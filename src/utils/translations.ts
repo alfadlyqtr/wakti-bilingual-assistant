@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -169,7 +168,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   },
   pricing: {
     en: "Pricing",
-    ar: "الأسعار",
+    ar: "الأ��عار",
   },
   monthly: {
     en: "Monthly",
@@ -412,6 +411,26 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   daysLeft: {
     en: "days left",
     ar: "أيام متبقية",
+  },
+  
+  // New notification keys
+  systemNotifications: {
+    en: "System Notifications",
+    ar: "إشعارات النظام",
+  },
+  newEvent: {
+    en: "New Event",
+    ar: "حدث جديد",
+  },
+  
+  // Contact request keys
+  contactRequestSettings: {
+    en: "Contact Request Settings",
+    ar: "إعدادات طلبات الاتصال",
+  },
+  autoApproveRequests: {
+    en: "Auto-approve contact requests",
+    ar: "الموافقة التلقائية على طلبات الاتصال",
   }
 };
 

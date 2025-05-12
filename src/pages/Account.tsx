@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -43,9 +42,12 @@ import {
   Upload,
   Moon,
   Sun, 
+  CalendarCheck,
+  UserPlus,
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { TranslationKey } from "@/utils/translationTypes";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -73,6 +75,8 @@ export default function Account() {
     reminder: true,
     newMessage: true,
     trialReminder: true,
+    systemNotifications: true,
+    newEvent: true,
   });
   const [emailNotifications, setEmailNotifications] = useState(true);
   
@@ -89,6 +93,7 @@ export default function Account() {
   const [privacySettings, setPrivacySettings] = useState({
     profileVisibility: true,
     activityStatus: true,
+    autoApproveRequests: false,
   });
 
   // Subscription details - would be fetched from an API in a real app
@@ -325,6 +330,24 @@ export default function Account() {
                 />
               </div>
               
+              {/* New Event Notifications */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm">{t("newEvent" as TranslationKey, language)}</span>
+                <Switch 
+                  checked={pushNotifications.newEvent} 
+                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, newEvent: checked})}
+                />
+              </div>
+              
+              {/* System Notifications */}
+              <div className="flex justify-between items-center">
+                <span className="text-sm">{t("systemNotifications" as TranslationKey, language)}</span>
+                <Switch 
+                  checked={pushNotifications.systemNotifications} 
+                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, systemNotifications: checked})}
+                />
+              </div>
+              
               <div className="flex justify-between items-center">
                 <span className="text-sm">{t("trialReminder" as TranslationKey, language)}</span>
                 <Switch 
@@ -455,6 +478,21 @@ export default function Account() {
                 checked={privacySettings.activityStatus} 
                 onCheckedChange={(checked) => setPrivacySettings({...privacySettings, activityStatus: checked})}
               />
+            </div>
+            
+            {/* New Contact Request Auto-Approve Setting */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <h3 className="text-sm font-medium flex items-center">
+                <UserPlus className="mr-2 h-4 w-4" />
+                {t("contactRequestSettings" as TranslationKey, language)}
+              </h3>
+              <div className="flex justify-between items-center">
+                <span>{t("autoApproveRequests" as TranslationKey, language)}</span>
+                <Switch 
+                  checked={privacySettings.autoApproveRequests} 
+                  onCheckedChange={(checked) => setPrivacySettings({...privacySettings, autoApproveRequests: checked})}
+                />
+              </div>
             </div>
             
             <Button variant="outline" className="w-full">

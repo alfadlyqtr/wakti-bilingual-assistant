@@ -113,4 +113,11 @@ export type TranslationKey =
   | "monthlyPlan"
   | "yearlyPlan"
   | "freePlan"
-  | "daysLeft";
+  | "daysLeft"
+  // New notification keys
+  | "systemNotifications"
+  | "newEvent"
+  // Contact request keys
+  | "contactRequestSettings"
+  | "autoApproveRequests";
+
