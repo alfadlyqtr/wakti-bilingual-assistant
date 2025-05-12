@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import Messages from "./pages/Messages";
 import Settings from "./pages/Settings";
 import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
@@ -40,7 +41,7 @@ const App = () => (
             <Route path="/reminders" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/account" element={<Account />} />
-            <Route path="/messages" element={<Dashboard />} />
+            <Route path="/messages" element={<Messages />} />
             <Route path="/contacts" element={<Dashboard />} />
             <Route path="/billing" element={<Dashboard />} />
             <Route path="/profile" element={<Navigate to="/account" replace />} />

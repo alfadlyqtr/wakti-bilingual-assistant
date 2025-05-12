@@ -119,4 +119,22 @@ export type TranslationKey =
   | "newEvent"
   // Contact request keys
   | "contactRequestSettings"
-  | "autoApproveRequests";
+  | "autoApproveRequests"
+  
+  // Messaging keys
+  | "newMessage"
+  | "searchContacts"
+  | "noContactsFound"
+  | "selectConversation"
+  | "typeMessage"
+  | "recordVoice"
+  | "stopRecording"
+  | "uploadImage"
+  | "sendMessage"
+  | "imageTooLarge"
+  | "transcript"
+  | "expiresIn"
+  | "onlineNow"
+  | "contactBlocked"
+  | "unblockContact"
+  | "noConversations";
