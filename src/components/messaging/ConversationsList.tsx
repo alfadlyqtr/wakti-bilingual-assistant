@@ -100,57 +100,59 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
   };
 
   return (
-    <ScrollArea className="flex-1 w-full">
-      <div className="divide-y divide-border w-full">
-        {filteredConversations.length === 0 ? (
-          <div className="text-center py-10 text-muted-foreground">
-            <p>{t("noConversations", language)}</p>
-          </div>
-        ) : (
-          filteredConversations.map((conversation) => (
-            <div
-              key={conversation.id}
-              className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30 w-full"
-              onClick={() => onSelectConversation(conversation.id)}
-            >
-              <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">
-                <AvatarFallback className="bg-muted text-foreground">
-                  {conversation.contactName[0]}
-                </AvatarFallback>
-              </Avatar>
-              
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline">
-                  <h3 className="font-medium text-foreground truncate">{conversation.contactName}</h3>
+    <div className="w-full h-full flex flex-col">
+      <ScrollArea className="flex-1 w-full">
+        <div className="divide-y divide-border w-full">
+          {filteredConversations.length === 0 ? (
+            <div className="text-center py-10 text-muted-foreground">
+              <p>{t("noConversations", language)}</p>
+            </div>
+          ) : (
+            filteredConversations.map((conversation) => (
+              <div
+                key={conversation.id}
+                className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30 w-full"
+                onClick={() => onSelectConversation(conversation.id)}
+              >
+                <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">
+                  <AvatarFallback className="bg-muted text-foreground">
+                    {conversation.contactName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 min-w-0 pr-2">
+                  <div className="flex justify-between items-baseline w-full">
+                    <h3 className="font-medium text-foreground truncate">{conversation.contactName}</h3>
+                    <div className="flex items-center flex-shrink-0">
+                      <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
+                        {formatTime(conversation.timestamp)}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
+                    </div>
+                  </div>
+                  
                   <div className="flex items-center">
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {formatTime(conversation.timestamp)}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
+                    {conversation.isVoiceMessage && (
+                      <span className="mr-1">🎤</span>
+                    )}
+                    {conversation.isImageMessage && (
+                      <span className="mr-1">📷</span>
+                    )}
+                    <p className="text-sm text-muted-foreground truncate">
+                      {conversation.lastMessage}
+                    </p>
+                    {conversation.unread > 0 && (
+                      <span className="ml-2 bg-blue-500 text-white text-xs rounded-full h-5 min-w-5 flex items-center justify-center px-1 flex-shrink-0">
+                        {conversation.unread}
+                      </span>
+                    )}
                   </div>
                 </div>
-                
-                <div className="flex items-center">
-                  {conversation.isVoiceMessage && (
-                    <span className="mr-1">🎤</span>
-                  )}
-                  {conversation.isImageMessage && (
-                    <span className="mr-1">📷</span>
-                  )}
-                  <p className="text-sm text-muted-foreground truncate">
-                    {conversation.lastMessage}
-                  </p>
-                  {conversation.unread > 0 && (
-                    <span className="ml-2 bg-blue-500 text-white text-xs rounded-full h-5 min-w-5 flex items-center justify-center px-1">
-                      {conversation.unread}
-                    </span>
-                  )}
-                </div>
               </div>
-            </div>
-          ))
-        )}
-      </div>
-    </ScrollArea>
+            ))
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
