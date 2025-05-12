@@ -100,8 +100,8 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
   };
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="divide-y divide-border">
+    <ScrollArea className="flex-1 w-full">
+      <div className="divide-y divide-border w-full">
         {filteredConversations.length === 0 ? (
           <div className="text-center py-10 text-muted-foreground">
             <p>{t("noConversations", language)}</p>
@@ -110,7 +110,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
           filteredConversations.map((conversation) => (
             <div
               key={conversation.id}
-              className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30"
+              className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30 w-full"
               onClick={() => onSelectConversation(conversation.id)}
             >
               <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">

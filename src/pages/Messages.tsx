@@ -10,8 +10,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Search, PenSquare } from "lucide-react";
 import { NewMessageModal } from "@/components/messaging/NewMessageModal";
 import { Input } from "@/components/ui/input";
+import { useNavigate } from "react-router-dom";
 
 export default function Messages() {
+  const navigate = useNavigate();
   const { language, theme } = useTheme();
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
@@ -21,16 +23,31 @@ export default function Messages() {
   const handleBackToList = () => {
     setActiveConversation(null);
   };
+  
+  // Back to dashboard
+  const handleBackToDashboard = () => {
+    navigate('/dashboard');
+  };
 
   return (
-    <div className="mobile-container bg-background text-foreground">
+    <div className="mobile-container bg-background text-foreground flex flex-col h-screen">
       {/* Header for conversations list view */}
       {!activeConversation && (
         <header className="sticky top-0 z-10 flex flex-col bg-background border-b border-border">
           <div className="flex items-center justify-between py-3 px-4">
-            <h1 className="text-2xl font-bold text-foreground">
-              {t("messaging", language)}
-            </h1>
+            <div className="flex items-center">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="hover:bg-transparent mr-1"
+                onClick={handleBackToDashboard}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <h1 className="text-2xl font-bold text-foreground">
+                {t("messaging", language)}
+              </h1>
+            </div>
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
@@ -84,10 +101,9 @@ export default function Messages() {
         </header>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden w-full">
         {/* Conversation List (hidden on mobile when a conversation is active) */}
         <div className={`flex flex-col w-full md:w-1/3 ${activeConversation ? "hidden md:flex" : "flex"}`}>
-          {/* Conversation list */}
           <ConversationsList 
             onSelectConversation={setActiveConversation} 
             activeConversationId={activeConversation}
