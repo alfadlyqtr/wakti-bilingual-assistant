@@ -113,6 +113,7 @@ export type TranslationKey =
   | "yearlyPlan"
   | "freePlan"
   | "daysLeft"
+  | "trialReminder"
   // Notification keys
   | "systemNotifications"
   | "newEvent"
