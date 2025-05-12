@@ -114,20 +114,15 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
   };
 
   return (
-    <div className="p-3 border-t bg-background">
+    <div className="p-2 border-t border-zinc-800 bg-black">
       <div className="flex items-center gap-2">
-        {/* User avatar */}
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="text-xs">Me</AvatarFallback>
-        </Avatar>
-        
         {/* Message input */}
         <div className="flex-1 relative">
           <Input
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder={t("typeMessage", language)}
-            className={`pr-16 ${isOverLimit ? "border-red-500" : ""}`}
+            className={`py-3 px-4 bg-zinc-800 border-0 text-white placeholder-zinc-500 ${isOverLimit ? "border-red-500" : ""}`}
             disabled={isRecording}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -141,7 +136,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
           {text.length > 0 && (
             <span 
               className={`absolute right-2 bottom-2 text-xs ${
-                isOverLimit ? "text-red-500" : "text-muted-foreground"
+                isOverLimit ? "text-red-500" : "text-zinc-500"
               }`}
             >
               {charCount}/{MAX_CHARS}
@@ -171,22 +166,24 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               <Button
                 variant="ghost"
                 size="icon"
+                className="text-zinc-400 hover:text-white hover:bg-transparent"
                 onClick={startRecording}
                 disabled={text.length > 0}
                 title={t("recordVoice", language)}
               >
-                <Mic className="h-5 w-5" />
+                <Mic className="h-6 w-6" />
               </Button>
               
               {/* Image upload button */}
               <Button
                 variant="ghost"
                 size="icon"
+                className="text-zinc-400 hover:text-white hover:bg-transparent"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={text.length > 0 || isRecording}
                 title={t("uploadImage", language)}
               >
-                <ImageIcon className="h-5 w-5" />
+                <ImageIcon className="h-6 w-6" />
               </Button>
               <input
                 ref={fileInputRef}
@@ -197,16 +194,17 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               />
               
               {/* Send button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className={text.trim() && !isOverLimit ? "text-primary" : "text-muted-foreground"}
-                disabled={!text.trim() || isOverLimit || isRecording}
-                onClick={sendTextMessage}
-                title={t("sendMessage", language)}
-              >
-                <Send className="h-5 w-5" />
-              </Button>
+              {text.trim() && !isOverLimit ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-blue-500 hover:text-blue-400 hover:bg-transparent"
+                  onClick={sendTextMessage}
+                  title={t("sendMessage", language)}
+                >
+                  <Send className="h-6 w-6" />
+                </Button>
+              ) : null}
             </>
           )}
         </div>

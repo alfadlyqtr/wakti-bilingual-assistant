@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { format, formatDistanceToNow } from "date-fns";
+import { format } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, ChevronDown, ChevronUp } from "lucide-react";
@@ -37,14 +37,14 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
 
   // Message bubble styling based on sender and theme
   const bubbleStyle = isSelf
-    ? `bg-primary text-primary-foreground rounded-t-2xl rounded-bl-2xl rounded-br-sm`
-    : `bg-secondary text-secondary-foreground rounded-t-2xl rounded-br-2xl rounded-bl-sm`;
+    ? `bg-blue-500 text-white rounded-2xl rounded-br-sm`
+    : `bg-zinc-700 text-white rounded-2xl rounded-bl-sm`;
 
   return (
     <div 
       className={cn(
-        "flex flex-col",
-        isSelf ? "items-end" : "items-start"
+        "flex flex-col max-w-[80%]",
+        isSelf ? "items-end self-end" : "items-start self-start"
       )}
       style={{ opacity }}
     >
@@ -67,7 +67,7 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 w-8 rounded-full p-0"
+                className="h-8 w-8 rounded-full p-0 text-white hover:bg-black/20"
                 onClick={() => setIsPlaying(!isPlaying)}
               >
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
@@ -75,9 +75,9 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
               
               <div className="flex-1">
                 {/* Audio waveform visualization */}
-                <div className="h-6 bg-secondary/20 dark:bg-secondary/30 rounded-full overflow-hidden">
+                <div className="h-6 bg-black/20 rounded-full overflow-hidden">
                   <div 
-                    className="h-full bg-secondary/50 dark:bg-secondary/70 rounded-full" 
+                    className="h-full bg-white/30 rounded-full" 
                     style={{ width: isPlaying ? "70%" : "0", transition: "width 0.1s linear" }}
                   />
                 </div>
@@ -90,7 +90,7 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-xs flex items-center gap-1"
+              className="h-6 px-2 text-xs flex items-center gap-1 text-white/80 hover:text-white hover:bg-black/20"
               onClick={() => setShowTranscript(!showTranscript)}
             >
               {t("transcript", language)}
@@ -102,7 +102,7 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
             </Button>
             
             {showTranscript && (
-              <div className="text-xs p-2 bg-black/5 dark:bg-white/5 rounded-md">
+              <div className="text-xs p-2 bg-black/20 rounded-md">
                 {message.transcript}
               </div>
             )}
@@ -131,10 +131,10 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
       </div>
 
       {/* Time and expiry info */}
-      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+      <div className="flex items-center gap-1 mt-1 text-[10px] text-zinc-500">
         <span>{formatTime(message.timestamp)}</span>
         <span>•</span>
-        <span>🕒 {t("expiresIn", language)} {hoursRemaining}h</span>
+        <span>🕒 {hoursRemaining}h</span>
       </div>
     </div>
   );

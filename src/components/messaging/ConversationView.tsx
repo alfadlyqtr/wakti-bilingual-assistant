@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { ArrowLeft, Mic, Image, Send } from "lucide-react";
+import { Mic, Image, Send } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,7 +77,7 @@ const mockMessages = [
 // Mock contact details - would be replaced with API calls
 const mockContactDetails = {
   id: "contact456",
-  name: "Sarah Johnson",
+  name: "QNB",
   avatarUrl: "",
   blocked: false,
 };
@@ -90,7 +90,7 @@ interface ConversationViewProps {
 export function ConversationView({ conversationId, onBack }: ConversationViewProps) {
   const { language } = useTheme();
   const [messages, setMessages] = useState(mockMessages);
-  const [contact, setContact] = useState(mockContactDetails);
+  const [contact, setContact] = useState({...mockContactDetails, name: conversationId});
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const currentUserId = "user123"; // This would come from auth context in a real app
 
@@ -121,102 +121,80 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     setMessages((prev) => [...prev, newMessage]);
   };
 
-  // Group messages by sender for consecutive messages
-  const groupedMessages = messages.reduce((acc: any[], message, index) => {
-    const prevMessage = index > 0 ? messages[index - 1] : null;
+  // Group messages by date
+  const groupedByDate = messages.reduce((acc: any, message) => {
+    const date = new Date(message.timestamp);
+    const dateStr = date.toDateString();
     
-    // Start a new group if:
-    // 1. It's the first message
-    // 2. The sender changed
-    // 3. More than 5 minutes passed since the previous message
-    const shouldStartNewGroup = 
-      !prevMessage || 
-      prevMessage.senderId !== message.senderId ||
-      message.timestamp.getTime() - prevMessage.timestamp.getTime() > 5 * 60 * 1000;
-    
-    if (shouldStartNewGroup) {
-      acc.push({
-        senderId: message.senderId,
-        isSelf: message.senderId === currentUserId,
-        senderName: message.senderId === currentUserId ? "You" : contact.name,
-        messages: [message]
-      });
-    } else {
-      // Add to the last group
-      acc[acc.length - 1].messages.push(message);
+    if (!acc[dateStr]) {
+      acc[dateStr] = [];
     }
     
+    acc[dateStr].push(message);
     return acc;
-  }, []);
+  }, {});
+
+  // Group messages by sender for consecutive messages
+  const processMessagesWithGroups = (messages: any[]) => {
+    return messages.reduce((acc: any[], message, index) => {
+      const prevMessage = index > 0 ? messages[index - 1] : null;
+      
+      // Start a new group if:
+      // 1. It's the first message
+      // 2. The sender changed
+      // 3. More than 5 minutes passed since the previous message
+      const shouldStartNewGroup = 
+        !prevMessage || 
+        prevMessage.senderId !== message.senderId ||
+        message.timestamp.getTime() - prevMessage.timestamp.getTime() > 5 * 60 * 1000;
+      
+      if (shouldStartNewGroup) {
+        acc.push({
+          senderId: message.senderId,
+          isSelf: message.senderId === currentUserId,
+          messages: [message]
+        });
+      } else {
+        // Add to the last group
+        acc[acc.length - 1].messages.push(message);
+      }
+      
+      return acc;
+    }, []);
+  };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-3 border-b flex items-center gap-3">
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="md:hidden"
-          onClick={onBack}
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        
-        <Avatar className="h-10 w-10">
-          <AvatarImage src={contact.avatarUrl} alt={contact.name} />
-          <AvatarFallback>
-            {contact.name.split(" ").map(n => n[0]).join("")}
-          </AvatarFallback>
-        </Avatar>
-        
-        <div className="flex-1">
-          <h3 className="font-medium">{contact.name}</h3>
-          <p className="text-xs text-muted-foreground">
-            {t("onlineNow", language)}
-          </p>
-        </div>
-      </div>
-      
+    <div className="flex flex-col h-full bg-black">
       {/* Messages */}
       <ScrollArea 
-        className="flex-1 p-4"
+        className="flex-1 px-3 py-4"
         ref={scrollAreaRef}
       >
         <div className="space-y-6">
-          {groupedMessages.map((group, groupIndex) => (
-            <div 
-              key={groupIndex} 
-              className={`flex flex-col ${group.isSelf ? "items-end" : "items-start"}`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                {!group.isSelf && (
-                  <Avatar className="h-6 w-6">
-                    <AvatarImage src={contact.avatarUrl} alt={contact.name} />
-                    <AvatarFallback className="text-xs">
-                      {contact.name.split(" ").map(n => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
-                <span className="text-xs text-muted-foreground">
-                  {group.senderName}
-                </span>
-                {group.isSelf && (
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="text-xs">You</AvatarFallback>
-                  </Avatar>
-                )}
+          {Object.entries(groupedByDate).map(([date, dateMessages]: [string, any]) => (
+            <div key={date} className="space-y-4">
+              <div className="flex justify-center">
+                <div className="bg-zinc-800 px-2 py-1 rounded-full text-xs text-zinc-400">
+                  {new Date(date).toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </div>
               </div>
               
-              <div className={`space-y-1 max-w-[75%] ${group.isSelf ? "items-end" : "items-start"}`}>
-                {group.messages.map((message: any) => (
-                  <MessageBubble 
-                    key={message.id}
-                    message={message}
-                    isSelf={group.isSelf}
-                    contactName={contact.name}
-                  />
-                ))}
-              </div>
+              {processMessagesWithGroups(dateMessages).map((group: any, groupIndex: number) => (
+                <div key={groupIndex} className="space-y-1">
+                  {group.messages.map((message: any, messageIndex: number) => (
+                    <MessageBubble 
+                      key={message.id}
+                      message={message}
+                      isSelf={group.isSelf}
+                      contactName={contact.name}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -224,11 +202,11 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
       
       {/* Input Area */}
       {contact.blocked ? (
-        <div className="p-4 text-center border-t bg-muted/30">
-          <p className="text-sm text-muted-foreground mb-2">
+        <div className="p-4 text-center border-t border-zinc-800 bg-zinc-900">
+          <p className="text-sm text-zinc-400 mb-2">
             {t("contactBlocked", language)}
           </p>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" className="bg-transparent text-blue-500 border-blue-500 hover:bg-blue-500/10">
             {t("unblockContact", language)}
           </Button>
         </div>
