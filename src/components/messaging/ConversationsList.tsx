@@ -102,7 +102,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
   return (
     <div className="w-full h-full flex flex-col">
       <ScrollArea className="flex-1 w-full">
-        <div className="divide-y divide-border w-full">
+        <div className="w-full divide-y divide-border">
           {filteredConversations.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
               <p>{t("noConversations", language)}</p>
@@ -120,25 +120,25 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
                   </AvatarFallback>
                 </Avatar>
                 
-                <div className="flex-1 min-w-0 pr-2">
+                <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline w-full">
                     <h3 className="font-medium text-foreground truncate">{conversation.contactName}</h3>
-                    <div className="flex items-center flex-shrink-0">
-                      <span className="text-xs text-muted-foreground ml-2 whitespace-nowrap">
+                    <div className="flex items-center flex-shrink-0 ml-2">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
                         {formatTime(conversation.timestamp)}
                       </span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
                     </div>
                   </div>
                   
-                  <div className="flex items-center">
+                  <div className="flex items-center w-full pr-6">
                     {conversation.isVoiceMessage && (
                       <span className="mr-1">🎤</span>
                     )}
                     {conversation.isImageMessage && (
                       <span className="mr-1">📷</span>
                     )}
-                    <p className="text-sm text-muted-foreground truncate">
+                    <p className="text-sm text-muted-foreground truncate flex-1">
                       {conversation.lastMessage}
                     </p>
                     {conversation.unread > 0 && (
