@@ -7,10 +7,12 @@ import { t } from "@/utils/translations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TranslationKey } from "@/utils/translationTypes";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
   const { language } = useTheme();
   const [trialDaysLeft, setTrialDaysLeft] = useState(3);
+  const navigate = useNavigate();
 
   // Example widgets (will be enhanced and made dynamic later)
   const widgets = [
@@ -67,10 +69,23 @@ export default function Dashboard() {
     },
   ];
 
+  const handleLogoClick = () => {
+    navigate('/dashboard');
+  };
+
   return (
     <div className="mobile-container">
       <header className="mobile-header">
-        <h1 className="text-2xl font-bold">{t("dashboard", language)}</h1>
+        <div className="flex items-center">
+          {/* Logo that acts as dashboard link */}
+          <img 
+            src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png" 
+            alt="WAKTI Logo" 
+            className="h-10 w-10 mr-3 cursor-pointer rounded-md"
+            onClick={handleLogoClick}
+          />
+          <h1 className="text-2xl font-bold">{t("dashboard", language)}</h1>
+        </div>
         <UserMenu userName="John Doe" />
       </header>
 

@@ -1,7 +1,6 @@
 
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
-  LayoutDashboard, 
   ListCheck, 
   Calendar, 
   Sparkle, 
@@ -20,7 +19,7 @@ export function MobileNav() {
   const location = useLocation();
   const { language } = useTheme();
   
-  // Restructured navigation items with exactly 3 on each side of dashboard
+  // Navigation items - removed dashboard from the dock as requested
   const navItems = [
     // Left side items (3)
     {
@@ -40,14 +39,6 @@ export function MobileNav() {
       label: "reminders" as TranslationKey,
       path: "/reminders",
       position: "left"
-    },
-    // Center item
-    {
-      icon: LayoutDashboard,
-      label: "dashboard" as TranslationKey,
-      path: "/dashboard",
-      isMain: true,
-      position: "center"
     },
     // Right side items (3)
     {
@@ -73,13 +64,13 @@ export function MobileNav() {
   return (
     <div className="max-w-md mx-auto px-2 pb-3">
       <div className="relative">
-        {/* Improved dock background with more curve */}
+        {/* Dock background */}
         <div className="bg-background/95 backdrop-blur-sm border border-border rounded-2xl h-16 shadow-lg"></div>
         
-        {/* Dock items with improved spacing */}
-        <div className="absolute inset-0 flex items-center px-4">
+        {/* Dock items with balanced spacing */}
+        <div className="absolute inset-0 flex items-center justify-between px-6">
           {/* Left side items */}
-          <div className="flex space-x-3 justify-end flex-1">
+          <div className="flex space-x-6">
             {navItems
               .filter(item => item.position === "left")
               .map((item) => {
@@ -101,31 +92,8 @@ export function MobileNav() {
               })}
           </div>
           
-          {/* Center Dashboard Button - Larger and more prominent */}
-          {navItems
-            .filter(item => item.isMain)
-            .map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <motion.button
-                  key={item.path}
-                  whileTap={{ scale: 0.95 }}
-                  className={cn(
-                    "flex flex-col items-center justify-center -mt-6 z-10 mx-2",
-                    isActive ? "text-primary" : "text-muted-foreground"
-                  )}
-                  onClick={() => navigate(item.path)}
-                >
-                  <div className="bg-primary text-primary-foreground p-4 rounded-full shadow-lg">
-                    <item.icon className="h-6 w-6" />
-                  </div>
-                  <span className="text-xs mt-1 font-medium">{t(item.label, language)}</span>
-                </motion.button>
-              );
-            })}
-          
           {/* Right side items */}
-          <div className="flex space-x-3 justify-start flex-1">
+          <div className="flex space-x-6">
             {navItems
               .filter(item => item.position === "right")
               .map((item) => {
