@@ -40,4 +40,22 @@ export type TranslationKey =
   | "widgetVisibility"
   | "privacyControls"
   | "deleteAccount"
-  | "freeTrialDays";
+  | "freeTrialDays"
+  
+  // New keys from errors
+  | "appName"
+  | "tagline"
+  | "features"
+  | "taskDesc"
+  | "calendarDesc"
+  | "remindersDesc"
+  | "messagingDesc"
+  | "pricing"
+  | "monthly"
+  | "yearly"
+  | "aiSummaries"
+  | "qar"
+  | "usd"
+  | "loading"
+  | "signup"
+  | "alreadyHaveAccount";

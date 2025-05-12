@@ -133,6 +133,72 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Free Trial",
     ar: "الفترة التجريبية المجانية",
   },
+  
+  // New added translations
+  appName: {
+    en: "WAKTI",
+    ar: "وقتي",
+  },
+  tagline: {
+    en: "Your Personal Productivity Assistant",
+    ar: "مساعدك الشخصي للإنتاجية",
+  },
+  features: {
+    en: "Features",
+    ar: "الميزات",
+  },
+  taskDesc: {
+    en: "Create, manage, and organize your tasks with ease",
+    ar: "إنشاء وإدارة وتنظيم المهام الخاصة بك بسهولة",
+  },
+  calendarDesc: {
+    en: "Keep track of your events and appointments",
+    ar: "تتبع الأحداث والمواعيد الخاصة بك",
+  },
+  remindersDesc: {
+    en: "Never forget important dates and deadlines",
+    ar: "لا تنسى أبدًا التواريخ المهمة والمواعيد النهائية",
+  },
+  messagingDesc: {
+    en: "Connect and collaborate with your contacts",
+    ar: "تواصل وتعاون مع جهات الاتصال الخاصة بك",
+  },
+  pricing: {
+    en: "Pricing",
+    ar: "الأسعار",
+  },
+  monthly: {
+    en: "Monthly",
+    ar: "شهري",
+  },
+  yearly: {
+    en: "Yearly",
+    ar: "سنوي",
+  },
+  aiSummaries: {
+    en: "AI Summaries",
+    ar: "ملخصات الذكاء الاصطناعي",
+  },
+  qar: {
+    en: "QAR",
+    ar: "ر.ق",
+  },
+  usd: {
+    en: "USD",
+    ar: "دولار",
+  },
+  loading: {
+    en: "Loading...",
+    ar: "جار التحميل...",
+  },
+  signup: {
+    en: "Sign Up",
+    ar: "تسجيل",
+  },
+  alreadyHaveAccount: {
+    en: "Already have an account?",
+    ar: "هل لديك حساب بالفعل؟",
+  }
 };
 
 export const t = (key: TranslationKey, language: "en" | "ar"): string => {
