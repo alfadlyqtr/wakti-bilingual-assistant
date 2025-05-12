@@ -56,9 +56,9 @@ export function UserMenu({ userImage, userName = "User" }: UserMenuProps) {
           <MessageSquare className="mr-2 h-4 w-4" />
           <span>{t("messaging", language)}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/settings")}>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>{t("settings", language)}</span>
+        <DropdownMenuItem onClick={() => navigate("/account")}>
+          <User className="mr-2 h-4 w-4" />
+          <span>{t("account", language)}</span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate("/contacts")}>
           <Users className="mr-2 h-4 w-4" />
@@ -67,10 +67,6 @@ export function UserMenu({ userImage, userName = "User" }: UserMenuProps) {
         <DropdownMenuItem onClick={() => navigate("/billing")}>
           <CreditCard className="mr-2 h-4 w-4" />
           <span>{t("billing", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/profile")}>
-          <User className="mr-2 h-4 w-4" />
-          <span>{t("profile", language)}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive">

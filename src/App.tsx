@@ -12,6 +12,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
 import Settings from "./pages/Settings";
+import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,13 +36,14 @@ const App = () => (
             <Route path="/calendar" element={<Dashboard />} />
             <Route path="/assistant" element={<Dashboard />} />
             <Route path="/voice-summary" element={<Dashboard />} />
-            <Route path="/events" element={<Dashboard />} /> {/* New route */}
-            <Route path="/reminders" element={<Dashboard />} /> {/* New route */}
+            <Route path="/events" element={<Dashboard />} /> 
+            <Route path="/reminders" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/messages" element={<Dashboard />} />
             <Route path="/contacts" element={<Dashboard />} />
             <Route path="/billing" element={<Dashboard />} />
-            <Route path="/profile" element={<Dashboard />} />
+            <Route path="/profile" element={<Navigate to="/account" replace />} />
             
             {/* Fallback routes */}
             <Route path="*" element={<NotFound />} />
