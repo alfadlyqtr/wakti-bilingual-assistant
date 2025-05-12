@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { format } from "date-fns";
-import { arSA, enUS } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,7 +13,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, isSelf, contactName }: MessageBubbleProps) {
-  const { language, theme } = useTheme();
+  const { language } = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
@@ -28,41 +26,29 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
   // Calculate opacity based on time remaining (fade out as it gets closer to expiry)
   const opacity = Math.min(1, Math.max(0.5, timeRemaining / (1000 * 60 * 60 * 24)));
 
-  // Format timestamp based on language
-  const formatTime = (date: Date) => {
-    return format(date, "p", {
-      locale: language === "ar" ? arSA : enUS,
-    });
-  };
-
-  // Message bubble styling based on sender and theme
+  // Message bubble styling based on sender
   const bubbleStyle = isSelf
-    ? `bg-blue-500 text-white rounded-2xl rounded-br-sm`
-    : `bg-zinc-700 text-white rounded-2xl rounded-bl-sm`;
+    ? "bg-[#007AFF] text-white rounded-2xl rounded-tr-sm mr-2 self-end"
+    : "bg-[#333333] text-white rounded-2xl rounded-tl-sm ml-2 self-start";
 
   return (
     <div 
       className={cn(
-        "flex flex-col max-w-[80%]",
-        isSelf ? "items-end self-end" : "items-start self-start"
+        "max-w-[75%] mb-1",
+        isSelf ? "self-end" : "self-start"
       )}
       style={{ opacity }}
     >
       {/* Message Content */}
-      <div 
-        className={cn(
-          "p-3 max-w-full",
-          bubbleStyle
-        )}
-      >
-        {/* Text Message */}
+      <div className={bubbleStyle}>
         {message.type === "text" && (
-          <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          <p className="p-3 whitespace-pre-wrap break-words text-base">
+            {message.text}
+          </p>
         )}
 
-        {/* Voice Message */}
         {message.type === "voice" && (
-          <div className="w-64 space-y-2">
+          <div className="p-2 w-64 space-y-1">
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -109,7 +95,6 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
           </div>
         )}
 
-        {/* Image Message */}
         {message.type === "image" && (
           <div 
             className={cn(
@@ -128,13 +113,6 @@ export function MessageBubble({ message, isSelf, contactName }: MessageBubblePro
             />
           </div>
         )}
-      </div>
-
-      {/* Time and expiry info */}
-      <div className="flex items-center gap-1 mt-1 text-[10px] text-zinc-500">
-        <span>{formatTime(message.timestamp)}</span>
-        <span>•</span>
-        <span>🕒 {hoursRemaining}h</span>
       </div>
     </div>
   );

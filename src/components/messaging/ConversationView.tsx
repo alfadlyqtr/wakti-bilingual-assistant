@@ -2,10 +2,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Mic, Image, Send } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInputBar } from "./MessageInputBar";
@@ -14,64 +10,28 @@ import { MessageInputBar } from "./MessageInputBar";
 const mockMessages = [
   {
     id: "1",
-    senderId: "user123", // current user
-    text: "Hey, how are you doing today?",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
+    senderId: "contact456", // other contact
+    text: "Dear QNB First Plus Member, Purchase premium furniture at That's Living, Doha Festival City and earn 3x points with QNB First Life Rewards credit cards. Enjoy this offer at That's Living Design District showrooms, featuring Ralph Lauren, Baker McGuire, Caracole, Eclipse, Theodore Alexander, Bernhardt, and more.",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
     type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 20), // expires in 20 hours
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 19), // expires in 19 hours
   },
   {
     id: "2",
     senderId: "contact456", // other contact
-    text: "I'm good thanks! Just finished the project we were working on.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1.5), // 1.5 hours ago
+    text: "Valid until 24 June. Find the full list of participating brands on QNB website. Terms and conditions apply. For more information, please call your dedicated Relationship Manager",
+    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
     type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 20.5), // expires in 20.5 hours
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 19), // expires in 19 hours
   },
   {
     id: "3",
-    senderId: "user123", // current user
-    text: "",
-    audioUrl: "/path-to-audio.mp3",
-    transcript: "I wanted to let you know that I'm going to be a bit late for our meeting tomorrow.",
-    duration: 12, // seconds
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 1), // 1 hour ago
-    type: "voice",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 21), // expires in 21 hours
-  },
-  {
-    id: "4",
     senderId: "contact456", // other contact
-    text: "No problem, thanks for letting me know. What time do you think you'll be there?",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
+    text: "Dear Customer, your login to QNB Mobile Banking was successful on 12/05/2025 22:57:28",
+    timestamp: new Date(), // now
     type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 22), // expires in 22 hours
-  },
-  {
-    id: "5",
-    senderId: "user123", // current user
-    text: "",
-    imageUrl: "/path-to-image.jpg",
-    timestamp: new Date(Date.now() - 1000 * 60 * 20), // 20 minutes ago
-    type: "image",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 23), // expires in 23 hours
-  },
-  {
-    id: "6",
-    senderId: "user123", // current user
-    text: "Here's the location for our meeting.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 15), // 15 minutes ago
-    type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 23.5), // expires in 23.5 hours
-  },
-  {
-    id: "7",
-    senderId: "contact456", // other contact
-    text: "Perfect, I'll see you there!",
-    timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
-    type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 23.8), // expires in 23.8 hours
-  },
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // expires in 24 hours
+  }
 ];
 
 // Mock contact details - would be replaced with API calls
@@ -134,67 +94,58 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     return acc;
   }, {});
 
-  // Group messages by sender for consecutive messages
-  const processMessagesWithGroups = (messages: any[]) => {
-    return messages.reduce((acc: any[], message, index) => {
-      const prevMessage = index > 0 ? messages[index - 1] : null;
-      
-      // Start a new group if:
-      // 1. It's the first message
-      // 2. The sender changed
-      // 3. More than 5 minutes passed since the previous message
-      const shouldStartNewGroup = 
-        !prevMessage || 
-        prevMessage.senderId !== message.senderId ||
-        message.timestamp.getTime() - prevMessage.timestamp.getTime() > 5 * 60 * 1000;
-      
-      if (shouldStartNewGroup) {
-        acc.push({
-          senderId: message.senderId,
-          isSelf: message.senderId === currentUserId,
-          messages: [message]
-        });
-      } else {
-        // Add to the last group
-        acc[acc.length - 1].messages.push(message);
-      }
-      
-      return acc;
-    }, []);
+  // Format date for iOS Messages style timestamp displays
+  const formatDateHeader = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    
+    if (date.toDateString() === today.toDateString()) {
+      return t("today", language);
+    }
+    
+    return date.toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
+      weekday: 'short',
+      month: 'short', 
+      day: 'numeric'
+    });
+  };
+
+  // Format time for message timestamp in iOS Messages style
+  const formatMessageTime = (date: Date) => {
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    const ampm = hours >= 12 ? "pm" : "am";
+    hours = hours % 12;
+    hours = hours ? hours : 12; // Handle midnight (0 hours)
+    return `${hours}:${minutes} ${ampm}`;
   };
 
   return (
     <div className="flex flex-col h-full bg-black">
       {/* Messages */}
       <ScrollArea 
-        className="flex-1 px-3 py-4"
+        className="flex-1"
         ref={scrollAreaRef}
       >
-        <div className="space-y-6">
+        <div className="py-4">
           {Object.entries(groupedByDate).map(([date, dateMessages]: [string, any]) => (
-            <div key={date} className="space-y-4">
-              <div className="flex justify-center">
-                <div className="bg-zinc-800 px-2 py-1 rounded-full text-xs text-zinc-400">
-                  {new Date(date).toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric'
-                  })}
+            <div key={date} className="mb-4">
+              <div className="flex justify-center mb-4">
+                <div className="text-center text-xs text-zinc-500">
+                  {formatDateHeader(date)} {formatMessageTime(new Date(date))}
                 </div>
               </div>
               
-              {processMessagesWithGroups(dateMessages).map((group: any, groupIndex: number) => (
-                <div key={groupIndex} className="space-y-1">
-                  {group.messages.map((message: any, messageIndex: number) => (
-                    <MessageBubble 
-                      key={message.id}
-                      message={message}
-                      isSelf={group.isSelf}
-                      contactName={contact.name}
-                    />
-                  ))}
-                </div>
-              ))}
+              <div className="space-y-2 px-4">
+                {dateMessages.map((message: any) => (
+                  <MessageBubble 
+                    key={message.id}
+                    message={message}
+                    isSelf={message.senderId === currentUserId}
+                    contactName={contact.name}
+                  />
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -206,9 +157,9 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
           <p className="text-sm text-zinc-400 mb-2">
             {t("contactBlocked", language)}
           </p>
-          <Button variant="outline" size="sm" className="bg-transparent text-blue-500 border-blue-500 hover:bg-blue-500/10">
+          <button className="px-4 py-2 bg-transparent text-blue-500 border border-blue-500 rounded-full text-sm">
             {t("unblockContact", language)}
-          </Button>
+          </button>
         </div>
       ) : (
         <MessageInputBar onSendMessage={handleSendMessage} />

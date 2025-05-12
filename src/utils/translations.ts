@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -168,7 +169,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   },
   pricing: {
     en: "Pricing",
-    ar: "الأ��عار",
+    ar: "الأسعار",
   },
   monthly: {
     en: "Monthly",
@@ -435,8 +436,8 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   
   // Messaging system keys
   searchContacts: {
-    en: "Search Contacts",
-    ar: "البحث عن جهات الاتصال",
+    en: "Search",
+    ar: "بحث",
   },
   noContactsFound: {
     en: "No contacts found",
@@ -447,8 +448,8 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     ar: "اختر محادثة",
   },
   typeMessage: {
-    en: "Type a message...",
-    ar: "اكتب رسالة...",
+    en: "Text Message • SMS",
+    ar: "رسالة نصية • رسالة قصيرة",
   },
   recordVoice: {
     en: "Record Voice",
@@ -494,14 +495,14 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "No conversations yet",
     ar: "لا توجد محادثات حتى الآن",
   },
-  newMessage: {
-    en: "New Message",
-    ar: "رسالة جديدة",
+  filters: {
+    en: "Filters",
+    ar: "تصفية",
   },
-  trialReminder: {
-    en: "Trial Reminder",
-    ar: "تذكير الفترة التجريبية",
-  },
+  today: {
+    en: "Today",
+    ar: "اليوم",
+  }
 };
 
 export const t = (key: TranslationKey, language: "en" | "ar"): string => {
