@@ -136,4 +136,6 @@ export type TranslationKey =
   | "onlineNow"
   | "contactBlocked"
   | "unblockContact"
-  | "noConversations";
+  | "noConversations"
+  | "filters"
+  | "today";
