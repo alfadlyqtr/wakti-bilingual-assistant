@@ -12,6 +12,7 @@ export type TranslationKey =
   | "logout"
   | "waktiAssistant"
   | "voiceSummary"
+  | "account"
   
   // Theme & Language
   | "lightMode"

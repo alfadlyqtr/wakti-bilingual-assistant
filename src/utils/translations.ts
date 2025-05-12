@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -46,6 +45,10 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   voiceSummary: {
     en: "Voice Summary",
     ar: "ملخص صوتي",
+  },
+  account: {
+    en: "Account",
+    ar: "الحساب",
   },
   
   // Theme & Language
