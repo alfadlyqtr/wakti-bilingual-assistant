@@ -110,7 +110,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
           filteredConversations.map((conversation) => (
             <div
               key={conversation.id}
-              className="flex items-center py-3 px-4 cursor-pointer"
+              className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30"
               onClick={() => onSelectConversation(conversation.id)}
             >
               <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">

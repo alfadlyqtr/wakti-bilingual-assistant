@@ -31,18 +31,21 @@ export default function Messages() {
             <h1 className="text-2xl font-bold text-foreground">
               {t("messaging", language)}
             </h1>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              className="text-blue-500 hover:bg-transparent"
-              onClick={() => setShowNewMessageModal(true)}
-            >
-              <PenSquare className="h-5 w-5" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                className="text-blue-500 hover:bg-transparent"
+                onClick={() => setShowNewMessageModal(true)}
+              >
+                <PenSquare className="h-5 w-5" />
+              </Button>
+              <UserMenu />
+            </div>
           </div>
           
-          {/* Search bar - moved to top */}
-          <div className="px-4 py-2 border-t border-border">
+          {/* Search bar - at top */}
+          <div className="px-4 py-2">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-muted-foreground" />
@@ -54,11 +57,6 @@ export default function Messages() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-          </div>
-          
-          {/* Select conversation label */}
-          <div className="px-4 py-2 text-sm text-muted-foreground bg-muted/30">
-            {t("selectConversation", language)}
           </div>
         </header>
       )}
@@ -80,14 +78,15 @@ export default function Messages() {
             </div>
             <h1 className="text-lg font-medium">{activeConversation}</h1>
           </div>
+          <div className="ml-auto">
+            <UserMenu />
+          </div>
         </header>
       )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* Conversation List (hidden on mobile when a conversation is active) */}
         <div className={`flex flex-col w-full md:w-1/3 ${activeConversation ? "hidden md:flex" : "flex"}`}>
-          {/* Favorite contacts section removed as requested */}
-          
           {/* Conversation list */}
           <ConversationsList 
             onSelectConversation={setActiveConversation} 
