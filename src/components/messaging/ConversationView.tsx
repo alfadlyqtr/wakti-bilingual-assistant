@@ -121,7 +121,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
   };
 
   return (
-    <div className="flex flex-col h-full bg-black">
+    <div className="flex flex-col h-full bg-background">
       {/* Messages */}
       <ScrollArea 
         className="flex-1"
@@ -131,7 +131,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
           {Object.entries(groupedByDate).map(([date, dateMessages]: [string, any]) => (
             <div key={date} className="mb-4">
               <div className="flex justify-center mb-4">
-                <div className="text-center text-xs text-zinc-500">
+                <div className="text-center text-xs text-muted-foreground">
                   {formatDateHeader(date)} {formatMessageTime(new Date(date))}
                 </div>
               </div>
@@ -153,8 +153,8 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
       
       {/* Input Area */}
       {contact.blocked ? (
-        <div className="p-4 text-center border-t border-zinc-800 bg-zinc-900">
-          <p className="text-sm text-zinc-400 mb-2">
+        <div className="p-4 text-center border-t border-border bg-muted">
+          <p className="text-sm text-muted-foreground mb-2">
             {t("contactBlocked", language)}
           </p>
           <button className="px-4 py-2 bg-transparent text-blue-500 border border-blue-500 rounded-full text-sm">

@@ -57,7 +57,7 @@ interface ConversationsListProps {
 }
 
 export function ConversationsList({ onSelectConversation, activeConversationId, searchQuery = "" }: ConversationsListProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const [conversations, setConversations] = useState(mockConversations);
   const [filteredConversations, setFilteredConversations] = useState(mockConversations);
   
@@ -101,9 +101,9 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
 
   return (
     <ScrollArea className="flex-1">
-      <div className="divide-y divide-zinc-800">
+      <div className="divide-y divide-border">
         {filteredConversations.length === 0 ? (
-          <div className="text-center py-10 text-zinc-500">
+          <div className="text-center py-10 text-muted-foreground">
             <p>{t("noConversations", language)}</p>
           </div>
         ) : (
@@ -113,20 +113,20 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
               className="flex items-center py-3 px-4 cursor-pointer"
               onClick={() => onSelectConversation(conversation.id)}
             >
-              <Avatar className="h-12 w-12 bg-zinc-700 mr-3 flex-shrink-0">
-                <AvatarFallback className="bg-zinc-700 text-white">
+              <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">
+                <AvatarFallback className="bg-muted text-foreground">
                   {conversation.contactName[0]}
                 </AvatarFallback>
               </Avatar>
               
               <div className="flex-1 min-w-0">
                 <div className="flex justify-between items-baseline">
-                  <h3 className="font-medium text-white truncate">{conversation.contactName}</h3>
+                  <h3 className="font-medium text-foreground truncate">{conversation.contactName}</h3>
                   <div className="flex items-center">
-                    <span className="text-xs text-zinc-500 ml-2">
+                    <span className="text-xs text-muted-foreground ml-2">
                       {formatTime(conversation.timestamp)}
                     </span>
-                    <ChevronRight className="h-4 w-4 text-zinc-500 ml-1" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
                   </div>
                 </div>
                 
@@ -137,7 +137,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
                   {conversation.isImageMessage && (
                     <span className="mr-1">📷</span>
                   )}
-                  <p className="text-sm text-zinc-400 truncate">
+                  <p className="text-sm text-muted-foreground truncate">
                     {conversation.lastMessage}
                   </p>
                   {conversation.unread > 0 && (

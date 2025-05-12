@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Plus, Image, Send } from "lucide-react";
+import { Plus, Image, Send, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -113,12 +113,13 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
   };
 
   return (
-    <div className="px-2 py-2 border-t border-zinc-800 bg-black">
-      <div className="flex items-center gap-2 bg-zinc-800 px-3 py-2 rounded-full">
+    <div className="p-2 border-t border-border bg-background">
+      <div className="flex items-center gap-2 bg-muted rounded-full overflow-hidden">
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 rounded-full text-zinc-400 hover:bg-transparent p-0"
+          className="h-10 w-10 rounded-full text-muted-foreground hover:bg-transparent p-0 ml-1"
+          onClick={() => fileInputRef.current?.click()}
         >
           <Plus className="h-5 w-5" />
         </Button>
@@ -127,7 +128,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={t("typeMessage", language)}
-          className="flex-1 bg-transparent border-0 focus-visible:ring-0 placeholder-zinc-500 text-white h-auto py-0 px-2"
+          className="flex-1 bg-transparent border-0 focus-visible:ring-0 placeholder-muted-foreground text-foreground h-10 py-0 px-2"
           disabled={isRecording}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -136,27 +137,29 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
             }
           }}
         />
-
-        {text.trim() && !isOverLimit ? (
+        
+        {text.trim() ? (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-full text-blue-500 hover:bg-transparent p-0"
+            className="h-10 w-10 rounded-full text-blue-500 hover:bg-transparent p-0 mr-1"
             onClick={sendTextMessage}
+            disabled={isOverLimit}
           >
             <Send className="h-5 w-5" />
           </Button>
         ) : (
-          <>
+          <div className="flex items-center">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-zinc-400 hover:bg-transparent p-0"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={text.length > 0 || isRecording}
+              className="h-10 w-10 rounded-full text-muted-foreground hover:bg-transparent p-0"
+              onClick={startRecording}
+              disabled={isRecording}
             >
-              <Image className="h-5 w-5" />
+              <Mic className="h-5 w-5" />
             </Button>
+            
             <input
               ref={fileInputRef}
               type="file"
@@ -164,7 +167,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               className="hidden"
               onChange={handleImageSelected}
             />
-          </>
+          </div>
         )}
       </div>
 
