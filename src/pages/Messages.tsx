@@ -136,7 +136,8 @@ export default function Messages() {
         }}
       />
 
-      {activeConversation ? null : <MobileNav />}
+      {/* Only show MobileNav when NOT in a conversation */}
+      {!activeConversation && <MobileNav />}
     </div>
   );
 }

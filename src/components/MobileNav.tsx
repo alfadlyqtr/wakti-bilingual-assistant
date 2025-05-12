@@ -78,9 +78,9 @@ export function MobileNav() {
           <div className="bg-background/95 backdrop-blur-sm border border-border rounded-2xl h-16 shadow-lg"></div>
           
           {/* Dock items with improved spacing */}
-          <div className="absolute inset-0 flex items-center justify-between px-4">
+          <div className="absolute inset-0 flex items-center px-4">
             {/* Left side items */}
-            <div className="flex space-x-4 justify-end flex-1">
+            <div className="flex space-x-3 justify-end flex-1">
               {navItems
                 .filter(item => item.position === "left")
                 .map((item) => {
@@ -112,7 +112,7 @@ export function MobileNav() {
                     key={item.path}
                     whileTap={{ scale: 0.95 }}
                     className={cn(
-                      "flex flex-col items-center justify-center -mt-6 z-10 mx-1",
+                      "flex flex-col items-center justify-center -mt-6 z-10 mx-2",
                       isActive ? "text-primary" : "text-muted-foreground"
                     )}
                     onClick={() => navigate(item.path)}
@@ -126,7 +126,7 @@ export function MobileNav() {
               })}
             
             {/* Right side items */}
-            <div className="flex space-x-4 justify-start flex-1">
+            <div className="flex space-x-3 justify-start flex-1">
               {navItems
                 .filter(item => item.position === "right")
                 .map((item) => {
