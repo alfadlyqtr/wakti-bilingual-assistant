@@ -2,7 +2,7 @@
 import { useState, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Plus, Image, Send, Mic } from "lucide-react";
+import { Plus, Send, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 

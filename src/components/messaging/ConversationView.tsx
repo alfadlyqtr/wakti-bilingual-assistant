@@ -132,7 +132,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
             <div key={date} className="mb-4">
               <div className="flex justify-center mb-4">
                 <div className="text-center text-xs text-muted-foreground">
-                  {formatDateHeader(date)} {formatMessageTime(new Date(date))}
+                  {formatDateHeader(date)}
                 </div>
               </div>
               
@@ -151,7 +151,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
         </div>
       </ScrollArea>
       
-      {/* Input Area */}
+      {/* Input Area - ALWAYS SHOW THIS */}
       {contact.blocked ? (
         <div className="p-4 text-center border-t border-border bg-muted">
           <p className="text-sm text-muted-foreground mb-2">
