@@ -5,6 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
 import {
   Check,
   Calendar,
@@ -21,34 +22,34 @@ export default function Home() {
   const features = [
     {
       icon: List,
-      title: "taskManagement",
-      description: "taskDesc",
+      title: "taskManagement" as TranslationKey,
+      description: "taskDesc" as TranslationKey,
     },
     {
       icon: Calendar,
-      title: "calendar",
-      description: "calendarDesc",
+      title: "calendar" as TranslationKey,
+      description: "calendarDesc" as TranslationKey,
     },
     {
       icon: Bell,
-      title: "reminders",
-      description: "remindersDesc",
+      title: "reminders" as TranslationKey,
+      description: "remindersDesc" as TranslationKey,
     },
     {
       icon: MessageSquare,
-      title: "messaging",
-      description: "messagingDesc",
+      title: "messaging" as TranslationKey,
+      description: "messagingDesc" as TranslationKey,
     },
   ];
 
   const pricingPlans = [
     {
-      title: "monthly",
+      title: "monthly" as TranslationKey,
       priceQAR: 55,
       priceUSD: 15,
     },
     {
-      title: "yearly",
+      title: "yearly" as TranslationKey,
       priceQAR: 550,
       priceUSD: 150,
     },
