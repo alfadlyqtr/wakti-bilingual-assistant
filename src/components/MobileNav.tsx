@@ -1,9 +1,10 @@
 
 import { useNavigate, useLocation } from "react-router-dom";
-import { Home, List, Calendar, MessageSquare, User } from "lucide-react";
+import { Home, ListCheck, Calendar, Mic, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export function MobileNav() {
   const navigate = useNavigate();
@@ -13,28 +14,28 @@ export function MobileNav() {
   const navItems = [
     {
       icon: Home,
-      label: "dashboard",
+      label: "dashboard" as TranslationKey,
       path: "/dashboard",
     },
     {
-      icon: List,
-      label: "taskManagement",
+      icon: ListCheck,
+      label: "taskManagement" as TranslationKey,
       path: "/tasks",
     },
     {
       icon: Calendar,
-      label: "calendar",
+      label: "calendar" as TranslationKey,
       path: "/calendar",
     },
     {
-      icon: MessageSquare,
-      label: "messaging",
-      path: "/messages",
+      icon: Mic,
+      label: "waktiAssistant" as TranslationKey,
+      path: "/assistant",
     },
     {
-      icon: User,
-      label: "profile",
-      path: "/profile",
+      icon: BarChart2,
+      label: "voiceSummary" as TranslationKey,
+      path: "/voice-summary",
     },
   ];
 

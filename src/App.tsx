@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,15 @@ const App = () => (
             
             {/* Protected Routes - Will add auth check later */}
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/tasks" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/calendar" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/assistant" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/voice-summary" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/messages" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/contacts" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/billing" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/profile" element={<Dashboard />} /> {/* Placeholder */}
             
             {/* Fallback routes */}
             <Route path="*" element={<NotFound />} />

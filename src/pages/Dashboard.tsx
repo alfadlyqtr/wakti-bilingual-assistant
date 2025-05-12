@@ -6,6 +6,7 @@ import { MobileNav } from "@/components/MobileNav";
 import { t } from "@/utils/translations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -15,7 +16,7 @@ export default function Dashboard() {
   const widgets = [
     {
       id: "tasks",
-      title: "taskManagement",
+      title: "tasks" as TranslationKey,
       component: (
         <div className="space-y-2">
           <div className="flex items-center">
@@ -31,7 +32,7 @@ export default function Dashboard() {
     },
     {
       id: "calendar",
-      title: "calendar",
+      title: "calendar" as TranslationKey,
       component: (
         <div className="text-sm">
           <div className="font-medium">Today</div>
@@ -50,7 +51,7 @@ export default function Dashboard() {
     },
     {
       id: "reminders",
-      title: "reminders",
+      title: "reminders" as TranslationKey,
       component: (
         <div className="text-sm">
           <div className="flex justify-between items-center mb-1">
