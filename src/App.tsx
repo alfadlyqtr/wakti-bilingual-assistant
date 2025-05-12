@@ -31,15 +31,17 @@ const App = () => (
             
             {/* Protected Routes - Will add auth check later */}
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/tasks" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/calendar" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/assistant" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/voice-summary" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/tasks" element={<Dashboard />} />
+            <Route path="/calendar" element={<Dashboard />} />
+            <Route path="/assistant" element={<Dashboard />} />
+            <Route path="/voice-summary" element={<Dashboard />} />
+            <Route path="/events" element={<Dashboard />} /> {/* New route */}
+            <Route path="/reminders" element={<Dashboard />} /> {/* New route */}
             <Route path="/settings" element={<Settings />} />
-            <Route path="/messages" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/contacts" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/billing" element={<Dashboard />} /> {/* Placeholder */}
-            <Route path="/profile" element={<Dashboard />} /> {/* Placeholder */}
+            <Route path="/messages" element={<Dashboard />} />
+            <Route path="/contacts" element={<Dashboard />} />
+            <Route path="/billing" element={<Dashboard />} />
+            <Route path="/profile" element={<Dashboard />} />
             
             {/* Fallback routes */}
             <Route path="*" element={<NotFound />} />
