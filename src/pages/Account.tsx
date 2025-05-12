@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -44,6 +45,8 @@ import {
   Sun, 
   CalendarCheck,
   UserPlus,
+  UserX,
+  ShieldAlert
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { TranslationKey } from "@/utils/translationTypes";
@@ -63,6 +66,8 @@ export default function Account() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
   const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
+  const [blockedUsersDialogOpen, setBlockedUsersDialogOpen] = useState(false);
+  const [reportAbuseDialogOpen, setReportAbuseDialogOpen] = useState(false);
   
   // Password state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -74,7 +79,6 @@ export default function Account() {
     taskDue: true,
     reminder: true,
     newMessage: true,
-    trialReminder: true,
     systemNotifications: true,
     newEvent: true,
   });
@@ -95,6 +99,12 @@ export default function Account() {
     activityStatus: true,
     autoApproveRequests: false,
   });
+
+  // Mock blocked users data
+  const [blockedUsers] = useState([
+    { id: 1, name: 'Jane Smith' },
+    { id: 2, name: 'Ahmed Hassan' }
+  ]);
 
   // Subscription details - would be fetched from an API in a real app
   const [subscriptionStatus] = useState({
@@ -170,7 +180,7 @@ export default function Account() {
                   <AvatarFallback className="text-lg">{name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
                 </Avatar>
                 <div className="absolute bottom-0 right-0">
-                  <Label htmlFor="profilePicture" className="cursor-pointer bg-primary text-primary-foreground rounded-full p-1.5 shadow-md">
+                  <Label htmlFor="profilePicture" className="cursor-pointer bg-primary text-primary-foreground dark:bg-primary dark:text-primary-foreground rounded-full p-1.5 shadow-md">
                     <Upload className="h-4 w-4" />
                     <span className="sr-only">Upload Picture</span>
                   </Label>
@@ -347,14 +357,6 @@ export default function Account() {
                   onCheckedChange={(checked) => setPushNotifications({...pushNotifications, systemNotifications: checked})}
                 />
               </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("trialReminder" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.trialReminder} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, trialReminder: checked})}
-                />
-              </div>
             </div>
             
             <div className="pt-2 border-t border-border">
@@ -480,7 +482,7 @@ export default function Account() {
               />
             </div>
             
-            {/* New Contact Request Auto-Approve Setting */}
+            {/* Contact Request Auto-Approve Setting */}
             <div className="space-y-3 pt-2 border-t border-border">
               <h3 className="text-sm font-medium flex items-center">
                 <UserPlus className="mr-2 h-4 w-4" />
@@ -495,11 +497,19 @@ export default function Account() {
               </div>
             </div>
             
-            <Button variant="outline" className="w-full">
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => setBlockedUsersDialogOpen(true)}
+            >
               {t("manageBlockedUsers" as TranslationKey, language)}
             </Button>
             
-            <Button variant="outline" className="w-full">
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => setReportAbuseDialogOpen(true)}
+            >
               {t("reportAbuse" as TranslationKey, language)}
             </Button>
             
@@ -642,6 +652,92 @@ export default function Account() {
               className="w-full p-2 border rounded-md bg-background resize-none"
               placeholder={t("feedbackPlaceholder" as TranslationKey, language) as string}
             ></textarea>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  {t("cancel" as TranslationKey, language)}
+                </Button>
+              </DialogClose>
+              <Button type="button">
+                {t("submit" as TranslationKey, language)}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Blocked Users Dialog */}
+      <Dialog open={blockedUsersDialogOpen} onOpenChange={setBlockedUsersDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t("manageBlockedUsers" as TranslationKey, language)}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 max-h-80 overflow-y-auto">
+            {blockedUsers.length > 0 ? blockedUsers.map(user => (
+              <div key={user.id} className="flex items-center justify-between border-b border-border pb-2">
+                <span>{user.name}</span>
+                <Button variant="ghost" size="sm">
+                  <UserX className="h-4 w-4 mr-1" />
+                  <span>Unblock</span>
+                </Button>
+              </div>
+            )) : (
+              <div className="text-center text-muted-foreground py-8">
+                No blocked users
+              </div>
+            )}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="outline">
+                  {t("cancel" as TranslationKey, language)}
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Report Abuse Dialog */}
+      <Dialog open={reportAbuseDialogOpen} onOpenChange={setReportAbuseDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center">
+              <ShieldAlert className="h-5 w-5 mr-2" />
+              {t("reportAbuse" as TranslationKey, language)}
+            </DialogTitle>
+            <DialogDescription>
+              Please provide details about the abuse you want to report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Report type</Label>
+              <RadioGroup defaultValue="user">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem id="user" value="user" />
+                  <Label htmlFor="user">User</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem id="content" value="content" />
+                  <Label htmlFor="content">Content</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem id="other" value="other" />
+                  <Label htmlFor="other">Other</Label>
+                </div>
+              </RadioGroup>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="reportDetails">Details</Label>
+              <textarea
+                id="reportDetails"
+                rows={4}
+                className="w-full p-2 border rounded-md bg-background resize-none"
+                placeholder="Describe the issue in detail..."
+              ></textarea>
+            </div>
+            
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="outline">

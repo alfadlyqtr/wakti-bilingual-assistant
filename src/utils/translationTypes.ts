@@ -70,7 +70,6 @@ export type TranslationKey =
   | "taskDue"
   | "reminder"
   | "newMessage"
-  | "trialReminder"
   | "emailNotifications"
   | "tasksWidget"
   | "calendarWidget"
@@ -114,10 +113,9 @@ export type TranslationKey =
   | "yearlyPlan"
   | "freePlan"
   | "daysLeft"
-  // New notification keys
+  // Notification keys
   | "systemNotifications"
   | "newEvent"
   // Contact request keys
   | "contactRequestSettings"
   | "autoApproveRequests";
-
