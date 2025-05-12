@@ -30,10 +30,10 @@ export default function Messages() {
   };
 
   return (
-    <div className="mobile-container bg-background text-foreground flex flex-col h-screen">
+    <div className="mobile-container bg-background text-foreground flex flex-col h-screen overflow-hidden">
       {/* Header for conversations list view */}
       {!activeConversation && (
-        <header className="sticky top-0 z-10 flex flex-col bg-background border-b border-border w-full">
+        <header className="sticky top-0 z-20 flex flex-col bg-background border-b border-border w-full">
           <div className="flex items-center justify-between py-3 px-4 w-full">
             <div className="flex items-center">
               <Button 
@@ -80,7 +80,7 @@ export default function Messages() {
 
       {/* Header for conversation view */}
       {activeConversation && (
-        <header className="sticky top-0 z-10 flex items-center py-4 px-4 bg-background border-b border-border w-full">
+        <header className="sticky top-0 z-20 flex items-center py-4 px-4 bg-background border-b border-border w-full">
           <Button 
             variant="ghost" 
             size="icon"
@@ -101,7 +101,8 @@ export default function Messages() {
         </header>
       )}
 
-      <div className="flex flex-1 overflow-hidden w-full">
+      {/* Main content with proper padding to accommodate navigation */}
+      <div className="flex flex-1 overflow-hidden w-full pb-16">
         {/* Conversation List (hidden on mobile when a conversation is active) */}
         <div className={`flex flex-col w-full md:w-1/3 ${activeConversation ? "hidden md:flex" : "flex"}`}>
           <ConversationsList 
@@ -112,7 +113,7 @@ export default function Messages() {
         </div>
 
         {/* Active Conversation (full screen on mobile when active) */}
-        <div className={`flex-1 ${!activeConversation ? "hidden md:block" : "block"}`}>
+        <div className={`flex-1 ${!activeConversation ? "hidden md:block" : "block"} h-full`}>
           {activeConversation ? (
             <ConversationView 
               conversationId={activeConversation} 
@@ -136,8 +137,10 @@ export default function Messages() {
         }}
       />
 
-      {/* Always show MobileNav */}
-      <MobileNav />
+      {/* Mobile Navigation with higher z-index to stay above content */}
+      <div className="fixed bottom-0 left-0 right-0 z-30 w-full">
+        <MobileNav />
+      </div>
     </div>
   );
 }

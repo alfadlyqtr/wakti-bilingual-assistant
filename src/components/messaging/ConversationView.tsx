@@ -121,13 +121,13 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
   };
 
   return (
-    <div className="flex flex-col h-full bg-background">
-      {/* Messages */}
+    <div className="flex flex-col h-full bg-background relative">
+      {/* Messages area with reduced bottom padding to make room for input */}
       <ScrollArea 
-        className="flex-1"
+        className="flex-1 pb-2"
         ref={scrollAreaRef}
       >
-        <div className="py-4">
+        <div className="py-4 pb-6">
           {Object.entries(groupedByDate).map(([date, dateMessages]: [string, any]) => (
             <div key={date} className="mb-4">
               <div className="flex justify-center mb-4">
@@ -151,19 +151,21 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
         </div>
       </ScrollArea>
       
-      {/* Input Area - ALWAYS SHOW THIS */}
-      {contact.blocked ? (
-        <div className="p-4 text-center border-t border-border bg-muted">
-          <p className="text-sm text-muted-foreground mb-2">
-            {t("contactBlocked", language)}
-          </p>
-          <button className="px-4 py-2 bg-transparent text-blue-500 border border-blue-500 rounded-full text-sm">
-            {t("unblockContact", language)}
-          </button>
-        </div>
-      ) : (
-        <MessageInputBar onSendMessage={handleSendMessage} />
-      )}
+      {/* Input Area - Now positioned at bottom with absolute positioning */}
+      <div className="w-full bottom-0 left-0 right-0 bg-background z-10">
+        {contact.blocked ? (
+          <div className="p-4 text-center border-t border-border bg-muted">
+            <p className="text-sm text-muted-foreground mb-2">
+              {t("contactBlocked", language)}
+            </p>
+            <button className="px-4 py-2 bg-transparent text-blue-500 border border-blue-500 rounded-full text-sm">
+              {t("unblockContact", language)}
+            </button>
+          </div>
+        ) : (
+          <MessageInputBar onSendMessage={handleSendMessage} />
+        )}
+      </div>
     </div>
   );
 }
