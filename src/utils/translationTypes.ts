@@ -120,9 +120,8 @@ export type TranslationKey =
   // Contact request keys
   | "contactRequestSettings"
   | "autoApproveRequests"
-  
-  // Messaging keys
-  | "newMessage"
+
+  // Messaging system keys
   | "searchContacts"
   | "noContactsFound"
   | "selectConversation"

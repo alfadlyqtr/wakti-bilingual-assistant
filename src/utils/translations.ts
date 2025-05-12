@@ -431,7 +431,77 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   autoApproveRequests: {
     en: "Auto-approve contact requests",
     ar: "الموافقة التلقائية على طلبات الاتصال",
-  }
+  },
+  
+  // Messaging system keys
+  searchContacts: {
+    en: "Search Contacts",
+    ar: "البحث عن جهات الاتصال",
+  },
+  noContactsFound: {
+    en: "No contacts found",
+    ar: "لم يتم العثور على جهات اتصال",
+  },
+  selectConversation: {
+    en: "Select a conversation",
+    ar: "اختر محادثة",
+  },
+  typeMessage: {
+    en: "Type a message...",
+    ar: "اكتب رسالة...",
+  },
+  recordVoice: {
+    en: "Record Voice",
+    ar: "تسجيل صوتي",
+  },
+  stopRecording: {
+    en: "Stop Recording",
+    ar: "إيقاف التسجيل",
+  },
+  uploadImage: {
+    en: "Upload Image",
+    ar: "تحميل صورة",
+  },
+  sendMessage: {
+    en: "Send Message",
+    ar: "إرسال رسالة",
+  },
+  imageTooLarge: {
+    en: "Image is too large (max 5MB)",
+    ar: "الصورة كبيرة جدًا (الحد الأقصى 5 ميجابايت)",
+  },
+  transcript: {
+    en: "Transcript",
+    ar: "نص",
+  },
+  expiresIn: {
+    en: "Expires in",
+    ar: "تنتهي في",
+  },
+  onlineNow: {
+    en: "Online now",
+    ar: "متصل الآن",
+  },
+  contactBlocked: {
+    en: "You have blocked this contact",
+    ar: "لقد قمت بحظر جهة الاتصال هذه",
+  },
+  unblockContact: {
+    en: "Unblock Contact",
+    ar: "إلغاء حظر جهة الاتصال",
+  },
+  noConversations: {
+    en: "No conversations yet",
+    ar: "لا توجد محادثات حتى الآن",
+  },
+  newMessage: {
+    en: "New Message",
+    ar: "رسالة جديدة",
+  },
+  trialReminder: {
+    en: "Trial Reminder",
+    ar: "تذكير الفترة التجريبية",
+  },
 };
 
 export const t = (key: TranslationKey, language: "en" | "ar"): string => {
