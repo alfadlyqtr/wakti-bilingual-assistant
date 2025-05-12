@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -180,8 +179,8 @@ export default function Account() {
                   <AvatarFallback className="text-lg">{name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
                 </Avatar>
                 <div className="absolute bottom-0 right-0">
-                  <Label htmlFor="profilePicture" className="cursor-pointer bg-primary text-primary-foreground dark:bg-primary dark:text-primary-foreground rounded-full p-1.5 shadow-md">
-                    <Upload className="h-4 w-4" />
+                  <Label htmlFor="profilePicture" className="cursor-pointer bg-primary rounded-full p-1.5 shadow-md flex items-center justify-center">
+                    <Upload className="h-4 w-4 text-primary-foreground" />
                     <span className="sr-only">Upload Picture</span>
                   </Label>
                   <Input 
