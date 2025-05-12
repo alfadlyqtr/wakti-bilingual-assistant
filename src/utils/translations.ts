@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -201,6 +202,216 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   alreadyHaveAccount: {
     en: "Already have an account?",
     ar: "هل لديك حساب بالفعل؟",
+  },
+  
+  // Account page translations
+  personalInformation: {
+    en: "Personal Information",
+    ar: "المعلومات الشخصية",
+  },
+  accountControls: {
+    en: "Account Controls",
+    ar: "ضوابط الحساب",
+  },
+  appearance: {
+    en: "Appearance",
+    ar: "المظهر",
+  },
+  theme: {
+    en: "Theme",
+    ar: "السمة",
+  },
+  pushNotifications: {
+    en: "Push Notifications",
+    ar: "الإشعارات المنبثقة",
+  },
+  taskDue: {
+    en: "Task Due",
+    ar: "موعد المهمة",
+  },
+  reminder: {
+    en: "Reminder",
+    ar: "تذكير",
+  },
+  newMessage: {
+    en: "New Message",
+    ar: "رسالة جديدة",
+  },
+  trialReminder: {
+    en: "Trial Reminder",
+    ar: "تذكير الفترة التجريبية",
+  },
+  emailNotifications: {
+    en: "Email Notifications",
+    ar: "إشعارات البريد الإلكتروني",
+  },
+  tasksWidget: {
+    en: "Tasks Widget",
+    ar: "ويدجت المهام",
+  },
+  calendarWidget: {
+    en: "Calendar Widget",
+    ar: "ويدجت التقويم",
+  },
+  remindersWidget: {
+    en: "Reminders Widget",
+    ar: "ويدجت التذكيرات",
+  },
+  dailyQuoteWidget: {
+    en: "Daily Quote Widget",
+    ar: "ويدجت الاقتباس اليومي",
+  },
+  quoteCategory: {
+    en: "Quote Category",
+    ar: "فئة الاقتباس",
+  },
+  inspirational: {
+    en: "Inspirational",
+    ar: "ملهم",
+  },
+  motivational: {
+    en: "Motivational",
+    ar: "تحفيزي",
+  },
+  islamic: {
+    en: "Islamic",
+    ar: "إسلامي",
+  },
+  sports: {
+    en: "Sports",
+    ar: "رياضة",
+  },
+  generalInfo: {
+    en: "General Info",
+    ar: "معلومات عامة",
+  },
+  mixed: {
+    en: "Mixed",
+    ar: "مختلط",
+  },
+  profileVisibility: {
+    en: "Profile Visibility",
+    ar: "ظهور الملف الشخصي",
+  },
+  searchable: {
+    en: "Searchable",
+    ar: "قابل للبحث",
+  },
+  hidden: {
+    en: "Hidden",
+    ar: "مخفي",
+  },
+  activityStatus: {
+    en: "Activity Status",
+    ar: "حالة النشاط",
+  },
+  manageBlockedUsers: {
+    en: "Manage Blocked Users",
+    ar: "إدارة المستخدمين المحظورين",
+  },
+  reportAbuse: {
+    en: "Report Abuse",
+    ar: "الإبلاغ عن إساءة",
+  },
+  submitFeedback: {
+    en: "Submit Feedback",
+    ar: "إرسال التعليقات",
+  },
+  subscriptionBilling: {
+    en: "Subscription & Billing",
+    ar: "الاشتراك والفواتير",
+  },
+  currentPlan: {
+    en: "Current Plan",
+    ar: "الخطة الحالية",
+  },
+  trialEndsIn: {
+    en: "Trial ends in",
+    ar: "تنتهي الفترة التجريبية في",
+  },
+  days: {
+    en: "days",
+    ar: "أيام",
+  },
+  billingManagedThrough: {
+    en: "Billing managed through Apple/Google IAP",
+    ar: "تتم إدارة الفواتير من خلال Apple/Google IAP",
+  },
+  manageBilling: {
+    en: "Manage Billing",
+    ar: "إدارة الفواتير",
+  },
+  cancelPlan: {
+    en: "Cancel Plan",
+    ar: "إلغاء الخطة",
+  },
+  changePassword: {
+    en: "Change Password",
+    ar: "تغيير كلمة المرور",
+  },
+  currentPassword: {
+    en: "Current Password",
+    ar: "كلمة المرور الحالية",
+  },
+  newPassword: {
+    en: "New Password",
+    ar: "كلمة المرور الجديدة",
+  },
+  confirmPassword: {
+    en: "Confirm Password",
+    ar: "تأكيد كلمة المرور",
+  },
+  cancel: {
+    en: "Cancel",
+    ar: "إلغاء",
+  },
+  deleteAccountWarning: {
+    en: "This will permanently delete your account and all associated data. This action cannot be undone.",
+    ar: "سيؤدي هذا إلى حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء.",
+  },
+  thisActionIrreversible: {
+    en: "This action is irreversible!",
+    ar: "هذا الإجراء لا رجعة فيه!",
+  },
+  feedbackDescription: {
+    en: "We value your input. Please share your thoughts and suggestions.",
+    ar: "نحن نقدر مدخلاتك. يرجى مشاركة أفكارك واقتراحاتك.",
+  },
+  feedback: {
+    en: "Feedback",
+    ar: "التعليقات",
+  },
+  feedbackPlaceholder: {
+    en: "Tell us what you think...",
+    ar: "أخبرنا برأيك...",
+  },
+  submit: {
+    en: "Submit",
+    ar: "إرسال",
+  },
+  requestChange: {
+    en: "Request Change",
+    ar: "طلب تغيير",
+  },
+  trialPlan: {
+    en: "Free Trial",
+    ar: "الفترة التجريبية المجانية",
+  },
+  monthlyPlan: {
+    en: "Monthly Plan",
+    ar: "الخطة الشهرية",
+  },
+  yearlyPlan: {
+    en: "Yearly Plan",
+    ar: "الخطة السنوية",
+  },
+  freePlan: {
+    en: "Free Plan",
+    ar: "الخطة المجانية",
+  },
+  daysLeft: {
+    en: "days left",
+    ar: "أيام متبقية",
   }
 };
 
