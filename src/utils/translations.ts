@@ -499,6 +499,10 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Today",
     ar: "اليوم",
   },
+  contactBlocked: {
+    en: "Contact blocked",
+    ar: "تم حظر جهة الاتصال",
+  },
   // Voice Summary keys
   newRecording: {
     en: "New Recording",
@@ -725,10 +729,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   addedToFavorites: {
     en: "Added to favorites",
     ar: "تمت إضافته إلى المفضلة",
-  },
-  contactBlocked: {
-    en: "Contact blocked",
-    ar: "تم حظر جهة الاتصال",
   },
   userBlockedDescription: {
     en: "You will no longer receive messages from this user",
@@ -1000,6 +1000,11 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Descending",
     ar: "تنازلي",
   },
+  // Events system keys
+  createEvent: {
+    en: "Create Event",
+    ar: "إنشاء حدث",
+  },
   event: {
     en: "Event",
     ar: "حدث",
@@ -1007,7 +1012,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   create: {
     en: "Create",
     ar: "إنشاء",
-  },
+  }
 };
 
 export const t = (key: TranslationKey, language: "en" | "ar") => {

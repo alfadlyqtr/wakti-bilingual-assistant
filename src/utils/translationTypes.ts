@@ -43,7 +43,7 @@ export type TranslationKey =
   | "deleteAccount"
   | "freeTrialDays"
   
-  // New keys from errors
+  // New added translations
   | "appName"
   | "tagline"
   | "features"
@@ -266,6 +266,8 @@ export type TranslationKey =
   | "filterBy"
   | "sortBy"
   | "date"
-  | "name"
   | "ascending"
-  | "descending";
+  | "descending"
+  // Event system keys
+  | "createEvent" 
+  | "event";
