@@ -8,6 +8,9 @@ import EventList from "@/components/events/EventList";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
+import { UserMenu } from "@/components/UserMenu";
+import { t } from "@/utils/translations";
+import { useTheme } from "@/providers/ThemeProvider";
 
 // Define the type for our events
 type Event = Tables<"events">;
@@ -15,6 +18,7 @@ type Event = Tables<"events">;
 export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
   const navigate = useNavigate();
+  const { language } = useTheme();
   
   const fetchEvents = async (type: "upcoming" | "past") => {
     const now = new Date().toISOString();
@@ -51,44 +55,66 @@ export default function Events() {
     queryKey: ["events", "past"],
     queryFn: () => fetchEvents("past")
   });
+
+  const handleLogoClick = () => {
+    navigate('/dashboard');
+  };
   
   return (
-    <div className="flex flex-col h-full w-full p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">Events</h1>
-        <Button 
-          onClick={() => navigate("/events/create")} 
-          className="flex items-center gap-1"
-        >
-          <Plus size={18} />
-          <span>Create</span>
-        </Button>
-      </div>
+    <div className="flex flex-col h-full w-full">
+      {/* Mobile Header */}
+      <header className="mobile-header">
+        <div className="flex items-center">
+          {/* Logo that acts as dashboard link */}
+          <img 
+            src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png" 
+            alt="WAKTI Logo" 
+            className="h-10 w-10 mr-3 cursor-pointer rounded-md"
+            onClick={handleLogoClick}
+          />
+          <h1 className="text-2xl font-bold">{t("events", language)}</h1>
+        </div>
+        <UserMenu />
+      </header>
       
-      <Tabs defaultValue="upcoming" onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 mb-4">
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="past">Past</TabsTrigger>
-        </TabsList>
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold sr-only">{t("events", language)}</h1>
+          <div className="flex-1"></div>
+          <Button 
+            onClick={() => navigate("/events/create")} 
+            className="flex items-center gap-1"
+          >
+            <Plus size={18} />
+            <span>Create</span>
+          </Button>
+        </div>
         
-        <TabsContent value="upcoming" className="mt-2">
-          <EventList 
-            type="upcoming" 
-            events={upcomingEvents} 
-            isLoading={isLoadingUpcoming}
-            emptyMessage="No upcoming events found"
-          />
-        </TabsContent>
-        
-        <TabsContent value="past" className="mt-2">
-          <EventList 
-            type="past" 
-            events={pastEvents} 
-            isLoading={isLoadingPast}
-            emptyMessage="No past events found"
-          />
-        </TabsContent>
-      </Tabs>
+        <Tabs defaultValue="upcoming" onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+            <TabsTrigger value="past">Past</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="upcoming" className="mt-2">
+            <EventList 
+              type="upcoming" 
+              events={upcomingEvents} 
+              isLoading={isLoadingUpcoming}
+              emptyMessage="No upcoming events found"
+            />
+          </TabsContent>
+          
+          <TabsContent value="past" className="mt-2">
+            <EventList 
+              type="past" 
+              events={pastEvents} 
+              isLoading={isLoadingPast}
+              emptyMessage="No past events found"
+            />
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
