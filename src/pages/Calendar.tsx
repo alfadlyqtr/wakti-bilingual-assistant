@@ -31,7 +31,7 @@ export default function Calendar() {
           <UserMenu userName="John Doe" />
         </header>
 
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden pb-16">
           <UnifiedCalendar />
         </div>
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
   addWeeks, subWeeks, setMonth, getMonth, startOfYear, endOfYear, 
-  setYear, getYear, addYears, subYears } from "date-fns";
+  setYear, getYear, addYears, subYears, parse } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useTaskReminder } from "@/contexts/TaskReminderContext";
@@ -25,10 +25,23 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Plus,
+  ChevronDown
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export const UnifiedCalendar: React.FC = () => {
   const { language, theme } = useTheme();
@@ -46,9 +59,29 @@ export const UnifiedCalendar: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTapRef = useRef<number>(0);
-
+  
   // Get the appropriate locale based on the selected language
   const locale = language === 'ar' ? arSA : enUS;
+
+  // Generate month options for the select
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const date = new Date();
+    date.setMonth(i);
+    return {
+      value: i.toString(),
+      label: format(date, 'MMMM', { locale }),
+    };
+  });
+
+  // Generate year options (past 2 years, current year, future 5 years)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 8 }, (_, i) => {
+    const year = currentYear - 2 + i;
+    return {
+      value: year.toString(),
+      label: year.toString(),
+    };
+  });
 
   // Load manual entries from local storage
   useEffect(() => {
@@ -93,6 +126,20 @@ export const UnifiedCalendar: React.FC = () => {
   const goToToday = () => {
     setCurrentDate(new Date());
     setSelectedDate(new Date());
+  };
+
+  // Handle month change from dropdown
+  const handleMonthChange = (value: string) => {
+    const newMonth = parseInt(value, 10);
+    const newDate = setMonth(currentDate, newMonth);
+    setCurrentDate(newDate);
+  };
+
+  // Handle year change from dropdown
+  const handleYearChange = (value: string) => {
+    const newYear = parseInt(value, 10);
+    const newDate = setYear(currentDate, newYear);
+    setCurrentDate(newDate);
   };
 
   // Handle touch gestures for view switching
@@ -219,63 +266,97 @@ export const UnifiedCalendar: React.FC = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      <div className="flex items-center justify-between p-3">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={navigatePrevious}
-            className={cn(language === 'ar' ? 'order-2' : 'order-1')}
-          >
-            <ChevronLeft className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
-          </Button>
-          
-          <div className={cn("text-lg font-semibold px-2 flex-1 text-center", 
-            language === 'ar' ? 'order-1' : 'order-2')}>
-            {format(currentDate, 
-              view === 'year' 
-                ? 'yyyy' 
-                : view === 'month' 
-                  ? 'MMMM yyyy' 
-                  : 'dd MMM yyyy', 
-              { locale }
-            )}
+      <div className="flex flex-col space-y-2 p-3">
+        {/* Date selector with dropdowns */}
+        <div className="flex items-center justify-center w-full">
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={navigatePrevious}
+              className={cn(language === 'ar' ? 'order-2' : 'order-1')}
+            >
+              <ChevronLeft className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
+            </Button>
+            
+            <div className={cn("flex items-center space-x-1", 
+              language === 'ar' ? 'order-1 flex-row-reverse' : 'order-2')}>
+              <Select 
+                value={getMonth(currentDate).toString()}
+                onValueChange={handleMonthChange}
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue>
+                    {format(currentDate, 'MMMM', { locale })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map(month => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select 
+                value={getYear(currentDate).toString()}
+                onValueChange={handleYearChange}
+              >
+                <SelectTrigger className="w-[90px]">
+                  <SelectValue>
+                    {format(currentDate, 'yyyy', { locale })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(year => (
+                    <SelectItem key={year.value} value={year.value}>
+                      {year.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={navigateNext}
+              className={cn(language === 'ar' ? 'order-1' : 'order-3')}
+            >
+              <ChevronRight className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
+            </Button>
           </div>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={navigateNext}
-            className={cn(language === 'ar' ? 'order-1' : 'order-3')}
-          >
-            <ChevronRight className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
-          </Button>
         </div>
-
-        <div className="flex items-center gap-2">
+        
+        {/* View switcher and action buttons */}
+        <div className="flex items-center justify-between">
           <CalendarViewSwitcher 
             view={view} 
             onViewChange={setView}
-            className="ml-auto"
           />
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={goToToday}
-          >
-            {t("today", language)}
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => {
-              setEditEntry(null);
-              setEntryDialogOpen(true);
-            }}
-            title={t("create", language)}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
+          
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={goToToday}
+            >
+              {t("today", language)}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => {
+                setEditEntry(null);
+                setEntryDialogOpen(true);
+              }}
+              title={t("create", language)}
+              className="fixed bottom-24 right-4 z-10 rounded-full shadow-lg h-12 w-12 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -288,17 +369,6 @@ export const UnifiedCalendar: React.FC = () => {
         language={language}
         locale={locale}
       />
-
-      <div className={cn("fixed bottom-20 left-0 right-0 flex justify-center z-10", 
-        agendaOpen && "hidden")}>
-        <Button 
-          onClick={goToToday}
-          variant="default"
-          className="rounded-full px-4 py-2 shadow-lg"
-        >
-          {t("today", language)}
-        </Button>
-      </div>
 
       <Drawer open={agendaOpen} onOpenChange={setAgendaOpen}>
         <DrawerTrigger asChild>
@@ -332,3 +402,4 @@ export const UnifiedCalendar: React.FC = () => {
     </div>
   );
 };
+
