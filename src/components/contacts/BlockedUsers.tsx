@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,8 +19,7 @@ export function BlockedUsers() {
     setBlockedUsers(blockedUsers.filter(user => user.id !== id));
     toast({
       title: "User unblocked",
-      description: `${name} has been removed from your blocked list`,
-      duration: 3000,
+      description: `${name} has been removed from your blocked list`
     });
   };
 

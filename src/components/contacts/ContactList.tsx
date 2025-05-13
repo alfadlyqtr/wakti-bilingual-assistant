@@ -1,45 +1,52 @@
-
 import { useState } from "react";
-import { MessageSquare, UserMinus, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
+import { MessageSquare, Star, UserX } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 // Mock data for demonstration
 const initialContacts = [
-  { id: 1, username: "abdullah_83", name: "Abdullah", avatar: "", lastActive: "2h ago" },
-  { id: 2, username: "nora_travel", name: "Nora", avatar: "", lastActive: "1d ago" },
-  { id: 3, username: "khalid_tech", name: "Khalid", avatar: "", lastActive: "3h ago" },
-  { id: 4, username: "aisha_designs", name: "Aisha", avatar: "", lastActive: "Just now" },
-  { id: 5, username: "omar_fitness", name: "Omar", avatar: "", lastActive: "5m ago" },
+  { id: 1, username: "ahmed_ibrahim", name: "Ahmed Ibrahim", avatar: "", favorite: true },
+  { id: 2, username: "sara_khalid", name: "Sara Khalid", avatar: "", favorite: false },
+  { id: 3, username: "mohammed_ali", name: "Mohammed Ali", avatar: "", favorite: false },
 ];
 
 export function ContactList() {
-  const navigate = useNavigate();
   const { toast } = useToast();
+  const { language } = useTheme();
+  const navigate = useNavigate();
   const [contacts, setContacts] = useState(initialContacts);
 
-  const handleMessage = (username: string) => {
-    // In a real app, this would navigate to the message thread with this contact
-    navigate(`/messages?contact=${username}`);
+  const handleMessage = (id: number, name: string) => {
+    // In a real app, this would navigate to a chat with this contact
+    navigate(`/messages/${id}`);
+    toast({
+      title: t("messageStarted", language),
+      description: t("chattingWithUser", language, { username: name })
+    });
   };
 
-  const handleRemove = (id: number) => {
-    setContacts(contacts.filter(contact => contact.id !== id));
+  const handleToggleFavorite = (id: number, isFavorite: boolean) => {
+    setContacts(contacts.map(contact => 
+      contact.id === id ? {...contact, favorite: !isFavorite} : contact
+    ));
+    
     toast({
-      description: "Contact removed",
-      duration: 3000,
+      title: isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language),
+      description: ""
     });
   };
 
   const handleBlock = (id: number, name: string) => {
     setContacts(contacts.filter(contact => contact.id !== id));
+    
     toast({
-      title: "Contact blocked",
-      description: `${name} has been added to your blocked list`,
-      duration: 3000,
+      title: t("contactBlocked", language),
+      description: t("userBlockedDescription", language, { username: name })
     });
   };
 
@@ -47,62 +54,49 @@ export function ContactList() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Sort contacts alphabetically by name
-  const sortedContacts = [...contacts].sort((a, b) => a.name.localeCompare(b.name));
-
   return (
     <div className="space-y-3">
-      {sortedContacts.length === 0 ? (
-        <Card className="p-6 text-center text-muted-foreground">
-          No contacts yet
-        </Card>
-      ) : (
-        sortedContacts.map(contact => (
-          <Card key={contact.id} className="overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar>
-                    <AvatarImage src={contact.avatar} />
-                    <AvatarFallback>{getInitials(contact.name)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{contact.name}</p>
-                    <p className="text-sm text-muted-foreground">@{contact.username}</p>
-                    <p className="text-xs text-muted-foreground">{contact.lastActive}</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => handleMessage(contact.username)}
-                    className="rounded-full h-8 w-8 p-0"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => handleBlock(contact.id, contact.name)}
-                    className="rounded-full h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost"
-                    onClick={() => handleRemove(contact.id)}
-                    className="rounded-full h-8 w-8 p-0 text-muted-foreground"
-                  >
-                    <UserMinus className="h-4 w-4" />
-                  </Button>
+      {contacts.map(contact => (
+        <Card key={contact.id} className="overflow-hidden">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={contact.avatar} />
+                  <AvatarFallback>{getInitials(contact.name)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{contact.name}</p>
+                  <p className="text-sm text-muted-foreground">@{contact.username}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        ))
-      )}
+              <div className="flex items-center gap-2">
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  onClick={() => handleToggleFavorite(contact.id, contact.favorite)}
+                >
+                  <Star className={`h-4 w-4 ${contact.favorite ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  onClick={() => handleMessage(contact.id, contact.name)}
+                >
+                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  variant="ghost"
+                  onClick={() => handleBlock(contact.id, contact.name)}
+                >
+                  <UserX className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }

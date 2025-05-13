@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -30,8 +29,7 @@ export function ContactSearch() {
     // In a real app, this would send a request to the backend
     toast({
       title: "Request sent!",
-      description: `Contact request sent to ${searchQuery}`,
-      duration: 3000,
+      description: `Contact request sent to ${searchQuery}`
     });
     
     setSearchQuery("");

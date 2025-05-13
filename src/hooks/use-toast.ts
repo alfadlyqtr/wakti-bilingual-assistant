@@ -1,6 +1,6 @@
 
 import * as React from "react"
-import { Cross2Icon } from "@radix-ui/react-icons"
+import { X } from "lucide-react"
 
 import {
   Toast,
@@ -21,6 +21,9 @@ type ToasterToast = {
   description?: React.ReactNode
   action?: React.ReactNode
   variant?: "default" | "destructive"
+  duration?: number
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 const actionTypes = {

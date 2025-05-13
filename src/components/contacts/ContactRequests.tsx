@@ -1,53 +1,45 @@
-
 import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent } from "@/components/ui/card";
+import { Check, X, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Check, X } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { useToast } from "@/hooks/use-toast";
 
 // Mock data for demonstration
-const incomingRequests = [
-  { id: 1, username: "ahmed_123", name: "Ahmed", avatar: "" },
-  { id: 2, username: "sarah_92", name: "Sarah", avatar: "" },
-];
-
-const outgoingRequests = [
-  { id: 3, username: "mohamed_45", name: "Mohamed", avatar: "" },
-  { id: 4, username: "fatima_22", name: "Fatima", avatar: "" },
+const initialRequests = [
+  { id: 1, username: "new_user", name: "New User", avatar: "", time: "2 hours ago" },
+  { id: 2, username: "contact_request", name: "Contact Request", avatar: "", time: "1 day ago" },
 ];
 
 export function ContactRequests() {
-  const { language } = useTheme();
   const { toast } = useToast();
-  const [incoming, setIncoming] = useState(incomingRequests);
-  const [outgoing, setOutgoing] = useState(outgoingRequests);
+  const { language } = useTheme();
+  const [requests, setRequests] = useState(initialRequests);
 
-  const handleAccept = (id: number) => {
-    setIncoming(incoming.filter(req => req.id !== id));
+  const handleAccept = (id: number, name: string) => {
+    setRequests(requests.filter(req => req.id !== id));
     toast({
-      title: "Request accepted",
-      description: "Contact has been added to your list",
-      duration: 3000,
+      title: t("requestAccepted", language),
+      description: t("contactAddedDescription", language, { username: name })
     });
   };
 
-  const handleReject = (id: number) => {
-    setIncoming(incoming.filter(req => req.id !== id));
+  const handleReject = (id: number, name: string) => {
+    setRequests(requests.filter(req => req.id !== id));
     toast({
-      description: "Request rejected",
-      duration: 3000,
+      title: t("requestRejected", language),
+      description: t("contactRejectedDescription", language, { username: name })
     });
   };
 
-  const handleCancel = (id: number) => {
-    setOutgoing(outgoing.filter(req => req.id !== id));
+  const handleBlock = (id: number, name: string) => {
+    setRequests(requests.filter(req => req.id !== id));
     toast({
-      description: "Request canceled",
-      duration: 3000,
+      title: t("contactBlocked", language),
+      description: t("blockedUserDescription", language, { username: name })
     });
   };
 
@@ -56,89 +48,59 @@ export function ContactRequests() {
   };
 
   return (
-    <Tabs defaultValue="incoming" className="w-full">
-      <TabsList className="grid grid-cols-2 mb-4">
-        <TabsTrigger value="incoming">{t("filters", language)}</TabsTrigger>
-        <TabsTrigger value="outgoing">{t("today", language)}</TabsTrigger>
-      </TabsList>
-      
-      <TabsContent value="incoming" className="space-y-3 animate-fade-in">
-        {incoming.length === 0 ? (
-          <Card className="p-6 text-center text-muted-foreground">
-            No incoming requests
-          </Card>
-        ) : (
-          incoming.map(request => (
-            <Card key={request.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={request.avatar} />
-                      <AvatarFallback>{getInitials(request.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{request.name}</p>
-                      <p className="text-sm text-muted-foreground">@{request.username}</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleAccept(request.id)}
-                      className="rounded-full h-8 w-8 p-0"
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => handleReject(request.id)}
-                      className="rounded-full h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+    <div className="space-y-3">
+      {requests.length === 0 ? (
+        <Card className="p-6 text-center text-muted-foreground">
+          {t("noContactRequests", language)}
+        </Card>
+      ) : (
+        requests.map(request => (
+          <Card key={request.id} className="overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar>
+                    <AvatarImage src={request.avatar} />
+                    <AvatarFallback>{getInitials(request.name)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{request.name}</p>
+                    <p className="text-sm text-muted-foreground">@{request.username}</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </TabsContent>
-      
-      <TabsContent value="outgoing" className="space-y-3 animate-fade-in">
-        {outgoing.length === 0 ? (
-          <Card className="p-6 text-center text-muted-foreground">
-            No outgoing requests
-          </Card>
-        ) : (
-          outgoing.map(request => (
-            <Card key={request.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={request.avatar} />
-                      <AvatarFallback>{getInitials(request.name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{request.name}</p>
-                      <p className="text-sm text-muted-foreground">@{request.username}</p>
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2">
                   <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => handleCancel(request.id)}
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => handleAccept(request.id, request.name)}
                   >
-                    Cancel
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => handleReject(request.id, request.name)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    size="icon" 
+                    variant="ghost"
+                    onClick={() => handleBlock(request.id, request.name)}
+                  >
+                    <User className="h-4 w-4" />
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </TabsContent>
-    </Tabs>
+              </div>
+              <div className="text-xs text-muted-foreground mt-1">
+                <Badge variant="secondary">
+                  {request.time}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
   );
 }
