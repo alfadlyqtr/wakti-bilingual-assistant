@@ -268,6 +268,8 @@ export type TranslationKey =
   | "date"
   | "ascending"
   | "descending"
-  // Event system keys
+  // Events system keys
   | "createEvent" 
-  | "event";
+  | "event"
+  | "create";
+
