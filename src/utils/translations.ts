@@ -483,6 +483,7 @@ export function t(key: TranslationKey, lang: string): string {
       writingContent: "Writing your content...",
       helpingYouWith: "Helping you with",
       errorProcessingRequest: "Sorry, there was an error processing your request. Please try again.",
+      taskCreatedSuccessfully: "Task created successfully",
       viewCalendar: "View Calendar",
       selectDate: "Select date",
       
@@ -924,6 +925,7 @@ export function t(key: TranslationKey, lang: string): string {
       writingContent: "جاري كتابة المحتوى الخاص بك...",
       helpingYouWith: "أساعدك في",
       errorProcessingRequest: "عذرًا، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.",
+      taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح",
       viewCalendar: "عرض التقويم",
       selectDate: "اختر تاريخ",
       
