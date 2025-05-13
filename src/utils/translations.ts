@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -482,10 +483,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Online now",
     ar: "متصل الآن",
   },
-  contactBlocked: {
-    en: "You have blocked this contact",
-    ar: "لقد قمت بحظر جهة الاتصال هذه",
-  },
   unblockContact: {
     en: "Unblock Contact",
     ar: "إلغاء حظر جهة الاتصال",
@@ -729,6 +726,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Added to favorites",
     ar: "تمت إضافته إلى المفضلة",
   },
+  // Removed the duplicate contactBlocked key and kept only one instance
   contactBlocked: {
     en: "Contact blocked",
     ar: "تم حظر جهة الاتصال",
