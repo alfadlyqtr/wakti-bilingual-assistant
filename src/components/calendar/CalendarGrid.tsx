@@ -21,6 +21,7 @@ import { arSA, enUS, Locale } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
+import { Circle, CalendarCheck, CalendarHeart, CalendarPlus } from "lucide-react";
 
 interface CalendarGridProps {
   currentDate: Date;
@@ -77,6 +78,23 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     });
   };
   
+  // Count entries by type for a given date
+  const getEntryCountByType = (date: Date) => {
+    const entries = getEntriesForDate(date);
+    const counts = {
+      [EntryType.TASK]: 0,
+      [EntryType.EVENT]: 0,
+      [EntryType.REMINDER]: 0,
+      [EntryType.MANUAL_NOTE]: 0
+    };
+    
+    entries.forEach(entry => {
+      counts[entry.type]++;
+    });
+    
+    return counts;
+  };
+  
   // First day of week should be Sunday for English, Saturday for Arabic
   const dayNames = React.useMemo(() => {
     const firstDayOfWeek = language === 'en' ? 0 : 6; // 0 = Sunday, 6 = Saturday
@@ -90,8 +108,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
     return (
       <div className="grid grid-cols-3 gap-2 p-2 overflow-y-auto flex-1 pb-20">
         {days.map((month) => {
-          const entries = getEntriesForDate(month);
-          const hasEntries = entries.length > 0;
+          const entryCounts = getEntryCountByType(month);
+          const hasEntries = Object.values(entryCounts).some(count => count > 0);
           const isCurrentMonth = isSameMonth(month, today);
           
           return (
@@ -113,18 +131,30 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               <div className="font-medium">{format(month, 'MMM', { locale })}</div>
               
               {hasEntries && (
-                <div className="flex justify-center gap-1 mt-1">
-                  {entries.some(e => e.type === EntryType.TASK) && (
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <div className="flex justify-center gap-2 mt-2">
+                  {entryCounts[EntryType.TASK] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                      {entryCounts[EntryType.TASK] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.TASK]}</span>}
+                    </div>
                   )}
-                  {entries.some(e => e.type === EntryType.EVENT) && (
-                    <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  {entryCounts[EntryType.EVENT] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
+                      {entryCounts[EntryType.EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.EVENT]}</span>}
+                    </div>
                   )}
-                  {entries.some(e => e.type === EntryType.REMINDER) && (
-                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                  {entryCounts[EntryType.REMINDER] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-red-500 text-red-500" />
+                      {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
+                    </div>
                   )}
-                  {entries.some(e => e.type === EntryType.MANUAL_NOTE) && (
-                    <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                  {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                      {entryCounts[EntryType.MANUAL_NOTE] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MANUAL_NOTE]}</span>}
+                    </div>
                   )}
                 </div>
               )}
@@ -163,7 +193,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
           const isToday = isSameDay(day, today);
           const isSelected = selectedDate ? isSameDay(day, selectedDate) : false;
           const isCurrentMonth = isSameMonth(day, currentDate);
-          const entries = getEntriesForDate(day);
+          const entryCounts = getEntryCountByType(day);
           const dayNumber = format(day, 'd');
           
           return (
@@ -172,7 +202,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               whileTap={{ scale: 0.95 }}
               onClick={() => onDayClick(day)}
               className={cn(
-                "relative min-h-[90px] p-1 rounded-md border",
+                "relative min-h-[80px] p-1 rounded-md border",
                 !isCurrentMonth && view === 'month' && "opacity-40 bg-background/50",
                 isToday && "border-primary",
                 isSelected && "bg-primary/10",
@@ -195,32 +225,37 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 )}
               </div>
               
-              <div className="flex flex-col gap-1 overflow-hidden">
-                {entries.slice(0, 3).map((entry) => {
-                  const entryColor = 
-                    entry.type === EntryType.TASK ? "bg-green-500" :
-                    entry.type === EntryType.EVENT ? "bg-blue-500" :
-                    entry.type === EntryType.REMINDER ? "bg-red-500" :
-                    "bg-yellow-500";
-                  
-                  return (
-                    <div 
-                      key={entry.id} 
-                      className={cn(
-                        "text-xs truncate px-1 py-0.5 rounded",
-                        entryColor,
-                        "text-white"
-                      )}
-                      title={entry.title}
-                    >
-                      {entry.title}
-                    </div>
-                  );
-                })}
-                
-                {entries.length > 3 && (
-                  <div className="text-xs text-muted-foreground px-1">
-                    +{entries.length - 3} more
+              <div className="flex flex-wrap justify-center gap-2 mt-1">
+                {entryCounts[EntryType.TASK] > 0 && (
+                  <div className="flex items-center">
+                    <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                    {entryCounts[EntryType.TASK] > 1 && 
+                      <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
+                    }
+                  </div>
+                )}
+                {entryCounts[EntryType.EVENT] > 0 && (
+                  <div className="flex items-center">
+                    <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
+                    {entryCounts[EntryType.EVENT] > 1 && 
+                      <span className="text-xs ml-0.5">{entryCounts[EntryType.EVENT]}</span>
+                    }
+                  </div>
+                )}
+                {entryCounts[EntryType.REMINDER] > 0 && (
+                  <div className="flex items-center">
+                    <Circle className="h-3 w-3 fill-red-500 text-red-500" />
+                    {entryCounts[EntryType.REMINDER] > 1 && 
+                      <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
+                    }
+                  </div>
+                )}
+                {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
+                  <div className="flex items-center">
+                    <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                    {entryCounts[EntryType.MANUAL_NOTE] > 1 && 
+                      <span className="text-xs ml-0.5">{entryCounts[EntryType.MANUAL_NOTE]}</span>
+                    }
                   </div>
                 )}
               </div>
