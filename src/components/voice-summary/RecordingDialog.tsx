@@ -29,6 +29,12 @@ interface VoiceRecordingData {
   clean_audio?: boolean;
 }
 
+// Type for the response data including ID
+interface VoiceRecordingResponse {
+  id: string;
+  [key: string]: any;
+}
+
 export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProps) {
   const [tab, setTab] = useState("record");
   const [recordingStep, setRecordingStep] = useState<"metadata" | "recording" | "transcribing" | "summarizing">("metadata");
@@ -155,17 +161,18 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       const voiceRecordingData: VoiceRecordingData = {
         title: formData.title,
         type: formData.type,
-        host: formData.host || null,
-        attendees: formData.attendees || null,
-        location: formData.location || null,
+        host: formData.host || undefined,
+        attendees: formData.attendees || undefined,
+        location: formData.location || undefined,
         audio_url: publicUrl.publicUrl,
         expires_at: expiresAt.toISOString(),
         clean_audio: formData.cleanAudio,
       };
       
-      const { data: recordingData, error: dbError } = await supabase
-        .from("voice_recordings" as any)
-        .insert(voiceRecordingData as any)
+      // Use explicit type assertion for the returned data
+      const { data, error: dbError } = await supabase
+        .from('voice_recordings')
+        .insert(voiceRecordingData)
         .select('id')
         .single();
 
@@ -173,8 +180,11 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
         throw dbError;
       }
 
+      // Safely check if data exists and has an id
+      const recordingData = data as VoiceRecordingResponse;
+      
       // Start audio transcription
-      if (recordingData?.id) {
+      if (recordingData && recordingData.id) {
         try {
           await supabase.functions.invoke("transcribe-audio", {
             body: { 
@@ -200,7 +210,7 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       onClose();
       
       // Navigate to the recording detail page if we have an ID
-      if (recordingData?.id) {
+      if (recordingData && recordingData.id) {
         navigate(`/voice-summary/${recordingData.id}`);
       }
       
@@ -258,16 +268,17 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       const voiceRecordingData: VoiceRecordingData = {
         title: title,
         type: formData.type,
-        host: formData.host || null,
-        attendees: formData.attendees || null,
-        location: formData.location || null,
+        host: formData.host || undefined,
+        attendees: formData.attendees || undefined,
+        location: formData.location || undefined,
         audio_url: publicUrl.publicUrl,
         expires_at: expiresAt.toISOString(),
       };
 
-      const { data: recordingData, error: dbError } = await supabase
-        .from("voice_recordings" as any)
-        .insert(voiceRecordingData as any)
+      // Use explicit type assertion for the returned data
+      const { data, error: dbError } = await supabase
+        .from('voice_recordings')
+        .insert(voiceRecordingData)
         .select('id')
         .single();
 
@@ -275,8 +286,11 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
         throw dbError;
       }
 
+      // Safely check if data exists and has an id
+      const recordingData = data as VoiceRecordingResponse;
+
       // Start audio transcription
-      if (recordingData?.id) {
+      if (recordingData && recordingData.id) {
         try {
           await supabase.functions.invoke("transcribe-audio", {
             body: { 
@@ -302,7 +316,7 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       onClose();
       
       // Navigate to the recording detail page if we have an ID
-      if (recordingData?.id) {
+      if (recordingData && recordingData.id) {
         navigate(`/voice-summary/${recordingData.id}`);
       }
       
