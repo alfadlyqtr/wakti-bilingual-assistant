@@ -502,6 +502,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Contact blocked",
     ar: "تم حظر جهة الاتصال",
   },
+  
   // Voice Summary keys
   newRecording: {
     en: "New Recording",
@@ -677,7 +678,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   },
   summaryLanguage: {
     en: "Summary Language",
-    ar: "لغة الملخص",
+    ar: "لغة ال��لخص",
   },
   male: {
     en: "Male",
@@ -1075,7 +1076,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Calendar Notes",
     ar: "ملاحظات التقويم",
   },
-  // Fixing duplicate translations by renaming them
+  // Calendar note specific translations
   calendarNote: {
     en: "Calendar Note",
     ar: "ملاحظة تقويم",

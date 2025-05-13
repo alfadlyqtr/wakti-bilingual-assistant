@@ -288,4 +288,6 @@ export type TranslationKey =
   | "descriptionPlaceholder"
   | "editNote"
   | "createNote"
-  | "notesLabel";
+  | "notesLabel"
+  | "calendarNote"
+  | "manualNote";
