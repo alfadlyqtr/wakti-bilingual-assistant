@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -678,7 +679,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   },
   summaryLanguage: {
     en: "Summary Language",
-    ar: "لغة ال��لخص",
+    ar: "لغة الملخص",
   },
   male: {
     en: "Male",
