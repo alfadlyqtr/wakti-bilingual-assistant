@@ -32,8 +32,9 @@ export default function VoiceSummaryArchive() {
     queryKey: ["voice-recordings"],
     queryFn: async () => {
       try {
+        // Using 'from' with type casting to handle the database schema mismatch
         const { data, error } = await supabase
-          .from("voice_recordings")
+          .from("voice_recordings" as any)
           .select("*")
           .order("created_at", { ascending: false });
           

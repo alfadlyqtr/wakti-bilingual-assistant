@@ -56,13 +56,13 @@ export default function VoiceSummaryDetail() {
       if (!id) throw new Error("Recording ID is required");
       
       const { data, error } = await supabase
-        .from("voice_recordings")
+        .from("voice_recordings" as any)
         .select("*")
         .eq("id", id)
         .single();
         
       if (error) throw error;
-      return data as RecordingDetail;
+      return data as unknown as RecordingDetail;
     },
   });
 

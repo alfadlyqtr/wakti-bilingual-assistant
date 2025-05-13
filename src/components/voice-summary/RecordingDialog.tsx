@@ -17,6 +17,18 @@ interface RecordingDialogProps {
   onClose: () => void;
 }
 
+// Type for the voice recording data
+interface VoiceRecordingData {
+  title: string;
+  type: string;
+  host?: string;
+  attendees?: string;
+  location?: string;
+  audio_url: string;
+  expires_at: string;
+  clean_audio?: boolean;
+}
+
 export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProps) {
   const [tab, setTab] = useState("record");
   const [recordingStep, setRecordingStep] = useState<"metadata" | "recording" | "transcribing" | "summarizing">("metadata");
@@ -139,19 +151,21 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 10);
       
-      // Save metadata to database
+      // Save metadata to database using type casting to match DB schema
+      const voiceRecordingData: VoiceRecordingData = {
+        title: formData.title,
+        type: formData.type,
+        host: formData.host || null,
+        attendees: formData.attendees || null,
+        location: formData.location || null,
+        audio_url: publicUrl.publicUrl,
+        expires_at: expiresAt.toISOString(),
+        clean_audio: formData.cleanAudio,
+      };
+      
       const { data: recordingData, error: dbError } = await supabase
-        .from('voice_recordings')
-        .insert({
-          title: formData.title,
-          type: formData.type,
-          host: formData.host || null,
-          attendees: formData.attendees || null,
-          location: formData.location || null,
-          audio_url: publicUrl.publicUrl,
-          expires_at: expiresAt.toISOString(),
-          clean_audio: formData.cleanAudio,
-        })
+        .from("voice_recordings" as any)
+        .insert(voiceRecordingData as any)
         .select('id')
         .single();
 
@@ -240,18 +254,20 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 10);
 
-      // Save metadata to database
+      // Save metadata to database using type casting for DB schema
+      const voiceRecordingData: VoiceRecordingData = {
+        title: title,
+        type: formData.type,
+        host: formData.host || null,
+        attendees: formData.attendees || null,
+        location: formData.location || null,
+        audio_url: publicUrl.publicUrl,
+        expires_at: expiresAt.toISOString(),
+      };
+
       const { data: recordingData, error: dbError } = await supabase
-        .from('voice_recordings')
-        .insert({
-          title: title,
-          type: formData.type,
-          host: formData.host || null,
-          attendees: formData.attendees || null,
-          location: formData.location || null,
-          audio_url: publicUrl.publicUrl,
-          expires_at: expiresAt.toISOString(),
-        })
+        .from("voice_recordings" as any)
+        .insert(voiceRecordingData as any)
         .select('id')
         .single();
 

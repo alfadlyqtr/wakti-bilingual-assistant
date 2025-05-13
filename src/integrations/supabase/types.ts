@@ -145,6 +145,63 @@ export type Database = {
         }
         Relationships: []
       }
+      voice_recordings: {
+        Row: {
+          attendees: string | null
+          audio_url: string
+          clean_audio: boolean | null
+          created_at: string
+          expires_at: string
+          highlighted_timestamps: Json | null
+          host: string | null
+          id: string
+          location: string | null
+          summary: string | null
+          summary_audio_url: string | null
+          summary_language: string | null
+          summary_voice: string | null
+          title: string
+          transcript: string | null
+          type: string
+        }
+        Insert: {
+          attendees?: string | null
+          audio_url: string
+          clean_audio?: boolean | null
+          created_at?: string
+          expires_at: string
+          highlighted_timestamps?: Json | null
+          host?: string | null
+          id?: string
+          location?: string | null
+          summary?: string | null
+          summary_audio_url?: string | null
+          summary_language?: string | null
+          summary_voice?: string | null
+          title: string
+          transcript?: string | null
+          type: string
+        }
+        Update: {
+          attendees?: string | null
+          audio_url?: string
+          clean_audio?: boolean | null
+          created_at?: string
+          expires_at?: string
+          highlighted_timestamps?: Json | null
+          host?: string | null
+          id?: string
+          location?: string | null
+          summary?: string | null
+          summary_audio_url?: string | null
+          summary_language?: string | null
+          summary_voice?: string | null
+          title?: string
+          transcript?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
