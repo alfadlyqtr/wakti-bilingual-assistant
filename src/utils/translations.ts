@@ -1,3 +1,4 @@
+
 import { TranslationKey } from './translationTypes';
 
 export interface GeneralText {
@@ -307,7 +308,7 @@ export function t(key: TranslationKey, lang: string): string {
       sortBy: "Sort by",
       date: "Date",
       ascending: "Ascending",
-      descending: "Descending",
+      descending: "Descending", 
       due: "Due",
       taskDescription: "Description",
       taskDueDate: "Due Date",
@@ -425,6 +426,7 @@ export function t(key: TranslationKey, lang: string): string {
       blockedUserDescription: "User blocked",
       noContactRequests: "No contact requests",
       contactBlocked: "Contact blocked",
+      unblockContact: "Unblock contact",
       
       // AI Assistant Translations
       welcomeToWaktiAI: "Welcome to WAKTI AI. How can I assist you today?",
@@ -481,8 +483,6 @@ export function t(key: TranslationKey, lang: string): string {
       helpingYouWith: "Helping you with",
       errorProcessingRequest: "Sorry, there was an error processing your request. Please try again.",
       viewCalendar: "View Calendar",
-      
-      // Widget Labels
       
       // Marketing
       startFreeTrial: "Start Free Trial",
@@ -924,8 +924,6 @@ export function t(key: TranslationKey, lang: string): string {
       errorProcessingRequest: "عذرًا، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.",
       viewCalendar: "عرض التقويم",
       
-      // Widget Labels
-      
       // Marketing
       startFreeTrial: "ابدأ الإصدار التجريبي المجاني",
       createAccount: "إنشاء حساب",
@@ -1057,7 +1055,7 @@ export function t(key: TranslationKey, lang: string): string {
       attendeesOptional: "الحاضرون (اختياري)",
       locationOptional: "الموقع (اختياري)",
       separateWithCommas: "الفصل بفواصل",
-      whereTookPlace: "مكان ا��حدث",
+      whereTookPlace: "مكان الحدث",
       minutes: "دقائق",
       ago: "مضت",
       daysRemaining: "الأيام المتبقية",
@@ -1099,3 +1097,4 @@ export function t(key: TranslationKey, lang: string): string {
 
   return translations[lang][key] || key;
 }
+
