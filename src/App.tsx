@@ -19,6 +19,8 @@ import NotFound from "./pages/NotFound";
 import Events from "./pages/Events";
 import EventCreate from "./pages/EventCreate";
 import EventDetail from "./pages/EventDetail";
+import VoiceSummary from "./pages/VoiceSummary";
+import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
 
 const queryClient = new QueryClient();
 
@@ -40,7 +42,8 @@ const App = () => (
             <Route path="/tasks" element={<Dashboard />} />
             <Route path="/calendar" element={<Dashboard />} />
             <Route path="/assistant" element={<Dashboard />} />
-            <Route path="/voice-summary" element={<Dashboard />} />
+            <Route path="/voice-summary" element={<VoiceSummary />} />
+            <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
             <Route path="/events" element={<Events />} />
             <Route path="/events/create" element={<EventCreate />} />
             <Route path="/events/:id" element={<EventDetail />} />
