@@ -6,6 +6,7 @@ import { ChatMessage, AIMode } from "./types";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { User } from "lucide-react";
 
 interface ChatWindowProps {
   messages: ChatMessage[];
