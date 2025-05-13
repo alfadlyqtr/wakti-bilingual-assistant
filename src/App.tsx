@@ -16,6 +16,9 @@ import Settings from "./pages/Settings";
 import Account from "./pages/Account";
 import Contacts from "./pages/Contacts";
 import NotFound from "./pages/NotFound";
+import Events from "./pages/Events";
+import EventCreate from "./pages/EventCreate";
+import EventDetail from "./pages/EventDetail";
 
 const queryClient = new QueryClient();
 
@@ -38,7 +41,9 @@ const App = () => (
             <Route path="/calendar" element={<Dashboard />} />
             <Route path="/assistant" element={<Dashboard />} />
             <Route path="/voice-summary" element={<Dashboard />} />
-            <Route path="/events" element={<Dashboard />} /> 
+            <Route path="/events" element={<Events />} />
+            <Route path="/events/create" element={<EventCreate />} />
+            <Route path="/events/:id" element={<EventDetail />} />
             <Route path="/reminders" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/account" element={<Account />} />
