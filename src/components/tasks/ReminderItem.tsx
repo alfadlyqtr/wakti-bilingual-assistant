@@ -2,12 +2,11 @@
 import React from 'react';
 import { format, isPast, isToday } from 'date-fns';
 import { motion } from 'framer-motion';
-import { Reminder } from '@/contexts/TaskReminderContext';
+import { Reminder, RecurrencePattern } from '@/contexts/TaskReminderContext';
 import { Badge } from '@/components/ui/badge';
 import { Clock, CalendarClock, Edit, Trash } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { TranslationKey } from '@/utils/translationTypes'; // Add this import
 
 interface ReminderItemProps {
   reminder: Reminder;
@@ -52,7 +51,7 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, onEdit, onDelete 
             {reminder.is_recurring && reminder.recurrence_pattern && (
               <Badge variant="outline" className="flex gap-1 items-center">
                 <Clock className="h-3 w-3" />
-                {t(reminder.recurrence_pattern as TranslationKey, language)}
+                {t(reminder.recurrence_pattern as RecurrencePattern, language)}
               </Badge>
             )}
           </div>

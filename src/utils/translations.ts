@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -725,7 +726,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Added to favorites",
     ar: "تمت إضافته إلى المفضلة",
   },
-  // Removed the duplicate contactBlocked key and kept only one instance
   contactBlocked: {
     en: "Contact blocked",
     ar: "تم حظر جهة الاتصال",
@@ -760,14 +760,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   },
   
   // Task + Reminder System
-  tasks: {
-    en: "Tasks",
-    ar: "المهام",
-  },
-  reminders: {
-    en: "Reminders",
-    ar: "التذكيرات",
-  },
   taskAndReminders: {
     en: "Tasks & Reminders",
     ar: "المهام والتذكيرات",
@@ -880,10 +872,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Save",
     ar: "حفظ",
   },
-  cancel: {
-    en: "Cancel",
-    ar: "إلغاء",
-  },
   delete: {
     en: "Delete",
     ar: "حذف",
@@ -895,6 +883,10 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   share: {
     en: "Share",
     ar: "مشاركة",
+  },
+  shared: {
+    en: "Shared",
+    ar: "مشترك",
   },
   shareWith: {
     en: "Share with",
@@ -1000,10 +992,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Date",
     ar: "التاريخ",
   },
-  name: {
-    en: "Name",
-    ar: "الاسم",
-  },
   ascending: {
     en: "Ascending",
     ar: "تصاعدي",
@@ -1011,6 +999,14 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   descending: {
     en: "Descending",
     ar: "تنازلي",
+  },
+  event: {
+    en: "Event",
+    ar: "حدث",
+  },
+  create: {
+    en: "Create",
+    ar: "إنشاء",
   },
 };
 
