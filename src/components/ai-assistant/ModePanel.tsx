@@ -5,6 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { cn } from "@/lib/utils";
 import { AIMode, ASSISTANT_MODES } from "./types";
+import { TranslationKey } from "@/utils/translationTypes";
 
 interface ModePanelProps {
   activeMode: AIMode;

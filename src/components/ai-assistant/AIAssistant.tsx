@@ -10,6 +10,7 @@ import { RightPanel } from "./RightPanel";
 import { LeftDrawer } from "./LeftDrawer";
 import { VoiceInput } from "./VoiceInput";
 import { AssistantMode, ChatMessage, AIMode } from "./types";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export function AIAssistant() {
   const { language, theme } = useTheme();
@@ -18,7 +19,7 @@ export function AIAssistant() {
     {
       id: "welcome",
       role: "assistant",
-      content: t("welcomeToWaktiAI", language),
+      content: t("welcomeToWaktiAI" as TranslationKey, language),
       mode: "general",
       timestamp: new Date(),
     },
@@ -129,7 +130,7 @@ export function AIAssistant() {
         const switchMessage: ChatMessage = {
           id: `switch-${Date.now()}`,
           role: "assistant",
-          content: `${t("toCompleteThisAction", language)} ${t("switchTo", language)} ${t(detectedMode + "Mode", language)}. ${t("hereIsWhatIUnderstood", language)}...`,
+          content: `${t("toCompleteThisAction" as TranslationKey, language)} ${t("switchTo" as TranslationKey, language)} ${t((detectedMode + "Mode") as TranslationKey, language)}. ${t("hereIsWhatIUnderstood" as TranslationKey, language)}...`,
           mode: activeMode,
           timestamp: new Date(),
           needsConfirmation: {
@@ -163,24 +164,24 @@ export function AIAssistant() {
                 dueDate: new Date(Date.now() + 86400000) // tomorrow
               }
             };
-            responseContent = `${t("iCanCreateThisTask", language)}:`;
+            responseContent = `${t("iCanCreateThisTask" as TranslationKey, language)}:`;
           } else {
-            responseContent = t("howCanIAssistYouWithWAKTI", language);
+            responseContent = t("howCanIAssistYouWithWAKTI" as TranslationKey, language);
           }
           break;
           
         case "creative":
-          responseContent = t("generatingVisualContent", language);
+          responseContent = t("generatingVisualContent" as TranslationKey, language);
           // In a real implementation, we would call the image generation API
           break;
           
         case "writer":
-          responseContent = t("writingContent", language);
+          responseContent = t("writingContent" as TranslationKey, language);
           // In a real implementation, we would call the text generation API
           break;
           
         default: // general
-          responseContent = `${t("helpingYouWith", language)}: ${inputText}`;
+          responseContent = `${t("helpingYouWith" as TranslationKey, language)}: ${inputText}`;
           // In a real implementation, we would call the LLM API
       }
       
@@ -209,7 +210,7 @@ export function AIAssistant() {
         {
           id: `error-${Date.now()}`,
           role: "assistant",
-          content: t("errorProcessingRequest", language),
+          content: t("errorProcessingRequest" as TranslationKey, language),
           mode: activeMode,
           timestamp: new Date(),
         }
@@ -236,7 +237,7 @@ export function AIAssistant() {
           {
             id: `confirm-${Date.now()}`,
             role: "assistant",
-            content: t("taskCreatedSuccessfully", language),
+            content: t("taskCreatedSuccessfully" as TranslationKey, language),
             mode: activeMode,
             timestamp: new Date(),
           }
@@ -304,7 +305,7 @@ export function AIAssistant() {
           <button
             onClick={() => setIsLeftDrawerOpen(true)}
             className="p-2 rounded-full hover:bg-accent"
-            aria-label={t("openHistory", language)}
+            aria-label={t("openHistory" as TranslationKey, language)}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-menu">
               <line x1="4" x2="20" y1="12" y2="12"/>
@@ -317,7 +318,7 @@ export function AIAssistant() {
           <input
             type="text"
             className="flex-1 px-4 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            placeholder={t("askWAKTI", language)}
+            placeholder={t("askWAKTI" as TranslationKey, language)}
             value={inputText}
             onChange={handleInputChange}
             onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
@@ -339,7 +340,7 @@ export function AIAssistant() {
               inputText.trim() ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
             )}
             disabled={!inputText.trim()}
-            aria-label={t("send", language)}
+            aria-label={t("send" as TranslationKey, language)}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-send">
               <path d="m22 2-7 20-4-9-9-4Z"/>
@@ -351,7 +352,7 @@ export function AIAssistant() {
           <button
             onClick={() => setIsRightPanelOpen(true)}
             className="p-2 rounded-full hover:bg-accent"
-            aria-label={t("openSettings", language)}
+            aria-label={t("openSettings" as TranslationKey, language)}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-settings">
               <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
