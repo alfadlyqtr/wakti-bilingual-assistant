@@ -861,14 +861,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Weekly",
     ar: "أسبوعي",
   },
-  monthly: {
-    en: "Monthly",
-    ar: "شهري",
-  },
-  yearly: {
-    en: "Yearly",
-    ar: "سنوي",
-  },
+  // Removed the duplicate monthly and yearly keys
   save: {
     en: "Save",
     ar: "حفظ",

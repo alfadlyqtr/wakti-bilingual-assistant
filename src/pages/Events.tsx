@@ -1,6 +1,11 @@
 
 import EventsPage from "@/components/events/EventsPage";
+import { TaskReminderProvider } from "@/contexts/TaskReminderContext";
 
 export default function Events() {
-  return <EventsPage />;
+  return (
+    <TaskReminderProvider>
+      <EventsPage />
+    </TaskReminderProvider>
+  );
 }
