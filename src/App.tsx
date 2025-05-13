@@ -1,12 +1,12 @@
 
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./App.css";
 
 // Pages
-import Index from "./pages/Index";
+import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -22,7 +22,6 @@ import VoiceSummary from "./pages/VoiceSummary";
 import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
 import Account from "./pages/Account";
 import Contacts from "./pages/Contacts";
-import Home from "./pages/Home";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -33,8 +32,8 @@ function App() {
       <ThemeProvider>
         <Router>
           <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/home" element={<Home />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/home" element={<Navigate to="/" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
