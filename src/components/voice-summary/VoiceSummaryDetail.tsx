@@ -1,20 +1,17 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Download, Copy, FileText, File, Play, Pause, AudioWaveform,
-  ArrowLeft, CheckCircle2
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AudioWaveform, Calendar, Download, ExternalLink, FileText, MapPin, Mic, Play, Users } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
 
 interface RecordingDetail {
   id: string;

@@ -501,7 +501,216 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   today: {
     en: "Today",
     ar: "اليوم",
-  }
+  },
+  // Voice Summary keys
+  newRecording: {
+    en: "New Recording",
+    ar: "تسجيل جديد",
+  },
+  recentRecordings: {
+    en: "Recent Recordings",
+    ar: "التسجيلات الحديثة",
+  },
+  meeting: {
+    en: "Meeting",
+    ar: "اجتماع",
+  },
+  lecture: {
+    en: "Lecture",
+    ar: "محاضرة",
+  },
+  brainstorm: {
+    en: "Brainstorm",
+    ar: "عصف ذهني",
+  },
+  other: {
+    en: "Other",
+    ar: "آخر",
+  },
+  hostName: {
+    en: "Host name",
+    ar: "اسم المضيف",
+  },
+  attendeesNames: {
+    en: "Separate names with commas",
+    ar: "افصل الأسماء بفواصل",
+  },
+  locationName: {
+    en: "Where this took place",
+    ar: "أين حدث هذا",
+  },
+  cleanAudio: {
+    en: "Clean Audio",
+    ar: "تنظيف الصوت",
+  },
+  noiseReduction: {
+    en: "noise reduction",
+    ar: "تقليل الضوضاء",
+  },
+  skip: {
+    en: "Skip",
+    ar: "تخطي",
+  },
+  next: {
+    en: "Next",
+    ar: "التالي",
+  },
+  untitledRecording: {
+    en: "Untitled Recording",
+    ar: "تسجيل بدون عنوان",
+  },
+  selectType: {
+    en: "Select type",
+    ar: "اختر النوع",
+  },
+  hostOptional: {
+    en: "Host (Optional)",
+    ar: "المضيف (اختياري)",
+  },
+  attendeesOptional: {
+    en: "Attendees (Optional)",
+    ar: "الحضور (اختياري)",
+  },
+  locationOptional: {
+    en: "Location (Optional)",
+    ar: "الموقع (اختياري)",
+  },
+  separateWithCommas: {
+    en: "Separate names with commas",
+    ar: "افصل الأسماء بفواصل",
+  },
+  whereTookPlace: {
+    en: "Where this took place",
+    ar: "أين حدث هذا",
+  },
+  minutes: {
+    en: "minutes",
+    ar: "دقائق",
+  },
+  ago: {
+    en: "ago",
+    ar: "مضت",
+  },
+  daysRemaining: {
+    en: "days remaining",
+    ar: "أيام متبقية",
+  },
+  viewDetails: {
+    en: "View Details",
+    ar: "عرض التفاصيل",
+  },
+  record: {
+    en: "Record",
+    ar: "تسجيل",
+  },
+  upload: {
+    en: "Upload",
+    ar: "رفع",
+  },
+  titleOptional: {
+    en: "Title (Optional)",
+    ar: "العنوان (اختياري)",
+  },
+  typeOptional: {
+    en: "Type",
+    ar: "النوع",
+  },
+  processingAudio: {
+    en: "Processing Audio",
+    ar: "معالجة الصوت",
+  },
+  transcribingAudio: {
+    en: "Transcribing your recording using Whisper AI...",
+    ar: "جاري نسخ التسجيل الخاص بك باستخدام Whisper AI...",
+  },
+  creatingSummary: {
+    en: "Creating your summary...",
+    ar: "جاري إنشاء الملخص الخاص بك...",
+  },
+  generateSummary: {
+    en: "Generate Summary",
+    ar: "إنشاء ملخص",
+  },
+  generateAudio: {
+    en: "Generate Audio",
+    ar: "إنشاء صوت",
+  },
+  downloadTranscript: {
+    en: "Download Transcript",
+    ar: "تحميل النص",
+  },
+  downloadSummary: {
+    en: "Download Summary",
+    ar: "تحميل الملخص",
+  },
+  downloadAudio: {
+    en: "Download Audio",
+    ar: "تحميل الصوت",
+  },
+  selectFile: {
+    en: "Select File",
+    ar: "اختر ملف",
+  },
+  mp3orWavFormat: {
+    en: "MP3 or WAV format, max 2 hours",
+    ar: "صيغة MP3 أو WAV، بحد أقصى ساعتين",
+  },
+  noRecordingsFound: {
+    en: "No recordings found",
+    ar: "لم يتم العثور على تسجيلات",
+  },
+  firstRecording: {
+    en: "Create your first recording to see it here",
+    ar: "أنشئ تسجيلك الأول لتراه هنا",
+  },
+  exportAsPDF: {
+    en: "Export as PDF",
+    ar: "تصدير كملف PDF",
+  },
+  exportAsAudio: {
+    en: "Export as Audio",
+    ar: "تصدير كملف صوتي",
+  },
+  summaryVoice: {
+    en: "Summary Voice",
+    ar: "صوت الملخص",
+  },
+  summaryLanguage: {
+    en: "Summary Language",
+    ar: "لغة الملخص",
+  },
+  male: {
+    en: "Male",
+    ar: "ذكر",
+  },
+  female: {
+    en: "Female",
+    ar: "أنثى",
+  },
+  arabic: {
+    en: "Arabic",
+    ar: "العربية",
+  },
+  english: {
+    en: "English",
+    ar: "الإنجليزية",
+  },
+  transcriptTitle: {
+    en: "Transcript",
+    ar: "النص",
+  },
+  summaryTitle: {
+    en: "Summary",
+    ar: "الملخص",
+  },
+  recordingDetails: {
+    en: "Recording Details",
+    ar: "تفاصيل التسجيل",
+  },
+  audioPlayerError: {
+    en: "Error playing audio",
+    ar: "خطأ في تشغيل الصوت",
+  },
 };
 
 export const t = (key: TranslationKey, language: "en" | "ar"): string => {
