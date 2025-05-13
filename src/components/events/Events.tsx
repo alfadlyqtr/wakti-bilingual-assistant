@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -7,6 +7,10 @@ import { useNavigate } from "react-router-dom";
 import EventList from "@/components/events/EventList";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Tables } from "@/integrations/supabase/types";
+
+// Define the type for our events
+type Event = Tables<"events">;
 
 export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
@@ -21,12 +25,12 @@ export default function Events() {
     const { data, error } = await supabase
       .from("events")
       .select("*")
-      .filter(queryConstraint.column, queryConstraint.operator, queryConstraint.value)
+      .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       
     if (error) {
       console.error("Error fetching events:", error);
-      throw new Error("Failed to fetch events");
+      throw new Error(`Failed to fetch ${type} events: ${error.message}`);
     }
     
     return data || [];

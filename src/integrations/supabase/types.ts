@@ -9,7 +9,142 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      event_invitees: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          event_id: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          event_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          event_id?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_invitees_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_rsvps: {
+        Row: {
+          created_at: string | null
+          device_id: string | null
+          event_id: string | null
+          guest_name: string | null
+          id: string
+          ip_address: string | null
+          response: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          device_id?: string | null
+          event_id?: string | null
+          guest_name?: string | null
+          id?: string
+          ip_address?: string | null
+          response: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string | null
+          event_id?: string | null
+          guest_name?: string | null
+          id?: string
+          ip_address?: string | null
+          response?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          background_color: string | null
+          background_gradient: string | null
+          button_style: string | null
+          cover_image: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_time: string
+          font_size: number | null
+          id: string
+          is_all_day: boolean | null
+          is_public: boolean | null
+          location: string | null
+          location_link: string | null
+          start_time: string
+          text_color: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          background_color?: string | null
+          background_gradient?: string | null
+          button_style?: string | null
+          cover_image?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time: string
+          font_size?: number | null
+          id?: string
+          is_all_day?: boolean | null
+          is_public?: boolean | null
+          location?: string | null
+          location_link?: string | null
+          start_time: string
+          text_color?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          background_color?: string | null
+          background_gradient?: string | null
+          button_style?: string | null
+          cover_image?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_time?: string
+          font_size?: number | null
+          id?: string
+          is_all_day?: boolean | null
+          is_public?: boolean | null
+          location?: string | null
+          location_link?: string | null
+          start_time?: string
+          text_color?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
