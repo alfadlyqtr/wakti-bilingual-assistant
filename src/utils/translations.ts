@@ -210,6 +210,7 @@ export interface AIAssistantText {
   taskCreatedSuccessfully: string;
   due: string;
   viewCalendar: string;
+  selectDate: string;
 }
 
 export function t(key: TranslationKey, lang: string): string {
@@ -483,7 +484,7 @@ export function t(key: TranslationKey, lang: string): string {
       helpingYouWith: "Helping you with",
       errorProcessingRequest: "Sorry, there was an error processing your request. Please try again.",
       viewCalendar: "View Calendar",
-      selectDate: "Select date", // Added missing translation
+      selectDate: "Select date",
       
       // Marketing
       startFreeTrial: "Start Free Trial",
@@ -924,7 +925,7 @@ export function t(key: TranslationKey, lang: string): string {
       helpingYouWith: "أساعدك في",
       errorProcessingRequest: "عذرًا، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.",
       viewCalendar: "عرض التقويم",
-      selectDate: "اختر تاريخ", // Added missing translation
+      selectDate: "اختر تاريخ",
       
       // Marketing
       startFreeTrial: "ابدأ الإصدار التجريبي المجاني",
