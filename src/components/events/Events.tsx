@@ -65,13 +65,15 @@ export default function Events() {
       {/* Mobile Header */}
       <header className="mobile-header">
         <div className="flex items-center">
-          {/* Logo that acts as dashboard link */}
-          <img 
-            src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png" 
-            alt="WAKTI Logo" 
-            className="h-10 w-10 mr-3 cursor-pointer rounded-md"
-            onClick={handleLogoClick}
-          />
+          {/* Logo that acts as dashboard link - fixed aspect ratio */}
+          <div className="h-10 w-10 mr-3 flex items-center justify-center cursor-pointer">
+            <img 
+              src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png" 
+              alt="WAKTI Logo" 
+              className="object-contain w-full h-full rounded-md"
+              onClick={handleLogoClick}
+            />
+          </div>
           <h1 className="text-2xl font-bold">{t("events", language)}</h1>
         </div>
         <UserMenu />
