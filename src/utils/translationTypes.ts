@@ -1,3 +1,4 @@
+
 export type TranslationKey =
   // Navigation & Menu Items
   | "dashboard"
@@ -198,18 +199,15 @@ export type TranslationKey =
   | "chattingWithUser"
   | "removedFromFavorites"
   | "addedToFavorites"
-  | "contactBlocked"
   | "userBlockedDescription"
   | "requestAccepted"
   | "contactAddedDescription"
   | "requestRejected"
   | "contactRejectedDescription"
   | "blockedUserDescription"
-  | "noContactRequests";
+  | "noContactRequests"
 
   // Task + Reminder System
-  | "tasks"
-  | "reminders"
   | "taskAndReminders"
   | "createTask"
   | "createReminder"
@@ -238,7 +236,6 @@ export type TranslationKey =
   | "monthly"
   | "yearly"
   | "save"
-  | "cancel"
   | "delete"
   | "edit"
   | "share"
@@ -247,7 +244,6 @@ export type TranslationKey =
   | "noTasks"
   | "noReminders"
   | "createYourFirst"
-  | "completed"
   | "markAsCompleted"
   | "markAsPending"
   | "allTasks"
