@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export const AIAssistant = () => {
   const [taskDetails, setTaskDetails] = useState({
     title: "",
     description: "",
-    dueDate: undefined,
+    dueDate: undefined as Date | undefined,
     priority: "medium",
     isRecurring: false,
   });
@@ -89,14 +90,14 @@ export const AIAssistant = () => {
   };
 
   const handleTaskInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     setTaskDetails((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleTaskCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTaskDetails((prev) => ({ ...prev, isRecurring: e.target.checked }));
+  const handleTaskCheckboxChange = (checked: boolean) => {
+    setTaskDetails((prev) => ({ ...prev, isRecurring: checked }));
   };
 
   const handleTaskDateChange = (date: Date | undefined) => {
@@ -120,12 +121,12 @@ export const AIAssistant = () => {
     <div className="flex flex-col h-full">
       <Card className="mb-4">
         <CardHeader>
-          <CardTitle>{t("waktiAssistant", language)}</CardTitle>
+          <CardTitle>{t("waktiAssistant" as TranslationKey, language)}</CardTitle>
           <CardDescription>
             {isLoading ? (
               <Progress value={progress} />
             ) : (
-              t("welcomeToWaktiAI", language)
+              t("welcomeToWaktiAI" as TranslationKey, language)
             )}
           </CardDescription>
         </CardHeader>
@@ -171,19 +172,19 @@ export const AIAssistant = () => {
               <AvatarFallback>W</AvatarFallback>
             </Avatar>
             <div className="rounded-lg p-3 w-fit max-w-[80%] bg-secondary text-secondary-foreground">
-              <p className="text-sm">{t("writingContent", language)}</p>
+              <p className="text-sm">{t("writingContent" as TranslationKey, language)}</p>
             </div>
           </div>
         )}
         {isCreatingTask && (
           <div className="p-4 bg-accent rounded-lg mb-4">
             <p className="font-medium">
-              {t("iCanCreateThisTask", language)}
+              {t("iCanCreateThisTask" as TranslationKey, language)}
             </p>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="title" className="text-right">
-                  {t("title", language)}
+                  {t("title" as TranslationKey, language)}
                 </Label>
                 <Input
                   type="text"
@@ -196,7 +197,7 @@ export const AIAssistant = () => {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="description" className="text-right">
-                  {t("description", language)}
+                  {t("description" as TranslationKey, language)}
                 </Label>
                 <Textarea
                   id="description"
@@ -208,7 +209,7 @@ export const AIAssistant = () => {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="dueDate" className="text-right">
-                  {t("dueDate", language)}
+                  {t("dueDate" as TranslationKey, language)}
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -223,7 +224,7 @@ export const AIAssistant = () => {
                       {taskDetails.dueDate ? (
                         format(taskDetails.dueDate, "PPP")
                       ) : (
-                        <span>{t("selectDate", language)}</span>
+                        <span>{t("selectDate" as TranslationKey, language)}</span>
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -240,7 +241,7 @@ export const AIAssistant = () => {
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="priority" className="text-right">
-                  {t("priority", language)}
+                  {t("priority" as TranslationKey, language)}
                 </Label>
                 <select
                   id="priority"
@@ -249,14 +250,14 @@ export const AIAssistant = () => {
                   onChange={handleTaskInputChange}
                   className="col-span-3 rounded-md border appearance-none bg-background px-4 py-2 focus:outline-none focus:border-primary"
                 >
-                  <option value="low">{t("low", language)}</option>
-                  <option value="medium">{t("medium", language)}</option>
-                  <option value="high">{t("high", language)}</option>
+                  <option value="low">{t("low" as TranslationKey, language)}</option>
+                  <option value="medium">{t("medium" as TranslationKey, language)}</option>
+                  <option value="high">{t("high" as TranslationKey, language)}</option>
                 </select>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="isRecurring" className="text-right">
-                  {t("recurring", language)}
+                  {t("recurring" as TranslationKey, language)}
                 </Label>
                 <Checkbox
                   id="isRecurring"
@@ -266,7 +267,7 @@ export const AIAssistant = () => {
                 />
               </div>
             </div>
-            <Button onClick={handleCreateTask}>{t("createTask", language)}</Button>
+            <Button onClick={handleCreateTask}>{t("createTask" as TranslationKey, language)}</Button>
           </div>
         )}
         {!isLoading &&
@@ -274,10 +275,13 @@ export const AIAssistant = () => {
           activeMode !== requiredMode && (
             <div className="p-4 bg-accent rounded-lg mb-4">
               <p className="font-medium">
-                {`${t("toCompleteThisAction", language)} ${t(
-                  "switchTo",
+                {`${t("toCompleteThisAction" as TranslationKey, language)} ${t(
+                  "switchTo" as TranslationKey,
                   language
-                )} ${requiredMode} ${t("hereIsWhatIUnderstood", language)}`}
+                )} ${requiredMode} ${t(
+                  "hereIsWhatIUnderstood" as TranslationKey,
+                  language
+                )}`}
               </p>
             </div>
           )}
@@ -288,14 +292,14 @@ export const AIAssistant = () => {
       <div className="p-4 flex items-center">
         <Input
           type="text"
-          placeholder={t("askWAKTI", language)}
+          placeholder={t("askWAKTI" as TranslationKey, language)}
           value={input}
           onChange={handleInputChange}
           onKeyDown={(e) => e.key === "Enter" ? handleSendMessage() : null}
           className="mr-2"
         />
         <Button onClick={handleSendMessage} disabled={isLoading}>
-          {t("send", language)}
+          {t("send" as TranslationKey, language)}
         </Button>
       </div>
     </div>

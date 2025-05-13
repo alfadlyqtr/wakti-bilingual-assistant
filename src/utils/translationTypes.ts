@@ -368,7 +368,8 @@ export type TranslationKey =
   | "writingContent"
   | "helpingYouWith"
   | "errorProcessingRequest"
-  | "due";
+  | "due"
+  | "selectDate";  // Added the missing selectDate key
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;
@@ -429,4 +430,5 @@ export interface AIAssistantText {
   taskCreatedSuccessfully: string;
   due: string;
   viewCalendar: string;
+  selectDate: string; // Added the missing selectDate property
 }

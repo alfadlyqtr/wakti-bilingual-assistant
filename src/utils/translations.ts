@@ -483,6 +483,7 @@ export function t(key: TranslationKey, lang: string): string {
       helpingYouWith: "Helping you with",
       errorProcessingRequest: "Sorry, there was an error processing your request. Please try again.",
       viewCalendar: "View Calendar",
+      selectDate: "Select date", // Added missing translation
       
       // Marketing
       startFreeTrial: "Start Free Trial",
@@ -923,6 +924,7 @@ export function t(key: TranslationKey, lang: string): string {
       helpingYouWith: "أساعدك في",
       errorProcessingRequest: "عذرًا، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.",
       viewCalendar: "عرض التقويم",
+      selectDate: "اختر تاريخ", // Added missing translation
       
       // Marketing
       startFreeTrial: "ابدأ الإصدار التجريبي المجاني",
@@ -1097,4 +1099,3 @@ export function t(key: TranslationKey, lang: string): string {
 
   return translations[lang][key] || key;
 }
-
