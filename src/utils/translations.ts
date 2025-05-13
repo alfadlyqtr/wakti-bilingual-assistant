@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -1075,6 +1074,15 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   notesLabel: {
     en: "Calendar Notes",
     ar: "ملاحظات التقويم",
+  },
+  // Fixing duplicate translations by renaming them
+  calendarNote: {
+    en: "Calendar Note",
+    ar: "ملاحظة تقويم",
+  },
+  manualNote: {
+    en: "Manual Note",
+    ar: "ملاحظة يدوية",
   }
 };
 

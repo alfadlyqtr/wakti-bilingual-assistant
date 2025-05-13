@@ -26,10 +26,11 @@ const tasksToCalendarEntries = (tasks: Task[]): CalendarEntry[] => {
     id: task.id,
     title: task.title,
     description: task.description,
-    date: task.due_date,
+    date: task.due_date || new Date().toISOString().split('T')[0],
     type: EntryType.TASK,
     priority: task.priority,
-    due: task.due_time
+    // Due time is optional, check if it exists
+    due: task.due_date 
   }));
 };
 
@@ -38,9 +39,10 @@ const remindersToCalendarEntries = (reminders: Reminder[]): CalendarEntry[] => {
   return reminders.map(reminder => ({
     id: reminder.id,
     title: reminder.title,
-    date: reminder.date,
+    date: reminder.due_date || new Date().toISOString().split('T')[0],
     type: EntryType.REMINDER,
-    due: reminder.time
+    // No separate time field in reminders, use due_date
+    due: reminder.due_date
   }));
 };
 
@@ -50,7 +52,7 @@ const eventsToCalendarEntries = (events: any[]): CalendarEntry[] => {
     id: event.id,
     title: event.title,
     description: event.description,
-    date: event.date || event.start_date,
+    date: event.date || event.start_date || new Date().toISOString().split('T')[0],
     type: EntryType.EVENT,
     due: event.time || event.start_time
   }));
