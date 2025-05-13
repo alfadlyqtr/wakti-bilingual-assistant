@@ -1,3 +1,4 @@
+
 export type TranslationKey =
   // Navigation & Menu Items
   | "dashboard"
@@ -12,6 +13,8 @@ export type TranslationKey =
   | "waktiAssistant"
   | "voiceSummary"
   | "account"
+  | "home"
+  | "assistant"
   
   // Theme & Language
   | "lightMode"
@@ -113,9 +116,11 @@ export type TranslationKey =
   | "freePlan"
   | "daysLeft"
   | "trialReminder"
+  
   // Notification keys
   | "systemNotifications"
   | "newEvent"
+  
   // Contact request keys
   | "contactRequestSettings"
   | "autoApproveRequests"
@@ -267,6 +272,7 @@ export type TranslationKey =
   | "date"
   | "ascending"
   | "descending"
+  
   // Events system keys
   | "createEvent" 
   | "event"
@@ -289,7 +295,44 @@ export type TranslationKey =
   | "createNote"
   | "notesLabel"
   | "calendarNote"
-  | "manualNote";
+  | "manualNote"
+  
+  // AI Assistant Modes and UI Text
+  | "generalMode"
+  | "writerMode"
+  | "creativeMode"
+  | "assistantMode"
+  | "noChatsYet"
+  | "switchLanguage"
+  | "commonQuestions"
+  | "whatCanYouDo"
+  | "howToCreateTask"
+  | "explainWAKTIFeatures"
+  | "generalSettings"
+  | "writerSettings"
+  | "creativeSettings"
+  | "assistantSettings"
+  | "tonePresets"
+  | "professional"
+  | "casual"
+  | "friendly"
+  | "academic"
+  | "lengthOptions"
+  | "short"
+  | "medium"
+  | "long"
+  | "grammarCheck"
+  | "imageTools"
+  | "chartTypes"
+  | "textToImage"
+  | "imageToImage"
+  | "removeBg"
+  | "enhanceImage"
+  | "barChart"
+  | "lineChart"
+  | "pieChart"
+  | "shortcuts"
+  | "viewCalendar";
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;

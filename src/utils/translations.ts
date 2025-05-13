@@ -246,6 +246,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       details: "Details",
       share: "Share",
       submit: "Submit",
+      assistant: "Assistant",
 
       // Task Translations
       taskTitle: "Title",
@@ -335,6 +336,17 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       weekView: "Week View",
       yearView: "Year View",
       agenda: "Agenda",
+      noEvents: "No events",
+      title: "Title",
+      titleRequired: "Title is required",
+      dateRequired: "Date is required",
+      titlePlaceholder: "Enter title...",
+      descriptionPlaceholder: "Enter description...",
+      editNote: "Edit Note",
+      createNote: "Create Note",
+      notesLabel: "Notes",
+      calendarNote: "Calendar Note",
+      manualNote: "Manual Note",
 
       // Contact Translations
       contacts: "Contacts",
@@ -448,6 +460,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       details: "تفاصيل",
       share: "شارك",
       submit: "إرسال",
+      assistant: "المساعد",
 
       // Task Translations
       taskTitle: "العنوان",
@@ -537,6 +550,17 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       weekView: "عرض الأسبوع",
       yearView: "عرض السنة",
       agenda: "جدول الأعمال",
+      noEvents: "لا توجد أحداث",
+      title: "العنوان",
+      titleRequired: "العنوان مطلوب",
+      dateRequired: "التاريخ مطلوب",
+      titlePlaceholder: "أدخل العنوان...",
+      descriptionPlaceholder: "أدخل الوصف...",
+      editNote: "تعديل المذكرة",
+      createNote: "إنشاء مذكرة",
+      notesLabel: "ملاحظات",
+      calendarNote: "ملاحظة تقويم",
+      manualNote: "ملاحظة يدوية",
 
       // Contact Translations
       contacts: "جهات الاتصال",
@@ -554,6 +578,19 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       messageSender: "المرسل",
       messageReceiver: "المتلقي",
       messageDate: "التاريخ",
+
+      // Contact list translations
+      messageStarted: "بدأت المحادثة",
+      chattingWithUser: "محادثة مع",
+      removedFromFavorites: "تمت إزالته من المفضلة",
+      addedToFavorites: "تمت إضافته للمفضلة",
+      userBlockedDescription: "تم حظر المستخدم",
+      requestAccepted: "تم قبول الطلب",
+      contactAddedDescription: "تمت إضافة جهة الاتصال",
+      requestRejected: "تم رفض الطلب",
+      contactRejectedDescription: "تم رفض جهة الاتصال",
+      blockedUserDescription: "تم حظر المستخدم",
+      noContactRequests: "لا توجد طلبات اتصال",
 
       // AI Assistant Translations
       welcomeToWaktiAI: "مرحبًا بك في WAKTI AI. كيف يمكنني مساعدتك اليوم؟",
