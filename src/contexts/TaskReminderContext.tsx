@@ -107,7 +107,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
-        .order('due_date', { ascending: true, nullsLast: true });
+        .order('due_date', { ascending: true });
 
       if (tasksError) {
         console.error('Error fetching tasks:', tasksError);
@@ -143,9 +143,19 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const now = new Date();
       const updatedTasks = tasksWithSubtasks.map(task => {
         if (task.status !== 'completed' && task.due_date && new Date(task.due_date) < now) {
-          return { ...task, status: 'overdue' as TaskStatus };
+          return { 
+            ...task, 
+            status: 'overdue' as TaskStatus,
+            priority: task.priority as TaskPriority,
+            recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
+          };
         }
-        return task;
+        return { 
+          ...task,
+          priority: task.priority as TaskPriority,
+          status: task.status as TaskStatus,
+          recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
+        };
       });
 
       setTasks(updatedTasks);
@@ -167,7 +177,12 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
         return;
       }
 
-      setReminders(data || []);
+      const typedReminders = data.map(reminder => ({
+        ...reminder,
+        recurrence_pattern: reminder.recurrence_pattern as RecurrencePattern | undefined
+      }));
+
+      setReminders(typedReminders);
     } catch (error) {
       console.error('Error in fetchReminders:', error);
     }
@@ -184,7 +199,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       if (!userId) {
         toast({
-          title: "Authentication Error",
           description: "You must be logged in to create tasks",
           variant: "destructive"
         });
@@ -204,7 +218,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error creating task:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -227,7 +240,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
         if (subtaskError) {
           console.error('Error creating subtasks:', subtaskError);
           toast({
-            title: "Error",
             description: "Task created but failed to add subtasks",
             variant: "destructive"
           });
@@ -235,7 +247,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("taskCreatedSuccessfully", language),
+        description: t("taskCreatedSuccessfully", language),
         variant: "default"
       });
 
@@ -261,7 +273,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error updating task:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -269,7 +280,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("taskUpdatedSuccessfully", language),
+        description: t("taskUpdatedSuccessfully", language),
         variant: "default"
       });
 
@@ -293,7 +304,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error deleting task:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -301,7 +311,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("taskDeletedSuccessfully", language),
+        description: t("taskDeletedSuccessfully", language),
         variant: "default"
       });
 
@@ -323,7 +333,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       
       if (!userId) {
         toast({
-          title: "Authentication Error",
           description: "You must be logged in to create reminders",
           variant: "destructive"
         });
@@ -342,7 +351,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error creating reminder:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -350,7 +358,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("reminderCreatedSuccessfully", language),
+        description: t("reminderCreatedSuccessfully", language),
         variant: "default"
       });
 
@@ -376,7 +384,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error updating reminder:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -384,7 +391,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("reminderUpdatedSuccessfully", language),
+        description: t("reminderUpdatedSuccessfully", language),
         variant: "default"
       });
 
@@ -407,7 +414,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error deleting reminder:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -415,7 +421,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("reminderDeletedSuccessfully", language),
+        description: t("reminderDeletedSuccessfully", language),
         variant: "default"
       });
 
@@ -443,7 +449,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error creating subtask:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -513,7 +518,6 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (error) {
         console.error('Error sharing task:', error);
         toast({
-          title: "Error",
           description: error.message,
           variant: "destructive"
         });
@@ -521,7 +525,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       toast({
-        title: t("taskSharedSuccessfully", language),
+        description: t("taskSharedSuccessfully", language),
         variant: "default"
       });
 

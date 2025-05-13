@@ -239,6 +239,7 @@ export type TranslationKey =
   | "delete"
   | "edit"
   | "share"
+  | "shared"
   | "shareWith"
   | "selectContact"
   | "noTasks"

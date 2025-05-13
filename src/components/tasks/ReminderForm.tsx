@@ -65,12 +65,12 @@ const ReminderForm: React.FC<ReminderFormProps> = ({ existingReminder, onSubmit,
       dueDate.setHours(hours, minutes);
     }
     
-    const reminderData = {
+    const reminderData: Reminder = {
       id: existingReminder?.id || '',
       title: values.title,
       due_date: dueDate.toISOString(),
       is_recurring: values.isRecurring,
-      recurrence_pattern: values.isRecurring ? values.recurrencePattern : undefined,
+      recurrence_pattern: values.isRecurring && values.recurrencePattern ? values.recurrencePattern : undefined,
       created_by: existingReminder?.created_by || '',
       created_at: existingReminder?.created_at || new Date().toISOString(),
       updated_at: existingReminder?.updated_at || new Date().toISOString(),
@@ -127,6 +127,7 @@ const ReminderForm: React.FC<ReminderFormProps> = ({ existingReminder, onSubmit,
                       selected={field.value}
                       onSelect={field.onChange as (date: Date | undefined) => void}
                       initialFocus
+                      className={cn("p-3 pointer-events-auto")}
                     />
                   </PopoverContent>
                 </Popover>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Clock, CalendarClock, Share, Edit, Trash } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes'; // Add this import
 
 interface TaskItemProps {
   task: Task;
@@ -100,7 +101,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onComplete, onEdit, onDelete,
             {task.is_shared && (
               <Badge variant="outline" className="flex gap-1 items-center">
                 <Share className="h-3 w-3" />
-                {t('shared', language)}
+                {t('shared' as TranslationKey, language)}
               </Badge>
             )}
             

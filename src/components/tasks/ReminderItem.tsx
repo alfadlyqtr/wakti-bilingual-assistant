@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, CalendarClock, Edit, Trash } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes'; // Add this import
 
 interface ReminderItemProps {
   reminder: Reminder;
