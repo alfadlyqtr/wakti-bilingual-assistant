@@ -51,7 +51,8 @@ const EventsPage: React.FC = () => {
         </TabsContent>
         
         <TabsContent value="create" className="flex-1 overflow-y-auto">
-          <EventCreate onEventCreated={fetchEvents} />
+          {/* Removed the onEventCreated prop since it's not defined in the component */}
+          <EventCreate />
         </TabsContent>
       </Tabs>
     </div>
