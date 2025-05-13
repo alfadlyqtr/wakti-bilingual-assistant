@@ -1,8 +1,11 @@
 
 import React, { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
+import { Mic } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface VoiceInputProps {
   isActive: boolean;
@@ -26,7 +29,7 @@ export function VoiceInput({
     if (isActive) {
       // Generate random waveform
       interval = setInterval(() => {
-        const newWaveform = Array.from({ length: 12 }, () => Math.random() * 0.8 + 0.2);
+        const newWaveform = Array.from({ length: 20 }, () => Math.random() * 0.8 + 0.2);
         setWaveform(newWaveform);
       }, 100);
       
@@ -34,43 +37,55 @@ export function VoiceInput({
       setTimeout(() => {
         onTranscript(language === "ar" ? 
           "أنشئ مهمة جديدة: اجتماع مع الفريق غدًا" : 
-          "Create a task: Team meeting tomorrow");
+          "Create a new task: Team meeting tomorrow");
+        onToggle();
       }, 3000);
     }
     
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, onTranscript, language]);
+  }, [isActive, onTranscript, language, onToggle]);
 
   return (
-    <button
-      onClick={onToggle}
-      className={cn(
-        "p-2 rounded-full transition-colors relative",
-        isActive ? "bg-red-500 text-white" : "hover:bg-accent"
-      )}
-      aria-label={isActive ? t("stopListening", language) : t("startVoiceInput", language)}
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-mic">
-        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-        <line x1="12" x2="12" y1="19" y2="22"/>
-      </svg>
-      
-      {isActive && waveform.length > 0 && (
-        <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-red-500 px-3 py-1 rounded-full flex items-center gap-0.5">
-          {waveform.map((value, idx) => (
-            <motion.div
-              key={idx}
-              className="w-0.5 bg-white"
-              style={{ height: `${value * 16}px` }}
-              animate={{ height: `${value * 16}px` }}
-              transition={{ duration: 0.1 }}
-            />
-          ))}
-        </div>
-      )}
-    </button>
+    <div className="relative">
+      <Button
+        onClick={onToggle}
+        variant={isActive ? "destructive" : "ghost"}
+        size="icon"
+        className={cn(
+          "rounded-full transition-all relative",
+          isActive && "animate-pulse"
+        )}
+        aria-label={isActive ? 
+          t("stopListening" as TranslationKey, language) : 
+          t("startVoiceInput" as TranslationKey, language)
+        }
+      >
+        <Mic size={20} />
+      </Button>
+
+      <AnimatePresence>
+        {isActive && waveform.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: -50 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="absolute left-1/2 transform -translate-x-1/2 bg-destructive text-destructive-foreground px-3 py-1 rounded-full flex items-center gap-0.5"
+            style={{ width: '200px' }}
+          >
+            {waveform.map((value, idx) => (
+              <motion.div
+                key={idx}
+                className="flex-1 bg-current"
+                style={{ height: `${value * 16}px` }}
+                animate={{ height: `${value * 16}px` }}
+                transition={{ duration: 0.1 }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

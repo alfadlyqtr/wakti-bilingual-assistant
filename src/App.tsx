@@ -23,6 +23,7 @@ import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
 import Account from "./pages/Account";
 import Contacts from "./pages/Contacts";
 import AIAssistant from "./pages/AIAssistant";
+import Index from "./pages/Index";
 
 // Create a client
 const queryClient = new QueryClient();

@@ -1,46 +1,58 @@
 
 import React from 'react';
+import { motion } from 'framer-motion';
 import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Notebook, Palette, BrainCog, LifeBuoy } from "lucide-react";
+import { MessageSquare, Notebook, Palette, LifeBuoy } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
+import { AIMode } from './types';
 
 interface ModePanelProps {
-  activeMode: string;
-  setActiveMode: React.Dispatch<React.SetStateAction<string>>;
+  activeMode: AIMode;
+  setActiveMode: React.Dispatch<React.SetStateAction<AIMode>>;
 }
 
 export const ModePanel: React.FC<ModePanelProps> = ({ activeMode, setActiveMode }) => {
   const { language } = useTheme();
 
   const modes = [
-    { id: 'general', label: 'generalMode', icon: <BrainCog className="h-4 w-4 mr-1" /> },
-    { id: 'writer', label: 'writerMode', icon: <Notebook className="h-4 w-4 mr-1" /> },
-    { id: 'creative', label: 'creativeMode', icon: <Palette className="h-4 w-4 mr-1" /> },
-    { id: 'assistant', label: 'assistantMode', icon: <LifeBuoy className="h-4 w-4 mr-1" /> },
+    { id: 'general', label: 'generalMode', icon: <MessageSquare className="h-4 w-4" /> },
+    { id: 'writer', label: 'writerMode', icon: <Notebook className="h-4 w-4" /> },
+    { id: 'creative', label: 'creativeMode', icon: <Palette className="h-4 w-4" /> },
+    { id: 'assistant', label: 'assistantMode', icon: <LifeBuoy className="h-4 w-4" /> },
   ];
 
   const handleModeChange = (value: string) => {
-    setActiveMode(value);
+    setActiveMode(value as AIMode);
   };
 
   return (
     <Tabs 
       value={activeMode} 
       onValueChange={handleModeChange}
-      className="w-full mb-4"
+      className="w-full"
     >
-      <TabsList className="w-full justify-around">
+      <TabsList className="w-full justify-between rounded-full bg-muted/50 p-1">
         {modes.map((mode) => (
           <TabsTrigger
             key={mode.id}
             value={mode.id}
-            className="flex items-center text-xs sm:text-sm py-1"
+            className="relative flex items-center gap-1.5 rounded-full data-[state=active]:shadow-sm"
           >
-            {mode.icon}
-            <span className="hidden sm:inline-block">
-              {t(mode.label as TranslationKey, language)}
+            {activeMode === mode.id && (
+              <motion.div
+                layoutId="activeModeBg"
+                className="absolute inset-0 bg-background rounded-full border shadow-sm"
+                initial={false}
+                transition={{ type: "spring", duration: 0.6 }}
+              />
+            )}
+            <span className="relative z-10 flex items-center gap-1.5">
+              {mode.icon}
+              <span className="hidden sm:inline-block">
+                {t(mode.label as TranslationKey, language)}
+              </span>
             </span>
           </TabsTrigger>
         ))}
