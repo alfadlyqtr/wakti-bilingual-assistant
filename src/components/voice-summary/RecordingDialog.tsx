@@ -1,17 +1,16 @@
-
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Mic, Upload, AudioWaveform, Pause, Play, Timer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -28,6 +27,7 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
   const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -119,15 +119,15 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       const filePath = `recordings/${Date.now()}_${title.replace(/\s+/g, '_')}.mp3`;
       
       // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
+      const { data: storageData, error: storageError } = await supabase.storage
         .from('voice_recordings')
         .upload(filePath, audioBlob, {
           contentType: 'audio/mp3',
           cacheControl: '3600',
         });
 
-      if (error) {
-        throw error;
+      if (storageError) {
+        throw storageError;
       }
 
       // Get the URL for the uploaded file
@@ -138,21 +138,40 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       // Calculate expiration date (10 days from now)
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 10);
-
+      
       // Save metadata to database
-      const { error: dbError } = await supabase.from('voice_recordings').insert({
-        title: formData.title,
-        type: formData.type,
-        host: formData.host || null,
-        attendees: formData.attendees || null,
-        location: formData.location || null,
-        audio_url: publicUrl.publicUrl,
-        expires_at: expiresAt.toISOString(),
-        clean_audio: formData.cleanAudio,
-      });
+      const { data: recordingData, error: dbError } = await supabase
+        .from('voice_recordings')
+        .insert({
+          title: formData.title,
+          type: formData.type,
+          host: formData.host || null,
+          attendees: formData.attendees || null,
+          location: formData.location || null,
+          audio_url: publicUrl.publicUrl,
+          expires_at: expiresAt.toISOString(),
+          clean_audio: formData.cleanAudio,
+        })
+        .select('id')
+        .single();
 
       if (dbError) {
         throw dbError;
+      }
+
+      // Start audio transcription
+      if (recordingData?.id) {
+        try {
+          await supabase.functions.invoke("transcribe-audio", {
+            body: { 
+              audioUrl: publicUrl.publicUrl,
+              recordingId: recordingData.id
+            }
+          });
+        } catch (error) {
+          console.error('Error invoking transcribe function:', error);
+          // Continue anyway as this is async
+        }
       }
 
       toast({
@@ -160,9 +179,16 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
         description: "Your recording has been uploaded successfully and is being processed.",
       });
 
-      // Ideally, transition to the next step or show processing indicator
-      // For now, we'll close the dialog and refresh the archive list
+      // Invalidate query cache to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["voice-recordings"] });
+      
+      // Close dialog
       onClose();
+      
+      // Navigate to the recording detail page if we have an ID
+      if (recordingData?.id) {
+        navigate(`/voice-summary/${recordingData.id}`);
+      }
       
     } catch (error) {
       console.error('Error uploading recording:', error);
@@ -193,10 +219,18 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
     try {
       setRecordingStep("transcribing");
       
-      // Upload file to Supabase Storage using similar logic as in handleUploadRecording
-      // This is a simplified version, you'd want to add error handling
+      // Format title or use filename if empty
+      const title = formData.title || file.name;
       const filePath = `recordings/${Date.now()}_${file.name}`;
-      await supabase.storage.from('voice_recordings').upload(filePath, file);
+      
+      // Upload to Supabase Storage
+      const { data: storageData, error: storageError } = await supabase.storage
+        .from('voice_recordings')
+        .upload(filePath, file);
+
+      if (storageError) {
+        throw storageError;
+      }
       
       const { data: publicUrl } = supabase.storage
         .from('voice_recordings')
@@ -207,22 +241,55 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       expiresAt.setDate(expiresAt.getDate() + 10);
 
       // Save metadata to database
-      await supabase.from('voice_recordings').insert({
-        title: formData.title || file.name,
-        type: formData.type,
-        host: formData.host || null,
-        attendees: formData.attendees || null,
-        location: formData.location || null,
-        audio_url: publicUrl.publicUrl,
-        expires_at: expiresAt.toISOString(),
-      });
+      const { data: recordingData, error: dbError } = await supabase
+        .from('voice_recordings')
+        .insert({
+          title: title,
+          type: formData.type,
+          host: formData.host || null,
+          attendees: formData.attendees || null,
+          location: formData.location || null,
+          audio_url: publicUrl.publicUrl,
+          expires_at: expiresAt.toISOString(),
+        })
+        .select('id')
+        .single();
+
+      if (dbError) {
+        throw dbError;
+      }
+
+      // Start audio transcription
+      if (recordingData?.id) {
+        try {
+          await supabase.functions.invoke("transcribe-audio", {
+            body: { 
+              audioUrl: publicUrl.publicUrl,
+              recordingId: recordingData.id
+            }
+          });
+        } catch (error) {
+          console.error('Error invoking transcribe function:', error);
+          // Continue anyway as this is async
+        }
+      }
 
       toast({
         title: "File uploaded",
         description: "Your audio file has been uploaded successfully and is being processed.",
       });
       
+      // Invalidate query cache to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["voice-recordings"] });
+      
+      // Close dialog
       onClose();
+      
+      // Navigate to the recording detail page if we have an ID
+      if (recordingData?.id) {
+        navigate(`/voice-summary/${recordingData.id}`);
+      }
+      
     } catch (error) {
       console.error('Error uploading file:', error);
       toast({

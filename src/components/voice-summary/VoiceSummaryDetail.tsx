@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -7,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Download, Copy, FileText, FilePdf, Play, Pause, AudioWaveform,
+  Download, Copy, FileText, File, Play, Pause, AudioWaveform,
   ArrowLeft, CheckCircle2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -394,7 +393,7 @@ export default function VoiceSummaryDetail() {
                       Copy Text
                     </Button>
                     <Button variant="outline" onClick={handleExportPDF}>
-                      <FilePdf className="mr-2 h-4 w-4" />
+                      <FileText className="mr-2 h-4 w-4" />
                       Export PDF
                     </Button>
                   </div>

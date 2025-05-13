@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AudioWaveform, Calendar, MapPin, Users } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 interface RecordingMeta {
   id: string;
@@ -26,16 +27,22 @@ interface RecordingMeta {
 }
 
 export default function VoiceSummaryArchive() {
+  const navigate = useNavigate();
   const { data: recordings = [], isLoading } = useQuery({
     queryKey: ["voice-recordings"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("voice_recordings")
-        .select("*")
-        .order("created_at", { ascending: false });
-        
-      if (error) throw error;
-      return data as RecordingMeta[];
+      try {
+        const { data, error } = await supabase
+          .from("voice_recordings")
+          .select("*")
+          .order("created_at", { ascending: false });
+          
+        if (error) throw error;
+        return data as unknown as RecordingMeta[];
+      } catch (error) {
+        console.error("Error fetching recordings:", error);
+        return [];
+      }
     },
   });
 
@@ -117,8 +124,10 @@ export default function VoiceSummaryArchive() {
                 {calculateExpiryTime(recording.expires_at)}
               </div>
               <div className="flex gap-2 text-xs">
-                {/* View details button - to be implemented */}
-                <button className="px-3 py-1 bg-primary text-primary-foreground rounded-md">
+                <button 
+                  className="px-3 py-1 bg-primary text-primary-foreground rounded-md"
+                  onClick={() => navigate(`/voice-summary/${recording.id}`)}
+                >
                   View Details
                 </button>
               </div>
