@@ -1,4 +1,3 @@
-
 export type TranslationKey =
   // Navigation & Menu Items
   | "dashboard"
@@ -291,3 +290,64 @@ export type TranslationKey =
   | "notesLabel"
   | "calendarNote"
   | "manualNote";
+
+export interface AIAssistantText {
+  welcomeToWaktiAI: string;
+  askWAKTI: string;
+  generalMode: string;
+  writerMode: string;
+  creativeMode: string;
+  assistantMode: string;
+  openHistory: string;
+  openSettings: string;
+  send: string;
+  searchChats: string;
+  clearHistory: string;
+  noChatsYet: string;
+  switchLanguage: string;
+  generalSettings: string;
+  writerSettings: string;
+  creativeSettings: string;
+  assistantSettings: string;
+  tonePresets: string;
+  professional: string;
+  casual: string;
+  friendly: string;
+  academic: string;
+  lengthOptions: string;
+  short: string;
+  medium: string;
+  long: string;
+  grammarCheck: string;
+  imageTools: string;
+  chartTypes: string;
+  textToImage: string;
+  imageToImage: string;
+  removeBg: string;
+  enhanceImage: string;
+  barChart: string;
+  lineChart: string;
+  pieChart: string;
+  shortcuts: string;
+  commonQuestions: string;
+  whatCanYouDo: string;
+  howToCreateTask: string;
+  explainWAKTIFeatures: string;
+  toCompleteThisAction: string;
+  switchTo: string;
+  hereIsWhatIUnderstood: string;
+  switchMode: string;
+  cancel: string;
+  confirm: string;
+  startVoiceInput: string;
+  stopListening: string;
+  iCanCreateThisTask: string;
+  howCanIAssistYouWithWAKTI: string;
+  generatingVisualContent: string;
+  writingContent: string;
+  helpingYouWith: string;
+  errorProcessingRequest: string;
+  taskCreatedSuccessfully: string;
+  due: string;
+  viewCalendar: string;
+}

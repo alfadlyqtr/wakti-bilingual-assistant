@@ -22,6 +22,7 @@ import VoiceSummary from "./pages/VoiceSummary";
 import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
 import Account from "./pages/Account";
 import Contacts from "./pages/Contacts";
+import AIAssistant from "./pages/AIAssistant";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ function App() {
             <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
             <Route path="/account" element={<Account />} />
             <Route path="/contacts" element={<Contacts />} />
+            <Route path="/ai-assistant" element={<AIAssistant />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <Toaster />
