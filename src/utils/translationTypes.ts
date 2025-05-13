@@ -271,4 +271,21 @@ export type TranslationKey =
   // Events system keys
   | "createEvent" 
   | "event"
-  | "create";
+  | "create"
+  
+  // Calendar Keys
+  | "month"
+  | "week"
+  | "year"
+  | "monthView"
+  | "weekView"
+  | "yearView"
+  | "noEvents"
+  | "title"
+  | "titleRequired"
+  | "dateRequired"
+  | "titlePlaceholder"
+  | "descriptionPlaceholder"
+  | "editNote"
+  | "createNote"
+  | "notesLabel";

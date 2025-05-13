@@ -14,6 +14,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import TasksReminders from "./pages/TasksReminders";
 import Events from "./pages/Events";
+import Calendar from "./pages/Calendar";
 import EventDetail from "./pages/EventDetail";
 import EventCreate from "./pages/EventCreate";
 import Messages from "./pages/Messages";
@@ -42,6 +43,7 @@ function App() {
             <Route path="/events" element={<Events />} />
             <Route path="/events/create" element={<EventCreate />} />
             <Route path="/events/:id" element={<EventDetail />} />
+            <Route path="/calendar" element={<Calendar />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/voice-summary" element={<VoiceSummary />} />
             <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />

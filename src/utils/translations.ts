@@ -1013,6 +1013,68 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   create: {
     en: "Create",
     ar: "إنشاء",
+  },
+  
+  // Calendar Keys
+  month: {
+    en: "Month",
+    ar: "شهر",
+  },
+  week: {
+    en: "Week",
+    ar: "أسبوع",
+  },
+  year: {
+    en: "Year",
+    ar: "سنة",
+  },
+  monthView: {
+    en: "Month view",
+    ar: "عرض الشهر",
+  },
+  weekView: {
+    en: "Week view",
+    ar: "عرض الأسبوع",
+  },
+  yearView: {
+    en: "Year view",
+    ar: "عرض السنة",
+  },
+  noEvents: {
+    en: "No items scheduled for this day",
+    ar: "لا توجد عناصر مجدولة لهذا اليوم",
+  },
+  title: {
+    en: "Title",
+    ar: "العنوان",
+  },
+  titleRequired: {
+    en: "Title is required",
+    ar: "العنوان مطلوب",
+  },
+  dateRequired: {
+    en: "Date is required",
+    ar: "التاريخ مطلوب",
+  },
+  titlePlaceholder: {
+    en: "Enter note title",
+    ar: "أدخل عنوان الملاحظة",
+  },
+  descriptionPlaceholder: {
+    en: "Enter note details (optional)",
+    ar: "أدخل تفاصيل الملاحظة (اختياري)",
+  },
+  editNote: {
+    en: "Edit Calendar Note",
+    ar: "تعديل ملاحظة التقويم",
+  },
+  createNote: {
+    en: "New Calendar Note",
+    ar: "ملاحظة تقويم جديدة",
+  },
+  notesLabel: {
+    en: "Calendar Notes",
+    ar: "ملاحظات التقويم",
   }
 };
 
