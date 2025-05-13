@@ -332,7 +332,21 @@ export type TranslationKey =
   | "lineChart"
   | "pieChart"
   | "shortcuts"
-  | "viewCalendar";
+  | "viewCalendar"
+  
+  // General UI text
+  | "notFound"
+  | "pageNotFound"
+  | "goHome"
+  | "search"
+  | "messages"
+  | "all"
+  | "done"
+  | "undone"
+  | "view"
+  | "details"
+  | "confirm"
+  | "messaging";
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;

@@ -1,3 +1,5 @@
+import { TranslationKey } from './translationTypes';
+
 export interface GeneralText {
   home: string;
   dashboard: string;
@@ -209,7 +211,7 @@ export interface AIAssistantText {
   viewCalendar: string;
 }
 
-export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText & VoiceSummaryText & SettingsText & CalendarText & ContactText & MessageText & AIAssistantText), lang: string): string {
+export function t(key: TranslationKey, lang: string): string {
   const translations = {
     en: {
       // General Translations
@@ -247,7 +249,12 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       share: "Share",
       submit: "Submit",
       assistant: "Assistant",
-
+      
+      // Theme & Language
+      lightMode: "Light Mode",
+      darkMode: "Dark Mode",
+      language: "Language",
+      
       // Task Translations
       taskTitle: "Title",
       taskDescription: "Description",
@@ -273,14 +280,14 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       createYourFirst: "Create your first",
       createTask: "Create Task",
       overdueItems: "Overdue Items",
-
+      
       // Reminder Translations
       reminderTitle: "Title",
       reminderDueDate: "Due Date",
       searchReminders: "Search reminders...",
       noReminders: "No reminders yet",
       createReminder: "Create Reminder",
-
+      
       // Event Translations
       eventTitle: "Title",
       eventDescription: "Description",
@@ -299,7 +306,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       events: "Events",
       eventCreate: "Create Event",
       eventDetail: "Event Detail",
-
+      
       // Voice Summary Translations
       voiceSummaryTitle: "Title",
       voiceSummaryDescription: "Description",
@@ -316,7 +323,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       voiceSummarySummaryAudioUrl: "Summary Audio URL",
       voiceSummarySummaryLanguage: "Summary Language",
       voiceSummarySummaryVoice: "Summary Voice",
-
+      
       // Settings Translations
       settingsTheme: "Theme",
       settingsLanguage: "Language",
@@ -327,7 +334,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       settingsLogout: "Logout",
       settingsThemeLight: "Light",
       settingsThemeDark: "Dark",
-
+      
       // Calendar Translations
       month: "Month",
       week: "Week",
@@ -347,7 +354,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       notesLabel: "Notes",
       calendarNote: "Calendar Note",
       manualNote: "Manual Note",
-
+      
       // Contact Translations
       contacts: "Contacts",
       contactName: "Name",
@@ -356,7 +363,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       contactAddress: "Address",
       contactCompany: "Company",
       contactWebsite: "Website",
-
+      
       // Message Translations
       messages: "Messages",
       messageTitle: "Title",
@@ -364,7 +371,21 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       messageSender: "Sender",
       messageReceiver: "Receiver",
       messageDate: "Date",
-
+      
+      // Contact list translations
+      messageStarted: "Message started",
+      chattingWithUser: "Chatting with",
+      removedFromFavorites: "Removed from favorites",
+      addedToFavorites: "Added to favorites",
+      userBlockedDescription: "User blocked",
+      requestAccepted: "Request accepted",
+      contactAddedDescription: "Contact added",
+      requestRejected: "Request rejected",
+      contactRejectedDescription: "Contact rejected",
+      blockedUserDescription: "User blocked",
+      noContactRequests: "No contact requests",
+      contactBlocked: "Contact blocked",
+      
       // AI Assistant Translations
       welcomeToWaktiAI: "Welcome to WAKTI AI. How can I assist you today?",
       askWAKTI: "Ask WAKTI...",
@@ -424,6 +445,243 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       taskCreatedSuccessfully: "Task created successfully!",
       due: "Due",
       viewCalendar: "View Calendar",
+      
+      // Widget Labels
+      tasks: "Tasks",
+      events: "Events",
+      reminders: "Reminders",
+      
+      // Marketing
+      startFreeTrial: "Start Free Trial",
+      createAccount: "Create Account",
+      forgotPassword: "Forgot Password",
+      
+      // Auth
+      email: "Email",
+      password: "Password",
+      name: "Name",
+      username: "Username",
+      
+      // Settings Categories
+      notificationPreferences: "Notification Preferences",
+      widgetVisibility: "Widget Visibility",
+      privacyControls: "Privacy Controls",
+      deleteAccount: "Delete Account",
+      freeTrialDays: "Free Trial Days",
+      
+      // New added translations
+      appName: "WAKTI",
+      tagline: "Manage your time efficiently",
+      features: "Features",
+      taskDesc: "Task Management",
+      calendarDesc: "Calendar Integration",
+      remindersDesc: "Smart Reminders",
+      messagingDesc: "Secure Messaging",
+      pricing: "Pricing",
+      monthly: "Monthly",
+      yearly: "Yearly",
+      aiSummaries: "AI Summaries",
+      qar: "QAR",
+      usd: "USD",
+      loading: "Loading",
+      signup: "Sign Up",
+      alreadyHaveAccount: "Already have an account?",
+      
+      // Account Page Keys
+      personalInformation: "Personal Information",
+      accountControls: "Account Controls",
+      appearance: "Appearance",
+      theme: "Theme",
+      pushNotifications: "Push Notifications",
+      taskDue: "Task Due",
+      reminder: "Reminder",
+      newMessage: "New Message",
+      emailNotifications: "Email Notifications",
+      tasksWidget: "Tasks Widget",
+      calendarWidget: "Calendar Widget",
+      remindersWidget: "Reminders Widget",
+      dailyQuoteWidget: "Daily Quote Widget",
+      quoteCategory: "Quote Category",
+      inspirational: "Inspirational",
+      motivational: "Motivational",
+      islamic: "Islamic",
+      sports: "Sports",
+      generalInfo: "General Info",
+      mixed: "Mixed",
+      profileVisibility: "Profile Visibility",
+      searchable: "Searchable",
+      hidden: "Hidden",
+      activityStatus: "Activity Status",
+      manageBlockedUsers: "Manage Blocked Users",
+      reportAbuse: "Report Abuse",
+      submitFeedback: "Submit Feedback",
+      subscriptionBilling: "Subscription & Billing",
+      currentPlan: "Current Plan",
+      trialEndsIn: "Trial ends in",
+      days: "days",
+      billingManagedThrough: "Billing managed through",
+      manageBilling: "Manage Billing",
+      cancelPlan: "Cancel Plan",
+      changePassword: "Change Password",
+      currentPassword: "Current Password",
+      newPassword: "New Password",
+      confirmPassword: "Confirm Password",
+      deleteAccountWarning: "Delete Account Warning",
+      thisActionIrreversible: "This action is irreversible",
+      feedbackDescription: "Feedback Description",
+      feedback: "Feedback",
+      feedbackPlaceholder: "Feedback Placeholder",
+      requestChange: "Request Change",
+      trialPlan: "Trial Plan",
+      monthlyPlan: "Monthly Plan",
+      yearlyPlan: "Yearly Plan",
+      freePlan: "Free Plan",
+      daysLeft: "Days Left",
+      trialReminder: "Trial Reminder",
+      
+      // Notification keys
+      systemNotifications: "System Notifications",
+      newEvent: "New Event",
+      
+      // Contact request keys
+      contactRequestSettings: "Contact Request Settings",
+      autoApproveRequests: "Auto-approve Requests",
+      
+      // Messaging system keys
+      searchContacts: "Search contacts",
+      noContactsFound: "No contacts found",
+      selectConversation: "Select a conversation",
+      typeMessage: "Type a message",
+      recordVoice: "Record voice",
+      stopRecording: "Stop recording",
+      uploadImage: "Upload image",
+      sendMessage: "Send message",
+      imageTooLarge: "Image too large",
+      transcript: "Transcript",
+      expiresIn: "Expires in",
+      onlineNow: "Online now",
+      contactBlocked: "Contact blocked",
+      unblockContact: "Unblock contact",
+      noConversations: "No conversations",
+      filters: "Filters",
+      
+      // Voice Summary keys
+      newRecording: "New Recording",
+      recentRecordings: "Recent Recordings",
+      meeting: "Meeting",
+      lecture: "Lecture",
+      brainstorm: "Brainstorm",
+      other: "Other",
+      hostName: "Host Name",
+      attendeesNames: "Attendees Names",
+      locationName: "Location Name",
+      cleanAudio: "Clean Audio",
+      noiseReduction: "Noise Reduction",
+      skip: "Skip",
+      next: "Next",
+      untitledRecording: "Untitled Recording",
+      selectType: "Select Type",
+      hostOptional: "Host (optional)",
+      attendeesOptional: "Attendees (optional)",
+      locationOptional: "Location (optional)",
+      separateWithCommas: "Separate with commas",
+      whereTookPlace: "Where it took place",
+      minutes: "minutes",
+      ago: "ago",
+      daysRemaining: "days remaining",
+      viewDetails: "View Details",
+      record: "Record",
+      upload: "Upload",
+      titleOptional: "Title (optional)",
+      typeOptional: "Type (optional)",
+      processingAudio: "Processing audio",
+      transcribingAudio: "Transcribing audio",
+      creatingSummary: "Creating summary",
+      generateSummary: "Generate Summary",
+      generateAudio: "Generate Audio",
+      downloadTranscript: "Download Transcript",
+      downloadSummary: "Download Summary",
+      downloadAudio: "Download Audio",
+      selectFile: "Select File",
+      mp3orWavFormat: "MP3 or WAV format",
+      noRecordingsFound: "No recordings found",
+      firstRecording: "Make your first recording",
+      exportAsPDF: "Export as PDF",
+      exportAsAudio: "Export as Audio",
+      summaryVoice: "Summary Voice",
+      summaryLanguage: "Summary Language",
+      male: "Male",
+      female: "Female",
+      arabic: "Arabic",
+      english: "English",
+      transcriptTitle: "Transcript",
+      summaryTitle: "Summary",
+      recordingDetails: "Recording Details",
+      audioPlayerError: "Audio Player Error",
+      
+      // Event system keys
+      createEvent: "Create Event",
+      event: "Event",
+      
+      // Task and reminder keys
+      createTask: "Create Task",
+      createReminder: "Create Reminder",
+      taskTitle: "Task Title",
+      reminderTitle: "Reminder Title",
+      description: "Description",
+      dueDate: "Due Date",
+      dueTime: "Due Time",
+      priority: "Priority",
+      urgent: "Urgent",
+      high: "High",
+      medium: "Medium",
+      low: "Low",
+      status: "Status",
+      pending: "Pending",
+      inProgress: "In Progress",
+      completed: "Completed",
+      overdue: "Overdue",
+      subtasks: "Subtasks",
+      addSubtask: "Add Subtask",
+      subtaskGroupTitle: "Subtasks",
+      recurring: "Recurring",
+      recurrencePattern: "Recurrence Pattern",
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      yearly: "Yearly",
+      delete: "Delete",
+      edit: "Edit",
+      share: "Share",
+      shared: "Shared",
+      shareWith: "Share with",
+      selectContact: "Select Contact",
+      noTasks: "No tasks",
+      noReminders: "No reminders",
+      createYourFirst: "Create your first",
+      markAsCompleted: "Mark as completed",
+      markAsPending: "Mark as pending",
+      allTasks: "All Tasks",
+      completedTasks: "Completed Tasks",
+      pendingTasks: "Pending Tasks",
+      overdueItems: "Overdue Items",
+      smartTask: "Smart Task",
+      swipeToComplete: "Swipe to complete",
+      swipeToDelete: "Swipe to delete",
+      taskCreatedSuccessfully: "Task created successfully",
+      reminderCreatedSuccessfully: "Reminder created successfully",
+      taskUpdatedSuccessfully: "Task updated successfully",
+      reminderUpdatedSuccessfully: "Reminder updated successfully",
+      taskDeletedSuccessfully: "Task deleted successfully",
+      reminderDeletedSuccessfully: "Reminder deleted successfully",
+      taskSharedSuccessfully: "Task shared successfully",
+      searchTasks: "Search tasks",
+      searchReminders: "Search reminders",
+      filterBy: "Filter by",
+      sortBy: "Sort by",
+      date: "Date",
+      ascending: "Ascending",
+      descending: "Descending",
     },
     ar: {
       // General Translations
@@ -461,7 +719,12 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       share: "شارك",
       submit: "إرسال",
       assistant: "المساعد",
-
+      
+      // Theme & Language
+      lightMode: "الوضع الفاتح",
+      darkMode: "الوضع الداكن",
+      language: "اللغة",
+      
       // Task Translations
       taskTitle: "العنوان",
       taskDescription: "الوصف",
@@ -487,14 +750,14 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       createYourFirst: "أنشئ أول",
       createTask: "إنشاء مهمة",
       overdueItems: "العناصر المتأخرة",
-
+      
       // Reminder Translations
       reminderTitle: "العنوان",
       reminderDueDate: "تاريخ الاستحقاق",
       searchReminders: "البحث في التذكيرات...",
       noReminders: "لا توجد تذكيرات بعد",
       createReminder: "إنشاء تذكير",
-
+      
       // Event Translations
       eventTitle: "العنوان",
       eventDescription: "الوصف",
@@ -513,7 +776,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       events: "الأحداث",
       eventCreate: "إنشاء حدث",
       eventDetail: "تفاصيل الحدث",
-
+      
       // Voice Summary Translations
       voiceSummaryTitle: "العنوان",
       voiceSummaryDescription: "الوصف",
@@ -530,7 +793,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       voiceSummarySummaryAudioUrl: "رابط ملخص الصوت",
       voiceSummarySummaryLanguage: "لغة الملخص",
       voiceSummarySummaryVoice: "صوت الملخص",
-
+      
       // Settings Translations
       settingsTheme: "المظهر",
       settingsLanguage: "اللغة",
@@ -541,7 +804,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       settingsLogout: "تسجيل الخروج",
       settingsThemeLight: "فاتح",
       settingsThemeDark: "داكن",
-
+      
       // Calendar Translations
       month: "شهر",
       week: "أسبوع",
@@ -561,7 +824,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       notesLabel: "ملاحظات",
       calendarNote: "ملاحظة تقويم",
       manualNote: "ملاحظة يدوية",
-
+      
       // Contact Translations
       contacts: "جهات الاتصال",
       contactName: "الاسم",
@@ -570,7 +833,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       contactAddress: "العنوان",
       contactCompany: "الشركة",
       contactWebsite: "الموقع الإلكتروني",
-
+      
       // Message Translations
       messages: "الرسائل",
       messageTitle: "العنوان",
@@ -578,7 +841,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       messageSender: "المرسل",
       messageReceiver: "المتلقي",
       messageDate: "التاريخ",
-
+      
       // Contact list translations
       messageStarted: "بدأت المحادثة",
       chattingWithUser: "محادثة مع",
@@ -591,7 +854,8 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       contactRejectedDescription: "تم رفض جهة الاتصال",
       blockedUserDescription: "تم حظر المستخدم",
       noContactRequests: "لا توجد طلبات اتصال",
-
+      contactBlocked: "جهة الاتصال محظورة",
+      
       // AI Assistant Translations
       welcomeToWaktiAI: "مرحبًا بك في WAKTI AI. كيف يمكنني مساعدتك اليوم؟",
       askWAKTI: "اسأل WAKTI...",
@@ -608,7 +872,7 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       switchLanguage: "تغيير اللغة",
       generalSettings: "الإعدادات العامة",
       writerSettings: "إعدادات الكاتب",
-      creativeSettings: "الإعدادات الإبداعية",
+      creativeSettings: "إعدادات الإبداعية",
       assistantSettings: "إعدادات المساعد",
       tonePresets: "إعدادات النبرة",
       professional: "احترافي",
@@ -651,6 +915,243 @@ export function t(key: keyof (GeneralText & TaskText & ReminderText & EventText 
       taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح!",
       due: "تاريخ الاستحقاق",
       viewCalendar: "عرض التقويم",
+      
+      // Widget Labels
+      tasks: "المهام",
+      events: "الأحداث",
+      reminders: "التذكيرات",
+      
+      // Marketing
+      startFreeTrial: "ابدأ الإصدار التجريبي المجاني",
+      createAccount: "إنشاء حساب",
+      forgotPassword: "نسيت كلمة المرور",
+      
+      // Auth
+      email: "البريد الإلكتروني",
+      password: "كلمة المرور",
+      name: "الاسم",
+      username: "اسم المستخدم",
+      
+      // Settings Categories
+      notificationPreferences: "تفضيلات الإشعارات",
+      widgetVisibility: "ظهور الويدجت",
+      privacyControls: "ضوابط الخصوصية",
+      deleteAccount: "حذف الحساب",
+      freeTrialDays: "أيام الإصدار التجريبي المجاني",
+      
+      // New added translations
+      appName: "وقتي",
+      tagline: "إدارة وقتك بكفاءة",
+      features: "الميزات",
+      taskDesc: "إدارة المهام",
+      calendarDesc: "تكامل التقويم",
+      remindersDesc: "تذكيرات ذكية",
+      messagingDesc: "رسائل آمنة",
+      pricing: "التسعير",
+      monthly: "شهري",
+      yearly: "سنوي",
+      aiSummaries: "ملخصات الذكاء الاصطناعي",
+      qar: "ريال قطري",
+      usd: "دولار أمريكي",
+      loading: "جاري التحميل",
+      signup: "اشتراك",
+      alreadyHaveAccount: "هل لديك حساب بالفعل؟",
+      
+      // Account Page Keys
+      personalInformation: "المعلومات الشخصية",
+      accountControls: "ضوابط الحساب",
+      appearance: "المظهر",
+      theme: "السمة",
+      pushNotifications: "إشعارات الدفع",
+      taskDue: "موعد استحقاق المهمة",
+      reminder: "تذكير",
+      newMessage: "رسالة جديدة",
+      emailNotifications: "إشعارات البريد الإلكتروني",
+      tasksWidget: "ويدجت المهام",
+      calendarWidget: "ويدجت التقويم",
+      remindersWidget: "ويدجت التذكيرات",
+      dailyQuoteWidget: "ويدجت الاقتباس اليومي",
+      quoteCategory: "فئة الاقتباس",
+      inspirational: "ملهمة",
+      motivational: "تحفيزية",
+      islamic: "إسلامية",
+      sports: "رياضية",
+      generalInfo: "معلومات عامة",
+      mixed: "مختلطة",
+      profileVisibility: "ظهور الملف الشخصي",
+      searchable: "قابل للبحث",
+      hidden: "مخفي",
+      activityStatus: "حالة النشاط",
+      manageBlockedUsers: "إدارة المستخدمين المحظورين",
+      reportAbuse: "الإبلاغ عن إساءة",
+      submitFeedback: "إرسال تعليق",
+      subscriptionBilling: "الاشتراك والفواتير",
+      currentPlan: "الخطة الحالية",
+      trialEndsIn: "ينتهي الإصدار التجريبي في",
+      days: "أيام",
+      billingManagedThrough: "تتم إدارة الفواتير من خلال",
+      manageBilling: "إدارة الفواتير",
+      cancelPlan: "إلغاء الخطة",
+      changePassword: "تغيير كلمة ��لمرور",
+      currentPassword: "كلمة المرور الحالية",
+      newPassword: "كلمة المرور الجديدة",
+      confirmPassword: "تأكيد كلمة المرور",
+      deleteAccountWarning: "تحذير حذف الحساب",
+      thisActionIrreversible: "هذا الإجراء لا رجعة فيه",
+      feedbackDescription: "وصف التعليق",
+      feedback: "تعليق",
+      feedbackPlaceholder: "مكان كتابة التعليق",
+      requestChange: "طلب تغيير",
+      trialPlan: "الخطة التجريبية",
+      monthlyPlan: "الخطة الشهرية",
+      yearlyPlan: "الخطة السنوية",
+      freePlan: "الخطة المجانية",
+      daysLeft: "الأيام المتبقية",
+      trialReminder: "تذكير تجريبي",
+      
+      // Notification keys
+      systemNotifications: "إشعارات النظام",
+      newEvent: "حدث جديد",
+      
+      // Contact request keys
+      contactRequestSettings: "إعدادات طلب الاتصال",
+      autoApproveRequests: "الموافقة التلقائية على الطلبات",
+      
+      // Messaging system keys
+      searchContacts: "بحث جهات الاتصال",
+      noContactsFound: "لم يتم العثور على جهات اتصال",
+      selectConversation: "اختر محادثة",
+      typeMessage: "اكتب رسالة",
+      recordVoice: "تسجيل صوت",
+      stopRecording: "إيقاف التسجيل",
+      uploadImage: "تحميل صورة",
+      sendMessage: "إرسال رسالة",
+      imageTooLarge: "الصورة كبيرة جدًا",
+      transcript: "نص",
+      expiresIn: "تنتهي في",
+      onlineNow: "متصل الآن",
+      contactBlocked: "جهة الاتصال محظورة",
+      unblockContact: "إلغاء حظر جهة الاتصال",
+      noConversations: "لا توجد محادثات",
+      filters: "تصفيات",
+      
+      // Voice Summary keys
+      newRecording: "تسجيل جديد",
+      recentRecordings: "التسجيلات الحديثة",
+      meeting: "اجتماع",
+      lecture: "محاضرة",
+      brainstorm: "عصف ذهني",
+      other: "أخرى",
+      hostName: "اسم المضيف",
+      attendeesNames: "أسماء الحاضرين",
+      locationName: "اسم الموقع",
+      cleanAudio: "تنظيف الصوت",
+      noiseReduction: "تقليل الضوضاء",
+      skip: "تخطي",
+      next: "التالي",
+      untitledRecording: "تسجيل بدون عنوان",
+      selectType: "اختر النوع",
+      hostOptional: "المضيف (اختياري)",
+      attendeesOptional: "الحاضرون (اختياري)",
+      locationOptional: "الموقع (اختياري)",
+      separateWithCommas: "الفصل بفواصل",
+      whereTookPlace: "مكان الحدث",
+      minutes: "دقائق",
+      ago: "مضت",
+      daysRemaining: "الأيام المتبقية",
+      viewDetails: "عرض التفاصيل",
+      record: "تسجيل",
+      upload: "تحميل",
+      titleOptional: "العنوان (اختياري)",
+      typeOptional: "النوع (اختياري)",
+      processingAudio: "معالجة الصوت",
+      transcribingAudio: "تحويل الصوت إلى نص",
+      creatingSummary: "إنشاء ملخص",
+      generateSummary: "إنشاء ملخص",
+      generateAudio: "إنشاء صوت",
+      downloadTranscript: "تنزيل النص",
+      downloadSummary: "تنزيل الملخص",
+      downloadAudio: "تنزيل الصوت",
+      selectFile: "اختيار ملف",
+      mp3orWavFormat: "تنسيق MP3 أو WAV",
+      noRecordingsFound: "لم يتم العثور على تسجيلات",
+      firstRecording: "قم بإجراء تسجيلك الأول",
+      exportAsPDF: "تصدير كملف PDF",
+      exportAsAudio: "تصدير كملف صوتي",
+      summaryVoice: "صوت الملخص",
+      summaryLanguage: "لغة الملخص",
+      male: "ذكر",
+      female: "أنثى",
+      arabic: "العربية",
+      english: "الإنجليزية",
+      transcriptTitle: "النص",
+      summaryTitle: "الملخص",
+      recordingDetails: "تفاصيل التسجيل",
+      audioPlayerError: "خطأ في مشغل الصوت",
+      
+      // Event system keys
+      createEvent: "إنشاء حدث",
+      event: "حدث",
+      
+      // Task and reminder keys
+      createTask: "إنشاء مهمة",
+      createReminder: "إنشاء تذكير",
+      taskTitle: "عنوان المهمة",
+      reminderTitle: "عنوان التذكير",
+      description: "الوصف",
+      dueDate: "تاريخ الاستحقاق",
+      dueTime: "وقت الاستحقاق",
+      priority: "الأولوية",
+      urgent: "عاجل",
+      high: "عالية",
+      medium: "متوسطة",
+      low: "منخفضة",
+      status: "الحالة",
+      pending: "معلق",
+      inProgress: "قيد التنفيذ",
+      completed: "مكتمل",
+      overdue: "متأخر",
+      subtasks: "مهام فرعية",
+      addSubtask: "إضافة مهمة فرعية",
+      subtaskGroupTitle: "المهام الفرعية",
+      recurring: "متكرر",
+      recurrencePattern: "نمط التكرار",
+      daily: "يومي",
+      weekly: "أسبوعي",
+      monthly: "شهري",
+      yearly: "سنوي",
+      delete: "حذف",
+      edit: "تعديل",
+      share: "مشاركة",
+      shared: "تمت المشاركة",
+      shareWith: "مشاركة مع",
+      selectContact: "اختيار جهة اتصال",
+      noTasks: "لا توجد مهام",
+      noReminders: "لا توجد تذكيرات",
+      createYourFirst: "إنشاء أول",
+      markAsCompleted: "وضع علامة كمكتمل",
+      markAsPending: "وضع علامة كمعلق",
+      allTasks: "جميع المهام",
+      completedTasks: "المهام المكتملة",
+      pendingTasks: "المهام المعلقة",
+      overdueItems: "العناصر المتأخرة",
+      smartTask: "مهمة ذكية",
+      swipeToComplete: "اسحب لإكمال",
+      swipeToDelete: "اسحب للحذف",
+      taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح",
+      reminderCreatedSuccessfully: "تم إنشاء التذكير بنجاح",
+      taskUpdatedSuccessfully: "تم تحديث المهمة بنجاح",
+      reminderUpdatedSuccessfully: "تم تحديث التذكير بنجاح",
+      taskDeletedSuccessfully: "تم حذف المهمة بنجاح",
+      reminderDeletedSuccessfully: "تم حذف التذكير بنجاح",
+      taskSharedSuccessfully: "تم مشاركة المهمة بنجاح",
+      searchTasks: "بحث المهام",
+      searchReminders: "بحث التذكيرات",
+      filterBy: "تصفية حسب",
+      sortBy: "ترتيب حسب",
+      date: "التاريخ",
+      ascending: "تصاعدي",
+      descending: "تنازلي",
     }
   };
 
