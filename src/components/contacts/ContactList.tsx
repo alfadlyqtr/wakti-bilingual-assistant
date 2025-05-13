@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ export function ContactList() {
     navigate(`/messages/${id}`);
     toast({
       title: t("messageStarted", language),
-      description: t("chattingWithUser", language, { username: name })
+      description: t("chattingWithUser", language) + " " + name
     });
   };
 
@@ -46,7 +47,7 @@ export function ContactList() {
     
     toast({
       title: t("contactBlocked", language),
-      description: t("userBlockedDescription", language, { username: name })
+      description: t("userBlockedDescription", language)
     });
   };
 

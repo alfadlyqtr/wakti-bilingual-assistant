@@ -192,5 +192,20 @@ export type TranslationKey =
   | "transcriptTitle"
   | "summaryTitle"
   | "recordingDetails"
-  | "audioPlayerError";
+  | "audioPlayerError"
+  
+  // Contact list translations
+  | "messageStarted"
+  | "chattingWithUser"
+  | "removedFromFavorites"
+  | "addedToFavorites"
+  | "contactBlocked"
+  | "userBlockedDescription"
+  | "requestAccepted"
+  | "contactAddedDescription"
+  | "requestRejected"
+  | "contactRejectedDescription"
+  | "blockedUserDescription"
+  | "noContactRequests";
+
 

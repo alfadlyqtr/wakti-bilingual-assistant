@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Check, X, User } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,7 +24,7 @@ export function ContactRequests() {
     setRequests(requests.filter(req => req.id !== id));
     toast({
       title: t("requestAccepted", language),
-      description: t("contactAddedDescription", language, { username: name })
+      description: t("contactAddedDescription", language)
     });
   };
 
@@ -31,7 +32,7 @@ export function ContactRequests() {
     setRequests(requests.filter(req => req.id !== id));
     toast({
       title: t("requestRejected", language),
-      description: t("contactRejectedDescription", language, { username: name })
+      description: t("contactRejectedDescription", language)
     });
   };
 
@@ -39,7 +40,7 @@ export function ContactRequests() {
     setRequests(requests.filter(req => req.id !== id));
     toast({
       title: t("contactBlocked", language),
-      description: t("blockedUserDescription", language, { username: name })
+      description: t("blockedUserDescription", language)
     });
   };
 

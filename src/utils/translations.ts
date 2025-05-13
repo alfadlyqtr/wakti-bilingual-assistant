@@ -711,8 +711,66 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Error playing audio",
     ar: "خطأ في تشغيل الصوت",
   },
+  
+  // Contact list translations
+  messageStarted: {
+    en: "Message started",
+    ar: "بدأت المحادثة",
+  },
+  chattingWithUser: {
+    en: "Chatting with",
+    ar: "محادثة مع",
+  },
+  removedFromFavorites: {
+    en: "Removed from favorites",
+    ar: "تمت إزالته من المفضلة",
+  },
+  addedToFavorites: {
+    en: "Added to favorites",
+    ar: "تمت إضافته إلى المفضلة",
+  },
+  contactBlocked: {
+    en: "Contact blocked",
+    ar: "تم حظر جهة الاتصال",
+  },
+  userBlockedDescription: {
+    en: "You will no longer receive messages from this user",
+    ar: "لن تتلقى رسائل من هذا المستخدم بعد الآن",
+  },
+  requestAccepted: {
+    en: "Request accepted",
+    ar: "تم قبول الطلب",
+  },
+  contactAddedDescription: {
+    en: "Added to your contacts",
+    ar: "تمت إضافته إلى جهات الاتصال الخاصة بك",
+  },
+  requestRejected: {
+    en: "Request rejected",
+    ar: "تم رفض الطلب",
+  },
+  contactRejectedDescription: {
+    en: "Contact request rejected",
+    ar: "تم رفض طلب جهة الاتصال",
+  },
+  blockedUserDescription: {
+    en: "User has been blocked",
+    ar: "تم حظر المستخدم",
+  },
+  noContactRequests: {
+    en: "No contact requests",
+    ar: "لا توجد طلبات جهات اتصال",
+  },
 };
 
-export const t = (key: TranslationKey, language: "en" | "ar"): string => {
-  return translations[key][language] || key;
+export const t = (key: TranslationKey, language: "en" | "ar", params?: Record<string, string>): string => {
+  let text = translations[key]?.[language] || key;
+  
+  if (params) {
+    Object.entries(params).forEach(([param, value]) => {
+      text = text.replace(`{${param}}`, value);
+    });
+  }
+  
+  return text;
 };
