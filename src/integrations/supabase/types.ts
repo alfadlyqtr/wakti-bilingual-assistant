@@ -145,6 +145,148 @@ export type Database = {
         }
         Relationships: []
       }
+      reminders: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          due_date: string
+          id: string
+          is_recurring: boolean
+          recurrence_pattern: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          due_date: string
+          id?: string
+          is_recurring?: boolean
+          recurrence_pattern?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          due_date?: string
+          id?: string
+          is_recurring?: boolean
+          recurrence_pattern?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      shared_tasks: {
+        Row: {
+          created_at: string | null
+          id: string
+          shared_with: string
+          task_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          shared_with: string
+          task_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          shared_with?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shared_tasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subtasks: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_completed: boolean
+          task_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean
+          task_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_completed?: boolean
+          task_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          is_recurring: boolean
+          priority: string
+          recurrence_pattern: string | null
+          status: string
+          subtask_group_title: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_recurring?: boolean
+          priority?: string
+          recurrence_pattern?: string | null
+          status?: string
+          subtask_group_title?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          is_recurring?: boolean
+          priority?: string
+          recurrence_pattern?: string | null
+          status?: string
+          subtask_group_title?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       voice_recordings: {
         Row: {
           attendees: string | null

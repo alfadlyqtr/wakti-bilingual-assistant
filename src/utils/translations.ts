@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -759,16 +758,268 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "No contact requests",
     ar: "لا توجد طلبات جهات اتصال",
   },
+  
+  // Task + Reminder System
+  tasks: {
+    en: "Tasks",
+    ar: "المهام",
+  },
+  reminders: {
+    en: "Reminders",
+    ar: "التذكيرات",
+  },
+  taskAndReminders: {
+    en: "Tasks & Reminders",
+    ar: "المهام والتذكيرات",
+  },
+  createTask: {
+    en: "Create Task",
+    ar: "إنشاء مهمة",
+  },
+  createReminder: {
+    en: "Create Reminder",
+    ar: "إنشاء تذكير",
+  },
+  taskTitle: {
+    en: "Task Title",
+    ar: "عنوان المهمة",
+  },
+  reminderTitle: {
+    en: "Reminder Title",
+    ar: "عنوان التذكير",
+  },
+  description: {
+    en: "Description",
+    ar: "وصف",
+  },
+  dueDate: {
+    en: "Due Date",
+    ar: "تاريخ الاستحقاق",
+  },
+  dueTime: {
+    en: "Due Time",
+    ar: "وقت الاستحقاق",
+  },
+  priority: {
+    en: "Priority",
+    ar: "الأولوية",
+  },
+  urgent: {
+    en: "Urgent",
+    ar: "عاجل",
+  },
+  high: {
+    en: "High",
+    ar: "مرتفع",
+  },
+  medium: {
+    en: "Medium",
+    ar: "متوسط",
+  },
+  low: {
+    en: "Low",
+    ar: "منخفض",
+  },
+  status: {
+    en: "Status",
+    ar: "الحالة",
+  },
+  pending: {
+    en: "Pending",
+    ar: "قيد الانتظار",
+  },
+  inProgress: {
+    en: "In Progress",
+    ar: "قيد التنفيذ",
+  },
+  completed: {
+    en: "Completed",
+    ar: "مكتمل",
+  },
+  overdue: {
+    en: "Overdue",
+    ar: "متأخر",
+  },
+  subtasks: {
+    en: "Subtasks",
+    ar: "المهام الفرعية",
+  },
+  addSubtask: {
+    en: "Add Subtask",
+    ar: "إضافة مهمة فرعية",
+  },
+  subtaskGroupTitle: {
+    en: "Subtask Group Title (Optional)",
+    ar: "عنوان مجموعة المهام الفرعية (اختياري)",
+  },
+  recurring: {
+    en: "Recurring",
+    ar: "متكرر",
+  },
+  recurrencePattern: {
+    en: "Recurrence Pattern",
+    ar: "نمط التكرار",
+  },
+  daily: {
+    en: "Daily",
+    ar: "يومي",
+  },
+  weekly: {
+    en: "Weekly",
+    ar: "أسبوعي",
+  },
+  monthly: {
+    en: "Monthly",
+    ar: "شهري",
+  },
+  yearly: {
+    en: "Yearly",
+    ar: "سنوي",
+  },
+  save: {
+    en: "Save",
+    ar: "حفظ",
+  },
+  cancel: {
+    en: "Cancel",
+    ar: "إلغاء",
+  },
+  delete: {
+    en: "Delete",
+    ar: "حذف",
+  },
+  edit: {
+    en: "Edit",
+    ar: "تعديل",
+  },
+  share: {
+    en: "Share",
+    ar: "مشاركة",
+  },
+  shareWith: {
+    en: "Share with",
+    ar: "مشاركة مع",
+  },
+  selectContact: {
+    en: "Select Contact",
+    ar: "اختر جهة اتصال",
+  },
+  noTasks: {
+    en: "No tasks found",
+    ar: "لم يتم العثور على مهام",
+  },
+  noReminders: {
+    en: "No reminders found",
+    ar: "لم يتم العثور على تذكيرات",
+  },
+  createYourFirst: {
+    en: "Create your first",
+    ar: "إنشاء أول",
+  },
+  markAsCompleted: {
+    en: "Mark as Completed",
+    ar: "وضع علامة كمكتمل",
+  },
+  markAsPending: {
+    en: "Mark as Pending",
+    ar: "وضع علامة قيد الانتظار",
+  },
+  allTasks: {
+    en: "All Tasks",
+    ar: "جميع المهام",
+  },
+  completedTasks: {
+    en: "Completed Tasks",
+    ar: "المهام المكتملة",
+  },
+  pendingTasks: {
+    en: "Pending Tasks",
+    ar: "المهام قيد الانتظار",
+  },
+  overdueItems: {
+    en: "Overdue Items",
+    ar: "العناصر المتأخرة",
+  },
+  smartTask: {
+    en: "Smart Task",
+    ar: "مهمة ذكية",
+  },
+  swipeToComplete: {
+    en: "Swipe right to complete",
+    ar: "اسحب لليمين للإكمال",
+  },
+  swipeToDelete: {
+    en: "Swipe left to delete",
+    ar: "اسحب لليسار للحذف",
+  },
+  taskCreatedSuccessfully: {
+    en: "Task created successfully",
+    ar: "تم إنشاء المهمة بنجاح",
+  },
+  reminderCreatedSuccessfully: {
+    en: "Reminder created successfully",
+    ar: "تم إنشاء التذكير بنجاح",
+  },
+  taskUpdatedSuccessfully: {
+    en: "Task updated successfully",
+    ar: "تم تحديث المهمة بنجاح",
+  },
+  reminderUpdatedSuccessfully: {
+    en: "Reminder updated successfully",
+    ar: "تم تحديث التذكير بنجاح",
+  },
+  taskDeletedSuccessfully: {
+    en: "Task deleted successfully",
+    ar: "تم حذف المهمة بنجاح",
+  },
+  reminderDeletedSuccessfully: {
+    en: "Reminder deleted successfully",
+    ar: "تم حذف التذكير بنجاح",
+  },
+  taskSharedSuccessfully: {
+    en: "Task shared successfully",
+    ar: "تمت مشاركة المهمة بنجاح",
+  },
+  searchTasks: {
+    en: "Search tasks...",
+    ar: "البحث في المهام...",
+  },
+  searchReminders: {
+    en: "Search reminders...",
+    ar: "البحث في التذكيرات...",
+  },
+  filterBy: {
+    en: "Filter by",
+    ar: "تصفية حسب",
+  },
+  sortBy: {
+    en: "Sort by",
+    ar: "ترتيب حسب",
+  },
+  date: {
+    en: "Date",
+    ar: "التاريخ",
+  },
+  name: {
+    en: "Name",
+    ar: "الاسم",
+  },
+  ascending: {
+    en: "Ascending",
+    ar: "تصاعدي",
+  },
+  descending: {
+    en: "Descending",
+    ar: "تنازلي",
+  },
 };
 
-export const t = (key: TranslationKey, language: "en" | "ar", params?: Record<string, string>): string => {
-  let text = translations[key]?.[language] || key;
-  
-  if (params) {
-    Object.entries(params).forEach(([param, value]) => {
-      text = text.replace(`{${param}}`, value);
-    });
+export const t = (key: TranslationKey, language: "en" | "ar") => {
+  if (!translations[key]) {
+    console.warn(`Translation key not found: ${key}`);
+    return key;
   }
-  
-  return text;
+  return translations[key][language];
 };
+
+export default translations;

@@ -1,12 +1,11 @@
 
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
-  ListCheck, 
   Calendar, 
   Sparkle, 
   AudioWaveform, 
   CalendarClock, 
-  AlarmClock 
+  ListCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -19,12 +18,12 @@ export function MobileNav() {
   const location = useLocation();
   const { language } = useTheme();
   
-  // Navigation items - removed dashboard from the dock as requested
+  // Navigation items - combined Tasks + Reminders into a single menu item
   const navItems = [
     // Left side items (3)
     {
       icon: ListCheck,
-      label: "taskManagement" as TranslationKey,
+      label: "taskAndReminders" as TranslationKey,
       path: "/tasks",
       position: "left"
     },
@@ -32,12 +31,6 @@ export function MobileNav() {
       icon: Calendar,
       label: "calendar" as TranslationKey,
       path: "/calendar",
-      position: "left"
-    },
-    {
-      icon: AlarmClock,
-      label: "reminders" as TranslationKey,
-      path: "/reminders",
       position: "left"
     },
     // Right side items (3)
@@ -72,7 +65,7 @@ export function MobileNav() {
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="flex w-full px-6 justify-between">
               {/* Left side items */}
-              <div className="flex space-x-8">
+              <div className="flex space-x-12">
                 {navItems
                   .filter(item => item.position === "left")
                   .map((item) => {
@@ -95,7 +88,7 @@ export function MobileNav() {
               </div>
               
               {/* Right side items */}
-              <div className="flex space-x-8">
+              <div className="flex space-x-12">
                 {navItems
                   .filter(item => item.position === "right")
                   .map((item) => {

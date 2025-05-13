@@ -1,67 +1,70 @@
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ThemeProvider } from "@/providers/ThemeProvider";
-
-// Pages
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
+import { useState, useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import Dashboard from "./pages/Dashboard";
-import Messages from "./pages/Messages";
 import Settings from "./pages/Settings";
 import Account from "./pages/Account";
-import Contacts from "./pages/Contacts";
-import NotFound from "./pages/NotFound";
 import Events from "./pages/Events";
 import EventCreate from "./pages/EventCreate";
 import EventDetail from "./pages/EventDetail";
+import Contacts from "./pages/Contacts";
+import Messages from "./pages/Messages";
 import VoiceSummary from "./pages/VoiceSummary";
 import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
+import TasksReminders from "./pages/TasksReminders";
+import { Toaster } from "./components/ui/toaster";
+import "./App.css";
 
-const queryClient = new QueryClient();
+function App() {
+  const [initializing, setInitializing] = useState(true);
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
+  useEffect(() => {
+    // Simulate loading (could be auth check, data loading, etc)
+    const timer = setTimeout(() => {
+      setInitializing(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (initializing) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <img
+          src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png"
+          alt="WAKTI Logo"
+          className="w-16 h-16 animate-pulse"
+        />
+      </div>
+    );
+  }
+
+  return (
     <ThemeProvider>
-      <TooltipProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/account" element={<Account />} />
+          <Route path="/tasks" element={<TasksReminders />} />
+          <Route path="/reminders" element={<Navigate to="/tasks" replace />} />
+          <Route path="/events" element={<Events />} />
+          <Route path="/event/create" element={<EventCreate />} />
+          <Route path="/event/:id" element={<EventDetail />} />
+          <Route path="/contacts" element={<Contacts />} />
+          <Route path="/messages" element={<Messages />} />
+          <Route path="/voice-summary" element={<VoiceSummary />} />
+          <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
+          {/* Add a 404 route that also redirects to dashboard */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+        
         <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            
-            {/* Protected Routes - Will add auth check later */}
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/tasks" element={<Dashboard />} />
-            <Route path="/calendar" element={<Dashboard />} />
-            <Route path="/assistant" element={<Dashboard />} />
-            <Route path="/voice-summary" element={<VoiceSummary />} />
-            <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/events/create" element={<EventCreate />} />
-            <Route path="/events/:id" element={<EventDetail />} />
-            <Route path="/reminders" element={<Dashboard />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/messages" element={<Messages />} />
-            <Route path="/contacts" element={<Contacts />} />
-            <Route path="/billing" element={<Dashboard />} />
-            <Route path="/profile" element={<Navigate to="/account" replace />} />
-            
-            {/* Fallback routes */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      </Router>
     </ThemeProvider>
-  </QueryClientProvider>
-);
+  );
+}
 
 export default App;
