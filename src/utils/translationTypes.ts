@@ -346,7 +346,29 @@ export type TranslationKey =
   | "view"
   | "details"
   | "confirm"
-  | "messaging";
+  | "messaging"
+
+  // AI Assistant specific keys (adding the missing ones)
+  | "welcomeToWaktiAI"
+  | "askWAKTI"
+  | "openHistory"
+  | "openSettings"
+  | "send"
+  | "searchChats"
+  | "clearHistory"
+  | "toCompleteThisAction"
+  | "switchTo"
+  | "hereIsWhatIUnderstood"
+  | "switchMode"
+  | "startVoiceInput"
+  | "stopListening"
+  | "iCanCreateThisTask"
+  | "howCanIAssistYouWithWAKTI"
+  | "generatingVisualContent"
+  | "writingContent"
+  | "helpingYouWith"
+  | "errorProcessingRequest"
+  | "due";
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;
@@ -362,6 +384,10 @@ export interface AIAssistantText {
   clearHistory: string;
   noChatsYet: string;
   switchLanguage: string;
+  commonQuestions: string;
+  whatCanYouDo: string;
+  howToCreateTask: string;
+  explainWAKTIFeatures: string;
   generalSettings: string;
   writerSettings: string;
   creativeSettings: string;
@@ -386,10 +412,6 @@ export interface AIAssistantText {
   lineChart: string;
   pieChart: string;
   shortcuts: string;
-  commonQuestions: string;
-  whatCanYouDo: string;
-  howToCreateTask: string;
-  explainWAKTIFeatures: string;
   toCompleteThisAction: string;
   switchTo: string;
   hereIsWhatIUnderstood: string;

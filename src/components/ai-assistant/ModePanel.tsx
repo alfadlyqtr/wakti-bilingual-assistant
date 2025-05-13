@@ -42,7 +42,7 @@ export function ModePanel({ activeMode, onModeChange }: ModePanelProps) {
               />
             )}
             <span className="relative z-10">
-              {t(mode.id + "Mode", language)}
+              {t(`${mode.id}Mode` as TranslationKey, language)}
             </span>
           </motion.button>
         ))}

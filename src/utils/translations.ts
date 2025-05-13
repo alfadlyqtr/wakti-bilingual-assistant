@@ -1,3 +1,4 @@
+
 import { TranslationKey } from './translationTypes';
 
 export interface GeneralText {
@@ -164,6 +165,10 @@ export interface AIAssistantText {
   clearHistory: string;
   noChatsYet: string;
   switchLanguage: string;
+  commonQuestions: string;
+  whatCanYouDo: string;
+  howToCreateTask: string;
+  explainWAKTIFeatures: string;
   generalSettings: string;
   writerSettings: string;
   creativeSettings: string;
@@ -188,10 +193,6 @@ export interface AIAssistantText {
   lineChart: string;
   pieChart: string;
   shortcuts: string;
-  commonQuestions: string;
-  whatCanYouDo: string;
-  howToCreateTask: string;
-  explainWAKTIFeatures: string;
   toCompleteThisAction: string;
   switchTo: string;
   hereIsWhatIUnderstood: string;
@@ -257,8 +258,10 @@ export function t(key: TranslationKey, lang: string): string {
       
       // Task Translations
       taskTitle: "Title",
+      reminderTitle: "Title",
       taskDescription: "Description",
       taskDueDate: "Due Date",
+      reminderDueDate: "Due Date",
       taskPriority: "Priority",
       taskStatus: "Status",
       taskSubtasks: "Subtasks",
@@ -266,27 +269,65 @@ export function t(key: TranslationKey, lang: string): string {
       taskSubtaskTitle: "Subtask Title",
       taskSubtaskCompleted: "Completed",
       taskPriorityHigh: "High",
+      high: "High",
       taskPriorityMedium: "Medium",
+      medium: "Medium",
       taskPriorityLow: "Low",
+      low: "Low",
       taskStatusOpen: "Open",
       taskStatusInProgress: "In Progress",
+      inProgress: "In Progress",
       taskStatusCompleted: "Completed",
+      completed: "Completed",
       taskAndReminders: "Tasks & Reminders",
       searchTasks: "Search tasks...",
+      searchReminders: "Search reminders...",
       allTasks: "All Tasks",
       pendingTasks: "Pending Tasks",
+      pending: "Pending",
       completedTasks: "Completed Tasks",
       noTasks: "No tasks yet",
+      noReminders: "No reminders yet",
       createYourFirst: "Create your first",
       createTask: "Create Task",
-      overdueItems: "Overdue Items",
-      
-      // Reminder Translations
-      reminderTitle: "Title",
-      reminderDueDate: "Due Date",
-      searchReminders: "Search reminders...",
-      noReminders: "No reminders yet",
       createReminder: "Create Reminder",
+      overdueItems: "Overdue Items",
+      description: "Description",
+      dueDate: "Due Date",
+      dueTime: "Due Time",
+      priority: "Priority",
+      urgent: "Urgent",
+      status: "Status",
+      subtasks: "Subtasks",
+      addSubtask: "Add Subtask",
+      subtaskGroupTitle: "Subtasks",
+      recurring: "Recurring",
+      recurrencePattern: "Recurrence Pattern",
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      yearly: "Yearly",
+      shared: "Shared",
+      shareWith: "Share with",
+      selectContact: "Select Contact",
+      markAsCompleted: "Mark as completed",
+      markAsPending: "Mark as pending",
+      smartTask: "Smart Task",
+      swipeToComplete: "Swipe to complete",
+      swipeToDelete: "Swipe to delete",
+      taskCreatedSuccessfully: "Task created successfully",
+      reminderCreatedSuccessfully: "Reminder created successfully",
+      taskUpdatedSuccessfully: "Task updated successfully",
+      reminderUpdatedSuccessfully: "Reminder updated successfully",
+      taskDeletedSuccessfully: "Task deleted successfully",
+      reminderDeletedSuccessfully: "Reminder deleted successfully",
+      taskSharedSuccessfully: "Task shared successfully",
+      filterBy: "Filter by",
+      sortBy: "Sort by",
+      date: "Date",
+      ascending: "Ascending",
+      descending: "Descending",
+      due: "Due",
       
       // Event Translations
       eventTitle: "Title",
@@ -303,7 +344,8 @@ export function t(key: TranslationKey, lang: string): string {
       eventFontSize: "Font Size",
       eventButtonStyle: "Button Style",
       eventCoverImage: "Cover Image",
-      events: "Events",
+      event: "Event",
+      createEvent: "Create Event",
       eventCreate: "Create Event",
       eventDetail: "Event Detail",
       
@@ -356,7 +398,6 @@ export function t(key: TranslationKey, lang: string): string {
       manualNote: "Manual Note",
       
       // Contact Translations
-      contacts: "Contacts",
       contactName: "Name",
       contactEmail: "Email",
       contactPhone: "Phone",
@@ -365,7 +406,7 @@ export function t(key: TranslationKey, lang: string): string {
       contactWebsite: "Website",
       
       // Message Translations
-      messages: "Messages",
+      messaging: "Messaging",
       messageTitle: "Title",
       messageContent: "Content",
       messageSender: "Sender",
@@ -432,8 +473,6 @@ export function t(key: TranslationKey, lang: string): string {
       switchTo: "switch to",
       hereIsWhatIUnderstood: "Here's what I understood",
       switchMode: "Switch Mode",
-      cancel: "Cancel",
-      confirm: "Confirm",
       startVoiceInput: "Start voice input",
       stopListening: "Stop listening",
       iCanCreateThisTask: "I can create this task for you",
@@ -442,14 +481,10 @@ export function t(key: TranslationKey, lang: string): string {
       writingContent: "Writing your content...",
       helpingYouWith: "Helping you with",
       errorProcessingRequest: "Sorry, there was an error processing your request. Please try again.",
-      taskCreatedSuccessfully: "Task created successfully!",
-      due: "Due",
       viewCalendar: "View Calendar",
+      billing: "Billing",
       
       // Widget Labels
-      tasks: "Tasks",
-      events: "Events",
-      reminders: "Reminders",
       
       // Marketing
       startFreeTrial: "Start Free Trial",
@@ -484,7 +519,6 @@ export function t(key: TranslationKey, lang: string): string {
       qar: "QAR",
       usd: "USD",
       loading: "Loading",
-      signup: "Sign Up",
       alreadyHaveAccount: "Already have an account?",
       
       // Account Page Keys
@@ -560,7 +594,6 @@ export function t(key: TranslationKey, lang: string): string {
       transcript: "Transcript",
       expiresIn: "Expires in",
       onlineNow: "Online now",
-      contactBlocked: "Contact blocked",
       unblockContact: "Unblock contact",
       noConversations: "No conversations",
       filters: "Filters",
@@ -618,70 +651,9 @@ export function t(key: TranslationKey, lang: string): string {
       summaryTitle: "Summary",
       recordingDetails: "Recording Details",
       audioPlayerError: "Audio Player Error",
-      
-      // Event system keys
-      createEvent: "Create Event",
-      event: "Event",
-      
-      // Task and reminder keys
-      createTask: "Create Task",
-      createReminder: "Create Reminder",
-      taskTitle: "Task Title",
-      reminderTitle: "Reminder Title",
-      description: "Description",
-      dueDate: "Due Date",
-      dueTime: "Due Time",
-      priority: "Priority",
-      urgent: "Urgent",
-      high: "High",
-      medium: "Medium",
-      low: "Low",
-      status: "Status",
-      pending: "Pending",
-      inProgress: "In Progress",
-      completed: "Completed",
-      overdue: "Overdue",
-      subtasks: "Subtasks",
-      addSubtask: "Add Subtask",
-      subtaskGroupTitle: "Subtasks",
-      recurring: "Recurring",
-      recurrencePattern: "Recurrence Pattern",
-      daily: "Daily",
-      weekly: "Weekly",
-      monthly: "Monthly",
-      yearly: "Yearly",
-      delete: "Delete",
-      edit: "Edit",
-      share: "Share",
-      shared: "Shared",
-      shareWith: "Share with",
-      selectContact: "Select Contact",
-      noTasks: "No tasks",
-      noReminders: "No reminders",
-      createYourFirst: "Create your first",
-      markAsCompleted: "Mark as completed",
-      markAsPending: "Mark as pending",
-      allTasks: "All Tasks",
-      completedTasks: "Completed Tasks",
-      pendingTasks: "Pending Tasks",
-      overdueItems: "Overdue Items",
-      smartTask: "Smart Task",
-      swipeToComplete: "Swipe to complete",
-      swipeToDelete: "Swipe to delete",
-      taskCreatedSuccessfully: "Task created successfully",
-      reminderCreatedSuccessfully: "Reminder created successfully",
-      taskUpdatedSuccessfully: "Task updated successfully",
-      reminderUpdatedSuccessfully: "Reminder updated successfully",
-      taskDeletedSuccessfully: "Task deleted successfully",
-      reminderDeletedSuccessfully: "Reminder deleted successfully",
-      taskSharedSuccessfully: "Task shared successfully",
-      searchTasks: "Search tasks",
-      searchReminders: "Search reminders",
-      filterBy: "Filter by",
-      sortBy: "Sort by",
-      date: "Date",
-      ascending: "Ascending",
-      descending: "Descending",
+      waktiAssistant: "WAKTI Assistant",
+      taskManagement: "Task Management",
+      profile: "Profile"
     },
     ar: {
       // General Translations
@@ -725,10 +697,66 @@ export function t(key: TranslationKey, lang: string): string {
       darkMode: "الوضع الداكن",
       language: "اللغة",
       
-      // Task Translations
-      taskTitle: "العنوان",
+      // Task and Reminder keys
+      createTask: "إنشاء مهمة",
+      createReminder: "إنشاء تذكير",
+      taskTitle: "عنوان المهمة",
+      reminderTitle: "عنوان التذكير",
+      description: "الوصف",
+      dueDate: "تاريخ الاستحقاق",
+      dueTime: "وقت الاستحقاق",
+      priority: "الأولوية",
+      urgent: "عاجل",
+      high: "عالية",
+      medium: "متوسطة",
+      low: "منخفضة",
+      status: "الحالة",
+      pending: "معلق",
+      inProgress: "قيد التنفيذ",
+      completed: "مكتمل",
+      overdue: "متأخر",
+      subtasks: "مهام فرعية",
+      addSubtask: "إضافة مهمة فرعية",
+      subtaskGroupTitle: "المهام الفرعية",
+      recurring: "متكرر",
+      recurrencePattern: "نمط التكرار",
+      daily: "يومي",
+      weekly: "أسبوعي",
+      monthly: "شهري",
+      yearly: "سنوي",
+      shared: "تمت المشاركة",
+      shareWith: "مشاركة مع",
+      selectContact: "اختيار جهة اتصال",
+      noTasks: "لا توجد مهام",
+      noReminders: "لا توجد تذكيرات",
+      createYourFirst: "إنشاء أول",
+      markAsCompleted: "وضع علامة كمكتمل",
+      markAsPending: "وضع علامة كمعلق",
+      allTasks: "جميع المهام",
+      completedTasks: "المهام المكتملة",
+      pendingTasks: "المهام المعلقة",
+      overdueItems: "العناصر المتأخرة",
+      smartTask: "مهمة ذكية",
+      swipeToComplete: "اسحب لإكمال",
+      swipeToDelete: "اسحب للحذف",
+      taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح",
+      reminderCreatedSuccessfully: "تم إنشاء التذكير بنجاح",
+      taskUpdatedSuccessfully: "تم تحديث المهمة بنجاح",
+      reminderUpdatedSuccessfully: "تم تحديث التذكير بنجاح",
+      taskDeletedSuccessfully: "تم حذف المهمة بنجاح",
+      reminderDeletedSuccessfully: "تم حذف التذكير بنجاح",
+      taskSharedSuccessfully: "تم مشاركة المهمة بنجاح",
+      searchTasks: "بحث المهام",
+      searchReminders: "بحث التذكيرات",
+      filterBy: "تصفية حسب",
+      sortBy: "ترتيب حسب",
+      date: "التاريخ",
+      ascending: "تصاعدي",
+      descending: "تنازلي", 
+      due: "تاريخ الاستحقاق",
       taskDescription: "الوصف",
       taskDueDate: "تاريخ الاستحقاق",
+      reminderDueDate: "تاريخ الاستحقاق",
       taskPriority: "الأولوية",
       taskStatus: "الحالة",
       taskSubtasks: "المهام الفرعية",
@@ -742,21 +770,6 @@ export function t(key: TranslationKey, lang: string): string {
       taskStatusInProgress: "قيد التقدم",
       taskStatusCompleted: "مكتملة",
       taskAndReminders: "المهام والتذكيرات",
-      searchTasks: "البحث في المهام...",
-      allTasks: "جميع المهام",
-      pendingTasks: "المهام المعلقة",
-      completedTasks: "المهام المكتملة",
-      noTasks: "لا توجد مهام بعد",
-      createYourFirst: "أنشئ أول",
-      createTask: "إنشاء مهمة",
-      overdueItems: "العناصر المتأخرة",
-      
-      // Reminder Translations
-      reminderTitle: "العنوان",
-      reminderDueDate: "تاريخ الاستحقاق",
-      searchReminders: "البحث في التذكيرات...",
-      noReminders: "لا توجد تذكيرات بعد",
-      createReminder: "إنشاء تذكير",
       
       // Event Translations
       eventTitle: "العنوان",
@@ -776,6 +789,8 @@ export function t(key: TranslationKey, lang: string): string {
       events: "الأحداث",
       eventCreate: "إنشاء حدث",
       eventDetail: "تفاصيل الحدث",
+      event: "حدث",
+      createEvent: "إنشاء حدث",
       
       // Voice Summary Translations
       voiceSummaryTitle: "العنوان",
@@ -826,7 +841,6 @@ export function t(key: TranslationKey, lang: string): string {
       manualNote: "ملاحظة يدوية",
       
       // Contact Translations
-      contacts: "جهات الاتصال",
       contactName: "الاسم",
       contactEmail: "البريد الإلكتروني",
       contactPhone: "الهاتف",
@@ -835,7 +849,7 @@ export function t(key: TranslationKey, lang: string): string {
       contactWebsite: "الموقع الإلكتروني",
       
       // Message Translations
-      messages: "الرسائل",
+      messaging: "المراسلة",
       messageTitle: "العنوان",
       messageContent: "المحتوى",
       messageSender: "المرسل",
@@ -902,8 +916,6 @@ export function t(key: TranslationKey, lang: string): string {
       switchTo: "انتقل إلى",
       hereIsWhatIUnderstood: "إليك ما فهمته",
       switchMode: "تبديل الوضع",
-      cancel: "إلغاء",
-      confirm: "تأكيد",
       startVoiceInput: "بدء الإدخال الصوتي",
       stopListening: "إيقاف الاستماع",
       iCanCreateThisTask: "يمكنني إنشاء هذه المهمة لك",
@@ -912,14 +924,10 @@ export function t(key: TranslationKey, lang: string): string {
       writingContent: "جاري كتابة المحتوى الخاص بك...",
       helpingYouWith: "أساعدك في",
       errorProcessingRequest: "عذرًا، حدث خطأ أثناء معالجة طلبك. يرجى المحاولة مرة أخرى.",
-      taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح!",
-      due: "تاريخ الاستحقاق",
       viewCalendar: "عرض التقويم",
+      billing: "الفواتير",
       
       // Widget Labels
-      tasks: "المهام",
-      events: "الأحداث",
-      reminders: "التذكيرات",
       
       // Marketing
       startFreeTrial: "ابدأ الإصدار التجريبي المجاني",
@@ -954,7 +962,6 @@ export function t(key: TranslationKey, lang: string): string {
       qar: "ريال قطري",
       usd: "دولار أمريكي",
       loading: "جاري التحميل",
-      signup: "اشتراك",
       alreadyHaveAccount: "هل لديك حساب بالفعل؟",
       
       // Account Page Keys
@@ -992,7 +999,7 @@ export function t(key: TranslationKey, lang: string): string {
       billingManagedThrough: "تتم إدارة الفواتير من خلال",
       manageBilling: "إدارة الفواتير",
       cancelPlan: "إلغاء الخطة",
-      changePassword: "تغيير كلمة ��لمرور",
+      changePassword: "تغيير كلمة المرور",
       currentPassword: "كلمة المرور الحالية",
       newPassword: "كلمة المرور الجديدة",
       confirmPassword: "تأكيد كلمة المرور",
@@ -1030,7 +1037,6 @@ export function t(key: TranslationKey, lang: string): string {
       transcript: "نص",
       expiresIn: "تنتهي في",
       onlineNow: "متصل الآن",
-      contactBlocked: "جهة الاتصال محظورة",
       unblockContact: "إلغاء حظر جهة الاتصال",
       noConversations: "لا توجد محادثات",
       filters: "تصفيات",
@@ -1088,70 +1094,9 @@ export function t(key: TranslationKey, lang: string): string {
       summaryTitle: "الملخص",
       recordingDetails: "تفاصيل التسجيل",
       audioPlayerError: "خطأ في مشغل الصوت",
-      
-      // Event system keys
-      createEvent: "إنشاء حدث",
-      event: "حدث",
-      
-      // Task and reminder keys
-      createTask: "إنشاء مهمة",
-      createReminder: "إنشاء تذكير",
-      taskTitle: "عنوان المهمة",
-      reminderTitle: "عنوان التذكير",
-      description: "الوصف",
-      dueDate: "تاريخ الاستحقاق",
-      dueTime: "وقت الاستحقاق",
-      priority: "الأولوية",
-      urgent: "عاجل",
-      high: "عالية",
-      medium: "متوسطة",
-      low: "منخفضة",
-      status: "الحالة",
-      pending: "معلق",
-      inProgress: "قيد التنفيذ",
-      completed: "مكتمل",
-      overdue: "متأخر",
-      subtasks: "مهام فرعية",
-      addSubtask: "إضافة مهمة فرعية",
-      subtaskGroupTitle: "المهام الفرعية",
-      recurring: "متكرر",
-      recurrencePattern: "نمط التكرار",
-      daily: "يومي",
-      weekly: "أسبوعي",
-      monthly: "شهري",
-      yearly: "سنوي",
-      delete: "حذف",
-      edit: "تعديل",
-      share: "مشاركة",
-      shared: "تمت المشاركة",
-      shareWith: "مشاركة مع",
-      selectContact: "اختيار جهة اتصال",
-      noTasks: "لا توجد مهام",
-      noReminders: "لا توجد تذكيرات",
-      createYourFirst: "إنشاء أول",
-      markAsCompleted: "وضع علامة كمكتمل",
-      markAsPending: "وضع علامة كمعلق",
-      allTasks: "جميع المهام",
-      completedTasks: "المهام المكتملة",
-      pendingTasks: "المهام المعلقة",
-      overdueItems: "العناصر المتأخرة",
-      smartTask: "مهمة ذكية",
-      swipeToComplete: "اسحب لإكمال",
-      swipeToDelete: "اسحب للحذف",
-      taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح",
-      reminderCreatedSuccessfully: "تم إنشاء التذكير بنجاح",
-      taskUpdatedSuccessfully: "تم تحديث المهمة بنجاح",
-      reminderUpdatedSuccessfully: "تم تحديث التذكير بنجاح",
-      taskDeletedSuccessfully: "تم حذف المهمة بنجاح",
-      reminderDeletedSuccessfully: "تم حذف التذكير بنجاح",
-      taskSharedSuccessfully: "تم مشاركة المهمة بنجاح",
-      searchTasks: "بحث المهام",
-      searchReminders: "بحث التذكيرات",
-      filterBy: "تصفية حسب",
-      sortBy: "ترتيب حسب",
-      date: "التاريخ",
-      ascending: "تصاعدي",
-      descending: "تنازلي",
+      waktiAssistant: "مساعد وقتي",
+      taskManagement: "إدارة المهام",
+      profile: "الملف الشخصي"
     }
   };
 
