@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Clock, CalendarClock, Share, Edit, Trash } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { TranslationKey } from '@/utils/translationTypes'; // Add this import
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface TaskItemProps {
   task: Task;
@@ -34,6 +34,28 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onComplete, onEdit, onDelete,
   // Count completed subtasks
   const completedSubtasks = task.subtasks?.filter(subtask => subtask.is_completed)?.length || 0;
   const totalSubtasks = task.subtasks?.length || 0;
+  
+  // Helper function to map priority values to translation keys
+  const getPriorityTranslationKey = (priority: TaskPriority): TranslationKey => {
+    switch (priority) {
+      case 'urgent': return 'urgent';
+      case 'high': return 'highPriority';
+      case 'medium': return 'mediumPriority';
+      case 'low': return 'lowPriority';
+      default: return priority as TranslationKey;
+    }
+  };
+  
+  // Helper function to map recurrence pattern to translation keys
+  const getRecurrenceTranslationKey = (pattern: string): TranslationKey => {
+    switch (pattern) {
+      case 'daily': return 'dailyRecurrence';
+      case 'weekly': return 'weeklyRecurrence';
+      case 'monthly': return 'monthlyRecurrence';
+      case 'yearly': return 'yearlyRecurrence';
+      default: return pattern as TranslationKey;
+    }
+  };
 
   return (
     <motion.div
@@ -86,14 +108,14 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onComplete, onEdit, onDelete,
             
             {/* Priority badge */}
             <Badge variant="outline" className="flex gap-1 items-center">
-              {t(task.priority as TranslationKey, language)}
+              {t(getPriorityTranslationKey(task.priority), language)}
             </Badge>
             
             {/* Recurrence badge */}
             {task.is_recurring && task.recurrence_pattern && (
               <Badge variant="outline" className="flex gap-1 items-center">
                 <Clock className="h-3 w-3" />
-                {t(task.recurrence_pattern as TranslationKey, language)}
+                {t(getRecurrenceTranslationKey(task.recurrence_pattern), language)}
               </Badge>
             )}
             
@@ -101,7 +123,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ task, onComplete, onEdit, onDelete,
             {task.is_shared && (
               <Badge variant="outline" className="flex gap-1 items-center">
                 <Share className="h-3 w-3" />
-                {t('shared' as TranslationKey, language)}
+                {t('sharedTask', language)}
               </Badge>
             )}
             

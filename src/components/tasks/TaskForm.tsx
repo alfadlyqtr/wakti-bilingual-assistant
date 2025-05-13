@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { 
@@ -226,9 +225,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ existingTask, onSubmit, onCancel })
                 </FormControl>
                 <SelectContent>
                   <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
-                  <SelectItem value="high">{t('high', language)}</SelectItem>
-                  <SelectItem value="medium">{t('medium', language)}</SelectItem>
-                  <SelectItem value="low">{t('low', language)}</SelectItem>
+                  <SelectItem value="high">{t('highPriority', language)}</SelectItem>
+                  <SelectItem value="medium">{t('mediumPriority', language)}</SelectItem>
+                  <SelectItem value="low">{t('lowPriority', language)}</SelectItem>
                 </SelectContent>
               </Select>
             </FormItem>
@@ -341,10 +340,10 @@ const TaskForm: React.FC<TaskFormProps> = ({ existingTask, onSubmit, onCancel })
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="daily">{t('daily', language)}</SelectItem>
-                    <SelectItem value="weekly">{t('weekly', language)}</SelectItem>
-                    <SelectItem value="monthly">{t('monthly', language)}</SelectItem>
-                    <SelectItem value="yearly">{t('yearly', language)}</SelectItem>
+                    <SelectItem value="daily">{t('dailyRecurrence', language)}</SelectItem>
+                    <SelectItem value="weekly">{t('weeklyRecurrence', language)}</SelectItem>
+                    <SelectItem value="monthly">{t('monthlyRecurrence', language)}</SelectItem>
+                    <SelectItem value="yearly">{t('yearlyRecurrence', language)}</SelectItem>
                   </SelectContent>
                 </Select>
               </FormItem>
@@ -363,6 +362,34 @@ const TaskForm: React.FC<TaskFormProps> = ({ existingTask, onSubmit, onCancel })
       </form>
     </Form>
   );
+};
+
+// Add the handleFormSubmit function that was missing
+const handleFormSubmit = async (values: TaskFormValues) => {
+  // Combine date and time
+  let fullDueDate = null;
+  if (values.dueDate) {
+    const dueDate = new Date(values.dueDate);
+    if (values.dueTime) {
+      const [hours, minutes] = values.dueTime.split(':').map(Number);
+      dueDate.setHours(hours, minutes);
+    }
+    fullDueDate = dueDate.toISOString();
+  }
+
+  const taskData = {
+    id: existingTask?.id || '',
+    title: values.title,
+    description: values.description,
+    due_date: fullDueDate,
+    priority: values.priority,
+    status: existingTask?.status || 'pending',
+    is_recurring: values.isRecurring,
+    recurrence_pattern: values.isRecurring ? values.recurrencePattern : undefined,
+    subtask_group_title: values.subtaskGroupTitle || undefined,
+  } as Task;
+
+  await onSubmit(taskData, subtasks);
 };
 
 export default TaskForm;

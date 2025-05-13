@@ -178,9 +178,9 @@ export interface AIAssistantText {
   friendly: string;
   academic: string;
   lengthOptions: string;
-  short: string;
-  medium: string;
-  long: string;
+  shortLength: string;
+  mediumLength: string;
+  longLength: string;
   grammarCheck: string;
   imageTools: string;
   chartTypes: string;
@@ -256,7 +256,7 @@ export function t(key: TranslationKey, lang: string): string {
       darkMode: "Dark Mode",
       language: "Language",
       
-      // Task Translations
+      // Task Translations - Updated with unique keys
       taskTitle: "Title",
       reminderTitle: "Title",
       description: "Description",
@@ -264,9 +264,9 @@ export function t(key: TranslationKey, lang: string): string {
       dueTime: "Due Time",
       priority: "Priority",
       urgent: "Urgent",
-      high: "High",
-      medium: "Medium",
-      low: "Low",
+      highPriority: "High",
+      mediumPriority: "Medium",
+      lowPriority: "Low",
       status: "Status",
       pending: "Pending",
       inProgress: "In Progress",
@@ -276,11 +276,11 @@ export function t(key: TranslationKey, lang: string): string {
       subtaskGroupTitle: "Subtasks",
       recurring: "Recurring",
       recurrencePattern: "Recurrence Pattern",
-      daily: "Daily",
-      weekly: "Weekly",
-      monthly: "Monthly",
-      yearly: "Yearly",
-      shared: "Shared",
+      dailyRecurrence: "Daily",
+      weeklyRecurrence: "Weekly",
+      monthlyRecurrence: "Monthly",
+      yearlyRecurrence: "Yearly",
+      sharedTask: "Shared",
       shareWith: "Share with",
       selectContact: "Select Contact",
       noTasks: "No tasks yet",
@@ -349,7 +349,7 @@ export function t(key: TranslationKey, lang: string): string {
       eventCreate: "Create Event",
       eventDetail: "Event Detail",
       
-      // Voice Summary Translations - renamed these to avoid duplicates
+      // Voice Summary Translations
       voiceSummaryTitleField: "Title",
       voiceSummaryDescriptionField: "Description",
       voiceSummaryAttendeesField: "Attendees",
@@ -428,7 +428,7 @@ export function t(key: TranslationKey, lang: string): string {
       contactBlocked: "Contact blocked",
       unblockContact: "Unblock contact",
       
-      // AI Assistant Translations
+      // AI Assistant Translations - Updated with unique keys
       welcomeToWaktiAI: "Welcome to WAKTI AI. How can I assist you today?",
       askWAKTI: "Ask WAKTI...",
       generalMode: "General",
@@ -456,9 +456,9 @@ export function t(key: TranslationKey, lang: string): string {
       friendly: "Friendly",
       academic: "Academic",
       lengthOptions: "Length Options",
-      short: "Short",
-      medium: "Medium",
-      long: "Long",
+      shortLength: "Short",
+      mediumLength: "Medium",
+      longLength: "Long",
       grammarCheck: "Grammar Check",
       imageTools: "Image Tools",
       chartTypes: "Chart Types",
@@ -512,8 +512,8 @@ export function t(key: TranslationKey, lang: string): string {
       remindersDesc: "Smart Reminders",
       messagingDesc: "Secure Messaging",
       pricing: "Pricing",
-      monthly: "Monthly",
-      yearly: "Yearly",
+      monthlyPlan: "Monthly",
+      yearlyPlan: "Yearly",
       aiSummaries: "AI Summaries",
       qar: "QAR",
       usd: "USD",
@@ -566,8 +566,6 @@ export function t(key: TranslationKey, lang: string): string {
       feedbackPlaceholder: "Feedback Placeholder",
       requestChange: "Request Change",
       trialPlan: "Trial Plan",
-      monthlyPlan: "Monthly Plan",
-      yearlyPlan: "Yearly Plan",
       freePlan: "Free Plan",
       daysLeft: "Days Left",
       trialReminder: "Trial Reminder",

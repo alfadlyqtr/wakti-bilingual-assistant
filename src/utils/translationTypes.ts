@@ -54,8 +54,8 @@ export type TranslationKey =
   | "remindersDesc"
   | "messagingDesc"
   | "pricing"
-  | "monthly"
-  | "yearly"
+  | "monthlyPlan"
+  | "yearlyPlan"
   | "aiSummaries"
   | "qar"
   | "usd"
@@ -111,8 +111,6 @@ export type TranslationKey =
   | "submit"
   | "requestChange"
   | "trialPlan"
-  | "monthlyPlan"
-  | "yearlyPlan"
   | "freePlan"
   | "daysLeft"
   | "trialReminder"
@@ -211,7 +209,7 @@ export type TranslationKey =
   | "blockedUserDescription"
   | "noContactRequests"
 
-  // Task + Reminder System
+  // Task + Reminder System - Updated names for consistency
   | "taskAndReminders"
   | "createTask"
   | "createReminder"
@@ -222,9 +220,9 @@ export type TranslationKey =
   | "dueTime"
   | "priority"
   | "urgent"
-  | "high"
-  | "medium"
-  | "low"
+  | "highPriority"
+  | "mediumPriority"
+  | "lowPriority"
   | "status"
   | "pending"
   | "inProgress"
@@ -235,15 +233,15 @@ export type TranslationKey =
   | "subtaskGroupTitle"
   | "recurring"
   | "recurrencePattern"
-  | "daily"
-  | "weekly"
-  | "monthly"
-  | "yearly"
+  | "dailyRecurrence"
+  | "weeklyRecurrence"
+  | "monthlyRecurrence"
+  | "yearlyRecurrence"
   | "save"
   | "delete"
   | "edit"
   | "share"
-  | "shared"
+  | "sharedTask"
   | "shareWith"
   | "selectContact"
   | "noTasks"
@@ -297,7 +295,7 @@ export type TranslationKey =
   | "calendarNote"
   | "manualNote"
   
-  // AI Assistant Modes and UI Text
+  // AI Assistant Modes and UI Text - Updated names for consistency
   | "generalMode"
   | "writerMode"
   | "creativeMode"
@@ -318,9 +316,9 @@ export type TranslationKey =
   | "friendly"
   | "academic"
   | "lengthOptions"
-  | "short"
-  | "medium"
-  | "long"
+  | "shortLength"
+  | "mediumLength"
+  | "longLength"
   | "grammarCheck"
   | "imageTools"
   | "chartTypes"
@@ -348,7 +346,7 @@ export type TranslationKey =
   | "confirm"
   | "messaging"
 
-  // AI Assistant specific keys (adding the missing ones)
+  // AI Assistant specific keys 
   | "welcomeToWaktiAI"
   | "askWAKTI"
   | "openHistory"
@@ -369,7 +367,7 @@ export type TranslationKey =
   | "helpingYouWith"
   | "errorProcessingRequest"
   | "due"
-  | "selectDate";  // Added the missing selectDate key
+  | "selectDate";  
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;
@@ -399,9 +397,9 @@ export interface AIAssistantText {
   friendly: string;
   academic: string;
   lengthOptions: string;
-  short: string;
-  medium: string;
-  long: string;
+  shortLength: string;
+  mediumLength: string;
+  longLength: string;
   grammarCheck: string;
   imageTools: string;
   chartTypes: string;
@@ -430,5 +428,5 @@ export interface AIAssistantText {
   taskCreatedSuccessfully: string;
   due: string;
   viewCalendar: string;
-  selectDate: string; // Added the missing selectDate property
+  selectDate: string;
 }
