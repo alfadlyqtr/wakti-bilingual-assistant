@@ -151,12 +151,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           })}
         </AnimatePresence>
         
-        {/* Typing indicator - increased bottom margin to create more space */}
+        {/* Typing indicator - increased both top and bottom margins */}
         {isTyping && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex justify-start mb-16"
+            className="flex justify-start mb-20 mt-10"
           >
             <div className="flex items-center gap-2 max-w-[80%]">
               <Avatar className="h-8 w-8">
