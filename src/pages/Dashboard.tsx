@@ -14,7 +14,9 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
 import { toast } from "sonner";
 import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
-import { GripVertical } from "lucide-react";
+import { GripVertical, CalendarIcon, CheckCircle, BellRing, Calendar as CalendarIconFull } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type WidgetType = {
   id: string;
@@ -32,6 +34,10 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const longPressDuration = 500; // ms
+  const [isLoading, setIsLoading] = useState(true);
+  const [tasks, setTasks] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [reminders, setReminders] = useState([]);
   
   // Get user preferences from localStorage
   const getUserPreferences = () => {
@@ -56,6 +62,63 @@ export default function Dashboard() {
   
   const widgetVisibility = getUserPreferences();
   
+  // Fetch data from Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      
+      try {
+        // Fetch tasks
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('tasks')
+          .select('*')
+          .order('due_date', { ascending: true })
+          .limit(3);
+          
+        if (!tasksError) {
+          setTasks(tasksData || []);
+        } else {
+          console.error('Error fetching tasks:', tasksError);
+          setTasks([]);
+        }
+        
+        // Fetch events
+        const { data: eventsData, error: eventsError } = await supabase
+          .from('events')
+          .select('*')
+          .order('start_time', { ascending: true })
+          .limit(2);
+          
+        if (!eventsError) {
+          setEvents(eventsData || []);
+        } else {
+          console.error('Error fetching events:', eventsError);
+          setEvents([]);
+        }
+        
+        // Fetch reminders
+        const { data: remindersData, error: remindersError } = await supabase
+          .from('reminders')
+          .select('*')
+          .order('due_date', { ascending: true })
+          .limit(2);
+          
+        if (!remindersError) {
+          setReminders(remindersData || []);
+        } else {
+          console.error('Error fetching reminders:', remindersError);
+          setReminders([]);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+  
   // Initialize widgets
   useEffect(() => {
     setWidgets([
@@ -64,18 +127,38 @@ export default function Dashboard() {
         title: "tasks" as TranslationKey,
         visible: widgetVisibility.tasks,
         component: (
-          <div className="space-y-2">
-            <div className="flex items-center">
-              <div className="h-2 w-2 rounded-full bg-yellow-400 mr-2"></div>
-              <span className="text-sm">Complete project proposal</span>
-            </div>
-            <div className="flex items-center">
-              <div className="h-2 w-2 rounded-full bg-red-500 mr-2"></div>
-              <span className="text-sm">Call with client</span>
-            </div>
-            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
-              {t("tasks_view_all", language)}
-            </Button>
+          <div className="p-4">
+            <h3 className="font-medium mb-3">{t("tasks", language)}</h3>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+            ) : tasks && tasks.length > 0 ? (
+              <div className="space-y-2">
+                {tasks.map((task: any) => (
+                  <div key={task.id} className="flex items-center">
+                    <div className={`h-2 w-2 rounded-full mr-2 ${
+                      task.priority === 'urgent' ? 'bg-red-500' : 
+                      task.priority === 'high' ? 'bg-orange-400' : 
+                      task.priority === 'low' ? 'bg-blue-400' : 'bg-yellow-400'
+                    }`}></div>
+                    <span className="text-sm">{task.title}</span>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
+                  {t("tasks_view_all", language)}
+                </Button>
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <CheckCircle className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
+                <p className="text-sm text-muted-foreground">{t("noTasksYet", language)}</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/tasks')}>
+                  {t("createTask", language)}
+                </Button>
+              </div>
+            )}
           </div>
         ),
       },
@@ -84,7 +167,7 @@ export default function Dashboard() {
         title: "calendar" as TranslationKey,
         visible: widgetVisibility.calendar,
         component: (
-          <div>
+          <div className="p-4">
             <div className="mb-2">
               <div className="flex justify-between items-center mb-2">
                 <h3 className="font-medium">{format(new Date(), "MMMM yyyy")}</h3>
@@ -111,8 +194,20 @@ export default function Dashboard() {
                   <div className="font-bold text-center">{format(new Date(), "d")}</div>
                   <div className="text-xs text-center">{t("today", language)}</div>
                   <div className="mt-1 text-xs">
-                    <div className="truncate">2 {t("events", language)}</div>
-                    <div className="truncate">1 {t("task", language)}</div>
+                    {isLoading ? (
+                      <Skeleton className="h-3 w-full" />
+                    ) : events && events.length > 0 ? (
+                      <div className="truncate">{events.length} {events.length === 1 ? t("event", language) : t("events", language)}</div>
+                    ) : (
+                      <div className="truncate">{t("noEvents", language)}</div>
+                    )}
+                    {isLoading ? (
+                      <Skeleton className="h-3 w-4/5 mt-1" />
+                    ) : tasks && tasks.length > 0 ? (
+                      <div className="truncate">{tasks.length} {tasks.length === 1 ? t("task", language) : t("tasks", language)}</div>
+                    ) : (
+                      <div className="truncate">{t("noTasks", language)}</div>
+                    )}
                   </div>
                 </div>
                 
@@ -121,7 +216,7 @@ export default function Dashboard() {
                   <div className="font-bold text-center">{format(addDays(new Date(), 1), "d")}</div>
                   <div className="text-xs text-center">{t("tomorrow", language)}</div>
                   <div className="mt-1 text-xs">
-                    <div className="truncate">1 {t("event", language)}</div>
+                    <div className="truncate">{t("nothingScheduled", language)}</div>
                   </div>
                 </div>
               </div>
@@ -137,27 +232,39 @@ export default function Dashboard() {
         title: "events" as TranslationKey,
         visible: widgetVisibility.events,
         component: (
-          <div className="text-sm">
+          <div className="p-4">
             <h3 className="font-medium mb-2">{t("events_today", language)}</h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 bg-secondary/20 rounded-md">
-                <div>
-                  <div className="font-medium">Team Meeting</div>
-                  <div className="text-xs text-muted-foreground">Online</div>
-                </div>
-                <div className="text-xs font-medium bg-secondary px-2 py-1 rounded-full">3:00 PM</div>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
               </div>
-              <div className="flex items-center justify-between p-2 bg-secondary/20 rounded-md">
-                <div>
-                  <div className="font-medium">Project Review</div>
-                  <div className="text-xs text-muted-foreground">Conference Room</div>
-                </div>
-                <div className="text-xs font-medium bg-secondary px-2 py-1 rounded-full">5:30 PM</div>
+            ) : events && events.length > 0 ? (
+              <div className="space-y-2">
+                {events.map((event: any) => (
+                  <div key={event.id} className="flex items-center justify-between p-2 bg-secondary/20 rounded-md">
+                    <div>
+                      <div className="font-medium">{event.title}</div>
+                      <div className="text-xs text-muted-foreground">{event.location || t("noLocation", language)}</div>
+                    </div>
+                    <div className="text-xs font-medium bg-secondary px-2 py-1 rounded-full">
+                      {event.start_time ? format(new Date(event.start_time), "h:mm a") : "--:--"}
+                    </div>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/events')}>
+                  {t("events_view_all", language)}
+                </Button>
               </div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/events')}>
-              {t("events_view_all", language)}
-            </Button>
+            ) : (
+              <div className="text-center py-3">
+                <CalendarIconFull className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
+                <p className="text-sm text-muted-foreground">{t("noEventsYet", language)}</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/events')}>
+                  {t("createEvent", language)}
+                </Button>
+              </div>
+            )}
           </div>
         ),
       },
@@ -166,18 +273,36 @@ export default function Dashboard() {
         title: "reminders" as TranslationKey,
         visible: widgetVisibility.reminders,
         component: (
-          <div className="text-sm">
-            <div className="flex justify-between items-center mb-1">
-              <div>Submit weekly report</div>
-              <div className="text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-full">Tomorrow</div>
-            </div>
-            <div className="flex justify-between items-center">
-              <div>Team lunch</div>
-              <div className="text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-full">Friday</div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
-              {t("reminders_view_all", language)}
-            </Button>
+          <div className="p-4">
+            <h3 className="font-medium mb-2">{t("reminders", language)}</h3>
+            {isLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+            ) : reminders && reminders.length > 0 ? (
+              <div className="space-y-2">
+                {reminders.map((reminder: any) => (
+                  <div key={reminder.id} className="flex justify-between items-center">
+                    <div>{reminder.title}</div>
+                    <div className="text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-full">
+                      {format(new Date(reminder.due_date), "MMM d")}
+                    </div>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
+                  {t("reminders_view_all", language)}
+                </Button>
+              </div>
+            ) : (
+              <div className="text-center py-3">
+                <BellRing className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
+                <p className="text-sm text-muted-foreground">{t("noRemindersYet", language)}</p>
+                <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/tasks')}>
+                  {t("createReminder", language)}
+                </Button>
+              </div>
+            )}
           </div>
         ),
       },
@@ -188,7 +313,7 @@ export default function Dashboard() {
         component: <QuoteWidget />
       },
     ]);
-  }, [language, navigate, widgetVisibility]);
+  }, [language, navigate, widgetVisibility, isLoading, tasks, events, reminders]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {

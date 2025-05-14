@@ -1,10 +1,13 @@
 
 import { useState } from "react";
-import { Calendar } from "lucide-react";
+import { Calendar, CalendarPlus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
 
 interface EventListProps {
   events: any[];
@@ -20,6 +23,7 @@ export default function EventList({
   emptyMessage,
 }: EventListProps) {
   const navigate = useNavigate();
+  const { language } = useTheme();
 
   if (isLoading) {
     return (
@@ -34,7 +38,11 @@ export default function EventList({
   if (events.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
-        <Calendar className="h-12 w-12 mb-4 text-muted-foreground" />
+        {type === "invites" ? (
+          <Calendar className="h-12 w-12 mb-4 text-muted-foreground" />
+        ) : (
+          <CalendarPlus className="h-12 w-12 mb-4 text-muted-foreground" />
+        )}
         <h3 className="text-lg font-medium mb-2">{emptyMessage}</h3>
         
         {type !== "past" && (
@@ -43,7 +51,7 @@ export default function EventList({
             className="mt-4"
             onClick={() => navigate("/events/create")}
           >
-            Create Your First Event
+            {t("createFirstEvent", language)}
           </Button>
         )}
       </div>
@@ -61,6 +69,7 @@ export default function EventList({
 
 function EventCard({ event, type }: { event: any; type: string }) {
   const navigate = useNavigate();
+  const { language } = useTheme();
 
   const handleEventClick = () => {
     navigate(`/events/${event.id}`);
@@ -95,19 +104,19 @@ function EventCard({ event, type }: { event: any; type: string }) {
       <div className="p-3">
         <div className="flex justify-between items-center mb-2">
           <div className="text-sm text-muted-foreground">
-            {new Date(event.start_time).toLocaleDateString()}
+            {event.start_time ? format(new Date(event.start_time), "MMM d, yyyy") : ""}
           </div>
           {type === "invites" && (
             <div className="flex space-x-2">
-              <Button size="sm" variant="outline">Decline</Button>
-              <Button size="sm">Accept</Button>
+              <Button size="sm" variant="outline">{t("decline", language)}</Button>
+              <Button size="sm">{t("accept", language)}</Button>
             </div>
           )}
         </div>
-        <div className="text-sm truncate">{event.location}</div>
+        <div className="text-sm truncate">{event.location || t("noLocation", language)}</div>
         {event.rsvp_count > 0 && (
           <div className="text-sm text-muted-foreground mt-2">
-            {event.rsvp_count} {event.rsvp_count === 1 ? "attendee" : "attendees"}
+            {event.rsvp_count} {event.rsvp_count === 1 ? t("attendee", language) : t("attendees", language)}
           </div>
         )}
       </div>

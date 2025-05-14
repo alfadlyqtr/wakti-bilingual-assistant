@@ -141,7 +141,7 @@ const TasksAndReminders: React.FC = () => {
 
   // Handle Smart Task button click to open AI Assistant
   const handleSmartTaskClick = () => {
-    navigate('/assistant', { state: { preloadedText: "Ready to create your task…" } });
+    navigate('/assistant', { state: { preloadedText: t("readyToCreateTask", language) } });
   };
   
   return (
