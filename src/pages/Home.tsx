@@ -102,7 +102,7 @@ export default function Home() {
       usd: "USD",
     },
     ar: {
-      appName: "واكتي",
+      appName: "وكتي",
       tagline: "إدارة وقتك بكفاءة",
       features: "الميزات",
       pricing: "التسعير",
