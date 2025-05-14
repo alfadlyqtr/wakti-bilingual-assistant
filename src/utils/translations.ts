@@ -646,6 +646,10 @@ const translations: TranslationMap = {
     en: "Enter event description",
     ar: "أدخل وصف الفعالية"
   },
+  location: {
+    en: "Location",
+    ar: "الموقع"
+  },
   enterLocation: {
     en: "Enter location",
     ar: "أدخل الموقع"
@@ -786,7 +790,6 @@ const translations: TranslationMap = {
     en: "Add Subtask",
     ar: "إضافة مهمة فرعية"
   },
-  
   dailyRecurrence: {
     en: "Daily",
     ar: "يومي"

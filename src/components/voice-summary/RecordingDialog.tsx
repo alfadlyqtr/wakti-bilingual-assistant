@@ -200,16 +200,19 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         attendees: attendees ? attendees.split(',').map(a => a.trim()) : [],
       };
       
-      // Create a new voice_summary entry in the database
+      // Create a new voice_recordings entry in the database
       const { data: recordingData, error: recordingError } = await supabase
         .from('voice_recordings')
         .insert({
           id: recordingId,
-          user_id: user.id,
           title: title,
-          recording_url: publicUrlData.publicUrl,
-          transcription_status: 'pending',
-          metadata: metadata,
+          audio_url: publicUrlData.publicUrl,
+          type: 'meeting',
+          host: user.id,
+          attendees: attendees || null,
+          location: location || null,
+          transcript: null,
+          summary: null,
           expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days from now
         })
         .select()

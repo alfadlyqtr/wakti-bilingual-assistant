@@ -169,7 +169,6 @@ export type TranslationKey =
   | "assistantSettings"
   | "contactRequestSettings"
   | "manageBlockedUsers"
-  // New missing translation keys from build errors
   | "unblockContact"
   | "noConversations"
   | "imageTooLarge"
@@ -196,7 +195,6 @@ export type TranslationKey =
   | "subtaskGroupTitle"
   | "subtasks"
   | "addSubtask"
-  // Additional missing keys from the new errors
   | "dailyRecurrence"
   | "weeklyRecurrence"
   | "monthlyRecurrence"

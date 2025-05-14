@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -42,7 +41,7 @@ export default function VoiceSummaryDetail() {
       try {
         setIsLoading(true);
         const { data, error } = await supabase
-          .from('voice_summaries')
+          .from('voice_recordings')
           .select('*')
           .eq('id', id)
           .single();
@@ -61,7 +60,7 @@ export default function VoiceSummaryDetail() {
         }
         
         setRecording(data);
-        setEditedTranscript(data.transcription_text || '');
+        setEditedTranscript(data.transcript || '');
       } catch (err) {
         console.error('Error in fetchRecordingDetails:', err);
       } finally {
@@ -73,22 +72,22 @@ export default function VoiceSummaryDetail() {
   }, [id, navigate, language]);
   
   useEffect(() => {
-    if (recording?.transcription_status === 'pending') {
+    if (recording?.transcript === null) {
       // If transcription is pending, poll for updates every 5 seconds
       const interval = setInterval(async () => {
         try {
           const { data, error } = await supabase
-            .from('voice_summaries')
+            .from('voice_recordings')
             .select('*')
             .eq('id', id)
             .single();
             
           if (!error && data) {
             setRecording(data);
-            setEditedTranscript(data.transcription_text || '');
+            setEditedTranscript(data.transcript || '');
             
             // If transcription is complete, stop polling
-            if (data.transcription_status === 'completed') {
+            if (data.transcript !== null) {
               clearInterval(interval);
             }
           }
@@ -99,7 +98,7 @@ export default function VoiceSummaryDetail() {
       
       return () => clearInterval(interval);
     }
-  }, [id, recording?.transcription_status]);
+  }, [id, recording?.transcript]);
   
   useEffect(() => {
     // Cleanup audio player on unmount
@@ -119,10 +118,9 @@ export default function VoiceSummaryDetail() {
       setIsUpdating(true);
       
       const { error } = await supabase
-        .from('voice_summaries')
+        .from('voice_recordings')
         .update({ 
-          transcription_text: editedTranscript,
-          transcription_status: 'edited'
+          transcript: editedTranscript
         })
         .eq('id', id);
         
@@ -133,14 +131,12 @@ export default function VoiceSummaryDetail() {
       // Update local recording state
       setRecording({
         ...recording,
-        transcription_text: editedTranscript,
-        transcription_status: 'edited'
+        transcript: editedTranscript
       });
       
       setEditMode(false);
       
       toast({
-        title: language === 'ar' ? 'تم الحفظ' : 'Saved',
         description: language === 'ar' 
           ? 'تم حفظ النص المعدل بنجاح' 
           : 'Edited transcript saved successfully',
@@ -148,11 +144,10 @@ export default function VoiceSummaryDetail() {
     } catch (err) {
       console.error('Error saving transcript:', err);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? `فشل في حفظ النص: ${err.message}` 
           : `Failed to save transcript: ${err.message}`,
-        variant: "destructive"
       });
     } finally {
       setIsUpdating(false);
@@ -164,7 +159,6 @@ export default function VoiceSummaryDetail() {
     
     navigator.clipboard.writeText(text).then(() => {
       toast({
-        title: language === 'ar' ? 'تم النسخ' : 'Copied',
         description: language === 'ar' 
           ? 'تم نسخ النص إلى الحافظة' 
           : 'Text copied to clipboard',
@@ -173,7 +167,7 @@ export default function VoiceSummaryDetail() {
   };
   
   const handleGenerateSummary = async () => {
-    if (!id || !recording?.transcription_text) return;
+    if (!id || !recording?.transcript) return;
     
     try {
       setIsGeneratingSummary(true);
@@ -200,13 +194,12 @@ export default function VoiceSummaryDetail() {
       // Update local recording state
       setRecording({
         ...recording,
-        summary_text: data.summary
+        summary: data.summary
       });
       
       setActiveTab("summary");
       
       toast({
-        title: language === 'ar' ? 'تم إنشاء الملخص' : 'Summary Generated',
         description: language === 'ar' 
           ? 'تم إنشاء ملخص النص بنجاح' 
           : 'Text summary generated successfully',
@@ -214,11 +207,10 @@ export default function VoiceSummaryDetail() {
     } catch (err) {
       console.error('Error generating summary:', err);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? `فشل في إنشاء الملخص: ${err.message}` 
           : `Failed to generate summary: ${err.message}`,
-        variant: "destructive"
       });
     } finally {
       setIsGeneratingSummary(false);
@@ -226,7 +218,7 @@ export default function VoiceSummaryDetail() {
   };
   
   const handleGenerateTTS = async (voiceGender: string) => {
-    if (!id || !recording?.summary_text) return;
+    if (!id || !recording?.summary) return;
     
     try {
       setIsGeneratingTTS(true);
@@ -254,11 +246,10 @@ export default function VoiceSummaryDetail() {
       setRecording({
         ...recording,
         summary_audio_url: data.audioUrl,
-        voice_gender: voiceGender
+        summary_voice: voiceGender
       });
       
       toast({
-        title: language === 'ar' ? 'تم إنشاء الصوت' : 'Audio Generated',
         description: language === 'ar' 
           ? 'تم إنشاء الملخص الصوتي بنجاح' 
           : 'Audio summary generated successfully',
@@ -266,11 +257,10 @@ export default function VoiceSummaryDetail() {
     } catch (err) {
       console.error('Error generating TTS:', err);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? `فشل في إنشاء الصوت: ${err.message}` 
           : `Failed to generate audio: ${err.message}`,
-        variant: "destructive"
       });
     } finally {
       setIsGeneratingTTS(false);
@@ -346,6 +336,8 @@ export default function VoiceSummaryDetail() {
     );
   }
   
+  const transStatus = recording.transcript === null ? 'pending' : 'completed';
+  
   return (
     <div className="p-4 space-y-4">
       <Card>
@@ -361,23 +353,19 @@ export default function VoiceSummaryDetail() {
             </div>
             
             <Badge 
-              variant={recording.transcription_status === 'completed' ? "default" : "outline"}
+              variant={transStatus === 'completed' ? "default" : "outline"}
               className="ml-2 flex items-center gap-1"
             >
-              {recording.transcription_status === 'completed' ? (
+              {transStatus === 'completed' ? (
                 <CheckCircle className="h-4 w-4 text-green-500" />
-              ) : recording.transcription_status === 'pending' ? (
-                <Clock className="h-4 w-4 text-amber-500" />
               ) : (
-                <Edit2 className="h-4 w-4 text-blue-500" />
+                <Clock className="h-4 w-4 text-amber-500" />
               )}
               <span>
-                {recording.transcription_status === 'completed' ? (
+                {transStatus === 'completed' ? (
                   language === 'ar' ? 'مكتمل' : 'Completed'
-                ) : recording.transcription_status === 'pending' ? (
-                  language === 'ar' ? 'قيد المعالجة' : 'Processing'
                 ) : (
-                  language === 'ar' ? 'تم التعديل' : 'Edited'
+                  language === 'ar' ? 'قيد المعالجة' : 'Processing'
                 )}
               </span>
             </Badge>
@@ -393,26 +381,26 @@ export default function VoiceSummaryDetail() {
           <Separator className="my-3" />
           
           <div className="space-y-2 text-sm">
-            {recording.metadata?.attendees?.length > 0 && (
+            {recording.attendees && (
               <div className="flex items-start gap-2">
                 <User className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
                   <span className="text-muted-foreground mr-1">
                     {language === 'ar' ? 'الحضور:' : 'Attendees:'}
                   </span>
-                  <span>{Array.isArray(recording.metadata.attendees) ? recording.metadata.attendees.join(', ') : recording.metadata.attendees}</span>
+                  <span>{recording.attendees}</span>
                 </div>
               </div>
             )}
             
-            {recording.metadata?.location && (
+            {recording.location && (
               <div className="flex items-start gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div>
                   <span className="text-muted-foreground mr-1">
                     {language === 'ar' ? 'الموقع:' : 'Location:'}
                   </span>
-                  <span>{recording.metadata.location}</span>
+                  <span>{recording.location}</span>
                 </div>
               </div>
             )}
@@ -431,14 +419,14 @@ export default function VoiceSummaryDetail() {
             </div>
           </div>
           
-          {recording.recording_url && (
+          {recording.audio_url && (
             <div className="mt-3 flex items-center gap-2">
-              <audio src={recording.recording_url} controls className="w-full h-8" />
+              <audio src={recording.audio_url} controls className="w-full h-8" />
               <Button
                 variant="ghost"
                 size="icon"
                 className="flex-shrink-0"
-                onClick={() => handleDownload(recording.recording_url, `recording-${recording.id}.mp3`)}
+                onClick={() => handleDownload(recording.audio_url, `recording-${recording.id}.mp3`)}
               >
                 <DownloadCloud className="h-4 w-4" />
               </Button>
@@ -468,7 +456,7 @@ export default function VoiceSummaryDetail() {
         </TabsList>
         
         <TabsContent value="transcript" className="space-y-4">
-          {recording.transcription_status === 'pending' ? (
+          {transStatus === 'pending' ? (
             <div className="flex flex-col items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-2" />
               <div className="text-center text-muted-foreground">
@@ -490,7 +478,7 @@ export default function VoiceSummaryDetail() {
                           size="sm"
                           onClick={() => {
                             setEditMode(false);
-                            setEditedTranscript(recording.transcription_text);
+                            setEditedTranscript(recording.transcript);
                           }}
                           disabled={isUpdating}
                         >
@@ -516,7 +504,7 @@ export default function VoiceSummaryDetail() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleCopyText(recording.transcription_text)}
+                          onClick={() => handleCopyText(recording.transcript)}
                         >
                           <Copy className="h-4 w-4" />
                         </Button>
@@ -541,13 +529,13 @@ export default function VoiceSummaryDetail() {
                     disabled={isUpdating}
                   />
                 ) : (
-                  <div className="whitespace-pre-wrap">{recording.transcription_text}</div>
+                  <div className="whitespace-pre-wrap">{recording.transcript}</div>
                 )}
               </CardContent>
             </Card>
           )}
           
-          {recording.transcription_status === 'completed' && !recording.summary_text && (
+          {transStatus === 'completed' && !recording.summary && (
             <Button
               onClick={handleGenerateSummary}
               disabled={isGeneratingSummary}
@@ -568,7 +556,7 @@ export default function VoiceSummaryDetail() {
         </TabsContent>
         
         <TabsContent value="summary" className="space-y-4">
-          {!recording.summary_text ? (
+          {!recording.summary ? (
             <div className="flex flex-col items-center justify-center py-8">
               <div className="text-center text-muted-foreground mb-4">
                 {language === 'ar' 
@@ -592,13 +580,13 @@ export default function VoiceSummaryDetail() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleCopyText(recording.summary_text)}
+                    onClick={() => handleCopyText(recording.summary)}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
                 
-                <div className="whitespace-pre-wrap">{recording.summary_text}</div>
+                <div className="whitespace-pre-wrap">{recording.summary}</div>
                 
                 {recording.summary_audio_url ? (
                   <div className="pt-2 flex items-center gap-2">
@@ -632,7 +620,7 @@ export default function VoiceSummaryDetail() {
                     <div className="flex-1"></div>
                     
                     <Badge variant="outline">
-                      {recording.voice_gender === 'male' 
+                      {recording.summary_voice === 'male' 
                         ? (language === 'ar' ? 'صوت ذكر' : 'Male Voice') 
                         : (language === 'ar' ? 'صوت أنثى' : 'Female Voice')}
                     </Badge>
