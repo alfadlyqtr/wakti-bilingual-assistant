@@ -3,77 +3,162 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
-import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Check,
   Calendar,
   Bell,
   MessageSquare,
-  User,
   List,
 } from "lucide-react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { language } = useTheme();
+  const { theme, language, toggleLanguage } = useTheme();
 
-  const features = [
+  // Direct text values for features instead of translation keys
+  const features = language === "en" ? [
     {
       icon: List,
-      title: "taskManagement" as TranslationKey,
-      description: "taskDesc" as TranslationKey,
+      title: "Task Management",
+      description: "Smart task organization with priorities and sharing",
     },
     {
       icon: Calendar,
-      title: "calendar" as TranslationKey,
-      description: "calendarDesc" as TranslationKey,
+      title: "Calendar",
+      description: "Unified calendar for events, tasks and reminders",
     },
     {
       icon: Bell,
-      title: "reminders" as TranslationKey,
-      description: "remindersDesc" as TranslationKey,
+      title: "Reminders",
+      description: "Smart reminders with recurring options",
     },
     {
       icon: MessageSquare,
-      title: "messaging" as TranslationKey,
-      description: "messagingDesc" as TranslationKey,
+      title: "Messaging",
+      description: "Secure messaging with voice and text",
+    },
+  ] : [
+    {
+      icon: List,
+      title: "إدارة المهام",
+      description: "تنظيم ذكي للمهام مع الأولويات والمشاركة",
+    },
+    {
+      icon: Calendar,
+      title: "التقويم",
+      description: "تقويم موحد للأحداث والمهام والتذكيرات",
+    },
+    {
+      icon: Bell,
+      title: "التذكيرات",
+      description: "تذكيرات ذكية مع خيارات التكرار",
+    },
+    {
+      icon: MessageSquare,
+      title: "المراسلة",
+      description: "مراسلة آمنة بالصوت والنص",
     },
   ];
 
-  const pricingPlans = [
+  const pricingPlans = language === "en" ? [
     {
-      title: "monthly" as TranslationKey,
+      title: "Monthly",
       priceQAR: 55,
       priceUSD: 15,
     },
     {
-      title: "yearly" as TranslationKey,
+      title: "Yearly",
+      priceQAR: 550,
+      priceUSD: 150,
+    },
+  ] : [
+    {
+      title: "شهري",
+      priceQAR: 55,
+      priceUSD: 15,
+    },
+    {
+      title: "سنوي",
       priceQAR: 550,
       priceUSD: 150,
     },
   ];
 
+  // Direct content based on language without translation keys
+  const content = {
+    en: {
+      appName: "WAKTI",
+      tagline: "Manage your time efficiently",
+      features: "Features",
+      pricing: "Pricing",
+      freeTrialDays: "3-Day Free Trial",
+      taskManagement: "Task Management",
+      aiSummaries: "AI Summaries",
+      startFreeTrial: "Start Free Trial",
+      login: "Login",
+      qar: "QAR",
+      usd: "USD",
+    },
+    ar: {
+      appName: "واكتي",
+      tagline: "إدارة وقتك بكفاءة",
+      features: "الميزات",
+      pricing: "التسعير",
+      freeTrialDays: "3 أيام تجربة مجانية",
+      taskManagement: "إدارة المهام",
+      aiSummaries: "ملخصات الذكاء الاصطناعي",
+      startFreeTrial: "ابدأ النسخة التجريبية المجانية",
+      login: "تسجيل الدخول",
+      qar: "ريال",
+      usd: "دولار",
+    }
+  };
+
+  const currentContent = content[language];
+
   return (
-    <div className="mobile-container">
+    <div className={`mobile-container ${language === 'ar' ? 'rtl' : ''}`}>
       <header className="mobile-header">
-        <h1 className="text-2xl font-bold">{t("appName", language)}</h1>
-        <ThemeLanguageToggle />
+        <h1 className="text-2xl font-bold">{currentContent.appName}</h1>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleLanguage}
+            className="h-9 px-3 rounded-full text-sm"
+          >
+            {language === "en" ? "العربية" : "English"}
+          </Button>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto">
         {/* Hero Section */}
-        <section className="py-10 px-4">
+        <section className="py-6 px-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-center mb-8"
+            className="text-center mb-6"
           >
-            <h1 className="text-4xl font-bold mb-4">{t("appName", language)}</h1>
+            <div className="mb-4 flex justify-center">
+              <div className="w-24 h-24 relative">
+                <AspectRatio ratio={1/1} className="bg-primary-900 rounded-2xl overflow-hidden">
+                  <img 
+                    src="/lovable-uploads/33ebdcdd-300d-42cf-be5e-f6a82ca9ef4d.png" 
+                    alt="WAKTI Logo"
+                    className="object-cover w-full h-full"
+                  />
+                </AspectRatio>
+              </div>
+            </div>
+
+            <h1 className="text-4xl font-bold mb-2">{currentContent.appName}</h1>
             <p className="text-xl text-muted-foreground mb-6">
-              {t("tagline", language)}
+              {currentContent.tagline}
             </p>
             <div className="flex flex-col gap-3">
               <Button
@@ -81,7 +166,7 @@ export default function Home() {
                 className="w-full text-base py-6"
                 onClick={() => navigate("/signup")}
               >
-                {t("startFreeTrial", language)}
+                {currentContent.startFreeTrial}
               </Button>
               <Button
                 variant="outline"
@@ -89,7 +174,7 @@ export default function Home() {
                 className="w-full text-base py-6"
                 onClick={() => navigate("/login")}
               >
-                {t("login", language)}
+                {currentContent.login}
               </Button>
             </div>
           </motion.div>
@@ -99,11 +184,12 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
+            className="mb-8"
           >
             <h2 className="text-2xl font-bold mb-5 text-center">
-              {t("features", language)}
+              {currentContent.features}
             </h2>
-            <div className="grid grid-cols-1 gap-4 mb-10">
+            <div className="grid grid-cols-1 gap-4 mb-6">
               {features.map((feature, index) => (
                 <div
                   key={index}
@@ -115,10 +201,10 @@ export default function Home() {
                     </div>
                     <div>
                       <h3 className="font-medium mb-1">
-                        {t(feature.title, language)}
+                        {feature.title}
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {t(feature.description, language)}
+                        {feature.description}
                       </p>
                     </div>
                   </div>
@@ -135,23 +221,23 @@ export default function Home() {
             className="mb-10"
           >
             <h2 className="text-2xl font-bold mb-5 text-center">
-              {t("pricing", language)}
+              {currentContent.pricing}
             </h2>
             <div className="bg-card p-4 rounded-xl border border-border mb-4">
               <p className="text-center font-medium mb-2">
-                {t("freeTrialDays", language)}
+                {currentContent.freeTrialDays}
               </p>
               <ul className="space-y-2 mb-4">
                 <li className="flex items-center">
                   <Check className="h-4 w-4 mr-2 text-green-500" />
                   <span className="text-sm">
-                    {t("features", language)} {t("taskManagement", language)}
+                    {currentContent.features} {currentContent.taskManagement}
                   </span>
                 </li>
                 <li className="flex items-center">
                   <Check className="h-4 w-4 mr-2 text-green-500" />
                   <span className="text-sm">
-                    {t("aiSummaries", language)}
+                    {currentContent.aiSummaries}
                   </span>
                 </li>
               </ul>
@@ -164,13 +250,13 @@ export default function Home() {
                   className="bg-card p-4 rounded-xl border border-border text-center"
                 >
                   <h3 className="font-medium mb-2">
-                    {t(plan.title, language)}
+                    {plan.title}
                   </h3>
                   <div className="text-2xl font-bold mb-1">
-                    {plan.priceQAR} {t("qar", language)}
+                    {plan.priceQAR} {currentContent.qar}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    ≈ {plan.priceUSD} {t("usd", language)}
+                    ≈ {plan.priceUSD} {currentContent.usd}
                   </div>
                 </div>
               ))}
