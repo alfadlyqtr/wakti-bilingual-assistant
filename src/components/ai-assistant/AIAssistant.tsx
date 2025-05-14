@@ -321,7 +321,7 @@ export const AIAssistant = () => {
       />
       
       {/* Bottom Input Area - Never covered by dock */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-6 pt-3 border-t bg-background/95 backdrop-blur-md shadow-lg">
+      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 pt-2 border-t bg-background/95 backdrop-blur-md shadow-lg">
         <div className="flex items-center gap-2 max-w-md mx-auto">
           <VoiceInput 
             isActive={isVoiceActive} 
@@ -338,7 +338,7 @@ export const AIAssistant = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder={t("askWAKTI" as TranslationKey, language)}
-              className="pl-4 pr-10 py-6 rounded-xl shadow-sm transition-all duration-300"
+              className={`pl-4 pr-10 py-6 rounded-full shadow-sm transition-all duration-300`}
               style={{
                 borderColor: getModeColor(activeMode),
                 boxShadow: `0 0 8px ${getModeColor(activeMode)}30`
