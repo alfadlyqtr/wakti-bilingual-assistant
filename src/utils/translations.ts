@@ -1,6 +1,12 @@
-
 import { TranslationKey } from "./translationTypes";
 
+// Helper function to create translations
+const createTranslation = (english: string, arabic: string) => ({
+  en: english,
+  ar: arabic,
+});
+
+// Translation key-value pairs
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
   dashboard: {
     en: "Dashboard",
@@ -547,7 +553,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   // Task Form Translations
   taskTitle: {
     en: "Task Title",
-    ar: "عنوان المهمة",
+    ar: "عنوا�� المهمة",
   },
   priority: {
     en: "Priority",
@@ -718,9 +724,135 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   voiceSummaryDetail: {
     en: "Voice Summary Detail",
     ar: "تفاصيل الملخص الصوتي",
-  }
+  },
+  // AI Assistant translations
+  welcomeToWaktiAI: createTranslation(
+    "Welcome to WAKTI Assistant! How can I help you today?",
+    "مرحباً بك في مساعد واكتي! كيف يمكنني مساعدتك اليوم؟"
+  ),
+  toCompleteThisAction: createTranslation(
+    "To complete this action, I'll need to",
+    "لإتمام هذا الإجراء، سأحتاج إلى"
+  ),
+  switchTo: createTranslation(
+    "switch to",
+    "التبديل إلى"
+  ),
+  assistantMode: createTranslation(
+    "Assistant mode",
+    "وضع المساعد"
+  ),
+  iCanCreateThisTask: createTranslation(
+    "I can create this task for you. Does this look correct?",
+    "يمكنني إنشاء هذه المهمة لك. هل هذا يبدو صحيحاً؟"
+  ),
+  helpingYouWith: createTranslation(
+    "I'm helping you with",
+    "أنا أساعدك في"
+  ),
+  howCanIAssistYouWithWAKTI: createTranslation(
+    "How can I assist you with WAKTI today?",
+    "كيف يمكنني مساعدتك مع واكتي اليوم؟"
+  ),
+  askWAKTI: createTranslation(
+    "Ask WAKTI anything...",
+    "اسأل واكتي أي شيء..."
+  ),
+  stopListening: createTranslation(
+    "Stop listening",
+    "توقف عن الاستماع"
+  ),
+  startVoiceInput: createTranslation(
+    "Start voice input",
+    "ابدأ الإدخال الصوتي"
+  ),
+  waktiAssistant: createTranslation(
+    "WAKTI Assistant",
+    "مساعد واكتي"
+  ),
+  openHistory: createTranslation(
+    "Open history",
+    "فتح السجل"
+  ),
+  openSettings: createTranslation(
+    "Open settings",
+    "فتح الإعدادات"
+  ),
+  chatHistory: createTranslation(
+    "Chat History",
+    "سجل المحادثات"
+  ),
+  searchChats: createTranslation(
+    "Search chats...",
+    "البحث في المحادثات..."
+  ),
+  noChatsYet: createTranslation(
+    "No chat history yet",
+    "لا يوجد سجل محادثات بعد"
+  ),
+  noChatsFound: createTranslation(
+    "No chats found",
+    "لم يتم العثور على محادثات"
+  ),
+  clearHistory: createTranslation(
+    "Clear History",
+    "مسح السجل"
+  ),
+  switchMode: createTranslation(
+    "Switch mode",
+    "تغيير الوضع"
+  ),
+  confirm: createTranslation(
+    "Confirm",
+    "تأكيد"
+  ),
+  instructions: createTranslation(
+    "Instructions",
+    "التعليمات"
+  ),
+  generalInstructions: createTranslation(
+    "Ask me anything or select from common questions below.",
+    "اسألني أي شيء أو اختر من الأسئلة الشائعة أدناه."
+  ),
+  writerInstructions: createTranslation(
+    "Select your preferences and let me write content for you.",
+    "حدد تفضيلاتك ودعني أكتب المحتوى لك."
+  ),
+  creativeInstructions: createTranslation(
+    "Choose tools to create images, charts, and visual content.",
+    "اختر أدوات لإنشاء الصور والرسوم البيانية والمحتوى المرئي."
+  ),
+  assistantInstructions: createTranslation(
+    "Let me help you manage your tasks, reminders, and events.",
+    "دعني أساعدك في إدارة مهامك وتذكيراتك وأحداثك."
+  ),
+  knowledge: createTranslation(
+    "Knowledge Base",
+    "قاعدة المعرفة"
+  ),
+  generalMode: createTranslation(
+    "General",
+    "عام"
+  ),
+  writerMode: createTranslation(
+    "Writer",
+    "كاتب"
+  ),
+  creativeMode: createTranslation(
+    "Creative",
+    "إبداعي"
+  ),
 };
 
-export const t = (key: TranslationKey, language: "en" | "ar"): string => {
-  return translations[key]?.[language] || key;
+// Get translation for a key in the specified language
+export const t = (key: TranslationKey | string, language: string = "en"): string => {
+  // Safely check if key exists and cast to proper type
+  const safeKey = key as TranslationKey;
+  
+  if (translations[safeKey]) {
+    return translations[safeKey][language as "en" | "ar"] || key;
+  }
+  
+  // Return the key itself if translation is not found
+  return key;
 };

@@ -5,15 +5,14 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Mic, Send, Settings, History, MessageSquare, User } from "lucide-react";
+import { Mic, Send, Settings, Menu, MessageSquare } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { ASSISTANT_MODES, AIMode, ChatMessage } from "./types";
 import { ChatWindow } from "./ChatWindow";
-import { ModePanel } from "./ModePanel";
+import { ModeSelector } from "./ModeSelector";
 import { LeftDrawer } from "./LeftDrawer";
-import { RightPanel } from "./RightPanel";
+import { RightDrawer } from "./RightDrawer";
 import { VoiceInput } from "./VoiceInput";
 import { v4 as uuidv4 } from "uuid";
 
@@ -21,7 +20,7 @@ export const AIAssistant = () => {
   const { theme, language } = useTheme();
   const [activeMode, setActiveMode] = useState<AIMode>("general");
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
-  const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+  const [isRightDrawerOpen, setIsRightDrawerOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
@@ -37,6 +36,7 @@ export const AIAssistant = () => {
   ]);
   
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -174,7 +174,7 @@ export const AIAssistant = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden">
+    <div className="flex flex-col h-full bg-background overflow-hidden relative">
       {/* Left Drawer - Chat History */}
       <LeftDrawer 
         isOpen={isLeftDrawerOpen}
@@ -183,44 +183,47 @@ export const AIAssistant = () => {
         language={language}
       />
       
-      {/* Right Panel - Settings & Tools */}
-      <RightPanel 
-        isOpen={isRightPanelOpen}
-        onClose={() => setIsRightPanelOpen(false)}
+      {/* Right Drawer - Settings & Tools */}
+      <RightDrawer
+        isOpen={isRightDrawerOpen}
+        onClose={() => setIsRightDrawerOpen(false)}
         activeMode={activeMode}
         language={language}
         theme={theme}
       />
       
-      {/* Header with Title and Mode Selector */}
-      <header className="flex flex-col p-4 border-b">
-        <div className="flex items-center justify-between mb-2">
-          <motion.button
-            className="p-2 rounded-full hover:bg-accent"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsLeftDrawerOpen(true)}
-            aria-label={t("openHistory" as TranslationKey, language)}
-          >
-            <History size={20} />
-          </motion.button>
-          
-          <h1 className="text-xl font-semibold">
-            {t("waktiAssistant" as TranslationKey, language)}
-          </h1>
-          
-          <motion.button
-            className="p-2 rounded-full hover:bg-accent"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsRightPanelOpen(true)}
-            aria-label={t("openSettings" as TranslationKey, language)}
-          >
-            <Settings size={20} />
-          </motion.button>
-        </div>
+      {/* Header with Title */}
+      <header className="flex items-center justify-between px-4 py-3 border-b z-20 bg-background">
+        <motion.button
+          className="p-2 rounded-full hover:bg-accent"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsLeftDrawerOpen(true)}
+          aria-label={t("openHistory" as TranslationKey, language)}
+        >
+          <Menu size={20} />
+        </motion.button>
         
-        {/* Mode Selector */}
-        <ModePanel activeMode={activeMode} setActiveMode={setActiveMode} />
+        <h1 className="text-xl font-semibold">
+          {t("waktiAssistant" as TranslationKey, language)}
+        </h1>
+        
+        <motion.button
+          className="p-2 rounded-full hover:bg-accent"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsRightDrawerOpen(true)}
+          aria-label={t("openSettings" as TranslationKey, language)}
+        >
+          <Settings size={20} />
+        </motion.button>
       </header>
+      
+      {/* Mode Selector - Centered Pills */}
+      <div className="px-4 py-3 flex justify-center border-b z-10">
+        <ModeSelector 
+          activeMode={activeMode} 
+          setActiveMode={setActiveMode}
+        />
+      </div>
       
       {/* Main Chat Window */}
       <ChatWindow 
@@ -234,43 +237,46 @@ export const AIAssistant = () => {
         theme={theme}
       />
       
-      {/* Input Area */}
-      <div className="p-4 border-t flex items-center gap-2 bg-background">
-        <VoiceInput 
-          isActive={isVoiceActive} 
-          onToggle={() => setIsVoiceActive(!isVoiceActive)}
-          onTranscript={handleVoiceInput}
-          language={language}
-        />
-        
-        <div className="relative flex-1">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder={t("askWAKTI" as TranslationKey, language)}
-            className="pl-4 pr-10 py-6 rounded-full"
+      {/* Bottom Input Area - Never covered by dock */}
+      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 pt-2 border-t bg-background/95 backdrop-blur-md">
+        <div className="flex items-center gap-2 max-w-md mx-auto">
+          <VoiceInput 
+            isActive={isVoiceActive} 
+            onToggle={() => setIsVoiceActive(!isVoiceActive)}
+            onTranscript={handleVoiceInput}
+            language={language}
           />
           
-          <AnimatePresence>
-            {input && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2"
-              >
-                <Button 
-                  size="icon" 
-                  variant="ghost" 
-                  className="rounded-full h-8 w-8" 
-                  onClick={handleSendMessage}
+          <div className="relative flex-1">
+            <Input
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder={t("askWAKTI" as TranslationKey, language)}
+              className="pl-4 pr-10 py-6 rounded-full"
+            />
+            
+            <AnimatePresence>
+              {input && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
                 >
-                  <Send size={18} />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="rounded-full h-8 w-8" 
+                    onClick={handleSendMessage}
+                  >
+                    <Send size={18} />
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </div>

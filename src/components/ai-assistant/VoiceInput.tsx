@@ -29,9 +29,9 @@ export function VoiceInput({
     if (isActive) {
       // Generate random waveform
       interval = setInterval(() => {
-        const newWaveform = Array.from({ length: 20 }, () => Math.random() * 0.8 + 0.2);
+        const newWaveform = Array.from({ length: 30 }, () => Math.random() * 0.8 + 0.2);
         setWaveform(newWaveform);
-      }, 100);
+      }, 80);
       
       // Simulate a voice recording after 3 seconds
       setTimeout(() => {
@@ -51,11 +51,11 @@ export function VoiceInput({
     <div className="relative">
       <Button
         onClick={onToggle}
-        variant={isActive ? "destructive" : "ghost"}
+        variant={isActive ? "destructive" : "outline"}
         size="icon"
         className={cn(
           "rounded-full transition-all relative",
-          isActive && "animate-pulse"
+          isActive ? "animate-pulse" : "hover:bg-accent/80"
         )}
         aria-label={isActive ? 
           t("stopListening" as TranslationKey, language) : 
@@ -68,18 +68,21 @@ export function VoiceInput({
       <AnimatePresence>
         {isActive && waveform.length > 0 && (
           <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: -50 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="absolute left-1/2 transform -translate-x-1/2 bg-destructive text-destructive-foreground px-3 py-1 rounded-full flex items-center gap-0.5"
-            style={{ width: '200px' }}
+            initial={{ opacity: 0, y: -10, scale: 0.9 }}
+            animate={{ opacity: 1, y: -50, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.9 }}
+            className="absolute left-1/2 transform -translate-x-1/2 bg-destructive text-destructive-foreground px-4 py-2 rounded-full flex items-center gap-0.5 shadow-lg"
+            style={{ width: '240px' }}
           >
             {waveform.map((value, idx) => (
               <motion.div
                 key={idx}
                 className="flex-1 bg-current"
-                style={{ height: `${value * 16}px` }}
-                animate={{ height: `${value * 16}px` }}
+                style={{ height: `${value * 20}px` }}
+                animate={{ 
+                  height: `${value * 20}px`,
+                  opacity: value * 1.2
+                }}
                 transition={{ duration: 0.1 }}
               />
             ))}

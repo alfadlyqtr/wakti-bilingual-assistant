@@ -1,69 +1,60 @@
 
 export type AIMode = "general" | "writer" | "creative" | "assistant";
 
+export interface ConfirmationData {
+  type: string;
+  action: string;
+  data?: any;
+}
+
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "assistant" | "user";
   content: string;
   mode: AIMode;
   timestamp: Date;
-  needsConfirmation?: {
-    type: string;
-    action: string;
-    data?: any;
-  } | null;
+  needsConfirmation?: ConfirmationData | null;
 }
 
-export interface AssistantMode {
-  id: AIMode;
-  name: string;
-  description: string;
-  color: {
-    dark: string;
-    light: string;
-  };
-  features: string[];
-}
-
-export const ASSISTANT_MODES: AssistantMode[] = [
+export const ASSISTANT_MODES = [
   {
     id: "general",
     name: "General",
-    description: "General chat, tutoring, translation",
+    description: "Ask anything and get general assistance",
     color: {
-      dark: "#858384",
-      light: "#060541"
+      light: "#060541", // WAKTI light-primary
+      dark: "#858384", // WAKTI dark-tertiary
     },
-    features: ["answer", "translate", "explain", "grammar", "help"]
+    icon: "message-square",
   },
   {
     id: "writer",
     name: "Writer",
-    description: "Smart text + content generator",
+    description: "Create and edit written content",
     color: {
-      dark: "#fcfefd",
-      light: "#e9ceb0"
+      light: "#e9ceb0", // WAKTI light-secondary
+      dark: "#fcfefd", // WAKTI near white for contrast
     },
-    features: ["email", "post", "tone", "extract"]
+    icon: "pen-tool",
   },
   {
     id: "creative",
     name: "Creative",
-    description: "Visual & chart generator",
+    description: "Generate images and creative content",
     color: {
-      dark: "#e9ceb0",
-      light: "#606062"
+      light: "#606062", // WAKTI dark-secondary (contrasted for light mode)
+      dark: "#e9ceb0", // WAKTI light-secondary
     },
-    features: ["image", "chart", "enhance", "background"]
+    icon: "palette",
   },
   {
     id: "assistant",
     name: "Assistant",
-    description: "Direct connection to WAKTI features",
+    description: "Task management and planning",
     color: {
-      dark: "#0c0f14",
-      light: "#060541"
+      light: "#060541", // WAKTI light-primary
+      dark: "#0c0f14", // WAKTI dark-bg
     },
-    features: ["task", "reminder", "event", "calendar"]
-  }
+    icon: "calendar",
+  },
 ];

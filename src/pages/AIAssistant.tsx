@@ -11,7 +11,6 @@ export default function AIAssistantPage() {
   
   return (
     <div className="mobile-container">
-      <MobileHeader title={t("assistant", language)} />
       <div className="flex-1 overflow-hidden">
         <AIAssistant />
       </div>
