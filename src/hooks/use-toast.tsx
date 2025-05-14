@@ -1,7 +1,6 @@
 
 import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast";
 import {
-  ToastActionProps,
   toast as sonnerToast,
   Toaster as SonnerToaster,
 } from "sonner";
@@ -23,6 +22,7 @@ let memoryToasts: ToasterToast[] = [];
 const useToast = () => {
   return {
     toast,
+    confirm,
     dismiss: (toastId?: string) => {
       sonnerToast.dismiss(toastId);
     },
@@ -54,7 +54,7 @@ export function toast(props: ToastOptions) {
   sonnerToast(title as string, {
     description,
     ...rest,
-    type: sonnerVariant,
+    // Use style instead of type which doesn't exist in ExternalToast
   });
   
   // Store toast in memory for any component that needs access to all toasts

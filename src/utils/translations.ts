@@ -845,6 +845,98 @@ const translations: TranslationMap = {
   createYourFirst: {
     en: "Create your first",
     ar: "أنشئ أول"
+  },
+  taskCreatedSuccessfully: {
+    en: "Task created successfully",
+    ar: "تم إنشاء المهمة بنجاح"
+  },
+  taskUpdatedSuccessfully: {
+    en: "Task updated successfully",
+    ar: "تم تحديث المهمة بنجاح"
+  },
+  taskDeletedSuccessfully: {
+    en: "Task deleted successfully",
+    ar: "تم حذف المهمة بنجاح"
+  },
+  reminderCreatedSuccessfully: {
+    en: "Reminder created successfully",
+    ar: "تم إنشاء التذكير بنجاح"
+  },
+  reminderUpdatedSuccessfully: {
+    en: "Reminder updated successfully",
+    ar: "تم تحديث التذكير بنجاح"
+  },
+  reminderDeletedSuccessfully: {
+    en: "Reminder deleted successfully",
+    ar: "تم حذف التذكير بنجاح"
+  },
+  taskSharedSuccessfully: {
+    en: "Task shared successfully",
+    ar: "تم مشاركة المهمة بنجاح"
+  },
+  username: {
+    en: "Username",
+    ar: "اسم المستخدم"
+  },
+  tasks_view_all: {
+    en: "View all tasks",
+    ar: "عرض كل المهام"
+  },
+  event: {
+    en: "Event",
+    ar: "فعالية"
+  },
+  task: {
+    en: "Task",
+    ar: "مهمة"
+  },
+  calendar_open: {
+    en: "Open Calendar",
+    ar: "فتح التقويم"
+  },
+  events_today: {
+    en: "Today's Events",
+    ar: "فعاليات اليوم"
+  },
+  events_view_all: {
+    en: "View all events",
+    ar: "عرض كل الفعاليات"
+  },
+  reminders_view_all: {
+    en: "View all reminders",
+    ar: "عرض كل التذكيرات"
+  },
+  freeTrialDays: {
+    en: "Free Trial Days",
+    ar: "أيام التجربة المجانية"
+  },
+  eventDetail: {
+    en: "Event Detail",
+    ar: "تفاصيل الفعالية"
+  },
+  lightMode: {
+    en: "Light Mode",
+    ar: "الوضع الفاتح"
+  },
+  darkMode: {
+    en: "Dark Mode",
+    ar: "الوضع الداكن"
+  },
+  notificationPreferences: {
+    en: "Notification Preferences",
+    ar: "تفضيلات الإشعارات"
+  },
+  widgetVisibility: {
+    en: "Widget Visibility",
+    ar: "ظهور الأدوات"
+  },
+  privacyControls: {
+    en: "Privacy Controls",
+    ar: "إعدادات الخصوصية"
+  },
+  deleteAccount: {
+    en: "Delete Account",
+    ar: "حذف الحساب"
   }
 };
 
