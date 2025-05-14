@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -78,7 +77,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4">
-      <div className="max-w-md mx-auto space-y-6">
+      <div className="max-w-md mx-auto space-y-4">
         <AnimatePresence>
           {messages.map((message, index) => {
             const isAssistant = message.role === 'assistant';
@@ -91,7 +90,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} w-full ${isLastMessage ? 'mb-12' : ''}`}
+                className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} w-full ${isLastMessage ? 'mb-8' : ''}`}
               >
                 <div className={`max-w-[80%] flex ${isAssistant ? 'flex-row' : 'flex-row-reverse'} gap-2`}>
                   {isAssistant && (
@@ -151,12 +150,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           })}
         </AnimatePresence>
         
-        {/* Typing indicator - increased both top and bottom margins */}
+        {/* Typing indicator - adjusted spacing */}
         {isTyping && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex justify-start mb-20 mt-10"
+            className="flex justify-start mb-20 mt-6"
           >
             <div className="flex items-center gap-2 max-w-[80%]">
               <Avatar className="h-8 w-8">
