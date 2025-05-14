@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { AIMode, ASSISTANT_MODES } from "./types";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { X, HelpCircle, BookOpen, BrainCircuit, Type, Palette, FileCheck } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { toast } from "@/components/ui/use-toast";
 
 interface RightDrawerProps {
   isOpen: boolean;
@@ -44,16 +43,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   const direction = language === "ar" ? "rtl" : "ltr";
   const isDark = theme === "dark";
   
-  // State for toggling knowledge base
-  const [knowledgeEnabled, setKnowledgeEnabled] = useState(true);
-  const [grammarCheckEnabled, setGrammarCheckEnabled] = useState(true);
-  const [imageTools, setImageTools] = useState({
-    textToImage: true,
-    imageToImage: false,
-    removeBg: false,
-    enhanceImage: false
-  });
-  
   // Get drawer background color based on active mode
   const getDrawerBgColor = (mode: AIMode) => {
     return isDark ? 
@@ -72,7 +61,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
     return brightness >= 128 ? "#000000" : "#ffffff";
   };
   
-  const textColor = getTextColor(drawerBgColor || "#000000");
+  const textColor = getTextColor(drawerBgColor);
   
   // Get the icon for the current mode
   const getModeIcon = () => {
@@ -88,67 +77,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
       default:
         return <HelpCircle size={18} style={{ color: textColor }} />;
     }
-  };
-  
-  // Handle common question clicks
-  const handleCommonQuestionClick = (question: string) => {
-    toast({
-      title: t("questionSelected", language),
-      description: question,
-      duration: 3000
-    });
-    onClose();
-  };
-  
-  // Handle tone preset selection
-  const handleTonePresetClick = (tone: string) => {
-    toast({
-      title: t("toneSelected", language),
-      description: tone,
-      duration: 3000
-    });
-  };
-  
-  // Handle length option selection
-  const handleLengthOptionClick = (length: string) => {
-    toast({
-      title: t("lengthSelected", language),
-      description: length,
-      duration: 3000
-    });
-  };
-  
-  // Handle shortcut action
-  const handleShortcutClick = (action: string) => {
-    toast({
-      title: t("shortcutSelected", language),
-      description: action,
-      duration: 3000
-    });
-    onClose();
-  };
-  
-  // Handle toggle for image tools
-  const handleImageToolToggle = (tool: keyof typeof imageTools) => {
-    setImageTools(prev => ({
-      ...prev,
-      [tool]: !prev[tool]
-    }));
-    
-    toast({
-      title: imageTools[tool] ? t("toolDisabled", language) : t("toolEnabled", language),
-      description: t(tool as TranslationKey, language),
-      duration: 3000
-    });
-  };
-  
-  // Handle chart type selection
-  const handleChartTypeClick = (chartType: string) => {
-    toast({
-      title: t("chartSelected", language),
-      description: chartType,
-      duration: 3000
-    });
   };
   
   // Dynamic content based on the active mode
@@ -186,7 +114,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                       backgroundColor: `${textColor}10`,
                       color: textColor
                     }}
-                    onClick={() => handleCommonQuestionClick(question)}
                   >
                     {question}
                   </button>
@@ -217,7 +144,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                       backgroundColor: `${textColor}10`,
                       color: textColor
                     }}
-                    onClick={() => handleTonePresetClick(tone)}
                   >
                     {tone}
                   </button>
@@ -242,7 +168,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                       backgroundColor: `${textColor}10`,
                       color: textColor
                     }}
-                    onClick={() => handleLengthOptionClick(length)}
                   >
                     {length}
                   </button>
@@ -254,17 +179,14 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
               <button 
                 className="flex items-center w-full py-2 px-3"
                 style={{ color: textColor }}
-                onClick={() => setGrammarCheckEnabled(!grammarCheckEnabled)}
               >
                 <div className="w-5 h-5 rounded border mr-2 flex items-center justify-center"
                   style={{ borderColor: `${textColor}40` }}
                 >
-                  {grammarCheckEnabled && (
-                    <div 
-                      className="w-3 h-3 rounded-sm"
-                      style={{ backgroundColor: `${textColor}70` }}
-                    ></div>
-                  )}
+                  <div 
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: `${textColor}70` }}
+                  ></div>
                 </div>
                 <span>{t("grammarCheck", language)}</span>
               </button>
@@ -280,7 +202,12 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 {t("imageTools", language)}
               </h3>
               <div className="space-y-2">
-                {Object.keys(imageTools).map((tool, idx) => (
+                {[
+                  t("textToImage", language),
+                  t("imageToImage", language),
+                  t("removeBg", language),
+                  t("enhanceImage", language),
+                ].map((tool, idx) => (
                   <button
                     key={idx}
                     className="w-full py-2 px-3 rounded-md text-left text-sm flex justify-between"
@@ -288,18 +215,13 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                       backgroundColor: `${textColor}10`,
                       color: textColor
                     }}
-                    onClick={() => handleImageToolToggle(tool as keyof typeof imageTools)}
                   >
-                    <span>{t(tool as TranslationKey, language)}</span>
+                    <span>{tool}</span>
                     <Toggle 
-                      pressed={imageTools[tool as keyof typeof imageTools]}
-                      onPressedChange={() => handleImageToolToggle(tool as keyof typeof imageTools)}
-                      aria-label={t(tool as TranslationKey, language)} 
+                      aria-label={tool} 
                       size="sm"
                       style={{ 
-                        backgroundColor: imageTools[tool as keyof typeof imageTools] 
-                          ? `${textColor}70` 
-                          : `${textColor}30`,
+                        backgroundColor: `${textColor}30`,
                         color: textColor
                       }} 
                     />
@@ -325,7 +247,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                       backgroundColor: `${textColor}10`,
                       color: textColor
                     }}
-                    onClick={() => handleChartTypeClick(chart)}
                   >
                     {chart}
                   </button>
@@ -349,7 +270,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                     backgroundColor: `${textColor}10`,
                     color: textColor
                   }}
-                  onClick={() => handleShortcutClick(t("createTask", language))}
                 >
                   {t("createTask", language)}
                 </button>
@@ -359,7 +279,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                     backgroundColor: `${textColor}10`,
                     color: textColor
                   }}
-                  onClick={() => handleShortcutClick(t("createReminder", language))}
                 >
                   {t("createReminder", language)}
                 </button>
@@ -369,7 +288,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                     backgroundColor: `${textColor}10`,
                     color: textColor
                   }}
-                  onClick={() => handleShortcutClick(t("createEvent", language))}
                 >
                   {t("createEvent", language)}
                 </button>
@@ -379,7 +297,6 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                     backgroundColor: `${textColor}10`,
                     color: textColor
                   }}
-                  onClick={() => handleShortcutClick(t("viewCalendar", language))}
                 >
                   {t("viewCalendar", language)}
                 </button>
@@ -440,7 +357,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
           
           {/* Drawer */}
           <motion.div 
-            className="fixed right-0 top-0 h-full w-4/5 max-w-xs z-50 overflow-hidden flex flex-col pointer-events-auto"
+            className="fixed right-0 top-0 h-full w-4/5 max-w-xs z-50 overflow-hidden flex flex-col"
             style={{ 
               backgroundColor: drawerBgColor,
               color: textColor 
@@ -484,11 +401,9 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                   {t("knowledge", language)}
                 </h3>
                 <Toggle 
-                  pressed={knowledgeEnabled}
-                  onPressedChange={() => setKnowledgeEnabled(!knowledgeEnabled)}
                   size="sm"
                   style={{ 
-                    backgroundColor: knowledgeEnabled ? `${textColor}70` : `${textColor}30`,
+                    backgroundColor: `${textColor}30`,
                     color: textColor
                   }} 
                 />
