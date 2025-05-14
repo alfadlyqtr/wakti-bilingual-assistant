@@ -10,6 +10,8 @@ import { TranslationKey } from "@/utils/translationTypes";
 import { useNavigate } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { MobileHeader } from "@/components/MobileHeader";
+import { Calendar } from "@/components/ui/calendar";
+import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
 
 type WidgetType = {
   id: string;
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
   // Initialize widgets
   useEffect(() => {
@@ -43,7 +46,7 @@ export default function Dashboard() {
               <span className="text-sm">Call with client</span>
             </div>
             <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
-              {t("viewAllTasks", language)}
+              {t("tasks_view_all", language)}
             </Button>
           </div>
         ),
@@ -53,32 +56,50 @@ export default function Dashboard() {
         title: "calendar" as TranslationKey,
         visible: true,
         component: (
-          <div className="text-sm">
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              <div className="text-xs text-center font-medium">S</div>
-              <div className="text-xs text-center font-medium">M</div>
-              <div className="text-xs text-center font-medium">T</div>
-              <div className="text-xs text-center font-medium">W</div>
-              <div className="text-xs text-center font-medium">T</div>
-              <div className="text-xs text-center font-medium">F</div>
-              <div className="text-xs text-center font-medium">S</div>
+          <div>
+            <div className="mb-2">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-medium">{format(new Date(), "MMMM yyyy")}</h3>
+                <div className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full">
+                  {t("today", language)}
+                </div>
+              </div>
               
-              {Array.from({ length: 31 }, (_, i) => {
-                const isToday = i + 1 === new Date().getDate();
-                return (
-                  <div 
-                    key={i} 
-                    className={`text-xs flex items-center justify-center h-6 w-6 rounded-full ${
-                      isToday ? 'bg-primary text-primary-foreground' : ''
-                    }`}
-                  >
-                    {i + 1}
+              {/* Calendar days of week header */}
+              <div className="grid grid-cols-7 gap-1 mb-1 text-xs text-center">
+                <div>S</div>
+                <div>M</div>
+                <div>T</div>
+                <div>W</div>
+                <div>T</div>
+                <div>F</div>
+                <div>S</div>
+              </div>
+              
+              {/* Today and tomorrow calendar cells */}
+              <div className="flex gap-1">
+                {/* Today */}
+                <div className="flex-1 bg-primary text-primary-foreground p-2 rounded-md">
+                  <div className="font-bold text-center">{format(new Date(), "d")}</div>
+                  <div className="text-xs text-center">{t("today", language)}</div>
+                  <div className="mt-1 text-xs">
+                    <div className="truncate">2 {t("events", language)}</div>
+                    <div className="truncate">1 {t("task", language)}</div>
                   </div>
-                );
-              })}
+                </div>
+                
+                {/* Tomorrow */}
+                <div className="flex-1 bg-secondary/20 p-2 rounded-md">
+                  <div className="font-bold text-center">{format(addDays(new Date(), 1), "d")}</div>
+                  <div className="text-xs text-center">{t("tomorrow", language)}</div>
+                  <div className="mt-1 text-xs">
+                    <div className="truncate">1 {t("event", language)}</div>
+                  </div>
+                </div>
+              </div>
             </div>
             <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/calendar')}>
-              {t("openCalendar", language)}
+              {t("calendar_open", language)}
             </Button>
           </div>
         ),
@@ -89,7 +110,7 @@ export default function Dashboard() {
         visible: true,
         component: (
           <div className="text-sm">
-            <h3 className="font-medium mb-2">{t("todaysEvents", language)}</h3>
+            <h3 className="font-medium mb-2">{t("events_today", language)}</h3>
             <div className="space-y-2">
               <div className="flex items-center justify-between p-2 bg-secondary/20 rounded-md">
                 <div>
@@ -107,7 +128,7 @@ export default function Dashboard() {
               </div>
             </div>
             <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/events')}>
-              {t("viewAllEvents", language)}
+              {t("events_view_all", language)}
             </Button>
           </div>
         ),
@@ -127,7 +148,7 @@ export default function Dashboard() {
               <div className="text-xs text-muted-foreground bg-secondary/50 px-2 py-1 rounded-full">Friday</div>
             </div>
             <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
-              {t("viewAllReminders", language)}
+              {t("reminders_view_all", language)}
             </Button>
           </div>
         ),
