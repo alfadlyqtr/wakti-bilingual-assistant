@@ -76,7 +76,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto py-4 px-4">
+    <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
       <div className="max-w-md mx-auto space-y-4">
         <AnimatePresence>
           {messages.map((message, index) => {
@@ -150,7 +150,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           })}
         </AnimatePresence>
         
-        {/* Typing indicator - adjusted spacing */}
+        {/* Typing indicator with adjusted spacing */}
         {isTyping && (
           <motion.div
             initial={{ opacity: 0 }}

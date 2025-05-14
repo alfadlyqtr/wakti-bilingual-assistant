@@ -312,8 +312,8 @@ export const AIAssistant = () => {
         theme={theme}
       />
       
-      {/* Bottom Input Area - With proper spacing from navbar */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 mb-8">
+      {/* Bottom Input Area - Added more space from the chat area */}
+      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-8 pt-4 mb-10 bg-gradient-to-t from-background to-transparent">
         <div className="flex items-center gap-2 max-w-md mx-auto">
           {/* Always visible mic button in all modes */}
           <VoiceInput 
