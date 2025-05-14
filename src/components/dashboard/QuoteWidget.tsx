@@ -30,12 +30,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   // Use a different layout for Arabic
   return (
     <Card className={className}>
-      <CardHeader className="p-3 pb-1">
-        <CardTitle className="text-lg">
-          {t("dailyQuote", language)}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 pt-0">
+      <CardContent className="p-4">
         <div className={`text-sm ${language === 'ar' ? 'text-right' : ''}`}>
           <p className="text-sm italic">{language === 'ar' ? `"${quoteText}"` : `"${quoteText}"`}</p>
           <p className="text-xs text-muted-foreground mt-1">- {quoteAuthor}</p>

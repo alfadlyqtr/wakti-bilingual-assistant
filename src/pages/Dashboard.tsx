@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -304,12 +305,17 @@ export default function Dashboard() {
                               <div className="h-2 w-12 bg-muted-foreground rounded-full" />
                             </div>
                           )}
-                          <CardHeader className="p-3 pb-1">
-                            <CardTitle className="text-lg">
-                              {t(widget.title, language)}
-                            </CardTitle>
-                          </CardHeader>
-                          <CardContent className="p-3 pt-0">{widget.component}</CardContent>
+                          {/* Only show card header with title for non-quote widgets */}
+                          {widget.id !== "quote" && (
+                            <CardHeader className="p-3 pb-1">
+                              <CardTitle className="text-lg">
+                                {t(widget.title, language)}
+                              </CardTitle>
+                            </CardHeader>
+                          )}
+                          <CardContent className={widget.id !== "quote" ? "p-3 pt-0" : "p-0"}>
+                            {widget.component}
+                          </CardContent>
                         </Card>
                       )}
                     </Draggable>
