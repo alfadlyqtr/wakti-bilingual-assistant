@@ -295,13 +295,13 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   const getModeTitle = () => {
     switch (activeMode) {
       case "general":
-        return t("chatSettings", language);
+        return t("chatSettings" as TranslationKey, language);
       case "writer":
-        return t("typeSettings", language);
+        return t("typeSettings" as TranslationKey, language);
       case "creative":
-        return t("createSettings", language);
+        return t("createSettings" as TranslationKey, language);
       case "assistant":
-        return t("planSettings", language);
+        return t("planSettings" as TranslationKey, language);
       default:
         return t("settings", language);
     }
@@ -311,13 +311,13 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   const getModeInstructions = () => {
     switch (activeMode) {
       case "general":
-        return t("chatInstructions", language);
+        return t("chatInstructions" as TranslationKey, language);
       case "writer":
-        return t("typeInstructions", language);
+        return t("typeInstructions" as TranslationKey, language);
       case "creative":
-        return t("createInstructions", language);
+        return t("createInstructions" as TranslationKey, language);
       case "assistant":
-        return t("planInstructions", language);
+        return t("planInstructions" as TranslationKey, language);
       default:
         return t("instructions", language);
     }

@@ -33,7 +33,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiv
     return brightness >= 128 ? "#000000" : "#ffffff";
   };
 
-  // Updated mode labels
+  // Updated mode labels and names
   const modes = [
     { 
       id: 'general', 
