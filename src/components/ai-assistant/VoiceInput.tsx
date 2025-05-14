@@ -66,13 +66,19 @@ export function VoiceInput({
         variant={isActive ? "destructive" : "outline"}
         size="icon"
         className={cn(
-          "rounded-full transition-all relative opacity-100", // Removed hover:opacity-100 to make always visible
-          isActive ? "animate-pulse" : "hover:bg-accent/80"
+          "rounded-full transition-all relative opacity-100", // Always visible with opacity-100
+          isActive ? "animate-pulse" : ""
         )}
-        style={!isActive ? {
-          borderColor: modeColor,
-          color: modeColor,
-        } : undefined}
+        style={{
+          // Always apply styles regardless of hover state
+          borderColor: !isActive ? modeColor : undefined,
+          color: !isActive ? modeColor : undefined,
+          // Add higher contrast for writer mode specifically
+          ...(activeMode === "writer" && !isActive ? {
+            backgroundColor: "rgba(6, 5, 65, 0.1)",
+            borderWidth: "1.5px"
+          } : {})
+        }}
         aria-label={isActive ? 
           t("stopListening" as TranslationKey, language) : 
           t("startVoiceInput" as TranslationKey, language)
