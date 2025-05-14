@@ -206,7 +206,7 @@ export default function Dashboard() {
     items.splice(result.destination.index, 0, reorderedItem);
     
     setWidgets(items);
-    toast.success(t("widget_moved" as TranslationKey, language) || "Widget rearranged");
+    toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
   };
 
   // Handle long press start
@@ -217,7 +217,7 @@ export default function Dashboard() {
     
     longPressTimer.current = setTimeout(() => {
       setIsDragging(true);
-      toast.info(t("widget_drag_mode" as TranslationKey, language) || "Drag mode activated");
+      toast.info(language === 'ar' ? "تم تفعيل وضع السحب" : "Drag mode activated");
       // Add haptic feedback if available
       if (navigator.vibrate) {
         navigator.vibrate(50);
@@ -244,7 +244,7 @@ export default function Dashboard() {
   // Exit drag mode
   const exitDragMode = () => {
     setIsDragging(false);
-    toast.info(t("widget_drag_mode_exit" as TranslationKey, language) || "Drag mode deactivated");
+    toast.info(language === 'ar' ? "تم إلغاء تفعيل وضع السحب" : "Drag mode deactivated");
   };
 
   return (
@@ -261,9 +261,9 @@ export default function Dashboard() {
                   <p className="text-sm font-medium">
                     {t("freeTrialDays", language)}:
                   </p>
-                  <p className="text-xl font-bold">{trialDaysLeft} days left</p>
+                  <p className="text-xl font-bold">{trialDaysLeft} {language === 'ar' ? "أيام متبقية" : "days left"}</p>
                 </div>
-                <Button size="sm">Upgrade</Button>
+                <Button size="sm">{language === 'ar' ? "ترقية" : "Upgrade"}</Button>
               </div>
             </CardContent>
           </Card>
@@ -280,9 +280,9 @@ export default function Dashboard() {
               >
                 {isDragging && (
                   <div className="bg-primary/10 rounded-md p-2 mb-4 flex items-center justify-between">
-                    <div className="text-sm">{t("dragging_mode" as TranslationKey, language) || "Widget dragging mode"}</div>
+                    <div className="text-sm">{language === 'ar' ? "وضع سحب الأدوات" : "Widget dragging mode"}</div>
                     <Button size="sm" variant="outline" onClick={exitDragMode}>
-                      {t("done" as TranslationKey, language) || "Done"}
+                      {language === 'ar' ? "تم" : "Done"}
                     </Button>
                   </div>
                 )}

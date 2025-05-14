@@ -17,7 +17,7 @@ export default function Settings() {
         {/* Language & Theme Settings */}
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <h2 className="text-lg font-medium">Appearance</h2>
+            <h2 className="text-lg font-medium">{language === 'ar' ? 'المظهر' : 'Appearance'}</h2>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Language Toggle */}
@@ -57,11 +57,11 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span>Push Notifications</span>
+              <span>{language === 'ar' ? 'إشعارات الدفع' : 'Push Notifications'}</span>
               <Switch defaultChecked id="push-notifications" />
             </div>
             <div className="flex justify-between items-center">
-              <span>Email Notifications</span>
+              <span>{language === 'ar' ? 'إشعارات البريد الإلكتروني' : 'Email Notifications'}</span>
               <Switch id="email-notifications" />
             </div>
           </CardContent>
@@ -74,19 +74,19 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span>Tasks Widget</span>
+              <span>{language === 'ar' ? 'أداة المهام المصغرة' : 'Tasks Widget'}</span>
               <Switch defaultChecked id="tasks-widget" />
             </div>
             <div className="flex justify-between items-center">
-              <span>Calendar Widget</span>
+              <span>{language === 'ar' ? 'أداة التقويم المصغرة' : 'Calendar Widget'}</span>
               <Switch defaultChecked id="calendar-widget" />
             </div>
             <div className="flex justify-between items-center">
-              <span>Reminders Widget</span>
+              <span>{language === 'ar' ? 'أداة التذكيرات المصغرة' : 'Reminders Widget'}</span>
               <Switch defaultChecked id="reminders-widget" />
             </div>
             <div className="flex justify-between items-center">
-              <span>Daily Quote Widget</span>
+              <span>{language === 'ar' ? 'أداة الاقتباس اليومي المصغرة' : 'Daily Quote Widget'}</span>
               <Switch defaultChecked id="quote-widget" />
             </div>
           </CardContent>
@@ -99,11 +99,11 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span>Profile Visibility</span>
+              <span>{language === 'ar' ? 'رؤية الملف الشخصي' : 'Profile Visibility'}</span>
               <Switch defaultChecked id="profile-visibility" />
             </div>
             <div className="flex justify-between items-center">
-              <span>Activity Status</span>
+              <span>{language === 'ar' ? 'حالة النشاط' : 'Activity Status'}</span>
               <Switch defaultChecked id="activity-status" />
             </div>
           </CardContent>
@@ -116,9 +116,13 @@ export default function Settings() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              Permanently delete your account and all associated data. This action cannot be undone.
+              {language === 'ar' 
+                ? 'حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء.'
+                : 'Permanently delete your account and all associated data. This action cannot be undone.'}
             </p>
-            <Button variant="destructive">Delete My Account</Button>
+            <Button variant="destructive">
+              {language === 'ar' ? 'حذف حسابي' : 'Delete My Account'}
+            </Button>
           </CardContent>
         </Card>
       </div>

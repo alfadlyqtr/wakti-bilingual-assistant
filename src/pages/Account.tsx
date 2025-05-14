@@ -1,737 +1,352 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { PageContainer } from "@/components/PageContainer";
 import { t } from "@/utils/translations";
+import { PageContainer } from "@/components/PageContainer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription,
-  DialogFooter,
-  DialogClose
-} from "@/components/ui/dialog";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { 
-  User, 
-  Settings, 
-  Key, 
-  Shield, 
-  Bell, 
-  LayoutDashboard, 
-  CreditCard,
-  Upload,
-  UserPlus,
-  UserX,
-  ShieldAlert
-} from "lucide-react";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { TranslationKey } from "@/utils/translationTypes";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
 
 export default function Account() {
-  const { theme, language, toggleTheme, toggleLanguage } = useTheme();
-  const navigate = useNavigate();
-  
-  // User profile state
-  const [name, setName] = useState("John Doe");
-  const [username] = useState("johndoe123");
-  const [email] = useState("john.doe@example.com");
-  const [profilePicture, setProfilePicture] = useState("");
-  
-  // Dialog states
-  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
-  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
-  const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
-  const [blockedUsersDialogOpen, setBlockedUsersDialogOpen] = useState(false);
-  const [reportAbuseDialogOpen, setReportAbuseDialogOpen] = useState(false);
-  
-  // Password state
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  
-  // Notification preferences
-  const [pushNotifications, setPushNotifications] = useState({
-    taskDue: true,
-    reminder: true,
-    newMessage: true,
-    systemNotifications: true,
-    newEvent: true,
-  });
-  const [emailNotifications, setEmailNotifications] = useState(true);
-  
-  // Dashboard widget visibility
-  const [widgetVisibility, setWidgetVisibility] = useState({
-    tasks: true,
-    calendar: true,
-    reminders: true,
-    dailyQuote: true,
-    events: true,
-  });
-  const [quoteCategory, setQuoteCategory] = useState("mixed");
-  
-  // Privacy controls
-  const [privacySettings, setPrivacySettings] = useState({
-    profileVisibility: true,
-    activityStatus: true,
-    autoApproveRequests: false,
-  });
-
-  // Mock blocked users data
-  const [blockedUsers] = useState([
-    { id: 1, name: 'Jane Smith' },
-    { id: 2, name: 'Ahmed Hassan' }
-  ]);
-
-  // Subscription details - would be fetched from an API in a real app
-  const [subscriptionStatus] = useState({
-    plan: "trial", // "trial", "monthly", "yearly", "free"
-    daysLeft: 3,
-  });
-  
-  // Mock function for changing password
-  const handleChangePassword = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Validation would go here
-    setPasswordDialogOpen(false);
-    // Success notification would be shown here
-  };
-  
-  // Mock function for profile picture upload
-  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setProfilePicture(event.target.result.toString());
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  // Get subscription text based on plan
-  const getSubscriptionText = () => {
-    if (subscriptionStatus.plan === "trial") {
-      return t("trialPlan" as TranslationKey, language) + ` (${subscriptionStatus.daysLeft} ${t("daysLeft" as TranslationKey, language)})`;
-    } else if (subscriptionStatus.plan === "monthly") {
-      return t("monthlyPlan" as TranslationKey, language);
-    } else if (subscriptionStatus.plan === "yearly") {
-      return t("yearlyPlan" as TranslationKey, language);
-    }
-    return t("freePlan" as TranslationKey, language);
-  };
+  const { language } = useTheme();
+  const [activeTab, setActiveTab] = useState("profile");
 
   return (
-    <PageContainer title={t("account" as TranslationKey, language)} showBackButton={true}>
+    <PageContainer title={t("account", language)} showBackButton={true}>
       <div className="p-4 pb-20">
-        {/* 1. Personal Information */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <User className="mr-2 h-5 w-5" /> 
-              {t("personalInformation" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col items-center mb-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid grid-cols-2 mb-8">
+            <TabsTrigger value="profile">
+              {language === "ar" ? "الملف الشخصي" : "Profile"}
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              {language === "ar" ? "الإعدادات" : "Settings"}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-6">
+            {/* Profile Picture */}
+            <div className="flex justify-center">
               <div className="relative">
-                <Avatar className="h-20 w-20 border-2 border-primary">
-                  <AvatarImage src={profilePicture} alt={name} />
-                  <AvatarFallback className="text-lg">{name.split(" ").map(n => n[0]).join("")}</AvatarFallback>
-                </Avatar>
-                <div className="absolute bottom-0 right-0">
-                  <Label htmlFor="profilePicture" className="cursor-pointer bg-primary rounded-full p-1.5 shadow-md flex items-center justify-center">
-                    <Upload className="h-4 w-4 text-primary-foreground" />
-                    <span className="sr-only">Upload Picture</span>
-                  </Label>
-                  <Input 
-                    id="profilePicture" 
-                    type="file" 
-                    accept="image/*"
-                    className="hidden" 
-                    onChange={handleProfilePictureChange} 
+                <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold">
+                  JD
+                </div>
+                <Button
+                  size="sm"
+                  className="absolute -right-2 -bottom-1 rounded-full h-8 w-8 p-0"
+                >
+                  +
+                </Button>
+              </div>
+            </div>
+
+            {/* Profile Form */}
+            <div className="space-y-4">
+              <div className="grid gap-2">
+                <label htmlFor="fullName" className="text-sm font-medium">
+                  {language === "ar" ? "الاسم الكامل" : "Full Name"}
+                </label>
+                <Input
+                  id="fullName"
+                  placeholder={
+                    language === "ar" ? "أدخل اسمك الكامل" : "Enter your full name"
+                  }
+                  defaultValue="Jane Doe"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="username" className="text-sm font-medium">
+                  {t("username", language)}
+                </label>
+                <Input
+                  id="username"
+                  placeholder={
+                    language === "ar"
+                      ? "أدخل اسم المستخدم"
+                      : "Enter your username"
+                  }
+                  defaultValue="jane_doe"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="email" className="text-sm font-medium">
+                  {t("email", language)}
+                </label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder={
+                    language === "ar"
+                      ? "أدخل بريدك الإلكتروني"
+                      : "Enter your email"
+                  }
+                  defaultValue="jane@example.com"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label htmlFor="bio" className="text-sm font-medium">
+                  {language === "ar" ? "السيرة الذاتية" : "Bio"}
+                </label>
+                <Textarea
+                  id="bio"
+                  placeholder={
+                    language === "ar"
+                      ? "أضف سيرة قصيرة عنك"
+                      : "Add a short bio about yourself"
+                  }
+                  defaultValue="WAKTI enthusiast and productivity expert."
+                />
+              </div>
+
+              <Button className="w-full mt-4">
+                {language === "ar" ? "حفظ التغييرات" : "Save Changes"}
+              </Button>
+
+              <div className="grid gap-2 pt-4">
+                <label htmlFor="password" className="text-sm font-medium">
+                  {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
+                </label>
+                <Button variant="outline">
+                  {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            {/* Privacy Settings */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "إعدادات الخصوصية" : "Privacy Settings"}
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {language === "ar"
+                        ? "الموافقة التلقائية على الطلبات"
+                        : "Auto-Approve Requests"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === "ar"
+                        ? "قبول طلبات الاتصال تلقائيًا بدون مراجعة"
+                        : "Accept connection requests automatically without review"}
+                    </p>
+                  </div>
+                  <Switch id="auto-approve" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">
+                      {language === "ar" ? "حالة النشاط" : "Activity Status"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {language === "ar"
+                        ? "اعرض متى تكون نشطًا على التطبيق"
+                        : "Show when you're active on the app"}
+                    </p>
+                  </div>
+                  <Switch id="activity-status" defaultChecked />
+                </div>
+              </div>
+            </Card>
+
+            {/* Notification Settings */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "إعدادات الإشعارات" : "Notification Settings"}
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar" ? "إشعارات المهام" : "Task Notifications"}
+                  </span>
+                  <Switch id="task-notifications" defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "إشعارات الفعاليات"
+                      : "Event Notifications"}
+                  </span>
+                  <Switch id="event-notifications" defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "إشعارات الرسائل"
+                      : "Message Notifications"}
+                  </span>
+                  <Switch id="message-notifications" defaultChecked />
+                </div>
+              </div>
+            </Card>
+
+            {/* Widget Settings */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar"
+                  ? "إعدادات الأدوات المصغرة"
+                  : "Widget Settings"}
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "أداة التقويم المصغرة"
+                      : "Calendar Widget"}
+                  </span>
+                  <Switch id="calendar-widget" defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "أداة التذكيرات المصغرة"
+                      : "Reminders Widget"}
+                  </span>
+                  <Switch id="reminders-widget" defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "أداة الاقتباس اليومي المصغرة"
+                      : "Daily Quote Widget"}
+                  </span>
+                  <Switch id="quote-widget" defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span>
+                    {language === "ar"
+                      ? "أداة الفعاليات المصغرة"
+                      : "Events Widget"}
+                  </span>
+                  <Switch id="events-widget" defaultChecked />
+                </div>
+
+                <div className="grid gap-2 pt-2">
+                  <label className="text-sm font-medium">
+                    {language === "ar" ? "فئة الاقتباس" : "Quote Category"}
+                  </label>
+                  <select className="w-full p-2 border rounded-md">
+                    <option>
+                      {language === "ar" ? "النجاح" : "Success"}
+                    </option>
+                    <option>
+                      {language === "ar" ? "الإلهام" : "Inspiration"}
+                    </option>
+                    <option>
+                      {language === "ar" ? "الإبداع" : "Creativity"}
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </Card>
+
+            {/* Report an Issue */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "الإبلاغ عن مشكلة" : "Report an Issue"}
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium block mb-2">
+                    {language === "ar" ? "نوع التقرير" : "Report Type"}
+                  </label>
+                  <RadioGroup defaultValue="user">
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="user" id="user" />
+                      <label htmlFor="user">
+                        {language === "ar" ? "مستخدم" : "User"}
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="content" id="content" />
+                      <label htmlFor="content">
+                        {language === "ar" ? "محتوى" : "Content"}
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="other" id="other" />
+                      <label htmlFor="other">
+                        {language === "ar" ? "آخر" : "Other"}
+                      </label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-2">
+                    {language === "ar" ? "التفاصيل" : "Details"}
+                  </label>
+                  <Textarea
+                    placeholder={
+                      language === "ar"
+                        ? "صف المشكلة بالتفصيل..."
+                        : "Describe the issue in detail..."
+                    }
+                    rows={4}
                   />
                 </div>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="name">{t("name" as TranslationKey, language)}</Label>
-              <Input 
-                id="name" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="username">{t("username" as TranslationKey, language)}</Label>
-              <div className="flex items-center">
-                <Input 
-                  id="username" 
-                  value={username} 
-                  disabled 
-                  className="flex-1 mr-2"
-                />
-                <Button size="sm" variant="outline">
-                  {t("requestChange" as TranslationKey, language)}
+                <Button variant="outline" className="w-full">
+                  {language === "ar" ? "إرسال التقرير" : "Submit Report"}
                 </Button>
               </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("email" as TranslationKey, language)}</Label>
-              <Input 
-                id="email" 
-                value={email} 
-                disabled 
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </Card>
 
-        {/* 2. Account Controls */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <Key className="mr-2 h-5 w-5" />
-              {t("accountControls" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button 
-              className="w-full" 
-              variant="outline"
-              onClick={() => setPasswordDialogOpen(true)}
-            >
-              {t("changePassword" as TranslationKey, language)}
-            </Button>
-            
-            <Button 
-              className="w-full" 
-              variant="destructive"
-              onClick={() => setDeleteAccountDialogOpen(true)}
-            >
-              {t("deleteAccount" as TranslationKey, language)}
-            </Button>
-          </CardContent>
-        </Card>
-        
-        {/* 3. Appearance */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <Settings className="mr-2 h-5 w-5" />
-              {t("appearance" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Language Toggle */}
-            <div className="flex justify-between items-center">
-              <span>{t("language" as TranslationKey, language)}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleLanguage}
-                className="h-9 px-3 rounded-full text-sm"
-              >
-                {language === "en" ? "العربية" : "English"}
-              </Button>
-            </div>
-            
-            {/* Theme Toggle */}
-            <div className="flex justify-between items-center">
-              <span>{t("theme" as TranslationKey, language)}</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleTheme}
-                className="h-9 px-3 rounded-full text-sm"
-              >
-                {theme === "dark"
-                  ? t("lightMode" as TranslationKey, language)
-                  : t("darkMode" as TranslationKey, language)}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 4. Notification Preferences */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <Bell className="mr-2 h-5 w-5" />
-              {t("notificationPreferences" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <h3 className="text-sm font-medium">{t("pushNotifications" as TranslationKey, language)}</h3>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("taskDue" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.taskDue} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, taskDue: checked})}
-                />
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("reminder" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.reminder} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, reminder: checked})}
-                />
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("newMessage" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.newMessage} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, newMessage: checked})}
-                />
-              </div>
-              
-              {/* New Event Notifications */}
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("newEvent" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.newEvent} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, newEvent: checked})}
-                />
-              </div>
-              
-              {/* System Notifications */}
-              <div className="flex justify-between items-center">
-                <span className="text-sm">{t("systemNotifications" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={pushNotifications.systemNotifications} 
-                  onCheckedChange={(checked) => setPushNotifications({...pushNotifications, systemNotifications: checked})}
-                />
-              </div>
-            </div>
-            
-            <div className="pt-2 border-t border-border">
-              <div className="flex justify-between items-center">
-                <span>{t("emailNotifications" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={emailNotifications} 
-                  onCheckedChange={setEmailNotifications}
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 5. Dashboard Widget Visibility */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <LayoutDashboard className="mr-2 h-5 w-5" />
-              {t("widgetVisibility" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span>{t("tasksWidget" as TranslationKey, language)}</span>
-              <Switch 
-                checked={widgetVisibility.tasks} 
-                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, tasks: checked})}
-              />
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span>{t("calendarWidget" as TranslationKey, language)}</span>
-              <Switch 
-                checked={widgetVisibility.calendar} 
-                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, calendar: checked})}
-              />
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span>{t("remindersWidget" as TranslationKey, language)}</span>
-              <Switch 
-                checked={widgetVisibility.reminders} 
-                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, reminders: checked})}
-              />
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span>{t("dailyQuoteWidget" as TranslationKey, language)}</span>
-              <Switch 
-                checked={widgetVisibility.dailyQuote} 
-                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, dailyQuote: checked})}
-              />
-            </div>
-            
-            {/* Events Widget Toggle */}
-            <div className="flex justify-between items-center">
-              <span>{t("eventsWidget" as TranslationKey, language)}</span>
-              <Switch 
-                checked={widgetVisibility.events} 
-                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, events: checked})}
-              />
-            </div>
-            
-            {widgetVisibility.dailyQuote && (
-              <div className="mt-2 space-y-2">
-                <Label className="text-sm">{t("quoteCategory" as TranslationKey, language)}</Label>
-                <RadioGroup 
-                  value={quoteCategory} 
-                  onValueChange={setQuoteCategory}
-                  className="grid grid-cols-2 gap-2"
-                >
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="inspirational" id="inspirational" />
-                    <Label htmlFor="inspirational">{t("inspirational" as TranslationKey, language)}</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="motivational" id="motivational" />
-                    <Label htmlFor="motivational">{t("motivational" as TranslationKey, language)}</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="islamic" id="islamic" />
-                    <Label htmlFor="islamic">{t("islamic" as TranslationKey, language)}</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="sports" id="sports" />
-                    <Label htmlFor="sports">{t("sports" as TranslationKey, language)}</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="general" id="general" />
-                    <Label htmlFor="general">{t("generalInfo" as TranslationKey, language)}</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="mixed" id="mixed" />
-                    <Label htmlFor="mixed">{t("mixed" as TranslationKey, language)}</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* 6. Privacy Controls */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <Shield className="mr-2 h-5 w-5" />
-              {t("privacyControls" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span>{t("profileVisibility" as TranslationKey, language)}</span>
-              <div className="flex items-center">
-                <span className="text-sm text-muted-foreground mr-2">
-                  {privacySettings.profileVisibility 
-                    ? t("searchable" as TranslationKey, language) 
-                    : t("hidden" as TranslationKey, language)}
-                </span>
-                <Switch 
-                  checked={privacySettings.profileVisibility} 
-                  onCheckedChange={(checked) => setPrivacySettings({...privacySettings, profileVisibility: checked})}
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span>{t("activityStatus" as TranslationKey, language)}</span>
-              <Switch 
-                checked={privacySettings.activityStatus} 
-                onCheckedChange={(checked) => setPrivacySettings({...privacySettings, activityStatus: checked})}
-              />
-            </div>
-            
-            {/* Contact Request Auto-Approve Setting */}
-            <div className="space-y-3 pt-2 border-t border-border">
-              <h3 className="text-sm font-medium flex items-center">
-                <UserPlus className="mr-2 h-4 w-4" />
-                {t("contactRequestSettings" as TranslationKey, language)}
+            {/* Blocked Users */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "المستخدمون المحظورون" : "Blocked Users"}
               </h3>
-              <div className="flex justify-between items-center">
-                <span>{t("autoApproveRequests" as TranslationKey, language)}</span>
-                <Switch 
-                  checked={privacySettings.autoApproveRequests} 
-                  onCheckedChange={(checked) => setPrivacySettings({...privacySettings, autoApproveRequests: checked})}
-                />
+              <div className="text-center py-8 text-muted-foreground">
+                <p>
+                  {language === "ar"
+                    ? "لا يوجد مستخدمون محظورون"
+                    : "No blocked users"}
+                </p>
               </div>
-            </div>
-            
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => setBlockedUsersDialogOpen(true)}
-            >
-              {t("manageBlockedUsers" as TranslationKey, language)}
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => setReportAbuseDialogOpen(true)}
-            >
-              {t("reportAbuse" as TranslationKey, language)}
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="w-full"
-              onClick={() => setFeedbackDialogOpen(true)}
-            >
-              {t("submitFeedback" as TranslationKey, language)}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* 7. Subscription & Billing */}
-        <Card className="mb-4">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <h2 className="text-lg font-medium flex items-center">
-              <CreditCard className="mr-2 h-5 w-5" />
-              {t("subscriptionBilling" as TranslationKey, language)}
-            </h2>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="bg-muted/50 p-4 rounded-lg">
-              <div className="font-medium mb-1">{t("currentPlan" as TranslationKey, language)}</div>
-              <div className="text-lg font-bold">
-                {getSubscriptionText()}
-              </div>
-              {subscriptionStatus.plan === "trial" && (
-                <div className="text-sm mt-1 text-muted-foreground">
-                  {t("trialEndsIn" as TranslationKey, language)} {subscriptionStatus.daysLeft} {t("days" as TranslationKey, language)}
+              <Separator className="my-4" />
+              <div className="hidden">
+                <div className="flex items-center justify-between py-2">
+                  <div className="flex items-center space-x-3">
+                    <div className="h-10 w-10 rounded-full bg-secondary" />
+                    <div>
+                      <p className="font-medium">User Name</p>
+                      <p className="text-sm text-muted-foreground">@username</p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline">
+                    {language === "ar" ? "إلغاء الحظر" : "Unblock"}
+                  </Button>
                 </div>
-              )}
-            </div>
-            
-            <div className="text-sm text-center text-muted-foreground">
-              {t("billingManagedThrough" as TranslationKey, language)}
-            </div>
-            
-            <Button variant="outline" className="w-full">
-              {t("manageBilling" as TranslationKey, language)}
-            </Button>
-            
-            {(subscriptionStatus.plan === "monthly" || subscriptionStatus.plan === "yearly") && (
-              <Button variant="outline" className="w-full text-destructive border-destructive/30 hover:bg-destructive/10">
-                {t("cancelPlan" as TranslationKey, language)}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* Change Password Dialog */}
-      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("changePassword" as TranslationKey, language)}</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleChangePassword} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="currentPassword">{t("currentPassword" as TranslationKey, language)}</Label>
-              <Input
-                id="currentPassword"
-                type="password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="newPassword">{t("newPassword" as TranslationKey, language)}</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">{t("confirmPassword" as TranslationKey, language)}</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  {t("cancel" as TranslationKey, language)}
-                </Button>
-              </DialogClose>
-              <Button type="submit">
-                {t("changePassword" as TranslationKey, language)}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Account Confirmation Dialog */}
-      <AlertDialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("deleteAccount" as TranslationKey, language)}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("deleteAccountWarning" as TranslationKey, language)}
-              <p className="mt-2 font-semibold text-destructive">
-                {t("thisActionIrreversible" as TranslationKey, language)}
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>
-              {t("cancel" as TranslationKey, language)}
-            </AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {t("deleteAccount" as TranslationKey, language)}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      
-      {/* Feedback Dialog */}
-      <Dialog open={feedbackDialogOpen} onOpenChange={setFeedbackDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("submitFeedback" as TranslationKey, language)}</DialogTitle>
-            <DialogDescription>
-              {t("feedbackDescription" as TranslationKey, language)}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Label htmlFor="feedback">{t("feedback" as TranslationKey, language)}</Label>
-            <textarea
-              id="feedback"
-              rows={4}
-              className="w-full p-2 border rounded-md bg-background resize-none"
-              placeholder={t("feedbackPlaceholder" as TranslationKey, language) as string}
-            ></textarea>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  {t("cancel" as TranslationKey, language)}
-                </Button>
-              </DialogClose>
-              <Button type="button">
-                {t("submit" as TranslationKey, language)}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Blocked Users Dialog */}
-      <Dialog open={blockedUsersDialogOpen} onOpenChange={setBlockedUsersDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t("manageBlockedUsers" as TranslationKey, language)}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 max-h-80 overflow-y-auto">
-            {blockedUsers.length > 0 ? blockedUsers.map(user => (
-              <div key={user.id} className="flex items-center justify-between border-b border-border pb-2">
-                <span>{user.name}</span>
-                <Button variant="ghost" size="sm">
-                  <UserX className="h-4 w-4 mr-1" />
-                  <span>Unblock</span>
-                </Button>
-              </div>
-            )) : (
-              <div className="text-center text-muted-foreground py-8">
-                No blocked users
-              </div>
-            )}
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  {t("cancel" as TranslationKey, language)}
-                </Button>
-              </DialogClose>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Report Abuse Dialog */}
-      <Dialog open={reportAbuseDialogOpen} onOpenChange={setReportAbuseDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center">
-              <ShieldAlert className="h-5 w-5 mr-2" />
-              {t("reportAbuse" as TranslationKey, language)}
-            </DialogTitle>
-            <DialogDescription>
-              Please provide details about the abuse you want to report.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Report type</Label>
-              <RadioGroup defaultValue="user">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem id="user" value="user" />
-                  <Label htmlFor="user">User</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem id="content" value="content" />
-                  <Label htmlFor="content">Content</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem id="other" value="other" />
-                  <Label htmlFor="other">Other</Label>
-                </div>
-              </RadioGroup>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="reportDetails">Details</Label>
-              <textarea
-                id="reportDetails"
-                rows={4}
-                className="w-full p-2 border rounded-md bg-background resize-none"
-                placeholder="Describe the issue in detail..."
-              ></textarea>
-            </div>
-            
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button type="button" variant="outline">
-                  {t("cancel" as TranslationKey, language)}
-                </Button>
-              </DialogClose>
-              <Button type="button">
-                {t("submit" as TranslationKey, language)}
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
     </PageContainer>
   );
 }
