@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -13,6 +12,7 @@ import { MobileHeader } from "@/components/MobileHeader";
 import { Calendar } from "@/components/ui/calendar";
 import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
 import { toast } from "sonner";
+import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
 
 type WidgetType = {
   id: string;
@@ -185,10 +185,7 @@ export default function Dashboard() {
         visible: widgetVisibility.dailyQuote,
         component: (
           <div className="text-sm">
-            <p className="text-sm italic">
-              "The secret of getting ahead is getting started."
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">- Mark Twain</p>
+            <QuoteWidget />
           </div>
         ),
       },

@@ -7,9 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
+import { toast } from "sonner";
+import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
+  const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
+  
+  const handleQuoteCategoryChange = (category: string) => {
+    const newPreferences = { ...quotePreferences, category };
+    setQuotePreferences(newPreferences);
+    saveQuotePreferences(newPreferences);
+    toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
+  };
+  
+  const handleQuoteFrequencyChange = (frequency: string) => {
+    const newPreferences = { ...quotePreferences, frequency };
+    setQuotePreferences(newPreferences);
+    saveQuotePreferences(newPreferences);
+    toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
+  };
   
   return (
     <PageContainer title={t("settings", language)} showBackButton={true}>
@@ -35,7 +54,7 @@ export default function Settings() {
             
             {/* Theme Toggle */}
             <div className="flex justify-between items-center">
-              <span>{theme === "dark" ? "Theme" : "السمة"}</span>
+              <span>{language === "ar" ? "السمة" : "Theme"}</span>
               <Button
                 variant="outline"
                 size="sm"
@@ -49,6 +68,81 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Quote Settings */}
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}</h2>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">
+                {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
+              </label>
+              <Select 
+                value={quotePreferences.category} 
+                onValueChange={handleQuoteCategoryChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="motivational">
+                    {language === 'ar' ? 'تحفيزي' : 'Motivational'}
+                  </SelectItem>
+                  <SelectItem value="islamic">
+                    {language === 'ar' ? 'إسلامي' : 'Islamic'}
+                  </SelectItem>
+                  <SelectItem value="positive">
+                    {language === 'ar' ? 'إيجابي' : 'Positive'}
+                  </SelectItem>
+                  <SelectItem value="health">
+                    {language === 'ar' ? 'صحي' : 'Health'}
+                  </SelectItem>
+                  <SelectItem value="mixed">
+                    {language === 'ar' ? 'متنوع' : 'Mixed'}
+                  </SelectItem>
+                  <SelectItem value="custom">
+                    {language === 'ar' ? 'مخصص' : 'Custom'}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">
+                {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
+              </label>
+              <Select 
+                value={quotePreferences.frequency}
+                onValueChange={handleQuoteFrequencyChange}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2xday">
+                    {language === 'ar' ? 'مرتان في اليوم' : '2 times a day'}
+                  </SelectItem>
+                  <SelectItem value="4xday">
+                    {language === 'ar' ? '4 مرات في اليوم' : '4 times a day'}
+                  </SelectItem>
+                  <SelectItem value="6xday">
+                    {language === 'ar' ? '6 مرات في اليوم' : '6 times a day'}
+                  </SelectItem>
+                  <SelectItem value="appStart">
+                    {language === 'ar' ? 'مع كل بدء تشغيل للتطبيق' : 'Every app start'}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Custom Quotes Manager (show only when custom category is selected) */}
+        {quotePreferences.category === 'custom' && (
+          <CustomQuoteManager />
+        )}
 
         {/* Notification Preferences */}
         <Card className="mb-4">

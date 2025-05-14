@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -30,6 +29,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
+import { getQuotePreferences } from "@/utils/quoteService";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -247,32 +248,35 @@ export default function Account() {
             {/* Quote Widget Settings */}
             <Card className="p-4">
               <h3 className="font-medium text-lg mb-4">
-                {language === "ar" ? "إعدادات الاقتباس اليومي" : "Daily Quote Settings"}
+                {language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}
               </h3>
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">
-                    {language === "ar" ? "فئة الاقتباس" : "Quote Category"}
+                    {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
                   </label>
-                  <Select defaultValue="motivation">
+                  <Select defaultValue={getQuotePreferences().category}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="motivation">
-                        {language === "ar" ? "تحفيزي" : "Motivational"}
+                      <SelectItem value="motivational">
+                        {language === 'ar' ? 'تحفيزي' : 'Motivational'}
                       </SelectItem>
                       <SelectItem value="islamic">
-                        {language === "ar" ? "إسلامي" : "Islamic"}
+                        {language === 'ar' ? 'إسلامي' : 'Islamic'}
                       </SelectItem>
                       <SelectItem value="positive">
-                        {language === "ar" ? "إيجابي" : "Positive"}
+                        {language === 'ar' ? 'إيجابي' : 'Positive'}
                       </SelectItem>
                       <SelectItem value="health">
-                        {language === "ar" ? "صحي" : "Health"}
+                        {language === 'ar' ? 'صحي' : 'Health'}
                       </SelectItem>
                       <SelectItem value="mixed">
-                        {language === "ar" ? "متنوع" : "Mixed"}
+                        {language === 'ar' ? 'متنوع' : 'Mixed'}
+                      </SelectItem>
+                      <SelectItem value="custom">
+                        {language === 'ar' ? 'مخصص' : 'Custom'}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -280,24 +284,24 @@ export default function Account() {
 
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">
-                    {language === "ar" ? "تكرار تغيير الاقتباس" : "Quote Change Frequency"}
+                    {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
                   </label>
-                  <Select defaultValue="2xday">
+                  <Select defaultValue={getQuotePreferences().frequency}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="2xday">
-                        {language === "ar" ? "مرتان في اليوم" : "2 times a day"}
+                        {language === 'ar' ? 'مرتان في اليوم' : '2 times a day'}
                       </SelectItem>
                       <SelectItem value="4xday">
-                        {language === "ar" ? "4 مرات في اليوم" : "4 times a day"}
+                        {language === 'ar' ? '4 مرات في اليوم' : '4 times a day'}
                       </SelectItem>
                       <SelectItem value="6xday">
-                        {language === "ar" ? "6 مرات في اليوم" : "6 times a day"}
+                        {language === 'ar' ? '6 مرات في اليوم' : '6 times a day'}
                       </SelectItem>
                       <SelectItem value="appStart">
-                        {language === "ar" ? "مع كل بدء تشغيل للتطبيق" : "Every app start"}
+                        {language === 'ar' ? 'مع كل بدء تشغيل للتطبيق' : 'Every app start'}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -305,6 +309,11 @@ export default function Account() {
               </div>
             </Card>
 
+            {/* Only show custom quote manager if custom quotes category is selected */}
+            {getQuotePreferences().category === 'custom' && (
+              <CustomQuoteManager />
+            )}
+            
             {/* Privacy Settings */}
             <Card className="p-4">
               <h3 className="font-medium text-lg mb-4">
