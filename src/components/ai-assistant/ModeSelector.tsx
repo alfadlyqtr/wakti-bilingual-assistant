@@ -33,28 +33,29 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiv
     return brightness >= 128 ? "#000000" : "#ffffff";
   };
 
+  // Updated mode labels
   const modes = [
     { 
       id: 'general', 
-      label: 'generalMode', 
+      label: 'chatMode', 
       icon: <MessageSquare className="h-4 w-4" />,
       color: MODE_COLORS.general
     },
     { 
       id: 'writer', 
-      label: 'writerMode', 
+      label: 'typeMode', 
       icon: <Notebook className="h-4 w-4" />,
       color: MODE_COLORS.writer
     },
     { 
       id: 'creative', 
-      label: 'creativeMode', 
+      label: 'createMode', 
       icon: <Palette className="h-4 w-4" />,
       color: MODE_COLORS.creative
     },
     { 
       id: 'assistant', 
-      label: 'assistantMode', 
+      label: 'planMode', 
       icon: <LifeBuoy className="h-4 w-4" />,
       color: MODE_COLORS.assistant
     },

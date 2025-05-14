@@ -222,4 +222,3 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
     </AnimatePresence>
   );
 }
-

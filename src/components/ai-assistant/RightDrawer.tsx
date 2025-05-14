@@ -291,6 +291,38 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
     }
   };
 
+  // Get the title for the current mode
+  const getModeTitle = () => {
+    switch (activeMode) {
+      case "general":
+        return t("chatSettings", language);
+      case "writer":
+        return t("typeSettings", language);
+      case "creative":
+        return t("createSettings", language);
+      case "assistant":
+        return t("planSettings", language);
+      default:
+        return t("settings", language);
+    }
+  };
+
+  // Get the instructions for the current mode
+  const getModeInstructions = () => {
+    switch (activeMode) {
+      case "general":
+        return t("chatInstructions", language);
+      case "writer":
+        return t("typeInstructions", language);
+      case "creative":
+        return t("createInstructions", language);
+      case "assistant":
+        return t("planInstructions", language);
+      default:
+        return t("instructions", language);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -324,10 +356,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
               <div className="flex items-center gap-2">
                 {getModeIcon()}
                 <h2 className="font-medium text-lg" style={{ color: textColor }}>
-                  {activeMode === "general" && t("generalSettings", language)}
-                  {activeMode === "writer" && t("writerSettings", language)}
-                  {activeMode === "creative" && t("creativeSettings", language)}
-                  {activeMode === "assistant" && t("assistantSettings", language)}
+                  {getModeTitle()}
                 </h2>
               </div>
               <button onClick={onClose} style={{ color: textColor }}>
@@ -344,10 +373,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 </h3>
               </div>
               <p className="text-sm mb-3" style={{ color: `${textColor}CC` }}>
-                {activeMode === "general" && t("generalInstructions", language)}
-                {activeMode === "writer" && t("writerInstructions", language)}
-                {activeMode === "creative" && t("creativeInstructions", language)}
-                {activeMode === "assistant" && t("assistantInstructions", language)}
+                {getModeInstructions()}
               </p>
               
               <div className="flex items-center gap-2 mt-4">

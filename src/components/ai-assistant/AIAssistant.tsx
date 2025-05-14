@@ -16,6 +16,27 @@ import { RightDrawer } from "./RightDrawer";
 import { VoiceInput } from "./VoiceInput";
 import { MobileHeader } from "@/components/MobileHeader";
 import { v4 as uuidv4 } from "uuid";
+import { UserMenu } from "@/components/UserMenu";
+
+// Define modes and their intent patterns
+const MODE_INTENTS = {
+  chat: [
+    "tell me about", "what is", "explain", "how to", "define", "answer", 
+    "question", "information", "help me understand"
+  ],
+  type: [
+    "write", "draft", "edit", "compose", "rephrase", "summarize", 
+    "paragraph", "essay", "text", "document", "story", "email"
+  ],
+  create: [
+    "image", "picture", "design", "draw", "create visual", "logo", "graphic", 
+    "chart", "diagram", "visualization", "generate image", "art"
+  ],
+  plan: [
+    "task", "reminder", "event", "schedule", "plan", "organize", 
+    "meeting", "appointment", "todo", "deadline", "project"
+  ]
+};
 
 export const AIAssistant = () => {
   const { theme, language } = useTheme();
@@ -25,6 +46,10 @@ export const AIAssistant = () => {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
+  const [modeSwitchSuggestion, setModeSwitchSuggestion] = useState<{
+    detectedMode: AIMode | null;
+    input: string;
+  }>({ detectedMode: null, input: "" });
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: uuidv4(),
@@ -52,9 +77,107 @@ export const AIAssistant = () => {
     return theme === "dark" ? modeData?.color.dark : modeData?.color.light;
   };
 
+  // Detect intent and suggest mode switch if needed
+  const detectIntent = (userInput: string): AIMode | null => {
+    userInput = userInput.toLowerCase();
+    
+    // Map the old modes to new modes
+    const modeMapping: Record<string, AIMode> = {
+      "chat": "general",
+      "type": "writer", 
+      "create": "creative",
+      "plan": "assistant"
+    };
+    
+    // Current mode type 
+    const currentModeType = Object.keys(modeMapping).find(
+      key => modeMapping[key] === activeMode
+    ) || "chat";
+    
+    // Check each mode's intent patterns
+    for (const [modeType, patterns] of Object.entries(MODE_INTENTS)) {
+      // Skip if this is the current mode type
+      if (modeType === currentModeType) continue;
+      
+      // Check if the input matches any pattern for this mode
+      const matchesMode = patterns.some(pattern => 
+        userInput.includes(pattern)
+      );
+      
+      if (matchesMode) {
+        return modeMapping[modeType];
+      }
+    }
+    
+    return null; // No mode switch needed
+  };
+
+  const handleModeSwitch = (targetMode: AIMode) => {
+    setActiveMode(targetMode);
+    
+    if (modeSwitchSuggestion.input) {
+      // Restore the previous input
+      setInput(modeSwitchSuggestion.input);
+      
+      // Clear the suggestion
+      setModeSwitchSuggestion({ detectedMode: null, input: "" });
+    }
+  };
+
   const handleSendMessage = () => {
     if (!input.trim()) return;
     
+    // Check if we should suggest a mode switch
+    const suggestedMode = detectIntent(input);
+    
+    if (suggestedMode && !modeSwitchSuggestion.detectedMode) {
+      // Save the input and suggest mode switch
+      setModeSwitchSuggestion({
+        detectedMode: suggestedMode,
+        input: input
+      });
+      
+      // Map mode IDs to readable names
+      const modeNames: Record<AIMode, string> = {
+        "general": "Chat",
+        "writer": "Type", 
+        "creative": "Create",
+        "assistant": "Plan"
+      };
+      
+      // Create suggestion message
+      const suggestedModeName = modeNames[suggestedMode];
+      const suggestionMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("thisActionWorksBetterIn" as TranslationKey, language) + " " + 
+                suggestedModeName + " " + 
+                t("mode" as TranslationKey, language) + ". " +
+                t("letsSwitchModes" as TranslationKey, language) + "?",
+        mode: activeMode,
+        timestamp: new Date(),
+        needsConfirmation: {
+          type: "mode",
+          action: "switchMode",
+          data: { targetMode: suggestedMode }
+        }
+      };
+      
+      // Add user message
+      const userMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "user",
+        content: input,
+        mode: activeMode,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, userMessage, suggestionMessage]);
+      setInput("");
+      return;
+    }
+    
+    // Regular message flow
     // Add user message
     const userMessage: ChatMessage = {
       id: uuidv4(),
@@ -81,7 +204,7 @@ export const AIAssistant = () => {
             role: "assistant",
             content: t("toCompleteThisAction" as TranslationKey, language) + " " + 
                     t("switchTo" as TranslationKey, language) + " " + 
-                    t("assistantMode" as TranslationKey, language) + ".",
+                    t("planMode" as TranslationKey, language) + ".",
             mode: activeMode,
             timestamp: new Date(),
             needsConfirmation: {
@@ -114,7 +237,12 @@ export const AIAssistant = () => {
         aiResponse = {
           id: uuidv4(),
           role: "assistant",
-          content: `${t("helpingYouWith" as TranslationKey, language)} "${input}" in ${t(`${activeMode}Mode` as TranslationKey, language)} mode.`,
+          content: `${t("helpingYouWith" as TranslationKey, language)} "${input}" in ${
+            activeMode === "general" ? t("chatMode" as TranslationKey, language) :
+            activeMode === "writer" ? t("typeMode" as TranslationKey, language) :
+            activeMode === "creative" ? t("createMode" as TranslationKey, language) :
+            t("planMode" as TranslationKey, language)
+          } mode.`,
           mode: activeMode,
           timestamp: new Date()
         };
@@ -131,7 +259,14 @@ export const AIAssistant = () => {
     
     if (action === "confirm") {
       if (message.needsConfirmation.action === "switchMode" && message.needsConfirmation.data?.targetMode) {
-        setActiveMode(message.needsConfirmation.data.targetMode as AIMode);
+        const targetMode = message.needsConfirmation.data.targetMode as AIMode;
+        setActiveMode(targetMode);
+        
+        // If there was a saved input from a suggestion, restore it
+        if (modeSwitchSuggestion.detectedMode === targetMode && modeSwitchSuggestion.input) {
+          setInput(modeSwitchSuggestion.input);
+          setModeSwitchSuggestion({ detectedMode: null, input: "" });
+        }
         
         // Follow up message after mode switch
         setTimeout(() => {
@@ -139,7 +274,7 @@ export const AIAssistant = () => {
             id: uuidv4(),
             role: "assistant",
             content: t("howCanIAssistYouWithWAKTI" as TranslationKey, language),
-            mode: message.needsConfirmation.data.targetMode as AIMode,
+            mode: targetMode,
             timestamp: new Date()
           };
           setMessages(prev => [...prev, followUpMessage]);
@@ -176,6 +311,44 @@ export const AIAssistant = () => {
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
+      {/* Main WAKTI App Header */}
+      <div className="main-header sticky top-0 z-30 shadow-sm bg-background border-b">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center">
+            <img 
+              src="/lovable-uploads/a1b03773-fb9b-441e-8b2d-c8559acaa23b.png" 
+              alt="WAKTI Logo" 
+              className="h-8 w-8 mr-2 cursor-pointer rounded-md"
+            />
+            <h1 className="text-lg font-semibold">WAKTI</h1>
+          </div>
+          <UserMenu />
+        </div>
+      </div>
+      
+      {/* AI Assistant Page Title Bar */}
+      <div className="page-title-bar flex items-center justify-between px-4 py-2 border-b z-20">
+        <motion.button
+          className="p-2 rounded-full hover:bg-accent"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsLeftDrawerOpen(true)}
+          aria-label={t("openHistory" as TranslationKey, language)}
+        >
+          <Menu size={20} />
+        </motion.button>
+        
+        <h2 className="text-base font-medium">{t("waktiAssistant" as TranslationKey, language)}</h2>
+        
+        <motion.button
+          className="p-2 rounded-full hover:bg-accent"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsRightDrawerOpen(true)}
+          aria-label={t("openSettings" as TranslationKey, language)}
+        >
+          <Settings size={20} />
+        </motion.button>
+      </div>
+      
       {/* Left Drawer - Chat History */}
       <LeftDrawer 
         isOpen={isLeftDrawerOpen}
@@ -193,32 +366,6 @@ export const AIAssistant = () => {
         language={language}
         theme={theme}
       />
-      
-      {/* Header with Title */}
-      <MobileHeader
-        title={t("waktiAssistant" as TranslationKey, language)}
-        showBackButton={false}
-      >
-        <div className="flex items-center gap-2">
-          <motion.button
-            className="p-2 rounded-full hover:bg-accent"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsLeftDrawerOpen(true)}
-            aria-label={t("openHistory" as TranslationKey, language)}
-          >
-            <Menu size={20} />
-          </motion.button>
-          
-          <motion.button
-            className="p-2 rounded-full hover:bg-accent"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setIsRightDrawerOpen(true)}
-            aria-label={t("openSettings" as TranslationKey, language)}
-          >
-            <Settings size={20} />
-          </motion.button>
-        </div>
-      </MobileHeader>
       
       {/* Mode Selector - Centered Pills */}
       <div className="px-4 py-3 flex justify-center border-b z-10">
