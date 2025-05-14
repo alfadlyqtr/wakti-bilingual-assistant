@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, CalendarClock, Edit, Trash } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface ReminderItemProps {
   reminder: Reminder;
@@ -21,9 +22,10 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, onEdit, onDelete 
   const isReminderToday = isToday(new Date(reminder.due_date));
 
   // Helper function to convert RecurrencePattern to TranslationKey
-  const getRecurrenceTranslationKey = (pattern: RecurrencePattern): string => {
-    // Using the pattern directly as it's now added to TranslationKey
-    return pattern;
+  const getRecurrenceTranslationKey = (pattern: RecurrencePattern): TranslationKey => {
+    // Now we directly return the pattern as a TranslationKey
+    // This works because we added 'daily', 'weekly', 'monthly', 'yearly' to TranslationKey type
+    return pattern as TranslationKey;
   };
 
   return (
