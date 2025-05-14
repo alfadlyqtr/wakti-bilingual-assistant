@@ -15,13 +15,24 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Account() {
-  const { language } = useTheme();
+  const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const [activeTab, setActiveTab] = useState("profile");
 
   return (
@@ -80,7 +91,13 @@ export default function Account() {
                       : "Enter your username"
                   }
                   defaultValue="jane_doe"
+                  disabled
                 />
+                <p className="text-xs text-muted-foreground">
+                  {language === "ar" 
+                    ? "لا يمكن تغيير اسم المستخدم. يرجى التواصل مع الدعم إذا كنت بحاجة إلى تغييره." 
+                    : "Username cannot be changed. Please contact support if you need to change it."}
+                </p>
               </div>
 
               <div className="grid gap-2">
@@ -99,37 +116,195 @@ export default function Account() {
                 />
               </div>
 
-              <div className="grid gap-2">
-                <label htmlFor="bio" className="text-sm font-medium">
-                  {language === "ar" ? "السيرة الذاتية" : "Bio"}
-                </label>
-                <Textarea
-                  id="bio"
-                  placeholder={
-                    language === "ar"
-                      ? "أضف سيرة قصيرة عنك"
-                      : "Add a short bio about yourself"
-                  }
-                  defaultValue="WAKTI enthusiast and productivity expert."
-                />
-              </div>
-
               <Button className="w-full mt-4">
                 {language === "ar" ? "حفظ التغييرات" : "Save Changes"}
               </Button>
 
               <div className="grid gap-2 pt-4">
-                <label htmlFor="password" className="text-sm font-medium">
+                <label className="text-sm font-medium">
                   {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
                 </label>
-                <Button variant="outline">
-                  {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline">
+                      {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {language === "ar" 
+                          ? "أدخل كلمة المرور الحالية والجديدة أدناه." 
+                          : "Enter your current and new password below."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="grid gap-2">
+                        <label htmlFor="currentPassword" className="text-sm font-medium">
+                          {language === "ar" ? "كلمة المرور الحالية" : "Current Password"}
+                        </label>
+                        <Input id="currentPassword" type="password" />
+                      </div>
+                      <div className="grid gap-2">
+                        <label htmlFor="newPassword" className="text-sm font-medium">
+                          {language === "ar" ? "كلمة المرور الجديدة" : "New Password"}
+                        </label>
+                        <Input id="newPassword" type="password" />
+                      </div>
+                      <div className="grid gap-2">
+                        <label htmlFor="confirmPassword" className="text-sm font-medium">
+                          {language === "ar" ? "تأكيد كلمة المرور الجديدة" : "Confirm New Password"}
+                        </label>
+                        <Input id="confirmPassword" type="password" />
+                      </div>
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>
+                        {language === "ar" ? "إلغاء" : "Cancel"}
+                      </AlertDialogCancel>
+                      <AlertDialogAction>
+                        {language === "ar" ? "تغيير" : "Change"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+              
+              {/* Delete Account Button */}
+              <div className="grid gap-2 pt-4">
+                <label className="text-sm font-medium text-destructive">
+                  {language === "ar" ? "حذف الحساب" : "Delete Account"}
+                </label>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                      {language === "ar" ? "حذف الحساب" : "Delete Account"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {language === "ar" ? "حذف الحساب" : "Delete Account"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {language === "ar" 
+                          ? "هذا الإجراء لا يمكن التراجع عنه. سيؤدي إلى حذف حسابك وجميع البيانات المرتبطة به بشكل دائم." 
+                          : "This action cannot be undone. This will permanently delete your account and remove your data from our servers."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>
+                        {language === "ar" ? "إلغاء" : "Cancel"}
+                      </AlertDialogCancel>
+                      <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                        {language === "ar" ? "نعم، حذف الحساب" : "Yes, delete account"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
+            {/* Appearance Settings */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "المظهر" : "Appearance"}
+              </h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span>{language === "ar" ? "اللغة" : "Language"}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleLanguage}
+                    className="h-9 px-3 rounded-full text-sm"
+                  >
+                    {language === "en" ? "العربية" : "English"}
+                  </Button>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span>{language === "ar" ? "السمة" : "Theme"}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={toggleTheme}
+                    className="h-9 px-3 rounded-full text-sm"
+                  >
+                    {theme === "dark"
+                      ? (language === "ar" ? "الوضع الفاتح" : "Light Mode")
+                      : (language === "ar" ? "الوضع الداكن" : "Dark Mode")}
+                  </Button>
+                </div>
+              </div>
+            </Card>
+
+            {/* Quote Widget Settings */}
+            <Card className="p-4">
+              <h3 className="font-medium text-lg mb-4">
+                {language === "ar" ? "إعدادات الاقتباس اليومي" : "Daily Quote Settings"}
+              </h3>
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">
+                    {language === "ar" ? "فئة الاقتباس" : "Quote Category"}
+                  </label>
+                  <Select defaultValue="motivation">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="motivation">
+                        {language === "ar" ? "تحفيزي" : "Motivational"}
+                      </SelectItem>
+                      <SelectItem value="islamic">
+                        {language === "ar" ? "إسلامي" : "Islamic"}
+                      </SelectItem>
+                      <SelectItem value="positive">
+                        {language === "ar" ? "إيجابي" : "Positive"}
+                      </SelectItem>
+                      <SelectItem value="health">
+                        {language === "ar" ? "صحي" : "Health"}
+                      </SelectItem>
+                      <SelectItem value="mixed">
+                        {language === "ar" ? "متنوع" : "Mixed"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium">
+                    {language === "ar" ? "تكرار تغيير الاقتباس" : "Quote Change Frequency"}
+                  </label>
+                  <Select defaultValue="2xday">
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2xday">
+                        {language === "ar" ? "مرتان في اليوم" : "2 times a day"}
+                      </SelectItem>
+                      <SelectItem value="4xday">
+                        {language === "ar" ? "4 مرات في اليوم" : "4 times a day"}
+                      </SelectItem>
+                      <SelectItem value="6xday">
+                        {language === "ar" ? "6 مرات في اليوم" : "6 times a day"}
+                      </SelectItem>
+                      <SelectItem value="appStart">
+                        {language === "ar" ? "مع كل بدء تشغيل للتطبيق" : "Every app start"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </Card>
+
             {/* Privacy Settings */}
             <Card className="p-4">
               <h3 className="font-medium text-lg mb-4">
@@ -244,75 +419,42 @@ export default function Account() {
                   </span>
                   <Switch id="events-widget" defaultChecked />
                 </div>
-
-                <div className="grid gap-2 pt-2">
-                  <label className="text-sm font-medium">
-                    {language === "ar" ? "فئة الاقتباس" : "Quote Category"}
-                  </label>
-                  <select className="w-full p-2 border rounded-md">
-                    <option>
-                      {language === "ar" ? "النجاح" : "Success"}
-                    </option>
-                    <option>
-                      {language === "ar" ? "الإلهام" : "Inspiration"}
-                    </option>
-                    <option>
-                      {language === "ar" ? "الإبداع" : "Creativity"}
-                    </option>
-                  </select>
-                </div>
               </div>
             </Card>
 
-            {/* Report an Issue */}
+            {/* Billing Section */}
             <Card className="p-4">
               <h3 className="font-medium text-lg mb-4">
-                {language === "ar" ? "الإبلاغ عن مشكلة" : "Report an Issue"}
+                {language === "ar" ? "الفواتير والاشتراكات" : "Billing & Subscriptions"}
               </h3>
               <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium block mb-2">
-                    {language === "ar" ? "نوع التقرير" : "Report Type"}
-                  </label>
-                  <RadioGroup defaultValue="user">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="user" id="user" />
-                      <label htmlFor="user">
-                        {language === "ar" ? "مستخدم" : "User"}
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="content" id="content" />
-                      <label htmlFor="content">
-                        {language === "ar" ? "محتوى" : "Content"}
-                      </label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="other" id="other" />
-                      <label htmlFor="other">
-                        {language === "ar" ? "آخر" : "Other"}
-                      </label>
-                    </div>
-                  </RadioGroup>
+                <div className="bg-muted/50 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="font-medium">
+                      {language === "ar" ? "الخطة الحالية" : "Current Plan"}
+                    </h4>
+                    <span className="text-sm bg-primary/10 text-primary px-2 py-1 rounded-full">
+                      {language === "ar" ? "نشط" : "Active"}
+                    </span>
+                  </div>
+                  <p className="text-xl font-bold mb-1">
+                    {language === "ar" ? "الاشتراك السنوي" : "Annual Subscription"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {language === "ar" ? "يتجدد في 15 يونيو 2025" : "Renews on June 15, 2025"}
+                  </p>
+                  <Button variant="outline" className="w-full">
+                    {language === "ar" ? "إدارة الاشتراك" : "Manage Subscription"}
+                  </Button>
                 </div>
-
-                <div>
-                  <label className="text-sm font-medium block mb-2">
-                    {language === "ar" ? "التفاصيل" : "Details"}
-                  </label>
-                  <Textarea
-                    placeholder={
-                      language === "ar"
-                        ? "صف المشكلة بالتفصيل..."
-                        : "Describe the issue in detail..."
-                    }
-                    rows={4}
-                  />
+                
+                <div className="text-sm text-muted-foreground">
+                  <p>
+                    {language === "ar" 
+                      ? "يتم إدارة الاشتراكات من خلال Apple App Store أو Google Play Store." 
+                      : "Subscriptions are managed through the Apple App Store or Google Play Store."}
+                  </p>
                 </div>
-
-                <Button variant="outline" className="w-full">
-                  {language === "ar" ? "إرسال التقرير" : "Submit Report"}
-                </Button>
               </div>
             </Card>
 
