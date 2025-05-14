@@ -247,20 +247,12 @@ export const AIAssistant = () => {
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
-      {/* Main WAKTI App Header */}
-      <div className="main-header sticky top-0 z-30 shadow-sm bg-background border-b">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center">
-            <img 
-              src="/lovable-uploads/a1b03773-fb9b-441e-8b2d-c8559acaa23b.png" 
-              alt="WAKTI Logo" 
-              className="h-8 w-8 mr-2 cursor-pointer rounded-md"
-            />
-            <h1 className="text-lg font-semibold">WAKTI</h1>
-          </div>
-          <UserMenu />
-        </div>
-      </div>
+      {/* Standard Mobile Header - matching other pages */}
+      <MobileHeader 
+        title={t("assistant" as TranslationKey, language)}
+        showBackButton={false}
+        showUserMenu={true}
+      />
       
       {/* Combined Mode Selector with Drawer Triggers - Single Row */}
       <div className="flex items-center justify-between px-4 py-3 border-b z-20">
@@ -320,10 +312,10 @@ export const AIAssistant = () => {
         theme={theme}
       />
       
-      {/* Bottom Input Area - With increased spacing from navbar */}
-      <div className="sticky bottom-20 left-0 right-0 z-30 px-4 pb-4 mb-6">
+      {/* Bottom Input Area - With proper spacing from navbar */}
+      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 mb-8">
         <div className="flex items-center gap-2 max-w-md mx-auto">
-          {/* Always show mic in all modes including writer mode */}
+          {/* Always visible mic button in all modes */}
           <VoiceInput 
             isActive={isVoiceActive} 
             onToggle={() => setIsVoiceActive(!isVoiceActive)}

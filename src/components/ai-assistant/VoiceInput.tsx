@@ -66,7 +66,7 @@ export function VoiceInput({
         variant={isActive ? "destructive" : "outline"}
         size="icon"
         className={cn(
-          "rounded-full transition-all relative",
+          "rounded-full transition-all relative opacity-100", // Removed hover:opacity-100 to make always visible
           isActive ? "animate-pulse" : "hover:bg-accent/80"
         )}
         style={!isActive ? {
