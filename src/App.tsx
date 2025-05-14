@@ -11,6 +11,7 @@ import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import TasksReminders from "./pages/TasksReminders";
@@ -41,6 +42,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/tasks" element={<TasksReminders />} />
               <Route path="/events" element={<Events />} />
