@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -778,6 +779,124 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   sharedTask: {
     en: "Shared Task",
     ar: "مهمة مشتركة"
+  },
+  
+  // Additional translation keys from the current errors
+  taskUpdatedSuccessfully: {
+    en: "Task updated successfully",
+    ar: "تم تحديث المهمة بنجاح"
+  },
+  taskDeletedSuccessfully: {
+    en: "Task deleted successfully",
+    ar: "تم حذف المهمة بنجاح"
+  },
+  reminderCreatedSuccessfully: {
+    en: "Reminder created successfully",
+    ar: "تم إنشاء التذكير بنجاح"
+  },
+  reminderUpdatedSuccessfully: {
+    en: "Reminder updated successfully",
+    ar: "تم تحديث التذكير بنجاح"
+  },
+  reminderDeletedSuccessfully: {
+    en: "Reminder deleted successfully",
+    ar: "تم حذف التذكير بنجاح"
+  },
+  taskSharedSuccessfully: {
+    en: "Task shared successfully",
+    ar: "تم مشاركة المهمة بنجاح"
+  },
+  username: {
+    en: "Username",
+    ar: "اسم المستخدم"
+  },
+  email: {
+    en: "Email",
+    ar: "البريد الإلكتروني"
+  },
+  tasks_view_all: {
+    en: "View all tasks",
+    ar: "عرض كل المهام"
+  },
+  tomorrow: {
+    en: "Tomorrow",
+    ar: "غداً"
+  },
+  event: {
+    en: "Event",
+    ar: "حدث"
+  },
+  calendar_open: {
+    en: "Open calendar",
+    ar: "فتح التقويم"
+  },
+  events_today: {
+    en: "Today's events",
+    ar: "أحداث اليوم"
+  },
+  events_view_all: {
+    en: "View all events",
+    ar: "عرض كل الأحداث"
+  },
+  reminders_view_all: {
+    en: "View all reminders",
+    ar: "عرض كل التذكيرات"
+  },
+  dashboard: {
+    en: "Dashboard",
+    ar: "لوحة التحكم"
+  },
+  freeTrialDays: {
+    en: "Free trial days",
+    ar: "أيام النسخة التجريبية المجانية"
+  },
+  eventDetail: {
+    en: "Event Details",
+    ar: "تفاصيل الحدث"
+  },
+  selectConversation: {
+    en: "Select a conversation",
+    ar: "اختر محادثة"
+  },
+  language: {
+    en: "Language",
+    ar: "اللغة"
+  },
+  lightMode: {
+    en: "Light Mode",
+    ar: "الوضع النهاري"
+  },
+  darkMode: {
+    en: "Dark Mode",
+    ar: "الوضع الليلي"
+  },
+  notificationPreferences: {
+    en: "Notification Preferences",
+    ar: "تفضيلات الإشعارات"
+  },
+  widgetVisibility: {
+    en: "Widget Visibility",
+    ar: "ظهور الأدوات"
+  },
+  privacyControls: {
+    en: "Privacy Controls",
+    ar: "ضوابط الخصوصية"
+  },
+  deleteAccount: {
+    en: "Delete Account",
+    ar: "حذف الحساب"
+  },
+  taskAndReminders: {
+    en: "Tasks & Reminders",
+    ar: "المهام والتذكيرات"
+  },
+  voiceSummary: {
+    en: "Voice Summary",
+    ar: "ملخص صوتي"
+  },
+  voiceSummaryDetail: {
+    en: "Voice Summary Detail",
+    ar: "تفاصيل الملخص الصوتي"
   }
 };
 

@@ -1,6 +1,6 @@
 
 import { useToast as useToastShadcn } from "@/components/ui/toast";
-import { toast as toastShadcn } from "@/components/ui/use-toast";
+import { toast as toastShadcn } from "@/components/ui/toast";
 
 export function useToast() {
   return useToastShadcn();
