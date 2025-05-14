@@ -20,8 +20,13 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   
   useEffect(() => {
     // Get the quote on component mount and when language changes
-    const quoteData = getQuoteForDisplay();
-    setQuote(quoteData);
+    const fetchQuote = () => {
+      const quoteData = getQuoteForDisplay();
+      console.log("Fetched quote:", quoteData);
+      setQuote(quoteData);
+    };
+    
+    fetchQuote();
   }, [language]); // Re-fetch quote when language changes
   
   // If no quote is available yet

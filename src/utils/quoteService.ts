@@ -1,4 +1,3 @@
-
 import { quotes } from './dailyQuotes';
 
 // Custom quotes storage
@@ -85,33 +84,35 @@ const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] =>
     return allQuotes;
   } else if (category === 'custom') {
     return getCustomQuotes();
-  } else if (typeof quotes[category] === 'string') {
-    // Category that's marked as "To be filled next"
-    return [{ 
-      text_en: "Category will be available in the next update.", 
-      text_ar: "هذه الفئة ستكون متاحة في التحديث القادم.",
-      source: "WAKTI"
-    }];
-  } else if (typeof quotes[category] === 'object') {
+  } else if (quotes[category] && typeof quotes[category] === 'object') {
     // For structured categories like motivational, islamic, etc.
     let categoryQuotes: QuoteObject[] = [];
     
     Object.keys(quotes[category]).forEach(subcat => {
-      categoryQuotes = [...categoryQuotes, ...quotes[category][subcat]];
+      if (Array.isArray(quotes[category][subcat])) {
+        categoryQuotes = [...categoryQuotes, ...quotes[category][subcat]];
+      }
     });
     
     return categoryQuotes;
   }
   
-  return [];
+  // If category doesn't exist or is empty
+  return [{
+    text_en: "Wisdom awaits. More quotes coming soon.",
+    text_ar: "الحكمة تنتظر. المزيد من الاقتباسات قريبًا.",
+    source: "WAKTI"
+  }];
 };
 
 // Get a random quote based on preferences
 export const getRandomQuote = (category: string = 'motivation'): QuoteObject | string => {
   const allQuotes = getAllQuotesFromCategory(category);
+  console.log(`Found ${allQuotes.length} quotes in category '${category}'`);
   
   // If no quotes available for the category
   if (allQuotes.length === 0) {
+    console.log("No quotes found for category:", category);
     return {
       text_en: "Wisdom awaits. More quotes coming soon.",
       text_ar: "الحكمة تنتظر. المزيد من الاقتباسات قريبًا.",
@@ -122,6 +123,7 @@ export const getRandomQuote = (category: string = 'motivation'): QuoteObject | s
   // Get a random quote
   const randomIndex = Math.floor(Math.random() * allQuotes.length);
   const quote = allQuotes[randomIndex];
+  console.log("Selected quote:", quote);
   
   // Store this quote and time
   saveLastQuote(quote);
@@ -201,13 +203,19 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
 export const getQuoteForDisplay = (): QuoteObject | string => {
   const { category, frequency } = getQuotePreferences();
   
+  // Force new quote for debugging
+  localStorage.removeItem(LAST_QUOTE_KEY);
+  
   // If we should show a new quote based on frequency
   if (shouldShowNewQuote(frequency)) {
-    return getRandomQuote(category);
+    const newQuote = getRandomQuote(category);
+    console.log("Showing new quote:", newQuote);
+    return newQuote;
   }
   
   // Otherwise return the last quote
   const { quote } = getLastQuote();
+  console.log("Showing last quote:", quote);
   return quote || getRandomQuote(category);
 };
 
