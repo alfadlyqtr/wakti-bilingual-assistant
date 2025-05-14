@@ -16,8 +16,6 @@ export default function Contacts() {
 
   return (
     <PageContainer>
-      <MobileHeader title={t("contacts", language)} />
-      
       <div className="flex flex-col p-4 pb-24">
         <ContactSearch />
         
