@@ -1,38 +1,19 @@
 
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { UserMenu } from "@/components/UserMenu";
-import { MobileNav } from "@/components/MobileNav";
 import { t } from "@/utils/translations";
+import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
-  const navigate = useNavigate();
   
   return (
-    <div className="mobile-container">
-      <header className="mobile-header">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="mr-2"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">{t("settings", language)}</h1>
-        </div>
-        <UserMenu userName="John Doe" />
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-4 pb-20">
+    <PageContainer title={t("settings", language)} showBackButton={true}>
+      <div className="p-4 pb-20">
         {/* Language & Theme Settings */}
         <Card className="mb-4">
           <CardHeader className="pb-2">
@@ -141,8 +122,6 @@ export default function Settings() {
           </CardContent>
         </Card>
       </div>
-
-      <MobileNav />
-    </div>
+    </PageContainer>
   );
 }
