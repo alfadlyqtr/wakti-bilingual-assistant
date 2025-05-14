@@ -77,6 +77,7 @@ export default function Account() {
         // Show success toast
         toast({
           title: language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully",
+          description: "",
           duration: 2000
         });
       }
@@ -111,6 +112,7 @@ export default function Account() {
         // Show success toast
         toast({
           title: language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully",
+          description: "",
           duration: 2000
         });
       }
@@ -127,6 +129,7 @@ export default function Account() {
         
         toast({
           title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
+          description: "",
           duration: 2000
         });
       }
