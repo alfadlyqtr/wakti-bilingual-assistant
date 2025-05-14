@@ -32,7 +32,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { quotes } from "@/utils/dailyQuotes";
-import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { Check, Save, Settings } from "lucide-react";
 
@@ -78,6 +77,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully",
           description: "",
+          variant: "default",
           duration: 2000
         });
       }
@@ -113,6 +113,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully",
           description: "",
+          variant: "default",
           duration: 2000
         });
       }
@@ -130,6 +131,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
           description: "",
+          variant: "default",
           duration: 2000
         });
       }
