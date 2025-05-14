@@ -959,6 +959,51 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   creating: {
     en: "Creating...",
     ar: "جاري الإنشاء..."
+  },
+  // Add the new translation keys that were missing
+  createFirstEvent: {
+    en: "Create first event",
+    ar: "إنشاء أول حدث"
+  },
+  decline: {
+    en: "Decline",
+    ar: "رفض"
+  },
+  accept: {
+    en: "Accept",
+    ar: "قبول"
+  },
+  noLocation: {
+    en: "No location",
+    ar: "بدون موقع"
+  },
+  attendee: {
+    en: "Attendee",
+    ar: "حاضر"
+  },
+  attendees: {
+    en: "Attendees",
+    ar: "الحاضرين"
+  },
+  readyToCreateTask: {
+    en: "I'm ready to create a task",
+    ar: "أنا جاهز لإنشاء مهمة"
+  },
+  noTasksYet: {
+    en: "No tasks yet",
+    ar: "لا توجد مهام بعد"
+  },
+  nothingScheduled: {
+    en: "Nothing scheduled",
+    ar: "لا يوجد جدول"
+  },
+  noEventsYet: {
+    en: "No events yet",
+    ar: "لا توجد أحداث بعد"
+  },
+  noRemindersYet: {
+    en: "No reminders yet",
+    ar: "لا توجد تذكيرات بعد"
   }
 };
 

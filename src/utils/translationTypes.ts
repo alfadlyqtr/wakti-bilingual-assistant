@@ -108,7 +108,6 @@ export type TranslationKey =
   | "stillWantMeToDoThis"
   | "yesDoIt"
   | "no"
-  // The updated key
   | "descriptionField"
   | "calendar"
   | "ai"
@@ -218,7 +217,6 @@ export type TranslationKey =
   | "taskAndReminders"
   | "voiceSummary"
   | "voiceSummaryDetail"
-  // Add all the missing translation keys
   | "error"
   | "pleaseCompleteAllRequiredFields"
   | "success"
@@ -233,5 +231,16 @@ export type TranslationKey =
   | "time"
   | "maxAttendees"
   | "enterMaxAttendees"
-  | "creating";
-
+  | "creating"
+  // Add the missing translation keys that are causing errors
+  | "createFirstEvent"
+  | "decline"
+  | "accept"
+  | "noLocation"
+  | "attendee"
+  | "attendees" 
+  | "readyToCreateTask"
+  | "noTasksYet"
+  | "nothingScheduled"
+  | "noEventsYet"
+  | "noRemindersYet";
