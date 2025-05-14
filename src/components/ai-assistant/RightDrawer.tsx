@@ -7,8 +7,7 @@ import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
-import { Separator } from "@/components/ui/separator";
-import { X, HelpCircle, BookOpen, BrainCircuit, Type, Palette, BarChart3, FileCheck } from "lucide-react";
+import { X, HelpCircle, BookOpen, BrainCircuit, Type, Palette, FileCheck } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 
 interface RightDrawerProps {
@@ -19,55 +18,45 @@ interface RightDrawerProps {
   theme: string;
 }
 
+// Define drawer colors per mode for user bubble colors
+const DRAWER_COLORS = {
+  general: "#757373",
+  writer: "#ebeaea",
+  creative: "#d4ba9f",
+  assistant: "#1e1f21"
+};
+
 export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: RightDrawerProps) {
   const { toggleLanguage } = useTheme();
   const direction = language === "ar" ? "rtl" : "ltr";
-  const isDark = theme === "dark";
   
-  // Background color for the drawer based on mode
-  const getModeColor = () => {
-    switch (activeMode) {
-      case "general":
-        return isDark ? "#858384" : "#060541";
-      case "writer":
-        return isDark ? "#fcfefd" : "#e9ceb0";
-      case "creative":
-        return isDark ? "#e9ceb0" : "#606062";
-      case "assistant":
-        return isDark ? "#0c0f14" : "#060541";
-      default:
-        return undefined;
-    }
+  // Get drawer background color based on active mode
+  const drawerBgColor = DRAWER_COLORS[activeMode];
+  
+  // Get text color based on background for readability
+  const getTextColor = (bgColor: string) => {
+    const r = parseInt(bgColor.slice(1, 3), 16);
+    const g = parseInt(bgColor.slice(3, 5), 16);
+    const b = parseInt(bgColor.slice(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness >= 128 ? "#000000" : "#ffffff";
   };
   
-  // Text color based on the background for readability
-  const getTextColor = () => {
-    if (isDark) {
-      if (activeMode === "writer" || activeMode === "creative") {
-        return "#0c0f14";
-      }
-      return "#ffffff";
-    } else {
-      if (activeMode === "general" || activeMode === "assistant") {
-        return "#ffffff";
-      }
-      return "#060541";
-    }
-  };
+  const textColor = getTextColor(drawerBgColor);
   
   // Get the icon for the current mode
   const getModeIcon = () => {
     switch (activeMode) {
       case "general":
-        return <BrainCircuit size={18} />;
+        return <BrainCircuit size={18} style={{ color: textColor }} />;
       case "writer":
-        return <Type size={18} />;
+        return <Type size={18} style={{ color: textColor }} />;
       case "creative":
-        return <Palette size={18} />;
+        return <Palette size={18} style={{ color: textColor }} />;
       case "assistant":
-        return <FileCheck size={18} />;
+        return <FileCheck size={18} style={{ color: textColor }} />;
       default:
-        return <HelpCircle size={18} />;
+        return <HelpCircle size={18} style={{ color: textColor }} />;
     }
   };
   
@@ -79,14 +68,20 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
           <div className="space-y-4">
             <button 
               onClick={toggleLanguage}
-              className="w-full py-3 px-4 rounded-lg bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-left flex justify-between items-center"
+              className="w-full py-3 px-4 rounded-lg text-left flex justify-between items-center"
+              style={{ 
+                backgroundColor: `${textColor}10`,
+                color: textColor
+              }}
             >
               <span>{t("switchLanguage", language)}</span>
               <span className="text-sm opacity-70">{language === "ar" ? "English" : "العربية"}</span>
             </button>
             
-            <div className="border-t border-black/10 dark:border-white/10 pt-4">
-              <h3 className="font-medium mb-2 px-2">{t("commonQuestions", language)}</h3>
+            <div className="border-t pt-4" style={{ borderColor: `${textColor}20` }}>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("commonQuestions", language)}
+              </h3>
               <div className="space-y-2">
                 {[
                   t("whatCanYouDo", language),
@@ -95,7 +90,11 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 ].map((question, idx) => (
                   <button
                     key={idx}
-                    className="w-full py-2 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left text-sm"
+                    className="w-full py-2 px-3 rounded-md text-left text-sm"
+                    style={{ 
+                      backgroundColor: `${textColor}10`,
+                      color: textColor
+                    }}
                   >
                     {question}
                   </button>
@@ -109,7 +108,9 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
         return (
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium mb-2 px-2">{t("tonePresets", language)}</h3>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("tonePresets", language)}
+              </h3>
               <div className="space-y-2">
                 {[
                   t("professional", language),
@@ -119,7 +120,11 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 ].map((tone, idx) => (
                   <button
                     key={idx}
-                    className="w-full py-2 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left text-sm"
+                    className="w-full py-2 px-3 rounded-md text-left text-sm"
+                    style={{ 
+                      backgroundColor: `${textColor}10`,
+                      color: textColor
+                    }}
                   >
                     {tone}
                   </button>
@@ -127,8 +132,10 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
               </div>
             </div>
             
-            <div className="border-t border-black/10 dark:border-white/10 pt-4">
-              <h3 className="font-medium mb-2 px-2">{t("lengthOptions", language)}</h3>
+            <div className="border-t pt-4" style={{ borderColor: `${textColor}20` }}>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("lengthOptions", language)}
+              </h3>
               <div className="space-y-2">
                 {[
                   t("short", language),
@@ -137,7 +144,11 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 ].map((length, idx) => (
                   <button
                     key={idx}
-                    className="w-full py-2 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left text-sm"
+                    className="w-full py-2 px-3 rounded-md text-left text-sm"
+                    style={{ 
+                      backgroundColor: `${textColor}10`,
+                      color: textColor
+                    }}
                   >
                     {length}
                   </button>
@@ -145,13 +156,18 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
               </div>
             </div>
             
-            <div className="border-t border-black/10 dark:border-white/10 pt-4">
-              <button className="flex items-center w-full py-2 px-3">
-                <div className={cn(
-                  "w-5 h-5 rounded border mr-2 flex items-center justify-center",
-                  "border-black/30 dark:border-white/30"
-                )}>
-                  <div className="w-3 h-3 rounded-sm bg-black/70 dark:bg-white/70"></div>
+            <div className="border-t pt-4" style={{ borderColor: `${textColor}20` }}>
+              <button 
+                className="flex items-center w-full py-2 px-3"
+                style={{ color: textColor }}
+              >
+                <div className="w-5 h-5 rounded border mr-2 flex items-center justify-center"
+                  style={{ borderColor: `${textColor}40` }}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-sm"
+                    style={{ backgroundColor: `${textColor}70` }}
+                  ></div>
                 </div>
                 <span>{t("grammarCheck", language)}</span>
               </button>
@@ -163,7 +179,9 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
         return (
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium mb-2 px-2">{t("imageTools", language)}</h3>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("imageTools", language)}
+              </h3>
               <div className="space-y-2">
                 {[
                   t("textToImage", language),
@@ -173,17 +191,30 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 ].map((tool, idx) => (
                   <button
                     key={idx}
-                    className="w-full py-2 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left text-sm flex justify-between"
+                    className="w-full py-2 px-3 rounded-md text-left text-sm flex justify-between"
+                    style={{ 
+                      backgroundColor: `${textColor}10`,
+                      color: textColor
+                    }}
                   >
                     <span>{tool}</span>
-                    <Toggle aria-label={tool} size="sm" />
+                    <Toggle 
+                      aria-label={tool} 
+                      size="sm"
+                      style={{ 
+                        backgroundColor: `${textColor}30`,
+                        color: textColor
+                      }} 
+                    />
                   </button>
                 ))}
               </div>
             </div>
             
-            <div className="border-t border-black/10 dark:border-white/10 pt-4">
-              <h3 className="font-medium mb-2 px-2">{t("chartTypes", language)}</h3>
+            <div className="border-t pt-4" style={{ borderColor: `${textColor}20` }}>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("chartTypes", language)}
+              </h3>
               <div className="space-y-2">
                 {[
                   t("barChart", language),
@@ -192,7 +223,11 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
                 ].map((chart, idx) => (
                   <button
                     key={idx}
-                    className="w-full py-2 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left text-sm"
+                    className="w-full py-2 px-3 rounded-md text-left text-sm"
+                    style={{ 
+                      backgroundColor: `${textColor}10`,
+                      color: textColor
+                    }}
                   >
                     {chart}
                   </button>
@@ -206,18 +241,44 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
         return (
           <div className="space-y-4">
             <div>
-              <h3 className="font-medium mb-2 px-2">{t("shortcuts", language)}</h3>
+              <h3 className="font-medium mb-2 px-2" style={{ color: textColor }}>
+                {t("shortcuts", language)}
+              </h3>
               <div className="space-y-2">
-                <button className="w-full py-3 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left">
+                <button 
+                  className="w-full py-3 px-3 rounded-md text-left"
+                  style={{ 
+                    backgroundColor: `${textColor}10`,
+                    color: textColor
+                  }}
+                >
                   {t("createTask", language)}
                 </button>
-                <button className="w-full py-3 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left">
+                <button 
+                  className="w-full py-3 px-3 rounded-md text-left"
+                  style={{ 
+                    backgroundColor: `${textColor}10`,
+                    color: textColor
+                  }}
+                >
                   {t("createReminder", language)}
                 </button>
-                <button className="w-full py-3 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left">
+                <button 
+                  className="w-full py-3 px-3 rounded-md text-left"
+                  style={{ 
+                    backgroundColor: `${textColor}10`,
+                    color: textColor
+                  }}
+                >
                   {t("createEvent", language)}
                 </button>
-                <button className="w-full py-3 px-3 rounded-md bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 text-left">
+                <button 
+                  className="w-full py-3 px-3 rounded-md text-left"
+                  style={{ 
+                    backgroundColor: `${textColor}10`,
+                    color: textColor
+                  }}
+                >
                   {t("viewCalendar", language)}
                 </button>
               </div>
@@ -247,8 +308,8 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
           <motion.div 
             className="fixed right-0 top-0 h-full w-4/5 max-w-xs z-50 overflow-hidden flex flex-col"
             style={{ 
-              backgroundColor: isDark ? "#606062" : "#e9ceb0", 
-              color: getTextColor() 
+              backgroundColor: drawerBgColor,
+              color: textColor 
             }}
             dir={direction}
             initial={{ x: language === "ar" ? "-100%" : "100%" }}
@@ -257,30 +318,32 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
           >
             {/* Header with Mode Title */}
-            <div className="p-4 border-b border-black/10 dark:border-white/10 flex justify-between items-center">
+            <div className="p-4 border-b flex justify-between items-center"
+              style={{ borderColor: `${textColor}30` }}
+            >
               <div className="flex items-center gap-2">
                 {getModeIcon()}
-                <h2 className="font-medium text-lg">
+                <h2 className="font-medium text-lg" style={{ color: textColor }}>
                   {activeMode === "general" && t("generalSettings", language)}
                   {activeMode === "writer" && t("writerSettings", language)}
                   {activeMode === "creative" && t("creativeSettings", language)}
                   {activeMode === "assistant" && t("assistantSettings", language)}
                 </h2>
               </div>
-              <button onClick={onClose}>
+              <button onClick={onClose} style={{ color: textColor }}>
                 <X size={20} />
               </button>
             </div>
             
             {/* Sticky Instructions Panel */}
-            <div className="p-4 border-b border-black/10 dark:border-white/10">
+            <div className="p-4 border-b" style={{ borderColor: `${textColor}30` }}>
               <div className="flex items-center gap-2 mb-2">
-                <HelpCircle size={16} />
-                <h3 className="font-medium">
+                <HelpCircle size={16} style={{ color: textColor }} />
+                <h3 className="font-medium" style={{ color: textColor }}>
                   {t("instructions", language)}
                 </h3>
               </div>
-              <p className="text-sm opacity-80 mb-3">
+              <p className="text-sm mb-3" style={{ color: `${textColor}CC` }}>
                 {activeMode === "general" && t("generalInstructions", language)}
                 {activeMode === "writer" && t("writerInstructions", language)}
                 {activeMode === "creative" && t("creativeInstructions", language)}
@@ -288,9 +351,17 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
               </p>
               
               <div className="flex items-center gap-2 mt-4">
-                <BookOpen size={16} />
-                <h3 className="font-medium">{t("knowledge", language)}</h3>
-                <Toggle size="sm" />
+                <BookOpen size={16} style={{ color: textColor }} />
+                <h3 className="font-medium" style={{ color: textColor }}>
+                  {t("knowledge", language)}
+                </h3>
+                <Toggle 
+                  size="sm"
+                  style={{ 
+                    backgroundColor: `${textColor}30`,
+                    color: textColor
+                  }} 
+                />
               </div>
             </div>
             

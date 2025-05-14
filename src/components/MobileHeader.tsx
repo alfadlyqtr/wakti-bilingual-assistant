@@ -1,4 +1,5 @@
 
+import { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ interface MobileHeaderProps {
   showBackButton?: boolean;
   showUserMenu?: boolean;
   onBackClick?: () => void;
+  children?: ReactNode;
 }
 
 export function MobileHeader({
@@ -16,6 +18,7 @@ export function MobileHeader({
   showBackButton = false,
   showUserMenu = true,
   onBackClick,
+  children,
 }: MobileHeaderProps) {
   const navigate = useNavigate();
 
@@ -52,7 +55,11 @@ export function MobileHeader({
         />
         <h1 className="text-lg font-semibold">{title}</h1>
       </div>
-      {showUserMenu && <UserMenu />}
+      {children ? (
+        children
+      ) : (
+        showUserMenu && <UserMenu />
+      )}
     </div>
   );
 }

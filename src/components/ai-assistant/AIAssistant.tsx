@@ -14,6 +14,7 @@ import { ModeSelector } from "./ModeSelector";
 import { LeftDrawer } from "./LeftDrawer";
 import { RightDrawer } from "./RightDrawer";
 import { VoiceInput } from "./VoiceInput";
+import { MobileHeader } from "@/components/MobileHeader";
 import { v4 as uuidv4 } from "uuid";
 
 export const AIAssistant = () => {
@@ -181,6 +182,7 @@ export const AIAssistant = () => {
         onClose={() => setIsLeftDrawerOpen(false)}
         theme={theme}
         language={language}
+        activeMode={activeMode}
       />
       
       {/* Right Drawer - Settings & Tools */}
@@ -193,29 +195,30 @@ export const AIAssistant = () => {
       />
       
       {/* Header with Title */}
-      <header className="flex items-center justify-between px-4 py-3 border-b z-20 bg-background">
-        <motion.button
-          className="p-2 rounded-full hover:bg-accent"
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsLeftDrawerOpen(true)}
-          aria-label={t("openHistory" as TranslationKey, language)}
-        >
-          <Menu size={20} />
-        </motion.button>
-        
-        <h1 className="text-xl font-semibold">
-          {t("waktiAssistant" as TranslationKey, language)}
-        </h1>
-        
-        <motion.button
-          className="p-2 rounded-full hover:bg-accent"
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsRightDrawerOpen(true)}
-          aria-label={t("openSettings" as TranslationKey, language)}
-        >
-          <Settings size={20} />
-        </motion.button>
-      </header>
+      <MobileHeader
+        title={t("waktiAssistant" as TranslationKey, language)}
+        showBackButton={false}
+      >
+        <div className="flex items-center gap-2">
+          <motion.button
+            className="p-2 rounded-full hover:bg-accent"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsLeftDrawerOpen(true)}
+            aria-label={t("openHistory" as TranslationKey, language)}
+          >
+            <Menu size={20} />
+          </motion.button>
+          
+          <motion.button
+            className="p-2 rounded-full hover:bg-accent"
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsRightDrawerOpen(true)}
+            aria-label={t("openSettings" as TranslationKey, language)}
+          >
+            <Settings size={20} />
+          </motion.button>
+        </div>
+      </MobileHeader>
       
       {/* Mode Selector - Centered Pills */}
       <div className="px-4 py-3 flex justify-center border-b z-10">
@@ -238,13 +241,14 @@ export const AIAssistant = () => {
       />
       
       {/* Bottom Input Area - Never covered by dock */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 pt-2 border-t bg-background/95 backdrop-blur-md">
+      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 pt-2 border-t bg-background/95 backdrop-blur-md shadow-lg">
         <div className="flex items-center gap-2 max-w-md mx-auto">
           <VoiceInput 
             isActive={isVoiceActive} 
             onToggle={() => setIsVoiceActive(!isVoiceActive)}
             onTranscript={handleVoiceInput}
             language={language}
+            activeMode={activeMode}
           />
           
           <div className="relative flex-1">
@@ -254,7 +258,11 @@ export const AIAssistant = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder={t("askWAKTI" as TranslationKey, language)}
-              className="pl-4 pr-10 py-6 rounded-full"
+              className={`pl-4 pr-10 py-6 rounded-full shadow-sm transition-all duration-300`}
+              style={{
+                borderColor: getModeColor(activeMode),
+                boxShadow: `0 0 8px ${getModeColor(activeMode)}30`
+              }}
             />
             
             <AnimatePresence>

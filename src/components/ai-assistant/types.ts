@@ -1,60 +1,150 @@
 
 export type AIMode = "general" | "writer" | "creative" | "assistant";
 
-export interface ConfirmationData {
-  type: string;
+export interface Confirmation {
+  type: "mode" | "task" | "event" | "reminder" | "other";
   action: string;
   data?: any;
 }
 
 export interface ChatMessage {
   id: string;
-  role: "assistant" | "user";
+  role: "user" | "assistant";
   content: string;
   mode: AIMode;
   timestamp: Date;
-  needsConfirmation?: ConfirmationData | null;
+  needsConfirmation?: Confirmation | null;
 }
 
 export const ASSISTANT_MODES = [
   {
     id: "general",
-    name: "General",
-    description: "Ask anything and get general assistance",
+    label: "generalMode",
+    description: "generalModeDescription",
     color: {
-      light: "#060541", // WAKTI light-primary
-      dark: "#858384", // WAKTI dark-tertiary
+      dark: "#858384",
+      light: "#858384"
     },
-    icon: "message-square",
+    userBubble: {
+      dark: "#757373",
+      light: "#757373"
+    }
   },
   {
     id: "writer",
-    name: "Writer",
-    description: "Create and edit written content",
+    label: "writerMode",
+    description: "writerModeDescription",
     color: {
-      light: "#e9ceb0", // WAKTI light-secondary
-      dark: "#fcfefd", // WAKTI near white for contrast
+      dark: "#fcfefd",
+      light: "#fcfefd"
     },
-    icon: "pen-tool",
+    userBubble: {
+      dark: "#ebeaea",
+      light: "#ebeaea"
+    }
   },
   {
     id: "creative",
-    name: "Creative",
-    description: "Generate images and creative content",
+    label: "creativeMode",
+    description: "creativeModeDescription",
     color: {
-      light: "#606062", // WAKTI dark-secondary (contrasted for light mode)
-      dark: "#e9ceb0", // WAKTI light-secondary
+      dark: "#e9ceb0",
+      light: "#e9ceb0"
     },
-    icon: "palette",
+    userBubble: {
+      dark: "#d4ba9f",
+      light: "#d4ba9f"
+    }
   },
   {
     id: "assistant",
-    name: "Assistant",
-    description: "Task management and planning",
+    label: "assistantMode",
+    description: "assistantModeDescription",
     color: {
-      light: "#060541", // WAKTI light-primary
-      dark: "#0c0f14", // WAKTI dark-bg
+      dark: "#0c0f14",
+      light: "#0c0f14"
     },
-    icon: "calendar",
+    userBubble: {
+      dark: "#1e1f21",
+      light: "#1e1f21"
+    }
+  }
+];
+
+export const AI_SIDEBAR_LINKS = [
+  {
+    id: "recent",
+    label: "recentChats",
   },
+  {
+    id: "saved",
+    label: "savedChats",
+  },
+];
+
+export const AI_SIDEBAR_TOOLS = [
+  {
+    id: "general",
+    tools: [
+      {
+        id: "language", 
+        label: "switchLanguage"
+      },
+      {
+        id: "clear",
+        label: "clearConversation"
+      }
+    ]
+  },
+  {
+    id: "writer",
+    tools: [
+      {
+        id: "tone",
+        label: "tonePresets"
+      },
+      {
+        id: "length",
+        label: "lengthOptions"
+      },
+      {
+        id: "grammar",
+        label: "grammarCheck"
+      }
+    ]
+  },
+  {
+    id: "creative",
+    tools: [
+      {
+        id: "image",
+        label: "imageTools"
+      },
+      {
+        id: "chart",
+        label: "chartTypes"
+      }
+    ]
+  },
+  {
+    id: "assistant",
+    tools: [
+      {
+        id: "task",
+        label: "createTask"
+      },
+      {
+        id: "reminder",
+        label: "createReminder"
+      },
+      {
+        id: "event",
+        label: "createEvent"
+      },
+      {
+        id: "calendar",
+        label: "viewCalendar"
+      }
+    ]
+  }
 ];

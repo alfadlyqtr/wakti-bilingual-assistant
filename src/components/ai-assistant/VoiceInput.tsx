@@ -6,21 +6,33 @@ import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AIMode } from "./types";
+
+// Define mode colors for VoiceInput matching
+const MODE_COLORS = {
+  general: "#858384",
+  writer: "#fcfefd",
+  creative: "#e9ceb0",
+  assistant: "#0c0f14"
+};
 
 interface VoiceInputProps {
   isActive: boolean;
   onToggle: () => void;
   onTranscript: (transcript: string) => void;
   language: string;
+  activeMode: AIMode;
 }
 
 export function VoiceInput({
   isActive,
   onToggle,
   onTranscript,
-  language
+  language,
+  activeMode
 }: VoiceInputProps) {
   const [waveform, setWaveform] = useState<number[]>([]);
+  const modeColor = MODE_COLORS[activeMode];
 
   // Simulate recording with animated waveform
   useEffect(() => {
@@ -57,6 +69,10 @@ export function VoiceInput({
           "rounded-full transition-all relative",
           isActive ? "animate-pulse" : "hover:bg-accent/80"
         )}
+        style={!isActive ? {
+          borderColor: modeColor,
+          color: modeColor,
+        } : undefined}
         aria-label={isActive ? 
           t("stopListening" as TranslationKey, language) : 
           t("startVoiceInput" as TranslationKey, language)
