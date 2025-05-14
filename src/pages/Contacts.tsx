@@ -1,7 +1,6 @@
 
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MobileHeader } from "@/components/MobileHeader";
 import { PageContainer } from "@/components/PageContainer";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
@@ -15,7 +14,7 @@ export default function Contacts() {
   const [activeTab, setActiveTab] = useState("contacts");
 
   return (
-    <PageContainer>
+    <PageContainer title={t("contacts", language)}>
       <div className="flex flex-col p-4 pb-24">
         <ContactSearch />
         
