@@ -17,6 +17,8 @@ export type ToastProps = {
   title: string;
   description?: string;
   variant?: "default" | "destructive";
+  duration?: number;
+  icon?: React.ReactNode;
 };
 
 // Custom hook to create toasts with a simpler API
@@ -38,6 +40,8 @@ export const useToast = () => {
     sonnerToast(props.title, {
       description: props.description,
       className: props.variant === "destructive" ? "bg-destructive text-destructive-foreground" : undefined,
+      duration: props.duration,
+      icon: props.icon,
     });
   };
 
@@ -92,6 +96,8 @@ export const toast = (props: ToastProps) => {
   sonnerToast(props.title, {
     description: props.description,
     className: props.variant === "destructive" ? "bg-destructive text-destructive-foreground" : undefined,
+    duration: props.duration,
+    icon: props.icon,
   });
 };
 
