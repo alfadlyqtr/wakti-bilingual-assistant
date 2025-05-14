@@ -91,6 +91,17 @@ export default function ForgotPassword() {
             </Button>
             
             <div className="mb-8 text-center">
+              {/* App logo with navigation to home */}
+              <div 
+                className="inline-block cursor-pointer mb-4"
+                onClick={() => navigate("/")}
+              >
+                <img 
+                  src="/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png" 
+                  alt={t.appName}
+                  className="w-24 h-24 mx-auto object-contain" 
+                />
+              </div>
               <h1 className="text-2xl font-bold">{t.forgotPassword}</h1>
             </div>
 

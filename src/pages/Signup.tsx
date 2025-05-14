@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Eye, EyeOff, User, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, User, Mail, Lock, ArrowLeft } from "lucide-react";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -42,7 +42,8 @@ export default function Signup() {
       loading: "Loading...",
       signup: "Sign Up",
       alreadyHaveAccount: "Already have an account?",
-      login: "Login"
+      login: "Login",
+      backToHome: "Back to Home"
     },
     ar: {
       appName: "وقتي",
@@ -54,7 +55,8 @@ export default function Signup() {
       loading: "جاري التحميل...",
       signup: "إنشاء حساب",
       alreadyHaveAccount: "لديك حساب بالفعل؟",
-      login: "تسجيل الدخول"
+      login: "تسجيل الدخول",
+      backToHome: "العودة للرئيسية"
     }
   };
 
@@ -63,7 +65,17 @@ export default function Signup() {
   return (
     <div className="mobile-container">
       <header className="mobile-header">
-        <h1 className="text-2xl font-bold">{t.appName}</h1>
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-1 mr-2"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-xs">{t.backToHome}</span>
+          </Button>
+        </div>
         <ThemeLanguageToggle />
       </header>
 
@@ -76,6 +88,17 @@ export default function Signup() {
             className="w-full max-w-md mx-auto"
           >
             <div className="mb-8 text-center">
+              {/* App logo with navigation to home */}
+              <div 
+                className="inline-block cursor-pointer mb-4"
+                onClick={() => navigate("/")}
+              >
+                <img 
+                  src="/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png" 
+                  alt={t.appName}
+                  className="w-24 h-24 mx-auto object-contain" 
+                />
+              </div>
               <h1 className="text-2xl font-bold">{t.createAccount}</h1>
             </div>
 
@@ -90,7 +113,7 @@ export default function Signup() {
                     id="name"
                     placeholder="Your Name"
                     type="text"
-                    autoCapitalize="words"
+                    autoCapitalize="none"
                     autoCorrect="off"
                     disabled={isLoading}
                     value={name}
