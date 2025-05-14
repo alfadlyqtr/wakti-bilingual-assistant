@@ -233,6 +233,10 @@ export type TranslationKey =
   | "subtaskGroupTitle"
   | "recurring"
   | "recurrencePattern"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
   | "dailyRecurrence"
   | "weeklyRecurrence"
   | "monthlyRecurrence"
@@ -367,7 +371,10 @@ export type TranslationKey =
   | "helpingYouWith"
   | "errorProcessingRequest"
   | "due"
-  | "selectDate";  
+  | "selectDate"
+  | "short"  
+  | "medium"
+  | "long";  
 
 export interface AIAssistantText {
   welcomeToWaktiAI: string;

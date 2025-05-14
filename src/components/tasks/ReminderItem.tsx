@@ -20,6 +20,12 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, onEdit, onDelete 
   const isReminderOverdue = isPast(new Date(reminder.due_date));
   const isReminderToday = isToday(new Date(reminder.due_date));
 
+  // Helper function to convert RecurrencePattern to TranslationKey
+  const getRecurrenceTranslationKey = (pattern: RecurrencePattern): string => {
+    // Using the pattern directly as it's now added to TranslationKey
+    return pattern;
+  };
+
   return (
     <motion.div
       layout
@@ -51,7 +57,7 @@ const ReminderItem: React.FC<ReminderItemProps> = ({ reminder, onEdit, onDelete 
             {reminder.is_recurring && reminder.recurrence_pattern && (
               <Badge variant="outline" className="flex gap-1 items-center">
                 <Clock className="h-3 w-3" />
-                {t(reminder.recurrence_pattern as RecurrencePattern, language)}
+                {t(getRecurrenceTranslationKey(reminder.recurrence_pattern), language)}
               </Badge>
             )}
           </div>
