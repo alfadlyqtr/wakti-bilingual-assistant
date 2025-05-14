@@ -92,10 +92,98 @@ export const quotes = {
       "The best doctor gives the least medicines. - Benjamin Franklin"
     ]
   },
-  productivity: "To be filled next",
-  discipline: "To be filled next",
-  gratitude: "To be filled next",
-  leadership: "To be filled next",
+  productivity: {
+    time: [
+      "Own your time or it will own you. - Unknown",
+      "Plan your work and work your plan. - Napoleon Hill",
+      "Don't watch the clock; do what it does. Keep going. - Sam Levenson",
+      "Time is what we want most, but what we use worst. - William Penn",
+      "The key is in not spending time, but in investing it. - Stephen R. Covey"
+    ],
+    focus: [
+      "What you stay focused on will grow. - Roy T. Bennett",
+      "You will never reach your destination if you stop and throw stones at every dog that barks. - Winston Churchill",
+      "Focus on being productive instead of busy. - Tim Ferriss",
+      "Concentrate all your thoughts upon the work in hand. The sun's rays do not burn until brought to a focus. - Alexander Graham Bell",
+      "Clarity affords focus. - Thomas Leonard"
+    ],
+    execution: [
+      "Ideas are easy. Execution is everything. - John Doerr",
+      "Vision without execution is hallucination. - Thomas Edison",
+      "Action is the foundational key to all success. - Pablo Picasso",
+      "Stop talking, start doing. - Unknown",
+      "Discipline turns plans into results. - Unknown"
+    ]
+  },
+  discipline: {
+    consistency: [
+      "Consistency is what transforms average into excellence. - Tony Robbins",
+      "Small disciplines repeated with consistency every day lead to great achievements. - John C. Maxwell",
+      "We are what we repeatedly do. Excellence, then, is not an act, but a habit. - Aristotle",
+      "Success doesn't come from what you do occasionally, it comes from what you do consistently. - Marie Forleo",
+      "Discipline is the bridge between goals and accomplishment. - Jim Rohn"
+    ],
+    selfControl: [
+      "Self-control is strength. Right thought is mastery. Calmness is power. - James Allen",
+      "He who controls others may be powerful, but he who has mastered himself is mightier still. - Lao Tzu",
+      "Discipline is choosing between what you want now and what you want most. - Abraham Lincoln",
+      "Freedom is not the absence of commitments, but the ability to choose – and commit myself to – what is best for me. - Paulo Coelho",
+      "Rule your mind or it will rule you. - Horace"
+    ],
+    persistence: [
+      "Winners are not those who never fail but those who never quit. - Edwin Louis Cole",
+      "The man who moves a mountain begins by carrying away small stones. - Confucius",
+      "Energy and persistence conquer all things. - Benjamin Franklin",
+      "It always seems impossible until it is done. - Nelson Mandela",
+      "The difference between the difficult and the impossible is that the impossible takes a little longer. - Lady Aberdeen"
+    ]
+  },
+  gratitude: {
+    thankfulness: [
+      "Gratitude turns what we have into enough. - Aesop",
+      "Give thanks for a little and you will find a lot. - Hausa Proverb",
+      "No duty is more urgent than giving thanks. - James Allen",
+      "Appreciation is a wonderful thing. It makes what is excellent in others belong to us as well. - Voltaire",
+      "Let us be grateful to people who make us happy; they are the charming gardeners who make our souls blossom. - Marcel Proust"
+    ],
+    perspective: [
+      "Change the way you look at things and the things you look at change. - Wayne Dyer",
+      "The real voyage of discovery consists not in seeking new landscapes, but in having new eyes. - Marcel Proust",
+      "We can complain because rose bushes have thorns, or rejoice because thorns have roses. - Alphonse Karr",
+      "Life is 10% what happens to us and 90% how we react to it. - Charles R. Swindoll",
+      "Happiness depends more on the inward disposition of mind than on outward circumstances. - Benjamin Franklin"
+    ],
+    blessings: [
+      "Each day provides its own gifts. - Marcus Aurelius",
+      "Wake up every morning with the thought that something wonderful is about to happen. - Unknown",
+      "Today is a gift. That's why it's called the present. - Eleanor Roosevelt",
+      "Sometimes the smallest things take up the most room in your heart. - A.A. Milne",
+      "Start each day with a grateful heart. - Unknown"
+    ]
+  },
+  leadership: {
+    inspiration: [
+      "Leadership is not about a title or a designation. It's about impact, influence, and inspiration. - Robin Sharma",
+      "A leader is one who knows the way, goes the way, and shows the way. - John C. Maxwell",
+      "Inspire others not just by what you say, but by what you do. - Unknown",
+      "Great leaders don't set out to be a leader… they set out to make a difference. - Lisa Haisha",
+      "Your spark can become a flame and change everything. - E.D. Nixon"
+    ],
+    responsibility: [
+      "The price of greatness is responsibility. - Winston Churchill",
+      "A leader takes people where they want to go. A great leader takes people where they don't necessarily want to go, but ought to be. - Rosalynn Carter",
+      "With great power comes great responsibility. - Voltaire",
+      "Accountability breeds response-ability. - Stephen R. Covey",
+      "A genuine leader is not a searcher for consensus but a molder of consensus. - Martin Luther King Jr."
+    ],
+    growth: [
+      "Leadership and learning are indispensable to each other. - John F. Kennedy",
+      "Don't go through life, grow through life. - Eric Butterworth",
+      "Growth is the only evidence of life. - John Henry Newman",
+      "If you want to lead, you must grow. If you want to grow, you must learn. - John C. Maxwell",
+      "Leaders become great not because of their power, but because of their ability to empower others. - John C. Maxwell"
+    ]
+  },
   mixed: "Randomly pull from all categories and subcategories",
   custom: "User can enter up to 5 quotes in the app settings. These quotes must appear randomly. Display format: quote - @username"
 };
