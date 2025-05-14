@@ -2,18 +2,13 @@
 import {
   ToastActionElement,
   ToastProps,
-} from "@/components/ui/toast"
-import {
-  useToast as useToastOriginal,
-} from "@/components/ui/toast"
+} from "@/components/ui/toast";
 
-export { useToast } from "@/components/ui/toaster"
+import { toast as toastOriginal } from "sonner";
+import { useToast as useToastOriginal } from "@/components/ui/toaster";
 
-import { toast as toastOriginal } from "@/components/ui/use-toast";
-
-export function toast(props: ToastProps) {
-  return toastOriginal(props);
-}
+export const useToast = useToastOriginal;
+export const toast = toastOriginal;
 
 type ConfirmOptions = {
   title: string;

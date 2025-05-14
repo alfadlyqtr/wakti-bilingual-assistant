@@ -2,11 +2,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
+import OpenAI from "https://esm.sh/openai@4.20.1";
 
 // Get environment variables
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -56,40 +57,44 @@ serve(async (req) => {
       );
     }
 
-    // Determine which voice to use based on language and gender
-    let voiceId = "21m00Tcm4TlvDq8ikWAM"; // Default: English, Male
+    // Initialize OpenAI client
+    const openai = new OpenAI({
+      apiKey: OPENAI_API_KEY,
+    });
+
+    // Determine which OpenAI TTS voice to use based on language and gender
+    let voice = "alloy"; // Default voice
 
     if (language === "ar") {
-      voiceId = voiceGender === "female" ? "jsCqWAovK2LkecY7zXl4" : "t0jbNlBVZ17f02VDIeMI"; // Arabic voices
+      voice = voiceGender === "female" ? "shimmer" : "echo"; // Arabic voices
     } else {
-      voiceId = voiceGender === "female" ? "EXAVITQu4vr4xnSDxMaL" : "21m00Tcm4TlvDq8ikWAM"; // English voices
+      voice = voiceGender === "female" ? "nova" : "onyx"; // English voices
     }
 
-    // Generate TTS using ElevenLabs API
-    const elevenLabsResponse = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    // Generate TTS using OpenAI API
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "xi-api-key": ELEVENLABS_API_KEY
+        "Authorization": `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        text: recording.summary_text,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5
-        }
+        model: "tts-1",
+        input: recording.summary_text,
+        voice: voice,
+        response_format: "mp3"
       })
     });
 
-    if (!elevenLabsResponse.ok) {
+    if (!response.ok) {
+      const errorData = await response.json();
       return new Response(
-        JSON.stringify({ error: "TTS generation failed", status: elevenLabsResponse.status }),
+        JSON.stringify({ error: "TTS generation failed", details: errorData }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const audioData = await elevenLabsResponse.arrayBuffer();
+    const audioData = await response.arrayBuffer();
     
     // Upload the TTS audio to Supabase Storage
     const fileName = `${recording.user_id}/${recordingId}_summary.mp3`;
