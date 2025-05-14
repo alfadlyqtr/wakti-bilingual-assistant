@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +52,8 @@ export default function VoiceSummaryArchive() {
 
   const handleViewDetails = (recordingId: string) => {
     console.log("Navigating to recording details:", recordingId);
-    navigate(`/voice/${recordingId}`);
+    // Update to use the consistent /voice-summary/:id path
+    navigate(`/voice-summary/${recordingId}`);
   };
 
   if (isLoading) {

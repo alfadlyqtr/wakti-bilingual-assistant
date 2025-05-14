@@ -1,93 +1,144 @@
 
-import { toast as sonnerToast } from "sonner";
-import React from "react";
+import * as React from "react"
+import { 
+  Toast,
+  ToastClose, 
+  ToastDescription, 
+  ToastProvider, 
+  ToastTitle, 
+  ToastViewport,
+} from "@/components/ui/toast"
+import { useToast as useToastPrimitive } from "@/components/ui/use-toast"
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
-type ToastProps = {
-  title: string;
-  description?: string;
-  variant?: "default" | "destructive";
-  action?: React.ReactNode;
-  duration?: number;
-  icon?: React.ReactNode;
-};
+export const ToasterToast = ({ ...props }) => {
+  return (
+    <Toast {...props}>
+      <div className="grid gap-1">
+        {props.title && <ToastTitle>{props.title}</ToastTitle>}
+        {props.description && (
+          <ToastDescription>{props.description}</ToastDescription>
+        )}
+      </div>
+      <ToastClose />
+    </Toast>
+  )
+}
 
-type ConfirmProps = {
-  title: string;
-  description?: string;
-  onConfirm: () => void;
-  onCancel?: () => void;
-};
+export function Toaster() {
+  const { toasts } = useToastPrimitive()
 
+  return (
+    <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, ...props }) {
+        return (
+          <ToasterToast
+            key={id}
+            {...props}
+            title={title}
+            description={description}
+            action={action}
+          />
+        )
+      })}
+      <ToastViewport />
+    </ToastProvider>
+  )
+}
+
+// Custom hook to create toasts with a simpler API
 export const useToast = () => {
-  const showToast = ({ title, description, variant, action, duration, icon }: ToastProps) => {
-    if (variant === "destructive") {
-      sonnerToast.error(title, {
-        description,
-        action,
-        duration,
-        icon,
-      });
-    } else {
-      sonnerToast.success(title, {
-        description,
-        action,
-        duration,
-        icon,
-      });
-    }
-  };
+  const { toast: originalToast } = useToastPrimitive()
+  const [openConfirm, setOpenConfirm] = React.useState(false)
+  const [confirmData, setConfirmData] = React.useState<{
+    title: string
+    description: string
+    onConfirm: () => void
+    onCancel?: () => void
+  }>({
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  })
 
-  const showConfirm = ({ title, description, onConfirm, onCancel }: ConfirmProps) => {
-    sonnerToast(title, {
-      description,
-      action: {
-        label: "Confirm",
-        onClick: onConfirm,
-      },
-      cancel: {
-        label: "Cancel",
-        onClick: onCancel,
-      },
-      className: "w-full",
-    });
-  };
+  // Simple alert function
+  const toast = (props: { title: string; description?: string; variant?: "default" | "destructive" }) => {
+    originalToast({
+      ...props,
+      variant: props.variant || "default",
+    })
+  }
+
+  // Confirmation dialog
+  const confirm = (props: {
+    title: string
+    description: string
+    onConfirm: () => void
+    onCancel?: () => void
+  }) => {
+    setConfirmData(props)
+    setOpenConfirm(true)
+  }
+
+  const ConfirmationDialog = () => (
+    <AlertDialog open={openConfirm} onOpenChange={setOpenConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmData.title}</AlertDialogTitle>
+          <AlertDialogDescription>{confirmData.description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            onClick={() => {
+              if (confirmData.onCancel) confirmData.onCancel()
+            }}
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              confirmData.onConfirm()
+              setOpenConfirm(false)
+            }}
+          >
+            Confirm
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 
   return {
-    toast: showToast,
-    confirm: showConfirm,
-  };
-};
-
-// These are for direct use without the hook
-export const toast = (props: ToastProps) => {
-  if (props.variant === "destructive") {
-    sonnerToast.error(props.title, {
-      description: props.description,
-      action: props.action,
-      duration: props.duration,
-      icon: props.icon,
-    });
-  } else {
-    sonnerToast.success(props.title, {
-      description: props.description,
-      action: props.action,
-      duration: props.duration,
-      icon: props.icon,
-    });
+    toast,
+    confirm,
+    ConfirmationDialog,
   }
-};
+}
 
-export const confirm = ({ title, description, onConfirm, onCancel }: ConfirmProps) => {
-  sonnerToast(title, {
-    description,
-    action: {
-      label: "Confirm",
-      onClick: onConfirm,
-    },
-    cancel: {
-      label: "Cancel",
-      onClick: onCancel,
-    },
-    className: "w-full",
-  });
-};
+// Export standalone toast function for easy use
+export const toast = (props: { title: string; description?: string; variant?: "default" | "destructive" }) => {
+  const { toast: originalToast } = useToastPrimitive()
+  originalToast({
+    ...props,
+    variant: props.variant || "default",
+  })
+}
+
+// Export standalone confirm function
+export const confirm = (props: {
+  title: string
+  description: string
+  onConfirm: () => void
+  onCancel?: () => void
+}) => {
+  throw new Error("The standalone confirm function can only be used inside a component. Use useToast().confirm instead.")
+}

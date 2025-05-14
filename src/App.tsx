@@ -1,4 +1,3 @@
-
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -53,6 +52,9 @@ function App() {
                 <Route path="/messages" element={<Messages />} />
                 <Route path="/voice-summary" element={<VoiceSummary />} />
                 <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
+                {/* Add redirect from /voice to /voice-summary */}
+                <Route path="/voice" element={<Navigate to="/voice-summary" replace />} />
+                {/* Keep compatibility with the old route pattern */}
                 <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/contacts" element={<Contacts />} />
