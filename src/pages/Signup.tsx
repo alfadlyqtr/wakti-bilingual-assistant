@@ -43,7 +43,11 @@ export default function Signup() {
       signup: "Sign Up",
       alreadyHaveAccount: "Already have an account?",
       login: "Login",
-      backToHome: "Back to Home"
+      backToHome: "Back to Home",
+      // Placeholders
+      namePlaceholder: "Your Name",
+      usernamePlaceholder: "username",
+      emailPlaceholder: "example@email.com"
     },
     ar: {
       appName: "وقتي",
@@ -56,7 +60,11 @@ export default function Signup() {
       signup: "إنشاء حساب",
       alreadyHaveAccount: "لديك حساب بالفعل؟",
       login: "تسجيل الدخول",
-      backToHome: "العودة للرئيسية"
+      backToHome: "العودة للرئيسية",
+      // Placeholders
+      namePlaceholder: "اسمك",
+      usernamePlaceholder: "اسم المستخدم",
+      emailPlaceholder: "example@email.com"
     }
   };
 
@@ -94,7 +102,7 @@ export default function Signup() {
                 onClick={() => navigate("/")}
               >
                 <img 
-                  src="/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png" 
+                  src="/lovable-uploads/2c20e274-1952-4a09-9b33-26de3cf72aab.png" 
                   alt={t.appName}
                   className="w-24 h-24 mx-auto object-contain" 
                 />
@@ -111,7 +119,7 @@ export default function Signup() {
                   </div>
                   <Input
                     id="name"
-                    placeholder="Your Name"
+                    placeholder={t.namePlaceholder}
                     type="text"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -132,7 +140,7 @@ export default function Signup() {
                   </div>
                   <Input
                     id="username"
-                    placeholder="username"
+                    placeholder={t.usernamePlaceholder}
                     type="text"
                     autoCapitalize="none"
                     autoCorrect="off"
@@ -153,7 +161,7 @@ export default function Signup() {
                   </div>
                   <Input
                     id="email"
-                    placeholder="example@email.com"
+                    placeholder={t.emailPlaceholder}
                     type="email"
                     autoCapitalize="none"
                     autoComplete="email"

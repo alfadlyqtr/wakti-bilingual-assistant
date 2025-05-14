@@ -7,8 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Mail, ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
+import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -17,21 +16,15 @@ export default function ForgotPassword() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleResetPassword = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!email || !email.includes('@')) {
-      toast.error(language === "en" ? "Please enter a valid email" : "يرجى إدخال بريد إلكتروني صالح");
-      return;
-    }
-    
     setIsLoading(true);
-    
     // Will implement with Supabase later
     setTimeout(() => {
       setIsSubmitted(true);
       setIsLoading(false);
-    }, 1500);
+    }, 1000);
   };
 
   // Translations
@@ -39,28 +32,32 @@ export default function ForgotPassword() {
     en: {
       appName: "WAKTI",
       forgotPassword: "Forgot Password",
+      email: "Email",
+      resetInstructions: "Enter your email to receive reset instructions",
+      loading: "Loading...",
       resetPassword: "Reset Password",
       backToLogin: "Back to Login",
-      resetInstructions: "Enter your email address and we'll send you a link to reset your password.",
-      email: "Email",
-      sendResetLink: "Send Reset Link",
-      loading: "Loading...",
-      successTitle: "Reset Link Sent",
-      successMessage: "If your email exists in our system, you will receive a password reset link shortly.",
-      checkEmail: "Please check your email.",
+      resetLinkSent: "Reset link sent",
+      resetEmailSent: "A password reset link has been sent to your email.",
+      checkEmail: "Please check your inbox.",
+      backToHome: "Back to Home",
+      // Placeholders
+      emailPlaceholder: "example@email.com"
     },
     ar: {
       appName: "وقتي",
       forgotPassword: "نسيت كلمة المرور",
+      email: "البريد الإلكتروني",
+      resetInstructions: "أدخل بريدك الإلكتروني لتلقي تعليمات إعادة تعيين كلمة المرور",
+      loading: "جاري التحميل...",
       resetPassword: "إعادة تعيين كلمة المرور",
       backToLogin: "العودة إلى تسجيل الدخول",
-      resetInstructions: "أدخل عنوان بريدك الإلكتروني وسنرسل لك رابطًا لإعادة تعيين كلمة المرور الخاصة بك.",
-      email: "البريد الإلكتروني",
-      sendResetLink: "إرسال رابط إعادة التعيين",
-      loading: "جاري التحميل...",
-      successTitle: "تم إرسال رابط إعادة التعيين",
-      successMessage: "إذا كان بريدك الإلكتروني موجودًا في نظامنا، فستتلقى رابط إعادة تعيين كلمة المرور قريبًا.",
-      checkEmail: "يرجى التحقق من بريدك الإلكتروني.",
+      resetLinkSent: "تم إرسال رابط إعادة التعيين",
+      resetEmailSent: "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.",
+      checkEmail: "يرجى التحقق من صندوق الوارد الخاص بك.",
+      backToHome: "العودة للرئيسية",
+      // Placeholders
+      emailPlaceholder: "example@email.com"
     }
   };
 
@@ -69,7 +66,17 @@ export default function ForgotPassword() {
   return (
     <div className="mobile-container">
       <header className="mobile-header">
-        <h1 className="text-2xl font-bold">{t.appName}</h1>
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-1 mr-2"
+            onClick={() => navigate("/")}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="text-xs">{t.backToHome}</span>
+          </Button>
+        </div>
         <ThemeLanguageToggle />
       </header>
 
@@ -81,15 +88,6 @@ export default function ForgotPassword() {
             transition={{ duration: 0.5 }}
             className="w-full max-w-md mx-auto"
           >
-            <Button 
-              variant="ghost" 
-              className="mb-4 -ml-2 flex items-center gap-1"
-              onClick={() => navigate('/login')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>{t.backToLogin}</span>
-            </Button>
-            
             <div className="mb-8 text-center">
               {/* App logo with navigation to home */}
               <div 
@@ -97,82 +95,85 @@ export default function ForgotPassword() {
                 onClick={() => navigate("/")}
               >
                 <img 
-                  src="/lovable-uploads/4ed7b33a-201e-4f05-94de-bac892155c01.png" 
+                  src="/lovable-uploads/2c20e274-1952-4a09-9b33-26de3cf72aab.png" 
                   alt={t.appName}
                   className="w-24 h-24 mx-auto object-contain" 
                 />
               </div>
-              <h1 className="text-2xl font-bold">{t.forgotPassword}</h1>
+              <h1 className="text-2xl font-bold mb-2">{t.forgotPassword}</h1>
+              {!isSubmitted && (
+                <p className="text-sm text-muted-foreground">
+                  {t.resetInstructions}
+                </p>
+              )}
             </div>
 
             {!isSubmitted ? (
-              <>
-                <p className="mb-6 text-center text-muted-foreground">
-                  {t.resetInstructions}
-                </p>
-
-                <form onSubmit={handleResetPassword} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-base">{t.email}</Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                        <Mail className="h-5 w-5 text-muted-foreground" />
-                      </div>
-                      <Input
-                        id="email"
-                        placeholder="example@email.com"
-                        type="email"
-                        autoCapitalize="none"
-                        autoComplete="email"
-                        autoCorrect="off"
-                        disabled={isLoading}
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 py-6 text-base shadow-sm"
-                        required
-                      />
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-base">{t.email}</Label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <Mail className="h-5 w-5 text-muted-foreground" />
                     </div>
+                    <Input
+                      id="email"
+                      placeholder={t.emailPlaceholder}
+                      type="email"
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      autoCorrect="off"
+                      disabled={isLoading}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="pl-10 py-6 text-base shadow-sm"
+                      required
+                    />
                   </div>
-                  
+                </div>
+                
+                <Button
+                  type="submit"
+                  className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
+                  disabled={isLoading}
+                >
+                  {isLoading ? t.loading : t.resetPassword}
+                </Button>
+                
+                <div className="mt-4 text-center">
                   <Button
-                    type="submit"
-                    className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                    disabled={isLoading}
+                    variant="link"
+                    className="px-0"
+                    onClick={() => navigate("/login")}
                   >
-                    {isLoading ? t.loading : t.sendResetLink}
+                    {t.backToLogin}
                   </Button>
-                </form>
-              </>
+                </div>
+              </form>
             ) : (
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2 }}
-                className="text-center space-y-6 p-6 bg-secondary/20 rounded-lg shadow-md"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-center"
               >
-                <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    className="h-8 w-8 text-green-500" 
-                    viewBox="0 0 20 20" 
-                    fill="currentColor"
-                  >
-                    <path 
-                      fillRule="evenodd" 
-                      d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" 
-                      clipRule="evenodd" 
-                    />
-                  </svg>
+                <div className="flex justify-center mb-4">
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-primary" />
+                  </div>
                 </div>
-                <h3 className="text-xl font-bold">{t.successTitle}</h3>
-                <p className="text-muted-foreground">
-                  {t.successMessage}
+                <h2 className="text-xl font-medium mb-2">
+                  {t.resetLinkSent}
+                </h2>
+                <p className="text-muted-foreground mb-2">
+                  {t.resetEmailSent}
                 </p>
-                <p className="font-medium">{t.checkEmail}</p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => navigate('/login')}
+                <p className="text-muted-foreground mb-6">
+                  {t.checkEmail}
+                </p>
+                <Button
+                  variant="outline"
+                  className="mb-4 w-full"
+                  onClick={() => navigate("/login")}
                 >
                   {t.backToLogin}
                 </Button>
