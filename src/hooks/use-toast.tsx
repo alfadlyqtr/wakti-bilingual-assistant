@@ -16,6 +16,12 @@ type ConfirmProps = {
   onCancel?: () => void;
 };
 
+// Define the toast parameter type to match sonner's type
+interface ToastT {
+  id: string | number;
+  dismiss: () => void;
+}
+
 const useToast = () => {
   const showToast = ({ title, description, variant, action }: ToastProps) => {
     if (variant === "destructive") {
@@ -33,7 +39,7 @@ const useToast = () => {
 
   const confirm = ({ title, description, onConfirm, onCancel }: ConfirmProps) => {
     sonnerToast.custom(
-      ({ toast }) => (
+      ({ id, dismiss }: ToastT) => (
         <div className="flex flex-col gap-2 w-full p-2">
           <div className="font-semibold">{title}</div>
           {description && <div className="text-sm text-muted-foreground">{description}</div>}
@@ -41,7 +47,7 @@ const useToast = () => {
             <button 
               onClick={() => {
                 if (onCancel) onCancel();
-                sonnerToast.dismiss(toast.id);
+                dismiss();
               }} 
               className="px-2 py-1 bg-muted hover:bg-muted/80 rounded-md text-sm transition-colors"
             >
@@ -50,7 +56,7 @@ const useToast = () => {
             <button 
               onClick={() => {
                 onConfirm();
-                sonnerToast.dismiss(toast.id);
+                dismiss();
               }} 
               className="px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-sm transition-colors"
             >
@@ -90,7 +96,7 @@ const toast = (props: ToastProps) => {
 // Export a confirm function for direct use like the toast function
 const confirm = (props: ConfirmProps) => {
   sonnerToast.custom(
-    ({ toast }) => (
+    ({ id, dismiss }: ToastT) => (
       <div className="flex flex-col gap-2 w-full p-2">
         <div className="font-semibold">{props.title}</div>
         {props.description && <div className="text-sm text-muted-foreground">{props.description}</div>}
@@ -98,7 +104,7 @@ const confirm = (props: ConfirmProps) => {
           <button 
             onClick={() => {
               if (props.onCancel) props.onCancel();
-              sonnerToast.dismiss(toast.id);
+              dismiss();
             }} 
             className="px-2 py-1 bg-muted hover:bg-muted/80 rounded-md text-sm transition-colors"
           >
@@ -107,7 +113,7 @@ const confirm = (props: ConfirmProps) => {
           <button 
             onClick={() => {
               props.onConfirm();
-              sonnerToast.dismiss(toast.id);
+              dismiss();
             }} 
             className="px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-sm transition-colors"
           >

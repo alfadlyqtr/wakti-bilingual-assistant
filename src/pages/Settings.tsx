@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -13,7 +12,7 @@ import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
-import { Check, Save, Settings } from "lucide-react";
+import { Check, Save, Settings as SettingsIcon } from "lucide-react";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
