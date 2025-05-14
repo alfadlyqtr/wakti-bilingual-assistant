@@ -25,9 +25,11 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
   const { language } = useTheme();
   const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes() || []);
   const [newQuote, setNewQuote] = useState('');
-  const [username, setUsername] = useState('');
   const MAX_QUOTES = 5;
   const MAX_CHARS = 30;
+  
+  // Use a fixed username - in a real app, this would come from auth
+  const username = 'jane_doe'; // This would normally come from your auth system
 
   const handleAddQuote = () => {
     if (!newQuote.trim()) {
@@ -44,13 +46,12 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
       return;
     }
     
-    const formattedQuote = `${newQuote.trim()} - @${username.trim() || 'user'}`;
+    const formattedQuote = `${newQuote.trim()} - @${username}`;
     const updatedQuotes = [...customQuotes, formattedQuote];
     
     setCustomQuotes(updatedQuotes);
     saveCustomQuotes(updatedQuotes);
     setNewQuote('');
-    setUsername('');
     
     if (onUpdate) onUpdate();
     
@@ -94,13 +95,16 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
           <div className="text-xs text-muted-foreground text-right mb-2">
             {newQuote.length}/{MAX_CHARS}
           </div>
-          <Input
-            placeholder={language === 'ar' ? 'اسم المستخدم (اختياري)' : 'Username (optional)'}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="mb-2"
-            maxLength={15}
-          />
+          
+          <div className="mb-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              {language === 'ar' ? 'سيتم إضافة اقتباسك باسم:' : 'Your quote will be added as:'}
+            </p>
+            <div className="text-sm bg-muted/30 p-2 rounded-md">
+              @{username}
+            </div>
+          </div>
+          
           <Button 
             onClick={handleAddQuote}
             disabled={!newQuote.trim() || customQuotes.length >= MAX_QUOTES}
