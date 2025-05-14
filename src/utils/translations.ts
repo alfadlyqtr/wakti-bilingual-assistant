@@ -494,6 +494,194 @@ const translations: TranslationMap = {
   knowledge: {
     en: "Knowledge",
     ar: "معرفة"
+  },
+  month: {
+    en: "Month",
+    ar: "شهر"
+  },
+  week: {
+    en: "Week",
+    ar: "أسبوع"
+  },
+  year: {
+    en: "Year",
+    ar: "سنة"
+  },
+  monthView: {
+    en: "Month View",
+    ar: "عرض الشهر"
+  },
+  weekView: {
+    en: "Week View",
+    ar: "عرض الأسبوع"
+  },
+  yearView: {
+    en: "Year View",
+    ar: "عرض السنة"
+  },
+  noEvents: {
+    en: "No events",
+    ar: "لا توجد فعاليات"
+  },
+  notesLabel: {
+    en: "Notes",
+    ar: "ملاحظات"
+  },
+  titleRequired: {
+    en: "Title is required",
+    ar: "العنوان مطلوب"
+  },
+  dateRequired: {
+    en: "Date is required",
+    ar: "التاريخ مطلوب"
+  },
+  editNote: {
+    en: "Edit Note",
+    ar: "تعديل الملاحظة"
+  },
+  createNote: {
+    en: "Create Note",
+    ar: "إنشاء ملاحظة"
+  },
+  title: {
+    en: "Title",
+    ar: "العنوان"
+  },
+  titlePlaceholder: {
+    en: "Enter title",
+    ar: "أدخل العنوان"
+  },
+  descriptionPlaceholder: {
+    en: "Enter description",
+    ar: "أدخل الوصف"
+  },
+  requestAccepted: {
+    en: "Request Accepted",
+    ar: "تم قبول الطلب"
+  },
+  contactRejectedDescription: {
+    en: "has been removed from your blocked list",
+    ar: "تمت إزالته من قائمة المحظورين"
+  },
+  noContactRequests: {
+    en: "No contact requests",
+    ar: "لا توجد طلبات اتصال"
+  },
+  messageStarted: {
+    en: "Message Started",
+    ar: "بدأت المحادثة"
+  },
+  chattingWithUser: {
+    en: "You are now chatting with",
+    ar: "أنت الآن تتحدث مع"
+  },
+  removedFromFavorites: {
+    en: "Removed from favorites",
+    ar: "تمت إزالته من المفضلة"
+  },
+  addedToFavorites: {
+    en: "Added to favorites",
+    ar: "تمت إضافته إلى المفضلة"
+  },
+  contactBlocked: {
+    en: "Contact Blocked",
+    ar: "تم حظر جهة الاتصال"
+  },
+  userBlockedDescription: {
+    en: "has been blocked and will not be able to contact you",
+    ar: "تم حظره ولن يتمكن من الاتصال بك"
+  },
+  contactAddedDescription: {
+    en: "has been added to your contacts",
+    ar: "تمت إضافته إلى جهات الاتصال الخاصة بك"
+  },
+  requestRejected: {
+    en: "Request Rejected",
+    ar: "تم رفض الطلب"
+  },
+  blockedUserDescription: {
+    en: "has been blocked",
+    ar: "تم حظره"
+  },
+  sendMessage: {
+    en: "Send Message",
+    ar: "إرسال رسالة"
+  },
+  dailyQuote: {
+    en: "Daily Quote",
+    ar: "اقتباس يومي"
+  },
+  error: {
+    en: "Error",
+    ar: "خطأ"
+  },
+  pleaseCompleteAllRequiredFields: {
+    en: "Please complete all required fields",
+    ar: "يرجى إكمال جميع الحقول المطلوبة"
+  },
+  success: {
+    en: "Success",
+    ar: "نجاح"
+  },
+  eventCreatedSuccessfully: {
+    en: "Event created successfully",
+    ar: "تم إنشاء الفعالية بنجاح"
+  },
+  errorCreatingEvent: {
+    en: "Error creating event",
+    ar: "خطأ في إنشاء الفعالية"
+  },
+  eventTitle: {
+    en: "Event Title",
+    ar: "عنوان الفعالية"
+  },
+  enterEventTitle: {
+    en: "Enter event title",
+    ar: "أدخل عنوان الفعالية"
+  },
+  descriptionField: {
+    en: "Description",
+    ar: "الوصف"
+  },
+  enterEventDescription: {
+    en: "Enter event description",
+    ar: "أدخل وصف الفعالية"
+  },
+  enterLocation: {
+    en: "Enter location",
+    ar: "أدخل الموقع"
+  },
+  selectDate: {
+    en: "Select Date",
+    ar: "حدد التاريخ"
+  },
+  creating: {
+    en: "Creating...",
+    ar: "جاري الإنشاء..."
+  },
+  generalSettings: {
+    en: "General Settings",
+    ar: "الإعدادات العامة"
+  },
+  writerSettings: {
+    en: "Writer Settings",
+    ar: "إعدادات الكاتب"
+  },
+  creativeSettings: {
+    en: "Creative Settings",
+    ar: "الإعدادات الإبداعية"
+  },
+  assistantSettings: {
+    en: "Assistant Settings",
+    ar: "إعدادات المساعد"
+  },
+  contactRequestSettings: {
+    en: "Contact Requests",
+    ar: "طلبات الاتصال"
+  },
+  manageBlockedUsers: {
+    en: "Blocked Users",
+    ar: "المستخدمون المحظورون"
   }
 };
 

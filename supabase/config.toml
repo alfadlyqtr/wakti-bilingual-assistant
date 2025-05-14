@@ -1,43 +1,15 @@
 
-project_id = "hxauxozopvpzpdygoqwf"
-
-[api]
-enabled = true
-port = 54321
-schemas = ["public", "storage", "graphql_public"]
-
-[db]
-port = 54322
-shadow_port = 54320
-major_version = 15
-
-[realtime]
-enabled = true
-
-[studio]
-enabled = true
-port = 54323
-
-[inbucket]
-enabled = true
-port = 54324
-
-[storage]
-enabled = true
-
-[auth]
-enabled = true
-site_url = "http://localhost:3000"
-
-[auth.email]
-enabled = true
-
 [functions]
-[functions.transcribe-audio]
+node_version = 18
+
+[[edge_functions]]
+path = "transcribe-audio"
 verify_jwt = true
 
-[functions.generate-summary]
+[[edge_functions]]
+path = "generate-summary"
 verify_jwt = true
 
-[functions.generate-tts]
+[[edge_functions]]
+path = "generate-tts"
 verify_jwt = true

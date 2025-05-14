@@ -1,68 +1,61 @@
 
-import * as React from "react";
-import { toast as toastSonner } from "sonner";
+import {
+  ToastActionElement,
+  ToastProps,
+} from "@/components/ui/toast"
+import {
+  useToast as useToastOriginal,
+} from "@/components/ui/toast"
 
-export function useToast() {
-  return {
-    toast: (props: { 
-      title?: string; 
-      description?: string; 
-      variant?: "default" | "destructive";
-      duration?: number;
-      icon?: React.ReactNode;
-    }) => {
-      toastSonner(props.title, {
-        description: props.description,
-        duration: props.duration,
-        icon: props.icon,
-      });
-    },
-    dismiss: (toastId?: string) => {
-      toastSonner.dismiss(toastId);
-    },
-    // Adding confirm to the useToast hook
-    confirm: (options: { title?: string; description?: string; onConfirm?: () => void }): Promise<boolean> => {
-      return new Promise((resolve) => {
-        const confirmed = window.confirm(options.description || "");
-        if (confirmed && options.onConfirm) {
-          options.onConfirm();
-        }
-        resolve(confirmed);
-      });
-    }
-  };
+export { useToast } from "@/components/ui/toaster"
+
+import { toast as toastOriginal } from "@/components/ui/use-toast";
+
+export function toast(props: ToastProps) {
+  return toastOriginal(props);
 }
 
-// Make toast function directly callable with title/description
-export const toast = Object.assign(
-  // Main callable function
-  (props: { 
-    title?: string; 
-    description?: string; 
-    variant?: "default" | "destructive";
-    duration?: number;
-    icon?: React.ReactNode;
-  }) => {
-    return toastSonner(props.title, {
-      description: props.description,
-      duration: props.duration,
-      icon: props.icon
-    });
-  },
-  // Additional methods
-  {
-    error: (message: string) => toastSonner.error(message),
-    success: (message: string) => toastSonner.success(message),
-    info: (message: string) => toastSonner.info(message),
-    warning: (message: string) => toastSonner.warning(message),
-    dismiss: (toastId?: string) => toastSonner.dismiss(toastId)
-  }
-);
+type ConfirmOptions = {
+  title: string;
+  description: string;
+  confirmText?: string;
+  cancelText?: string;
+}
 
-// Standalone confirm function
-export const confirm = (message: string): Promise<boolean> => {
+export const confirm = (options: ConfirmOptions): Promise<boolean> => {
   return new Promise((resolve) => {
-    const confirmed = window.confirm(message);
-    resolve(confirmed);
+    const { toast } = useToastOriginal();
+    
+    const onConfirm = () => {
+      resolve(true);
+    };
+
+    const onCancel = () => {
+      resolve(false);
+    };
+
+    toast({
+      title: options.title,
+      description: options.description,
+      action: (
+        <ToastActionElement altText="Confirm action">
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className="rounded bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground"
+            >
+              {options.cancelText || "Cancel"}
+            </button>
+            <button
+              onClick={onConfirm}
+              className="rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              {options.confirmText || "Confirm"}
+            </button>
+          </div>
+        </ToastActionElement>
+      ),
+      duration: 10000,
+    });
   });
 };
