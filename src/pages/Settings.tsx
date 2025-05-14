@@ -10,14 +10,17 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
+import { Check, Save, Settings } from "lucide-react";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
+  const { confirm } = useToast();
   
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
@@ -40,8 +43,16 @@ export default function Settings() {
   };
   
   const handleSaveAllSettings = () => {
-    // Already saving on change, but we can add additional save logic here if needed
-    toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved");
+    confirm({
+      title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
+      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
+      onConfirm: () => {
+        // Already saving on change, but we can add additional save logic here if needed
+        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+          icon: <Check className="h-4 w-4" />,
+        });
+      }
+    });
   };
   
   // Watch for category changes to show dialog
@@ -253,9 +264,10 @@ export default function Settings() {
 
         {/* Save All Settings Button */}
         <Button 
-          className="w-full mt-6" 
+          className="w-full mt-6 flex items-center gap-2" 
           onClick={handleSaveAllSettings}
         >
+          <Save className="h-4 w-4" />
           {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
         </Button>
       </div>
