@@ -4,9 +4,17 @@ import { toast as toastSonner } from "sonner";
 
 export function useToast() {
   return {
-    toast: (props: { title?: string; description?: string; variant?: "default" | "destructive" }) => {
+    toast: (props: { 
+      title?: string; 
+      description?: string; 
+      variant?: "default" | "destructive";
+      duration?: number;
+      icon?: React.ReactNode;
+    }) => {
       toastSonner(props.title, {
         description: props.description,
+        duration: props.duration,
+        icon: props.icon,
       });
     },
     dismiss: (toastId?: string) => {
@@ -28,9 +36,17 @@ export function useToast() {
 // Make toast function directly callable with title/description
 export const toast = Object.assign(
   // Main callable function
-  (props: { title?: string; description?: string; variant?: "default" | "destructive" }) => {
+  (props: { 
+    title?: string; 
+    description?: string; 
+    variant?: "default" | "destructive";
+    duration?: number;
+    icon?: React.ReactNode;
+  }) => {
     return toastSonner(props.title, {
       description: props.description,
+      duration: props.duration,
+      icon: props.icon
     });
   },
   // Additional methods
