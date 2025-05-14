@@ -19,25 +19,34 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
   return (
     <button
       className={cn(
-        "flex flex-col items-center justify-center p-2 rounded-lg transition-all",
+        "flex flex-col items-center justify-center py-2 px-3 rounded-xl transition-all scale-100 hover:scale-110",
         isActive
-          ? "text-primary"
+          ? isDark 
+            ? "text-white" 
+            : "text-light-primary"
           : "text-muted-foreground hover:text-foreground"
       )}
       onClick={onClick}
     >
       <div
         className={cn(
-          "rounded-full p-2 mb-1",
-          isActive &&
-            (isDark
-              ? "bg-gradient-to-tr from-primary/20 to-primary/10"
-              : "bg-primary/10")
+          "rounded-full p-2 mb-1 transition-all",
+          isActive && (
+            isDark
+              ? "bg-gradient-to-br from-dark-secondary to-dark-tertiary shadow-lg shadow-dark-secondary/20"
+              : "bg-gradient-to-br from-light-primary/80 to-light-secondary shadow-lg shadow-light-secondary/20"
+          ),
+          !isActive && "hover:bg-accent/50"
         )}
       >
         {icon}
       </div>
-      <span className="text-xs font-medium">{label}</span>
+      <span className={cn(
+        "text-xs font-medium transition-all", 
+        isActive && "font-semibold"
+      )}>
+        {label}
+      </span>
     </button>
   );
 };
@@ -84,7 +93,12 @@ export const MobileNav = () => {
 
   return (
     <div className="fixed bottom-6 left-2 right-2 z-50">
-      <div className="flex justify-around items-center p-1 mx-auto max-w-md bg-background/90 backdrop-blur-xl shadow-xl rounded-full border border-border/30">
+      <div className={cn(
+        "flex justify-around items-center p-1 mx-auto max-w-md rounded-full border shadow-xl animate-fade-in",
+        isDark 
+          ? "bg-dark-bg/90 backdrop-blur-xl border-dark-secondary/30 shadow-dark-bg/30" 
+          : "bg-light-bg/90 backdrop-blur-xl border-light-secondary/40 shadow-light-secondary/20"
+      )}>
         {navItems.map((item) => (
           <NavItem
             key={item.path}
