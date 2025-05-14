@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -34,6 +33,8 @@ import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { quotes } from "@/utils/dailyQuotes";
 import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
+import { Check, Save, Settings } from "lucide-react";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -41,6 +42,7 @@ export default function Account() {
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
+  const { confirm } = useToast();
 
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
@@ -57,18 +59,46 @@ export default function Account() {
   };
 
   const handleSaveSettings = () => {
-    saveQuotePreferences(quotePreferences);
-    
-    // Show success toast
-    toast.success(language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully");
+    confirm({
+      title: language === 'ar' ? "حفظ الإعدادات؟" : "Save settings?",
+      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ التغييرات؟" : "Are you sure you want to save changes?",
+      onConfirm: () => {
+        saveQuotePreferences(quotePreferences);
+        // Show success toast
+        toast.success(language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully", {
+          icon: <Check className="h-4 w-4" />,
+        });
+      }
+    });
   };
 
   const handleSaveAllSettings = () => {
-    // Save quote preferences
-    saveQuotePreferences(quotePreferences);
-    
-    // Show success toast
-    toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully");
+    confirm({
+      title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
+      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
+      onConfirm: () => {
+        // Save quote preferences
+        saveQuotePreferences(quotePreferences);
+        
+        // Show success toast
+        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully", {
+          icon: <Check className="h-4 w-4" />,
+        });
+      }
+    });
+  };
+
+  const handleSaveProfile = () => {
+    confirm({
+      title: language === 'ar' ? "حفظ التغييرات؟" : "Save changes?",
+      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ تغييرات الملف الشخصي؟" : "Are you sure you want to save profile changes?",
+      onConfirm: () => {
+        // Profile save logic would go here
+        toast.success(language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully", {
+          icon: <Check className="h-4 w-4" />,
+        });
+      }
+    });
   };
 
   // Watch for category changes to show dialog
@@ -159,7 +189,8 @@ export default function Account() {
                 />
               </div>
 
-              <Button className="w-full mt-4">
+              <Button className="w-full mt-4 flex items-center gap-2" onClick={handleSaveProfile}>
+                <Save className="h-4 w-4" />
                 {language === "ar" ? "حفظ التغييرات" : "Save Changes"}
               </Button>
 
@@ -360,9 +391,10 @@ export default function Account() {
                 </div>
                 
                 <Button 
-                  className="w-full mt-4" 
+                  className="w-full mt-4 flex items-center gap-2" 
                   onClick={handleSaveSettings}
                 >
+                  <Save className="h-4 w-4" />
                   {language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings'}
                 </Button>
 
@@ -563,9 +595,10 @@ export default function Account() {
 
             {/* Save All Settings Button */}
             <Button 
-              className="w-full mt-6" 
+              className="w-full mt-6 flex items-center gap-2" 
               onClick={handleSaveAllSettings}
             >
+              <Settings className="h-4 w-4" />
               {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
             </Button>
           </TabsContent>

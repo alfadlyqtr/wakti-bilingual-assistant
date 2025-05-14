@@ -3,7 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from '@/utils/quoteService';
+import { 
+  getQuoteForDisplay, 
+  getQuoteText, 
+  getQuoteAuthor, 
+  QuoteObject 
+} from '@/utils/quoteService';
 
 interface QuoteWidgetProps {
   className?: string;
@@ -11,12 +16,17 @@ interface QuoteWidgetProps {
 
 export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   const { language } = useTheme();
-  const [quote, setQuote] = useState<string>("");
+  const [quote, setQuote] = useState<QuoteObject | string | null>(null);
   
   useEffect(() => {
     // Get the quote on component mount and when language changes
-    const quoteText = getQuoteForDisplay();
-    setQuote(quoteText);
+    const fetchQuote = () => {
+      const quoteData = getQuoteForDisplay();
+      console.log("Fetched quote:", quoteData);
+      setQuote(quoteData);
+    };
+    
+    fetchQuote();
   }, [language]); // Re-fetch quote when language changes
   
   // If no quote is available yet
@@ -24,7 +34,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
     return null;
   }
   
-  const quoteText = getQuoteText(quote);
+  const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
   
   return (
