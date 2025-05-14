@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -49,6 +48,7 @@ export default function Settings() {
     });
   };
   
+  // Update the handleSaveAllSettings function to use the new confirm syntax
   const handleSaveAllSettings = () => {
     confirm({
       title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
@@ -68,7 +68,7 @@ export default function Settings() {
         
         toast({
           title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
-          icon: <Check className="h-4 w-4" />,
+          description: <Check className="h-4 w-4" />, // Use description to show the icon
           duration: 2000
         });
       }

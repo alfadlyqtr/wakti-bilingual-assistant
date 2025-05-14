@@ -17,6 +17,14 @@ const TOAST_REMOVE_DELAY = 1000000;
 
 export type ToastOptions = Omit<ToasterToast, "id">;
 
+// Define the confirm options type
+export type ConfirmOptions = {
+  title: string;
+  description?: string;
+  onConfirm: () => void;
+  onCancel?: () => void;
+};
+
 let memoryToasts: ToasterToast[] = [];
 
 const useToast = () => {
@@ -30,11 +38,33 @@ const useToast = () => {
   };
 };
 
-// Simple confirm function that returns a promise
-export function confirm(message: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const confirmed = window.confirm(message);
-    resolve(confirmed);
+// Confirm function that shows a confirm dialog
+export function confirm(options: ConfirmOptions | string) {
+  // Handle string argument (backward compatibility)
+  if (typeof options === 'string') {
+    const confirmed = window.confirm(options);
+    return Promise.resolve(confirmed);
+  }
+  
+  // Handle object argument
+  const { title, description, onConfirm, onCancel } = options;
+  
+  // Show confirm dialog using sonner
+  sonnerToast(title, {
+    description,
+    action: {
+      label: "Confirm",
+      onClick: () => {
+        onConfirm();
+      },
+    },
+    cancel: {
+      label: "Cancel",
+      onClick: () => {
+        if (onCancel) onCancel();
+      },
+    },
+    duration: 10000,
   });
 }
 
@@ -43,7 +73,7 @@ export function toast(props: ToastOptions) {
   const { title, description, variant, ...rest } = props;
   
   // Map variant to sonner's equivalent
-  let sonnerVariant: "default" | "success" | "error" | "warning" | "info" = "default";
+  let sonnerVariant = "default";
   if (variant === "destructive") {
     sonnerVariant = "error";
   } else if (variant === "success") {
@@ -54,7 +84,7 @@ export function toast(props: ToastOptions) {
   sonnerToast(title as string, {
     description,
     ...rest,
-    // Use style instead of type which doesn't exist in ExternalToast
+    // No need to specify a type property here as it's not compatible
   });
   
   // Store toast in memory for any component that needs access to all toasts

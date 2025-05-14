@@ -5,3 +5,5 @@ export { useToast } from "@/hooks/use-toast";
 export { confirm } from "@/hooks/use-toast";
 // Export toast function
 export { toast } from "@/hooks/use-toast";
+// Export the types too
+export type { ConfirmOptions } from "@/hooks/use-toast";
