@@ -1,49 +1,16 @@
 
-import * as React from "react";
-import { toast as sonnerToast } from "sonner";
+import { useToast as useToastShadcn } from "@/components/ui/toast";
+import { toast as toastShadcn } from "@/components/ui/use-toast";
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof sonnerToast>;
+export function useToast() {
+  return useToastShadcn();
+}
 
-const useToast = () => {
-  return {
-    toast: sonnerToast,
-  };
-};
+export const toast = toastShadcn;
 
-type ConfirmOptions = {
-  title?: string;
-  description?: string;
-  confirmText?: string;
-  cancelText?: string;
-};
-
-const toast = sonnerToast;
-
-const confirm = (options: ConfirmOptions = {}): Promise<boolean> => {
+export const confirm = (message: string): Promise<boolean> => {
   return new Promise((resolve) => {
-    const {
-      title = "Confirm",
-      description = "Are you sure you want to continue?",
-      confirmText = "Confirm",
-      cancelText = "Cancel",
-    } = options;
-
-    sonnerToast(
-      title,
-      {
-        description,
-        action: {
-          label: confirmText,
-          onClick: () => resolve(true),
-        },
-        cancel: {
-          label: cancelText,
-          onClick: () => resolve(false),
-        },
-        onAutoClose: () => resolve(false),
-      }
-    );
+    const confirmed = window.confirm(message);
+    resolve(confirmed);
   });
 };
-
-export { useToast, toast, confirm };

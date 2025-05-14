@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -455,6 +454,192 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   iCanCreateThisTask: {
     en: "I can create this task for you. Please confirm the details below.",
     ar: "يمكنني إنشاء هذه المهمة لك. يرجى تأكيد التفاصيل أدناه."
+  },
+  
+  // Additional translations
+  calendar: {
+    en: "Calendar",
+    ar: "التقويم"
+  },
+  ai: {
+    en: "AI",
+    ar: "الذكاء الاصطناعي"
+  },
+  summary: {
+    en: "Summary",
+    ar: "الملخص"
+  },
+  events: {
+    en: "Events",
+    ar: "الفعاليات"
+  },
+  account: {
+    en: "Account",
+    ar: "الحساب"
+  },
+  messaging: {
+    en: "Messages",
+    ar: "الرسائل"
+  },
+  contacts: {
+    en: "Contacts",
+    ar: "جهات الاتصال"
+  },
+  logout: {
+    en: "Logout",
+    ar: "تسجيل الخروج"
+  },
+  generalSettings: {
+    en: "General Settings",
+    ar: "الإعدادات العامة"
+  },
+  writerSettings: {
+    en: "Writer Settings",
+    ar: "إعدادات الكتابة"
+  },
+  creativeSettings: {
+    en: "Creative Settings",
+    ar: "إعدادات الإبداع"
+  },
+  assistantSettings: {
+    en: "Assistant Settings",
+    ar: "إعدادات المساعد"
+  },
+  messageStarted: {
+    en: "Message Started",
+    ar: "بدأت المحادثة"
+  },
+  chattingWithUser: {
+    en: "Chatting with",
+    ar: "محادثة مع"
+  },
+  removedFromFavorites: {
+    en: "Removed from favorites",
+    ar: "تمت الإزالة من المفضلة"
+  },
+  addedToFavorites: {
+    en: "Added to favorites",
+    ar: "تمت الإضافة إلى المفضلة"
+  },
+  contactBlocked: {
+    en: "Contact blocked",
+    ar: "تم حظر جهة الاتصال"
+  },
+  userBlockedDescription: {
+    en: "The user has been blocked",
+    ar: "تم حظر المستخدم"
+  },
+  noEvents: {
+    en: "No events for this day",
+    ar: "لا توجد فعاليات لهذا اليوم"
+  },
+  title: {
+    en: "Title",
+    ar: "العنوان"
+  },
+  titlePlaceholder: {
+    en: "Enter title...",
+    ar: "أدخل العنوان..."
+  },
+  date: {
+    en: "Date",
+    ar: "التاريخ"
+  },
+  description: {
+    en: "Description",
+    ar: "الوصف"
+  },
+  descriptionPlaceholder: {
+    en: "Enter description...",
+    ar: "أدخل الوصف..."
+  },
+  delete: {
+    en: "Delete",
+    ar: "حذف"
+  },
+  save: {
+    en: "Save",
+    ar: "حفظ"
+  },
+  titleRequired: {
+    en: "Title is required",
+    ar: "العنوان مطلوب"
+  },
+  dateRequired: {
+    en: "Date is required",
+    ar: "التاريخ مطلوب"
+  },
+  editNote: {
+    en: "Edit Note",
+    ar: "تعديل الملاحظة"
+  },
+  createNote: {
+    en: "Create Note",
+    ar: "إنشاء ملاحظة"
+  },
+  today: {
+    en: "Today",
+    ar: "اليوم"
+  },
+  monthView: {
+    en: "Month View",
+    ar: "عرض الشهر"
+  },
+  month: {
+    en: "Month",
+    ar: "شهر"
+  },
+  weekView: {
+    en: "Week View",
+    ar: "عرض الأسبوع"
+  },
+  week: {
+    en: "Week",
+    ar: "أسبوع"
+  },
+  yearView: {
+    en: "Year View",
+    ar: "عرض السنة"
+  },
+  year: {
+    en: "Year",
+    ar: "سنة"
+  },
+  notesLabel: {
+    en: "Notes",
+    ar: "ملاحظات"
+  },
+  requestAccepted: {
+    en: "Request Accepted",
+    ar: "تم قبول الطلب"
+  },
+  contactAddedDescription: {
+    en: "Contact has been added to your list",
+    ar: "تمت إضافة جهة الاتصال إلى قائمتك"
+  },
+  requestRejected: {
+    en: "Request Rejected",
+    ar: "تم رفض الطلب"
+  },
+  contactRejectedDescription: {
+    en: "Contact request has been rejected",
+    ar: "تم رفض طلب جهة الاتصال"
+  },
+  blockedUserDescription: {
+    en: "User has been added to your blocked list",
+    ar: "تمت إضافة المستخدم إلى قائمة الحظر"
+  },
+  noContactRequests: {
+    en: "No contact requests",
+    ar: "لا توجد طلبات جهات اتصال"
+  },
+  contactRequestSettings: {
+    en: "Requests",
+    ar: "الطلبات"
+  },
+  manageBlockedUsers: {
+    en: "Blocked",
+    ar: "المحظورون"
   }
 };
 

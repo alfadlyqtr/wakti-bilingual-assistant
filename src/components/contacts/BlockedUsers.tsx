@@ -1,9 +1,12 @@
+
 import { useState } from "react";
 import { UserPlus } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
 
 // Mock data for demonstration
 const initialBlockedUsers = [
@@ -13,13 +16,14 @@ const initialBlockedUsers = [
 
 export function BlockedUsers() {
   const { toast } = useToast();
+  const { language } = useTheme();
   const [blockedUsers, setBlockedUsers] = useState(initialBlockedUsers);
 
   const handleUnblock = (id: number, name: string) => {
     setBlockedUsers(blockedUsers.filter(user => user.id !== id));
     toast({
-      title: "User unblocked",
-      description: `${name} has been removed from your blocked list`
+      title: t("requestAccepted", language),
+      description: `${name} ${t("contactRejectedDescription", language)}`
     });
   };
 
@@ -31,7 +35,7 @@ export function BlockedUsers() {
     <div className="space-y-3">
       {blockedUsers.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">
-          No blocked users
+          {t("noContactRequests", language)}
         </Card>
       ) : (
         blockedUsers.map(user => (
@@ -55,7 +59,7 @@ export function BlockedUsers() {
                   className="flex gap-1"
                 >
                   <UserPlus className="h-4 w-4" />
-                  Unblock
+                  {t("contacts", language)}
                 </Button>
               </div>
             </CardContent>
