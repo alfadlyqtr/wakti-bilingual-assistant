@@ -50,11 +50,11 @@ function App() {
               <Route path="/events/:id" element={<EventDetail />} />
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/messages" element={<Messages />} />
-              <Route path="/voice-summary" element={<VoiceSummary />} />
-              <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
+              <Route path="/voice" element={<VoiceSummary />} />
+              <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
               <Route path="/account" element={<Account />} />
               <Route path="/contacts" element={<Contacts />} />
-              <Route path="/ai-assistant" element={<AIAssistant />} />
+              <Route path="/assistant" element={<AIAssistant />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster />
