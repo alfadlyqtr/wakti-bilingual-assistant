@@ -1,8 +1,8 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { UserMenu } from "@/components/UserMenu";
-import { MobileNav } from "@/components/MobileNav";
+import { PageContainer } from "@/components/PageContainer";
 import { t } from "@/utils/translations";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -37,12 +37,7 @@ import {
   Bell, 
   LayoutDashboard, 
   CreditCard,
-  Trash2,
-  ArrowLeft,
   Upload,
-  Moon,
-  Sun, 
-  CalendarCheck,
   UserPlus,
   UserX,
   ShieldAlert
@@ -89,6 +84,7 @@ export default function Account() {
     calendar: true,
     reminders: true,
     dailyQuote: true,
+    events: true,
   });
   const [quoteCategory, setQuoteCategory] = useState("mixed");
   
@@ -146,23 +142,8 @@ export default function Account() {
   };
 
   return (
-    <div className="mobile-container">
-      <header className="mobile-header">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="mr-2"
-            onClick={() => navigate(-1)}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-2xl font-bold">{t("account" as TranslationKey, language)}</h1>
-        </div>
-        <UserMenu userName="John Doe" />
-      </header>
-
-      <div className="flex-1 overflow-y-auto p-4 pb-20">
+    <PageContainer title={t("account" as TranslationKey, language)} showBackButton={true}>
+      <div className="p-4 pb-20">
         {/* 1. Personal Information */}
         <Card className="mb-4">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -285,19 +266,11 @@ export default function Account() {
                 variant="outline"
                 size="sm"
                 onClick={toggleTheme}
-                className="h-9 px-3 rounded-full text-sm flex items-center"
+                className="h-9 px-3 rounded-full text-sm"
               >
-                {theme === "dark" ? (
-                  <>
-                    <Sun className="h-4 w-4 mr-1" />
-                    {t("lightMode" as TranslationKey, language)}
-                  </>
-                ) : (
-                  <>
-                    <Moon className="h-4 w-4 mr-1" />
-                    {t("darkMode" as TranslationKey, language)}
-                  </>
-                )}
+                {theme === "dark"
+                  ? t("lightMode" as TranslationKey, language)
+                  : t("darkMode" as TranslationKey, language)}
               </Button>
             </div>
           </CardContent>
@@ -408,6 +381,15 @@ export default function Account() {
               <Switch 
                 checked={widgetVisibility.dailyQuote} 
                 onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, dailyQuote: checked})}
+              />
+            </div>
+            
+            {/* Events Widget Toggle */}
+            <div className="flex justify-between items-center">
+              <span>{t("eventsWidget" as TranslationKey, language)}</span>
+              <Switch 
+                checked={widgetVisibility.events} 
+                onCheckedChange={(checked) => setWidgetVisibility({...widgetVisibility, events: checked})}
               />
             </div>
             
@@ -750,8 +732,6 @@ export default function Account() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <MobileNav />
-    </div>
+    </PageContainer>
   );
 }

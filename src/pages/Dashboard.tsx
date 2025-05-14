@@ -28,13 +28,36 @@ export default function Dashboard() {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   
+  // Get user preferences from localStorage
+  const getUserPreferences = () => {
+    try {
+      const storedPreferences = localStorage.getItem('widgetVisibility');
+      if (storedPreferences) {
+        return JSON.parse(storedPreferences);
+      }
+    } catch (error) {
+      console.error('Error loading widget preferences:', error);
+    }
+    
+    // Default preferences if nothing is stored
+    return {
+      tasks: true,
+      calendar: true,
+      reminders: true,
+      dailyQuote: true,
+      events: true,
+    };
+  };
+  
+  const widgetVisibility = getUserPreferences();
+  
   // Initialize widgets
   useEffect(() => {
     setWidgets([
       {
         id: "tasks",
         title: "tasks" as TranslationKey,
-        visible: true,
+        visible: widgetVisibility.tasks,
         component: (
           <div className="space-y-2">
             <div className="flex items-center">
@@ -54,7 +77,7 @@ export default function Dashboard() {
       {
         id: "calendar",
         title: "calendar" as TranslationKey,
-        visible: true,
+        visible: widgetVisibility.calendar,
         component: (
           <div>
             <div className="mb-2">
@@ -107,7 +130,7 @@ export default function Dashboard() {
       {
         id: "events",
         title: "events" as TranslationKey,
-        visible: true,
+        visible: widgetVisibility.events,
         component: (
           <div className="text-sm">
             <h3 className="font-medium mb-2">{t("events_today", language)}</h3>
@@ -136,7 +159,7 @@ export default function Dashboard() {
       {
         id: "reminders",
         title: "reminders" as TranslationKey,
-        visible: true,
+        visible: widgetVisibility.reminders,
         component: (
           <div className="text-sm">
             <div className="flex justify-between items-center mb-1">
@@ -156,7 +179,7 @@ export default function Dashboard() {
       {
         id: "quote",
         title: "dailyQuote" as TranslationKey,
-        visible: true,
+        visible: widgetVisibility.dailyQuote,
         component: (
           <div className="text-sm">
             <p className="text-sm italic">
@@ -167,7 +190,7 @@ export default function Dashboard() {
         ),
       },
     ]);
-  }, [language, navigate]);
+  }, [language, navigate, widgetVisibility]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
