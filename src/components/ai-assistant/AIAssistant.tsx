@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Mic, Send, Settings, Menu, MessageSquare } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
-import { ASSISTANT_MODES, AIMode, ChatMessage } from "./types";
+import { ASSISTANT_MODES, AIMode, ChatMessage, MODE_INTENTS, MODE_NAME_MAP } from "./types";
 import { ChatWindow } from "./ChatWindow";
 import { ModeSelector } from "./ModeSelector";
 import { LeftDrawer } from "./LeftDrawer";
@@ -17,26 +17,7 @@ import { VoiceInput } from "./VoiceInput";
 import { MobileHeader } from "@/components/MobileHeader";
 import { v4 as uuidv4 } from "uuid";
 import { UserMenu } from "@/components/UserMenu";
-
-// Define modes and their intent patterns
-const MODE_INTENTS = {
-  chat: [
-    "tell me about", "what is", "explain", "how to", "define", "answer", 
-    "question", "information", "help me understand"
-  ],
-  type: [
-    "write", "draft", "edit", "compose", "rephrase", "summarize", 
-    "paragraph", "essay", "text", "document", "story", "email"
-  ],
-  create: [
-    "image", "picture", "design", "draw", "create visual", "logo", "graphic", 
-    "chart", "diagram", "visualization", "generate image", "art"
-  ],
-  plan: [
-    "task", "reminder", "event", "schedule", "plan", "organize", 
-    "meeting", "appointment", "todo", "deadline", "project"
-  ]
-};
+import { toast } from "@/hooks/use-toast";
 
 export const AIAssistant = () => {
   const { theme, language } = useTheme();
@@ -46,10 +27,10 @@ export const AIAssistant = () => {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [modeSwitchSuggestion, setModeSwitchSuggestion] = useState<{
-    detectedMode: AIMode | null;
+  const [pendingAction, setPendingAction] = useState<{
     input: string;
-  }>({ detectedMode: null, input: "" });
+    targetMode: AIMode;
+  } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: uuidv4(),
@@ -81,23 +62,13 @@ export const AIAssistant = () => {
   const detectIntent = (userInput: string): AIMode | null => {
     userInput = userInput.toLowerCase();
     
-    // Map the old modes to new modes
-    const modeMapping: Record<string, AIMode> = {
-      "chat": "general",
-      "type": "writer", 
-      "create": "creative",
-      "plan": "assistant"
-    };
-    
-    // Current mode type 
-    const currentModeType = Object.keys(modeMapping).find(
-      key => modeMapping[key] === activeMode
-    ) || "chat";
+    // Skip intent detection for very short inputs
+    if (userInput.length < 5) return null;
     
     // Check each mode's intent patterns
     for (const [modeType, patterns] of Object.entries(MODE_INTENTS)) {
       // Skip if this is the current mode type
-      if (modeType === currentModeType) continue;
+      if (modeType === activeMode) continue;
       
       // Check if the input matches any pattern for this mode
       const matchesMode = patterns.some(pattern => 
@@ -105,80 +76,18 @@ export const AIAssistant = () => {
       );
       
       if (matchesMode) {
-        return modeMapping[modeType];
+        return modeType as AIMode;
       }
     }
     
     return null; // No mode switch needed
   };
 
-  const handleModeSwitch = (targetMode: AIMode) => {
-    setActiveMode(targetMode);
-    
-    if (modeSwitchSuggestion.input) {
-      // Restore the previous input
-      setInput(modeSwitchSuggestion.input);
-      
-      // Clear the suggestion
-      setModeSwitchSuggestion({ detectedMode: null, input: "" });
-    }
-  };
-
+  // Step 1: Handle initial user message and detect if mode switch is needed
   const handleSendMessage = () => {
     if (!input.trim()) return;
     
-    // Check if we should suggest a mode switch
-    const suggestedMode = detectIntent(input);
-    
-    if (suggestedMode && !modeSwitchSuggestion.detectedMode) {
-      // Save the input and suggest mode switch
-      setModeSwitchSuggestion({
-        detectedMode: suggestedMode,
-        input: input
-      });
-      
-      // Map mode IDs to readable names
-      const modeNames: Record<AIMode, string> = {
-        "general": "Chat",
-        "writer": "Type", 
-        "creative": "Create",
-        "assistant": "Plan"
-      };
-      
-      // Create suggestion message
-      const suggestedModeName = modeNames[suggestedMode];
-      const suggestionMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "assistant",
-        content: t("thisActionWorksBetterIn" as TranslationKey, language) + " " + 
-                suggestedModeName + " " + 
-                t("mode" as TranslationKey, language) + ". " +
-                t("letsSwitchModes" as TranslationKey, language) + "?",
-        mode: activeMode,
-        timestamp: new Date(),
-        needsConfirmation: {
-          type: "mode",
-          action: "switchMode",
-          data: { targetMode: suggestedMode }
-        }
-      };
-      
-      // Add user message
-      const userMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "user",
-        content: input,
-        mode: activeMode,
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, userMessage, suggestionMessage]);
-      setInput("");
-      return;
-    }
-    
-    // Regular message flow
-    // Add user message
+    // Add user message immediately
     const userMessage: ChatMessage = {
       id: uuidv4(),
       role: "user",
@@ -188,120 +97,148 @@ export const AIAssistant = () => {
     };
     
     setMessages(prev => [...prev, userMessage]);
-    setInput("");
+    
+    // Check if we should suggest a mode switch
+    const suggestedMode = detectIntent(input);
     setIsTyping(true);
     
-    // Simulate AI response
     setTimeout(() => {
-      let aiResponse: ChatMessage;
-      
-      // Check for task creation request
-      if (input.toLowerCase().includes("create task") || input.toLowerCase().includes("new task")) {
-        if (activeMode !== "assistant") {
-          // Need to switch mode
-          aiResponse = {
-            id: uuidv4(),
-            role: "assistant",
-            content: t("toCompleteThisAction" as TranslationKey, language) + " " + 
-                    t("switchTo" as TranslationKey, language) + " " + 
-                    t("planMode" as TranslationKey, language) + ".",
-            mode: activeMode,
-            timestamp: new Date(),
-            needsConfirmation: {
-              type: "mode",
-              action: "switchMode",
-              data: { targetMode: "assistant" }
-            }
-          };
-        } else {
-          // Create task in assistant mode
-          aiResponse = {
-            id: uuidv4(),
-            role: "assistant",
-            content: t("iCanCreateThisTask" as TranslationKey, language),
-            mode: "assistant",
-            timestamp: new Date(),
-            needsConfirmation: {
-              type: "task",
-              action: "createTask",
-              data: {
-                title: input.replace(/create task|new task/i, "").trim(),
-                dueDate: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
-                priority: "medium",
-              }
-            }
-          };
-        }
-      } else {
-        // Standard response
-        aiResponse = {
+      if (suggestedMode) {
+        // Step 1: Suggest mode switch with confirmation buttons
+        const modeName = MODE_NAME_MAP[suggestedMode];
+        
+        const suggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
-          content: `${t("helpingYouWith" as TranslationKey, language)} "${input}" in ${
-            activeMode === "general" ? t("chatMode" as TranslationKey, language) :
-            activeMode === "writer" ? t("typeMode" as TranslationKey, language) :
-            activeMode === "creative" ? t("createMode" as TranslationKey, language) :
-            t("planMode" as TranslationKey, language)
-          } mode.`,
+          content: `${t("youAskedTo" as TranslationKey, language)}: "${input}"\n\n${t("thisActionWorksBetterIn" as TranslationKey, language)} ${modeName}. ${t("wantToSwitch" as TranslationKey, language)}`,
           mode: activeMode,
-          timestamp: new Date()
+          timestamp: new Date(),
+          originalInput: input,
+          actionButtons: {
+            primary: {
+              text: `${t("switchMode" as TranslationKey, language)} → ${modeName}`,
+              action: `switch:${suggestedMode}`
+            },
+            secondary: {
+              text: t("cancel" as TranslationKey, language),
+              action: "cancel"
+            }
+          }
         };
+        
+        setMessages(prev => [...prev, suggestionMessage]);
+      } else {
+        // Regular message flow - no mode switch needed
+        processMessageInCurrentMode(input);
       }
       
-      setMessages(prev => [...prev, aiResponse]);
       setIsTyping(false);
-    }, 1500);
+      setInput("");
+    }, 800);
   };
 
-  const handleConfirmAction = (messageId: string, action: string) => {
-    const message = messages.find(m => m.id === messageId);
-    if (!message || !message.needsConfirmation) return;
+  // Process the message in the current mode (no switch needed)
+  const processMessageInCurrentMode = (messageText: string) => {
+    // Standard response
+    const aiResponse: ChatMessage = {
+      id: uuidv4(),
+      role: "assistant",
+      content: `${t("helpingYouWith" as TranslationKey, language)} "${messageText}" in ${t(activeMode as TranslationKey, language)}.`,
+      mode: activeMode,
+      timestamp: new Date()
+    };
     
-    if (action === "confirm") {
-      if (message.needsConfirmation.action === "switchMode" && message.needsConfirmation.data?.targetMode) {
-        const targetMode = message.needsConfirmation.data.targetMode as AIMode;
-        setActiveMode(targetMode);
+    setMessages(prev => [...prev, aiResponse]);
+  };
+
+  // Step 2: Handle mode switch confirmation
+  const handleActionButton = (messageId: string, action: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    
+    // Check if this is a mode switch action
+    if (action.startsWith("switch:")) {
+      const targetMode = action.split(":")[1] as AIMode;
+      const originalInput = message.originalInput || "";
+      
+      // Switch the mode
+      setActiveMode(targetMode);
+      
+      // Store the pending action for confirmation in step 3
+      setPendingAction({
+        input: originalInput,
+        targetMode
+      });
+      
+      // Step 2: After user clicks Switch
+      setTimeout(() => {
+        const confirmationMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `${t("wereNowIn" as TranslationKey, language)} ${t(targetMode as TranslationKey, language)}.\n\n${t("stillWantMeToDoThis" as TranslationKey, language)}: "${originalInput}"`,
+          mode: targetMode,
+          timestamp: new Date(),
+          actionButtons: {
+            primary: {
+              text: t("yesDoIt" as TranslationKey, language),
+              action: `execute:${originalInput}`
+            },
+            secondary: {
+              text: t("no" as TranslationKey, language),
+              action: "cancel-execution"
+            }
+          }
+        };
         
-        // If there was a saved input from a suggestion, restore it
-        if (modeSwitchSuggestion.detectedMode === targetMode && modeSwitchSuggestion.input) {
-          setInput(modeSwitchSuggestion.input);
-          setModeSwitchSuggestion({ detectedMode: null, input: "" });
-        }
-        
-        // Follow up message after mode switch
-        setTimeout(() => {
-          const followUpMessage: ChatMessage = {
-            id: uuidv4(),
-            role: "assistant",
-            content: t("howCanIAssistYouWithWAKTI" as TranslationKey, language),
-            mode: targetMode,
-            timestamp: new Date()
-          };
-          setMessages(prev => [...prev, followUpMessage]);
-        }, 500);
-      }
-      else if (message.needsConfirmation.action === "createTask") {
-        // Task creation confirmation
-        setTimeout(() => {
-          const confirmationMessage: ChatMessage = {
-            id: uuidv4(),
-            role: "assistant",
-            content: t("taskCreatedSuccessfully" as TranslationKey, language),
-            mode: "assistant",
-            timestamp: new Date()
-          };
-          setMessages(prev => [...prev, confirmationMessage]);
-        }, 500);
-      }
+        setMessages(prev => [...prev, confirmationMessage]);
+      }, 500);
+    } 
+    // Step 3: Execute the original input in the new mode
+    else if (action.startsWith("execute:")) {
+      const inputToExecute = action.split(":").slice(1).join(":");
+      
+      // Clear pending action
+      setPendingAction(null);
+      
+      // Add user message showing the original input
+      const userMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "user",
+        content: inputToExecute,
+        mode: activeMode,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, userMessage]);
+      setIsTyping(true);
+      
+      // Process the message in the current (new) mode
+      setTimeout(() => {
+        processMessageInCurrentMode(inputToExecute);
+        setIsTyping(false);
+      }, 800);
+    }
+    // Cancel execution
+    else if (action === "cancel-execution") {
+      // Clear pending action
+      setPendingAction(null);
+      
+      // Add a simple acknowledgment
+      const ackMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("howCanIAssistYouWithWAKTI" as TranslationKey, language),
+        mode: activeMode,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, ackMessage]);
     }
     
-    // Remove confirmation UI regardless of action
-    setMessages(prev => prev.map(m => {
-      if (m.id === messageId) {
-        return { ...m, needsConfirmation: null };
-      }
-      return m;
-    }));
+    // Remove action buttons from the message
+    setMessages(prev => prev.map(m => 
+      m.id === messageId ? { ...m, actionButtons: undefined } : m
+    ));
   };
 
   const handleVoiceInput = (transcript: string) => {
@@ -381,7 +318,7 @@ export const AIAssistant = () => {
         isTyping={isTyping}
         activeMode={activeMode}
         getModeColor={getModeColor}
-        onConfirm={handleConfirmAction}
+        onConfirm={handleActionButton}
         messageEndRef={messageEndRef}
         language={language}
         theme={theme}

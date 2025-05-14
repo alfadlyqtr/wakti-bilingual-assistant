@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "./translationTypes";
 
 const translations: Record<TranslationKey, { en: string; ar: string }> = {
@@ -132,6 +133,24 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     ar: "وضع"
   },
   
+  // Mode names without "mode" suffix
+  chat: {
+    en: "Chat",
+    ar: "دردشة"
+  },
+  type: {
+    en: "Type",
+    ar: "كتابة"
+  },
+  create: {
+    en: "Create",
+    ar: "إنشاء"
+  },
+  plan: {
+    en: "Plan",
+    ar: "تخطيط"
+  },
+  
   // AI Assistant mode settings
   chatSettings: {
     en: "Chat Settings",
@@ -168,7 +187,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     ar: "دعني أساعدك في تنظيم المهام والأحداث والتذكيرات. أخبرني بما تحتاج إلى جدولته."
   },
   
-  // Mode switching
+  // Mode switching - Original messages
   thisActionWorksBetterIn: {
     en: "This action works better in",
     ar: "هذا الإجراء يعمل بشكل أفضل في"
@@ -176,6 +195,32 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   letsSwitchModes: {
     en: "Let's switch modes?",
     ar: "هل ننتقل إلى وضع آخر؟"
+  },
+  
+  // New mode switching messages
+  youAskedTo: {
+    en: "You asked to",
+    ar: "طلبت أن"
+  },
+  wantToSwitch: {
+    en: "Want to switch?",
+    ar: "هل تريد التبديل؟"
+  },
+  wereNowIn: {
+    en: "We're now in",
+    ar: "نحن الآن في"
+  },
+  stillWantMeToDoThis: {
+    en: "Still want me to do this?",
+    ar: "هل ما زلت تريد مني أن أفعل هذا؟"
+  },
+  yesDoIt: {
+    en: "Yes, do it",
+    ar: "نعم، افعل ذلك"
+  },
+  no: {
+    en: "No",
+    ar: "لا"
   },
   
   // Common Questions
@@ -307,6 +352,110 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Priority",
     ar: "الأولوية"
   },
+  
+  // Tasks section translations
+  tasks: {
+    en: "Tasks",
+    ar: "المهام"
+  },
+  task: {
+    en: "Task",
+    ar: "مهمة"
+  },
+  reminders: {
+    en: "Reminders",
+    ar: "التذكيرات"
+  },
+  reminder: {
+    en: "Reminder",
+    ar: "تذكير"
+  },
+  searchTasks: {
+    en: "Search Tasks",
+    ar: "البحث في المهام"
+  },
+  searchReminders: {
+    en: "Search Reminders",
+    ar: "البحث في التذكيرات"
+  },
+  allTasks: {
+    en: "All Tasks",
+    ar: "كل المهام"
+  },
+  pendingTasks: {
+    en: "Pending Tasks",
+    ar: "المهام المعلقة"
+  },
+  completedTasks: {
+    en: "Completed Tasks",
+    ar: "المهام المكتملة"
+  },
+  overdueItems: {
+    en: "Overdue Items",
+    ar: "العناصر المتأخرة"
+  },
+  noTasks: {
+    en: "No Tasks",
+    ar: "لا توجد مهام"
+  },
+  noReminders: {
+    en: "No Reminders",
+    ar: "لا توجد تذكيرات"
+  },
+  createYourFirst: {
+    en: "Create your first",
+    ar: "إنشاء أول"
+  },
+  edit: {
+    en: "Edit",
+    ar: "تعديل"
+  },
+  
+  // App-specific messaging
+  waktiAssistant: {
+    en: "WAKTI Assistant",
+    ar: "مساعد وقتي"
+  },
+  askWAKTI: {
+    en: "Ask WAKTI",
+    ar: "اسأل وقتي"
+  },
+  openHistory: {
+    en: "Open History",
+    ar: "فتح السجل"
+  },
+  openSettings: {
+    en: "Open Settings",
+    ar: "فتح الإعدادات"
+  },
+  helpingYouWith: {
+    en: "Helping you with",
+    ar: "مساعدتك في"
+  },
+  welcomeToWaktiAI: {
+    en: "Welcome to WAKTI AI Assistant! How can I help you today?",
+    ar: "مرحبًا بك في مساعد وقتي الذكي! كيف يمكنني مساعدتك اليوم؟"
+  },
+  howCanIAssistYouWithWAKTI: {
+    en: "How can I assist you with WAKTI now?",
+    ar: "كيف يمكنني مساعدتك مع وقتي الآن؟"
+  },
+  taskCreatedSuccessfully: {
+    en: "Task created successfully!",
+    ar: "تم إنشاء المهمة بنجاح!"
+  },
+  toCompleteThisAction: {
+    en: "To complete this action, we need to",
+    ar: "لإكمال هذا الإجراء، نحتاج إلى"
+  },
+  switchTo: {
+    en: "switch to",
+    ar: "التبديل إلى"
+  },
+  iCanCreateThisTask: {
+    en: "I can create this task for you. Please confirm the details below.",
+    ar: "يمكنني إنشاء هذه المهمة لك. يرجى تأكيد التفاصيل أدناه."
+  }
 };
 
 export const t = (key: TranslationKey, language: string): string => {
