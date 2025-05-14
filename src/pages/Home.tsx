@@ -148,7 +148,7 @@ export default function Home() {
               <div className="w-24 h-24 relative">
                 <AspectRatio ratio={1/1} className="bg-primary-900 rounded-2xl overflow-hidden">
                   <img 
-                    src="/lovable-uploads/e33c18dc-cb50-4f1c-b056-9643953473ce.png" 
+                    src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
                     alt="WAKTI Logo"
                     className="object-cover w-full h-full"
                   />

@@ -41,7 +41,8 @@ export default function Login() {
       signup: "Sign Up",
       backToHome: "Back to Home",
       // Placeholders
-      emailPlaceholder: "example@email.com"
+      emailPlaceholder: "example@email.com",
+      passwordPlaceholder: "Enter your password"
     },
     ar: {
       appName: "وقتي",
@@ -54,7 +55,8 @@ export default function Login() {
       signup: "إنشاء حساب",
       backToHome: "العودة للرئيسية",
       // Placeholders
-      emailPlaceholder: "example@email.com"
+      emailPlaceholder: "example@email.com",
+      passwordPlaceholder: "أدخل كلمة المرور"
     }
   };
 
@@ -92,7 +94,7 @@ export default function Login() {
                 onClick={() => navigate("/")}
               >
                 <img 
-                  src="/lovable-uploads/e33c18dc-cb50-4f1c-b056-9643953473ce.png" 
+                  src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
                   alt={t.appName}
                   className="w-24 h-24 mx-auto object-contain" 
                 />
@@ -142,6 +144,7 @@ export default function Login() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    placeholder={t.passwordPlaceholder}
                     autoCapitalize="none"
                     autoComplete="current-password"
                     disabled={isLoading}

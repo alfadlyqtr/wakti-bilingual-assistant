@@ -95,7 +95,7 @@ export default function ForgotPassword() {
                 onClick={() => navigate("/")}
               >
                 <img 
-                  src="/lovable-uploads/e33c18dc-cb50-4f1c-b056-9643953473ce.png" 
+                  src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
                   alt={t.appName}
                   className="w-24 h-24 mx-auto object-contain" 
                 />
