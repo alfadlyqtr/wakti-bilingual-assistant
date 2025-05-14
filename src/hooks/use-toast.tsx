@@ -1,4 +1,3 @@
-
 import { toast as sonnerToast } from "sonner";
 import React from "react";
 
@@ -7,6 +6,7 @@ type ToastProps = {
   description?: string;
   variant?: "default" | "destructive";
   action?: React.ReactNode;
+  duration?: number;
 };
 
 type ConfirmProps = {
@@ -17,16 +17,18 @@ type ConfirmProps = {
 };
 
 const useToast = () => {
-  const showToast = ({ title, description, variant, action }: ToastProps) => {
+  const showToast = ({ title, description, variant, action, duration }: ToastProps) => {
     if (variant === "destructive") {
       sonnerToast.error(title, {
         description,
         action,
+        duration,
       });
     } else {
       sonnerToast.success(title, {
         description,
         action,
+        duration,
       });
     }
   };
@@ -75,11 +77,13 @@ const toast = (props: ToastProps) => {
     sonnerToast.error(props.title, {
       description: props.description,
       action: props.action,
+      duration: props.duration,
     });
   } else {
     sonnerToast.success(props.title, {
       description: props.description,
       action: props.action,
+      duration: props.duration,
     });
   }
 };

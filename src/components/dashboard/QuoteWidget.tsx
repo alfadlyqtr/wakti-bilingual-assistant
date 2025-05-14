@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -32,8 +31,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
       
       if (forceRefresh) {
         toast({
-          title: language === 'ar' ? "تم تحديث الاقتباس" : "Quote refreshed",
-          duration: 2000
+          title: language === 'ar' ? "تم تحديث الاقتباس" : "Quote refreshed"
         });
       }
     } catch (error) {
