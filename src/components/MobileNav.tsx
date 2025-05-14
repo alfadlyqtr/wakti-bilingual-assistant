@@ -1,4 +1,3 @@
-
 import { useNavigate, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Mic, CalendarHeart, Sparkles } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -19,7 +18,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
   return (
     <button
       className={cn(
-        "flex flex-col items-center justify-center py-2 px-3 rounded-xl transition-all scale-100 hover:scale-110",
+        "flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all scale-100 hover:scale-110",
         isActive
           ? isDark 
             ? "text-white" 
@@ -30,7 +29,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
     >
       <div
         className={cn(
-          "rounded-full p-2 mb-1 transition-all",
+          "rounded-full p-1.5 mb-0.5 transition-all",
           isActive && (
             isDark
               ? "bg-gradient-to-br from-dark-secondary to-dark-tertiary shadow-lg shadow-dark-secondary/20"
@@ -42,7 +41,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
         {icon}
       </div>
       <span className={cn(
-        "text-xs font-medium transition-all", 
+        "text-[10px] font-medium transition-all", 
         isActive && "font-semibold"
       )}>
         {label}
@@ -92,9 +91,9 @@ export const MobileNav = () => {
   }
 
   return (
-    <div className="fixed bottom-6 left-2 right-2 z-50">
+    <div className="fixed bottom-4 left-2 right-2 z-50">
       <div className={cn(
-        "flex justify-around items-center p-1 mx-auto max-w-md rounded-full border shadow-xl animate-fade-in",
+        "flex justify-around items-center p-0.5 mx-auto max-w-md rounded-full border shadow-xl animate-fade-in",
         isDark 
           ? "bg-dark-bg/90 backdrop-blur-xl border-dark-secondary/30 shadow-dark-bg/30" 
           : "bg-light-bg/90 backdrop-blur-xl border-light-secondary/40 shadow-light-secondary/20"
