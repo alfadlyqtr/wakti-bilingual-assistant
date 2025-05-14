@@ -1,5 +1,6 @@
 
 import { toast as sonnerToast } from "sonner";
+import React from "react";
 
 type ToastProps = {
   title?: string;
@@ -86,4 +87,39 @@ const toast = (props: ToastProps) => {
   }
 };
 
-export { useToast, toast };
+// Export a confirm function for direct use like the toast function
+const confirm = (props: ConfirmProps) => {
+  sonnerToast.custom(
+    ({ toast }) => (
+      <div className="flex flex-col gap-2 w-full p-2">
+        <div className="font-semibold">{props.title}</div>
+        {props.description && <div className="text-sm text-muted-foreground">{props.description}</div>}
+        <div className="flex gap-2 justify-end mt-1">
+          <button 
+            onClick={() => {
+              if (props.onCancel) props.onCancel();
+              sonnerToast.dismiss(toast.id);
+            }} 
+            className="px-2 py-1 bg-muted hover:bg-muted/80 rounded-md text-sm transition-colors"
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={() => {
+              props.onConfirm();
+              sonnerToast.dismiss(toast.id);
+            }} 
+            className="px-2 py-1 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md text-sm transition-colors"
+          >
+            Confirm
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      duration: 5000,
+    }
+  );
+};
+
+export { useToast, toast, confirm };
