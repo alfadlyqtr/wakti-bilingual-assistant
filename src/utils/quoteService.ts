@@ -125,15 +125,43 @@ export const getRandomQuote = (category: string = 'motivational'): QuoteObject |
     };
   }
   
+  // We need to make sure we don't show the same quote twice in a row
+  const lastQuote = getLastQuoteObject();
+  let availableQuotes = allQuotes;
+  
+  // If we have a last quote and enough quotes to choose from, filter it out
+  if (lastQuote && allQuotes.length > 1) {
+    availableQuotes = allQuotes.filter(quote => {
+      // For string quotes
+      if (typeof quote === 'string' && typeof lastQuote === 'string') {
+        return quote !== lastQuote;
+      }
+      
+      // For object quotes
+      if (typeof quote === 'object' && typeof lastQuote === 'object') {
+        return quote.text_en !== lastQuote.text_en;
+      }
+      
+      return true;
+    });
+  }
+  
   // Get a random quote
-  const randomIndex = Math.floor(Math.random() * allQuotes.length);
-  const quote = allQuotes[randomIndex];
+  const randomIndex = Math.floor(Math.random() * availableQuotes.length);
+  const quote = availableQuotes[randomIndex];
   console.log("Selected quote:", quote);
   
   // Store this quote and time
   saveLastQuote(quote);
   
   return quote;
+};
+
+// Force a new quote regardless of timing preferences
+export const forceNewQuote = (): QuoteObject | string => {
+  const { category } = getQuotePreferences();
+  const newQuote = getRandomQuote(category);
+  return newQuote;
 };
 
 // Save the last displayed quote and time
@@ -146,24 +174,39 @@ const saveLastQuote = (quote: QuoteObject | string): void => {
   }
 };
 
+// Get the last displayed quote object
+export const getLastQuoteObject = (): QuoteObject | string | null => {
+  try {
+    const quoteStr = localStorage.getItem(LAST_QUOTE_KEY);
+    if (!quoteStr) return null;
+    
+    try {
+      return JSON.parse(quoteStr);
+    } catch (e) {
+      // Handle old format quotes that were stored as strings
+      return quoteStr;
+    }
+  } catch (error) {
+    console.error('Error getting last quote object:', error);
+    return null;
+  }
+};
+
 // Get the last displayed quote
 export const getLastQuote = (): { quote: QuoteObject | string; timestamp: string } => {
   try {
-    const quoteStr = localStorage.getItem(LAST_QUOTE_KEY);
-    let quote;
+    const quote = getLastQuoteObject();
     
-    if (quoteStr) {
-      try {
-        quote = JSON.parse(quoteStr);
-      } catch (e) {
-        // Handle old format quotes that were stored as strings
-        quote = quoteStr;
-      }
-    } else {
-      quote = {
+    if (!quote) {
+      const defaultQuote = {
         text_en: "Welcome to WAKTI.",
         text_ar: "مرحبًا بك في وكتي.",
         source: "WAKTI"
+      };
+      
+      return { 
+        quote: defaultQuote, 
+        timestamp: new Date().toISOString() 
       };
     }
     
@@ -190,6 +233,8 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
   const currentTime = new Date().getTime();
   const hoursSinceLastQuote = (currentTime - lastQuoteTime) / (1000 * 60 * 60);
   
+  console.log(`Hours since last quote: ${hoursSinceLastQuote.toFixed(2)}, frequency: ${frequency}`);
+  
   switch (frequency) {
     case '2xday':
       return hoursSinceLastQuote >= 12; // Show new quote every 12 hours
@@ -208,11 +253,17 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
 export const getQuoteForDisplay = (): QuoteObject | string => {
   const { category, frequency } = getQuotePreferences();
   
-  // Remove debugging code that was forcing new quotes
-  // localStorage.removeItem(LAST_QUOTE_KEY);
+  // Check if localStorage has valid quote data
+  const lastQuoteData = getLastQuoteObject();
+  const hasValidQuote = lastQuoteData !== null && 
+                        lastQuoteData !== undefined && 
+                        typeof lastQuoteData !== 'string' &&
+                        lastQuoteData.text_en !== "Welcome to WAKTI.";
   
-  // If we should show a new quote based on frequency
-  if (shouldShowNewQuote(frequency)) {
+  console.log("Has valid quote stored:", hasValidQuote);
+  
+  // If we should show a new quote based on frequency or don't have a valid quote
+  if (shouldShowNewQuote(frequency) || !hasValidQuote) {
     const newQuote = getRandomQuote(category);
     console.log("Showing new quote:", newQuote);
     return newQuote;
@@ -220,8 +271,8 @@ export const getQuoteForDisplay = (): QuoteObject | string => {
   
   // Otherwise return the last quote
   const { quote } = getLastQuote();
-  console.log("Showing last quote:", quote);
-  return quote || getRandomQuote(category);
+  console.log("Showing existing quote:", quote);
+  return quote;
 };
 
 // Return the appropriate quote text based on language
