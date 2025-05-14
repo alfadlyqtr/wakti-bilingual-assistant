@@ -183,11 +183,7 @@ export default function Dashboard() {
         id: "quote",
         title: "dailyQuote" as TranslationKey,
         visible: widgetVisibility.dailyQuote,
-        component: (
-          <div className="text-sm">
-            <QuoteWidget />
-          </div>
-        ),
+        component: <QuoteWidget />
       },
     ]);
   }, [language, navigate, widgetVisibility]);

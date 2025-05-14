@@ -14,10 +14,10 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   const [quote, setQuote] = useState<string>("");
   
   useEffect(() => {
-    // Get the quote on component mount
+    // Get the quote on component mount and when language changes
     const quoteText = getQuoteForDisplay();
     setQuote(quoteText);
-  }, []);
+  }, [language]); // Re-fetch quote when language changes
   
   // If no quote is available yet
   if (!quote) {
@@ -27,6 +27,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   const quoteText = getQuoteText(quote);
   const quoteAuthor = getQuoteAuthor(quote);
   
+  // Use a different layout for Arabic
   return (
     <Card className={className}>
       <CardHeader className="p-3 pb-1">
@@ -35,8 +36,8 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0">
-        <div className="text-sm">
-          <p className="text-sm italic">"{quoteText}"</p>
+        <div className={`text-sm ${language === 'ar' ? 'text-right' : ''}`}>
+          <p className="text-sm italic">{language === 'ar' ? `"${quoteText}"` : `"${quoteText}"`}</p>
           <p className="text-xs text-muted-foreground mt-1">- {quoteAuthor}</p>
         </div>
       </CardContent>
