@@ -31,7 +31,7 @@ export default function VoiceSummaryArchive() {
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  const { data: recordings = [], isLoading } = useQuery({
+  const { data: recordings = [], isLoading, refetch } = useQuery({
     queryKey: ["voice-recordings"],
     queryFn: async () => {
       try {
@@ -42,6 +42,7 @@ export default function VoiceSummaryArchive() {
           .order("created_at", { ascending: false });
           
         if (error) throw error;
+        console.log("Fetched recordings:", data);
         return data as unknown as RecordingMeta[];
       } catch (error) {
         console.error("Error fetching recordings:", error);
@@ -49,6 +50,11 @@ export default function VoiceSummaryArchive() {
       }
     },
   });
+
+  const handleViewDetails = (recordingId: string) => {
+    console.log("Navigating to recording details:", recordingId);
+    navigate(`/voice/${recordingId}`);
+  };
 
   if (isLoading) {
     return (
@@ -132,7 +138,7 @@ export default function VoiceSummaryArchive() {
               <div className="flex gap-2 text-xs">
                 <button 
                   className="px-3 py-1 bg-primary text-primary-foreground rounded-md"
-                  onClick={() => navigate(`/voice-summary/${recording.id}`)}
+                  onClick={() => handleViewDetails(recording.id)}
                 >
                   {language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
                 </button>

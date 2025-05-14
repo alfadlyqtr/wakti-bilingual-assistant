@@ -4,7 +4,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MobileNav } from "@/components/MobileNav";
 import "./App.css";
 
 // Pages
@@ -52,16 +51,14 @@ function App() {
                 <Route path="/events/:id" element={<EventDetail />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/messages" element={<Messages />} />
-                <Route path="/voice" element={<VoiceSummary />} />
+                <Route path="/voice-summary" element={<VoiceSummary />} />
+                <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
                 <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
                 <Route path="/account" element={<Account />} />
                 <Route path="/contacts" element={<Contacts />} />
                 <Route path="/assistant" element={<AIAssistant />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
-              
-              {/* Global Mobile Navigation */}
-              <MobileNav />
               
               <Toaster />
             </div>

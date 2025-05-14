@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -7,7 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, AudioWaveform, Calendar, Copy, Download, ExternalLink, FileText, MapPin, Mic, Pause, Play, Users } from "lucide-react";
+import { 
+  AlertTriangle, ArrowLeft, AudioWaveform, Calendar, Copy, Download, 
+  ExternalLink, FileText, MapPin, Mic, Pause, Play, Trash2, Users 
+} from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -16,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface RecordingDetail {
   id: string;
@@ -46,12 +51,13 @@ export default function VoiceSummaryDetail() {
   const [duration, setDuration] = useState(0);
   const [editingTranscript, setEditingTranscript] = useState("");
   const [transcriptEdited, setTranscriptEdited] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   
   // Voice options for TTS
   const [voiceGender, setVoiceGender] = useState<"male" | "female">("male");
   const [voiceLanguage, setVoiceLanguage] = useState<"english" | "arabic">("english");
 
-  const { data: recording, isLoading } = useQuery({
+  const { data: recording, isLoading, error } = useQuery({
     queryKey: ["voice-recording", id],
     queryFn: async () => {
       if (!id) throw new Error("Recording ID is required");
@@ -66,6 +72,39 @@ export default function VoiceSummaryDetail() {
       return data as unknown as RecordingDetail;
     },
   });
+
+  // Delete recording mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (recordingId: string) => {
+      const { error } = await supabase
+        .from("voice_recordings" as any)
+        .delete()
+        .eq("id", recordingId);
+      
+      if (error) throw error;
+      return true;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Recording deleted",
+        description: "The recording has been deleted successfully."
+      });
+      navigate('/voice-summary');
+    },
+    onError: (error) => {
+      console.error('Error deleting recording:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete the recording. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleDeleteRecording = async () => {
+    if (!id) return;
+    deleteMutation.mutate(id);
+  };
 
   useEffect(() => {
     if (recording?.transcript && !editingTranscript) {
@@ -267,10 +306,10 @@ export default function VoiceSummaryDetail() {
     );
   }
 
-  if (!recording) {
+  if (error || !recording) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
-        <AudioWaveform className="h-16 w-16 text-muted-foreground mb-4" />
+        <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
         <h2 className="text-xl font-semibold mb-2">Recording not found</h2>
         <p className="text-muted-foreground mb-6">The recording you're looking for doesn't exist or has expired</p>
         <Button onClick={() => navigate('/voice-summary')}>
@@ -295,9 +334,38 @@ export default function VoiceSummaryDetail() {
           </Button>
           <h1 className="text-xl font-bold truncate">{recording.title}</h1>
         </div>
-        <Badge className="bg-primary/20 text-primary hover:bg-primary/30">
-          {calculateExpiryTime(recording.expires_at)}
-        </Badge>
+        <div className="flex gap-2">
+          <Badge className="bg-primary/20 text-primary hover:bg-primary/30">
+            {calculateExpiryTime(recording.expires_at)}
+          </Badge>
+          <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <DialogTrigger asChild>
+              <Button variant="ghost" size="icon" className="text-destructive">
+                <Trash2 className="h-5 w-5" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Recording</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete this recording? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteRecording}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? 'Deleting...' : 'Delete Recording'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4">
