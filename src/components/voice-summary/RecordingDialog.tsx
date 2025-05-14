@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -46,6 +48,7 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { language } = useTheme();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -103,8 +106,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
     } catch (error) {
       console.error('Error accessing microphone:', error);
       toast({
-        title: "Error",
-        description: "Could not access microphone. Please check your browser permissions.",
+        title: language === 'ar' ? "خطأ" : "Error",
+        description: language === 'ar' ? 
+          "لم نتمكن من الوصول إلى الميكروفون. يرجى التحقق من أذونات المتصفح." : 
+          "Could not access microphone. Please check your browser permissions.",
         variant: "destructive",
       });
     }
@@ -199,8 +204,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       }
 
       toast({
-        title: "Recording saved",
-        description: "Your recording has been uploaded successfully and is being processed.",
+        title: language === 'ar' ? "تم حفظ التسجيل" : "Recording saved",
+        description: language === 'ar' ? 
+          "تم تحميل تسجيلك بنجاح وجاري معالجته." : 
+          "Your recording has been uploaded successfully and is being processed.",
       });
 
       // Invalidate query cache to refresh the list
@@ -217,8 +224,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
     } catch (error) {
       console.error('Error uploading recording:', error);
       toast({
-        title: "Upload failed",
-        description: "There was an error uploading your recording. Please try again.",
+        title: language === 'ar' ? "فشل التحميل" : "Upload failed",
+        description: language === 'ar' ? 
+          "حدث خطأ أثناء تحميل تسجيلك. يرجى المحاولة مرة أخرى." : 
+          "There was an error uploading your recording. Please try again.",
         variant: "destructive",
       });
       setRecordingStep("metadata");
@@ -233,8 +242,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
     const file = e.target.files[0];
     if (!file.type.includes('audio')) {
       toast({
-        title: "Invalid file",
-        description: "Please upload an audio file (mp3, wav, etc.)",
+        title: language === 'ar' ? "ملف غير صالح" : "Invalid file",
+        description: language === 'ar' ? 
+          "يرجى تحميل ملف صوتي (mp3، wav، إلخ)" : 
+          "Please upload an audio file (mp3, wav, etc.)",
         variant: "destructive",
       });
       return;
@@ -305,8 +316,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       }
 
       toast({
-        title: "File uploaded",
-        description: "Your audio file has been uploaded successfully and is being processed.",
+        title: language === 'ar' ? "تم تحميل الملف" : "File uploaded",
+        description: language === 'ar' ? 
+          "تم تحميل ملفك الصوتي بنجاح وجاري معالجته." : 
+          "Your audio file has been uploaded successfully and is being processed.",
       });
       
       // Invalidate query cache to refresh the list
@@ -323,8 +336,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
     } catch (error) {
       console.error('Error uploading file:', error);
       toast({
-        title: "Upload failed",
-        description: "There was an error uploading your file. Please try again.",
+        title: language === 'ar' ? "فشل التحميل" : "Upload failed",
+        description: language === 'ar' ? 
+          "حدث خطأ أثناء تحميل ملفك. يرجى المحاولة مرة أخرى." : 
+          "There was an error uploading your file. Please try again.",
         variant: "destructive",
       });
       setRecordingStep("metadata");
@@ -364,10 +379,10 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-center">
-            {recordingStep === "metadata" && "Voice Summary"}
-            {recordingStep === "recording" && "Recording Audio"}
-            {recordingStep === "transcribing" && "Transcribing Audio"}
-            {recordingStep === "summarizing" && "Creating Summary"}
+            {recordingStep === "metadata" && (language === 'ar' ? "ملخص صوتي" : "Voice Summary")}
+            {recordingStep === "recording" && (language === 'ar' ? "تسجيل الصوت" : "Recording Audio")}
+            {recordingStep === "transcribing" && (language === 'ar' ? "نسخ الصوت" : "Transcribing Audio")}
+            {recordingStep === "summarizing" && (language === 'ar' ? "إنشاء ملخص" : "Creating Summary")}
           </DialogTitle>
         </DialogHeader>
         
@@ -375,76 +390,78 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
           <>
             <Tabs defaultValue="record" value={tab} onValueChange={setTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="record">Record</TabsTrigger>
-                <TabsTrigger value="upload">Upload</TabsTrigger>
+                <TabsTrigger value="record">{language === 'ar' ? "تسجيل" : "Record"}</TabsTrigger>
+                <TabsTrigger value="upload">{language === 'ar' ? "رفع" : "Upload"}</TabsTrigger>
               </TabsList>
               
               <TabsContent value="record" className="mt-4">
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="title">Title (Optional)</Label>
+                    <Label htmlFor="title">{language === 'ar' ? "العنوان (اختياري)" : "Title (Optional)"}</Label>
                     <Input
                       id="title"
                       name="title"
-                      placeholder="Untitled Recording"
+                      placeholder={language === 'ar' ? "تسجيل بدون عنوان" : "Untitled Recording"}
                       value={formData.title}
                       onChange={handleInputChange}
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="type">Type</Label>
+                    <Label htmlFor="type">{language === 'ar' ? "النوع" : "Type"}</Label>
                     <Select 
                       value={formData.type} 
                       onValueChange={(value) => handleSelectChange('type', value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
+                        <SelectValue placeholder={language === 'ar' ? "حدد النوع" : "Select type"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Meeting">Meeting</SelectItem>
-                        <SelectItem value="Lecture">Lecture</SelectItem>
-                        <SelectItem value="Brainstorm">Brainstorm</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        <SelectItem value="Meeting">{language === 'ar' ? "اجتماع" : "Meeting"}</SelectItem>
+                        <SelectItem value="Lecture">{language === 'ar' ? "محاضرة" : "Lecture"}</SelectItem>
+                        <SelectItem value="Brainstorm">{language === 'ar' ? "عصف ذهني" : "Brainstorm"}</SelectItem>
+                        <SelectItem value="Other">{language === 'ar' ? "آخر" : "Other"}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   
                   <div>
-                    <Label htmlFor="host">Host (Optional)</Label>
+                    <Label htmlFor="host">{language === 'ar' ? "المضيف (اختياري)" : "Host (Optional)"}</Label>
                     <Input
                       id="host"
                       name="host"
-                      placeholder="Host name"
+                      placeholder={language === 'ar' ? "اسم المضيف" : "Host name"}
                       value={formData.host}
                       onChange={handleInputChange}
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="attendees">Attendees (Optional)</Label>
+                    <Label htmlFor="attendees">{language === 'ar' ? "الحضور (اختياري)" : "Attendees (Optional)"}</Label>
                     <Input
                       id="attendees"
                       name="attendees"
-                      placeholder="Separate names with commas"
+                      placeholder={language === 'ar' ? "افصل بين الأسماء بفواصل" : "Separate names with commas"}
                       value={formData.attendees}
                       onChange={handleInputChange}
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="location">Location (Optional)</Label>
+                    <Label htmlFor="location">{language === 'ar' ? "الموقع (اختياري)" : "Location (Optional)"}</Label>
                     <Input
                       id="location"
                       name="location"
-                      placeholder="Where this took place"
+                      placeholder={language === 'ar' ? "مكان الحدث" : "Where this took place"}
                       value={formData.location}
                       onChange={handleInputChange}
                     />
                   </div>
                   
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="cleanAudio">Clean Audio (noise reduction)</Label>
+                    <Label htmlFor="cleanAudio">
+                      {language === 'ar' ? "تنقية الصوت (تقليل الضوضاء)" : "Clean Audio (noise reduction)"}
+                    </Label>
                     <Switch
                       id="cleanAudio"
                       checked={formData.cleanAudio}
@@ -454,14 +471,14 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
                   
                   <div className="flex justify-between pt-4">
                     <Button variant="outline" onClick={handleDialogClose}>
-                      Cancel
+                      {language === 'ar' ? "إلغاء" : "Cancel"}
                     </Button>
                     <div className="space-x-2">
                       <Button variant="outline" onClick={handleSkip}>
-                        Skip
+                        {language === 'ar' ? "تخطي" : "Skip"}
                       </Button>
                       <Button onClick={() => setRecordingStep("recording")}>
-                        Next
+                        {language === 'ar' ? "التالي" : "Next"}
                       </Button>
                     </div>
                   </div>
@@ -471,40 +488,42 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
               <TabsContent value="upload" className="mt-4">
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="title">Title (Optional)</Label>
+                    <Label htmlFor="title">{language === 'ar' ? "العنوان (اختياري)" : "Title (Optional)"}</Label>
                     <Input
                       id="title"
                       name="title"
-                      placeholder="Name your upload"
+                      placeholder={language === 'ar' ? "اسم ملفك" : "Name your upload"}
                       value={formData.title}
                       onChange={handleInputChange}
                     />
                   </div>
                   
                   <div>
-                    <Label htmlFor="type">Type</Label>
+                    <Label htmlFor="type">{language === 'ar' ? "النوع" : "Type"}</Label>
                     <Select 
                       value={formData.type} 
                       onValueChange={(value) => handleSelectChange('type', value)}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
+                        <SelectValue placeholder={language === 'ar' ? "حدد النوع" : "Select type"} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Meeting">Meeting</SelectItem>
-                        <SelectItem value="Lecture">Lecture</SelectItem>
-                        <SelectItem value="Brainstorm">Brainstorm</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        <SelectItem value="Meeting">{language === 'ar' ? "اجتماع" : "Meeting"}</SelectItem>
+                        <SelectItem value="Lecture">{language === 'ar' ? "محاضرة" : "Lecture"}</SelectItem>
+                        <SelectItem value="Brainstorm">{language === 'ar' ? "عصف ذهني" : "Brainstorm"}</SelectItem>
+                        <SelectItem value="Other">{language === 'ar' ? "آخر" : "Other"}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label>Upload Audio File</Label>
+                    <Label>{language === 'ar' ? "تحميل ملف صوتي" : "Upload Audio File"}</Label>
                     <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
                       <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                       <p className="text-sm text-muted-foreground mb-4">
-                        MP3 or WAV format, max 2 hours
+                        {language === 'ar' 
+                          ? "صيغة MP3 أو WAV، بحد أقصى ساعتين" 
+                          : "MP3 or WAV format, max 2 hours"}
                       </p>
                       <Input
                         id="audio-upload"
@@ -517,17 +536,17 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
                         variant="outline"
                         onClick={() => document.getElementById('audio-upload')?.click()}
                       >
-                        Select File
+                        {language === 'ar' ? "اختر ملفًا" : "Select File"}
                       </Button>
                     </div>
                   </div>
                   
                   <div className="flex justify-between pt-4">
                     <Button variant="outline" onClick={handleDialogClose}>
-                      Cancel
+                      {language === 'ar' ? "إلغاء" : "Cancel"}
                     </Button>
                     <Button disabled type="submit">
-                      Upload
+                      {language === 'ar' ? "تحميل" : "Upload"}
                     </Button>
                   </div>
                 </div>
@@ -563,7 +582,9 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
             </div>
             
             <div className="text-center text-sm text-muted-foreground">
-              {!isRecording ? "Press the microphone to start recording" : "Recording in progress..."}
+              {!isRecording 
+                ? (language === 'ar' ? "اضغط على الميكروفون لبدء التسجيل" : "Press the microphone to start recording")
+                : (language === 'ar' ? "جارٍ التسجيل..." : "Recording in progress...")}
             </div>
             
             {isRecording && (
@@ -573,18 +594,18 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
                   className="bg-background/50 border-destructive text-destructive"
                   onClick={handleStopRecording}
                 >
-                  Stop Recording
+                  {language === 'ar' ? "إيقاف التسجيل" : "Stop Recording"}
                 </Button>
               </div>
             )}
             
             <div className="flex justify-between pt-4">
               <Button variant="outline" onClick={handleDialogClose}>
-                Cancel
+                {language === 'ar' ? "إلغاء" : "Cancel"}
               </Button>
               {isRecording && (
                 <Button variant="outline" disabled>
-                  Highlight This Moment
+                  {language === 'ar' ? "تمييز هذه اللحظة" : "Highlight This Moment"}
                 </Button>
               )}
             </div>
@@ -599,9 +620,13 @@ export default function RecordingDialog({ isOpen, onClose }: RecordingDialogProp
               </div>
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-medium">Processing Audio</h3>
+              <h3 className="text-lg font-medium">
+                {language === 'ar' ? "معالجة الصوت" : "Processing Audio"}
+              </h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Transcribing your recording using Whisper AI...
+                {language === 'ar' 
+                  ? "جارٍ نسخ تسجيلك باستخدام Whisper AI..." 
+                  : "Transcribing your recording using Whisper AI..."}
               </p>
             </div>
             <div className="flex justify-center">

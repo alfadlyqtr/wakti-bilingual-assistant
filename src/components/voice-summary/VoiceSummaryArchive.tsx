@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AudioWaveform, Calendar, MapPin, Users } from "lucide-react";
 import { formatDistanceToNow, parseISO } from "date-fns";
 import { useNavigate } from "react-router-dom";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface RecordingMeta {
   id: string;
@@ -28,6 +29,8 @@ interface RecordingMeta {
 
 export default function VoiceSummaryArchive() {
   const navigate = useNavigate();
+  const { language } = useTheme();
+  
   const { data: recordings = [], isLoading } = useQuery({
     queryKey: ["voice-recordings"],
     queryFn: async () => {
@@ -72,9 +75,11 @@ export default function VoiceSummaryArchive() {
     return (
       <div className="text-center py-12">
         <AudioWaveform className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">No recordings found</h3>
+        <h3 className="mt-4 text-lg font-medium">
+          {language === 'ar' ? 'لم يتم العثور على تسجيلات' : 'No recordings found'}
+        </h3>
         <p className="text-sm text-muted-foreground mt-1">
-          Create your first recording to see it here
+          {language === 'ar' ? 'قم بإنشاء أول تسجيل لعرضه هنا' : 'Create your first recording to see it here'}
         </p>
       </div>
     );
@@ -84,7 +89,7 @@ export default function VoiceSummaryArchive() {
     const now = new Date();
     const expiry = parseISO(expiryDate);
     const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return `${daysLeft} days remaining`;
+    return language === 'ar' ? `${daysLeft} أيام متبقية` : `${daysLeft} days remaining`;
   };
 
   return (
@@ -129,7 +134,7 @@ export default function VoiceSummaryArchive() {
                   className="px-3 py-1 bg-primary text-primary-foreground rounded-md"
                   onClick={() => navigate(`/voice-summary/${recording.id}`)}
                 >
-                  View Details
+                  {language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
                 </button>
               </div>
             </div>

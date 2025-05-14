@@ -17,13 +17,15 @@ export default function VoiceSummaryPage() {
     <div className="flex flex-col h-full w-full">
       <div className="flex-1 overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">Recent Recordings</h2>
+          <h2 className="text-xl font-semibold">
+            {language === 'ar' ? 'التسجيلات الأخيرة' : 'Recent Recordings'}
+          </h2>
           <Button 
             onClick={() => setShowRecordingDialog(true)} 
             className="flex items-center gap-1"
           >
             <Plus size={18} />
-            <span>New Recording</span>
+            <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
           </Button>
         </div>
 
