@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -8,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -18,16 +21,58 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+    
+    if (!name || !username || !email || !password) {
+      setErrorMsg(language === 'en' ? 'Please fill in all fields' : 'يرجى تعبئة جميع الحقول');
+      return;
+    }
+    
+    if (password.length < 6) {
+      setErrorMsg(language === 'en' ? 'Password must be at least 6 characters long' : 'يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+      return;
+    }
     
     setIsLoading(true);
-    // Will implement with Supabase later
-    setTimeout(() => {
-      navigate("/dashboard");
+    
+    try {
+      // Create the user in Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            username,
+          },
+        },
+      });
+      
+      if (error) {
+        console.error("Signup error:", error);
+        setErrorMsg(error.message);
+        toast({
+          title: language === 'en' ? 'Signup Failed' : 'فشل إنشاء الحساب',
+          description: error.message,
+          variant: 'destructive',
+        });
+      } else if (data?.user) {
+        toast({
+          title: language === 'en' ? 'Account Created' : 'تم إنشاء الحساب',
+          description: language === 'en' ? 'Your account has been created successfully!' : 'تم إنشاء حسابك بنجاح!',
+        });
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error("Unexpected error during signup:", err);
+      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   // Translations
@@ -106,6 +151,12 @@ export default function Signup() {
                 <Logo3D size="lg" />
               </div>
               <h1 className="text-2xl font-bold">{t.createAccount}</h1>
+              
+              {errorMsg && (
+                <div className="mt-3 text-sm text-red-500">
+                  {errorMsg}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSignup} className="space-y-6">

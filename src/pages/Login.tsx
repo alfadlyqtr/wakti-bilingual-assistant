@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -8,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,16 +19,46 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+    
+    if (!email || !password) {
+      setErrorMsg(language === 'en' ? 'Please fill in all fields' : 'يرجى تعبئة جميع الحقول');
+      return;
+    }
     
     setIsLoading(true);
-    // Will implement with Supabase later
-    setTimeout(() => {
-      navigate("/dashboard");
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error("Login error:", error);
+        setErrorMsg(error.message);
+        toast({
+          title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
+          description: error.message,
+          variant: 'destructive',
+        });
+      } else if (data?.user) {
+        toast({
+          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
+          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
+        });
+        navigate("/dashboard");
+      }
+    } catch (err) {
+      console.error("Unexpected error during login:", err);
+      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   // Translations
@@ -96,6 +129,12 @@ export default function Login() {
                 <Logo3D size="lg" />
               </div>
               <h1 className="text-2xl font-bold">{t.login}</h1>
+              
+              {errorMsg && (
+                <div className="mt-3 text-sm text-red-500">
+                  {errorMsg}
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleLogin} className="space-y-6">

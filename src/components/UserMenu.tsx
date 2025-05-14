@@ -1,75 +1,137 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, Settings, Users, User, LogOut } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Settings, LogOut, MessageCircle, 
+  Users, User as UserIcon, ChevronDown 
+} from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { t } from "@/utils/translations";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "@/components/ui/use-toast";
 
-interface UserMenuProps {
-  userImage?: string;
-  userName?: string;
-}
-
-export function UserMenu({ userImage, userName = "User" }: UserMenuProps) {
+export function UserMenu() {
+  const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { language } = useTheme();
-  const [open, setOpen] = useState(false);
+  const { user, signOut } = useAuth();
 
-  const handleLogout = () => {
-    // Will implement with Supabase later
-    navigate("/");
-    setOpen(false);
+  const toggleMenu = () => {
+    setIsOpen(!isOpen);
   };
-  
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
+
+  const closeMenu = () => {
+    setIsOpen(false);
   };
+
+  const handleMenuItemClick = (path: string) => {
+    navigate(path);
+    closeMenu();
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: language === 'en' ? 'Logged Out' : 'تم تسجيل الخروج',
+        description: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
+      });
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast({
+        title: language === 'en' ? 'Error' : 'خطأ',
+        description: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
+        variant: "destructive",
+      });
+    }
+    closeMenu();
+  };
+
+  // Shorthand for avatar display name
+  const getInitials = () => {
+    if (!user) return "?";
+    
+    const name = user.user_metadata?.full_name || user.email || '';
+    if (!name) return "?";
+    
+    if (name.includes(' ')) {
+      const [first, last] = name.split(' ');
+      return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+    }
+    
+    return name.charAt(0).toUpperCase();
+  };
+
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t("user", language);
+
+  // User menu options
+  const menuOptions = [
+    { icon: <Settings size={16} />, label: t("settings", language), path: "/settings" },
+    { icon: <MessageCircle size={16} />, label: t("messages", language), path: "/messages" },
+    { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
+    { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
+    { divider: true },
+    { icon: <LogOut size={16} />, label: t("logout", language), action: handleLogout },
+  ];
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-10 w-10 rounded-full p-0">
-          <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={userImage} alt={userName} />
-            <AvatarFallback className="text-xs">
-              {getInitials(userName)}
-            </AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuItem onClick={() => navigate("/messages")}>
-          <MessageSquare className="mr-2 h-4 w-4" />
-          <span>{t("messaging", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/account")}>
-          <User className="mr-2 h-4 w-4" />
-          <span>{t("account", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/contacts")}>
-          <Users className="mr-2 h-4 w-4" />
-          <span>{t("contacts", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>{t("logout", language)}</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div className="relative z-50">
+      <button 
+        onClick={toggleMenu}
+        className="flex items-center space-x-1 bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded-full transition-colors"
+      >
+        <Avatar className="h-6 w-6">
+          <AvatarImage src={user?.user_metadata?.avatar_url || ''} />
+          <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
+        </Avatar>
+        <span className="text-sm max-w-[70px] truncate">{displayName}</span>
+        <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            {/* Backdrop for closing menu when clicked outside */}
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={closeMenu}
+            />
+            
+            {/* User menu dropdown */}
+            <motion.div
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15 }}
+              className="absolute right-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg overflow-hidden z-50"
+            >
+              <div className="py-2 px-3 border-b border-border">
+                <p className="text-sm font-medium truncate">{displayName}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              </div>
+              
+              <div className="py-1">
+                {menuOptions.map((option, i) => (
+                  option.divider ? (
+                    <div key={`divider-${i}`} className="my-1 border-t border-border" />
+                  ) : (
+                    <button
+                      key={option.label}
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center space-x-2"
+                      onClick={() => option.action ? option.action() : handleMenuItemClick(option.path)}
+                    >
+                      <span className="text-muted-foreground">{option.icon}</span>
+                      <span>{option.label}</span>
+                    </button>
+                  )
+                ))}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

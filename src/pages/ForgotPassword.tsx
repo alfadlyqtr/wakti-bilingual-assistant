@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/use-toast";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -15,16 +17,47 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMsg(null);
+    
+    if (!email) {
+      setErrorMsg(language === 'en' ? 'Please enter your email' : 'يرجى إدخال بريدك الإلكتروني');
+      return;
+    }
     
     setIsLoading(true);
-    // Will implement with Supabase later
-    setTimeout(() => {
-      setIsSubmitted(true);
+    
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password',
+      });
+      
+      if (error) {
+        console.error("Password reset error:", error);
+        setErrorMsg(error.message);
+        toast({
+          title: language === 'en' ? 'Reset Failed' : 'فشل إعادة التعيين',
+          description: error.message,
+          variant: 'destructive',
+        });
+      } else {
+        setIsSubmitted(true);
+        toast({
+          title: language === 'en' ? 'Email Sent' : 'تم إرسال البريد الإلكتروني',
+          description: language === 'en' ? 
+            'Check your email for the password reset link' : 
+            'تحقق من بريدك الإلكتروني للحصول على رابط إعادة تعيين كلمة المرور',
+        });
+      }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   // Translations
@@ -105,6 +138,12 @@ export default function ForgotPassword() {
                 <p className="text-sm text-muted-foreground">
                   {t.resetInstructions}
                 </p>
+              )}
+              
+              {errorMsg && (
+                <div className="mt-3 text-sm text-red-500">
+                  {errorMsg}
+                </div>
               )}
             </div>
 

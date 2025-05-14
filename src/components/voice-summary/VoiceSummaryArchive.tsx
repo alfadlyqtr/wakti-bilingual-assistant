@@ -1,149 +1,125 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { AudioWaveform, Calendar, MapPin, Users } from "lucide-react";
-import { formatDistanceToNow, parseISO } from "date-fns";
+
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
+import { formatDistanceToNow } from "date-fns";
+import { arSA, enUS } from "date-fns/locale";
+import { Card, CardContent } from "@/components/ui/card";
+import { Mic, FileText, CheckCircle, Clock, DownloadCloud } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-interface RecordingMeta {
-  id: string;
-  title: string;
-  type: "Meeting" | "Lecture" | "Brainstorm" | "Other";
-  host?: string;
-  attendees?: string;
-  location?: string;
-  created_at: string;
-  expires_at: string;
-  audio_url: string;
-  transcript?: string;
-  summary?: string;
-  summary_audio_url?: string;
-  summary_voice?: "male" | "female";
-  summary_language?: "english" | "arabic";
-  highlighted_timestamps?: { time: number; note: string }[];
+interface VoiceSummaryArchiveProps {
+  recordings: any[];
 }
 
-export default function VoiceSummaryArchive() {
+export default function VoiceSummaryArchive({ recordings }: VoiceSummaryArchiveProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
-  
-  const { data: recordings = [], isLoading, refetch } = useQuery({
-    queryKey: ["voice-recordings"],
-    queryFn: async () => {
-      try {
-        // Using 'from' with type casting to handle the database schema mismatch
-        const { data, error } = await supabase
-          .from("voice_recordings" as any)
-          .select("*")
-          .order("created_at", { ascending: false });
-          
-        if (error) throw error;
-        console.log("Fetched recordings:", data);
-        return data as unknown as RecordingMeta[];
-      } catch (error) {
-        console.error("Error fetching recordings:", error);
-        return [];
-      }
-    },
-  });
 
-  const handleViewDetails = (recordingId: string) => {
-    console.log("Navigating to recording details:", recordingId);
-    // Update to use the consistent /voice-summary/:id path
-    navigate(`/voice-summary/${recordingId}`);
+  const locale = language === 'ar' ? arSA : enUS;
+
+  const getStatusIcon = (status: string) => {
+    switch(status) {
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'pending':
+        return <Clock className="h-4 w-4 text-amber-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-muted-foreground" />;
+    }
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2].map(i => (
-          <Card key={i} className="w-full">
-            <CardHeader>
-              <Skeleton className="h-6 w-3/4" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-20 w-full mb-4" />
-              <div className="flex justify-between">
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-8 w-24" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
+  const getStatusText = (status: string) => {
+    switch(status) {
+      case 'completed':
+        return language === 'ar' ? 'مكتمل' : 'Completed';
+      case 'pending':
+        return language === 'ar' ? 'قيد المعالجة' : 'Processing';
+      case 'edited':
+        return language === 'ar' ? 'تم التعديل' : 'Edited';
+      default:
+        return language === 'ar' ? 'غير معروف' : 'Unknown';
+    }
+  };
 
-  if (recordings.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <AudioWaveform className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">
-          {language === 'ar' ? 'لم يتم العثور على تسجيلات' : 'No recordings found'}
-        </h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          {language === 'ar' ? 'قم بإنشاء أول تسجيل لعرضه هنا' : 'Create your first recording to see it here'}
-        </p>
-      </div>
-    );
-  }
-
-  const calculateExpiryTime = (expiryDate: string) => {
-    const now = new Date();
-    const expiry = parseISO(expiryDate);
-    const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    return language === 'ar' ? `${daysLeft} أيام متبقية` : `${daysLeft} days remaining`;
+  const handleDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {recordings.map((recording) => (
-        <Card key={recording.id} className="w-full">
-          <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-lg font-semibold">{recording.title}</CardTitle>
-              <div className="text-xs text-muted-foreground border border-border rounded-full px-2 py-0.5">
-                {recording.type}
+        <Card 
+          key={recording.id}
+          className="hover:border-primary/50 transition-colors cursor-pointer"
+          onClick={() => navigate(`/voice-summary/${recording.id}`)}
+        >
+          <CardContent className="p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="bg-primary/10 p-2 rounded-full">
+                  <Mic className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-base line-clamp-1">
+                    {recording.title || (language === 'ar' ? 'تسجيل بدون عنوان' : 'Untitled Recording')}
+                  </h3>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {formatDistanceToNow(new Date(recording.created_at), { 
+                      addSuffix: true, 
+                      locale 
+                    })}
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
-              {recording.created_at && (
-                <div className="flex items-center gap-1">
-                  <Calendar size={12} />
-                  <span>{formatDistanceToNow(parseISO(recording.created_at), { addSuffix: true })}</span>
-                </div>
-              )}
-              {recording.location && (
-                <div className="flex items-center gap-1">
-                  <MapPin size={12} />
-                  <span>{recording.location}</span>
-                </div>
-              )}
-              {recording.attendees && (
-                <div className="flex items-center gap-1">
-                  <Users size={12} />
-                  <span>{recording.attendees}</span>
-                </div>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex justify-between items-center mt-2">
-              <div className="text-xs text-destructive">
-                {calculateExpiryTime(recording.expires_at)}
-              </div>
-              <div className="flex gap-2 text-xs">
-                <button 
-                  className="px-3 py-1 bg-primary text-primary-foreground rounded-md"
-                  onClick={() => handleViewDetails(recording.id)}
+              
+              <div className="flex items-center gap-2">
+                {recording.recording_url && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownload(recording.recording_url, `recording-${recording.id}.mp3`);
+                    }}
+                  >
+                    <DownloadCloud className="h-4 w-4" />
+                  </Button>
+                )}
+                <Badge 
+                  variant={recording.transcription_status === 'completed' ? "default" : "outline"}
+                  className="ml-2 flex items-center gap-1"
                 >
-                  {language === 'ar' ? 'عرض التفاصيل' : 'View Details'}
-                </button>
+                  {getStatusIcon(recording.transcription_status)}
+                  <span>{getStatusText(recording.transcription_status)}</span>
+                </Badge>
               </div>
             </div>
+            
+            {recording.transcription_text && (
+              <div className="mt-2 border-t pt-2 border-border/50">
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+                  <FileText className="h-3 w-3" />
+                  <span>{language === 'ar' ? 'النص' : 'Transcript'}</span>
+                </div>
+                <p className="text-sm line-clamp-2">{recording.transcription_text}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}

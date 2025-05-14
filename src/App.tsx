@@ -1,11 +1,9 @@
 
-import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
-import { ThemeProvider } from "@/providers/ThemeProvider";
+import { ThemeProvider } from "./providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MobileNav } from "@/components/MobileNav";
-import "./App.css";
+import { AuthProvider, AuthRoute } from "./contexts/AuthContext";
+import Loading from "./components/ui/loading";
 
 // Pages
 import Home from "./pages/Home";
@@ -16,62 +14,55 @@ import ForgotPassword from "./pages/ForgotPassword";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import TasksReminders from "./pages/TasksReminders";
+import AIAssistant from "./pages/AIAssistant";
+import VoiceSummary from "./pages/VoiceSummary";
+import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
 import Events from "./pages/Events";
-import Calendar from "./pages/Calendar";
 import EventDetail from "./pages/EventDetail";
 import EventCreate from "./pages/EventCreate";
 import Messages from "./pages/Messages";
-import VoiceSummary from "./pages/VoiceSummary";
-import VoiceSummaryDetail from "./pages/VoiceSummaryDetail";
-import Account from "./pages/Account";
+import Calendar from "./pages/Calendar";
 import Contacts from "./pages/Contacts";
-import AIAssistant from "./pages/AIAssistant";
+import Account from "./pages/Account";
 import Index from "./pages/Index";
 
-// Create a client
-const queryClient = new QueryClient();
+import "./App.css";
 
 function App() {
   return (
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <Router>
-            <div className="app-container min-h-screen bg-background text-foreground">
-              <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/home" element={<Navigate to="/" replace />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/tasks" element={<TasksReminders />} />
-                <Route path="/events" element={<Events />} />
-                <Route path="/events/create" element={<EventCreate />} />
-                <Route path="/events/:id" element={<EventDetail />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/messages" element={<Messages />} />
-                <Route path="/voice-summary" element={<VoiceSummary />} />
-                <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
-                {/* Add redirect from /voice to /voice-summary */}
-                <Route path="/voice" element={<Navigate to="/voice-summary" replace />} />
-                {/* Keep compatibility with the old route pattern */}
-                <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
-                <Route path="/account" element={<Account />} />
-                <Route path="/contacts" element={<Contacts />} />
-                <Route path="/assistant" element={<AIAssistant />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              
-              {/* Add MobileNav here to ensure it appears on all pages */}
-              <MobileNav />
-              <Toaster />
-            </div>
-          </Router>
-        </ThemeProvider>
-      </QueryClientProvider>
-    </React.StrictMode>
+    <ThemeProvider>
+      <Router>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          
+          {/* Protected routes that require authentication */}
+          <Route path="/dashboard" element={<AuthRoute><Dashboard /></AuthRoute>} />
+          <Route path="/tasks" element={<AuthRoute><TasksReminders /></AuthRoute>} />
+          <Route path="/assistant" element={<AuthRoute><AIAssistant /></AuthRoute>} />
+          <Route path="/voice-summary" element={<AuthRoute><VoiceSummary /></AuthRoute>} />
+          <Route path="/voice-summary/:id" element={<AuthRoute><VoiceSummaryDetail /></AuthRoute>} />
+          <Route path="/events" element={<AuthRoute><Events /></AuthRoute>} />
+          <Route path="/events/:id" element={<AuthRoute><EventDetail /></AuthRoute>} />
+          <Route path="/events/create" element={<AuthRoute><EventCreate /></AuthRoute>} />
+          <Route path="/messages" element={<AuthRoute><Messages /></AuthRoute>} />
+          <Route path="/calendar" element={<AuthRoute><Calendar /></AuthRoute>} />
+          <Route path="/contacts" element={<AuthRoute><Contacts /></AuthRoute>} />
+          <Route path="/account" element={<AuthRoute><Account /></AuthRoute>} />
+          <Route path="/settings" element={<AuthRoute><Settings /></AuthRoute>} />
+          
+          {/* Redirect routes */}
+          <Route path="/index" element={<Index />} />
+          
+          {/* 404 fallback */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <Toaster />
+      </Router>
+    </ThemeProvider>
   );
 }
 
