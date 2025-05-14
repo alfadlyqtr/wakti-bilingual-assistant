@@ -232,7 +232,6 @@ export type TranslationKey =
   | "maxAttendees"
   | "enterMaxAttendees"
   | "creating"
-  // Add the missing translation keys that are causing errors
   | "createFirstEvent"
   | "decline"
   | "accept"
@@ -243,4 +242,9 @@ export type TranslationKey =
   | "noTasksYet"
   | "nothingScheduled"
   | "noEventsYet"
-  | "noRemindersYet";
+  | "noRemindersYet"
+  | "assistant"
+  | "writer"
+  | "creative"
+  | "general"
+  | "startVoiceInput";

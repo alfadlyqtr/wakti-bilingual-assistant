@@ -1004,6 +1004,28 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   noRemindersYet: {
     en: "No reminders yet",
     ar: "لا توجد تذكيرات بعد"
+  },
+  
+  // Add the missing translation keys for AI mode names
+  assistant: {
+    en: "Assistant",
+    ar: "المساعد"
+  },
+  writer: {
+    en: "Writer",
+    ar: "الكاتب"
+  },
+  creative: {
+    en: "Creative",
+    ar: "المبدع"
+  },
+  general: {
+    en: "General",
+    ar: "عام"
+  },
+  startVoiceInput: {
+    en: "Start voice input",
+    ar: "بدء إدخال الصوت"
   }
 };
 

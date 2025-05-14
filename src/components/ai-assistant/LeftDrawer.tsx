@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, MessageSquare, History, Trash2 } from "lucide-react";
 import { AIMode, ASSISTANT_MODES } from "./types";
+import { toast } from "@/hooks/use-toast";
 
 interface LeftDrawerProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ interface LeftDrawerProps {
 
 export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: LeftDrawerProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [chats, setChats] = useState<any[]>([]); // Empty array instead of dummy data
   const direction = language === "ar" ? "rtl" : "ltr";
   const isDark = theme === "dark";
   
@@ -40,17 +42,6 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
   };
   
   const textColor = getTextColor(drawerBgColor || "#000000");
-  
-  // Mock previous chats
-  const previousChats = [
-    { id: "1", title: "Task Planning", date: new Date(), mode: "assistant" },
-    { id: "2", title: "Image Creation", date: new Date(Date.now() - 86400000), mode: "creative" },
-    { id: "3", title: "Meeting Notes", date: new Date(Date.now() - 172800000), mode: "writer" },
-    { id: "4", title: "Translation Help", date: new Date(Date.now() - 259200000), mode: "general" },
-    { id: "5", title: "Weekly Report", date: new Date(Date.now() - 345600000), mode: "writer" },
-    { id: "6", title: "Event Planning", date: new Date(Date.now() - 432000000), mode: "assistant" },
-    { id: "7", title: "Logo Design Ideas", date: new Date(Date.now() - 518400000), mode: "creative" }
-  ];
 
   // Get mode color for chat items
   const getModeColor = (mode: string) => {
@@ -60,10 +51,19 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
 
   // Filter chats based on search query
   const filteredChats = searchQuery 
-    ? previousChats.filter(chat => 
+    ? chats.filter(chat => 
         chat.title.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : previousChats;
+    : chats;
+
+  // Handle clear history functionality
+  const handleClearHistory = () => {
+    setChats([]);
+    toast({
+      title: t("success" as TranslationKey, language),
+      description: t("clearHistory" as TranslationKey, language),
+    });
+  };
 
   return (
     <AnimatePresence>
@@ -131,58 +131,16 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
               </div>
             </div>
             
-            {/* Chat List */}
+            {/* Chat List - Always showing empty state now */}
             <div className="flex-1 overflow-y-auto">
-              <AnimatePresence>
-                {filteredChats.length === 0 ? (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="px-4 py-8 text-center"
-                    style={{ color: `${textColor}80` }}
-                  >
-                    {searchQuery ? t("noChatsFound" as TranslationKey, language) : t("noChatsYet" as TranslationKey, language)}
-                  </motion.div>
-                ) : (
-                  filteredChats.map((chat, index) => (
-                    <motion.div 
-                      key={chat.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.05 }}
-                      className={`px-4 py-3 cursor-pointer flex gap-3 items-center border-b border-opacity-10`}
-                      style={{ 
-                        borderColor: textColor,
-                        backgroundColor: 'transparent'
-                      }}
-                      whileHover={{
-                        backgroundColor: `${textColor}10`
-                      }}
-                    >
-                      <div 
-                        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                        style={{ 
-                          backgroundColor: getModeColor(chat.mode),
-                          color: getTextColor(getModeColor(chat.mode) || "#000000")
-                        }}
-                      >
-                        <MessageSquare size={14} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate" style={{ color: textColor }}>
-                          {chat.title}
-                        </div>
-                        <div className="text-xs" style={{ color: `${textColor}80` }}>
-                          {chat.date.toLocaleDateString(
-                            language === "ar" ? "ar-SA" : "en-US",
-                            { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </AnimatePresence>
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="px-4 py-8 text-center"
+                style={{ color: `${textColor}80` }}
+              >
+                {searchQuery ? t("noChatsFound" as TranslationKey, language) : t("noChatsYet" as TranslationKey, language)}
+              </motion.div>
             </div>
             
             {/* Bottom Button */}
@@ -195,9 +153,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                   color: textColor,
                   backgroundColor: `${textColor}10`
                 }}
-                onClick={() => {
-                  // Clear history functionality would go here
-                }}
+                onClick={handleClearHistory}
               >
                 <Trash2 size={16} />
                 {t("clearHistory" as TranslationKey, language)}
