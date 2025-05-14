@@ -72,8 +72,8 @@ export function confirm(options: ConfirmOptions | string) {
 export function toast(props: ToastOptions) {
   const { title, description, variant, ...rest } = props;
   
-  // Map variant to sonner's equivalent
-  let sonnerVariant = "default";
+  // Map variant to sonner's equivalent - fix the type comparison issue
+  let sonnerVariant: string = "default";
   if (variant === "destructive") {
     sonnerVariant = "error";
   } else if (variant === "success") {
