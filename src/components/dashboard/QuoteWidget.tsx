@@ -21,9 +21,19 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   useEffect(() => {
     // Get the quote on component mount and when language changes
     const fetchQuote = () => {
-      const quoteData = getQuoteForDisplay();
-      console.log("Fetched quote:", quoteData);
-      setQuote(quoteData);
+      try {
+        const quoteData = getQuoteForDisplay();
+        console.log("Fetched quote in widget:", quoteData);
+        setQuote(quoteData);
+      } catch (error) {
+        console.error("Error fetching quote:", error);
+        // Fallback to default quote on error
+        setQuote({
+          text_en: "The journey of a thousand miles begins with a single step.",
+          text_ar: "رحلة الألف ميل تبدأ بخطوة واحدة.",
+          source: "Lao Tzu"
+        });
+      }
     };
     
     fetchQuote();

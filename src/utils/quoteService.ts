@@ -1,3 +1,4 @@
+
 import { quotes } from './dailyQuotes';
 
 // Custom quotes storage
@@ -29,9 +30,9 @@ export const getQuotePreferences = (): QuotePreferences => {
     console.error('Error loading quote preferences:', error);
   }
   
-  // Default preferences
+  // Default preferences - use "motivational" instead of "motivation"
   return {
-    category: 'motivation',
+    category: 'motivational',
     frequency: '2xday',
   };
 };
@@ -70,6 +71,8 @@ export const getCustomQuotes = (): string[] => {
 
 // Helper function to get all quotes from a category
 const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] => {
+  console.log(`Getting quotes from category: ${category}`);
+  
   if (category === 'mixed') {
     // For mixed category, collect all quotes from all categories
     let allQuotes: QuoteObject[] = [];
@@ -94,10 +97,12 @@ const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] =>
       }
     });
     
+    console.log(`Found ${categoryQuotes.length} quotes in category '${category}'`);
     return categoryQuotes;
   }
   
   // If category doesn't exist or is empty
+  console.log(`Category '${category}' not found or empty, using default quote`);
   return [{
     text_en: "Wisdom awaits. More quotes coming soon.",
     text_ar: "الحكمة تنتظر. المزيد من الاقتباسات قريبًا.",
@@ -106,7 +111,7 @@ const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] =>
 };
 
 // Get a random quote based on preferences
-export const getRandomQuote = (category: string = 'motivation'): QuoteObject | string => {
+export const getRandomQuote = (category: string = 'motivational'): QuoteObject | string => {
   const allQuotes = getAllQuotesFromCategory(category);
   console.log(`Found ${allQuotes.length} quotes in category '${category}'`);
   
@@ -203,8 +208,8 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
 export const getQuoteForDisplay = (): QuoteObject | string => {
   const { category, frequency } = getQuotePreferences();
   
-  // Force new quote for debugging
-  localStorage.removeItem(LAST_QUOTE_KEY);
+  // Remove debugging code that was forcing new quotes
+  // localStorage.removeItem(LAST_QUOTE_KEY);
   
   // If we should show a new quote based on frequency
   if (shouldShowNewQuote(frequency)) {
