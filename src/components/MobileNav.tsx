@@ -3,7 +3,7 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Home as HomeIcon, Calendar as CalendarIcon, Clipboard as ClipboardIcon, PartyPopper as PartyIcon, Sparkles as SparklesIcon } from "lucide-react";
+import { Calendar, ClipboardList, Sparkles, Mic, PartyPopper } from "lucide-react";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -31,44 +31,44 @@ export const MobileNav: React.FC = () => {
   const { language } = useTheme();
   
   const isActive = (path: string) => {
-    if (path === "/") {
-      return location.pathname === "/";
+    if (path === "/calendar") {
+      return location.pathname === "/calendar";
     }
     return location.pathname.startsWith(path);
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-lg z-10">
-      <div className="flex justify-around py-2 px-1 items-center">
-        <NavItem
-          to="/"
-          label={t("home", language)}
-          icon={<HomeIcon className={isActive("/") ? "fill-primary" : ""} />}
-          isActive={isActive("/")}
-        />
+    <nav className="fixed bottom-5 left-0 right-0 mx-auto max-w-sm z-10">
+      <div className="flex justify-around py-3 px-4 mx-4 rounded-full bg-background/80 backdrop-blur-lg border border-border shadow-lg">
         <NavItem
           to="/calendar"
           label={t("calendar", language)}
-          icon={<CalendarIcon className={isActive("/calendar") ? "fill-primary" : ""} />}
+          icon={<Calendar className={isActive("/calendar") ? "fill-primary" : ""} />}
           isActive={isActive("/calendar")}
         />
         <NavItem
           to="/tasks"
           label={t("tasks", language)}
-          icon={<ClipboardIcon className={isActive("/tasks") ? "fill-primary" : ""} />}
+          icon={<ClipboardList className={isActive("/tasks") ? "fill-primary" : ""} />}
           isActive={isActive("/tasks")}
-        />
-        <NavItem
-          to="/events"
-          label={t("events", language)}
-          icon={<PartyIcon className={isActive("/events") ? "fill-primary" : ""} />}
-          isActive={isActive("/events")}
         />
         <NavItem
           to="/ai-assistant"
           label={t("assistant", language)}
-          icon={<SparklesIcon className={isActive("/ai-assistant") ? "fill-primary" : ""} />}
+          icon={<Sparkles className={isActive("/ai-assistant") ? "fill-primary" : ""} />}
           isActive={isActive("/ai-assistant")}
+        />
+        <NavItem
+          to="/voice-summary"
+          label={t("summary", language)}
+          icon={<Mic className={isActive("/voice-summary") ? "fill-primary" : ""} />}
+          isActive={isActive("/voice-summary")}
+        />
+        <NavItem
+          to="/events"
+          label={t("events", language)}
+          icon={<PartyPopper className={isActive("/events") ? "fill-primary" : ""} />}
+          isActive={isActive("/events")}
         />
       </div>
     </nav>
