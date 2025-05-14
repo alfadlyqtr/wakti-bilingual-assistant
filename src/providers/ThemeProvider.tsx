@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 
 type Theme = "dark" | "light";
 type Language = "en" | "ar";
@@ -13,16 +13,18 @@ interface ThemeContextType {
   toggleLanguage: () => void;
 }
 
-const ThemeContext = createContext<ThemeContextType>({
+const defaultContextValue: ThemeContextType = {
   theme: "light",
   language: "en",
   setTheme: () => null,
   setLanguage: () => null,
   toggleTheme: () => null,
   toggleLanguage: () => null,
-});
+};
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+const ThemeContext = createContext<ThemeContextType>(defaultContextValue);
+
+export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [language, setLanguage] = useState<Language>("en");
 

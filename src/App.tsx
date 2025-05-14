@@ -1,4 +1,5 @@
 
+import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
@@ -30,33 +31,35 @@ const queryClient = new QueryClient();
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/home" element={<Navigate to="/" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/tasks" element={<TasksReminders />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/events/create" element={<EventCreate />} />
-            <Route path="/events/:id" element={<EventDetail />} />
-            <Route path="/calendar" element={<Calendar />} />
-            <Route path="/messages" element={<Messages />} />
-            <Route path="/voice-summary" element={<VoiceSummary />} />
-            <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
-            <Route path="/account" element={<Account />} />
-            <Route path="/contacts" element={<Contacts />} />
-            <Route path="/ai-assistant" element={<AIAssistant />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-          <Toaster />
-        </Router>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <React.StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <Router>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Navigate to="/" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/tasks" element={<TasksReminders />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/events/create" element={<EventCreate />} />
+              <Route path="/events/:id" element={<EventDetail />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/messages" element={<Messages />} />
+              <Route path="/voice-summary" element={<VoiceSummary />} />
+              <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/contacts" element={<Contacts />} />
+              <Route path="/ai-assistant" element={<AIAssistant />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+            <Toaster />
+          </Router>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </React.StrictMode>
   );
 }
 
