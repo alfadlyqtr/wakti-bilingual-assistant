@@ -2,13 +2,14 @@
 import React, { RefObject } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { ChatMessage, AIMode } from "./types";
+import { ChatMessage, AIMode, ASSISTANT_MODES } from "./types";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { User, Check, X, Calendar, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { arSA } from "date-fns/locale";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -21,23 +22,23 @@ interface ChatWindowProps {
   theme: string;
 }
 
-// Define chat bubble colors per mode
-const CHAT_BUBBLE_COLORS = {
+// Define user chat bubble colors per mode
+const USER_BUBBLE_COLORS = {
   general: {
-    ai: "#858384",
-    user: "#757373"
+    dark: "#757373",
+    light: "#757373"
   },
   writer: {
-    ai: "#fcfefd",
-    user: "#ebeaea"
+    dark: "#1EAEDB",   // Bright blue
+    light: "#BED7F9"   // Lighter soft blue
   },
   creative: {
-    ai: "#e9ceb0",
-    user: "#d4ba9f"
+    dark: "#d4ba9f",
+    light: "#d4ba9f"
   },
   assistant: {
-    ai: "#0c0f14", 
-    user: "#1e1f21"
+    dark: "#C026D3",   // Magenta pink shade
+    light: "#9B87F5"   // Primary purple
   }
 };
 
@@ -52,6 +53,7 @@ export function ChatWindow({
   theme
 }: ChatWindowProps) {
   const direction = language === "ar" ? "rtl" : "ltr";
+  const isDark = theme === "dark";
   
   // Get text color based on background for readability
   const getTextColor = (bgColor: string) => {
@@ -66,8 +68,14 @@ export function ChatWindow({
 
   // Get bubble color based on role and message mode
   const getBubbleColor = (role: string, messageMode: AIMode) => {
-    const colors = CHAT_BUBBLE_COLORS[messageMode];
-    return role === "assistant" ? colors.ai : colors.user;
+    if (role === "assistant") {
+      const modeData = ASSISTANT_MODES.find(mode => mode.id === messageMode);
+      return isDark ? modeData?.color.dark : modeData?.color.light;
+    } else {
+      return isDark ? 
+        USER_BUBBLE_COLORS[messageMode].dark : 
+        USER_BUBBLE_COLORS[messageMode].light;
+    }
   };
   
   return (
@@ -80,7 +88,7 @@ export function ChatWindow({
           {messages.map((message, index) => {
             // Determine bubble color and text color
             const bubbleColor = getBubbleColor(message.role, message.mode);
-            const textColor = getTextColor(bubbleColor);
+            const textColor = getTextColor(bubbleColor || "#000000");
             
             return (
               <motion.div
@@ -243,7 +251,11 @@ export function ChatWindow({
               animate={{ opacity: 1, y: 0 }}
             >
               <div className={`flex items-start gap-2 ${language === "ar" ? "flex-row-reverse" : ""}`}>
-                <Avatar className="mt-1 border-2" style={{ borderColor: CHAT_BUBBLE_COLORS[activeMode].ai }}>
+                <Avatar className="mt-1 border-2" style={{ 
+                  borderColor: isDark ? 
+                    ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                    ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light 
+                }}>
                   <AvatarImage src="/wakti-logo-square.png" alt="WAKTI AI" />
                   <AvatarFallback>AI</AvatarFallback>
                 </Avatar>
@@ -254,8 +266,14 @@ export function ChatWindow({
                     language === "ar" ? "rounded-tr-none" : "rounded-tl-none"
                   )}
                   style={{
-                    backgroundColor: CHAT_BUBBLE_COLORS[activeMode].ai,
-                    color: getTextColor(CHAT_BUBBLE_COLORS[activeMode].ai)
+                    backgroundColor: isDark ? 
+                      ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                      ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light,
+                    color: getTextColor(
+                      (isDark ? 
+                        ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                        ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light) || "#000000"
+                    )
                   }}
                   initial={{ scale: 0.95 }}
                   animate={{ scale: 1 }}
@@ -263,19 +281,37 @@ export function ChatWindow({
                   <div className="flex space-x-1 h-5 items-center">
                     <motion.div 
                       className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: getTextColor(CHAT_BUBBLE_COLORS[activeMode].ai) }}
+                      style={{ 
+                        backgroundColor: getTextColor(
+                          (isDark ? 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light) || "#000000"
+                        )
+                      }}
                       animate={{ opacity: [0.4, 1, 0.4] }}
                       transition={{ duration: 1.2, repeat: Infinity }}
                     />
                     <motion.div 
                       className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: getTextColor(CHAT_BUBBLE_COLORS[activeMode].ai) }}
+                      style={{ 
+                        backgroundColor: getTextColor(
+                          (isDark ? 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light) || "#000000"
+                        )
+                      }}
                       animate={{ opacity: [0.4, 1, 0.4] }}
                       transition={{ duration: 1.2, delay: 0.2, repeat: Infinity }}
                     />
                     <motion.div 
                       className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: getTextColor(CHAT_BUBBLE_COLORS[activeMode].ai) }}
+                      style={{ 
+                        backgroundColor: getTextColor(
+                          (isDark ? 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.dark : 
+                            ASSISTANT_MODES.find(mode => mode.id === activeMode)?.color.light) || "#000000"
+                        )
+                      }}
                       animate={{ opacity: [0.4, 1, 0.4] }}
                       transition={{ duration: 1.2, delay: 0.4, repeat: Infinity }}
                     />

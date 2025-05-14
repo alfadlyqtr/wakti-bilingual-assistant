@@ -7,7 +7,7 @@ import { TranslationKey } from "@/utils/translationTypes";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, MessageSquare, History, Trash2 } from "lucide-react";
-import { AIMode } from "./types";
+import { AIMode, ASSISTANT_MODES } from "./types";
 
 interface LeftDrawerProps {
   isOpen: boolean;
@@ -17,21 +17,18 @@ interface LeftDrawerProps {
   activeMode: AIMode;
 }
 
-// Define drawer colors per mode
-const DRAWER_COLORS = {
-  general: "#858384",
-  writer: "#fcfefd",
-  creative: "#e9ceb0",
-  assistant: "#0c0f14"
-};
-
 export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: LeftDrawerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const direction = language === "ar" ? "rtl" : "ltr";
   const isDark = theme === "dark";
   
   // Get drawer background color based on active mode
-  const drawerBgColor = DRAWER_COLORS[activeMode];
+  const getDrawerBgColor = (mode: AIMode) => {
+    const modeData = ASSISTANT_MODES.find(m => m.id === mode);
+    return isDark ? modeData?.color.dark : modeData?.color.light;
+  };
+  
+  const drawerBgColor = getDrawerBgColor(activeMode);
   
   // Get text color based on background for readability
   const getTextColor = (bgColor: string) => {
@@ -42,7 +39,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
     return brightness >= 128 ? "#000000" : "#ffffff";
   };
   
-  const textColor = getTextColor(drawerBgColor);
+  const textColor = getTextColor(drawerBgColor || "#000000");
   
   // Mock previous chats
   const previousChats = [
@@ -57,18 +54,8 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
 
   // Get mode color for chat items
   const getModeColor = (mode: string) => {
-    switch (mode) {
-      case "general":
-        return "#858384";
-      case "writer":
-        return "#fcfefd";
-      case "creative":
-        return "#e9ceb0";
-      case "assistant":
-        return "#0c0f14";
-      default:
-        return undefined;
-    }
+    const modeData = ASSISTANT_MODES.find(m => m.id === mode);
+    return isDark ? modeData?.color.dark : modeData?.color.light;
   };
 
   // Filter chats based on search query
@@ -163,7 +150,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className={`px-4 py-3 hover:bg-opacity-10 cursor-pointer flex gap-3 items-center border-b border-opacity-10`}
+                      className={`px-4 py-3 cursor-pointer flex gap-3 items-center border-b border-opacity-10`}
                       style={{ 
                         borderColor: textColor,
                         backgroundColor: 'transparent'
@@ -176,7 +163,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
                         style={{ 
                           backgroundColor: getModeColor(chat.mode),
-                          color: getTextColor(getModeColor(chat.mode))
+                          color: getTextColor(getModeColor(chat.mode) || "#000000")
                         }}
                       >
                         <MessageSquare size={14} />

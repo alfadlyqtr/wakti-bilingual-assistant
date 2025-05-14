@@ -34,8 +34,8 @@ export const ASSISTANT_MODES = [
     name: "Type",
     description: "Create and edit text",
     color: {
-      dark: "#fcfefd",
-      light: "#fcfefd"
+      dark: "#33C3F0",  // Bright blue in dark mode
+      light: "#D3E4FD"  // Soft blue in light mode
     },
     icon: "Notebook"
   },
@@ -54,8 +54,8 @@ export const ASSISTANT_MODES = [
     name: "Plan",
     description: "Task and event management",
     color: {
-      dark: "#0c0f14",
-      light: "#0c0f14"
+      dark: "#D946EF",  // Magenta pink for dark mode
+      light: "#7E69AB"  // Secondary purple for light mode
     },
     icon: "LifeBuoy"
   }

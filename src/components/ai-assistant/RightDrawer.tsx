@@ -2,7 +2,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AIMode } from "./types";
+import { AIMode, ASSISTANT_MODES } from "./types";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import { Button } from "@/components/ui/button";
@@ -18,20 +18,39 @@ interface RightDrawerProps {
   theme: string;
 }
 
-// Define drawer colors per mode for user bubble colors
-const DRAWER_COLORS = {
-  general: "#757373",
-  writer: "#ebeaea",
-  creative: "#d4ba9f",
-  assistant: "#1e1f21"
+// Define user bubble colors per mode
+const USER_BUBBLE_COLORS = {
+  general: {
+    dark: "#757373",
+    light: "#757373"
+  },
+  writer: {
+    dark: "#1EAEDB",   // Bright blue
+    light: "#BED7F9"   // Lighter soft blue
+  },
+  creative: {
+    dark: "#d4ba9f",
+    light: "#d4ba9f"
+  },
+  assistant: {
+    dark: "#C026D3",   // Magenta pink shade
+    light: "#9B87F5"   // Primary purple
+  }
 };
 
 export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: RightDrawerProps) {
   const { toggleLanguage } = useTheme();
   const direction = language === "ar" ? "rtl" : "ltr";
+  const isDark = theme === "dark";
   
   // Get drawer background color based on active mode
-  const drawerBgColor = DRAWER_COLORS[activeMode];
+  const getDrawerBgColor = (mode: AIMode) => {
+    return isDark ? 
+      USER_BUBBLE_COLORS[mode].dark : 
+      USER_BUBBLE_COLORS[mode].light;
+  };
+  
+  const drawerBgColor = getDrawerBgColor(activeMode);
   
   // Get text color based on background for readability
   const getTextColor = (bgColor: string) => {

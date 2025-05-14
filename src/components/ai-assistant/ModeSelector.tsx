@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
-import { AIMode } from './types';
+import { AIMode, ASSISTANT_MODES } from './types';
 import { MessageSquare, Notebook, Palette, LifeBuoy } from "lucide-react";
 
 interface ModeSelectorProps {
@@ -12,12 +12,12 @@ interface ModeSelectorProps {
   setActiveMode: React.Dispatch<React.SetStateAction<AIMode>>;
 }
 
-// Define mode colors
-const MODE_COLORS = {
-  general: "#858384",
-  writer: "#fcfefd",
-  creative: "#e9ceb0",
-  assistant: "#0c0f14"
+// Map AI modes to their translation keys
+const MODE_TRANSLATION_KEYS: Record<AIMode, TranslationKey> = {
+  general: "chatMode",
+  writer: "typeMode",
+  creative: "createMode",
+  assistant: "planMode"
 };
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiveMode }) => {
@@ -33,31 +33,31 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiv
     return brightness >= 128 ? "#000000" : "#ffffff";
   };
 
-  // Updated mode labels and names
+  // Updated mode data
   const modes = [
     { 
       id: 'general', 
-      label: 'chatMode', 
+      label: MODE_TRANSLATION_KEYS.general, 
       icon: <MessageSquare className="h-4 w-4" />,
-      color: MODE_COLORS.general
+      color: isDark ? ASSISTANT_MODES[0].color.dark : ASSISTANT_MODES[0].color.light
     },
     { 
       id: 'writer', 
-      label: 'typeMode', 
+      label: MODE_TRANSLATION_KEYS.writer, 
       icon: <Notebook className="h-4 w-4" />,
-      color: MODE_COLORS.writer
+      color: isDark ? ASSISTANT_MODES[1].color.dark : ASSISTANT_MODES[1].color.light
     },
     { 
       id: 'creative', 
-      label: 'createMode', 
+      label: MODE_TRANSLATION_KEYS.creative, 
       icon: <Palette className="h-4 w-4" />,
-      color: MODE_COLORS.creative
+      color: isDark ? ASSISTANT_MODES[2].color.dark : ASSISTANT_MODES[2].color.light
     },
     { 
       id: 'assistant', 
-      label: 'planMode', 
+      label: MODE_TRANSLATION_KEYS.assistant, 
       icon: <LifeBuoy className="h-4 w-4" />,
-      color: MODE_COLORS.assistant
+      color: isDark ? ASSISTANT_MODES[3].color.dark : ASSISTANT_MODES[3].color.light
     },
   ];
 
@@ -83,7 +83,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiv
                 className="absolute inset-0 rounded-full shadow-sm"
                 style={{ 
                   backgroundColor: mode.color,
-                  opacity: mode.id === "writer" ? 0.9 : 1
+                  opacity: 1
                 }}
                 initial={false}
                 transition={{ type: "spring", duration: 0.6 }}
@@ -93,7 +93,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({ activeMode, setActiv
             <span className="relative z-10 flex items-center gap-1.5">
               {React.cloneElement(mode.icon, { style: { color: textColor } })}
               <span style={{ color: textColor }}>
-                {t(mode.label as TranslationKey, language)}
+                {t(mode.label, language)}
               </span>
             </span>
             
