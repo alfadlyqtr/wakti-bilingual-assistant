@@ -24,10 +24,10 @@ export function PageContainer({
         title={title ? t(title as any, language) : "WAKTI"}
         showBackButton={showBackButton}
       />
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div className="flex-1 overflow-y-auto pb-24">
         {children}
       </div>
-      <MobileNav />
+      {/* MobileNav is now a global component rendered in App.tsx */}
     </div>
   );
 }

@@ -19,7 +19,7 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
   return (
     <button
       className={cn(
-        "flex flex-col items-center justify-center p-2 rounded-lg transition-colors",
+        "flex flex-col items-center justify-center p-2 rounded-lg transition-all",
         isActive
           ? "text-primary"
           : "text-muted-foreground hover:text-foreground"
@@ -47,6 +47,7 @@ export const MobileNav = () => {
   const location = useLocation();
   const { language, theme } = useTheme();
   const path = location.pathname;
+  const isDark = theme === "dark";
 
   const navItems = [
     {
@@ -76,9 +77,14 @@ export const MobileNav = () => {
     },
   ];
 
+  // Don't show nav on auth screens
+  if (path === "/login" || path === "/signup" || path === "/forgot-password" || path === "/") {
+    return null;
+  }
+
   return (
-    <div className="fixed bottom-4 left-2 right-2 z-50 bg-background/80 backdrop-blur-lg rounded-xl shadow-xl border border-border/30">
-      <div className="flex justify-around items-center p-1">
+    <div className="fixed bottom-6 left-2 right-2 z-50">
+      <div className="flex justify-around items-center p-1 mx-auto max-w-md bg-background/90 backdrop-blur-xl shadow-xl rounded-full border border-border/30">
         {navItems.map((item) => (
           <NavItem
             key={item.path}

@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MobileNav } from "@/components/MobileNav";
 import "./App.css";
 
 // Pages
@@ -57,6 +58,10 @@ function App() {
               <Route path="/assistant" element={<AIAssistant />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            
+            {/* Global Mobile Navigation */}
+            <MobileNav />
+            
             <Toaster />
           </Router>
         </ThemeProvider>
