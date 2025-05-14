@@ -366,6 +366,134 @@ const translations: TranslationMap = {
   startVoiceInput: {
     en: "Start Voice Input",
     ar: "بدء الإدخال الصوتي"
+  },
+  ai: {
+    en: "AI",
+    ar: "الذكاء الاصطناعي"
+  },
+  account: {
+    en: "Account",
+    ar: "الحساب"
+  },
+  switchLanguage: {
+    en: "Switch Language",
+    ar: "تغيير اللغة"
+  },
+  commonQuestions: {
+    en: "Common Questions",
+    ar: "أسئلة شائعة"
+  },
+  whatCanYouDo: {
+    en: "What can you do?",
+    ar: "ماذا يمكنك أن تفعل؟"
+  },
+  howToCreateTask: {
+    en: "How do I create a task?",
+    ar: "كيف أنشئ مهمة؟"
+  },
+  explainWAKTIFeatures: {
+    en: "Explain WAKTI features",
+    ar: "اشرح ميزات WAKTI"
+  },
+  tonePresets: {
+    en: "Tone Presets",
+    ar: "إعدادات النبرة"
+  },
+  professional: {
+    en: "Professional",
+    ar: "احترافي"
+  },
+  casual: {
+    en: "Casual",
+    ar: "غير رسمي"
+  },
+  friendly: {
+    en: "Friendly",
+    ar: "ودي"
+  },
+  academic: {
+    en: "Academic",
+    ar: "أكاديمي"
+  },
+  lengthOptions: {
+    en: "Length Options",
+    ar: "خيارات الطول"
+  },
+  short: {
+    en: "Short",
+    ar: "قصير"
+  },
+  long: {
+    en: "Long",
+    ar: "طويل"
+  },
+  grammarCheck: {
+    en: "Grammar Check",
+    ar: "فحص القواعد"
+  },
+  imageTools: {
+    en: "Image Tools",
+    ar: "أدوات الصور"
+  },
+  textToImage: {
+    en: "Text to Image",
+    ar: "نص إلى صورة"
+  },
+  imageToImage: {
+    en: "Image to Image",
+    ar: "صورة إلى صورة"
+  },
+  removeBg: {
+    en: "Remove Background",
+    ar: "إزالة الخلفية"
+  },
+  enhanceImage: {
+    en: "Enhance Image",
+    ar: "تحسين الصورة"
+  },
+  chartTypes: {
+    en: "Chart Types",
+    ar: "أنواع المخططات"
+  },
+  barChart: {
+    en: "Bar Chart",
+    ar: "مخطط شريطي"
+  },
+  lineChart: {
+    en: "Line Chart",
+    ar: "مخطط خطي"
+  },
+  pieChart: {
+    en: "Pie Chart",
+    ar: "مخطط دائري"
+  },
+  shortcuts: {
+    en: "Shortcuts",
+    ar: "اختصارات"
+  },
+  createTask: {
+    en: "Create Task",
+    ar: "إنشاء مهمة"
+  },
+  createReminder: {
+    en: "Create Reminder",
+    ar: "إنشاء تذكير"
+  },
+  createEvent: {
+    en: "Create Event",
+    ar: "إنشاء فعالية"
+  },
+  viewCalendar: {
+    en: "View Calendar",
+    ar: "عرض التقويم"
+  },
+  instructions: {
+    en: "Instructions",
+    ar: "تعليمات"
+  },
+  knowledge: {
+    en: "Knowledge",
+    ar: "معرفة"
   }
 };
 
