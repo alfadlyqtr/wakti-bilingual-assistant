@@ -163,11 +163,13 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="px-4 py-3 hover:bg-opacity-10 cursor-pointer flex gap-3 items-center border-b border-opacity-10"
+                      className={`px-4 py-3 hover:bg-opacity-10 cursor-pointer flex gap-3 items-center border-b border-opacity-10`}
                       style={{ 
                         borderColor: textColor,
-                        backgroundColor: 'transparent',
-                        ':hover': { backgroundColor: `${textColor}10` }
+                        backgroundColor: 'transparent'
+                      }}
+                      whileHover={{
+                        backgroundColor: `${textColor}10`
                       }}
                     >
                       <div 
@@ -220,3 +222,4 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
     </AnimatePresence>
   );
 }
+
