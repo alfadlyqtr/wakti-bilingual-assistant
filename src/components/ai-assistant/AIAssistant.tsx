@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -263,8 +262,8 @@ export const AIAssistant = () => {
         </div>
       </div>
       
-      {/* AI Assistant Page Title Bar */}
-      <div className="page-title-bar flex items-center justify-between px-4 py-2 border-b z-20">
+      {/* Combined Mode Selector with Drawer Triggers - Single Row */}
+      <div className="flex items-center justify-between px-4 py-3 border-b z-20">
         <motion.button
           className="p-2 rounded-full hover:bg-accent"
           whileTap={{ scale: 0.9 }}
@@ -274,7 +273,12 @@ export const AIAssistant = () => {
           <Menu size={20} />
         </motion.button>
         
-        <h2 className="text-base font-medium">{t("waktiAssistant" as TranslationKey, language)}</h2>
+        <div className="flex-1">
+          <ModeSelector 
+            activeMode={activeMode} 
+            setActiveMode={setActiveMode}
+          />
+        </div>
         
         <motion.button
           className="p-2 rounded-full hover:bg-accent"
@@ -303,14 +307,6 @@ export const AIAssistant = () => {
         language={language}
         theme={theme}
       />
-      
-      {/* Mode Selector - Centered Pills */}
-      <div className="px-4 py-3 flex justify-center border-b z-10">
-        <ModeSelector 
-          activeMode={activeMode} 
-          setActiveMode={setActiveMode}
-        />
-      </div>
       
       {/* Main Chat Window */}
       <ChatWindow 
