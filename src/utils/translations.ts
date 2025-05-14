@@ -605,6 +605,119 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   manageBlockedUsers: {
     en: "Blocked",
     ar: "المحظورون",
+  },
+  // New translations for the missing keys
+  sharedTask: {
+    en: "Shared Task",
+    ar: "مهمة مشتركة",
+  },
+  searchTasks: {
+    en: "Search tasks...",
+    ar: "البحث عن المهام...",
+  },
+  searchReminders: {
+    en: "Search reminders...",
+    ar: "البحث عن التذكيرات...",
+  },
+  allTasks: {
+    en: "All Tasks",
+    ar: "جميع المهام",
+  },
+  pendingTasks: {
+    en: "Pending Tasks",
+    ar: "المهام المعلقة",
+  },
+  completedTasks: {
+    en: "Completed Tasks",
+    ar: "المهام المكتملة",
+  },
+  overdueItems: {
+    en: "Overdue Items",
+    ar: "العناصر المتأخرة",
+  },
+  noTasks: {
+    en: "No tasks yet",
+    ar: "لا توجد مهام بعد",
+  },
+  createYourFirst: {
+    en: "Create your first",
+    ar: "أنشئ أول",
+  },
+  noReminders: {
+    en: "No reminders yet",
+    ar: "لا توجد تذكيرات بعد",
+  },
+  edit: {
+    en: "Edit",
+    ar: "تعديل",
+  },
+  voiceSummary: {
+    en: "Voice Summary",
+    ar: "ملخص صوتي",
+  },
+  taskCreatedSuccessfully: {
+    en: "Task created successfully",
+    ar: "تم إنشاء المهمة بنجاح",
+  },
+  taskUpdatedSuccessfully: {
+    en: "Task updated successfully",
+    ar: "تم تحديث المهمة بنجاح",
+  },
+  taskDeletedSuccessfully: {
+    en: "Task deleted successfully",
+    ar: "تم حذف المهمة بنجاح",
+  },
+  reminderCreatedSuccessfully: {
+    en: "Reminder created successfully",
+    ar: "تم إنشاء التذكير بنجاح",
+  },
+  reminderUpdatedSuccessfully: {
+    en: "Reminder updated successfully",
+    ar: "تم تحديث التذكير بنجاح",
+  },
+  reminderDeletedSuccessfully: {
+    en: "Reminder deleted successfully",
+    ar: "تم حذف التذكير بنجاح",
+  },
+  taskSharedSuccessfully: {
+    en: "Task shared successfully",
+    ar: "تمت مشاركة المهمة بنجاح",
+  },
+  eventDetail: {
+    en: "Event Detail",
+    ar: "تفاصيل الفعالية",
+  },
+  selectConversation: {
+    en: "Select a conversation",
+    ar: "اختر محادثة",
+  },
+  language: {
+    en: "Language",
+    ar: "اللغة",
+  },
+  notificationPreferences: {
+    en: "Notification Preferences",
+    ar: "تفضيلات الإشعارات",
+  },
+  widgetVisibility: {
+    en: "Widget Visibility",
+    ar: "ظهور الأدوات المصغرة",
+  },
+  privacyControls: {
+    en: "Privacy Controls",
+    ar: "إعدادات الخصوصية",
+  },
+  deleteAccount: {
+    en: "Delete Account",
+    ar: "حذف الحساب",
+  },
+  taskAndReminders: {
+    en: "Tasks & Reminders",
+    ar: "المهام والتذكيرات",
+  },
+  voiceSummaryDetail: {
+    en: "Voice Summary Detail",
+    ar: "تفاصيل الملخص الصوتي",
   }
 };
 
