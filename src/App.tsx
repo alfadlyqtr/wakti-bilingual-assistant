@@ -1,8 +1,10 @@
+
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MobileNav } from "@/components/MobileNav";
 import "./App.css";
 
 // Pages
@@ -62,6 +64,8 @@ function App() {
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
+              {/* Add MobileNav here to ensure it appears on all pages */}
+              <MobileNav />
               <Toaster />
             </div>
           </Router>
