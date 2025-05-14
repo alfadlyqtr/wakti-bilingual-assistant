@@ -91,7 +91,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} w-full ${isLastMessage ? 'mb-3' : ''}`}
+                className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} w-full ${isLastMessage ? 'mb-8' : ''}`}
               >
                 <div className={`max-w-[80%] flex ${isAssistant ? 'flex-row' : 'flex-row-reverse'} gap-2`}>
                   {isAssistant && (
@@ -156,7 +156,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="flex justify-start mb-3"
+            className="flex justify-start mb-8"
           >
             <div className="flex items-center gap-2 max-w-[80%]">
               <Avatar className="h-8 w-8">
