@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -246,9 +245,6 @@ export const AIAssistant = () => {
     setIsVoiceActive(false);
   };
 
-  // We're removing this line as per user request to show mic in all modes
-  // const shouldShowMic = activeMode !== "writer";
-
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
       {/* Main WAKTI App Header */}
@@ -324,10 +320,10 @@ export const AIAssistant = () => {
         theme={theme}
       />
       
-      {/* Bottom Input Area - Direct input field without container */}
-      <div className="sticky bottom-16 left-0 right-0 z-30 px-4 pb-4 mb-2">
+      {/* Bottom Input Area - With increased spacing from navbar */}
+      <div className="sticky bottom-20 left-0 right-0 z-30 px-4 pb-4 mb-6">
         <div className="flex items-center gap-2 max-w-md mx-auto">
-          {/* Show mic in all modes now */}
+          {/* Always show mic in all modes including writer mode */}
           <VoiceInput 
             isActive={isVoiceActive} 
             onToggle={() => setIsVoiceActive(!isVoiceActive)}
