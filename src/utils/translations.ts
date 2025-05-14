@@ -513,10 +513,6 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Chatting with",
     ar: "محادثة مع"
   },
-  removedFromFavorites: {
-    en: "Removed from favorites",
-    ar: "تمت الإزالة من المفضلة"
-  },
   addedToFavorites: {
     en: "Added to favorites",
     ar: "تمت الإضافة إلى المفضلة"
@@ -780,7 +776,7 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     ar: "مهمة مشتركة"
   },
   
-  // Additional translation keys from the current errors
+  // Adding the previously missing keys
   taskUpdatedSuccessfully: {
     en: "Task updated successfully",
     ar: "تم تحديث المهمة بنجاح"
@@ -896,6 +892,10 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   voiceSummaryDetail: {
     en: "Voice Summary Detail",
     ar: "تفاصيل الملخص الصوتي"
+  },
+  removedFromFavorites: {
+    en: "Removed from favorites",
+    ar: "تمت الإزالة من المفضلة"
   }
 };
 
