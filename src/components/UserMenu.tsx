@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, Settings, Users, CreditCard, User, LogOut } from "lucide-react";
+import { MessageSquare, Settings, Users, User, LogOut } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -63,10 +63,6 @@ export function UserMenu({ userImage, userName = "User" }: UserMenuProps) {
         <DropdownMenuItem onClick={() => navigate("/contacts")}>
           <Users className="mr-2 h-4 w-4" />
           <span>{t("contacts", language)}</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/billing")}>
-          <CreditCard className="mr-2 h-4 w-4" />
-          <span>{t("billing", language)}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout} className="text-destructive">
