@@ -43,6 +43,13 @@ export default function Account() {
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
   const { confirm } = useToast();
+  
+  // Add state for profile information
+  const [profile, setProfile] = useState({
+    fullName: "Jane Doe",
+    username: "jane_doe",
+    email: "jane@example.com"
+  });
 
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
@@ -64,9 +71,13 @@ export default function Account() {
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ التغييرات؟" : "Are you sure you want to save changes?",
       onConfirm: () => {
         saveQuotePreferences(quotePreferences);
+        // Store preferences in localStorage to ensure they're saved
+        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
+        
         // Show success toast
-        toast.success(language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully", {
-          icon: <Check className="h-4 w-4" />,
+        toast({
+          title: language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully",
+          duration: 2000
         });
       }
     });
@@ -80,9 +91,27 @@ export default function Account() {
         // Save quote preferences
         saveQuotePreferences(quotePreferences);
         
+        // Save widget settings and privacy settings to localStorage
+        const widgetSettings = {
+          calendarWidget: true,
+          remindersWidget: true,
+          quoteWidget: true,
+          eventsWidget: true
+        };
+        
+        const privacySettings = {
+          autoApprove: false,
+          activityStatus: true
+        };
+        
+        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
+        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+        localStorage.setItem('privacySettings', JSON.stringify(privacySettings));
+        
         // Show success toast
-        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully", {
-          icon: <Check className="h-4 w-4" />,
+        toast({
+          title: language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully",
+          duration: 2000
         });
       }
     });
@@ -93,20 +122,52 @@ export default function Account() {
       title: language === 'ar' ? "حفظ التغييرات؟" : "Save changes?",
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ تغييرات الملف الشخصي؟" : "Are you sure you want to save profile changes?",
       onConfirm: () => {
-        // Profile save logic would go here
-        toast.success(language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully", {
-          icon: <Check className="h-4 w-4" />,
+        // Save profile data to localStorage
+        localStorage.setItem('userProfile', JSON.stringify(profile));
+        
+        toast({
+          title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
+          duration: 2000
         });
       }
     });
   };
+  
+  // Handle profile input changes
+  const handleProfileChange = (field: string, value: string) => {
+    setProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
-  // Watch for category changes to show dialog
+  // Load saved data on component mount
   useEffect(() => {
+    // Load profile data if it exists
+    const savedProfile = localStorage.getItem('userProfile');
+    if (savedProfile) {
+      try {
+        setProfile(JSON.parse(savedProfile));
+      } catch (e) {
+        console.error('Error parsing saved profile:', e);
+      }
+    }
+    
+    // Load quote preferences
+    const savedPreferences = localStorage.getItem('quotePreferences');
+    if (savedPreferences) {
+      try {
+        setQuotePreferences(JSON.parse(savedPreferences));
+      } catch (e) {
+        console.error('Error parsing quote preferences:', e);
+      }
+    }
+    
+    // Watch for category changes to show dialog
     if (quotePreferences.category === 'custom') {
       setCustomQuoteDialogOpen(true);
     }
-  }, []); // Only run once on component mount
+  }, []); 
 
   return (
     <PageContainer title={t("account", language)} showBackButton={true}>
@@ -126,7 +187,7 @@ export default function Account() {
             <div className="flex justify-center">
               <div className="relative">
                 <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold">
-                  JD
+                  {profile.fullName.split(' ').map(name => name[0]).join('').toUpperCase().substring(0, 2)}
                 </div>
                 <Button
                   size="sm"
@@ -148,7 +209,8 @@ export default function Account() {
                   placeholder={
                     language === "ar" ? "أدخل اسمك الكامل" : "Enter your full name"
                   }
-                  defaultValue="Jane Doe"
+                  value={profile.fullName}
+                  onChange={(e) => handleProfileChange('fullName', e.target.value)}
                 />
               </div>
 
@@ -163,7 +225,7 @@ export default function Account() {
                       ? "أدخل اسم المستخدم"
                       : "Enter your username"
                   }
-                  defaultValue="jane_doe"
+                  value={profile.username}
                   disabled
                 />
                 <p className="text-xs text-muted-foreground">
@@ -185,7 +247,8 @@ export default function Account() {
                       ? "أدخل بريدك الإلكتروني"
                       : "Enter your email"
                   }
-                  defaultValue="jane@example.com"
+                  value={profile.email}
+                  onChange={(e) => handleProfileChange('email', e.target.value)}
                 />
               </div>
 
@@ -329,7 +392,7 @@ export default function Account() {
                     {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
                   </label>
                   <Select 
-                    defaultValue={quotePreferences.category} 
+                    value={quotePreferences.category} 
                     onValueChange={handleQuoteCategoryChange}
                   >
                     <SelectTrigger>
@@ -367,7 +430,7 @@ export default function Account() {
                     {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
                   </label>
                   <Select 
-                    defaultValue={quotePreferences.frequency}
+                    value={quotePreferences.frequency}
                     onValueChange={handleQuoteFrequencyChange}
                   >
                     <SelectTrigger>
@@ -610,7 +673,9 @@ export default function Account() {
         open={customQuoteDialogOpen} 
         onOpenChange={setCustomQuoteDialogOpen}
         onUpdate={() => {
-          // Refresh any state if needed after quotes are updated
+          // Refresh the quotes if needed after changes
+          const updatedPrefs = getQuotePreferences();
+          setQuotePreferences(updatedPrefs);
         }}
       />
     </PageContainer>

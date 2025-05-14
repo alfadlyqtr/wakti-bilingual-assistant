@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -8,7 +9,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
@@ -31,14 +32,21 @@ export default function Settings() {
       setCustomQuoteDialogOpen(true);
     }
     
-    toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
+    toast({
+      title: language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated",
+      duration: 2000
+    });
   };
   
   const handleQuoteFrequencyChange = (frequency: string) => {
     const newPreferences = { ...quotePreferences, frequency };
     setQuotePreferences(newPreferences);
     saveQuotePreferences(newPreferences);
-    toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
+    
+    toast({
+      title: language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated",
+      duration: 2000
+    });
   };
   
   const handleSaveAllSettings = () => {
@@ -46,9 +54,22 @@ export default function Settings() {
       title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
       onConfirm: () => {
-        // Already saving on change, but we can add additional save logic here if needed
-        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+        // Already saving on change, but we can add additional save logic here
+        // Save widget visibility settings
+        const widgetSettings = {
+          tasksWidget: true,
+          calendarWidget: true,
+          remindersWidget: true,
+          quoteWidget: true
+        };
+        
+        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
+        
+        toast({
+          title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
           icon: <Check className="h-4 w-4" />,
+          duration: 2000
         });
       }
     });
@@ -277,6 +298,8 @@ export default function Settings() {
         onOpenChange={setCustomQuoteDialogOpen}
         onUpdate={() => {
           // Refresh any state if needed after quotes are updated
+          const updatedPrefs = getQuotePreferences();
+          setQuotePreferences(updatedPrefs);
         }}
       />
     </PageContainer>
