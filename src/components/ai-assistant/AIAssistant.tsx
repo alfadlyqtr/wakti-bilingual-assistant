@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -246,6 +245,9 @@ export const AIAssistant = () => {
     setIsVoiceActive(false);
   };
 
+  // Check if microphone should be shown (hide in writer mode)
+  const shouldShowMic = activeMode !== "writer";
+
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
       {/* Main WAKTI App Header */}
@@ -321,16 +323,18 @@ export const AIAssistant = () => {
         theme={theme}
       />
       
-      {/* Bottom Input Area - Never covered by dock */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-4 pt-4 border-t bg-background/95 backdrop-blur-md shadow-lg rounded-t-xl mt-1">
+      {/* Bottom Input Area - Direct input field without container */}
+      <div className="sticky bottom-24 left-0 right-0 z-30 mt-2 px-4 pb-4">
         <div className="flex items-center gap-2 max-w-md mx-auto">
-          <VoiceInput 
-            isActive={isVoiceActive} 
-            onToggle={() => setIsVoiceActive(!isVoiceActive)}
-            onTranscript={handleVoiceInput}
-            language={language}
-            activeMode={activeMode}
-          />
+          {shouldShowMic && (
+            <VoiceInput 
+              isActive={isVoiceActive} 
+              onToggle={() => setIsVoiceActive(!isVoiceActive)}
+              onTranscript={handleVoiceInput}
+              language={language}
+              activeMode={activeMode}
+            />
+          )}
           
           <div className="relative flex-1">
             <Input
@@ -339,7 +343,7 @@ export const AIAssistant = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder={t("askWAKTI" as TranslationKey, language)}
-              className="pl-4 pr-10 py-5 rounded-xl shadow-sm transition-all duration-300"
+              className="pl-4 pr-10 py-5 rounded-xl shadow-lg transition-all duration-300"
               style={{
                 borderColor: getModeColor(activeMode),
                 boxShadow: `0 0 8px ${getModeColor(activeMode)}30`
