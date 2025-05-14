@@ -93,7 +93,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   // Handle common question clicks
   const handleCommonQuestionClick = (question: string) => {
     toast({
-      title: t("questionSelected", language),
+      title: t("questionSelected" as TranslationKey, language),
       description: question,
       duration: 3000
     });
@@ -103,7 +103,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   // Handle tone preset selection
   const handleTonePresetClick = (tone: string) => {
     toast({
-      title: t("toneSelected", language),
+      title: t("toneSelected" as TranslationKey, language),
       description: tone,
       duration: 3000
     });
@@ -112,7 +112,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   // Handle length option selection
   const handleLengthOptionClick = (length: string) => {
     toast({
-      title: t("lengthSelected", language),
+      title: t("lengthSelected" as TranslationKey, language),
       description: length,
       duration: 3000
     });
@@ -121,7 +121,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   // Handle shortcut action
   const handleShortcutClick = (action: string) => {
     toast({
-      title: t("shortcutSelected", language),
+      title: t("shortcutSelected" as TranslationKey, language),
       description: action,
       duration: 3000
     });
@@ -136,7 +136,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
     }));
     
     toast({
-      title: imageTools[tool] ? t("toolDisabled", language) : t("toolEnabled", language),
+      title: imageTools[tool] ? t("toolDisabled" as TranslationKey, language) : t("toolEnabled" as TranslationKey, language),
       description: t(tool as TranslationKey, language),
       duration: 3000
     });
@@ -145,7 +145,7 @@ export function RightDrawer({ isOpen, onClose, activeMode, language, theme }: Ri
   // Handle chart type selection
   const handleChartTypeClick = (chartType: string) => {
     toast({
-      title: t("chartSelected", language),
+      title: t("chartSelected" as TranslationKey, language),
       description: chartType,
       duration: 3000
     });

@@ -233,5 +233,14 @@ export type TranslationKey =
   | "time"
   | "maxAttendees"
   | "enterMaxAttendees"
-  | "creating";
-
+  | "creating"
+  // Adding missing keys from RightDrawer.tsx
+  | "questionSelected" 
+  | "toneSelected"
+  | "lengthSelected"
+  | "shortcutSelected"
+  | "toolDisabled"
+  | "toolEnabled"
+  | "chartSelected"
+  | "tonePresets"
+  | "toolSelected";

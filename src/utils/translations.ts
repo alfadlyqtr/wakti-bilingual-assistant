@@ -959,6 +959,40 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   creating: {
     en: "Creating...",
     ar: "جاري الإنشاء..."
+  },
+  
+  // Add new translations for drawer functionality
+  questionSelected: {
+    en: "Selected Question",
+    ar: "السؤال المحدد"
+  },
+  toneSelected: {
+    en: "Selected Tone",
+    ar: "النبرة المختارة"
+  },
+  lengthSelected: {
+    en: "Selected Length",
+    ar: "الطول المحدد"
+  },
+  shortcutSelected: {
+    en: "Selected Shortcut",
+    ar: "الاختصار المحدد"
+  },
+  toolDisabled: {
+    en: "Tool Disabled",
+    ar: "الأداة معطلة"
+  },
+  toolEnabled: {
+    en: "Tool Enabled",
+    ar: "الأداة مفعلة"
+  },
+  chartSelected: {
+    en: "Selected Chart",
+    ar: "المخطط المحدد"
+  },
+  toolSelected: {
+    en: "Selected Tool",
+    ar: "الأداة المحددة"
   }
 };
 
