@@ -12,6 +12,7 @@ import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Calendar } from "@/components/ui/calendar";
 import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
+import { toast } from "sonner";
 
 type WidgetType = {
   id: string;
@@ -27,6 +28,8 @@ export default function Dashboard() {
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const longPressDuration = 500; // ms
   
   // Get user preferences from localStorage
   const getUserPreferences = () => {
@@ -203,11 +206,45 @@ export default function Dashboard() {
     items.splice(result.destination.index, 0, reorderedItem);
     
     setWidgets(items);
+    toast.success(t("widget_moved" as TranslationKey, language) || "Widget rearranged");
   };
 
-  // Handle long press
-  const handleLongPress = () => {
-    setIsDragging(true);
+  // Handle long press start
+  const handleLongPressStart = (e: React.TouchEvent) => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+    }
+    
+    longPressTimer.current = setTimeout(() => {
+      setIsDragging(true);
+      toast.info(t("widget_drag_mode" as TranslationKey, language) || "Drag mode activated");
+      // Add haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
+      }
+    }, longPressDuration);
+  };
+  
+  // Handle touch end
+  const handleTouchEnd = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
+  // Handle touch move - prevent accidental long press during scroll
+  const handleTouchMove = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
+  // Exit drag mode
+  const exitDragMode = () => {
+    setIsDragging(false);
+    toast.info(t("widget_drag_mode_exit" as TranslationKey, language) || "Drag mode deactivated");
   };
 
   return (
@@ -241,6 +278,15 @@ export default function Dashboard() {
                 {...provided.droppableProps}
                 ref={provided.innerRef}
               >
+                {isDragging && (
+                  <div className="bg-primary/10 rounded-md p-2 mb-4 flex items-center justify-between">
+                    <div className="text-sm">{t("dragging_mode" as TranslationKey, language) || "Widget dragging mode"}</div>
+                    <Button size="sm" variant="outline" onClick={exitDragMode}>
+                      {t("done" as TranslationKey, language) || "Done"}
+                    </Button>
+                  </div>
+                )}
+                
                 {widgets
                   .filter(widget => widget.visible)
                   .map((widget, index) => (
@@ -250,23 +296,15 @@ export default function Dashboard() {
                       index={index}
                       isDragDisabled={!isDragging}
                     >
-                      {(provided) => (
+                      {(provided, snapshot) => (
                         <Card 
-                          className="shadow-sm relative"
+                          className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''}`}
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
-                          onTouchStart={() => {
-                            let timer = setTimeout(() => {
-                              handleLongPress();
-                            }, 500);
-                            
-                            const clearTimer = () => {
-                              clearTimeout(timer);
-                            };
-                            
-                            document.addEventListener('touchend', clearTimer, { once: true });
-                          }}
+                          onTouchStart={handleLongPressStart}
+                          onTouchEnd={handleTouchEnd}
+                          onTouchMove={handleTouchMove}
                         >
                           {isDragging && (
                             <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm z-10 rounded-md">
