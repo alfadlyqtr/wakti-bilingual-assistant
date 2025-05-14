@@ -117,10 +117,13 @@ export default function Home() {
   };
 
   const currentContent = content[language];
+  
+  // Apply the theme's background colors explicitly
+  const bgClass = theme === "dark" ? "bg-dark-bg text-white" : "bg-light-bg text-light-primary";
 
   return (
-    <div className={`mobile-container ${language === 'ar' ? 'rtl' : ''}`}>
-      <header className="mobile-header">
+    <div className={`min-h-screen flex flex-col ${bgClass} ${language === 'ar' ? 'rtl' : ''}`}>
+      <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-border">
         <h1 className="text-2xl font-bold">{currentContent.appName}</h1>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -135,9 +138,9 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-4 pb-10">
         {/* Hero Section */}
-        <section className="py-6 px-4">
+        <section className="py-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

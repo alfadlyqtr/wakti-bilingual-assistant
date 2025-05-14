@@ -63,12 +63,17 @@
   }
   
   body {
-    @apply bg-background text-foreground flex flex-col;
+    @apply bg-background text-foreground flex flex-col min-h-full;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
   #root {
-    @apply flex flex-col h-full w-full max-w-md mx-auto;
+    @apply flex flex-col h-full w-full max-w-md mx-auto min-h-screen;
+  }
+
+  /* App container */
+  .app-container {
+    @apply flex flex-col max-w-md w-full mx-auto;
   }
 
   /* Mobile container */

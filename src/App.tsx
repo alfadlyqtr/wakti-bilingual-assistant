@@ -37,32 +37,34 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <Router>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/home" element={<Navigate to="/" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/tasks" element={<TasksReminders />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/events/create" element={<EventCreate />} />
-              <Route path="/events/:id" element={<EventDetail />} />
-              <Route path="/calendar" element={<Calendar />} />
-              <Route path="/messages" element={<Messages />} />
-              <Route path="/voice" element={<VoiceSummary />} />
-              <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
-              <Route path="/account" element={<Account />} />
-              <Route path="/contacts" element={<Contacts />} />
-              <Route path="/assistant" element={<AIAssistant />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            
-            {/* Global Mobile Navigation */}
-            <MobileNav />
-            
-            <Toaster />
+            <div className="app-container min-h-screen bg-background text-foreground">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/home" element={<Navigate to="/" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/tasks" element={<TasksReminders />} />
+                <Route path="/events" element={<Events />} />
+                <Route path="/events/create" element={<EventCreate />} />
+                <Route path="/events/:id" element={<EventDetail />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/messages" element={<Messages />} />
+                <Route path="/voice" element={<VoiceSummary />} />
+                <Route path="/voice/:id" element={<VoiceSummaryDetail />} />
+                <Route path="/account" element={<Account />} />
+                <Route path="/contacts" element={<Contacts />} />
+                <Route path="/assistant" element={<AIAssistant />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+              
+              {/* Global Mobile Navigation */}
+              <MobileNav />
+              
+              <Toaster />
+            </div>
           </Router>
         </ThemeProvider>
       </QueryClientProvider>
