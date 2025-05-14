@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -13,6 +14,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
 import { toast } from "sonner";
 import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
+import { GripVertical } from "lucide-react";
 
 type WidgetType = {
   id: string;
@@ -202,8 +204,31 @@ export default function Dashboard() {
     toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
   };
 
-  // Handle long press start
+  // Handle long press start - Modified to use dedicated drag handle instead of the whole card
   const handleLongPressStart = (e: React.TouchEvent) => {
+    // No longer needed as we're using the handle instead
+  };
+  
+  // Handle touch end - Only needed for the drag handle now
+  const handleTouchEnd = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
+  // Handle touch move - Only needed for the drag handle now
+  const handleTouchMove = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Dedicated handle drag mode activator
+  const handleDragHandlePress = (e: React.TouchEvent) => {
+    e.stopPropagation(); // Prevent event from bubbling up
+    
     if (longPressTimer.current !== null) {
       clearTimeout(longPressTimer.current);
     }
@@ -216,22 +241,6 @@ export default function Dashboard() {
         navigator.vibrate(50);
       }
     }, longPressDuration);
-  };
-  
-  // Handle touch end
-  const handleTouchEnd = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-  
-  // Handle touch move - prevent accidental long press during scroll
-  const handleTouchMove = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
   };
   
   // Exit drag mode
@@ -291,19 +300,21 @@ export default function Dashboard() {
                     >
                       {(provided, snapshot) => (
                         <Card 
-                          className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''}`}
+                          className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''} 
+                                     ${isDragging ? 'select-none' : ''}`}
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
-                          onTouchStart={handleLongPressStart}
-                          onTouchEnd={handleTouchEnd}
-                          onTouchMove={handleTouchMove}
                         >
+                          {/* New dedicated drag handle that appears in the corner when in drag mode */}
                           {isDragging && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-sm z-10 rounded-md">
-                              <div className="h-2 w-12 bg-muted-foreground rounded-full" />
+                            <div 
+                              className="absolute top-0 right-0 bg-primary/10 p-1 rounded-bl-md rounded-tr-md z-20"
+                            >
+                              <GripVertical className="h-5 w-5 text-muted-foreground" />
                             </div>
                           )}
+                          
                           <CardContent className="p-0">
                             {widget.component}
                           </CardContent>
