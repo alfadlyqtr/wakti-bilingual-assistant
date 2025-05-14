@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { PageContainer } from "@/components/PageContainer";
@@ -15,12 +16,19 @@ import { quotes } from "@/utils/dailyQuotes";
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
+  const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
   
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
     setQuotePreferences(newPreferences);
     saveQuotePreferences(newPreferences);
+    
+    // Open dialog when custom is selected
+    if (category === 'custom') {
+      setCustomQuoteDialogOpen(true);
+    }
+    
     toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
   };
   
@@ -30,6 +38,18 @@ export default function Settings() {
     saveQuotePreferences(newPreferences);
     toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
   };
+  
+  const handleSaveAllSettings = () => {
+    // Already saving on change, but we can add additional save logic here if needed
+    toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved");
+  };
+  
+  // Watch for category changes to show dialog
+  useEffect(() => {
+    if (quotePreferences.category === 'custom') {
+      setCustomQuoteDialogOpen(true);
+    }
+  }, []); // Only run once on component mount
   
   return (
     <PageContainer title={t("settings", language)} showBackButton={true}>
@@ -142,19 +162,18 @@ export default function Settings() {
               </Select>
             </div>
             
-            <Button 
-              className="w-full mt-4" 
-              onClick={() => toast.success(language === 'ar' ? "تم حفظ الإعدادات" : "Settings saved")}
-            >
-              {language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings'}
-            </Button>
+            {/* Button to manage custom quotes */}
+            {quotePreferences.category === 'custom' && (
+              <Button 
+                variant="outline" 
+                className="w-full mt-4" 
+                onClick={() => setCustomQuoteDialogOpen(true)}
+              >
+                {language === 'ar' ? 'إدارة الاقتباسات المخصصة' : 'Manage Custom Quotes'}
+              </Button>
+            )}
           </CardContent>
         </Card>
-
-        {/* Custom Quotes Manager (show only when custom category is selected) */}
-        {quotePreferences.category === 'custom' && (
-          <CustomQuoteManager />
-        )}
 
         {/* Notification Preferences */}
         <Card className="mb-4">
@@ -235,11 +254,20 @@ export default function Settings() {
         {/* Save All Settings Button */}
         <Button 
           className="w-full mt-6" 
-          onClick={() => toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved")}
+          onClick={handleSaveAllSettings}
         >
           {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
         </Button>
       </div>
+      
+      {/* Custom Quote Manager Dialog */}
+      <CustomQuoteManager 
+        open={customQuoteDialogOpen} 
+        onOpenChange={setCustomQuoteDialogOpen}
+        onUpdate={() => {
+          // Refresh any state if needed after quotes are updated
+        }}
+      />
     </PageContainer>
   );
 }

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -7,17 +7,27 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { getCustomQuotes, saveCustomQuotes } from '@/utils/quoteService';
 import { toast } from 'sonner';
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 interface CustomQuoteManagerProps {
   onUpdate?: () => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate }) => {
+export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate, open, onOpenChange }) => {
   const { language } = useTheme();
   const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes() || []);
   const [newQuote, setNewQuote] = useState('');
   const [username, setUsername] = useState('');
   const MAX_QUOTES = 5;
+  const MAX_CHARS = 30;
 
   const handleAddQuote = () => {
     if (!newQuote.trim()) {
@@ -65,7 +75,8 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
     );
   };
 
-  return (
+  // Standalone component content (for Settings page)
+  const quoteManagerContent = (
     <Card className="p-4">
       <h3 className="font-medium text-lg mb-4">
         {language === 'ar' ? 'الاقتباسات المخصصة' : 'Custom Quotes'}
@@ -78,12 +89,17 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
             value={newQuote}
             onChange={(e) => setNewQuote(e.target.value)}
             className="mb-2"
+            maxLength={MAX_CHARS}
           />
+          <div className="text-xs text-muted-foreground text-right mb-2">
+            {newQuote.length}/{MAX_CHARS}
+          </div>
           <Input
             placeholder={language === 'ar' ? 'اسم المستخدم (اختياري)' : 'Username (optional)'}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="mb-2"
+            maxLength={15}
           />
           <Button 
             onClick={handleAddQuote}
@@ -123,4 +139,28 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
       </div>
     </Card>
   );
+
+  // If used as a dialog, wrap in Dialog components
+  if (typeof open !== 'undefined') {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {language === 'ar' ? 'إدارة الاقتباسات المخصصة' : 'Manage Custom Quotes'}
+            </DialogTitle>
+            <DialogDescription>
+              {language === 'ar' 
+                ? 'أضف ما يصل إلى 5 اقتباسات مخصصة لعرضها في الاقتباس اليومي الخاص بك'
+                : 'Add up to 5 custom quotes to display in your daily quote widget'}
+            </DialogDescription>
+          </DialogHeader>
+          {quoteManagerContent}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  // Return standalone component
+  return quoteManagerContent;
 };
