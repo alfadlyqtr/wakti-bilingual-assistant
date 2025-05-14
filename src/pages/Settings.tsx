@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -11,10 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { toast } from "sonner";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
+import { quotes } from "@/utils/dailyQuotes";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
+  const categories = Object.keys(quotes);
   
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
@@ -87,24 +88,28 @@ export default function Settings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="motivational">
-                    {language === 'ar' ? 'تحفيزي' : 'Motivational'}
-                  </SelectItem>
-                  <SelectItem value="islamic">
-                    {language === 'ar' ? 'إسلامي' : 'Islamic'}
-                  </SelectItem>
-                  <SelectItem value="positive">
-                    {language === 'ar' ? 'إيجابي' : 'Positive'}
-                  </SelectItem>
-                  <SelectItem value="health">
-                    {language === 'ar' ? 'صحي' : 'Health'}
-                  </SelectItem>
-                  <SelectItem value="mixed">
-                    {language === 'ar' ? 'متنوع' : 'Mixed'}
-                  </SelectItem>
-                  <SelectItem value="custom">
-                    {language === 'ar' ? 'مخصص' : 'Custom'}
-                  </SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {language === 'ar' ? 
+                        (
+                          category === 'motivational' ? 'تحفيزي' : 
+                          category === 'islamic' ? 'إسلامي' : 
+                          category === 'positive' ? 'إيجابي' : 
+                          category === 'health' ? 'صحي' : 
+                          category === 'mixed' ? 'متنوع' : 
+                          category === 'custom' ? 'مخصص' :
+                          category === 'productivity' ? 'إنتاجية' :
+                          category === 'discipline' ? 'انضباط' :
+                          category === 'gratitude' ? 'امتنان' :
+                          category === 'leadership' ? 'قيادة' :
+                          category
+                        ) : 
+                        (
+                          category.charAt(0).toUpperCase() + category.slice(1)
+                        )
+                      }
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -136,6 +141,13 @@ export default function Settings() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <Button 
+              className="w-full mt-4" 
+              onClick={() => toast.success(language === 'ar' ? "تم حفظ الإعدادات" : "Settings saved")}
+            >
+              {language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings'}
+            </Button>
           </CardContent>
         </Card>
 
@@ -219,6 +231,14 @@ export default function Settings() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Save All Settings Button */}
+        <Button 
+          className="w-full mt-6" 
+          onClick={() => toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved")}
+        >
+          {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
+        </Button>
       </div>
     </PageContainer>
   );

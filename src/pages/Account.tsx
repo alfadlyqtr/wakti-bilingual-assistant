@@ -30,11 +30,28 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
-import { getQuotePreferences } from "@/utils/quoteService";
+import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
+import { quotes } from "@/utils/dailyQuotes";
+import { toast } from "sonner";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const [activeTab, setActiveTab] = useState("profile");
+  const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
+  const categories = Object.keys(quotes);
+
+  const handleQuoteCategoryChange = (category: string) => {
+    setQuotePreferences(prev => ({ ...prev, category }));
+  };
+
+  const handleQuoteFrequencyChange = (frequency: string) => {
+    setQuotePreferences(prev => ({ ...prev, frequency }));
+  };
+
+  const handleSaveSettings = () => {
+    saveQuotePreferences(quotePreferences);
+    toast.success(language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully");
+  };
 
   return (
     <PageContainer title={t("account", language)} showBackButton={true}>
@@ -255,29 +272,36 @@ export default function Account() {
                   <label className="text-sm font-medium">
                     {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
                   </label>
-                  <Select defaultValue={getQuotePreferences().category}>
+                  <Select 
+                    defaultValue={quotePreferences.category} 
+                    onValueChange={handleQuoteCategoryChange}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="motivational">
-                        {language === 'ar' ? 'تحفيزي' : 'Motivational'}
-                      </SelectItem>
-                      <SelectItem value="islamic">
-                        {language === 'ar' ? 'إسلامي' : 'Islamic'}
-                      </SelectItem>
-                      <SelectItem value="positive">
-                        {language === 'ar' ? 'إيجابي' : 'Positive'}
-                      </SelectItem>
-                      <SelectItem value="health">
-                        {language === 'ar' ? 'صحي' : 'Health'}
-                      </SelectItem>
-                      <SelectItem value="mixed">
-                        {language === 'ar' ? 'متنوع' : 'Mixed'}
-                      </SelectItem>
-                      <SelectItem value="custom">
-                        {language === 'ar' ? 'مخصص' : 'Custom'}
-                      </SelectItem>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {language === 'ar' ? 
+                            (
+                              category === 'motivational' ? 'تحفيزي' : 
+                              category === 'islamic' ? 'إسلامي' : 
+                              category === 'positive' ? 'إيجابي' : 
+                              category === 'health' ? 'صحي' : 
+                              category === 'mixed' ? 'متنوع' : 
+                              category === 'custom' ? 'مخصص' :
+                              category === 'productivity' ? 'إنتاجية' :
+                              category === 'discipline' ? 'انضباط' :
+                              category === 'gratitude' ? 'امتنان' :
+                              category === 'leadership' ? 'قيادة' :
+                              category
+                            ) : 
+                            (
+                              category.charAt(0).toUpperCase() + category.slice(1)
+                            )
+                          }
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -286,7 +310,10 @@ export default function Account() {
                   <label className="text-sm font-medium">
                     {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
                   </label>
-                  <Select defaultValue={getQuotePreferences().frequency}>
+                  <Select 
+                    defaultValue={quotePreferences.frequency}
+                    onValueChange={handleQuoteFrequencyChange}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -306,11 +333,18 @@ export default function Account() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                <Button 
+                  className="w-full mt-4" 
+                  onClick={handleSaveSettings}
+                >
+                  {language === 'ar' ? 'حفظ الإعدادات' : 'Save Settings'}
+                </Button>
               </div>
             </Card>
 
             {/* Only show custom quote manager if custom quotes category is selected */}
-            {getQuotePreferences().category === 'custom' && (
+            {quotePreferences.category === 'custom' && (
               <CustomQuoteManager />
             )}
             
@@ -495,6 +529,14 @@ export default function Account() {
                 </div>
               </div>
             </Card>
+
+            {/* Save All Settings Button */}
+            <Button 
+              className="w-full mt-6" 
+              onClick={handleSaveSettings}
+            >
+              {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
+            </Button>
           </TabsContent>
         </Tabs>
       </div>
