@@ -31,6 +31,10 @@ export type TranslationKey =
   | "createMode"
   | "planMode"
   | "mode"
+  | "chat"
+  | "type"
+  | "create"
+  | "plan"
   | "chatSettings"
   | "typeSettings"
   | "createSettings"
@@ -104,7 +108,8 @@ export type TranslationKey =
   | "stillWantMeToDoThis"
   | "yesDoIt"
   | "no"
-  // Adding all the missing keys from the errors
+  // The updated key
+  | "descriptionField"
   | "calendar"
   | "ai"
   | "summary"
@@ -127,7 +132,7 @@ export type TranslationKey =
   | "title"
   | "titlePlaceholder"
   | "date"
-  | "description"
+  // ----- replaced "description" with "descriptionField" -----
   | "descriptionPlaceholder"
   | "delete"
   | "save"
@@ -186,7 +191,6 @@ export type TranslationKey =
   | "monthlyRecurrence"
   | "yearlyRecurrence"
   | "sharedTask"
-  // Adding new keys from the current errors
   | "taskUpdatedSuccessfully"
   | "taskDeletedSuccessfully"
   | "reminderCreatedSuccessfully"

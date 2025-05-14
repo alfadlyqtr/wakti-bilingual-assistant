@@ -541,7 +541,8 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
     en: "Date",
     ar: "التاريخ"
   },
-  description: {
+  // Renamed from 'description' to 'descriptionField' to avoid the duplicate property
+  descriptionField: {
     en: "Description",
     ar: "الوصف"
   },
