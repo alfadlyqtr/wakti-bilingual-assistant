@@ -1,9 +1,9 @@
-
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Logo3D } from "@/components/Logo3D";
 import {
   Check,
   Calendar,
@@ -11,7 +11,6 @@ import {
   MessageSquare,
   List,
 } from "lucide-react";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -148,15 +147,7 @@ export default function Home() {
             className="text-center mb-6"
           >
             <div className="mb-4 flex justify-center">
-              <div className="w-24 h-24 relative">
-                <AspectRatio ratio={1/1} className="bg-primary-900 rounded-2xl overflow-hidden">
-                  <img 
-                    src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
-                    alt="WAKTI Logo"
-                    className="object-cover w-full h-full"
-                  />
-                </AspectRatio>
-              </div>
+              <Logo3D size="lg" />
             </div>
 
             <h1 className="text-4xl font-bold mb-2">{currentContent.appName}</h1>

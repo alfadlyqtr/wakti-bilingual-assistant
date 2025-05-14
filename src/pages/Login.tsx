@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -7,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 
 export default function Login() {
@@ -93,11 +93,7 @@ export default function Login() {
                 className="inline-block cursor-pointer mb-4"
                 onClick={() => navigate("/")}
               >
-                <img 
-                  src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
-                  alt={t.appName}
-                  className="w-24 h-24 mx-auto object-contain" 
-                />
+                <Logo3D size="lg" />
               </div>
               <h1 className="text-2xl font-bold">{t.login}</h1>
             </div>

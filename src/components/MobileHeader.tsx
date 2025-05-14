@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/UserMenu";
+import { Logo3D } from "@/components/Logo3D";
 
 interface MobileHeaderProps {
   title: string;
@@ -47,12 +48,7 @@ export function MobileHeader({
             <ArrowLeft className="h-5 w-5" />
           </Button>
         )}
-        <img 
-          src="/lovable-uploads/a1b03773-fb9b-441e-8b2d-c8559acaa23b.png" 
-          alt="WAKTI Logo" 
-          className="h-10 w-10 mr-3 cursor-pointer rounded-md"
-          onClick={handleLogoClick}
-        />
+        <Logo3D size="sm" onClick={handleLogoClick} className="mr-3" />
         <h1 className="text-lg font-semibold">{title}</h1>
       </div>
       {children ? (

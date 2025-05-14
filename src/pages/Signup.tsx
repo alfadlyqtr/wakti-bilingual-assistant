@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -7,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Eye, EyeOff, User, Mail, Lock, ArrowLeft } from "lucide-react";
+import { Logo3D } from "@/components/Logo3D";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -90,24 +90,20 @@ export default function Signup() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <div className="flex min-h-[80vh] flex-col justify-center py-12 px-6 sm:px-6 lg:px-8">
+        <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
             className="w-full max-w-md mx-auto"
           >
-            <div className="mb-8 text-center">
+            <div className="mb-6 text-center">
               {/* App logo with navigation to home */}
               <div 
                 className="inline-block cursor-pointer mb-4"
                 onClick={() => navigate("/")}
               >
-                <img 
-                  src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" 
-                  alt={t.appName}
-                  className="w-24 h-24 mx-auto object-contain" 
-                />
+                <Logo3D size="lg" />
               </div>
               <h1 className="text-2xl font-bold">{t.createAccount}</h1>
             </div>
