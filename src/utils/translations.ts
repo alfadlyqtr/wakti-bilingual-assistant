@@ -640,6 +640,144 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   manageBlockedUsers: {
     en: "Blocked",
     ar: "المحظورون"
+  },
+  
+  // New translation keys
+  searchContacts: {
+    en: "Search Contacts",
+    ar: "البحث في جهات الاتصال"
+  },
+  sendMessage: {
+    en: "Send Message",
+    ar: "إرسال رسالة"
+  },
+  dailyQuote: {
+    en: "Daily Quote",
+    ar: "اقتباس اليوم"
+  },
+  unblockContact: {
+    en: "Unblock Contact",
+    ar: "إلغاء حظر جهة الاتصال"
+  },
+  noConversations: {
+    en: "No conversations found",
+    ar: "لم يتم العثور على محادثات"
+  },
+  transcript: {
+    en: "Transcript",
+    ar: "النص المكتوب"
+  },
+  imageTooLarge: {
+    en: "Image is too large (max 5MB)",
+    ar: "الصورة كبيرة جدًا (الحد الأقصى 5 ميجابايت)"
+  },
+  typeMessage: {
+    en: "Type a message...",
+    ar: "اكتب رسالة..."
+  },
+  stopRecording: {
+    en: "Stop Recording",
+    ar: "إيقاف التسجيل"
+  },
+  newMessage: {
+    en: "New Message",
+    ar: "رسالة جديدة"
+  },
+  noContactsFound: {
+    en: "No contacts found",
+    ar: "لم يتم العثور على جهات اتصال"
+  },
+  reminderTitle: {
+    en: "Reminder Title",
+    ar: "عنوان التذكير"
+  },
+  dueTime: {
+    en: "Due Time",
+    ar: "وقت الاستحقاق"
+  },
+  recurring: {
+    en: "Recurring",
+    ar: "متكرر"
+  },
+  recurrencePattern: {
+    en: "Recurrence Pattern",
+    ar: "نمط التكرار"
+  },
+  daily: {
+    en: "Daily",
+    ar: "يومي"
+  },
+  weekly: {
+    en: "Weekly",
+    ar: "أسبوعي"
+  },
+  monthly: {
+    en: "Monthly",
+    ar: "شهري"
+  },
+  yearly: {
+    en: "Yearly",
+    ar: "سنوي"
+  },
+  shareWith: {
+    en: "Share With",
+    ar: "مشاركة مع"
+  },
+  selectContact: {
+    en: "Select Contact",
+    ar: "اختر جهة اتصال"
+  },
+  share: {
+    en: "Share",
+    ar: "مشاركة"
+  },
+  urgent: {
+    en: "Urgent",
+    ar: "عاجل"
+  },
+  highPriority: {
+    en: "High Priority",
+    ar: "أولوية عالية"
+  },
+  mediumPriority: {
+    en: "Medium Priority",
+    ar: "أولوية متوسطة"
+  },
+  lowPriority: {
+    en: "Low Priority",
+    ar: "أولوية منخفضة"
+  },
+  subtaskGroupTitle: {
+    en: "Subtasks",
+    ar: "المهام الفرعية"
+  },
+  subtasks: {
+    en: "Subtasks",
+    ar: "المهام الفرعية"
+  },
+  addSubtask: {
+    en: "Add Subtask",
+    ar: "إضافة مهمة فرعية"
+  },
+  dailyRecurrence: {
+    en: "Daily",
+    ar: "يومي"
+  },
+  weeklyRecurrence: {
+    en: "Weekly",
+    ar: "أسبوعي"
+  },
+  monthlyRecurrence: {
+    en: "Monthly",
+    ar: "شهري"
+  },
+  yearlyRecurrence: {
+    en: "Yearly",
+    ar: "سنوي"
+  },
+  sharedTask: {
+    en: "Shared Task",
+    ar: "مهمة مشتركة"
   }
 };
 
