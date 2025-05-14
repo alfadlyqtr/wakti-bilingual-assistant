@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, MessageSquare, History, Trash2 } from "lucide-react";
 import { AIMode, ASSISTANT_MODES } from "./types";
+import { toast } from "@/components/ui/use-toast";
 
 interface LeftDrawerProps {
   isOpen: boolean;
@@ -64,6 +65,25 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
         chat.title.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : previousChats;
+    
+  // Handler for chat item click
+  const handleChatClick = (chat: { id: string; title: string }) => {
+    toast({
+      title: t("chatSelected" as TranslationKey, language),
+      description: chat.title,
+      duration: 3000
+    });
+    onClose();
+  };
+  
+  // Handler for clear history button
+  const handleClearHistory = () => {
+    toast({
+      title: t("historyCleared" as TranslationKey, language),
+      description: t("allChatsRemoved" as TranslationKey, language),
+      duration: 3000
+    });
+  };
 
   return (
     <AnimatePresence>
@@ -80,7 +100,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
           
           {/* Drawer */}
           <motion.div 
-            className="fixed left-0 top-0 h-full w-4/5 max-w-xs z-50 overflow-hidden flex flex-col"
+            className="fixed left-0 top-0 h-full w-4/5 max-w-xs z-50 overflow-hidden flex flex-col pointer-events-auto"
             style={{ 
               backgroundColor: drawerBgColor,
               color: textColor
@@ -158,6 +178,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                       whileHover={{
                         backgroundColor: `${textColor}10`
                       }}
+                      onClick={() => handleChatClick(chat)}
                     >
                       <div 
                         className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
@@ -195,9 +216,7 @@ export function LeftDrawer({ isOpen, onClose, theme, language, activeMode }: Lef
                   color: textColor,
                   backgroundColor: `${textColor}10`
                 }}
-                onClick={() => {
-                  // Clear history functionality would go here
-                }}
+                onClick={handleClearHistory}
               >
                 <Trash2 size={16} />
                 {t("clearHistory" as TranslationKey, language)}
