@@ -12,7 +12,27 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { CalendarIcon } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import BackgroundSelector from './BackgroundSelector';
+
+type EventFormData = {
+  title: string;
+  description: string;
+  location: string;
+  googleMapsLink: string;
+  isAllDay: boolean;
+  isPublic: boolean;
+  startDate: Date;
+  endDate: Date;
+  startTime: string;
+  endTime: string;
+  backgroundColor: string;
+  backgroundGradient: string;
+  backgroundImage: string;
+  textColor: string;
+  fontSize: number;
+  buttonStyle: 'rounded' | 'square';
+};
 
 const EventCreate: React.FC = () => {
   const { language } = useTheme();
@@ -20,6 +40,51 @@ const EventCreate: React.FC = () => {
   const [endDate, setEndDate] = useState<Date | undefined>(new Date());
   const [isAllDay, setIsAllDay] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  
+  const form = useForm<EventFormData>({
+    defaultValues: {
+      title: '',
+      description: '',
+      location: '',
+      googleMapsLink: '',
+      isAllDay: false,
+      isPublic: false,
+      startDate: new Date(),
+      endDate: new Date(),
+      startTime: '',
+      endTime: '',
+      backgroundColor: '#4f46e5',
+      backgroundGradient: 'linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%)',
+      backgroundImage: '',
+      textColor: '#FFFFFF',
+      fontSize: 2,
+      buttonStyle: 'rounded',
+    }
+  });
+  
+  // Handle AI image generation
+  const generateImage = async () => {
+    if (!aiPrompt.trim()) return;
+    
+    setIsGeneratingImage(true);
+    
+    try {
+      // This would call an actual API in production
+      // Simulated delay for now
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Simulated result - would be an actual API call result
+      const mockResult = 'https://source.unsplash.com/random/800x600/?event';
+      
+      form.setValue("backgroundImage", mockResult, { shouldDirty: true });
+    } catch (error) {
+      console.error("Error generating image:", error);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
   
   return (
     <div className="p-4 pb-20">
@@ -166,19 +231,47 @@ const EventCreate: React.FC = () => {
             </TabsList>
             
             <TabsContent value="color">
-              <BackgroundSelector type="color" />
+              <BackgroundSelector 
+                type="color" 
+                form={form} 
+                generateImage={generateImage}
+                isGeneratingImage={isGeneratingImage}
+                aiPrompt={aiPrompt}
+                setAiPrompt={setAiPrompt}
+              />
             </TabsContent>
             
             <TabsContent value="gradient">
-              <BackgroundSelector type="gradient" />
+              <BackgroundSelector 
+                type="gradient" 
+                form={form} 
+                generateImage={generateImage}
+                isGeneratingImage={isGeneratingImage}
+                aiPrompt={aiPrompt}
+                setAiPrompt={setAiPrompt}
+              />
             </TabsContent>
             
             <TabsContent value="image">
-              <BackgroundSelector type="image" />
+              <BackgroundSelector 
+                type="image" 
+                form={form} 
+                generateImage={generateImage}
+                isGeneratingImage={isGeneratingImage}
+                aiPrompt={aiPrompt}
+                setAiPrompt={setAiPrompt}
+              />
             </TabsContent>
             
             <TabsContent value="ai">
-              <BackgroundSelector type="ai" />
+              <BackgroundSelector 
+                type="ai" 
+                form={form} 
+                generateImage={generateImage}
+                isGeneratingImage={isGeneratingImage}
+                aiPrompt={aiPrompt}
+                setAiPrompt={setAiPrompt}
+              />
             </TabsContent>
           </Tabs>
           

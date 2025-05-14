@@ -10,7 +10,7 @@ export default function EventCreatePage() {
   
   return (
     <div className="mobile-container">
-      <MobileHeader title={t("createEvent", language)} showBackButton={true} />
+      <MobileHeader title={language === 'ar' ? 'إنشاء فعالية' : 'Create Event'} showBackButton={true} />
       <div className="flex-1 overflow-y-auto">
         <EventCreate />
       </div>
