@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { quotes } from "@/utils/dailyQuotes";
-import { useToast } from "@/hooks/use-toast";
+import { useToast, toast } from "@/hooks/use-toast";
 import { Check, Save, Settings } from "lucide-react";
 
 export default function Account() {
