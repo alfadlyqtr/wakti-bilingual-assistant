@@ -78,11 +78,10 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     } catch (err) {
       console.error("Error accessing microphone:", err);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? 'فشل في الوصول إلى الميكروفون' 
           : 'Failed to access the microphone',
-        variant: "destructive"
       });
     }
   };
@@ -117,11 +116,10 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       // Check if file is an audio file
       if (!file.type.startsWith('audio/')) {
         toast({
-          title: language === 'ar' ? 'خطأ' : 'Error',
+          variant: "destructive",
           description: language === 'ar' 
             ? 'يرجى تحديد ملف صوتي' 
             : 'Please select an audio file',
-          variant: "destructive"
         });
         return;
       }
@@ -141,33 +139,30 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   const handleSaveRecording = async () => {
     if (!user) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? 'يجب تسجيل الدخول لحفظ التسجيل' 
           : 'You must be logged in to save a recording',
-        variant: "destructive"
       });
       return;
     }
     
     if (!audioBlob) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? 'لا يوجد تسجيل للحفظ' 
           : 'No recording to save',
-        variant: "destructive"
       });
       return;
     }
     
     if (!title.trim()) {
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? 'يرجى إدخال عنوان للتسجيل' 
           : 'Please enter a title for the recording',
-        variant: "destructive"
       });
       return;
     }
@@ -207,7 +202,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       
       // Create a new voice_summary entry in the database
       const { data: recordingData, error: recordingError } = await supabase
-        .from('voice_summaries')
+        .from('voice_recordings')
         .insert({
           id: recordingId,
           user_id: user.id,
@@ -246,7 +241,6 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       
       // Show success message
       toast({
-        title: language === 'ar' ? 'نجاح' : 'Success',
         description: language === 'ar' 
           ? 'تم حفظ التسجيل بنجاح' 
           : 'Recording saved successfully',
@@ -258,11 +252,10 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     } catch (err) {
       console.error('Error saving recording:', err);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        variant: "destructive",
         description: language === 'ar' 
           ? `فشل في حفظ التسجيل: ${err.message}` 
           : `Failed to save recording: ${err.message}`,
-        variant: "destructive"
       });
     } finally {
       setIsUploading(false);

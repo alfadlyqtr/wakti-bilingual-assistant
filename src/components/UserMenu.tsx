@@ -35,15 +35,13 @@ export function UserMenu() {
     try {
       await signOut();
       toast({
-        title: language === 'en' ? 'Logged Out' : 'تم تسجيل الخروج',
         description: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
       });
     } catch (error) {
       console.error('Error logging out:', error);
       toast({
-        title: language === 'en' ? 'Error' : 'خطأ',
-        description: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
         variant: "destructive",
+        description: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
       });
     }
     closeMenu();

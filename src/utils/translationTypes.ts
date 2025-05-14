@@ -195,4 +195,19 @@ export type TranslationKey =
   | "lowPriority"
   | "subtaskGroupTitle"
   | "subtasks"
-  | "addSubtask";
+  | "addSubtask"
+  // Additional missing keys from the new errors
+  | "dailyRecurrence"
+  | "weeklyRecurrence"
+  | "monthlyRecurrence"
+  | "yearlyRecurrence"
+  | "sharedTask"
+  | "searchTasks"
+  | "searchReminders"
+  | "allTasks"
+  | "pendingTasks"
+  | "completedTasks"
+  | "overdueItems"
+  | "noTasks"
+  | "noReminders"
+  | "createYourFirst";

@@ -785,6 +785,63 @@ const translations: TranslationMap = {
   addSubtask: {
     en: "Add Subtask",
     ar: "إضافة مهمة فرعية"
+  },
+  
+  dailyRecurrence: {
+    en: "Daily",
+    ar: "يومي"
+  },
+  weeklyRecurrence: {
+    en: "Weekly",
+    ar: "أسبوعي"
+  },
+  monthlyRecurrence: {
+    en: "Monthly",
+    ar: "شهري"
+  },
+  yearlyRecurrence: {
+    en: "Yearly",
+    ar: "سنوي"
+  },
+  sharedTask: {
+    en: "Shared Task",
+    ar: "مهمة مشتركة"
+  },
+  searchTasks: {
+    en: "Search tasks",
+    ar: "بحث في المهام"
+  },
+  searchReminders: {
+    en: "Search reminders",
+    ar: "بحث في التذكيرات"
+  },
+  allTasks: {
+    en: "All Tasks",
+    ar: "جميع المهام"
+  },
+  pendingTasks: {
+    en: "Pending Tasks",
+    ar: "المهام قيد الانتظار"
+  },
+  completedTasks: {
+    en: "Completed Tasks",
+    ar: "المهام المكتملة"
+  },
+  overdueItems: {
+    en: "Overdue Items",
+    ar: "العناصر المتأخرة"
+  },
+  noTasks: {
+    en: "No tasks",
+    ar: "لا توجد مهام"
+  },
+  noReminders: {
+    en: "No reminders",
+    ar: "لا توجد تذكيرات"
+  },
+  createYourFirst: {
+    en: "Create your first",
+    ar: "أنشئ أول"
   }
 };
 
