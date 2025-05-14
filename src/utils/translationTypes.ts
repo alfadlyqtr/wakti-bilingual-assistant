@@ -132,7 +132,6 @@ export type TranslationKey =
   | "title"
   | "titlePlaceholder"
   | "date"
-  // ----- replaced "description" with "descriptionField" -----
   | "descriptionPlaceholder"
   | "delete"
   | "save"
@@ -156,7 +155,6 @@ export type TranslationKey =
   | "noContactRequests"
   | "contactRequestSettings"
   | "manageBlockedUsers"
-  // Adding new keys from the previous errors
   | "searchContacts"
   | "sendMessage"
   | "dailyQuote"
@@ -219,4 +217,21 @@ export type TranslationKey =
   | "deleteAccount"
   | "taskAndReminders"
   | "voiceSummary"
-  | "voiceSummaryDetail";
+  | "voiceSummaryDetail"
+  // Add all the missing translation keys
+  | "error"
+  | "pleaseCompleteAllRequiredFields"
+  | "success"
+  | "eventCreatedSuccessfully"
+  | "errorCreatingEvent"
+  | "eventTitle"
+  | "enterEventTitle"
+  | "enterEventDescription"
+  | "location"
+  | "enterLocation"
+  | "selectDate"
+  | "time"
+  | "maxAttendees"
+  | "enterMaxAttendees"
+  | "creating";
+

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
 import { CalendarIcon, MapPin, Clock, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,18 +45,20 @@ const EventCreate: React.FC = () => {
       const [hours, minutes] = time.split(':').map(Number);
       eventDate.setHours(hours, minutes);
       
+      // Set end time to 1 hour after start time by default
+      const endTime = new Date(eventDate);
+      endTime.setHours(endTime.getHours() + 1);
+
       const { data, error } = await supabase
         .from('events')
-        .insert([
-          { 
-            title,
-            description,
-            location,
-            start_time: eventDate.toISOString(),
-            max_attendees: maxAttendees ? parseInt(maxAttendees) : null,
-            created_by: (await supabase.auth.getUser()).data.user?.id
-          }
-        ])
+        .insert({
+          title,
+          description,
+          location,
+          start_time: eventDate.toISOString(),
+          end_time: endTime.toISOString(),
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        })
         .select();
       
       if (error) throw error;
@@ -156,21 +157,6 @@ const EventCreate: React.FC = () => {
                 required
               />
             </div>
-          </div>
-        </div>
-        
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("maxAttendees", language)}</label>
-          <div className="relative">
-            <Users className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              type="number"
-              value={maxAttendees}
-              onChange={(e) => setMaxAttendees(e.target.value)}
-              placeholder={t("enterMaxAttendees", language)}
-              min="1"
-              className="pl-8"
-            />
           </div>
         </div>
         

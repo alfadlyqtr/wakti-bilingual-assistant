@@ -897,6 +897,68 @@ const translations: Record<TranslationKey, { en: string; ar: string }> = {
   removedFromFavorites: {
     en: "Removed from favorites",
     ar: "تمت الإزالة من المفضلة"
+  },
+  
+  // Add new translations for event creation
+  error: {
+    en: "Error",
+    ar: "خطأ"
+  },
+  pleaseCompleteAllRequiredFields: {
+    en: "Please complete all required fields",
+    ar: "يرجى إكمال جميع الحقول المطلوبة"
+  },
+  success: {
+    en: "Success",
+    ar: "نجاح"
+  },
+  eventCreatedSuccessfully: {
+    en: "Event created successfully",
+    ar: "تم إنشاء الحدث بنجاح"
+  },
+  errorCreatingEvent: {
+    en: "Error creating event",
+    ar: "خطأ في إنشاء الحدث"
+  },
+  eventTitle: {
+    en: "Event Title",
+    ar: "عنوان الحدث"
+  },
+  enterEventTitle: {
+    en: "Enter event title",
+    ar: "أدخل عنوان الحدث"
+  },
+  enterEventDescription: {
+    en: "Enter event description",
+    ar: "أدخل وصف الحدث"
+  },
+  location: {
+    en: "Location",
+    ar: "الموقع"
+  },
+  enterLocation: {
+    en: "Enter location",
+    ar: "أدخل الموقع"
+  },
+  selectDate: {
+    en: "Select date",
+    ar: "اختر التاريخ"
+  },
+  time: {
+    en: "Time",
+    ar: "الوقت"
+  },
+  maxAttendees: {
+    en: "Max Attendees",
+    ar: "الحد الأقصى للحضور"
+  },
+  enterMaxAttendees: {
+    en: "Enter max attendees",
+    ar: "أدخل الحد الأقصى للحضور"
+  },
+  creating: {
+    en: "Creating...",
+    ar: "جاري الإنشاء..."
   }
 };
 
