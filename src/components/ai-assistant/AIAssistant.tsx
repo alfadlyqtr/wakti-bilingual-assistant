@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -245,8 +246,8 @@ export const AIAssistant = () => {
     setIsVoiceActive(false);
   };
 
-  // Check if microphone should be shown (hide in writer mode)
-  const shouldShowMic = activeMode !== "writer";
+  // We're removing this line as per user request to show mic in all modes
+  // const shouldShowMic = activeMode !== "writer";
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden relative">
@@ -324,17 +325,16 @@ export const AIAssistant = () => {
       />
       
       {/* Bottom Input Area - Direct input field without container */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 mt-2 px-4 pb-4">
+      <div className="sticky bottom-16 left-0 right-0 z-30 px-4 pb-4 mb-2">
         <div className="flex items-center gap-2 max-w-md mx-auto">
-          {shouldShowMic && (
-            <VoiceInput 
-              isActive={isVoiceActive} 
-              onToggle={() => setIsVoiceActive(!isVoiceActive)}
-              onTranscript={handleVoiceInput}
-              language={language}
-              activeMode={activeMode}
-            />
-          )}
+          {/* Show mic in all modes now */}
+          <VoiceInput 
+            isActive={isVoiceActive} 
+            onToggle={() => setIsVoiceActive(!isVoiceActive)}
+            onTranscript={handleVoiceInput}
+            language={language}
+            activeMode={activeMode}
+          />
           
           <div className="relative flex-1">
             <Input
