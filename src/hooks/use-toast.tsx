@@ -72,7 +72,7 @@ export function confirm(options: ConfirmOptions | string) {
 export function toast(props: ToastOptions) {
   const { title, description, variant, ...rest } = props;
   
-  // Map variant to sonner's equivalent - fix the type comparison issue
+  // Map variant to sonner's equivalent
   let sonnerVariant: "default" | "success" | "error" | "warning" | "info" = "default";
   
   if (variant === "destructive") {
