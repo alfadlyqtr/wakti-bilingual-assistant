@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import {
   Toast,
@@ -269,7 +268,11 @@ function ToasterInternal() {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
-              {title && <ToastTitle>{typeof title === 'number' ? title.toString() : title}</ToastTitle>}
+              {title && (
+                <ToastTitle>
+                  {typeof title === 'number' ? title.toString() : title}
+                </ToastTitle>
+              )}
               {description && <ToastDescription>{description}</ToastDescription>}
             </div>
             {action}
