@@ -305,6 +305,7 @@ export type Database = {
           title: string
           transcript: string | null
           type: string
+          user_id: string | null
         }
         Insert: {
           attendees?: string | null
@@ -323,6 +324,7 @@ export type Database = {
           title: string
           transcript?: string | null
           type: string
+          user_id?: string | null
         }
         Update: {
           attendees?: string | null
@@ -341,6 +343,7 @@ export type Database = {
           title?: string
           transcript?: string | null
           type?: string
+          user_id?: string | null
         }
         Relationships: []
       }

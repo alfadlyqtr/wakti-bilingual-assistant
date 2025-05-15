@@ -1,4 +1,3 @@
-
 import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast";
 import {
   toast as sonnerToast,
@@ -73,7 +72,8 @@ export function toast(props: ToastOptions) {
   const { title, description, variant, ...rest } = props;
   
   // Map variant to sonner's equivalent - fix the type comparison issue
-  let sonnerVariant: string = "default";
+  let sonnerVariant: "default" | "success" | "error" | "warning" | "info" = "default";
+  
   if (variant === "destructive") {
     sonnerVariant = "error";
   } else if (variant === "success") {
