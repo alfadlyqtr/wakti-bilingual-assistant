@@ -1,29 +1,313 @@
-
 import * as React from "react";
-import { toast as toastOriginal, ToastT } from "@/components/ui/toast";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  Toast,
+  ToastProps,
+  ToastActionElement,
+  ToastProvider,
+  ToastViewport,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
+  ToastAction,
+} from "@/components/ui/toast";
 
-// Re-export the useToast hook from shadcn
-export { useToast } from "@/components/ui/toast";
+import { createContext, useContext } from "react";
 
-// Create a toast function with success variant
-export const toast: typeof toastOriginal & {
-  success: (opts: ToastT) => void;
-} = Object.assign(
-  (opts: ToastT) => toastOriginal(opts),
-  {
-    success: (opts: ToastT) => toastOriginal({ ...opts, variant: "success" }),
+const TOAST_LIMIT = 5;
+const TOAST_REMOVE_DELAY = 1000000;
+
+type ToasterToast = ToastProps & {
+  id: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+};
+
+const actionTypes = {
+  ADD_TOAST: "ADD_TOAST",
+  UPDATE_TOAST: "UPDATE_TOAST",
+  DISMISS_TOAST: "DISMISS_TOAST",
+  REMOVE_TOAST: "REMOVE_TOAST",
+} as const;
+
+let count = 0;
+
+function genId() {
+  count = (count + 1) % Number.MAX_VALUE;
+  return count.toString();
+}
+
+type ActionType = typeof actionTypes;
+
+type Action =
+  | {
+      type: ActionType["ADD_TOAST"];
+      toast: ToasterToast;
+    }
+  | {
+      type: ActionType["UPDATE_TOAST"];
+      toast: Partial<ToasterToast>;
+      id: string;
+    }
+  | {
+      type: ActionType["DISMISS_TOAST"];
+      toastId: string;
+    }
+  | {
+      type: ActionType["REMOVE_TOAST"];
+      toastId: string;
+    };
+
+interface State {
+  toasts: ToasterToast[];
+}
+
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+const addToRemoveQueue = (toastId: string) => {
+  if (toastTimeouts.has(toastId)) {
+    return;
   }
-);
+
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId);
+    dispatch({
+      type: actionTypes.REMOVE_TOAST,
+      toastId,
+    });
+  }, TOAST_REMOVE_DELAY);
+
+  toastTimeouts.set(toastId, timeout);
+};
+
+export const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case actionTypes.ADD_TOAST:
+      return {
+        ...state,
+        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+      };
+
+    case actionTypes.UPDATE_TOAST:
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === action.id ? { ...t, ...action.toast } : t
+        ),
+      };
+
+    case actionTypes.DISMISS_TOAST: {
+      const { toastId } = action;
+
+      // ! Side effects ! - This could be extracted into a dismissToast() action,
+      // but I'll keep it here for simplicity
+      if (toastId) {
+        addToRemoveQueue(toastId);
+      }
+
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === toastId || toastId === "all"
+            ? {
+                ...t,
+                open: false,
+              }
+            : t
+        ),
+      };
+    }
+    case actionTypes.REMOVE_TOAST:
+      if (action.toastId === "all") {
+        return {
+          ...state,
+          toasts: [],
+        };
+      }
+      return {
+        ...state,
+        toasts: state.toasts.filter((t) => t.id !== action.toastId),
+      };
+    default:
+      return state;
+  }
+};
+
+const listeners: Array<(state: State) => void> = [];
+
+let memoryState: State = { toasts: [] };
+
+function dispatch(action: Action) {
+  memoryState = reducer(memoryState, action);
+  listeners.forEach((listener) => {
+    listener(memoryState);
+  });
+}
+
+interface Toast {
+  id: string;
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+  variant?: "default" | "destructive" | "success";
+  open: boolean;
+}
+
+type ToastContextType = {
+  toast: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }) => void;
+  dismiss: (toastId?: string) => void;
+};
+
+const ToastContext = createContext<ToastContextType | null>(null);
+
+function useToastInternal(): ToastContextType {
+  const [state, setState] = React.useState<State>(memoryState);
+
+  React.useEffect(() => {
+    listeners.push(setState);
+    return () => {
+      const index = listeners.indexOf(setState);
+      if (index > -1) {
+        listeners.splice(index, 1);
+      }
+    };
+  }, []);
+
+  return {
+    toast: ({ title, description, action, variant }) => {
+      const id = genId();
+
+      const update = (props: ToasterToast) =>
+        dispatch({
+          type: actionTypes.UPDATE_TOAST,
+          id,
+          toast: { ...props },
+        });
+
+      const dismiss = () =>
+        dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
+
+      dispatch({
+        type: actionTypes.ADD_TOAST,
+        toast: {
+          id,
+          title,
+          description,
+          action,
+          variant,
+          open: true,
+          onOpenChange: (open) => {
+            if (!open) dismiss();
+          },
+        },
+      });
+
+      return {
+        id,
+        dismiss,
+        update,
+      };
+    },
+    dismiss: (toastId) =>
+      dispatch({
+        type: actionTypes.DISMISS_TOAST,
+        toastId: toastId || "all",
+      }),
+  };
+}
+
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { toast, dismiss } = useToastInternal();
+  return (
+    <ToastContext.Provider value={{ toast, dismiss }}>
+      {children}
+      <ToasterInternal />
+    </ToastContext.Provider>
+  );
+}
+
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error("useToast must be used within a ToastProvider");
+  }
+  return context;
+}
+
+export function Toaster() {
+  return <ToasterInternal />;
+}
+
+function ToasterInternal() {
+  const [state] = React.useState<State>(memoryState);
+
+  return (
+    <ToastProvider>
+      <ToastViewport />
+      {state.toasts.map(function ({
+        id,
+        title,
+        description,
+        action,
+        ...props
+      }) {
+        return (
+          <Toast key={id} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && <ToastDescription>{description}</ToastDescription>}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        );
+      })}
+    </ToastProvider>
+  );
+}
+
+// Create a simplified toast function with success variant
+export const toast = {
+  success: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => {
+    const { toast: toastFn } = useToast();
+    toastFn({ ...props, variant: "success" });
+  },
+  error: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => {
+    const { toast: toastFn } = useToast();
+    toastFn({ ...props, variant: "destructive" });
+  },
+  default: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => {
+    const { toast: toastFn } = useToast();
+    toastFn({ ...props, variant: "default" });
+  },
+  // Default toast function
+  (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }) {
+    const { toast: toastFn } = useToast();
+    toastFn(props);
+  },
+};
 
 // Confirmation dialog types
 export interface ConfirmOptions {
@@ -72,24 +356,60 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
       cleanup();
     };
 
-    // Render the confirmation dialog
+    const AlertDialog = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: ({ children }: { children: React.ReactNode }) => (
+        <>
+          {React.createElement(module.AlertDialog, { defaultOpen: true }, children)}
+        </>
+      )
+    })));
+
+    const AlertDialogContent = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogContent
+    })));
+
+    const AlertDialogHeader = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogHeader
+    })));
+
+    const AlertDialogTitle = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogTitle
+    })));
+
+    const AlertDialogDescription = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogDescription
+    })));
+
+    const AlertDialogFooter = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogFooter
+    })));
+
+    const AlertDialogAction = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogAction
+    })));
+
+    const AlertDialogCancel = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
+      default: module.AlertDialogCancel
+    })));
+
+    // Render the confirmation dialog using React.createElement to avoid the JSX transformation
     React.render(
-      <AlertDialog defaultOpen>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{title}</AlertDialogTitle>
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleCancel}>
-              {cancelText}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirm}>
-              {confirmText}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>,
+      React.createElement(
+        React.Suspense,
+        { fallback: null },
+        React.createElement(AlertDialog, null, 
+          React.createElement(AlertDialogContent, null,
+            React.createElement(AlertDialogHeader, null,
+              React.createElement(AlertDialogTitle, null, title),
+              React.createElement(AlertDialogDescription, null, description)
+            ),
+            React.createElement(AlertDialogFooter, null,
+              React.createElement(AlertDialogCancel, { onClick: handleCancel }, cancelText),
+              React.createElement(AlertDialogAction, { onClick: handleConfirm }, confirmText)
+            )
+          )
+        )
+      ),
       rootElement
     );
   });

@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast"; // Fixed import
+import { toast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/services/chatService";
 
 interface VoiceInputProps {

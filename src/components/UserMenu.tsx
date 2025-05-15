@@ -10,7 +10,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { t } from "@/utils/translations";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
@@ -35,13 +35,13 @@ export function UserMenu() {
     try {
       await signOut();
       toast({
-        description: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
+        title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
       });
     } catch (error) {
       console.error('Error logging out:', error);
       toast({
         variant: "destructive",
-        description: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
+        title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
       });
     }
     closeMenu();

@@ -16,12 +16,12 @@ import {
   PlusCircle,
   Loader2,
 } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile"; // Fix for useMobile
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "next-themes";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
 import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
-import { toast } from "@/hooks/use-toast"; // Fix for toast import
+import { toast } from "@/hooks/use-toast";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import {
@@ -51,7 +51,7 @@ export const AIAssistant: React.FC = () => {
 
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { isMobile } = useIsMobile(); // Fix for useMobile
+  const { isMobile } = useIsMobile();
   const { theme } = useTheme();
   const { user, session } = useAuth();
 
@@ -305,7 +305,6 @@ export const AIAssistant: React.FC = () => {
         toast({
           title: t("taskCreated" as TranslationKey, language),
           description: taskData.title,
-          variant: "default",
         });
         break;
 
@@ -317,7 +316,6 @@ export const AIAssistant: React.FC = () => {
         toast({
           title: t("reminderCreated" as TranslationKey, language),
           description: reminderData.title,
-          variant: "default",
         });
         break;
 
@@ -329,7 +327,6 @@ export const AIAssistant: React.FC = () => {
         toast({
           title: t("eventCreated" as TranslationKey, language),
           description: eventData.title,
-          variant: "default",
         });
         break;
 

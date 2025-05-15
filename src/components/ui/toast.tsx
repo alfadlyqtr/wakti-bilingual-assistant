@@ -41,8 +41,6 @@ const toastVariants = cva(
   }
 )
 
-export type ToastT = React.ComponentPropsWithoutRef<typeof Toast>;
-
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
@@ -120,9 +118,6 @@ export type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 export type ToastActionElement = React.ReactElement<typeof ToastAction>
 
 export {
-  toast,
-  type ToastProps,
-  type ToastActionElement,
   ToastProvider,
   ToastViewport,
   Toast,
@@ -131,9 +126,3 @@ export {
   ToastClose,
   ToastAction,
 }
-
-// Export the toast function
-export const toast = (props: ToastProps) => {
-  const { toast: toastFunction } = useToast();
-  return toastFunction(props);
-};
