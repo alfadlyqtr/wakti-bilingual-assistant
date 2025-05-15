@@ -1,365 +1,475 @@
+
 import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useTheme } from "@/providers/ThemeProvider";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Mic, Send, Settings, Menu, MessageSquare } from "lucide-react";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
-import { ASSISTANT_MODES, AIMode, ChatMessage, MODE_INTENTS, MODE_NAME_MAP } from "./types";
-import { ChatWindow } from "./ChatWindow";
-import { ModeSelector } from "./ModeSelector";
+import { motion } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
 import { LeftDrawer } from "./LeftDrawer";
 import { RightDrawer } from "./RightDrawer";
+import { ChatWindow } from "./ChatWindow";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { VoiceInput } from "./VoiceInput";
-import { MobileHeader } from "@/components/MobileHeader";
+import {
+  Menu,
+  Send,
+  Image as ImageIcon,
+  Calculator,
+  PlusCircle,
+  Loader2,
+} from "lucide-react";
+import { useMobile } from "@/hooks/use-mobile";
+import { useTheme } from "next-themes";
+import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
+import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
-import { UserMenu } from "@/components/UserMenu";
 import { toast } from "@/hooks/use-toast";
+import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
+import {
+  saveChatMessage,
+  getRecentChatHistory,
+  processAIRequest,
+  generateImage,
+} from "@/services/chatService";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
+import Loading from "@/components/ui/loading";
 
-export const AIAssistant = () => {
-  const { theme, language } = useTheme();
-  const [activeMode, setActiveMode] = useState<AIMode>("general");
+const getDefaultWelcomeMessage = (language: string): string => {
+  return language === "ar"
+    ? "مرحبًا! أنا وكتي، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟"
+    : "Hello! I'm WAKTI, your smart assistant. How can I help you today?";
+};
+
+export const AIAssistant: React.FC = () => {
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
   const [isRightDrawerOpen, setIsRightDrawerOpen] = useState(false);
-  const [input, setInput] = useState("");
+  const [inputValue, setInputValue] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [isVoiceActive, setIsVoiceActive] = useState(false);
-  const [pendingAction, setPendingAction] = useState<{
-    input: string;
-    targetMode: AIMode;
-  } | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: uuidv4(),
-      role: "assistant",
-      content: t("welcomeToWaktiAI" as TranslationKey, language),
-      mode: "general",
-      timestamp: new Date(),
-      needsConfirmation: null
-    }
-  ]);
-  
+  const [activeMode, setActiveMode] = useState<AIMode>("general");
+  const [isSending, setIsSending] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { isMobile } = useMobile();
+  const { theme } = useTheme();
+  const { user, session } = useAuth();
 
-  // Auto-scroll to bottom when messages change
+  // Language and theme state
+  const language = "en"; // This would normally come from user preferences
+  const currentTheme = theme || "light";
+
+  // Initialize with welcome message
   useEffect(() => {
-    if (messageEndRef.current) {
-      messageEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    const welcomeMessage: ChatMessage = {
+      id: uuidv4(),
+      role: "assistant",
+      content: getDefaultWelcomeMessage(language),
+      timestamp: new Date(),
+      mode: "general",
+    };
+    setMessages([welcomeMessage]);
+
+    // Load chat history if user is authenticated
+    if (user) {
+      loadChatHistory();
     }
+  }, [user, language]);
+
+  // Load chat history from Supabase
+  const loadChatHistory = async () => {
+    if (!user) return;
+
+    const history = await getRecentChatHistory(user.id, null, 20);
+    if (history.length > 0) {
+      // Only set history if it's not empty
+      // We're not replacing the welcome message if there's no history
+      setMessages(history);
+    }
+  };
+
+  // Scroll to bottom whenever messages change
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
 
-  // Get color for the current mode
-  const getModeColor = (mode: AIMode) => {
-    const modeData = ASSISTANT_MODES.find(m => m.id === mode);
-    return theme === "dark" ? modeData?.color.dark : modeData?.color.light;
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Detect intent and suggest mode switch if needed
-  const detectIntent = (userInput: string): AIMode | null => {
-    userInput = userInput.toLowerCase();
-    
-    // Skip intent detection for very short inputs
-    if (userInput.length < 5) return null;
-    
-    // Check each mode's intent patterns
-    for (const [modeType, patterns] of Object.entries(MODE_INTENTS)) {
-      // Skip if this is the current mode type
-      if (modeType === activeMode) continue;
-      
-      // Check if the input matches any pattern for this mode
-      const matchesMode = patterns.some(pattern => 
-        userInput.includes(pattern)
-      );
-      
-      if (matchesMode) {
-        return modeType as AIMode;
-      }
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
+    if (!user) {
+      toast({
+        title: t("loginRequired" as TranslationKey, language),
+        description: t("pleaseLoginToChat" as TranslationKey, language),
+        variant: "destructive",
+      });
+      return;
     }
-    
-    return null; // No mode switch needed
-  };
 
-  // Step 1: Handle initial user message and detect if mode switch is needed
-  const handleSendMessage = () => {
-    if (!input.trim()) return;
-    
-    // Add user message immediately
+    setIsSending(true);
     const userMessage: ChatMessage = {
       id: uuidv4(),
       role: "user",
-      content: input,
+      content: inputValue,
+      timestamp: new Date(),
       mode: activeMode,
-      timestamp: new Date()
     };
-    
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Check if we should suggest a mode switch
-    const suggestedMode = detectIntent(input);
+
+    // Add user message to UI
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+
+    // Save user message to database
+    await saveChatMessage(user.id, userMessage.content, "user", activeMode);
+
+    // Show typing indicator
     setIsTyping(true);
-    
-    setTimeout(() => {
-      if (suggestedMode) {
-        // Step 1: Suggest mode switch with confirmation buttons
-        const modeName = MODE_NAME_MAP[suggestedMode];
-        
-        const suggestionMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: `${t("youAskedTo" as TranslationKey, language)}: "${input}"\n\n${t("thisActionWorksBetterIn" as TranslationKey, language)} ${modeName}. ${t("wantToSwitch" as TranslationKey, language)}`,
-          mode: activeMode,
-          timestamp: new Date(),
-          originalInput: input,
-          actionButtons: {
-            primary: {
-              text: `${t("switchMode" as TranslationKey, language)} → ${modeName}`,
-              action: `switch:${suggestedMode}`
-            },
-            secondary: {
-              text: t("cancel" as TranslationKey, language),
-              action: "cancel"
-            }
-          }
-        };
-        
-        setMessages(prev => [...prev, suggestionMessage]);
-      } else {
-        // Regular message flow - no mode switch needed
-        processMessageInCurrentMode(input);
-      }
-      
-      setIsTyping(false);
-      setInput("");
-    }, 800);
-  };
 
-  // Process the message in the current mode (no switch needed)
-  const processMessageInCurrentMode = (messageText: string) => {
-    // Standard response
-    const aiResponse: ChatMessage = {
-      id: uuidv4(),
-      role: "assistant",
-      content: `${t("helpingYouWith" as TranslationKey, language)} "${messageText}" in ${t(activeMode as TranslationKey, language)}.`,
-      mode: activeMode,
-      timestamp: new Date()
-    };
-    
-    setMessages(prev => [...prev, aiResponse]);
-  };
-
-  // Step 2: Handle mode switch confirmation
-  const handleActionButton = (messageId: string, action: string) => {
-    const message = messages.find(m => m.id === messageId);
-    if (!message) return;
-    
-    // Check if this is a mode switch action
-    if (action.startsWith("switch:")) {
-      const targetMode = action.split(":")[1] as AIMode;
-      const originalInput = message.originalInput || "";
-      
-      // Switch the mode
-      setActiveMode(targetMode);
-      
-      // Store the pending action for confirmation in step 3
-      setPendingAction({
-        input: originalInput,
-        targetMode
-      });
-      
-      // Step 2: After user clicks Switch
-      setTimeout(() => {
-        const confirmationMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: `${t("wereNowIn" as TranslationKey, language)} ${t(targetMode as TranslationKey, language)}.\n\n${t("stillWantMeToDoThis" as TranslationKey, language)}: "${originalInput}"`,
-          mode: targetMode,
-          timestamp: new Date(),
-          actionButtons: {
-            primary: {
-              text: t("yesDoIt" as TranslationKey, language),
-              action: `execute:${originalInput}`
-            },
-            secondary: {
-              text: t("no" as TranslationKey, language),
-              action: "cancel-execution"
-            }
-          }
-        };
-        
-        setMessages(prev => [...prev, confirmationMessage]);
-      }, 500);
-    } 
-    // Step 3: Execute the original input in the new mode
-    else if (action.startsWith("execute:")) {
-      const inputToExecute = action.split(":").slice(1).join(":");
-      
-      // Clear pending action
-      setPendingAction(null);
-      
-      // Add user message showing the original input
-      const userMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "user",
-        content: inputToExecute,
-        mode: activeMode,
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, userMessage]);
-      setIsTyping(true);
-      
-      // Process the message in the current (new) mode
-      setTimeout(() => {
-        processMessageInCurrentMode(inputToExecute);
+    try {
+      // Special command for image generation
+      if (
+        inputValue.toLowerCase().startsWith("/image") ||
+        inputValue.toLowerCase().includes("generate image") ||
+        inputValue.toLowerCase().includes("create image") ||
+        inputValue.toLowerCase().includes("draw")
+      ) {
+        await handleImageGeneration(userMessage.content);
+        setIsSending(false);
         setIsTyping(false);
-      }, 800);
-    }
-    // Cancel execution
-    else if (action === "cancel-execution") {
-      // Clear pending action
-      setPendingAction(null);
-      
-      // Add a simple acknowledgment
-      const ackMessage: ChatMessage = {
+        return;
+      }
+
+      // Process the message with the AI
+      const aiResponse = await processAIRequest(
+        userMessage.content,
+        activeMode,
+        user.id
+      );
+
+      // Add realistic typing delay
+      const typingDelay = Math.min(1000, aiResponse.response.length * 10);
+      await new Promise((resolve) => setTimeout(resolve, typingDelay));
+
+      // Create the AI response message
+      const assistantMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: t("howCanIAssistYouWithWAKTI" as TranslationKey, language),
+        content: aiResponse.response,
+        timestamp: new Date(),
         mode: activeMode,
-        timestamp: new Date()
       };
-      
-      setMessages(prev => [...prev, ackMessage]);
+
+      // If this was an intent to create something, add action buttons
+      if (aiResponse.intent && aiResponse.intent !== "general_chat") {
+        assistantMessage.actionButtons = {
+          primary: {
+            text: t("confirm" as TranslationKey, language),
+            action: aiResponse.intent,
+          },
+          secondary: {
+            text: t("cancel" as TranslationKey, language),
+            action: "cancel",
+          },
+        };
+        assistantMessage.metadata = {
+          intentData: aiResponse.intentData,
+        };
+      }
+
+      // Add assistant response to UI
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // Save assistant response to database
+      await saveChatMessage(
+        user.id,
+        assistantMessage.content,
+        "assistant",
+        activeMode,
+        assistantMessage.metadata
+      );
+    } catch (error) {
+      console.error("Error processing message:", error);
+      // Show error message
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("errorProcessingRequest" as TranslationKey, language),
+        timestamp: new Date(),
+        mode: activeMode,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsTyping(false);
+      setIsSending(false);
     }
-    
-    // Remove action buttons from the message
-    setMessages(prev => prev.map(m => 
-      m.id === messageId ? { ...m, actionButtons: undefined } : m
-    ));
   };
 
-  const handleVoiceInput = (transcript: string) => {
-    setInput(transcript);
-    setIsVoiceActive(false);
+  const handleImageGeneration = async (prompt: string) => {
+    setIsGeneratingImage(true);
+
+    try {
+      // Extract the image prompt
+      let imagePrompt = prompt;
+      if (prompt.toLowerCase().startsWith("/image")) {
+        imagePrompt = prompt.substring(6).trim();
+      }
+
+      // Create assistant message to show we're generating the image
+      const processingMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("generatingImage" as TranslationKey, language),
+        timestamp: new Date(),
+        mode: activeMode,
+      };
+      setMessages((prev) => [...prev, processingMessage]);
+
+      // Call the image generation service
+      const imageUrl = await generateImage(imagePrompt);
+
+      // Update the message with the image or error
+      if (imageUrl) {
+        const updatedMessage: ChatMessage = {
+          ...processingMessage,
+          content: `${t(
+            "imageGenerated" as TranslationKey,
+            language
+          )}\n\n![${t("generatedImage" as TranslationKey, language)}](${imageUrl})`,
+          metadata: { imageUrl },
+        };
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === processingMessage.id ? updatedMessage : msg
+          )
+        );
+
+        // Save the message with the image URL
+        await saveChatMessage(
+          user!.id,
+          updatedMessage.content,
+          "assistant",
+          activeMode,
+          { imageUrl, hasMedia: true }
+        );
+      } else {
+        throw new Error("Image generation failed");
+      }
+    } catch (error) {
+      console.error("Error generating image:", error);
+      // Show error message
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("errorGeneratingImage" as TranslationKey, language),
+        timestamp: new Date(),
+        mode: activeMode,
+      };
+      setMessages((prev) => 
+        prev.map((msg) => 
+          msg.content === t("generatingImage" as TranslationKey, language) 
+            ? errorMessage 
+            : msg
+        )
+      );
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const handleVoiceTranscription = (text: string) => {
+    setInputValue(text);
+    // Focus the input field after receiving transcription
+    inputRef.current?.focus();
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const handleConfirmAction = async (messageId: string, action: string) => {
+    const message = messages.find((msg) => msg.id === messageId);
+    if (!message || !user) return;
+
+    // Special actions
+    switch (action) {
+      case "create_task":
+        // Handle task creation using the intent data from the message
+        const taskData = message.metadata?.intentData?.data || {
+          title: "New Task",
+        };
+        toast({
+          title: t("taskCreated" as TranslationKey, language),
+          description: taskData.title,
+          variant: "default",
+        });
+        break;
+
+      case "create_reminder":
+        // Handle reminder creation
+        const reminderData = message.metadata?.intentData?.data || {
+          title: "New Reminder",
+        };
+        toast({
+          title: t("reminderCreated" as TranslationKey, language),
+          description: reminderData.title,
+          variant: "default",
+        });
+        break;
+
+      case "create_event":
+        // Handle event creation
+        const eventData = message.metadata?.intentData?.data || {
+          title: "New Event",
+        };
+        toast({
+          title: t("eventCreated" as TranslationKey, language),
+          description: eventData.title,
+          variant: "default",
+        });
+        break;
+
+      case "cancel":
+        // User canceled the action
+        break;
+
+      default:
+        console.log("Unknown action:", action);
+    }
+
+    // Remove action buttons after action is taken
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId ? { ...msg, actionButtons: undefined } : msg
+      )
+    );
+  };
+
+  // Function to get the color based on mode
+  const getModeColor = (mode: AIMode): string => {
+    const modeData = ASSISTANT_MODES.find((m) => m.id === mode);
+    const colorKey = currentTheme === "dark" ? "dark" : "light";
+    return modeData?.color[colorKey] || "#3498db";
   };
 
   return (
-    <div className="flex flex-col h-full bg-background overflow-hidden relative">
-      {/* Standard Mobile Header - matching other pages */}
-      <MobileHeader 
-        title={t("assistant" as TranslationKey, language)}
-        showBackButton={false}
-        showUserMenu={true}
-      />
-      
-      {/* Combined Mode Selector with Drawer Triggers - Single Row */}
-      <div className="flex items-center justify-between px-4 py-3 border-b z-20">
-        <motion.button
-          className="p-2 rounded-full hover:bg-accent"
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsLeftDrawerOpen(true)}
-          aria-label={t("openHistory" as TranslationKey, language)}
-        >
-          <Menu size={20} />
-        </motion.button>
-        
-        <div className="flex-1">
-          <ModeSelector 
-            activeMode={activeMode} 
-            setActiveMode={setActiveMode}
-          />
-        </div>
-        
-        <motion.button
-          className="p-2 rounded-full hover:bg-accent"
-          whileTap={{ scale: 0.9 }}
-          onClick={() => setIsRightDrawerOpen(true)}
-          aria-label={t("openSettings" as TranslationKey, language)}
-        >
-          <Settings size={20} />
-        </motion.button>
-      </div>
-      
-      {/* Left Drawer - Chat History */}
-      <LeftDrawer 
+    <div
+      className={`flex flex-col h-full relative`}
+      style={{ backgroundColor: currentTheme === "dark" ? "#0c0f14" : "#fcfefd" }}
+    >
+      {/* Left Drawer */}
+      <LeftDrawer
         isOpen={isLeftDrawerOpen}
         onClose={() => setIsLeftDrawerOpen(false)}
-        theme={theme}
+        theme={currentTheme}
         language={language}
         activeMode={activeMode}
       />
-      
-      {/* Right Drawer - Settings & Tools */}
-      <RightDrawer
-        isOpen={isRightDrawerOpen}
-        onClose={() => setIsRightDrawerOpen(false)}
+
+      {/* Mode Selector */}
+      <ModeSelector
         activeMode={activeMode}
+        setActiveMode={setActiveMode}
+        theme={currentTheme}
         language={language}
-        theme={theme}
       />
-      
-      {/* Main Chat Window */}
-      <ChatWindow 
+
+      {/* Chat Window */}
+      <ChatWindow
         messages={messages}
         isTyping={isTyping}
         activeMode={activeMode}
         getModeColor={getModeColor}
-        onConfirm={handleActionButton}
+        onConfirm={handleConfirmAction}
         messageEndRef={messageEndRef}
         language={language}
-        theme={theme}
+        theme={currentTheme}
       />
-      
-      {/* Bottom Input Area - Added more space from the chat area */}
-      <div className="sticky bottom-24 left-0 right-0 z-30 px-4 pb-8 pt-4 mb-10 bg-gradient-to-t from-background to-transparent">
-        <div className="flex items-center gap-2 max-w-md mx-auto">
-          {/* Always visible mic button in all modes */}
-          <VoiceInput 
-            isActive={isVoiceActive} 
-            onToggle={() => setIsVoiceActive(!isVoiceActive)}
-            onTranscript={handleVoiceInput}
-            language={language}
-            activeMode={activeMode}
-          />
-          
-          <div className="relative flex-1">
-            <Input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              placeholder={t("askWAKTI" as TranslationKey, language)}
-              className="pl-4 pr-10 py-5 rounded-xl shadow-lg transition-all duration-300"
-              style={{
-                borderColor: getModeColor(activeMode),
-                boxShadow: `0 0 8px ${getModeColor(activeMode)}30`
-              }}
-            />
-            
-            <AnimatePresence>
-              {input && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2"
+
+      {/* Input Area */}
+      <div
+        className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full"
+        dir={language === "ar" ? "rtl" : "ltr"}
+      >
+        <div
+          className={`flex ${isMobile ? "items-end" : "items-center"} gap-2 max-w-md mx-auto`}
+        >
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setIsLeftDrawerOpen(true)}
+            className="h-9 w-9 rounded-full"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+
+          <div className="flex-1 flex flex-col">
+            <div
+              className={`flex ${
+                isMobile ? "flex-col" : "flex-row"
+              } items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg`}
+            >
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder={t("typeMessage" as TranslationKey, language)}
+                className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                disabled={isSending || !user}
+              />
+              <div className="flex items-center">
+                <VoiceInput
+                  onTranscription={handleVoiceTranscription}
+                  language={language}
+                  theme={currentTheme}
+                  disabled={isSending || isTyping || !user}
+                />
+                <Button
+                  onClick={handleSendMessage}
+                  disabled={!inputValue.trim() || isSending || !user}
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9 rounded-full"
+                  type="submit"
                 >
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    className="rounded-full h-8 w-8" 
-                    onClick={handleSendMessage}
-                  >
-                    <Send size={18} />
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                  {isSending ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            {!user && (
+              <p className="text-xs text-center mt-1 text-muted-foreground">
+                {t("loginToChat" as TranslationKey, language)}
+              </p>
+            )}
           </div>
+
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setIsRightDrawerOpen(true)}
+            className="h-9 w-9 rounded-full"
+          >
+            <PlusCircle className="h-5 w-5" />
+          </Button>
         </div>
       </div>
+
+      {/* Right Drawer */}
+      <RightDrawer
+        isOpen={isRightDrawerOpen}
+        onClose={() => setIsRightDrawerOpen(false)}
+        theme={currentTheme}
+        language={language}
+      />
     </div>
   );
 };

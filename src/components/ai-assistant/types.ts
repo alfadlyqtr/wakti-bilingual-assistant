@@ -1,22 +1,71 @@
+export type AIMode = 'general' | 'writer' | 'creative' | 'assistant';
 
-export type AIMode = "general" | "writer" | "creative" | "assistant";
+export const ASSISTANT_MODES = [
+  {
+    id: 'general',
+    name: 'Chat',
+    description: 'General conversation',
+    color: {
+      dark: '#3498db',
+      light: '#3498db'
+    },
+    activeColor: {
+      dark: '#2980b9',
+      light: '#2980b9'  
+    },
+    icon: 'MessageSquare'
+  },
+  {
+    id: 'writer',
+    name: 'Type',
+    description: 'Writing assistant',
+    color: {
+      dark: '#1abc9c',
+      light: '#1abc9c'
+    },
+    activeColor: {
+      dark: '#16a085',
+      light: '#16a085'
+    },
+    icon: 'Edit3'
+  },
+  {
+    id: 'creative',
+    name: 'Create',
+    description: 'Creative generation',
+    color: {
+      dark: '#e67e22',
+      light: '#e67e22'
+    },
+    activeColor: {
+      dark: '#d35400',
+      light: '#d35400'
+    },
+    icon: 'Paintbrush'
+  },
+  {
+    id: 'assistant',
+    name: 'Plan',
+    description: 'Task management',
+    color: {
+      dark: '#9b59b6',
+      light: '#9b59b6'
+    },
+    activeColor: {
+      dark: '#8e44ad',
+      light: '#8e44ad'
+    },
+    icon: 'Calendar'
+  }
+];
 
-export type ChatMessageRole = "user" | "assistant";
-
-export interface NeedsConfirmation {
-  type: "mode" | "task" | "event" | "reminder" | "action";
-  action: "switchMode" | "createTask" | "createEvent" | "createReminder" | "other";
-  data?: Record<string, any>;
-}
-
+// Chat message interface
 export interface ChatMessage {
   id: string;
-  role: ChatMessageRole;
+  role: 'user' | 'assistant';
   content: string;
-  mode: AIMode;
   timestamp: Date;
-  needsConfirmation?: NeedsConfirmation | null;
-  originalInput?: string;
+  mode: AIMode;
   actionButtons?: {
     primary?: {
       text: string;
@@ -27,74 +76,20 @@ export interface ChatMessage {
       action: string;
     };
   };
+  metadata?: any;
 }
 
-export const ASSISTANT_MODES = [
-  {
-    id: "general",
-    name: "Chat",
-    description: "General chat and questions",
-    color: {
-      dark: "#858384",
-      light: "#858384"
-    },
-    icon: "MessageSquare"
-  },
-  {
-    id: "writer",
-    name: "Type",
-    description: "Create and edit text",
-    color: {
-      dark: "#33C3F0",  // Bright blue in dark mode
-      light: "#33C3F0"   // Soft blue in light mode
-    },
-    icon: "Notebook"
-  },
-  {
-    id: "creative",
-    name: "Create",
-    description: "Image and design creation",
-    color: {
-      dark: "#e9ceb0",
-      light: "#e9ceb0"
-    },
-    icon: "Palette"
-  },
-  {
-    id: "assistant",
-    name: "Plan",
-    description: "Task and event management",
-    color: {
-      dark: "#D946EF",  // Purplish-pink for dark mode
-      light: "#7E69AB"  // Secondary purple for light mode
-    },
-    icon: "LifeBuoy"
-  }
-];
+// Intent types
+export type AIIntent = 
+  | 'general_chat'
+  | 'create_task'
+  | 'create_reminder'
+  | 'create_event'
+  | 'generate_image'
+  | 'math_question';
 
-export const MODE_NAME_MAP: Record<AIMode, string> = {
-  "general": "Chat",
-  "writer": "Type",
-  "creative": "Create",
-  "assistant": "Plan"
-};
-
-// Map between mode types and their common intent patterns
-export const MODE_INTENTS = {
-  general: [
-    "tell me about", "what is", "explain", "how to", "define", "answer", 
-    "question", "information", "help me understand"
-  ],
-  writer: [
-    "write", "draft", "edit", "compose", "rephrase", "summarize", 
-    "paragraph", "essay", "text", "document", "story", "email"
-  ],
-  creative: [
-    "image", "picture", "design", "draw", "create visual", "logo", "graphic", 
-    "chart", "diagram", "visualization", "generate image", "art"
-  ],
-  assistant: [
-    "task", "reminder", "event", "schedule", "plan", "organize", 
-    "meeting", "appointment", "todo", "deadline", "project"
-  ]
-};
+// Interface for intent data
+export interface IntentData {
+  intent: AIIntent;
+  data: any;
+}

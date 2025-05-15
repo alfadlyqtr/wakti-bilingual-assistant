@@ -18,3 +18,10 @@ verify_jwt = true
 path = "configure-storage-buckets"
 verify_jwt = true
 
+[[edge_functions]]
+path = "process-ai-intent"
+verify_jwt = true
+
+[[edge_functions]]
+path = "generate-image"
+verify_jwt = true

@@ -1,116 +1,183 @@
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
-import { Mic } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { AIMode } from "./types";
-
-// Define mode colors for VoiceInput matching
-const MODE_COLORS = {
-  general: "#858384",
-  writer: "#fcfefd",
-  creative: "#e9ceb0",
-  assistant: "#0c0f14"
-};
+import React, { useState, useRef, useEffect } from 'react';
+import { Mic, MicOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { transcribeAudio } from '@/services/chatService';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from '@/hooks/use-toast';
+import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface VoiceInputProps {
-  isActive: boolean;
-  onToggle: () => void;
-  onTranscript: (transcript: string) => void;
+  onTranscription: (text: string) => void;
   language: string;
-  activeMode: AIMode;
+  theme: string;
+  isListening?: boolean;
+  disabled?: boolean;
 }
 
-export function VoiceInput({
-  isActive,
-  onToggle,
-  onTranscript,
-  language,
-  activeMode
-}: VoiceInputProps) {
-  const [waveform, setWaveform] = useState<number[]>([]);
-  const modeColor = MODE_COLORS[activeMode];
-
-  // Simulate recording with animated waveform
+export function VoiceInput({ onTranscription, language, theme, disabled = false }: VoiceInputProps) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const startTimeRef = useRef<number | null>(null);
+  const { user } = useAuth();
+  
+  // Timer to enforce max recording duration (1 minute)
+  const MAX_RECORDING_TIME = 60000; // 60 seconds in milliseconds
+  const recordingTimerRef = useRef<number | null>(null);
+  
+  // Request microphone permission
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (isActive) {
-      // Generate random waveform
-      interval = setInterval(() => {
-        const newWaveform = Array.from({ length: 30 }, () => Math.random() * 0.8 + 0.2);
-        setWaveform(newWaveform);
-      }, 80);
-      
-      // Simulate a voice recording after 3 seconds
-      setTimeout(() => {
-        onTranscript(language === "ar" ? 
-          "أنشئ مهمة جديدة: اجتماع مع الفريق غدًا" : 
-          "Create a new task: Team meeting tomorrow");
-        onToggle();
-      }, 3000);
-    }
-    
     return () => {
-      if (interval) clearInterval(interval);
+      // Cleanup when component unmounts
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+      }
+      
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
     };
-  }, [isActive, onTranscript, language, onToggle]);
+  }, []);
 
-  return (
-    <div className="relative">
-      <Button
-        onClick={onToggle}
-        variant={isActive ? "destructive" : "outline"}
-        size="icon"
-        className={cn(
-          "rounded-full transition-all relative opacity-100", // Always visible with opacity-100
-          isActive ? "animate-pulse" : ""
-        )}
-        style={{
-          // Always apply styles regardless of hover state
-          borderColor: !isActive ? modeColor : undefined,
-          color: !isActive ? modeColor : undefined,
-          // Add higher contrast for writer mode specifically
-          ...(activeMode === "writer" && !isActive ? {
-            backgroundColor: "rgba(6, 5, 65, 0.1)",
-            borderWidth: "1.5px"
-          } : {})
-        }}
-        aria-label={isActive ? 
-          t("stopListening" as TranslationKey, language) : 
-          t("startVoiceInput" as TranslationKey, language)
+  const handleToggleRecording = async () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      await startRecording();
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
-      >
-        <Mic size={20} />
-      </Button>
+      };
+      
+      mediaRecorder.onstop = async () => {
+        // Get all tracks and stop them to turn off the microphone
+        stream.getTracks().forEach(track => track.stop());
+        
+        // Only process if we have audio data
+        if (audioChunksRef.current.length > 0) {
+          processAudio();
+        }
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      startTimeRef.current = Date.now();
+      
+      // Set a timer to automatically stop recording after MAX_RECORDING_TIME
+      recordingTimerRef.current = window.setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          stopRecording();
+          toast({
+            title: t("maxRecordingReached" as TranslationKey, language),
+            description: t("recordingStoppedAutomatically" as TranslationKey, language),
+            variant: "default",
+          });
+        }
+      }, MAX_RECORDING_TIME);
+      
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      toast({
+        title: t("microphoneError" as TranslationKey, language),
+        description: t("microphoneAccessDenied" as TranslationKey, language),
+        variant: "destructive", 
+      });
+    }
+  };
 
-      <AnimatePresence>
-        {isActive && waveform.length > 0 && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10, scale: 0.9 }}
-            animate={{ opacity: 1, y: -50, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            className="absolute left-1/2 transform -translate-x-1/2 bg-destructive text-destructive-foreground px-4 py-2 rounded-full flex items-center gap-0.5 shadow-lg"
-            style={{ width: '240px' }}
-          >
-            {waveform.map((value, idx) => (
-              <motion.div
-                key={idx}
-                className="flex-1 bg-current"
-                style={{ height: `${value * 20}px` }}
-                animate={{ 
-                  height: `${value * 20}px`,
-                  opacity: value * 1.2
-                }}
-                transition={{ duration: 0.1 }}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      // Clear the automatic stop timer
+      if (recordingTimerRef.current) {
+        clearTimeout(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+  };
+
+  const processAudio = async () => {
+    setIsProcessing(true);
+    
+    try {
+      // Create audio blob from recorded chunks
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      
+      // Check recording duration
+      const recordingDuration = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
+      console.log(`Recording duration: ${recordingDuration / 1000} seconds`);
+      
+      // Only process if the recording is at least 0.5 seconds (avoid accidental clicks)
+      if (recordingDuration < 500) {
+        toast({
+          title: t("recordingTooShort" as TranslationKey, language),
+          description: t("pleaseRecordLonger" as TranslationKey, language),
+          variant: "default",
+        });
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Transcribe audio using our service
+      const transcription = await transcribeAudio(audioBlob);
+      
+      if (transcription) {
+        onTranscription(transcription);
+      } else {
+        toast({
+          title: t("transcriptionFailed" as TranslationKey, language),
+          description: t("tryAgainOrTypeMessage" as TranslationKey, language),
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error processing audio:', error);
+      toast({
+        title: t("processingError" as TranslationKey, language),
+        description: t("errorProcessingAudio" as TranslationKey, language),
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const isDark = theme === 'dark';
+  
+  return (
+    <Button
+      onClick={handleToggleRecording}
+      disabled={disabled || isProcessing}
+      size="icon"
+      variant="ghost"
+      className={`h-9 w-9 rounded-full ${isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}`}
+      type="button"
+      aria-label={isRecording ? t("stopRecording" as TranslationKey, language) : t("startRecording" as TranslationKey, language)}
+    >
+      {isProcessing ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : isRecording ? (
+        <MicOff className="h-5 w-5" />
+      ) : (
+        <Mic className="h-5 w-5" />
+      )}
+    </Button>
   );
 }
