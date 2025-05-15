@@ -287,7 +287,7 @@ export type Database = {
         }
         Relationships: []
       }
-      voice_recordings: {
+      voice_summaries: {
         Row: {
           attendees: string | null
           audio_url: string

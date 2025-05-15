@@ -200,15 +200,16 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         attendees: attendees ? attendees.split(',').map(a => a.trim()) : [],
       };
       
-      // Create a new voice_recordings entry in the database
+      // Create a new voice_summaries entry in the database
       const { data: recordingData, error: recordingError } = await supabase
-        .from('voice_recordings')
+        .from('voice_summaries')
         .insert({
           id: recordingId,
           title: title,
           audio_url: publicUrlData.publicUrl,
           type: 'meeting',
           host: user.id,
+          user_id: user.id,
           attendees: attendees || null,
           location: location || null,
           transcript: null,

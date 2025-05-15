@@ -24,7 +24,7 @@ export default function VoiceSummaryPage() {
     async function fetchRecordings() {
       try {
         const { data, error } = await supabase
-          .from('voice_recordings')
+          .from('voice_summaries')
           .select('*')
           .order('created_at', { ascending: false });
           
