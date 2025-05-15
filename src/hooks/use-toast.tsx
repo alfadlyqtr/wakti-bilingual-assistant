@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import {
   Toast,
@@ -252,6 +253,19 @@ export function Toaster() {
   return <ToasterInternal />;
 }
 
+// Helper function to safely convert ReactNode to string representation
+function renderReactNodeToString(content: React.ReactNode): React.ReactNode {
+  if (content === null || content === undefined) {
+    return "";
+  }
+  
+  if (typeof content === 'number' || typeof content === 'boolean') {
+    return content.toString();
+  }
+  
+  return content;
+}
+
 function ToasterInternal() {
   const [state] = React.useState<State>(memoryState);
 
@@ -270,16 +284,12 @@ function ToasterInternal() {
             <div className="grid gap-1">
               {title && (
                 <ToastTitle>
-                  {typeof title === 'number' 
-                    ? title.toString() 
-                    : title}
+                  {renderReactNodeToString(title)}
                 </ToastTitle>
               )}
               {description && (
                 <ToastDescription>
-                  {typeof description === 'number'
-                    ? description.toString()
-                    : description}
+                  {renderReactNodeToString(description)}
                 </ToastDescription>
               )}
             </div>
