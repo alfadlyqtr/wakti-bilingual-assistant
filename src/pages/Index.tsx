@@ -13,7 +13,7 @@ const Index = () => {
       description: language === 'ar' 
         ? "تم تحديث إعدادات الأمان وسياسة دورة الحياة للتخزين" 
         : "Storage security and lifecycle policies have been updated",
-      variant: "success",
+      variant: "default",
     });
   }, [language]);
 
