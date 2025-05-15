@@ -270,10 +270,18 @@ function ToasterInternal() {
             <div className="grid gap-1">
               {title && (
                 <ToastTitle>
-                  {typeof title === 'number' ? title.toString() : title}
+                  {typeof title === 'number' 
+                    ? title.toString() 
+                    : title}
                 </ToastTitle>
               )}
-              {description && <ToastDescription>{description}</ToastDescription>}
+              {description && (
+                <ToastDescription>
+                  {typeof description === 'number'
+                    ? description.toString()
+                    : description}
+                </ToastDescription>
+              )}
             </div>
             {action}
             <ToastClose />
