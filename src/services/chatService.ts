@@ -27,7 +27,7 @@ export async function saveChatMessage(
   if (!userId) return null;
   
   try {
-    // Using a stored function
+    // Convert to parameters required by the stored function
     const { data, error } = await supabase
       .rpc('insert_ai_chat', {
         p_user_id: userId,
@@ -78,7 +78,7 @@ export async function getRecentChatHistory(
     }
     
     // Convert to ChatMessage format
-    const chatMessages: ChatMessage[] = data.map((item: any) => ({
+    const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => ({
       id: item.id,
       role: item.role as "user" | "assistant",
       content: item.content,

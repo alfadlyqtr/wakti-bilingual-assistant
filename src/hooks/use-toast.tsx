@@ -268,7 +268,7 @@ function ToasterInternal() {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
-              {title && <ToastTitle>{title?.toString()}</ToastTitle>}
+              {title && <ToastTitle>{title?.toString?.() || String(title)}</ToastTitle>}
               {description && <ToastDescription>{description}</ToastDescription>}
             </div>
             {action}
