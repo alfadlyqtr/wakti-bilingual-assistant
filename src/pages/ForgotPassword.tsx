@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -19,7 +18,7 @@ export default function ForgotPassword() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setErrorMsg(null);
     
@@ -31,30 +30,29 @@ export default function ForgotPassword() {
     setIsLoading(true);
     
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password',
-      });
+      const error = await forgotPassword(email);
       
       if (error) {
-        console.error("Password reset error:", error);
-        setErrorMsg(error.message);
         toast({
-          title: language === 'en' ? 'Reset Failed' : 'فشل إعادة التعيين',
+          title: "Password reset failed",
           description: error.message,
-          variant: 'destructive',
+          variant: "destructive",
         });
       } else {
-        setIsSubmitted(true);
         toast({
-          title: language === 'en' ? 'Email Sent' : 'تم إرسال البريد الإلكتروني',
-          description: language === 'en' ? 
-            'Check your email for the password reset link' : 
-            'تحقق من بريدك الإلكتروني للحصول على رابط إعادة تعيين كلمة المرور',
+          title: "Password reset link sent",
+          description: "Check your email for the reset link",
+          variant: "success",
         });
+        // Redirect to login after a short delay
+        setTimeout(() => navigate('/login'), 2000);
       }
-    } catch (err) {
-      console.error("Unexpected error:", err);
-      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } catch (error) {
+      toast({
+        title: "Password reset failed",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

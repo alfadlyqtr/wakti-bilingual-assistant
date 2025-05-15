@@ -1,5 +1,5 @@
 
-import { toast as toastUtil } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { ToastActionElement } from "@/components/ui/toast";
 import { ReactNode } from "react";
 
@@ -7,13 +7,13 @@ import { ReactNode } from "react";
 export function useToastHelper() {
   return {
     success: (title: string, description?: string, action?: ToastActionElement) => {
-      toastUtil.success({ title, description, action });
+      toast.success({ title, description, action });
     },
     error: (title: string, description?: string, action?: ToastActionElement) => {
-      toastUtil.error({ title, description, action });
+      toast.error({ title, description, action });
     },
     info: (title: string, description?: string, action?: ToastActionElement) => {
-      toastUtil.default({ title, description, action });
+      toast.default({ title, description, action });
     },
     show: (props: {
       title?: ReactNode;
@@ -21,7 +21,7 @@ export function useToastHelper() {
       action?: ToastActionElement;
       variant?: "default" | "destructive" | "success";
     }) => {
-      toastUtil.show(props);
+      toast.show(props);
     }
   };
 }

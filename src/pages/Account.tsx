@@ -34,6 +34,8 @@ import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService"
 import { quotes } from "@/utils/dailyQuotes";
 import { useToast, toast } from "@/hooks/use-toast";
 import { Check, Save, Settings } from "lucide-react";
+import { signOut, updateProfile } from "@/utils/auth";
+import { validateDisplayName } from "@/utils/validations";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -173,6 +175,60 @@ export default function Account() {
       setCustomQuoteDialogOpen(true);
     }
   }, []); 
+
+  const handleLogout = async () => {
+    confirm({
+      title: language === 'ar' ? 'تسجيل الخروج' : 'Log Out',
+      description: language === 'ar' ? 'هل أنت متأكد أنك تريد تسجيل الخروج؟' : 'Are you sure you want to log out?',
+      onConfirm: async () => {
+        await signOut();
+        navigate('/login');
+      }
+    });
+  };
+  
+  const handleSave = async () => {
+    if (!user) return;
+    
+    setIsSaving(true);
+    try {
+      const displayNameErrors = validateDisplayName(displayName);
+      
+      if (displayNameErrors) {
+        toast({
+          title: language === 'ar' ? 'خطأ في التحديث' : 'Update Error',
+          description: displayNameErrors,
+          variant: 'destructive'
+        });
+        setIsSaving(false);
+        return;
+      }
+      
+      // Update user profile data
+      const userUpdate = await updateProfile({
+        user_metadata: {
+          display_name: displayName,
+          avatar_url: avatar,
+        }
+      });
+      
+      if (userUpdate) {
+        toast({
+          title: language === 'ar' ? 'تم تحديث الملف الشخصي' : 'Profile Updated',
+          description: <Check className="h-4 w-4" />,
+          variant: 'success'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: language === 'ar' ? 'فشل التحديث' : 'Update Failed',
+        description: (error as Error).message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <PageContainer title={t("account", language)} showBackButton={true}>

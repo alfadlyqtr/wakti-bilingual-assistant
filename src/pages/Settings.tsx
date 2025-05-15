@@ -33,7 +33,7 @@ export default function Settings() {
     
     toast({
       title: language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated",
-      duration: 2000
+      variant: "success"
     });
   };
   
@@ -44,7 +44,7 @@ export default function Settings() {
     
     toast({
       title: language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated",
-      duration: 2000
+      variant: "success"
     });
   };
   
@@ -69,7 +69,7 @@ export default function Settings() {
         toast({
           title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
           description: <Check className="h-4 w-4" />, // Use description to show the icon
-          duration: 2000
+          variant: "success"
         });
       }
     });

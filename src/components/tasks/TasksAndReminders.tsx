@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Task, Reminder, Subtask, useTaskReminder } from '@/contexts/TaskReminderContext';
@@ -26,7 +27,15 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-const TasksAndReminders: React.FC = () => {
+interface TasksAndRemindersProps {
+  showTasks?: boolean;
+  showReminders?: boolean;
+}
+
+const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({ 
+  showTasks = true, 
+  showReminders = true 
+}) => {
   const { language } = useTheme();
   const navigate = useNavigate();
   const { 
@@ -36,7 +45,7 @@ const TasksAndReminders: React.FC = () => {
     createReminder, updateReminder, deleteReminder
   } = useTaskReminder();
   
-  const [activeTab, setActiveTab] = useState<string>('tasks');
+  const [activeTab, setActiveTab] = useState<string>(showTasks ? 'tasks' : 'reminders');
   const [taskFilter, setTaskFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isTaskFormOpen, setIsTaskFormOpen] = useState<boolean>(false);
@@ -148,15 +157,15 @@ const TasksAndReminders: React.FC = () => {
     <div className="flex flex-col h-full">
       <div className="p-4 pb-2">
         <Tabs 
-          defaultValue="tasks" 
+          defaultValue={showTasks ? "tasks" : "reminders"} 
           value={activeTab}
           onValueChange={setActiveTab}
           className="w-full"
         >
           <div className="flex items-center justify-between mb-4">
             <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>
-              <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>
+              {showTasks && <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>}
+              {showReminders && <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>}
             </TabsList>
           </div>
           
@@ -227,85 +236,89 @@ const TasksAndReminders: React.FC = () => {
             )}
           </div>
 
-          <TabsContent value="tasks" className="m-0 overflow-hidden flex flex-col flex-1">
-            {loading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : filteredTasks.length > 0 ? (
-              <div className="overflow-y-auto pb-20">
-                <AnimatePresence>
-                  {filteredTasks.map((task) => (
-                    <TaskItem
-                      key={task.id}
-                      task={task}
-                      onComplete={handleTaskComplete}
-                      onEdit={handleEditTask}
-                      onDelete={handleDeleteTask}
-                      onShare={handleShareTask}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4">
-                <CirclePlus className="h-12 w-12 mb-2" />
-                <p className="text-center mb-1">{t('noTasks', language)}</p>
-                <p className="text-center text-sm">
-                  {t('createYourFirst', language)} {t('tasks', language).toLowerCase()}
-                </p>
-                <Button 
-                  className="mt-4" 
-                  onClick={() => {
-                    setCurrentTask(null);
-                    setIsTaskFormOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('createTask', language)}
-                </Button>
-              </div>
-            )}
-          </TabsContent>
+          {showTasks && (
+            <TabsContent value="tasks" className="m-0 overflow-hidden flex flex-col flex-1">
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : filteredTasks.length > 0 ? (
+                <div className="overflow-y-auto pb-20">
+                  <AnimatePresence>
+                    {filteredTasks.map((task) => (
+                      <TaskItem
+                        key={task.id}
+                        task={task}
+                        onComplete={handleTaskComplete}
+                        onEdit={handleEditTask}
+                        onDelete={handleDeleteTask}
+                        onShare={handleShareTask}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4">
+                  <CirclePlus className="h-12 w-12 mb-2" />
+                  <p className="text-center mb-1">{t('noTasks', language)}</p>
+                  <p className="text-center text-sm">
+                    {t('createYourFirst', language)} {t('tasks', language).toLowerCase()}
+                  </p>
+                  <Button 
+                    className="mt-4" 
+                    onClick={() => {
+                      setCurrentTask(null);
+                      setIsTaskFormOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('createTask', language)}
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          )}
 
-          <TabsContent value="reminders" className="m-0 overflow-hidden flex flex-col flex-1">
-            {loading ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : filteredReminders.length > 0 ? (
-              <div className="overflow-y-auto pb-20">
-                <AnimatePresence>
-                  {filteredReminders.map((reminder) => (
-                    <ReminderItem
-                      key={reminder.id}
-                      reminder={reminder}
-                      onEdit={handleEditReminder}
-                      onDelete={handleDeleteReminder}
-                    />
-                  ))}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4">
-                <CirclePlus className="h-12 w-12 mb-2" />
-                <p className="text-center mb-1">{t('noReminders', language)}</p>
-                <p className="text-center text-sm">
-                  {t('createYourFirst', language)} {t('reminders', language).toLowerCase()}
-                </p>
-                <Button 
-                  className="mt-4" 
-                  onClick={() => {
-                    setCurrentReminder(null);
-                    setIsReminderFormOpen(true);
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  {t('createReminder', language)}
-                </Button>
-              </div>
-            )}
-          </TabsContent>
+          {showReminders && (
+            <TabsContent value="reminders" className="m-0 overflow-hidden flex flex-col flex-1">
+              {loading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : filteredReminders.length > 0 ? (
+                <div className="overflow-y-auto pb-20">
+                  <AnimatePresence>
+                    {filteredReminders.map((reminder) => (
+                      <ReminderItem
+                        key={reminder.id}
+                        reminder={reminder}
+                        onEdit={handleEditReminder}
+                        onDelete={handleDeleteReminder}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-4">
+                  <CirclePlus className="h-12 w-12 mb-2" />
+                  <p className="text-center mb-1">{t('noReminders', language)}</p>
+                  <p className="text-center text-sm">
+                    {t('createYourFirst', language)} {t('reminders', language).toLowerCase()}
+                  </p>
+                  <Button 
+                    className="mt-4" 
+                    onClick={() => {
+                      setCurrentReminder(null);
+                      setIsReminderFormOpen(true);
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('createReminder', language)}
+                  </Button>
+                </div>
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       </div>
       

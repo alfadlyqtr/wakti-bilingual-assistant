@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,15 +6,29 @@ import { useNavigate } from 'react-router-dom';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  isLoading: boolean;
-  signOut: () => Promise<void>;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<AuthError | null>;
+  signUp: (email: string, password: string) => Promise<AuthError | null>;
+  signOut: () => Promise<AuthError | null>;
+  resetPassword: (token: string, newPassword: string) => Promise<AuthError | null>;
+  forgotPassword: (email: string) => Promise<AuthError | null>;
+  updateProfile: (data: Partial<User>) => Promise<User | null>;
+  updateEmail: (email: string) => Promise<AuthError | null>;
+  updatePassword: (password: string) => Promise<AuthError | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
-  isLoading: true,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => {},
   signOut: async () => {},
+  resetPassword: async () => {},
+  forgotPassword: async () => {},
+  updateProfile: async () => {},
+  updateEmail: async () => {},
+  updatePassword: async () => {},
 });
 
 interface AuthProviderProps {
@@ -26,7 +39,7 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,7 +48,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
-        setIsLoading(false);
+        setLoading(false);
 
         if (event === 'SIGNED_OUT' && requireAuth) {
           navigate('/login');
@@ -47,7 +60,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-      setIsLoading(false);
+      setLoading(false);
       
       // If authentication is required but user is not logged in, redirect to login
       if (requireAuth && !currentSession) {
@@ -60,16 +73,95 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     };
   }, [navigate, requireAuth]);
 
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signIn({ email, password });
+      return error;
+    } catch (error) {
+      console.error("Error signing in:", error);
+      return error as AuthError;
+    }
+  };
+
+  const signUp = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      return error;
+    } catch (error) {
+      console.error("Error signing up:", error);
+      return error as AuthError;
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     navigate('/login');
   };
 
+  const resetPassword = async (token: string, newPassword: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(token, {
+        password: newPassword
+      });
+      return error;
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      return error as AuthError;
+    }
+  };
+
+  const forgotPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      return error;
+    } catch (error) {
+      console.error("Error sending password reset email:", error);
+      return error as AuthError;
+    }
+  };
+
+  const updateProfile = async (data: Partial<User>) => {
+    try {
+      const { error, data: updatedUser } = await supabase.auth.update(data);
+      return updatedUser;
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      return null;
+    }
+  };
+
+  const updateEmail = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.update({ email });
+      return error;
+    } catch (error) {
+      console.error("Error updating email:", error);
+      return error as AuthError;
+    }
+  };
+
+  const updatePassword = async (password: string) => {
+    try {
+      const { error } = await supabase.auth.update({ password });
+      return error;
+    } catch (error) {
+      console.error("Error updating password:", error);
+      return error as AuthError;
+    }
+  };
+
   const value = {
     user,
     session,
-    isLoading,
+    loading,
+    signIn,
+    signUp,
     signOut,
+    resetPassword,
+    forgotPassword,
+    updateProfile,
+    updateEmail,
+    updatePassword
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

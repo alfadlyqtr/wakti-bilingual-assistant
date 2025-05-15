@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
-import { TasksAndReminders } from "@/components/tasks/TasksAndReminders";
+import TasksAndReminders from "@/components/tasks/TasksAndReminders";
 
 export default function Tasks() {
   return (

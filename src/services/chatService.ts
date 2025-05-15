@@ -3,6 +3,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
 
+// Define a type for the ai_chat_history table
+interface AIChatHistory {
+  id: string;
+  user_id: string;
+  content: string;
+  role: "user" | "assistant";
+  mode: string;
+  metadata: any;
+  has_media: boolean;
+  expires_at: string;
+  created_at: string;
+}
+
 // Save a message to the chat history
 export async function saveChatMessage(
   userId: string, 
@@ -24,7 +37,7 @@ export async function saveChatMessage(
         metadata: metadata,
         has_media: metadata.hasMedia || false,
         expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
-      })
+      } as any)
       .select("id")
       .single();
       
@@ -60,7 +73,7 @@ export async function getRecentChatHistory(
       query = query.eq("mode", mode);
     }
     
-    const { data, error } = await query;
+    const { data, error } = await query as { data: AIChatHistory[], error: any };
     
     if (error) {
       console.error("Error fetching chat history:", error);
@@ -70,10 +83,10 @@ export async function getRecentChatHistory(
     // Convert to ChatMessage format and sort by timestamp ascending
     return data.map(item => ({
       id: item.id,
-      role: item.role,
+      role: item.role as "user" | "assistant",
       content: item.content,
       timestamp: new Date(item.created_at),
-      mode: item.mode,
+      mode: item.mode as AIMode,
       metadata: item.metadata
     }))
     .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
