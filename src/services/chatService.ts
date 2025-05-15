@@ -27,7 +27,7 @@ export async function saveChatMessage(
   if (!userId) return null;
   
   try {
-    // Using a raw SQL insert since the ai_chat_history table isn't in types yet
+    // Using a stored function
     const { data, error } = await supabase
       .rpc('insert_ai_chat', {
         p_user_id: userId,
@@ -60,7 +60,7 @@ export async function getRecentChatHistory(
   if (!userId) return [];
   
   try {
-    // Using a stored function to get chat history since table isn't in types
+    // Using a stored function
     const { data, error } = await supabase
       .rpc('get_recent_chat_history', {
         p_user_id: userId,
@@ -73,16 +73,22 @@ export async function getRecentChatHistory(
       return [];
     }
     
+    if (!data || !Array.isArray(data)) {
+      return [];
+    }
+    
     // Convert to ChatMessage format
-    return (data || []).map((item: AIChatHistory) => ({
+    const chatMessages: ChatMessage[] = data.map((item: any) => ({
       id: item.id,
       role: item.role as "user" | "assistant",
       content: item.content,
       timestamp: new Date(item.created_at),
       mode: item.mode as AIMode,
       metadata: item.metadata
-    }))
-    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    }));
+    
+    // Sort by timestamp
+    return chatMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       
   } catch (error) {
     console.error("Exception fetching chat history:", error);

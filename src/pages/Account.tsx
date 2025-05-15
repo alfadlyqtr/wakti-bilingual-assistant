@@ -1,4 +1,7 @@
+
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { PageContainer } from "@/components/PageContainer";
@@ -39,11 +42,16 @@ import { validateDisplayName } from "@/utils/validations";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("profile");
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [avatar, setAvatar] = useState("");
   const categories = Object.keys(quotes);
-  const { confirm } = useToast();
+  const { toast, confirm } = useToast();
   
   // Add state for profile information
   const [profile, setProfile] = useState({
@@ -79,8 +87,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully",
           description: "",
-          variant: "default",
-          duration: 2000
+          variant: "default"
         });
       }
     });
@@ -115,8 +122,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully",
           description: "",
-          variant: "default",
-          duration: 2000
+          variant: "default"
         });
       }
     });
@@ -133,8 +139,7 @@ export default function Account() {
         toast({
           title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
           description: "",
-          variant: "default",
-          duration: 2000
+          variant: "default"
         });
       }
     });
