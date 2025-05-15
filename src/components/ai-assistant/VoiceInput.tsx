@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/services/chatService";
 
 interface VoiceInputProps {
@@ -23,6 +23,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   const [recordingTime, setRecordingTime] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const MAX_RECORDING_TIME = 60; // 60 seconds maximum
+  const { toast } = useToast();
 
   const startRecording = async () => {
     try {
@@ -44,20 +45,22 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (text) {
             onTranscription(text);
           } else {
-            toast.error({
+            toast({
               title: language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error',
               description: language === 'ar' 
                 ? 'لم نتمكن من تحويل الصوت إلى نص. يرجى المحاولة مرة أخرى.'
                 : 'We couldn\'t convert the audio to text. Please try again.',
+              variant: "destructive"
             });
           }
         } catch (error) {
           console.error('Error during transcription:', error);
-          toast.error({
+          toast({
             title: language === 'ar' ? 'خطأ' : 'Error',
             description: language === 'ar'
               ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
               : 'An error occurred while processing the voice recording',
+            variant: "destructive"
           });
         }
 
@@ -93,11 +96,12 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       setTimerInterval(interval);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      toast.error({
+      toast({
         title: language === 'ar' ? 'خطأ في الوصول للميكروفون' : 'Microphone Access Error',
         description: language === 'ar'
           ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
           : 'Please allow microphone access to use voice input feature',
+        variant: "destructive"
       });
     }
   };

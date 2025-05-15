@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,7 +20,7 @@ import { useTheme } from "next-themes";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
 import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import {
@@ -54,6 +53,7 @@ export const AIAssistant: React.FC = () => {
   const { isMobile } = useIsMobile();
   const { theme } = useTheme();
   const { user, session } = useAuth();
+  const { toast } = useToast();
 
   // Language and theme state
   const language = "en"; // This would normally come from user preferences
@@ -100,7 +100,7 @@ export const AIAssistant: React.FC = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
     if (!user) {
-      toast.show({
+      toast({
         title: t("loginRequired" as TranslationKey, language),
         description: t("pleaseLoginToChat" as TranslationKey, language),
         variant: "destructive",
@@ -268,7 +268,7 @@ export const AIAssistant: React.FC = () => {
       };
       setMessages((prev) => 
         prev.map((msg) => 
-          // Type-safe string comparison
+          // Using exact content comparison instead of type comparison
           msg.content === t("generatingImage" as TranslationKey, language)
             ? errorMessage 
             : msg
@@ -303,7 +303,7 @@ export const AIAssistant: React.FC = () => {
         const taskData = message.metadata?.intentData?.data || {
           title: "New Task",
         };
-        toast.show({
+        toast({
           title: t("taskCreated" as TranslationKey, language),
           description: taskData.title,
         });
@@ -314,7 +314,7 @@ export const AIAssistant: React.FC = () => {
         const reminderData = message.metadata?.intentData?.data || {
           title: "New Reminder",
         };
-        toast.show({
+        toast({
           title: t("reminderCreated" as TranslationKey, language),
           description: reminderData.title,
         });
@@ -325,7 +325,7 @@ export const AIAssistant: React.FC = () => {
         const eventData = message.metadata?.intentData?.data || {
           title: "New Event",
         };
-        toast.show({
+        toast({
           title: t("eventCreated" as TranslationKey, language),
           description: eventData.title,
         });

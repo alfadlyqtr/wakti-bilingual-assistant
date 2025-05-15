@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import {
   Toast,
@@ -271,7 +272,7 @@ function ToasterInternal() {
   );
 }
 
-// Create toast utility functions
+// Create toast utility functions with proper type handling
 export const toast = {
   success: (props: {
     title?: React.ReactNode;
@@ -306,7 +307,6 @@ export const toast = {
     }
     context.toast({ ...props, variant: "default" });
   },
-  // Add a function that can be called directly as a function
   show: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
@@ -319,6 +319,18 @@ export const toast = {
     }
     context.toast(props);
   }
+};
+
+// Replaces the previous toast implementation with a function call wrapper
+export const showToast = (props: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+  variant?: "default" | "destructive" | "success";
+}) => {
+  const { useToast } = require("@/hooks/use-toast"); // Dynamically import to avoid circular dependency
+  const { toast } = useToast();
+  toast(props);
 };
 
 // Confirmation dialog types
@@ -350,6 +362,7 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
     // Function to handle dialog cleanup
     const cleanup = () => {
       // Use ReactDOM.unmountComponentAtNode instead of direct React.unmountComponentAtNode
+      const ReactDOM = require('react-dom');
       const unmountResult = ReactDOM.unmountComponentAtNode(rootElement);
       if (unmountResult && rootElement.parentNode) {
         rootElement.parentNode.removeChild(rootElement);
@@ -373,6 +386,7 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
     import("@/components/ui/alert-dialog").then((AlertDialogModule) => {
       import("react-dom").then((ReactDOMModule) => {
         const ReactDOM = ReactDOMModule.default;
+        const React = require('react');
         
         // Create AlertDialog component tree
         const alertDialog = React.createElement(

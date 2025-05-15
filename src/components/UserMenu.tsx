@@ -10,13 +10,14 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { t } from "@/utils/translations";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user, signOut } = useAuth();
+  const { toast } = useToast();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -34,13 +35,15 @@ export function UserMenu() {
   const handleLogout = async () => {
     try {
       await signOut();
-      toast.success({
+      toast({
         title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
+        variant: "success"
       });
     } catch (error) {
       console.error('Error logging out:', error);
-      toast.error({
+      toast({
         title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
+        variant: "destructive"
       });
     }
     closeMenu();
