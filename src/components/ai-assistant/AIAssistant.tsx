@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,7 +34,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import Loading from "@/components/ui/loading";
 
 // Changed this function to accept language as a parameter
-const getDefaultWelcomeMessage = (language: string): string => {
+const getDefaultWelcomeMessage = (language: "en" | "ar"): string => {
   return language === "ar"
     ? "مرحبًا! أنا وكتي، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟"
     : "Hello! I'm WAKTI, your smart assistant. How can I help you today?";

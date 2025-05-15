@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import {
   Toast,
@@ -144,7 +145,7 @@ function dispatch(action: Action) {
   });
 }
 
-interface ToastContextValue {
+export interface ToastContextValue {
   toast: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
@@ -152,6 +153,7 @@ interface ToastContextValue {
     variant?: "default" | "destructive" | "success";
   }) => void;
   dismiss: (toastId?: string) => void;
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -209,11 +211,12 @@ function useToastInternal(): ToastContextValue {
         type: actionTypes.DISMISS_TOAST,
         toastId: toastId || "all",
       }),
+    confirm: (options: ConfirmOptions) => confirmDialog(options),
   };
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const { toast, dismiss } = useToastInternal();
+  const { toast, dismiss, confirm } = useToastInternal();
   
   // Set up event listener for external toast events
   React.useEffect(() => {
@@ -231,7 +234,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, [toast]);
   
   return (
-    <ToastContext.Provider value={{ toast, dismiss }}>
+    <ToastContext.Provider value={{ toast, dismiss, confirm }}>
       {children}
       <ToasterInternal />
     </ToastContext.Provider>
@@ -301,7 +304,7 @@ export interface ConfirmOptions {
 }
 
 // Confirmation dialog implementation
-export function confirm(options: ConfirmOptions): Promise<boolean> {
+export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
   const {
     title,
     description,
@@ -374,35 +377,73 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
   });
 }
 
-// Direct access to toast methods to simplify implementation in components
-export const toast = {
-  success: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }): void {
-    showToast({ ...props, variant: "success" });
-  },
-  error: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }): void {
-    showToast({ ...props, variant: "destructive" });
-  },
-  default: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }): void {
-    showToast({ ...props, variant: "default" });
-  },
-  show: function(props: {
+// Export confirm function directly so it can be used outside of useToast
+export function confirm(options: ConfirmOptions): Promise<boolean> {
+  return confirmDialog(options);
+}
+
+// Fix for the toast object to make it callable and have methods
+interface ToastFunction {
+  (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
     variant?: "default" | "destructive" | "success";
-  }): void {
+  }): void;
+  success: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => void;
+  error: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => void;
+  default: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }) => void;
+  show: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }) => void;
+}
+
+// Create a callable function with methods
+const createToastFunction = (): ToastFunction => {
+  // Base function
+  const toastFn = ((props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }) => {
     showToast(props);
-  }
+  }) as ToastFunction;
+  
+  // Add methods
+  toastFn.success = (props) => {
+    showToast({ ...props, variant: "success" });
+  };
+  
+  toastFn.error = (props) => {
+    showToast({ ...props, variant: "destructive" });
+  };
+  
+  toastFn.default = (props) => {
+    showToast({ ...props, variant: "default" });
+  };
+  
+  toastFn.show = (props) => {
+    showToast(props);
+  };
+  
+  return toastFn;
 };
+
+// Export the callable toast function
+export const toast = createToastFunction();

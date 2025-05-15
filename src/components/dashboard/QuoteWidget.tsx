@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -11,7 +12,7 @@ import {
 } from '@/utils/quoteService';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
-import { toast } from '@/components/ui/use-toast';
+import { showToast } from '@/components/ui/use-toast';
 
 interface QuoteWidgetProps {
   className?: string;
@@ -30,7 +31,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
       setQuote(quoteData);
       
       if (forceRefresh) {
-        toast({
+        showToast({
           title: language === 'ar' ? "تم تحديث الاقتباس" : "Quote refreshed"
         });
       }
