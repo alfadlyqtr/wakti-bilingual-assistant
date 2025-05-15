@@ -1,5 +1,6 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
+import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,9 +8,10 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isLoading: boolean; // Adding this to match ProtectedRoute usage
   signIn: (email: string, password: string) => Promise<AuthError | null>;
   signUp: (email: string, password: string) => Promise<AuthError | null>;
-  signOut: () => Promise<AuthError | null>;
+  signOut: () => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<AuthError | null>;
   forgotPassword: (email: string) => Promise<AuthError | null>;
   updateProfile: (data: Partial<User>) => Promise<User | null>;
@@ -21,14 +23,15 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
-  signIn: async () => {},
-  signUp: async () => {},
+  isLoading: true,
+  signIn: async () => null,
+  signUp: async () => null,
   signOut: async () => {},
-  resetPassword: async () => {},
-  forgotPassword: async () => {},
-  updateProfile: async () => {},
-  updateEmail: async () => {},
-  updatePassword: async () => {},
+  resetPassword: async () => null,
+  forgotPassword: async () => null,
+  updateProfile: async () => null,
+  updateEmail: async () => null,
+  updatePassword: async () => null,
 });
 
 interface AuthProviderProps {
@@ -75,7 +78,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signIn({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       return error;
     } catch (error) {
       console.error("Error signing in:", error);
@@ -100,7 +103,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const resetPassword = async (token: string, newPassword: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(token, {
+      const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
       return error;
@@ -122,8 +125,12 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const updateProfile = async (data: Partial<User>) => {
     try {
-      const { error, data: updatedUser } = await supabase.auth.update(data);
-      return updatedUser;
+      const { data: userData, error } = await supabase.auth.updateUser(data);
+      if (error) {
+        console.error("Error updating profile:", error);
+        return null;
+      }
+      return userData.user;
     } catch (error) {
       console.error("Error updating profile:", error);
       return null;
@@ -132,7 +139,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const updateEmail = async (email: string) => {
     try {
-      const { error } = await supabase.auth.update({ email });
+      const { error } = await supabase.auth.updateUser({ email });
       return error;
     } catch (error) {
       console.error("Error updating email:", error);
@@ -142,7 +149,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const updatePassword = async (password: string) => {
     try {
-      const { error } = await supabase.auth.update({ password });
+      const { error } = await supabase.auth.updateUser({ password });
       return error;
     } catch (error) {
       console.error("Error updating password:", error);
@@ -154,6 +161,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     user,
     session,
     loading,
+    isLoading: loading, // Adding this to match ProtectedRoute usage
     signIn,
     signUp,
     signOut,

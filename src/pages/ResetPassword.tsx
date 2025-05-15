@@ -42,13 +42,21 @@ export default function ResetPassword() {
     setIsLoading(true);
     
     try {
-      await resetPassword(token, password);
-      toast({
-        title: "Password reset successful",
-        description: "You can now log in with your new password",
-        variant: "success",
-      });
-      navigate("/login");
+      const error = await resetPassword(token, password);
+      if (error) {
+        toast({
+          title: "Password reset failed",
+          description: error.message,
+          variant: "destructive", 
+        });
+      } else {
+        toast({
+          title: "Password reset successful",
+          description: "You can now log in with your new password",
+          variant: "success",
+        });
+        navigate("/login");
+      }
     } catch (error) {
       toast({
         title: "Password reset failed",

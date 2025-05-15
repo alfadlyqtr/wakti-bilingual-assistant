@@ -27,26 +27,24 @@ export async function saveChatMessage(
   if (!userId) return null;
   
   try {
+    // Using a raw SQL insert since the ai_chat_history table isn't in types yet
     const { data, error } = await supabase
-      .from("ai_chat_history")
-      .insert({
-        user_id: userId,
-        content: message,
-        role: role,
-        mode: mode,
-        metadata: metadata,
-        has_media: metadata.hasMedia || false,
-        expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
-      } as any)
-      .select("id")
-      .single();
+      .rpc('insert_ai_chat', {
+        p_user_id: userId,
+        p_content: message,
+        p_role: role,
+        p_mode: mode,
+        p_metadata: metadata,
+        p_has_media: metadata.hasMedia || false,
+        p_expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
+      });
       
     if (error) {
       console.error("Error saving chat message:", error);
       return null;
     }
     
-    return data.id;
+    return data;
   } catch (error) {
     console.error("Exception saving chat message:", error);
     return null;
@@ -62,26 +60,21 @@ export async function getRecentChatHistory(
   if (!userId) return [];
   
   try {
-    let query = supabase
-      .from("ai_chat_history")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-      
-    if (mode) {
-      query = query.eq("mode", mode);
-    }
-    
-    const { data, error } = await query as { data: AIChatHistory[], error: any };
+    // Using a stored function to get chat history since table isn't in types
+    const { data, error } = await supabase
+      .rpc('get_recent_chat_history', {
+        p_user_id: userId,
+        p_mode: mode,
+        p_limit: limit
+      });
     
     if (error) {
       console.error("Error fetching chat history:", error);
       return [];
     }
     
-    // Convert to ChatMessage format and sort by timestamp ascending
-    return data.map(item => ({
+    // Convert to ChatMessage format
+    return (data || []).map((item: AIChatHistory) => ({
       id: item.id,
       role: item.role as "user" | "assistant",
       content: item.content,
