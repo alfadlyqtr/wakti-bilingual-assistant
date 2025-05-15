@@ -13,3 +13,8 @@ verify_jwt = true
 [[edge_functions]]
 path = "generate-tts"
 verify_jwt = true
+
+[[edge_functions]]
+path = "configure-storage-buckets"
+verify_jwt = true
+
