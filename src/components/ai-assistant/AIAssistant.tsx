@@ -32,6 +32,7 @@ import {
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import Loading from "@/components/ui/loading";
 
+// Changed this function to accept language as a parameter
 const getDefaultWelcomeMessage = (language: string): string => {
   return language === "ar"
     ? "مرحبًا! أنا وكتي، مساعدك الذكي. كيف يمكنني مساعدتك اليوم؟"
@@ -55,8 +56,8 @@ export const AIAssistant: React.FC = () => {
   const { user, session } = useAuth();
   const { toast } = useToast();
 
-  // Language and theme state
-  const language = "en"; // This would normally come from user preferences
+  // Language and theme state - Changed this to typed string literal
+  const language: "en" | "ar" = "en"; // This would normally come from user preferences
   const currentTheme = theme || "light";
 
   // Initialize with welcome message

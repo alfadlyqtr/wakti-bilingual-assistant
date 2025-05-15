@@ -8,7 +8,7 @@ import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 
 // Helper function to translate mode names
-const getModeLabel = (mode: AIMode, language: string): string => {
+const getModeLabel = (mode: AIMode, language: "en" | "ar"): string => {
   // Translation key naming convention: mode_[mode_id]
   const translationKey = `mode_${mode}` as TranslationKey;
   return t(translationKey, language) || mode;
@@ -17,7 +17,7 @@ const getModeLabel = (mode: AIMode, language: string): string => {
 export interface ModeSelectorProps {
   activeMode: AIMode;
   setActiveMode: (mode: AIMode) => void;
-  language: string;
+  language: "en" | "ar";
 }
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({

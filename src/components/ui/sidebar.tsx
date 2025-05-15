@@ -1,3 +1,4 @@
+
 import {
   LayoutDashboard,
   ListChecks,
@@ -93,16 +94,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const displayName =
     user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||
-    t("user", language);
+    "User";
 
   const sidebarVariants = {
     open: { width: 250 },
     collapsed: { width: 65 },
   };
 
+  // Fix the variants type for framer-motion
   const containerVariants = {
-    open: { x: 0, opacity: 1, pointerEvents: "auto" },
-    closed: { x: "-100%", opacity: 0, pointerEvents: "none" },
+    open: { x: 0, opacity: 1, transition: { type: "spring" } },
+    closed: { x: "-100%", opacity: 0, transition: { type: "spring" } },
   };
 
   return (
@@ -113,14 +115,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={isMobile ? onClose : undefined}
+          onClick={onClose}
         >
           <motion.aside
             className="flex flex-col h-screen bg-secondary border-r border-muted"
-            variants={containerVariants}
             initial="closed"
             animate="open"
             exit="closed"
+            variants={containerVariants}
             transition={{ duration: 0.2, ease: "easeInOut" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -132,7 +134,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                 <Home className="h-6 w-6 text-primary" />
                 {!isCollapsed && (
                   <motion.span className="font-bold text-lg">
-                    {t("dashboard", language)}
+                    Dashboard
                   </motion.span>
                 )}
               </Link>
@@ -172,7 +174,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                       onClick={() => handleNavigation(item.path)}
                     >
                       <item.icon className="h-4 w-4 mr-2" />
-                      {!isCollapsed && <span>{t(item.label, language)}</span>}
+                      {!isCollapsed && <span>{t(item.label as any, language)}</span>}
                     </Button>
                   </motion.div>
                 ))}
@@ -204,7 +206,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                       onClick={() => handleNavigation(item.path)}
                     >
                       <item.icon className="h-4 w-4 mr-2" />
-                      {!isCollapsed && <span>{t(item.label, language)}</span>}
+                      {!isCollapsed && <span>{t(item.label as any, language)}</span>}
                     </Button>
                   </motion.div>
                 ))}
