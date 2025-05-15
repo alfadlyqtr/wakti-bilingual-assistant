@@ -1,3 +1,4 @@
+
 import { Toast, ToastActionElement, ToastProps } from "@/components/ui/toast";
 import {
   toast as sonnerToast,
@@ -77,14 +78,14 @@ export function toast(props: ToastOptions) {
   if (variant === "destructive") {
     sonnerVariant = "error";
   } else if (variant === "success") {
-    sonnerVariant = "success";
+    sonnerVariant = "success"; 
   }
   
   // Use sonner toast
   sonnerToast(title as string, {
     description,
+    type: sonnerVariant, // Use type instead of variant for sonner
     ...rest,
-    // No need to specify a type property here as it's not compatible
   });
   
   // Store toast in memory for any component that needs access to all toasts
