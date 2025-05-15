@@ -296,17 +296,18 @@ export const toast = {
   }) => {
     const { toast: toastFn } = useToast();
     toastFn({ ...props, variant: "default" });
-  },
-  // Default toast function
-  (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-  }) {
-    const { toast: toastFn } = useToast();
-    toastFn(props);
-  },
+  }
+};
+
+// Create a regular toast function as well
+toast.toast = (props: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+  variant?: "default" | "destructive" | "success";
+}) => {
+  const { toast: toastFn } = useToast();
+  toastFn(props);
 };
 
 // Confirmation dialog types
@@ -337,7 +338,8 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
 
     // Function to handle dialog cleanup
     const cleanup = () => {
-      const unmountResult = React.unmountComponentAtNode(rootElement);
+      // Use ReactDOM.unmountComponentAtNode instead of direct React.unmountComponentAtNode
+      const unmountResult = ReactDOM.unmountComponentAtNode(rootElement);
       if (unmountResult && rootElement.parentNode) {
         rootElement.parentNode.removeChild(rootElement);
       }
@@ -356,61 +358,36 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
       cleanup();
     };
 
-    const AlertDialog = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: ({ children }: { children: React.ReactNode }) => (
-        <>
-          {React.createElement(module.AlertDialog, { defaultOpen: true }, children)}
-        </>
-      )
-    })));
-
-    const AlertDialogContent = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogContent
-    })));
-
-    const AlertDialogHeader = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogHeader
-    })));
-
-    const AlertDialogTitle = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogTitle
-    })));
-
-    const AlertDialogDescription = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogDescription
-    })));
-
-    const AlertDialogFooter = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogFooter
-    })));
-
-    const AlertDialogAction = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogAction
-    })));
-
-    const AlertDialogCancel = React.lazy(() => import("@/components/ui/alert-dialog").then(module => ({
-      default: module.AlertDialogCancel
-    })));
-
-    // Render the confirmation dialog using React.createElement to avoid the JSX transformation
-    React.render(
-      React.createElement(
-        React.Suspense,
-        { fallback: null },
-        React.createElement(AlertDialog, null, 
-          React.createElement(AlertDialogContent, null,
-            React.createElement(AlertDialogHeader, null,
-              React.createElement(AlertDialogTitle, null, title),
-              React.createElement(AlertDialogDescription, null, description)
+    // Import necessary components using dynamic import
+    import("@/components/ui/alert-dialog").then((AlertDialogModule) => {
+      import("react-dom").then((ReactDOMModule) => {
+        const ReactDOM = ReactDOMModule.default;
+        
+        // Create AlertDialog component tree
+        const alertDialog = React.createElement(
+          AlertDialogModule.AlertDialog,
+          { defaultOpen: true },
+          React.createElement(
+            AlertDialogModule.AlertDialogContent,
+            null,
+            React.createElement(
+              AlertDialogModule.AlertDialogHeader,
+              null,
+              React.createElement(AlertDialogModule.AlertDialogTitle, null, title),
+              React.createElement(AlertDialogModule.AlertDialogDescription, null, description)
             ),
-            React.createElement(AlertDialogFooter, null,
-              React.createElement(AlertDialogCancel, { onClick: handleCancel }, cancelText),
-              React.createElement(AlertDialogAction, { onClick: handleConfirm }, confirmText)
+            React.createElement(
+              AlertDialogModule.AlertDialogFooter,
+              null,
+              React.createElement(AlertDialogModule.AlertDialogCancel, { onClick: handleCancel }, cancelText),
+              React.createElement(AlertDialogModule.AlertDialogAction, { onClick: handleConfirm }, confirmText)
             )
           )
-        )
-      ),
-      rootElement
-    );
+        );
+        
+        // Render the dialog
+        ReactDOM.render(alertDialog, rootElement);
+      });
+    });
   });
 }
