@@ -57,7 +57,7 @@ export const AIAssistant: React.FC = () => {
   const { toast } = useToast();
 
   // Language and theme state - Changed this to typed string literal
-  const language: "en" | "ar" = "en"; // This would normally come from user preferences
+  const language = "en" as "en" | "ar"; // This would normally come from user preferences
   const currentTheme = theme || "light";
 
   // Initialize with welcome message

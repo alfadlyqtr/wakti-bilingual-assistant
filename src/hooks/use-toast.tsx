@@ -1,10 +1,9 @@
-
 import * as React from "react";
 import {
   Toast,
   ToastProps,
   ToastActionElement,
-  ToastProvider,
+  ToastProvider as ToastUiProvider,
   ToastViewport,
   ToastTitle,
   ToastDescription,
@@ -215,6 +214,22 @@ function useToastInternal(): ToastContextValue {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const { toast, dismiss } = useToastInternal();
+  
+  // Set up event listener for external toast events
+  React.useEffect(() => {
+    const handleToastEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        toast(customEvent.detail);
+      }
+    };
+    
+    document.addEventListener("lovable:toast", handleToastEvent);
+    return () => {
+      document.removeEventListener("lovable:toast", handleToastEvent);
+    };
+  }, [toast]);
+  
   return (
     <ToastContext.Provider value={{ toast, dismiss }}>
       {children}
@@ -239,7 +254,7 @@ function ToasterInternal() {
   const [state] = React.useState<State>(memoryState);
 
   return (
-    <ToastProvider>
+    <ToastUiProvider>
       <ToastViewport />
       {state.toasts.map(function ({
         id,
@@ -259,85 +274,21 @@ function ToasterInternal() {
           </Toast>
         );
       })}
-    </ToastProvider>
+    </ToastUiProvider>
   );
 }
 
-// Create proper toast functions
-export const toast = {
-  success: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }) {
-    const context = useContext(ToastContext);
-    if (!context) {
-      throw new Error("useToast must be used within a ToastProvider");
-    }
-    context.toast({ ...props, variant: "success" });
-  },
-  error: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }) {
-    const context = useContext(ToastContext);
-    if (!context) {
-      throw new Error("useToast must be used within a ToastProvider");
-    }
-    context.toast({ ...props, variant: "destructive" });
-  },
-  default: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-  }) {
-    const context = useContext(ToastContext);
-    if (!context) {
-      throw new Error("useToast must be used within a ToastProvider");
-    }
-    context.toast({ ...props, variant: "default" });
-  },
-  show: function(props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-  }) {
-    const context = useContext(ToastContext);
-    if (!context) {
-      throw new Error("useToast must be used within a ToastProvider");
-    }
-    context.toast(props);
-  }
-};
-
-// This function can be called outside of React components
-export function showToast(props: {
+// Helper functions for using toast
+export const showToast = (props: {
   title?: React.ReactNode;
   description?: React.ReactNode;
   action?: ToastActionElement;
   variant?: "default" | "destructive" | "success";
-}): void {
+}): void => {
   // We'll dispatch an event that will be caught by the toast provider
   const event = new CustomEvent("lovable:toast", { detail: props });
   document.dispatchEvent(event);
-}
-
-// Create a custom DOM event listener in the ToastProvider
-React.useEffect(() => {
-  const handleToastEvent = (e: Event) => {
-    const customEvent = e as CustomEvent;
-    if (customEvent.detail) {
-      toast.show(customEvent.detail);
-    }
-  };
-  
-  document.addEventListener("lovable:toast", handleToastEvent);
-  return () => {
-    document.removeEventListener("lovable:toast", handleToastEvent);
-  };
-}, []);
+};
 
 // Confirmation dialog types
 export interface ConfirmOptions {
@@ -422,3 +373,36 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
     });
   });
 }
+
+// Direct access to toast methods to simplify implementation in components
+export const toast = {
+  success: function(props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }): void {
+    showToast({ ...props, variant: "success" });
+  },
+  error: function(props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }): void {
+    showToast({ ...props, variant: "destructive" });
+  },
+  default: function(props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+  }): void {
+    showToast({ ...props, variant: "default" });
+  },
+  show: function(props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }): void {
+    showToast(props);
+  }
+};
