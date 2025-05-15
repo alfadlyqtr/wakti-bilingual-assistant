@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -41,7 +42,7 @@ export default function VoiceSummaryDetail() {
       try {
         setIsLoading(true);
         const { data, error } = await supabase
-          .from('voice_recordings')
+          .from('voice_summaries')
           .select('*')
           .eq('id', id)
           .single();
@@ -77,7 +78,7 @@ export default function VoiceSummaryDetail() {
       const interval = setInterval(async () => {
         try {
           const { data, error } = await supabase
-            .from('voice_recordings')
+            .from('voice_summaries')
             .select('*')
             .eq('id', id)
             .single();
@@ -118,7 +119,7 @@ export default function VoiceSummaryDetail() {
       setIsUpdating(true);
       
       const { error } = await supabase
-        .from('voice_recordings')
+        .from('voice_summaries')
         .update({ 
           transcript: editedTranscript
         })
