@@ -16,12 +16,12 @@ import {
   PlusCircle,
   Loader2,
 } from "lucide-react";
-import { useMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/use-mobile"; // Fix for useMobile
 import { useTheme } from "next-themes";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
 import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast"; // Fix for toast import
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import {
@@ -51,7 +51,7 @@ export const AIAssistant: React.FC = () => {
 
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { isMobile } = useMobile();
+  const { isMobile } = useIsMobile(); // Fix for useMobile
   const { theme } = useTheme();
   const { user, session } = useAuth();
 
@@ -365,16 +365,14 @@ export const AIAssistant: React.FC = () => {
       <LeftDrawer
         isOpen={isLeftDrawerOpen}
         onClose={() => setIsLeftDrawerOpen(false)}
-        theme={currentTheme}
+        activeMode={activeMode} 
         language={language}
-        activeMode={activeMode}
       />
 
       {/* Mode Selector */}
       <ModeSelector
         activeMode={activeMode}
         setActiveMode={setActiveMode}
-        theme={currentTheme}
         language={language}
       />
 
@@ -467,7 +465,7 @@ export const AIAssistant: React.FC = () => {
       <RightDrawer
         isOpen={isRightDrawerOpen}
         onClose={() => setIsRightDrawerOpen(false)}
-        theme={currentTheme}
+        activeMode={activeMode}
         language={language}
       />
     </div>

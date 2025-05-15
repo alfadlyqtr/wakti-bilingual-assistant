@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -30,6 +31,8 @@ const toastVariants = cva(
         default: "border bg-background text-foreground",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
+        success:
+          "border border-green-500 bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-300",
       },
     },
     defaultVariants: {
@@ -37,6 +40,8 @@ const toastVariants = cva(
     },
   }
 )
+
+export type ToastT = React.ComponentPropsWithoutRef<typeof Toast>;
 
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
@@ -110,11 +115,12 @@ const ToastDescription = React.forwardRef<
 ))
 ToastDescription.displayName = ToastPrimitives.Description.displayName
 
-type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
+export type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
 
-type ToastActionElement = React.ReactElement<typeof ToastAction>
+export type ToastActionElement = React.ReactElement<typeof ToastAction>
 
 export {
+  toast,
   type ToastProps,
   type ToastActionElement,
   ToastProvider,
@@ -125,3 +131,9 @@ export {
   ToastClose,
   ToastAction,
 }
+
+// Export the toast function
+export const toast = (props: ToastProps) => {
+  const { toast: toastFunction } = useToast();
+  return toastFunction(props);
+};

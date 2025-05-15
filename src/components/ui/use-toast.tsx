@@ -1,9 +1,6 @@
 
 // Re-export from the hooks folder
-export { useToast } from "@/hooks/use-toast";
-// Add confirm function export
+export { useToast } from "@/components/ui/toast";
 export { confirm } from "@/hooks/use-toast";
-// Export toast function
 export { toast } from "@/hooks/use-toast";
-// Export the types too
 export type { ConfirmOptions } from "@/hooks/use-toast";

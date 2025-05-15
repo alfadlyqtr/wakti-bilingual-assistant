@@ -1,7 +1,7 @@
 
 import { useEffect } from "react";
 import { Navigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/use-toast"; // Fixed import
 import { useTheme } from "@/providers/ThemeProvider";
 
 const Index = () => {

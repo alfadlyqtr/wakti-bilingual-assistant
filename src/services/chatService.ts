@@ -68,16 +68,15 @@ export async function getRecentChatHistory(
     }
     
     // Convert to ChatMessage format and sort by timestamp ascending
-    return data
-      .map(item => ({
-        id: item.id,
-        role: item.role,
-        content: item.content,
-        timestamp: new Date(item.created_at),
-        mode: item.mode as AIMode,
-        metadata: item.metadata
-      }))
-      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    return data.map(item => ({
+      id: item.id,
+      role: item.role,
+      content: item.content,
+      timestamp: new Date(item.created_at),
+      mode: item.mode,
+      metadata: item.metadata
+    }))
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
       
   } catch (error) {
     console.error("Exception fetching chat history:", error);
@@ -98,7 +97,7 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${supabase.auth.session()?.access_token}`,
+          Authorization: `Bearer ${supabase.auth.getSession().then(({ data }) => data.session?.access_token)}`
         },
         body: formData,
       }
@@ -128,13 +127,16 @@ export async function processAIRequest(
   intentData?: any;
 }> {
   try {
+    const getSession = await supabase.auth.getSession();
+    const accessToken = getSession.data.session?.access_token;
+
     const response = await fetch(
       "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/process-ai-intent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${supabase.auth.session()?.access_token}`,
+          Authorization: `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           text,
@@ -161,13 +163,16 @@ export async function processAIRequest(
 // Generate image based on prompt
 export async function generateImage(prompt: string): Promise<string | null> {
   try {
+    const getSession = await supabase.auth.getSession();
+    const accessToken = getSession.data.session?.access_token;
+    
     const response = await fetch(
       "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-image",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${supabase.auth.session()?.access_token}`,
+          Authorization: `Bearer ${accessToken}`
         },
         body: JSON.stringify({
           prompt,

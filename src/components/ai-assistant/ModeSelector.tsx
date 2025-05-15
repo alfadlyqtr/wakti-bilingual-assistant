@@ -1,75 +1,67 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "next-themes";
+import { AIMode, ASSISTANT_MODES } from "./types";
 import { Button } from "@/components/ui/button";
-import { ASSISTANT_MODES, AIMode, MODE_NAME_MAP } from "./types";
-import { MessageSquare, Notebook, Palette, LifeBuoy } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 
-interface ModeSelectorProps {
+// Helper function to translate mode names
+const getModeLabel = (mode: AIMode, language: string): string => {
+  // Translation key naming convention: mode_[mode_id]
+  const translationKey = `mode_${mode}` as TranslationKey;
+  return t(translationKey, language) || mode;
+};
+
+export interface ModeSelectorProps {
   activeMode: AIMode;
   setActiveMode: (mode: AIMode) => void;
+  language: string;
 }
 
 export const ModeSelector: React.FC<ModeSelectorProps> = ({
   activeMode,
   setActiveMode,
+  language
 }) => {
-  const { theme, language } = useTheme();
-  
-  // Get the icon component for a mode ID
-  const getModeIcon = (modeId: string) => {
-    switch (modeId) {
-      case "general": return <MessageSquare size={16} />;
-      case "writer": return <Notebook size={16} />;
-      case "creative": return <Palette size={16} />;
-      case "assistant": return <LifeBuoy size={16} />;
-      default: return null;
-    }
-  };
-  
+  const { theme } = useTheme();
+  const currentTheme = theme === "dark" ? "dark" : "light";
+
   return (
-    <div className="w-full flex justify-center">
-      <div className="flex space-x-1 bg-muted/40 p-1 rounded-full relative">
+    <div className="flex justify-center py-2 px-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto hide-scrollbar">
+      <div className="flex space-x-2">
         {ASSISTANT_MODES.map((mode) => {
           const isActive = activeMode === mode.id;
-          const modeColor = theme === "dark" ? mode.color.dark : mode.color.light;
+          const colorKey = currentTheme as keyof typeof mode.color;
           
           return (
-            <div key={mode.id} className="relative">
+            <Button
+              key={mode.id}
+              onClick={() => setActiveMode(mode.id)}
+              variant="ghost"
+              size="sm"
+              className={`relative px-3 py-1 rounded-full transition-all ${
+                isActive ? "text-white" : "text-foreground hover:text-foreground/80"
+              }`}
+              style={{
+                backgroundColor: isActive ? mode.color[colorKey] : "transparent",
+              }}
+            >
               {isActive && (
                 <motion.div
-                  layoutId="active-pill"
+                  layoutId="mode-bubble"
                   className="absolute inset-0 rounded-full"
-                  style={{
-                    backgroundColor: modeColor,
-                    opacity: 0.15
-                  }}
-                  transition={{ type: 'spring', duration: 0.5 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
                 />
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`rounded-full relative px-3 py-1 h-8 text-xs font-medium transition-all duration-200 ${
-                  isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-                onClick={() => setActiveMode(mode.id as AIMode)}
-                style={{
-                  borderColor: isActive ? modeColor : "transparent",
-                  boxShadow: isActive ? `0 0 8px ${modeColor}30` : "none",
-                }}
-              >
-                <div className="flex items-center gap-1.5">
-                  {getModeIcon(mode.id)}
-                  <span>
-                    {t(mode.id as TranslationKey, language)}
-                  </span>
-                </div>
-              </Button>
-            </div>
+              <span className="relative z-10 text-xs font-medium">
+                {getModeLabel(mode.id, language)}
+              </span>
+            </Button>
           );
         })}
       </div>

@@ -1,183 +1,147 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { transcribeAudio } from '@/services/chatService';
-import { useAuth } from '@/contexts/AuthContext';
-import { toast } from '@/hooks/use-toast';
-import { t } from '@/utils/translations';
-import { TranslationKey } from '@/utils/translationTypes';
+import React, { useState } from "react";
+import { Mic, MicOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast"; // Fixed import
+import { transcribeAudio } from "@/services/chatService";
 
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
   language: string;
   theme: string;
-  isListening?: boolean;
   disabled?: boolean;
 }
 
-export function VoiceInput({ onTranscription, language, theme, disabled = false }: VoiceInputProps) {
+export const VoiceInput: React.FC<VoiceInputProps> = ({
+  onTranscription,
+  language,
+  theme,
+  disabled,
+}) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const startTimeRef = useRef<number | null>(null);
-  const { user } = useAuth();
-  
-  // Timer to enforce max recording duration (1 minute)
-  const MAX_RECORDING_TIME = 60000; // 60 seconds in milliseconds
-  const recordingTimerRef = useRef<number | null>(null);
-  
-  // Request microphone permission
-  useEffect(() => {
-    return () => {
-      // Cleanup when component unmounts
-      if (recordingTimerRef.current) {
-        clearTimeout(recordingTimerRef.current);
-      }
-      
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
-    };
-  }, []);
-
-  const handleToggleRecording = async () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
-      await startRecording();
-    }
-  };
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  const MAX_RECORDING_TIME = 60; // 60 seconds maximum
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      const recorder = new MediaRecorder(stream);
+      const audioChunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunks.push(e.data);
         }
       };
-      
-      mediaRecorder.onstop = async () => {
-        // Get all tracks and stop them to turn off the microphone
-        stream.getTracks().forEach(track => track.stop());
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
         
-        // Only process if we have audio data
-        if (audioChunksRef.current.length > 0) {
-          processAudio();
-        }
-      };
-      
-      mediaRecorder.start();
-      setIsRecording(true);
-      startTimeRef.current = Date.now();
-      
-      // Set a timer to automatically stop recording after MAX_RECORDING_TIME
-      recordingTimerRef.current = window.setTimeout(() => {
-        if (mediaRecorderRef.current?.state === 'recording') {
-          stopRecording();
+        try {
+          const text = await transcribeAudio(audioBlob);
+          if (text) {
+            onTranscription(text);
+          } else {
+            toast({
+              title: language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error',
+              description: language === 'ar' 
+                ? 'لم نتمكن من تحويل الصوت إلى نص. يرجى المحاولة مرة أخرى.'
+                : 'We couldn\'t convert the audio to text. Please try again.',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+          console.error('Error during transcription:', error);
           toast({
-            title: t("maxRecordingReached" as TranslationKey, language),
-            description: t("recordingStoppedAutomatically" as TranslationKey, language),
-            variant: "default",
+            title: language === 'ar' ? 'خطأ' : 'Error',
+            description: language === 'ar'
+              ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
+              : 'An error occurred while processing the voice recording',
+            variant: 'destructive',
           });
         }
-      }, MAX_RECORDING_TIME);
-      
+
+        // Clean up stream tracks
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false);
+        setRecordingTime(0);
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          setTimerInterval(null);
+        }
+      };
+
+      // Start recording
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+
+      // Set up timer
+      const interval = setInterval(() => {
+        setRecordingTime((prev) => {
+          if (prev >= MAX_RECORDING_TIME - 1) {
+            if (recorder.state === 'recording') {
+              recorder.stop();
+            }
+            clearInterval(interval);
+            return MAX_RECORDING_TIME;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+
+      setTimerInterval(interval);
     } catch (error) {
       console.error('Error accessing microphone:', error);
       toast({
-        title: t("microphoneError" as TranslationKey, language),
-        description: t("microphoneAccessDenied" as TranslationKey, language),
-        variant: "destructive", 
+        title: language === 'ar' ? 'خطأ في الوصول للميكروفون' : 'Microphone Access Error',
+        description: language === 'ar'
+          ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
+          : 'Please allow microphone access to use voice input feature',
+        variant: 'destructive',
       });
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Clear the automatic stop timer
-      if (recordingTimerRef.current) {
-        clearTimeout(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
     }
   };
 
-  const processAudio = async () => {
-    setIsProcessing(true);
-    
-    try {
-      // Create audio blob from recorded chunks
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      
-      // Check recording duration
-      const recordingDuration = startTimeRef.current ? Date.now() - startTimeRef.current : 0;
-      console.log(`Recording duration: ${recordingDuration / 1000} seconds`);
-      
-      // Only process if the recording is at least 0.5 seconds (avoid accidental clicks)
-      if (recordingDuration < 500) {
-        toast({
-          title: t("recordingTooShort" as TranslationKey, language),
-          description: t("pleaseRecordLonger" as TranslationKey, language),
-          variant: "default",
-        });
-        setIsProcessing(false);
-        return;
-      }
-      
-      // Transcribe audio using our service
-      const transcription = await transcribeAudio(audioBlob);
-      
-      if (transcription) {
-        onTranscription(transcription);
-      } else {
-        toast({
-          title: t("transcriptionFailed" as TranslationKey, language),
-          description: t("tryAgainOrTypeMessage" as TranslationKey, language),
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('Error processing audio:', error);
-      toast({
-        title: t("processingError" as TranslationKey, language),
-        description: t("errorProcessingAudio" as TranslationKey, language),
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
   };
 
-  const isDark = theme === 'dark';
-  
   return (
-    <Button
-      onClick={handleToggleRecording}
-      disabled={disabled || isProcessing}
-      size="icon"
-      variant="ghost"
-      className={`h-9 w-9 rounded-full ${isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''}`}
-      type="button"
-      aria-label={isRecording ? t("stopRecording" as TranslationKey, language) : t("startRecording" as TranslationKey, language)}
-    >
-      {isProcessing ? (
-        <Loader2 className="h-5 w-5 animate-spin" />
-      ) : isRecording ? (
-        <MicOff className="h-5 w-5" />
-      ) : (
-        <Mic className="h-5 w-5" />
+    <div className="relative flex items-center">
+      <Button
+        onClick={isRecording ? stopRecording : startRecording}
+        disabled={disabled}
+        size="icon"
+        variant={isRecording ? "destructive" : "ghost"}
+        type="button"
+        className={`h-9 w-9 rounded-full transition-all ${
+          isRecording ? 'animate-pulse' : ''
+        }`}
+        title={language === 'ar' ? 'إدخال صوتي' : 'Voice input'}
+      >
+        {isRecording ? (
+          <MicOff className="h-5 w-5" />
+        ) : (
+          <Mic className="h-5 w-5" />
+        )}
+      </Button>
+
+      {isRecording && (
+        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-xs font-mono bg-background border rounded px-2 py-1 shadow-md">
+          {formatTime(recordingTime)} / {formatTime(MAX_RECORDING_TIME)}
+        </div>
       )}
-    </Button>
+    </div>
   );
-}
+};
