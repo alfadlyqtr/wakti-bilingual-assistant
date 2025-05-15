@@ -1,27 +1,13 @@
 
+project_id = "hxauxozopvpzpdygoqwf"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+
 [functions]
-node_version = 18
-
-[[edge_functions]]
-path = "transcribe-audio"
+[functions.insert-ai-chat]
 verify_jwt = true
-
-[[edge_functions]]
-path = "generate-summary"
-verify_jwt = true
-
-[[edge_functions]]
-path = "generate-tts"
-verify_jwt = true
-
-[[edge_functions]]
-path = "configure-storage-buckets"
-verify_jwt = true
-
-[[edge_functions]]
-path = "process-ai-intent"
-verify_jwt = true
-
-[[edge_functions]]
-path = "generate-image"
+[functions.get-recent-chat-history]
 verify_jwt = true

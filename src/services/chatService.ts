@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -28,16 +27,17 @@ export async function saveChatMessage(
   
   try {
     // Convert to parameters required by the stored function
-    const { data, error } = await supabase
-      .rpc('insert_ai_chat', {
-        p_user_id: userId,
-        p_content: message,
-        p_role: role,
-        p_mode: mode,
-        p_metadata: metadata,
-        p_has_media: metadata.hasMedia || false,
-        p_expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
-      });
+    const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
+      body: {
+        userId,
+        content: message,
+        role,
+        mode,
+        metadata,
+        hasMedia: metadata.hasMedia || false,
+        expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
+      }
+    });
       
     if (error) {
       console.error("Error saving chat message:", error);
@@ -61,12 +61,13 @@ export async function getRecentChatHistory(
   
   try {
     // Using a stored function
-    const { data, error } = await supabase
-      .rpc('get_recent_chat_history', {
-        p_user_id: userId,
-        p_mode: mode,
-        p_limit: limit
-      });
+    const { data, error } = await supabase.functions.invoke('get-recent-chat-history', {
+      body: {
+        userId,
+        mode,
+        limit
+      }
+    });
     
     if (error) {
       console.error("Error fetching chat history:", error);

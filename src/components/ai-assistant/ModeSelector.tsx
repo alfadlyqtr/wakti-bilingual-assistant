@@ -38,7 +38,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
           return (
             <Button
               key={mode.id}
-              onClick={() => setActiveMode(mode.id)}
+              onClick={() => setActiveMode(mode.id as AIMode)}
               variant="ghost"
               size="sm"
               className={`relative px-3 py-1 rounded-full transition-all ${
@@ -59,7 +59,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
                 />
               )}
               <span className="relative z-10 text-xs font-medium">
-                {getModeLabel(mode.id, language)}
+                {getModeLabel(mode.id as AIMode, language)}
               </span>
             </Button>
           );
