@@ -271,43 +271,54 @@ function ToasterInternal() {
   );
 }
 
-// Create a simplified toast function with success variant
+// Create toast utility functions
 export const toast = {
   success: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
   }) => {
-    const { toast: toastFn } = useToast();
-    toastFn({ ...props, variant: "success" });
+    const context = useContext(ToastContext);
+    if (!context) {
+      throw new Error("useToast must be used within a ToastProvider");
+    }
+    context.toast({ ...props, variant: "success" });
   },
   error: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
   }) => {
-    const { toast: toastFn } = useToast();
-    toastFn({ ...props, variant: "destructive" });
+    const context = useContext(ToastContext);
+    if (!context) {
+      throw new Error("useToast must be used within a ToastProvider");
+    }
+    context.toast({ ...props, variant: "destructive" });
   },
   default: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
   }) => {
-    const { toast: toastFn } = useToast();
-    toastFn({ ...props, variant: "default" });
+    const context = useContext(ToastContext);
+    if (!context) {
+      throw new Error("useToast must be used within a ToastProvider");
+    }
+    context.toast({ ...props, variant: "default" });
+  },
+  // Add a function that can be called directly as a function
+  show: (props: {
+    title?: React.ReactNode;
+    description?: React.ReactNode;
+    action?: ToastActionElement;
+    variant?: "default" | "destructive" | "success";
+  }) => {
+    const context = useContext(ToastContext);
+    if (!context) {
+      throw new Error("useToast must be used within a ToastProvider");
+    }
+    context.toast(props);
   }
-};
-
-// Create a regular toast function as well
-toast.toast = (props: {
-  title?: React.ReactNode;
-  description?: React.ReactNode;
-  action?: ToastActionElement;
-  variant?: "default" | "destructive" | "success";
-}) => {
-  const { toast: toastFn } = useToast();
-  toastFn(props);
 };
 
 // Confirmation dialog types

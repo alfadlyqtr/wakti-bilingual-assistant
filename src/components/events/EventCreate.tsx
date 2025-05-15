@@ -29,10 +29,9 @@ const EventCreate: React.FC = () => {
     e.preventDefault();
     
     if (!title || !date || !time) {
-      toast({
+      toast.error({
         title: t("error", language),
         description: t("pleaseCompleteAllRequiredFields", language),
-        variant: "destructive"
       });
       return;
     }
@@ -63,7 +62,7 @@ const EventCreate: React.FC = () => {
       
       if (error) throw error;
       
-      toast({
+      toast.success({
         title: t("success", language),
         description: t("eventCreatedSuccessfully", language)
       });
@@ -75,10 +74,9 @@ const EventCreate: React.FC = () => {
       }
     } catch (error) {
       console.error('Error creating event:', error);
-      toast({
+      toast.error({
         title: t("error", language),
         description: t("errorCreatingEvent", language),
-        variant: "destructive"
       });
     } finally {
       setIsSubmitting(false);

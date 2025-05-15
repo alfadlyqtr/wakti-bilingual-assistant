@@ -100,7 +100,7 @@ export const AIAssistant: React.FC = () => {
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
     if (!user) {
-      toast({
+      toast.show({
         title: t("loginRequired" as TranslationKey, language),
         description: t("pleaseLoginToChat" as TranslationKey, language),
         variant: "destructive",
@@ -268,7 +268,8 @@ export const AIAssistant: React.FC = () => {
       };
       setMessages((prev) => 
         prev.map((msg) => 
-          msg.content === t("generatingImage" as TranslationKey, language) 
+          // Type-safe string comparison
+          msg.content === t("generatingImage" as TranslationKey, language)
             ? errorMessage 
             : msg
         )
@@ -302,7 +303,7 @@ export const AIAssistant: React.FC = () => {
         const taskData = message.metadata?.intentData?.data || {
           title: "New Task",
         };
-        toast({
+        toast.show({
           title: t("taskCreated" as TranslationKey, language),
           description: taskData.title,
         });
@@ -313,7 +314,7 @@ export const AIAssistant: React.FC = () => {
         const reminderData = message.metadata?.intentData?.data || {
           title: "New Reminder",
         };
-        toast({
+        toast.show({
           title: t("reminderCreated" as TranslationKey, language),
           description: reminderData.title,
         });
@@ -324,7 +325,7 @@ export const AIAssistant: React.FC = () => {
         const eventData = message.metadata?.intentData?.data || {
           title: "New Event",
         };
-        toast({
+        toast.show({
           title: t("eventCreated" as TranslationKey, language),
           description: eventData.title,
         });

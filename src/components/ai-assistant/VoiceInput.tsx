@@ -44,22 +44,20 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (text) {
             onTranscription(text);
           } else {
-            toast({
+            toast.error({
               title: language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error',
               description: language === 'ar' 
                 ? 'لم نتمكن من تحويل الصوت إلى نص. يرجى المحاولة مرة أخرى.'
                 : 'We couldn\'t convert the audio to text. Please try again.',
-              variant: 'destructive',
             });
           }
         } catch (error) {
           console.error('Error during transcription:', error);
-          toast({
+          toast.error({
             title: language === 'ar' ? 'خطأ' : 'Error',
             description: language === 'ar'
               ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
               : 'An error occurred while processing the voice recording',
-            variant: 'destructive',
           });
         }
 
@@ -95,12 +93,11 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       setTimerInterval(interval);
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      toast({
+      toast.error({
         title: language === 'ar' ? 'خطأ في الوصول للميكروفون' : 'Microphone Access Error',
         description: language === 'ar'
           ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
           : 'Please allow microphone access to use voice input feature',
-        variant: 'destructive',
       });
     }
   };

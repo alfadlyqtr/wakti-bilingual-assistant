@@ -34,13 +34,12 @@ export function UserMenu() {
   const handleLogout = async () => {
     try {
       await signOut();
-      toast({
+      toast.success({
         title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
       });
     } catch (error) {
       console.error('Error logging out:', error);
-      toast({
-        variant: "destructive",
+      toast.error({
         title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
       });
     }
