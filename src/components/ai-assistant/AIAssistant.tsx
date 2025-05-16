@@ -32,6 +32,8 @@ import {
 } from "@/services/chatService";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import Loading from "@/components/ui/loading";
+import { MobileHeader } from "@/components/MobileHeader";
+import { MobileNav } from "@/components/MobileNav";
 
 // Changed this function to accept language as a parameter
 const getDefaultWelcomeMessage = (language: "en" | "ar"): string => {
@@ -357,114 +359,120 @@ export const AIAssistant: React.FC = () => {
   };
 
   return (
-    <div
-      className={`flex flex-col h-full relative`}
-      style={{ backgroundColor: currentTheme === "dark" ? "#0c0f14" : "#fcfefd" }}
-    >
-      {/* Left Drawer */}
-      <LeftDrawer
-        isOpen={isLeftDrawerOpen}
-        onClose={() => setIsLeftDrawerOpen(false)}
-        activeMode={activeMode} 
-        language={language}
-      />
-
-      {/* Mode Selector */}
-      <ModeSelector
-        activeMode={activeMode}
-        setActiveMode={setActiveMode}
-        language={language}
-      />
-
-      {/* Chat Window */}
-      <ChatWindow
-        messages={messages}
-        isTyping={isTyping}
-        activeMode={activeMode}
-        getModeColor={getModeColor}
-        onConfirm={handleConfirmAction}
-        messageEndRef={messageEndRef}
-        language={language}
-        theme={currentTheme}
-      />
-
-      {/* Input Area */}
+    <div className="mobile-container flex flex-col h-full">
+      <MobileHeader title={t("ai", language)} />
+      
       <div
-        className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full"
-        dir={language === "ar" ? "rtl" : "ltr"}
+        className="flex flex-col flex-1 relative overflow-hidden"
+        style={{ backgroundColor: currentTheme === "dark" ? "#0c0f14" : "#fcfefd" }}
       >
-        <div className="flex items-center gap-2 max-w-md mx-auto">
-          {/* Left Menu Button (Hamburger) */}
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setIsLeftDrawerOpen(true)}
-            className="h-9 w-9 rounded-full flex-shrink-0"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
+        {/* Left Drawer */}
+        <LeftDrawer
+          isOpen={isLeftDrawerOpen}
+          onClose={() => setIsLeftDrawerOpen(false)}
+          activeMode={activeMode} 
+          language={language}
+        />
 
-          {/* Input Box with Voice Button */}
-          <div className="flex-1 flex flex-col">
-            <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg">
-              <Input
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyPress}
-                placeholder={t("typeMessage" as TranslationKey, language)}
-                className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                disabled={isSending || !user}
-              />
-              <div className="flex items-center">
-                <VoiceInput
-                  onTranscription={handleVoiceTranscription}
-                  language={language}
-                  theme={currentTheme}
-                  disabled={isSending || isTyping || !user}
+        {/* Mode Selector */}
+        <ModeSelector
+          activeMode={activeMode}
+          setActiveMode={setActiveMode}
+          language={language as "en" | "ar"}
+        />
+
+        {/* Chat Window */}
+        <ChatWindow
+          messages={messages}
+          isTyping={isTyping}
+          activeMode={activeMode}
+          getModeColor={getModeColor}
+          onConfirm={handleConfirmAction}
+          messageEndRef={messageEndRef}
+          language={language}
+          theme={currentTheme}
+        />
+
+        {/* Input Area */}
+        <div
+          className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full"
+          dir={language === "ar" ? "rtl" : "ltr"}
+        >
+          <div className="flex items-center gap-2 max-w-md mx-auto">
+            {/* Left Menu Button (Hamburger) */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setIsLeftDrawerOpen(true)}
+              className="h-9 w-9 rounded-full flex-shrink-0"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+
+            {/* Input Box with Voice Button */}
+            <div className="flex-1 flex flex-col">
+              <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+                <Input
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyPress}
+                  placeholder={t("typeMessage" as TranslationKey, language)}
+                  className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                  disabled={isSending || !user}
                 />
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!inputValue.trim() || isSending || !user}
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 rounded-full"
-                  type="submit"
-                >
-                  {isSending ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
-                  )}
-                </Button>
+                <div className="flex items-center">
+                  <VoiceInput
+                    onTranscription={handleVoiceTranscription}
+                    language={language}
+                    theme={currentTheme}
+                    disabled={isSending || isTyping || !user}
+                  />
+                  <Button
+                    onClick={handleSendMessage}
+                    disabled={!inputValue.trim() || isSending || !user}
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 rounded-full"
+                    type="submit"
+                  >
+                    {isSending ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
+                  </Button>
+                </div>
               </div>
+              {!user && (
+                <p className="text-xs text-center mt-1 text-muted-foreground">
+                  {t("loginToChat" as TranslationKey, language)}
+                </p>
+              )}
             </div>
-            {!user && (
-              <p className="text-xs text-center mt-1 text-muted-foreground">
-                {t("loginToChat" as TranslationKey, language)}
-              </p>
-            )}
+
+            {/* Right Menu Button (Settings/Tools) */}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setIsRightDrawerOpen(true)}
+              className="h-9 w-9 rounded-full flex-shrink-0"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
           </div>
-
-          {/* Right Menu Button (Settings/Tools) */}
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => setIsRightDrawerOpen(true)}
-            className="h-9 w-9 rounded-full flex-shrink-0"
-          >
-            <Settings className="h-5 w-5" />
-          </Button>
         </div>
-      </div>
 
-      {/* Right Drawer */}
-      <RightDrawer
-        isOpen={isRightDrawerOpen}
-        onClose={() => setIsRightDrawerOpen(false)}
-        activeMode={activeMode}
-        language={language}
-      />
+        {/* Right Drawer */}
+        <RightDrawer
+          isOpen={isRightDrawerOpen}
+          onClose={() => setIsRightDrawerOpen(false)}
+          activeMode={activeMode}
+          language={language}
+        />
+      </div>
+      
+      <MobileNav />
     </div>
   );
 };
