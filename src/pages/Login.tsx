@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -10,15 +11,31 @@ import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
+  const { user, session, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Add effect to check auth state and redirect if already logged in
+  useEffect(() => {
+    console.log("Login: Auth state check", { 
+      user: !!user, 
+      session: !!session, 
+      authLoading 
+    });
+    
+    if (user && session && !authLoading) {
+      console.log("Login: User already authenticated, redirecting to dashboard");
+      navigate("/dashboard");
+    }
+  }, [user, session, authLoading, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +47,7 @@ export default function Login() {
     }
     
     setIsLoading(true);
+    console.log("Login: Attempting login with email:", email);
     
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -38,7 +56,7 @@ export default function Login() {
       });
 
       if (error) {
-        console.error("Login error:", error);
+        console.error("Login: Login error:", error);
         setErrorMsg(error.message);
         toast({
           title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
@@ -46,14 +64,19 @@ export default function Login() {
           variant: 'destructive',
         });
       } else if (data?.user) {
+        console.log("Login: Login successful, user:", data.user.id);
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        navigate("/dashboard"); // Updated to redirect to /dashboard instead of /
+        
+        // Small delay to ensure auth state is properly updated
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 100);
       }
     } catch (err) {
-      console.error("Unexpected error during login:", err);
+      console.error("Login: Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
       setIsLoading(false);

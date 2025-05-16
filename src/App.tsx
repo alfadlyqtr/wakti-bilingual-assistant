@@ -26,6 +26,8 @@ import Account from "@/pages/Account";
 import Home from "@/pages/Home";
 
 function App() {
+  console.log("App: Initializing application");
+  
   return (
     <Router>
       <ThemeProvider>

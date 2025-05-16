@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,7 +7,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  isLoading: boolean; // Adding this to match ProtectedRoute usage
+  isLoading: boolean;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
   signUp: (email: string, password: string) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
@@ -43,62 +42,109 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Set up auth state listener
+    console.log('AuthProvider: Setting up authentication listeners');
+    
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        console.log('AuthProvider: Auth state change event:', event);
+        console.log('AuthProvider: Session exists:', !!currentSession);
+        
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
 
+        // Only redirect on signout if explicitly required
         if (event === 'SIGNED_OUT' && requireAuth) {
-          navigate('/login');
+          console.log('AuthProvider: User signed out, redirecting to login');
+          // Use a timeout to avoid potential race conditions
+          setTimeout(() => {
+            navigate('/login');
+          }, 0);
         }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      setLoading(false);
-      
-      // If authentication is required but user is not logged in, redirect to login
-      if (requireAuth && !currentSession) {
-        navigate('/login');
+    // THEN check for existing session
+    const initializeAuth = async () => {
+      try {
+        console.log('AuthProvider: Checking for existing session');
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log('AuthProvider: Initial session exists:', !!currentSession);
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setLoading(false);
+        setInitialized(true);
+        
+        // Only redirect if authentication is required but user is not logged in
+        if (requireAuth && !currentSession) {
+          console.log('AuthProvider: No session found, redirecting to login');
+          navigate('/login');
+        }
+      } catch (error) {
+        console.error('AuthProvider: Error initializing auth', error);
+        setLoading(false);
+        setInitialized(true);
+        if (requireAuth) {
+          navigate('/login');
+        }
       }
-    });
+    };
+
+    initializeAuth();
 
     return () => {
+      console.log('AuthProvider: Cleaning up auth subscription');
       subscription.unsubscribe();
     };
   }, [navigate, requireAuth]);
 
   const signIn = async (email: string, password: string) => {
+    console.log('AuthProvider: Attempting sign in for email:', email);
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        console.error("AuthProvider: Error signing in:", error);
+      } else {
+        console.log("AuthProvider: Sign in successful");
+      }
       return error;
     } catch (error) {
-      console.error("Error signing in:", error);
+      console.error("AuthProvider: Exception during sign in:", error);
       return error as AuthError;
     }
   };
 
   const signUp = async (email: string, password: string) => {
+    console.log('AuthProvider: Attempting sign up for email:', email);
     try {
       const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        console.error("AuthProvider: Error signing up:", error);
+      } else {
+        console.log("AuthProvider: Sign up successful");
+      }
       return error;
     } catch (error) {
-      console.error("Error signing up:", error);
+      console.error("AuthProvider: Exception during sign up:", error);
       return error as AuthError;
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
+    console.log('AuthProvider: Attempting sign out');
+    try {
+      await supabase.auth.signOut();
+      console.log('AuthProvider: Sign out successful');
+      navigate('/login');
+    } catch (error) {
+      console.error("AuthProvider: Error signing out:", error);
+    }
   };
 
   const resetPassword = async (token: string, newPassword: string) => {
@@ -161,7 +207,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     user,
     session,
     loading,
-    isLoading: loading, // Adding this to match ProtectedRoute usage
+    isLoading: loading,
     signIn,
     signUp,
     signOut,
