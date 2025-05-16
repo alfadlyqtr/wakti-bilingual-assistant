@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import {
   Toast,
@@ -254,7 +253,7 @@ export function Toaster() {
 }
 
 // Helper function to safely convert ReactNode to string representation
-function renderReactNodeToString(content: React.ReactNode): React.ReactNode {
+function renderReactNodeToString(content: React.ReactNode): string {
   if (content === null || content === undefined) {
     return "";
   }
@@ -263,7 +262,13 @@ function renderReactNodeToString(content: React.ReactNode): React.ReactNode {
     return content.toString();
   }
   
-  return content;
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  // For React elements or fragments, return empty string as we can't convert them to strings
+  // but we'll still render them directly in the JSX
+  return "";
 }
 
 function ToasterInternal() {
@@ -284,12 +289,16 @@ function ToasterInternal() {
             <div className="grid gap-1">
               {title && (
                 <ToastTitle>
-                  {renderReactNodeToString(title)}
+                  {typeof title === 'string' ? title : 
+                   typeof title === 'number' || typeof title === 'boolean' ? title.toString() : 
+                   React.isValidElement(title) ? title : String(title)}
                 </ToastTitle>
               )}
               {description && (
                 <ToastDescription>
-                  {renderReactNodeToString(description)}
+                  {typeof description === 'string' ? description : 
+                   typeof description === 'number' || typeof description === 'boolean' ? description.toString() : 
+                   React.isValidElement(description) ? description : String(description)}
                 </ToastDescription>
               )}
             </div>
