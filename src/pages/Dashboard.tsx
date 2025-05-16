@@ -375,6 +375,7 @@ export default function Dashboard() {
 
   return (
     <div className="mobile-container">
+      {/* Single Mobile Header */}
       <MobileHeader title={t("dashboard", language)} />
 
       <div className="flex-1 overflow-y-auto p-4 pb-28">
