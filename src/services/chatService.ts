@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -146,57 +145,31 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
 }
 
 // Process AI request with intent detection
-export async function processAIRequest(
-  text: string,
-  mode: AIMode,
-  userId: string
-): Promise<{
-  response: string;
-  intent?: string;
-  intentData?: any;
-  suggestedMode?: AIMode;
-}> {
+export const processAIRequest = async (text: string, mode: string, userId: string) => {
   try {
-    console.log('Processing AI request:', { text, mode, userId });
-    
-    const getSession = await supabase.auth.getSession();
-    const accessToken = getSession.data.session?.access_token;
-    
-    if (!accessToken) {
-      throw new Error('No auth session');
+    // Call the Supabase Edge Function to process the AI request
+    const { data, error } = await supabase.functions.invoke("process-ai-intent", {
+      body: { text, mode, userId },
+    });
+
+    if (error) {
+      console.error("Error processing AI request:", error);
+      throw new Error(`Error processing AI request: ${error.message}`);
     }
 
-    const response = await fetch(
-      "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/process-ai-intent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`
-        },
-        body: JSON.stringify({
-          text,
-          mode,
-          userId,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "AI processing failed");
-    }
-
-    const result = await response.json();
-    console.log('AI processing result:', result);
-    return result;
-  } catch (error) {
-    console.error("Error in AI processing:", error);
+    // Return the processed data
     return {
-      response: "I'm sorry, I encountered an error processing your request. Please try again.",
+      response: data.response,
+      intent: data.intent || "general_chat",
+      intentData: data.intentData || null,
+      suggestedMode: data.suggestedMode || null,
+      originalPrompt: data.originalPrompt || null // Add this line to capture the original prompt
     };
+  } catch (error) {
+    console.error("Error in processAIRequest:", error);
+    throw error;
   }
-}
+};
 
 // Generate image based on prompt
 export async function generateImage(prompt: string): Promise<string | null> {
@@ -329,3 +302,45 @@ export function extractImagePrompt(text: string): string {
   // Fallback - use the entire text as prompt
   return text;
 }
+
+// Function to save chat messages to the database
+export const saveChatMessage = async (
+  userId: string,
+  content: string,
+  role: "user" | "assistant",
+  mode: string,
+  metadata: any = {}
+) => {
+  try {
+    // Check if the message contains an image (for assistant responses)
+    const hasMedia = content.includes("![") || (metadata && metadata.hasMedia);
+
+    // Add the originalPrompt to metadata if it exists
+    const enhancedMetadata = {
+      ...metadata,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Call the Supabase Edge Function to insert the chat message
+    const { data, error } = await supabase.functions.invoke("insert-ai-chat", {
+      body: {
+        userId,
+        content,
+        role,
+        mode,
+        hasMedia,
+        metadata: enhancedMetadata, // Pass the enhanced metadata
+      },
+    });
+
+    if (error) {
+      console.error("Error saving chat message:", error);
+      throw new Error(`Error saving chat message: ${error.message}`);
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error in saveChatMessage:", error);
+    throw error;
+  }
+};

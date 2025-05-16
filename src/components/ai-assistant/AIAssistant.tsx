@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -147,23 +146,30 @@ export const AIAssistant: React.FC = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Handle mode switching with double echo logic
+  // Enhanced handleModeSwitch function - key part of the fix
   const handleModeSwitch = useCallback(async (messageId: string, action: string) => {
     if (action.startsWith("switch_to_") && user) {
       const newMode = action.replace("switch_to_", "") as AIMode;
       console.log(`Switching mode from ${activeMode} to ${newMode}`);
       
-      // Store the pending message and target mode
-      const pendingMessage = pendingModeSwitchMessage || inputValue;
+      // Find the message containing the original prompt
+      const originalMessage = messages.find(m => m.id === messageId);
+      if (!originalMessage || !originalMessage.originalPrompt) {
+        console.error("Could not find original prompt for mode switch");
+        return;
+      }
+      
+      // Store the pending message from the original prompt
+      const pendingMessage = originalMessage.originalPrompt;
       
       // Switch the mode
       setActiveMode(newMode);
       
-      // Add confirmation message
+      // Add confirmation message with the double-echo pattern
       const confirmMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
-        content: `Still want me to do this: "${pendingMessage}"?`,
+        content: `We're now in ${newMode} mode.\n\nStill want me to do this: "${pendingMessage}"?`,
         timestamp: new Date(),
         mode: newMode,
         actionButtons: {
@@ -172,7 +178,7 @@ export const AIAssistant: React.FC = () => {
             action: "execute_pending",
           },
           secondary: {
-            text: "No, cancel",
+            text: "Cancel",
             action: "cancel_pending",
           },
         }
@@ -206,11 +212,30 @@ export const AIAssistant: React.FC = () => {
       setPendingModeSwitchTarget(null);
       console.log("Cancelled pending action after mode switch");
       
+      // Add cancellation message
+      const cancelMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant", 
+        content: "Mode switch completed, but action was cancelled.",
+        timestamp: new Date(),
+        mode: activeMode
+      };
+      
+      setMessages(prev => [...prev, cancelMessage]);
+      
+      if (user) {
+        await saveChatMessage(
+          user.id, 
+          cancelMessage.content, 
+          "assistant", 
+          activeMode
+        );
+      }
     } else {
       // Handle other action types (task creation, reminder, event, etc.)
       handleConfirmAction(messageId, action);
     }
-  }, [activeMode, inputValue, pendingModeSwitchMessage, pendingModeSwitchTarget, user]);
+  }, [activeMode, pendingModeSwitchMessage, pendingModeSwitchTarget, user, messages]);
 
   const processUserMessage = async (message: string) => {
     if (!message.trim() || !user) return;
@@ -249,13 +274,14 @@ export const AIAssistant: React.FC = () => {
       if (suggestedMode) {
         console.log(`Suggesting mode switch from ${activeMode} to ${suggestedMode}`);
         
-        // Create message suggesting mode switch
+        // Create message suggesting mode switch - enhanced with originalPrompt
         const switchSuggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
-          content: `You asked to: "${message}". This works better in ${suggestedMode} mode. Would you like to switch?`,
+          content: `You asked to: "${message}". This works better in ${suggestedMode} mode. Would you like me to switch?`,
           timestamp: new Date(),
           mode: activeMode,
+          originalPrompt: message, // Store the original prompt for later use
           modeSwitchAction: {
             text: `Switch to ${suggestedMode} mode`,
             action: `switch_to_${suggestedMode}`,
@@ -267,8 +293,9 @@ export const AIAssistant: React.FC = () => {
         await new Promise((resolve) => setTimeout(resolve, 500));
         setMessages((prev) => [...prev, switchSuggestionMessage]);
         
-        // Save the suggestion message
+        // Save the suggestion message with the original prompt
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
+          originalPrompt: message,
           modeSwitchAction: switchSuggestionMessage.modeSwitchAction
         });
         
@@ -297,10 +324,11 @@ export const AIAssistant: React.FC = () => {
           content: aiResponse.response,
           timestamp: new Date(),
           mode: activeMode,
+          originalPrompt: aiResponse.originalPrompt || message, // Store original prompt from backend or use current message
           modeSwitchAction: {
             text: `Switch to ${aiResponse.suggestedMode} mode`,
             action: `switch_to_${aiResponse.suggestedMode}`,
-            targetMode: aiResponse.suggestedMode
+            targetMode: aiResponse.suggestedMode as AIMode
           }
         };
         
@@ -309,6 +337,7 @@ export const AIAssistant: React.FC = () => {
         
         // Save the suggestion message
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
+          originalPrompt: aiResponse.originalPrompt || message,
           modeSwitchAction: switchSuggestionMessage.modeSwitchAction
         });
         

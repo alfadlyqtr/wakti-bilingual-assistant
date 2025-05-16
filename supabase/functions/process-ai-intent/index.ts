@@ -63,7 +63,7 @@ serve(async (req) => {
       }
     };
 
-    // Detect if mode switch is needed
+    // Enhanced detection logic for mode switching
     const detectBetterMode = (userText: string, currentMode: string) => {
       const lowerText = userText.toLowerCase();
       
@@ -77,7 +77,8 @@ serve(async (req) => {
         lowerText.includes("make an image") ||
         lowerText.includes("generate a picture") ||
         lowerText.includes("show me a picture") ||
-        lowerText.includes("visualize")
+        lowerText.includes("visualize") ||
+        lowerText.includes("picture of")
       ) {
         return currentMode !== 'creative' ? 'creative' : null;
       }
@@ -92,8 +93,12 @@ serve(async (req) => {
         lowerText.includes("remind me") ||
         lowerText.includes("schedule") ||
         lowerText.includes("create event") ||
+        lowerText.includes("add event") ||
         lowerText.includes("calendar") ||
-        lowerText.includes("add to my calendar")
+        lowerText.includes("add to my calendar") ||
+        lowerText.includes("plan") ||
+        lowerText.includes("meeting") ||
+        lowerText.includes("appointment")
       ) {
         return currentMode !== 'assistant' ? 'assistant' : null;
       }
@@ -109,7 +114,10 @@ serve(async (req) => {
         lowerText.includes("poem") ||
         lowerText.includes("story") ||
         lowerText.includes("message") ||
-        lowerText.includes("edit")
+        lowerText.includes("edit") ||
+        lowerText.includes("text") ||
+        lowerText.includes("summarize") ||
+        lowerText.includes("rewrite")
       ) {
         return currentMode !== 'writer' ? 'writer' : null;
       }
@@ -127,7 +135,8 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Would you like me to switch?`,
-          suggestedMode: suggestedMode
+          suggestedMode: suggestedMode,
+          originalPrompt: text // Store the original prompt for the second step
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
