@@ -1,6 +1,6 @@
 
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/hooks/use-toast";
@@ -33,6 +33,7 @@ function App() {
           <AuthProvider>
             <Routes>
               {/* Public routes */}
+              <Route path="/" element={<Navigate to="/home" replace />} />
               <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
@@ -41,7 +42,7 @@ function App() {
 
               {/* Protected routes */}
               <Route element={<ProtectedRoute />}>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/reminders" element={<Reminders />} />

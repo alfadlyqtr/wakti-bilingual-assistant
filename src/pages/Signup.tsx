@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -65,7 +64,7 @@ export default function Signup() {
           title: language === 'en' ? 'Account Created' : 'تم إنشاء الحساب',
           description: language === 'en' ? 'Your account has been created successfully!' : 'تم إنشاء حسابك بنجاح!',
         });
-        navigate("/"); // Changed from "/dashboard" to "/" to match the route in App.tsx
+        navigate("/dashboard"); // Updated to redirect to /dashboard instead of /
       }
     } catch (err) {
       console.error("Unexpected error during signup:", err);
@@ -125,7 +124,7 @@ export default function Signup() {
             variant="ghost"
             size="sm"
             className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/home")}  // Updated to navigate to /home
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs">{t.backToHome}</span>
@@ -146,7 +145,7 @@ export default function Signup() {
               {/* App logo with navigation to home */}
               <div 
                 className="inline-block cursor-pointer mb-4"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/home")}  // Updated to navigate to /home
               >
                 <Logo3D size="lg" />
               </div>
