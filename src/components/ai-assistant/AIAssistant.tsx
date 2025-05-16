@@ -32,8 +32,6 @@ import {
 } from "@/services/chatService";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import Loading from "@/components/ui/loading";
-import { MobileHeader } from "@/components/MobileHeader";
-import { MobileNav } from "@/components/MobileNav";
 
 // Changed this function to accept language as a parameter
 const getDefaultWelcomeMessage = (language: "en" | "ar"): string => {
@@ -84,11 +82,16 @@ export const AIAssistant: React.FC = () => {
   const loadChatHistory = async () => {
     if (!user) return;
 
-    const history = await getRecentChatHistory(user.id, null, 20);
-    if (history.length > 0) {
-      // Only set history if it's not empty
-      // We're not replacing the welcome message if there's no history
-      setMessages(history);
+    try {
+      const history = await getRecentChatHistory(user.id, null, 20);
+      if (history.length > 0) {
+        // Only set history if it's not empty
+        // We're not replacing the welcome message if there's no history
+        setMessages(history);
+      }
+    } catch (error) {
+      console.error("Error fetching chat history:", error);
+      // We'll just keep the welcome message if history fetching fails
     }
   };
 
@@ -359,9 +362,7 @@ export const AIAssistant: React.FC = () => {
   };
 
   return (
-    <div className="mobile-container flex flex-col h-full">
-      <MobileHeader title={t("ai", language)} />
-      
+    <div className="flex flex-col h-full">
       <div
         className="flex flex-col flex-1 relative overflow-hidden"
         style={{ backgroundColor: currentTheme === "dark" ? "#0c0f14" : "#fcfefd" }}
@@ -471,8 +472,6 @@ export const AIAssistant: React.FC = () => {
           language={language}
         />
       </div>
-      
-      <MobileNav />
     </div>
   );
 };
