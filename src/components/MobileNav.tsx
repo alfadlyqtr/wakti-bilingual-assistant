@@ -1,4 +1,3 @@
-
 import { useNavigate, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Mic, CalendarHeart, Sparkles } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -86,8 +85,8 @@ export const MobileNav = () => {
     },
   ];
 
-  // Don't show nav on auth screens
-  if (path === "/login" || path === "/signup" || path === "/forgot-password" || path === "/") {
+  // Don't show nav on auth screens or home page
+  if (path === "/login" || path === "/signup" || path === "/forgot-password" || path === "/" || path === "/home") {
     return null;
   }
 

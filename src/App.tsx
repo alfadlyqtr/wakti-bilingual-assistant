@@ -56,7 +56,7 @@ function RouteTracker() {
 // Layout component that adds header and mobile navigation
 function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/'].includes(location.pathname);
+  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/home', '/'].includes(location.pathname);
   
   // Don't show header on auth pages
   return (

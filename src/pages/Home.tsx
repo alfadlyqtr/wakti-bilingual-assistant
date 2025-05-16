@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,6 +9,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -72,13 +74,11 @@ export default function Home() {
 
   return (
     <div className="mobile-container">
-      <div className="flex justify-end p-4">
-        <ThemeLanguageToggle />
-      </div>
+      <AppHeader showUserMenu={false} title="WAKTI" />
       
       <div className="flex-1 overflow-y-auto pb-16">
         {/* Hero Section */}
-        <section className={`${primaryBg} px-4 py-8 text-center`}>
+        <section className={`${primaryBg} px-4 py-6 text-center`}>
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
