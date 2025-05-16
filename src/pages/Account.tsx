@@ -34,10 +34,12 @@ import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { quotes } from "@/utils/dailyQuotes";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Save, Settings, Upload, Camera, Image } from "lucide-react";
-import { signOut, updateProfile } from "@/utils/auth";
+import { Check, Save, Settings, Upload, Camera, Image, Loader2 } from "lucide-react";
+import { signOut, updateProfile, updateUserPassword, deleteUserAccount } from "@/utils/auth";
 import { validateDisplayName } from "@/utils/validations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useToastHelper } from "@/hooks/use-toast-helper";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -53,6 +55,20 @@ export default function Account() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const categories = Object.keys(quotes);
   const { toast, confirm } = useToast();
+  const { showSuccess, showError } = useToastHelper();
+  
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  
+  // Account deletion states
+  const [confirmDeleteInput, setConfirmDeleteInput] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteReason, setDeleteReason] = useState("");
   
   // Use real user data from auth context
   const [profile, setProfile] = useState({
@@ -77,6 +93,7 @@ export default function Account() {
     }
   }, [user]);
 
+  // Handle quote category change
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
     setQuotePreferences(newPreferences);
@@ -145,8 +162,8 @@ export default function Account() {
     });
   };
 
-  // Handle profile changes
-  const handleSaveProfile = () => {
+  // Handle profile changes with proper image upload
+  const handleSaveProfile = async () => {
     if (!user) return;
 
     confirm({
@@ -155,27 +172,62 @@ export default function Account() {
       onConfirm: async () => {
         setIsSaving(true);
         try {
-          // Update user profile data
+          // Handle file upload if a new image was selected
+          let avatarUrl = avatar;
+          if (selectedFile) {
+            try {
+              // Generate a unique file name to prevent conflicts
+              const fileExt = selectedFile.name.split('.').pop();
+              const fileName = `${user.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+              
+              // Create a storage object with the file
+              const { data, error } = await supabase.storage
+                .from('avatars')
+                .upload(fileName, selectedFile, {
+                  cacheControl: '3600',
+                  upsert: false
+                });
+                
+              if (error) throw error;
+              
+              // Get the public URL for the uploaded file
+              const { data: { publicUrl } } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(data.path);
+                
+              avatarUrl = publicUrl;
+              
+            } catch (uploadError) {
+              console.error('Error uploading file:', uploadError);
+              showError(language === 'ar' 
+                ? 'فشل في تحميل الصورة' 
+                : 'Failed to upload image');
+              setIsSaving(false);
+              return;
+            }
+          }
+          
+          // Update user profile data with new avatar URL if available
           const userUpdate = await updateProfile({
             user_metadata: {
               full_name: profile.fullName,
-              avatar_url: imagePreview || avatar
+              avatar_url: avatarUrl || avatar
             }
           });
           
           if (userUpdate) {
-            toast({
-              title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
-              description: <Check className="h-4 w-4" />,
-              variant: "success"
-            });
+            // Update local state with the new avatar URL
+            setAvatar(avatarUrl);
+            setImagePreview(avatarUrl);
+            setSelectedFile(null);
+            
+            showSuccess(language === 'ar' 
+              ? 'تم حفظ الملف الشخصي بنجاح' 
+              : 'Profile saved successfully');
           }
         } catch (error) {
-          toast({
-            title: language === 'ar' ? "فشل تحديث الملف الشخصي" : "Failed to update profile",
-            description: (error as Error).message,
-            variant: "destructive"
-          });
+          console.error('Error updating profile:', error);
+          showError((error as Error).message);
         } finally {
           setIsSaving(false);
         }
@@ -208,33 +260,94 @@ export default function Account() {
     }
   };
 
-  // Load saved data on component mount
-  useEffect(() => {
-    // Load profile data if it exists
-    const savedProfile = localStorage.getItem('userProfile');
-    if (savedProfile) {
-      try {
-        setProfile(JSON.parse(savedProfile));
-      } catch (e) {
-        console.error('Error parsing saved profile:', e);
-      }
+  // Password Change Handling
+  const handlePasswordChange = async () => {
+    if (!newPassword || !confirmPassword || !currentPassword) {
+      setPasswordError(language === 'ar' ? 'جميع الحقول مطلوبة' : 'All fields are required');
+      return;
     }
     
-    // Load quote preferences
-    const savedPreferences = localStorage.getItem('quotePreferences');
-    if (savedPreferences) {
-      try {
-        setQuotePreferences(JSON.parse(savedPreferences));
-      } catch (e) {
-        console.error('Error parsing quote preferences:', e);
-      }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(language === 'ar' ? 'كلمات المرور الجديدة غير متطابقة' : 'New passwords do not match');
+      return;
     }
     
-    // Watch for category changes to show dialog
-    if (quotePreferences.category === 'custom') {
-      setCustomQuoteDialogOpen(true);
+    if (newPassword.length < 8) {
+      setPasswordError(language === 'ar' ? 'كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل' : 'New password must be at least 8 characters');
+      return;
     }
-  }, []); 
+    
+    setIsChangingPassword(true);
+    setPasswordError("");
+    
+    try {
+      // First verify the current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email || '',
+        password: currentPassword
+      });
+      
+      if (signInError) {
+        setPasswordError(language === 'ar' ? 'كلمة المرور الحالية غير صحيحة' : 'Current password is incorrect');
+        setIsChangingPassword(false);
+        return;
+      }
+      
+      // Now change the password
+      const error = await updateUserPassword(newPassword);
+      
+      if (error) {
+        setPasswordError(error.message);
+      } else {
+        showSuccess(language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        
+        // Close the dialog by triggering the cancel button
+        const cancelButton = document.querySelector('[data-password-cancel-button]') as HTMLButtonElement;
+        if (cancelButton) cancelButton.click();
+      }
+    } catch (error) {
+      console.error('Error changing password:', error);
+      setPasswordError((error as Error).message);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  // Account Deletion Handling
+  const showDeleteAccountConfirmation = () => {
+    setShowDeleteConfirm(true);
+  };
+  
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    
+    // Check if confirmation text matches email
+    if (confirmDeleteInput.toLowerCase() !== user.email?.toLowerCase()) {
+      showError(language === 'ar' ? 'البريد الإلكتروني غير متطابق' : 'Email does not match');
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      const result = await deleteUserAccount();
+      if (result.error) {
+        showError(result.error.message);
+      } else {
+        // Show goodbye message and redirect to login
+        showSuccess(language === 'ar' ? 'تم حذف الحساب بنجاح' : 'Account successfully deleted');
+        navigate('/login');
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      showError((error as Error).message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const handleLogout = async () => {
     confirm({
@@ -247,49 +360,6 @@ export default function Account() {
     });
   };
   
-  const handleSave = async () => {
-    if (!user) return;
-    
-    setIsSaving(true);
-    try {
-      const displayNameErrors = validateDisplayName(displayName);
-      
-      if (displayNameErrors) {
-        toast({
-          title: language === 'ar' ? 'خطأ في التحديث' : 'Update Error',
-          description: displayNameErrors,
-          variant: 'destructive'
-        });
-        setIsSaving(false);
-        return;
-      }
-      
-      // Update user profile data
-      const userUpdate = await updateProfile({
-        user_metadata: {
-          display_name: displayName,
-          avatar_url: avatar,
-        }
-      });
-      
-      if (userUpdate) {
-        toast({
-          title: language === 'ar' ? 'تم تحديث الملف الشخصي' : 'Profile Updated',
-          description: <Check className="h-4 w-4" />,
-          variant: 'success'
-        });
-      }
-    } catch (error) {
-      toast({
-        title: language === 'ar' ? 'فشل التحديث' : 'Update Failed',
-        description: (error as Error).message,
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   // Get initials for avatar
   const getInitials = () => {
     if (!user) return "?";
@@ -342,9 +412,10 @@ export default function Account() {
                 size="sm"
                 className="absolute -right-2 -bottom-1 rounded-full h-8 w-8 p-0"
                 onClick={handleUploadClick}
+                disabled={isSaving}
                 aria-label="Upload profile picture"
               >
-                <Camera className="h-4 w-4" />
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               </Button>
               <input 
                 type="file" 
@@ -370,6 +441,7 @@ export default function Account() {
                 }
                 value={profile.fullName}
                 onChange={(e) => handleProfileChange('fullName', e.target.value)}
+                disabled={isSaving}
               />
             </div>
 
@@ -411,8 +483,16 @@ export default function Account() {
               />
             </div>
 
-            <Button className="w-full mt-4 flex items-center gap-2" onClick={handleSaveProfile}>
-              <Save className="h-4 w-4" />
+            <Button 
+              className="w-full mt-4 flex items-center gap-2" 
+              onClick={handleSaveProfile}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               {language === "ar" ? "حفظ التغييرات" : "Save Changes"}
             </Button>
 
@@ -439,30 +519,60 @@ export default function Account() {
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <div className="space-y-4 py-4">
+                    {passwordError && (
+                      <div className="text-sm text-destructive mb-2">{passwordError}</div>
+                    )}
                     <div className="grid gap-2">
                       <label htmlFor="currentPassword" className="text-sm font-medium">
                         {language === "ar" ? "كلمة المرور الحالية" : "Current Password"}
                       </label>
-                      <Input id="currentPassword" type="password" />
+                      <Input 
+                        id="currentPassword" 
+                        type="password" 
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        disabled={isChangingPassword}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <label htmlFor="newPassword" className="text-sm font-medium">
                         {language === "ar" ? "كلمة المرور الجديدة" : "New Password"}
                       </label>
-                      <Input id="newPassword" type="password" />
+                      <Input 
+                        id="newPassword" 
+                        type="password" 
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        disabled={isChangingPassword}
+                      />
                     </div>
                     <div className="grid gap-2">
                       <label htmlFor="confirmPassword" className="text-sm font-medium">
                         {language === "ar" ? "تأكيد كلمة المرور الجديدة" : "Confirm New Password"}
                       </label>
-                      <Input id="confirmPassword" type="password" />
+                      <Input 
+                        id="confirmPassword" 
+                        type="password" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={isChangingPassword}
+                      />
                     </div>
                   </div>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>
+                    <AlertDialogCancel data-password-cancel-button>
                       {language === "ar" ? "إلغاء" : "Cancel"}
                     </AlertDialogCancel>
-                    <AlertDialogAction>
+                    <AlertDialogAction 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handlePasswordChange();
+                      }}
+                      disabled={isChangingPassword}
+                    >
+                      {isChangingPassword ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {language === "ar" ? "تغيير" : "Change"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
@@ -475,9 +585,9 @@ export default function Account() {
               <label className="text-sm font-medium text-destructive">
                 {language === "ar" ? "حذف الحساب" : "Delete Account"}
               </label>
-              <AlertDialog>
+              <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
+                  <Button variant="destructive" onClick={showDeleteAccountConfirmation}>
                     {language === "ar" ? "حذف الحساب" : "Delete Account"}
                   </Button>
                 </AlertDialogTrigger>
@@ -492,11 +602,56 @@ export default function Account() {
                         : "This action cannot be undone. This will permanently delete your account and remove your data from our servers."}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
+                  
+                  <div className="space-y-4 py-4">
+                    <div className="grid gap-2">
+                      <label htmlFor="deleteReason" className="text-sm font-medium">
+                        {language === "ar" ? "سبب الحذف (اختياري)" : "Reason for deletion (optional)"}
+                      </label>
+                      <Input 
+                        id="deleteReason" 
+                        placeholder={language === "ar" 
+                          ? "يساعدنا هذا في تحسين خدماتنا" 
+                          : "This helps us improve our services"
+                        }
+                        value={deleteReason}
+                        onChange={(e) => setDeleteReason(e.target.value)}
+                        disabled={isDeleting}
+                      />
+                    </div>
+                    
+                    <div className="grid gap-2">
+                      <label htmlFor="confirmDelete" className="text-sm font-medium">
+                        {language === "ar" 
+                          ? `أدخل بريدك الإلكتروني (${user?.email}) للتأكيد` 
+                          : `Type your email (${user?.email}) to confirm`
+                        }
+                      </label>
+                      <Input 
+                        id="confirmDelete" 
+                        value={confirmDeleteInput}
+                        onChange={(e) => setConfirmDeleteInput(e.target.value)}
+                        disabled={isDeleting}
+                        className="border-destructive focus:ring-destructive"
+                      />
+                    </div>
+                  </div>
+                  
                   <AlertDialogFooter>
                     <AlertDialogCancel>
                       {language === "ar" ? "إلغاء" : "Cancel"}
                     </AlertDialogCancel>
-                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    <AlertDialogAction 
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleDeleteAccount();
+                      }}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
                       {language === "ar" ? "نعم، حذف الحساب" : "Yes, delete account"}
                     </AlertDialogAction>
                   </AlertDialogFooter>

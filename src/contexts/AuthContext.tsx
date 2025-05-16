@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +16,7 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<User | null>;
   updateEmail: (email: string) => Promise<AuthError | null>;
   updatePassword: (password: string) => Promise<AuthError | null>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -32,6 +32,7 @@ const AuthContext = createContext<AuthContextType>({
   updateProfile: async () => null,
   updateEmail: async () => null,
   updatePassword: async () => null,
+  refreshSession: async () => {},
 });
 
 interface AuthProviderProps {
@@ -124,6 +125,19 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     };
   }, [navigate, requireAuth, location.pathname]);
 
+  // Add a function to refresh the session
+  const refreshSession = async () => {
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession) {
+        setSession(currentSession);
+        setUser(currentSession.user);
+      }
+    } catch (error) {
+      console.error("Error refreshing session:", error);
+    }
+  };
+
   const signIn = async (email: string, password: string) => {
     logAuthState('Attempting sign in for email:', { email });
     try {
@@ -196,6 +210,10 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         console.error("Error updating profile:", error);
         return null;
       }
+      
+      // Refresh the session after profile update
+      await refreshSession();
+      
       return userData.user;
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -206,6 +224,12 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const updateEmail = async (email: string) => {
     try {
       const { error } = await supabase.auth.updateUser({ email });
+      
+      // Refresh the session after email update
+      if (!error) {
+        await refreshSession();
+      }
+      
       return error;
     } catch (error) {
       console.error("Error updating email:", error);
@@ -235,7 +259,8 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     forgotPassword,
     updateProfile,
     updateEmail,
-    updatePassword
+    updatePassword,
+    refreshSession
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

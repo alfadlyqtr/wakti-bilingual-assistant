@@ -31,3 +31,50 @@ export async function updateProfile(data: { user_metadata: {
     throw error;
   }
 }
+
+// Update password function
+export async function updateUserPassword(newPassword: string) {
+  try {
+    const { error } = await supabase.auth.updateUser({ 
+      password: newPassword 
+    });
+    return error;
+  } catch (error) {
+    console.error("Error updating password:", error);
+    throw error;
+  }
+}
+
+// Delete account function
+export async function deleteUserAccount() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      return { error: new Error('No active session found') };
+    }
+    
+    // Call our serverless function to delete the user account
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      return { error: new Error(result.error || 'Failed to delete account') };
+    }
+    
+    // Sign out the user locally after successful deletion
+    await supabase.auth.signOut();
+    
+    return { error: null };
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    return { error };
+  }
+}
