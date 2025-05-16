@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -18,7 +19,7 @@ interface AIChatHistory {
 // Save a message to the chat history
 export async function saveChatMessage(
   userId: string, 
-  message: string, 
+  content: string, 
   role: "user" | "assistant",
   mode: AIMode,
   metadata: any = {}
@@ -28,15 +29,24 @@ export async function saveChatMessage(
   try {
     console.log('Saving chat message:', { userId, role, mode, metadata });
     
+    // Check if the message contains an image (for assistant responses)
+    const hasMedia = content.includes("![") || (metadata && metadata.hasMedia);
+
+    // Add the timestamp to metadata if it doesn't exist
+    const enhancedMetadata = {
+      ...metadata,
+      timestamp: metadata.timestamp || new Date().toISOString(),
+    };
+    
     // Convert to parameters required by the stored function
     const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
       body: {
         userId,
-        content: message,
+        content,
         role,
         mode,
-        metadata,
-        hasMedia: metadata.hasMedia || metadata.imageUrl ? true : false,
+        metadata: enhancedMetadata,
+        hasMedia,
         expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
       }
     });
@@ -303,44 +313,4 @@ export function extractImagePrompt(text: string): string {
   return text;
 }
 
-// Function to save chat messages to the database
-export const saveChatMessage = async (
-  userId: string,
-  content: string,
-  role: "user" | "assistant",
-  mode: string,
-  metadata: any = {}
-) => {
-  try {
-    // Check if the message contains an image (for assistant responses)
-    const hasMedia = content.includes("![") || (metadata && metadata.hasMedia);
-
-    // Add the originalPrompt to metadata if it exists
-    const enhancedMetadata = {
-      ...metadata,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Call the Supabase Edge Function to insert the chat message
-    const { data, error } = await supabase.functions.invoke("insert-ai-chat", {
-      body: {
-        userId,
-        content,
-        role,
-        mode,
-        hasMedia,
-        metadata: enhancedMetadata, // Pass the enhanced metadata
-      },
-    });
-
-    if (error) {
-      console.error("Error saving chat message:", error);
-      throw new Error(`Error saving chat message: ${error.message}`);
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Error in saveChatMessage:", error);
-    throw error;
-  }
-};
+// Removed the duplicate saveChatMessage function that was here
