@@ -1,7 +1,7 @@
 
 import { useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast"; // Direct import from hooks
+import { toast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 
 export default function Index() {

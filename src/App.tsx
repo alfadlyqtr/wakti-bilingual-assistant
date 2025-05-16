@@ -23,12 +23,11 @@ import EventDetail from "@/pages/EventDetail";
 import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
-import { Toaster } from "@/components/ui/toaster";
 
 function App() {
   return (
-    <ThemeProvider>
-      <Router>
+    <Router>
+      <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
             <Routes>
@@ -58,11 +57,10 @@ function App() {
               {/* 404 route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-            <Toaster />
           </AuthProvider>
         </ToastProvider>
-      </Router>
-    </ThemeProvider>
+      </ThemeProvider>
+    </Router>
   );
 }
 

@@ -1,3 +1,4 @@
+
 import * as React from "react";
 import {
   Toast,
@@ -14,7 +15,7 @@ import {
 import { createContext, useContext } from "react";
 
 const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -99,8 +100,6 @@ export const reducer = (state: State, action: Action): State => {
     case actionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
-      // ! Side effects ! - This could be extracted into a dismissToast() action,
-      // but I'll keep it here for simplicity
       if (toastId) {
         addToRemoveQueue(toastId);
       }
@@ -214,6 +213,33 @@ function useToastInternal(): ToastContextValue {
   };
 }
 
+// Helper function for safely rendering ReactNode content that ensures string output
+function renderToastContent(content: React.ReactNode): string {
+  if (content === null || content === undefined) {
+    return "";
+  }
+  
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  if (typeof content === 'number' || typeof content === 'boolean') {
+    return String(content);
+  }
+  
+  // For React elements or other complex types, convert to string safely
+  try {
+    // For simple objects that can be stringified
+    if (typeof content === 'object') {
+      return JSON.stringify(content);
+    }
+    return String(content);
+  } catch (e) {
+    console.error("Failed to convert toast content to string", e);
+    return "[Content could not be displayed]";
+  }
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const { toast, dismiss, confirm } = useToastInternal();
   
@@ -250,19 +276,6 @@ export function useToast() {
 
 export function Toaster() {
   return <ToasterInternal />;
-}
-
-// Helper function for safely rendering ReactNode content
-function renderToastContent(content: React.ReactNode): React.ReactNode {
-  if (content === null || content === undefined) {
-    return "";
-  }
-  
-  if (typeof content === 'number' || typeof content === 'boolean') {
-    return String(content);
-  }
-  
-  return content;
 }
 
 function ToasterInternal() {
