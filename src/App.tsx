@@ -7,7 +7,6 @@ import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
 import Reminders from "@/pages/Reminders";
-import AIAssistant from "@/pages/AIAssistant";
 import VoiceSummary from "@/pages/VoiceSummary";
 import VoiceSummaryDetail from "@/pages/VoiceSummaryDetail";
 import Settings from "@/pages/Settings";
@@ -50,8 +49,8 @@ function RouteTracker() {
   return null;
 }
 
-// Create a wrapper component to render the inner AIAssistant component directly
-function AIAssistantInnerPage() {
+// Wrapper component to render the inner AIAssistant component directly
+function WaktiAIPage() {
   return (
     <div className="mobile-container">
       <div className="flex-1 overflow-hidden">
@@ -80,8 +79,8 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Temporary route for testing the inner AIAssistant component directly */}
-              <Route path="/ai-test" element={<AIAssistantInnerPage />} />
+              {/* WAKTI AI route */}
+              <Route path="/wakti-ai" element={<WaktiAIPage />} />
 
               {/* Protected routes - but now without redirect */}
               <Route element={<ProtectedRoute />}>
@@ -89,7 +88,6 @@ function App() {
                 <Route path="/calendar" element={<Calendar />} />
                 <Route path="/tasks" element={<Tasks />} />
                 <Route path="/reminders" element={<Reminders />} />
-                <Route path="/assistant" element={<AIAssistant />} />
                 <Route path="/voice-summary" element={<VoiceSummary />} />
                 <Route path="/voice-summary/:id" element={<VoiceSummaryDetail />} />
                 <Route path="/settings" element={<Settings />} />

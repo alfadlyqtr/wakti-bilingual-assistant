@@ -1,3 +1,4 @@
+
 import { useNavigate, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Mic, CalendarHeart, Sparkles } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -71,12 +72,12 @@ export const MobileNav = () => {
     {
       icon: <Sparkles className="h-5 w-5" />,
       label: t("ai", language),
-      path: "/assistant",
+      path: "/wakti-ai",
     },
     {
       icon: <Mic className="h-5 w-5" />,
       label: t("summary", language),
-      path: "/voice-summary", // Updated to use voice-summary consistently
+      path: "/voice-summary",
     },
     {
       icon: <CalendarHeart className="h-5 w-5" />,
