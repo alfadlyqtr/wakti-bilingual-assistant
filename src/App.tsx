@@ -28,9 +28,9 @@ import { Toaster } from "@/components/ui/toaster";
 function App() {
   return (
     <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <Router>
+      <Router>
+        <ToastProvider>
+          <AuthProvider>
             <Routes>
               {/* Public routes */}
               <Route path="/login" element={<Login />} />
@@ -59,9 +59,9 @@ function App() {
               <Route path="*" element={<NotFound />} />
             </Routes>
             <Toaster />
-          </Router>
-        </AuthProvider>
-      </ToastProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </Router>
     </ThemeProvider>
   );
 }
