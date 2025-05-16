@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -24,6 +23,8 @@ import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
+import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAssistant";
+import { Toaster } from "@/components/ui/toaster";
 
 // Enhanced route tracker component to debug navigation
 function RouteTracker() {
@@ -49,6 +50,18 @@ function RouteTracker() {
   return null;
 }
 
+// Create a wrapper component to render the inner AIAssistant component directly
+function AIAssistantInnerPage() {
+  return (
+    <div className="mobile-container">
+      <div className="flex-1 overflow-hidden">
+        <AIAssistantInner />
+      </div>
+      <Toaster />
+    </div>
+  );
+}
+
 function App() {
   console.log("App: Initializing application");
   
@@ -66,6 +79,9 @@ function App() {
               <Route path="/signup" element={<Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+
+              {/* Temporary route for testing the inner AIAssistant component directly */}
+              <Route path="/ai-test" element={<AIAssistantInnerPage />} />
 
               {/* Protected routes - but now without redirect */}
               <Route element={<ProtectedRoute />}>
