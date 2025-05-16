@@ -1,3 +1,4 @@
+
 import { useNavigate, useLocation } from "react-router-dom";
 import { CalendarDays, CheckCircle, Mic, CalendarHeart, Sparkles } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -91,7 +92,7 @@ export const MobileNav = () => {
   }
 
   return (
-    <div className="fixed bottom-4 left-2 right-2 z-50">
+    <div className="fixed bottom-4 left-2 right-2 z-40">
       <div className={cn(
         "flex justify-around items-center p-0.5 mx-auto max-w-md rounded-full border shadow-xl animate-fade-in",
         isDark 
