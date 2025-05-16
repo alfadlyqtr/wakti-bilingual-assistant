@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Settings, LogOut, MessageCircle, 
+  LogOut, MessageCircle, 
   Users, User as UserIcon, ChevronDown 
 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -66,9 +66,8 @@ export function UserMenu() {
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t("user", language);
 
-  // User menu options
+  // User menu options - removed Settings from here
   const menuOptions = [
-    { icon: <Settings size={16} />, label: t("settings", language), path: "/settings" },
     { icon: <MessageCircle size={16} />, label: t("messages", language), path: "/messages" },
     { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
