@@ -1,10 +1,6 @@
 
 import { ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { UserMenu } from "@/components/UserMenu";
-import { Logo3D } from "@/components/Logo3D";
+import { AppHeader } from "@/components/AppHeader";
 
 interface MobileHeaderProps {
   title: string;
@@ -21,41 +17,14 @@ export function MobileHeader({
   onBackClick,
   children,
 }: MobileHeaderProps) {
-  const navigate = useNavigate();
-
-  const handleBackClick = () => {
-    if (onBackClick) {
-      onBackClick();
-    } else {
-      navigate(-1);
-    }
-  };
-
-  const handleLogoClick = () => {
-    navigate('/dashboard');
-  };
-
+  // Use the new AppHeader component for consistency
   return (
-    <div className="mobile-header sticky top-0 z-20">
-      <div className="flex items-center">
-        {showBackButton && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleBackClick}
-            className="mr-2"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        )}
-        <Logo3D size="sm" onClick={handleLogoClick} className="mr-3" />
-        <h1 className="text-lg font-semibold">{title}</h1>
-      </div>
-      {children ? (
-        children
-      ) : (
-        showUserMenu && <UserMenu />
-      )}
-    </div>
+    <AppHeader
+      title={title}
+      showBackButton={showBackButton}
+      showUserMenu={showUserMenu}
+      onBackClick={onBackClick}
+      children={children}
+    />
   );
 }

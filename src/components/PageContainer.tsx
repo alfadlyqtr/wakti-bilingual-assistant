@@ -1,6 +1,6 @@
 
 import { ReactNode } from "react";
-import { MobileHeader } from "@/components/MobileHeader";
+import { AppHeader } from "@/components/AppHeader";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
@@ -21,7 +21,7 @@ export function PageContainer({
   
   return (
     <div className="mobile-container">
-      <MobileHeader 
+      <AppHeader 
         title={title ? t(title as any, language) : "WAKTI"}
         showBackButton={showBackButton}
         showUserMenu={showUserMenu}
