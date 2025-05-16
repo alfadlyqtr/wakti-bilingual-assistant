@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -313,7 +312,7 @@ export default function Dashboard() {
         component: <QuoteWidget />
       },
     ]);
-  }, [language, navigate, widgetVisibility, isLoading, tasks, events, reminders]);
+  }, [language, navigate, widgetVisibility]); // Removed isLoading from the dependency array to fix the infinite loop
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
