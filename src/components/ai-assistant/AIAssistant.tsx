@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -638,9 +639,9 @@ export const AIAssistant: React.FC = () => {
           theme={currentTheme}
         />
 
-        {/* Fixed Bottom Bar - MODIFIED: Added pb-16 to create space above the mobile nav */}
+        {/* Fixed Bottom Bar - MODIFIED: Added pb-20 to create more space above the mobile nav */}
         <div
-          className="py-3 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 left-0 right-0 w-full z-10 shadow-lg pb-16"
+          className="py-3 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 left-0 right-0 w-full z-10 shadow-lg pb-20"
           dir={language === "ar" ? "rtl" : "ltr"}
         >
           <div className="flex items-center gap-2 max-w-md mx-auto">
