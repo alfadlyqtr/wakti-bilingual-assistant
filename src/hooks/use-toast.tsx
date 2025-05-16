@@ -46,11 +46,8 @@ function renderToastContent(content: React.ReactNode): string {
   if (content === null || content === undefined) return "";
   if (typeof content === "string") return content;
   if (typeof content === "number" || typeof content === "boolean") return content.toString();
-  try {
-    return JSON.stringify(content) ?? "";
-  } catch {
-    return "";
-  }
+  // For React elements or objects, return empty string to satisfy typing
+  return "";
 }
 
 type ActionType = typeof actionTypes;
