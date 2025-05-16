@@ -217,35 +217,13 @@ function useToastInternal(): ToastContextValue {
  * 'string & ReactNode' type requirements for toast content
  */
 function renderToastContent(content: React.ReactNode): string {
-  // Handle null/undefined values
-  if (content === null || content === undefined) {
-    return "";
-  }
-  
-  // Handle primitive types
-  if (typeof content === 'string') {
-    return content;
-  }
-  
-  if (typeof content === 'number' || typeof content === 'boolean') {
-    return String(content);
-  }
-  
-  // Handle React elements and complex objects
-  if (React.isValidElement(content)) {
-    // For React elements, try to extract text content
-    return "React Element";
-  }
-  
-  // For simple objects that can be stringified
+  if (content === null || content === undefined) return "";
+  if (typeof content === "string") return content;
+  if (typeof content === "number" || typeof content === "boolean") return content.toString();
   try {
-    if (typeof content === 'object') {
-      return JSON.stringify(content);
-    }
-    return String(content);
-  } catch (error) {
-    console.error("Failed to convert toast content to string", error);
-    return "[Content could not be displayed]";
+    return JSON.stringify(content) ?? "";
+  } catch {
+    return "";
   }
 }
 
