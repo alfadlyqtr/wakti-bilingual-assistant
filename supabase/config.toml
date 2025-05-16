@@ -11,3 +11,10 @@ schemas = ["public", "storage", "graphql_public"]
 verify_jwt = true
 [functions.get-recent-chat-history]
 verify_jwt = true
+[functions.process-ai-intent]
+verify_jwt = true
+[functions.transcribe-audio]
+verify_jwt = true
+[functions.generate-image]
+verify_jwt = true
+

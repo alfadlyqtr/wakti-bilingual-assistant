@@ -11,6 +11,7 @@ export function useToastHelper() {
     toast({
       title: message,
       variant: "success",
+      duration: 3000
     });
   };
 
@@ -19,6 +20,7 @@ export function useToastHelper() {
     toast({
       title: message,
       variant: "destructive",
+      duration: 5000
     });
   };
 
@@ -26,6 +28,15 @@ export function useToastHelper() {
     console.log('Showing info toast:', message);
     toast({
       title: message,
+      duration: 3000
+    });
+  };
+
+  const showLoading = (message: string) => {
+    console.log('Showing loading toast:', message);
+    return toast({
+      title: message,
+      duration: 9999999, // Long duration to keep it visible until dismissed
     });
   };
 
@@ -33,5 +44,6 @@ export function useToastHelper() {
     showSuccess,
     showError,
     showInfo,
+    showLoading
   };
 }

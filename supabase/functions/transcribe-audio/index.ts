@@ -11,11 +11,14 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Transcribe audio request received");
+    
     // Get audio data from request
     const formData = await req.formData();
     const audioFile = formData.get("audio");
     
     if (!audioFile || !(audioFile instanceof File)) {
+      console.error("Missing audio file in request");
       return new Response(
         JSON.stringify({ error: "Audio file is required" }),
         { 
@@ -25,24 +28,33 @@ serve(async (req) => {
       );
     }
 
-    // Maximum allowed audio duration (60 seconds)
-    const MAX_AUDIO_SIZE = 25 * 1024 * 1024; // 25MB approximate limit for 1 minute audio
+    // Maximum allowed audio duration (2 minutes = ~40MB approximate for high quality audio)
+    const MAX_AUDIO_SIZE = 40 * 1024 * 1024; 
     
     if (audioFile.size > MAX_AUDIO_SIZE) {
+      console.error(`Audio file too large: ${audioFile.size} bytes`);
       return new Response(
-        JSON.stringify({ error: "Audio file exceeds maximum allowed duration (60 seconds)" }),
+        JSON.stringify({ error: "Audio file exceeds maximum allowed duration (2 minutes)" }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         }
       );
     }
+    
+    console.log(`Processing audio file: ${audioFile.size} bytes, type: ${audioFile.type}`);
 
     // Create FormData for OpenAI API
     const openAIFormData = new FormData();
     openAIFormData.append("file", audioFile);
     openAIFormData.append("model", "whisper-1");
     openAIFormData.append("response_format", "json");
+    
+    // Try to auto-detect language
+    // Note: Not specifying a language lets Whisper auto-detect, which works great 
+    // for English, Arabic and mixed language content
+    
+    console.log("Calling OpenAI Whisper API...");
 
     // Call OpenAI Whisper API
     const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -60,6 +72,8 @@ serve(async (req) => {
       throw new Error(result.error?.message || "Transcription failed");
     }
 
+    console.log("Transcription successful");
+    
     // Return the transcription
     return new Response(
       JSON.stringify({ text: result.text }),

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+
+import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ import { AIMode, ChatMessage } from "./types";
 import { Loader2 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
+import ReactMarkdown from 'react-markdown';
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -75,6 +77,63 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  // Function to render message content with markdown support
+  const renderMessageContent = (content: string) => {
+    // Check if content contains an image markdown
+    const hasImageMarkdown = content.includes('![');
+    
+    if (hasImageMarkdown) {
+      return (
+        <ReactMarkdown
+          components={{
+            img: ({ node, ...props }) => (
+              <div className="mt-2 overflow-hidden rounded-md">
+                <img 
+                  {...props}
+                  className="w-full h-auto object-cover transition-opacity duration-500 opacity-100"
+                  loading="lazy"
+                  onLoad={(e) => {
+                    // Remove shimmer effect once image loads
+                    e.currentTarget.classList.remove('opacity-0');
+                  }}
+                  style={{ maxHeight: '300px' }}
+                />
+              </div>
+            ),
+            p: ({ node, children, ...props }) => <p className="mb-2" {...props}>{children}</p>,
+            a: ({ node, children, ...props }) => (
+              <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>
+                {children}
+              </a>
+            )
+          }}
+        >
+          {content}
+        </ReactMarkdown>
+      );
+    }
+    
+    // Regular message formatting with line breaks
+    return (
+      <div className="whitespace-pre-wrap text-sm">
+        {content.split('\n').map((line, i) => (
+          <React.Fragment key={i}>
+            {line}
+            {i < content.split('\n').length - 1 && <br />}
+          </React.Fragment>
+        ))}
+      </div>
+    );
+  };
+
+  const ShimmerEffect = () => (
+    <div className="animate-pulse space-y-2">
+      <div className="h-2 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
+      <div className="h-2 bg-gray-300 dark:bg-gray-700 rounded w-1/2"></div>
+      <div className="h-2 bg-gray-300 dark:bg-gray-700 rounded w-5/6"></div>
+    </div>
+  );
+
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
       <div className="max-w-md mx-auto space-y-4">
@@ -90,6 +149,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.3 }}
                 className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} w-full ${isLastMessage ? 'mb-8' : ''}`}
               >
                 <div className={`max-w-[80%] flex ${isAssistant ? 'flex-row' : 'flex-row-reverse'} gap-2`}>
@@ -107,7 +167,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         borderRight: !isAssistant ? `2px solid ${styles?.borderColor}` : 'none'
                       }}
                     >
-                      <div className="whitespace-pre-wrap text-sm">{message.content}</div>
+                      {message.isLoading ? (
+                        <ShimmerEffect />
+                      ) : renderMessageContent(message.content)}
                     </div>
                     
                     {/* Action Buttons */}
@@ -137,6 +199,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             {message.actionButtons.primary.text}
                           </Button>
                         )}
+                      </div>
+                    )}
+                    
+                    {/* Mode Switch Buttons */}
+                    {message.modeSwitchAction && (
+                      <div className="flex justify-start mt-1">
+                        <Button 
+                          variant="default"
+                          size="sm"
+                          onClick={() => onConfirm(message.id, message.modeSwitchAction?.action || '')}
+                          className="text-xs py-1 h-8"
+                          style={{ 
+                            backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
+                          }}
+                        >
+                          {message.modeSwitchAction.text}
+                        </Button>
                       </div>
                     )}
                     

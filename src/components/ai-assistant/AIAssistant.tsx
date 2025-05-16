@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { LeftDrawer } from "./LeftDrawer";
@@ -21,7 +21,7 @@ import { useTheme } from "next-themes";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
 import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
-import { useToast } from "@/hooks/use-toast";
+import { useToastHelper } from "@/hooks/use-toast-helper";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import {
@@ -29,9 +29,10 @@ import {
   getRecentChatHistory,
   processAIRequest,
   generateImage,
+  isImageGenerationRequest,
+  extractImagePrompt,
+  detectAppropriateMode
 } from "@/services/chatService";
-import { AspectRatio } from "@/components/ui/aspect-ratio";
-import Loading from "@/components/ui/loading";
 
 // Changed this function to accept language as a parameter
 const getDefaultWelcomeMessage = (language: "en" | "ar"): string => {
@@ -49,49 +50,90 @@ export const AIAssistant: React.FC = () => {
   const [activeMode, setActiveMode] = useState<AIMode>("general");
   const [isSending, setIsSending] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [pendingModeSwitchMessage, setPendingModeSwitchMessage] = useState<string | null>(null);
+  const [pendingModeSwitchTarget, setPendingModeSwitchTarget] = useState<AIMode | null>(null);
 
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isMobile } = useIsMobile();
   const { theme } = useTheme();
   const { user, session } = useAuth();
-  const { toast } = useToast();
+  const { showSuccess, showError, showInfo } = useToastHelper();
 
   // Language and theme state - Changed this to typed string literal
   const language = "en" as "en" | "ar"; // This would normally come from user preferences
   const currentTheme = theme || "light";
 
-  // Initialize with welcome message
+  // Set initial welcome message or load chat history
   useEffect(() => {
-    const welcomeMessage: ChatMessage = {
-      id: uuidv4(),
-      role: "assistant",
-      content: getDefaultWelcomeMessage(language),
-      timestamp: new Date(),
-      mode: "general",
+    const initializeChat = async () => {
+      if (user && !historyLoaded) {
+        console.log("Initializing chat with user:", user.id);
+        await loadChatHistory();
+        setHistoryLoaded(true);
+      } else if (!user && !historyLoaded) {
+        console.log("Setting welcome message for anonymous user");
+        const welcomeMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: getDefaultWelcomeMessage(language),
+          timestamp: new Date(),
+          mode: "general",
+        };
+        setMessages([welcomeMessage]);
+        setHistoryLoaded(true);
+      }
     };
-    setMessages([welcomeMessage]);
 
-    // Load chat history if user is authenticated
-    if (user) {
-      loadChatHistory();
-    }
+    initializeChat();
   }, [user, language]);
+
+  // Re-initialize chat when user logs in/out
+  useEffect(() => {
+    if (user === null && historyLoaded) {
+      // User logged out, reset to welcome message
+      setHistoryLoaded(false);
+      setMessages([]);
+    }
+  }, [user]);
 
   // Load chat history from Supabase
   const loadChatHistory = async () => {
     if (!user) return;
 
     try {
+      console.log("Loading chat history for user:", user.id);
       const history = await getRecentChatHistory(user.id, null, 20);
+      
       if (history.length > 0) {
+        console.log(`Loaded ${history.length} chat messages from history`);
         // Only set history if it's not empty
         // We're not replacing the welcome message if there's no history
         setMessages(history);
+      } else {
+        // If no history, show welcome message
+        console.log("No chat history found, showing welcome message");
+        const welcomeMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: getDefaultWelcomeMessage(language),
+          timestamp: new Date(),
+          mode: "general",
+        };
+        setMessages([welcomeMessage]);
       }
     } catch (error) {
       console.error("Error fetching chat history:", error);
       // We'll just keep the welcome message if history fetching fails
+      const welcomeMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: getDefaultWelcomeMessage(language),
+        timestamp: new Date(),
+        mode: "general",
+      };
+      setMessages([welcomeMessage]);
     }
   };
 
@@ -104,22 +146,79 @@ export const AIAssistant: React.FC = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim()) return;
-    if (!user) {
-      toast({
-        title: t("loginRequired" as TranslationKey, language),
-        description: t("pleaseLoginToChat" as TranslationKey, language),
-        variant: "destructive",
+  // Handle mode switching with double echo logic
+  const handleModeSwitch = useCallback(async (messageId: string, action: string) => {
+    if (action.startsWith("switch_to_") && user) {
+      const newMode = action.replace("switch_to_", "") as AIMode;
+      console.log(`Switching mode from ${activeMode} to ${newMode}`);
+      
+      // Store the pending message and target mode
+      const pendingMessage = pendingModeSwitchMessage || inputValue;
+      
+      // Switch the mode
+      setActiveMode(newMode);
+      
+      // Add confirmation message
+      const confirmMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: `Still want me to do this: "${pendingMessage}"?`,
+        timestamp: new Date(),
+        mode: newMode,
+        actionButtons: {
+          primary: {
+            text: "Yes, do it",
+            action: "execute_pending",
+          },
+          secondary: {
+            text: "No, cancel",
+            action: "cancel_pending",
+          },
+        }
+      };
+      
+      setMessages((prev) => [...prev, confirmMessage]);
+      setPendingModeSwitchMessage(pendingMessage);
+      setPendingModeSwitchTarget(newMode);
+      
+      // Save the confirmation message
+      await saveChatMessage(user.id, confirmMessage.content, "assistant", newMode, {
+        pendingMessage,
+        actionButtons: confirmMessage.actionButtons
       });
-      return;
+      
+    } else if (action === "execute_pending" && pendingModeSwitchMessage && user) {
+      // Execute the pending message in the new mode
+      console.log("Executing pending message after mode switch:", pendingModeSwitchMessage);
+      
+      // Clear pending state first to avoid loops
+      const messageToSend = pendingModeSwitchMessage;
+      setPendingModeSwitchMessage(null);
+      setPendingModeSwitchTarget(null);
+      
+      // Process the message in the new mode
+      await processUserMessage(messageToSend);
+      
+    } else if (action === "cancel_pending") {
+      // Clear pending state
+      setPendingModeSwitchMessage(null);
+      setPendingModeSwitchTarget(null);
+      console.log("Cancelled pending action after mode switch");
+      
+    } else {
+      // Handle other action types (task creation, reminder, event, etc.)
+      handleConfirmAction(messageId, action);
     }
+  }, [activeMode, inputValue, pendingModeSwitchMessage, pendingModeSwitchTarget, user]);
 
+  const processUserMessage = async (message: string) => {
+    if (!message.trim() || !user) return;
+    
     setIsSending(true);
     const userMessage: ChatMessage = {
       id: uuidv4(),
       role: "user",
-      content: inputValue,
+      content: message,
       timestamp: new Date(),
       mode: activeMode,
     };
@@ -136,21 +235,50 @@ export const AIAssistant: React.FC = () => {
 
     try {
       // Special command for image generation
-      if (
-        inputValue.toLowerCase().startsWith("/image") ||
-        inputValue.toLowerCase().includes("generate image") ||
-        inputValue.toLowerCase().includes("create image") ||
-        inputValue.toLowerCase().includes("draw")
-      ) {
+      if (isImageGenerationRequest(message)) {
         await handleImageGeneration(userMessage.content);
         setIsSending(false);
         setIsTyping(false);
         return;
       }
 
+      // Check if we should suggest a mode switch
+      const suggestedMode = detectAppropriateMode(message, activeMode);
+      
+      if (suggestedMode) {
+        console.log(`Suggesting mode switch from ${activeMode} to ${suggestedMode}`);
+        
+        // Create message suggesting mode switch
+        const switchSuggestionMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `You asked to: "${message}". This works better in ${suggestedMode} mode. Would you like to switch?`,
+          timestamp: new Date(),
+          mode: activeMode,
+          modeSwitchAction: {
+            text: `Switch to ${suggestedMode} mode`,
+            action: `switch_to_${suggestedMode}`,
+            targetMode: suggestedMode
+          }
+        };
+        
+        // Add suggestion to UI after small delay for realism
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setMessages((prev) => [...prev, switchSuggestionMessage]);
+        
+        // Save the suggestion message
+        await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
+          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+        });
+        
+        setIsTyping(false);
+        setIsSending(false);
+        return;
+      }
+
       // Process the message with the AI
       const aiResponse = await processAIRequest(
-        userMessage.content,
+        message,
         activeMode,
         user.id
       );
@@ -158,6 +286,35 @@ export const AIAssistant: React.FC = () => {
       // Add realistic typing delay
       const typingDelay = Math.min(1000, aiResponse.response.length * 10);
       await new Promise((resolve) => setTimeout(resolve, typingDelay));
+
+      // Check if AI suggests a mode switch (second method of detection)
+      if (aiResponse.suggestedMode && aiResponse.suggestedMode !== activeMode) {
+        // The edge function detected that another mode would be better
+        const switchSuggestionMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: aiResponse.response,
+          timestamp: new Date(),
+          mode: activeMode,
+          modeSwitchAction: {
+            text: `Switch to ${aiResponse.suggestedMode} mode`,
+            action: `switch_to_${aiResponse.suggestedMode}`,
+            targetMode: aiResponse.suggestedMode
+          }
+        };
+        
+        // Add suggestion to UI
+        setMessages((prev) => [...prev, switchSuggestionMessage]);
+        
+        // Save the suggestion message
+        await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
+          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+        });
+        
+        setIsTyping(false);
+        setIsSending(false);
+        return;
+      }
 
       // Create the AI response message
       const assistantMessage: ChatMessage = {
@@ -194,7 +351,10 @@ export const AIAssistant: React.FC = () => {
         assistantMessage.content,
         "assistant",
         activeMode,
-        assistantMessage.metadata
+        {
+          intentData: aiResponse.intentData,
+          actionButtons: assistantMessage.actionButtons
+        }
       );
     } catch (error) {
       console.error("Error processing message:", error);
@@ -207,6 +367,7 @@ export const AIAssistant: React.FC = () => {
         mode: activeMode,
       };
       setMessages((prev) => [...prev, errorMessage]);
+      showError(t("errorProcessingRequest" as TranslationKey, language));
     } finally {
       setIsTyping(false);
       setIsSending(false);
@@ -218,20 +379,18 @@ export const AIAssistant: React.FC = () => {
 
     try {
       // Extract the image prompt
-      let imagePrompt = prompt;
-      if (prompt.toLowerCase().startsWith("/image")) {
-        imagePrompt = prompt.substring(6).trim();
-      }
-
-      // Create assistant message to show we're generating the image
-      const processingMessage: ChatMessage = {
+      const imagePrompt = extractImagePrompt(prompt);
+      
+      // Create loading message to show we're generating the image
+      const loadingMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
         content: t("generatingImage" as TranslationKey, language),
         timestamp: new Date(),
         mode: activeMode,
+        isLoading: true
       };
-      setMessages((prev) => [...prev, processingMessage]);
+      setMessages((prev) => [...prev, loadingMessage]);
 
       // Call the image generation service
       const imageUrl = await generateImage(imagePrompt);
@@ -239,16 +398,17 @@ export const AIAssistant: React.FC = () => {
       // Update the message with the image or error
       if (imageUrl) {
         const updatedMessage: ChatMessage = {
-          ...processingMessage,
+          ...loadingMessage,
           content: `${t(
             "imageGenerated" as TranslationKey,
             language
           )}\n\n![${t("generatedImage" as TranslationKey, language)}](${imageUrl})`,
           metadata: { imageUrl },
+          isLoading: false
         };
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === processingMessage.id ? updatedMessage : msg
+            msg.id === loadingMessage.id ? updatedMessage : msg
           )
         );
 
@@ -276,11 +436,12 @@ export const AIAssistant: React.FC = () => {
       setMessages((prev) => 
         prev.map((msg) => 
           // Using exact content comparison instead of type comparison
-          msg.content === t("generatingImage" as TranslationKey, language)
+          msg.content === t("generatingImage" as TranslationKey, language) && msg.isLoading
             ? errorMessage 
             : msg
         )
       );
+      showError(t("errorGeneratingImage" as TranslationKey, language));
     } finally {
       setIsGeneratingImage(false);
     }
@@ -290,6 +451,17 @@ export const AIAssistant: React.FC = () => {
     setInputValue(text);
     // Focus the input field after receiving transcription
     inputRef.current?.focus();
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
+    
+    if (!user) {
+      showError(t("loginRequired" as TranslationKey, language));
+      return;
+    }
+    
+    await processUserMessage(inputValue);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -310,10 +482,25 @@ export const AIAssistant: React.FC = () => {
         const taskData = message.metadata?.intentData?.data || {
           title: "New Task",
         };
-        toast({
-          title: t("taskCreated" as TranslationKey, language),
-          description: taskData.title,
-        });
+        showSuccess(t("taskCreated" as TranslationKey, language));
+        
+        // Add confirmation message
+        const taskConfirmMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `✅ Task "${taskData.title}" created successfully.`,
+          timestamp: new Date(),
+          mode: activeMode,
+        };
+        setMessages((prev) => [...prev, taskConfirmMessage]);
+        
+        // Save confirmation to chat history
+        await saveChatMessage(
+          user.id,
+          taskConfirmMessage.content,
+          "assistant",
+          activeMode
+        );
         break;
 
       case "create_reminder":
@@ -321,10 +508,25 @@ export const AIAssistant: React.FC = () => {
         const reminderData = message.metadata?.intentData?.data || {
           title: "New Reminder",
         };
-        toast({
-          title: t("reminderCreated" as TranslationKey, language),
-          description: reminderData.title,
-        });
+        showSuccess(t("reminderCreated" as TranslationKey, language));
+        
+        // Add confirmation message
+        const reminderConfirmMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `✅ Reminder "${reminderData.title}" created successfully.`,
+          timestamp: new Date(),
+          mode: activeMode,
+        };
+        setMessages((prev) => [...prev, reminderConfirmMessage]);
+        
+        // Save confirmation to chat history
+        await saveChatMessage(
+          user.id,
+          reminderConfirmMessage.content,
+          "assistant",
+          activeMode
+        );
         break;
 
       case "create_event":
@@ -332,17 +534,59 @@ export const AIAssistant: React.FC = () => {
         const eventData = message.metadata?.intentData?.data || {
           title: "New Event",
         };
-        toast({
-          title: t("eventCreated" as TranslationKey, language),
-          description: eventData.title,
-        });
+        showSuccess(t("eventCreated" as TranslationKey, language));
+        
+        // Add confirmation message
+        const eventConfirmMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `✅ Event "${eventData.title}" created successfully.`,
+          timestamp: new Date(),
+          mode: activeMode,
+        };
+        setMessages((prev) => [...prev, eventConfirmMessage]);
+        
+        // Save confirmation to chat history
+        await saveChatMessage(
+          user.id,
+          eventConfirmMessage.content,
+          "assistant",
+          activeMode
+        );
+        break;
+
+      case "generate_image":
+        // Handle image generation through the separate flow
+        const imagePrompt = message.metadata?.intentData?.data?.prompt || "abstract art";
+        await handleImageGeneration(imagePrompt);
         break;
 
       case "cancel":
         // User canceled the action
+        const cancelMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `Action canceled.`,
+          timestamp: new Date(),
+          mode: activeMode,
+        };
+        setMessages((prev) => [...prev, cancelMessage]);
+        
+        // Save cancellation to chat history
+        await saveChatMessage(
+          user.id,
+          cancelMessage.content,
+          "assistant",
+          activeMode
+        );
         break;
 
       default:
+        if (action.startsWith("switch_to_")) {
+          // Handle mode switching
+          await handleModeSwitch(messageId, action);
+          return;
+        }
         console.log("Unknown action:", action);
     }
 
@@ -396,7 +640,7 @@ export const AIAssistant: React.FC = () => {
 
         {/* Input Area */}
         <div
-          className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full"
+          className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full shadow-lg"
           dir={language === "ar" ? "rtl" : "ltr"}
         >
           <div className="flex items-center gap-2 max-w-md mx-auto">

@@ -9,6 +9,8 @@ serve(async (req) => {
   }
   
   try {
+    console.log("Get recent chat history request received");
+    
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -27,8 +29,11 @@ serve(async (req) => {
     // Get request body
     const { userId, mode, limit = 20 } = await req.json();
     
+    console.log("Fetch params:", { userId, mode, limit });
+    
     // Ensure user is authorized
     if (user?.id !== userId) {
+      console.error("Unauthorized: token user ID doesn't match request user ID");
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -50,17 +55,21 @@ serve(async (req) => {
     const { data, error } = await query;
     
     if (error) {
+      console.error("Database error:", error);
       return new Response(
         JSON.stringify({ error: error.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
+    console.log(`Retrieved ${data?.length || 0} chat messages`);
+    
     return new Response(
       JSON.stringify(data),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("Error in get-recent-chat-history function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

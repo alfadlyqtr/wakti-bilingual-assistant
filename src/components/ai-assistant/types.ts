@@ -1,71 +1,17 @@
-export type AIMode = 'general' | 'writer' | 'creative' | 'assistant';
 
-export const ASSISTANT_MODES = [
-  {
-    id: 'general',
-    name: 'Chat',
-    description: 'General conversation',
-    color: {
-      dark: '#3498db',
-      light: '#3498db'
-    },
-    activeColor: {
-      dark: '#2980b9',
-      light: '#2980b9'  
-    },
-    icon: 'MessageSquare'
-  },
-  {
-    id: 'writer',
-    name: 'Type',
-    description: 'Writing assistant',
-    color: {
-      dark: '#1abc9c',
-      light: '#1abc9c'
-    },
-    activeColor: {
-      dark: '#16a085',
-      light: '#16a085'
-    },
-    icon: 'Edit3'
-  },
-  {
-    id: 'creative',
-    name: 'Create',
-    description: 'Creative generation',
-    color: {
-      dark: '#e67e22',
-      light: '#e67e22'
-    },
-    activeColor: {
-      dark: '#d35400',
-      light: '#d35400'
-    },
-    icon: 'Paintbrush'
-  },
-  {
-    id: 'assistant',
-    name: 'Plan',
-    description: 'Task management',
-    color: {
-      dark: '#9b59b6',
-      light: '#9b59b6'
-    },
-    activeColor: {
-      dark: '#8e44ad',
-      light: '#8e44ad'
-    },
-    icon: 'Calendar'
-  }
-];
+import React from "react";
 
-// Chat message interface
+// Available modes for the AI assistant
+export type AIMode = "general" | "writer" | "creative" | "assistant";
+
+// Basic structure for chat messages
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
   mode: AIMode;
+  metadata?: any;
   actionButtons?: {
     primary?: {
       text: string;
@@ -76,20 +22,102 @@ export interface ChatMessage {
       action: string;
     };
   };
-  metadata?: any;
+  modeSwitchAction?: {
+    text: string;
+    action: string;
+    targetMode: AIMode;
+  };
+  isLoading?: boolean;
 }
 
-// Intent types
-export type AIIntent = 
-  | 'general_chat'
-  | 'create_task'
-  | 'create_reminder'
-  | 'create_event'
-  | 'generate_image'
-  | 'math_question';
-
-// Interface for intent data
-export interface IntentData {
-  intent: AIIntent;
-  data: any;
+// Type for message variables
+export interface MessageVariable {
+  key: string;
+  value: string;
 }
+
+// Define mode parameters
+interface AssistantMode {
+  id: AIMode;
+  label: {
+    en: string;
+    ar: string;
+  };
+  description: {
+    en: string;
+    ar: string;
+  };
+  icon: React.ReactNode;
+  color: {
+    light: string;
+    dark: string;
+  };
+}
+
+// Available modes with their configurations
+export const ASSISTANT_MODES: AssistantMode[] = [
+  {
+    id: "general",
+    label: {
+      en: "Chat",
+      ar: "دردشة",
+    },
+    description: {
+      en: "General conversation and information",
+      ar: "محادثة عامة ومعلومات",
+    },
+    icon: null,
+    color: {
+      light: "#3498db",
+      dark: "#2980b9",
+    },
+  },
+  {
+    id: "writer",
+    label: {
+      en: "Type",
+      ar: "كتابة",
+    },
+    description: {
+      en: "Writing, editing and text refinement",
+      ar: "الكتابة والتحرير وتحسين النص",
+    },
+    icon: null,
+    color: {
+      light: "#2ecc71",
+      dark: "#27ae60",
+    },
+  },
+  {
+    id: "creative",
+    label: {
+      en: "Create",
+      ar: "إنشاء",
+    },
+    description: {
+      en: "Creative content and image generation",
+      ar: "محتوى إبداعي وإنشاء الصور",
+    },
+    icon: null,
+    color: {
+      light: "#e74c3c",
+      dark: "#c0392b",
+    },
+  },
+  {
+    id: "assistant",
+    label: {
+      en: "Plan",
+      ar: "تخطيط",
+    },
+    description: {
+      en: "Task management and scheduling",
+      ar: "إدارة المهام والجدولة",
+    },
+    icon: null,
+    color: {
+      light: "#9b59b6",
+      dark: "#8e44ad",
+    },
+  },
+];

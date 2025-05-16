@@ -12,6 +12,7 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Processing AI intent request");
     const { text, mode, userId } = await req.json();
 
     if (!text) {
@@ -30,21 +31,116 @@ serve(async (req) => {
       
       switch (currentMode) {
         case "general":
-          return basePrompt + "Provide helpful, conversational responses to general queries.";
+          return basePrompt + `
+            Provide helpful, conversational responses to general queries.
+            If the user asks about creating tasks, events, reminders, or images, suggest switching to the appropriate mode.
+            Task/Events/Reminders = assistant mode, Images = creative mode, Writing = writer mode.
+            If suggesting a mode switch, specify which mode would be better and why.
+          `;
         case "writer":
-          return basePrompt + "Help with writing, editing, and language refinement.";
+          return basePrompt + `
+            Help with writing, editing, and language refinement.
+            You excel at drafting emails, creating content, and refining text.
+            If the user asks for something better suited to another mode, suggest switching.
+          `;
         case "creative":
-          return basePrompt + "Assist with creative content generation and ideas.";
+          return basePrompt + `
+            Assist with creative content generation and ideas.
+            You're especially good at image generation, storytelling, and creative concepts.
+            For image generation requests, extract the image prompt clearly.
+          `;
         case "assistant":
-          return basePrompt + "Focus on task management, planning, and organization.";
+          return basePrompt + `
+            Focus on task management, planning, and organization.
+            You excel at helping create tasks, events, and reminders.
+            Try to extract structured data from user requests for these items.
+            For tasks: extract title, description, priority, due date when possible.
+            For events: extract title, description, start time, end time, location when possible.
+            For reminders: extract title and due date when possible.
+          `;
         default:
           return "You are WAKTI, a helpful AI assistant.";
       }
     };
 
+    // Detect if mode switch is needed
+    const detectBetterMode = (userText: string, currentMode: string) => {
+      const lowerText = userText.toLowerCase();
+      
+      // Image generation - creative mode
+      if (
+        lowerText.startsWith("/image") ||
+        lowerText.includes("generate image") ||
+        lowerText.includes("create image") ||
+        lowerText.includes("draw") ||
+        lowerText.includes("create a picture") ||
+        lowerText.includes("make an image") ||
+        lowerText.includes("generate a picture") ||
+        lowerText.includes("show me a picture") ||
+        lowerText.includes("visualize")
+      ) {
+        return currentMode !== 'creative' ? 'creative' : null;
+      }
+      
+      // Task creation - assistant mode
+      if (
+        lowerText.includes("create task") ||
+        lowerText.includes("add task") ||
+        lowerText.includes("make task") ||
+        lowerText.includes("create reminder") ||
+        lowerText.includes("add reminder") ||
+        lowerText.includes("remind me") ||
+        lowerText.includes("schedule") ||
+        lowerText.includes("create event") ||
+        lowerText.includes("calendar") ||
+        lowerText.includes("add to my calendar")
+      ) {
+        return currentMode !== 'assistant' ? 'assistant' : null;
+      }
+      
+      // Writing assistance - writer mode
+      if (
+        lowerText.includes("write") ||
+        lowerText.includes("draft") ||
+        lowerText.includes("compose") ||
+        lowerText.includes("email") ||
+        lowerText.includes("letter") ||
+        lowerText.includes("essay") ||
+        lowerText.includes("poem") ||
+        lowerText.includes("story") ||
+        lowerText.includes("message") ||
+        lowerText.includes("edit")
+      ) {
+        return currentMode !== 'writer' ? 'writer' : null;
+      }
+      
+      // Default - no mode switch needed
+      return null;
+    };
+
+    // Check if a mode switch is recommended
+    const suggestedMode = detectBetterMode(text, mode);
+    console.log(`Current mode: ${mode}, Suggested mode: ${suggestedMode || 'none'}`);
+
+    // If mode switch is suggested, return that instead of processing normally
+    if (suggestedMode) {
+      return new Response(
+        JSON.stringify({
+          response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Would you like me to switch?`,
+          suggestedMode: suggestedMode
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // First try DeepSeek API
     let result;
     try {
+      if (!DEEPSEEK_API_KEY) {
+        throw new Error("DeepSeek API key not configured");
+      }
+      
+      console.log("Calling DeepSeek API");
       const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -62,14 +158,19 @@ serve(async (req) => {
       });
 
       result = await deepseekResponse.json();
+      console.log("DeepSeek response status:", deepseekResponse.status);
 
       if (!deepseekResponse.ok) {
-        throw new Error("DeepSeek API failed");
+        throw new Error(`DeepSeek API failed: ${JSON.stringify(result)}`);
       }
     } catch (error) {
       console.log("DeepSeek API failed, falling back to OpenAI:", error.message);
       
       // Fallback to OpenAI GPT-4-mini
+      if (!OPENAI_API_KEY) {
+        throw new Error("OpenAI API key not configured for fallback");
+      }
+      
       const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -89,15 +190,19 @@ serve(async (req) => {
       result = await openaiResponse.json();
       
       if (!openaiResponse.ok) {
-        throw new Error("Both DeepSeek and OpenAI APIs failed");
+        throw new Error(`Both DeepSeek and OpenAI APIs failed: ${JSON.stringify(result)}`);
       }
+      
+      console.log("OpenAI fallback successful");
     }
 
     // Extract detected intent and response content
     const responseContent = result.choices[0].message?.content || "";
     
     // Analyze the content for special intents (task creation, reminders, events)
-    const intentAnalysis = analyzeForIntent(text, responseContent);
+    const intentAnalysis = analyzeForIntent(text, responseContent, mode);
+    
+    console.log("Intent analysis:", intentAnalysis);
     
     return new Response(
       JSON.stringify({
@@ -121,31 +226,49 @@ serve(async (req) => {
 });
 
 // Function to analyze text for specific intents
-function analyzeForIntent(userText: string, aiResponse: string) {
+function analyzeForIntent(userText: string, aiResponse: string, mode: string) {
   const lowerText = userText.toLowerCase();
   
-  // Check for task creation intent
-  if (lowerText.includes("create task") || 
-      lowerText.includes("new task") || 
-      lowerText.includes("add task") ||
-      (lowerText.includes("task") && (lowerText.includes("make") || lowerText.includes("add")))) {
-    return extractTaskData(userText, aiResponse);
+  // In assistant mode, we're much more likely to detect structured intents
+  if (mode === 'assistant') {
+    // Check for task creation intent
+    if (lowerText.includes("task") || 
+        lowerText.includes("to do") || 
+        lowerText.includes("todo")) {
+      return extractTaskData(userText, aiResponse);
+    }
+    
+    // Check for reminder creation intent
+    if (lowerText.includes("remind") || 
+        lowerText.includes("reminder") || 
+        lowerText.includes("don't forget")) {
+      return extractReminderData(userText, aiResponse);
+    }
+    
+    // Check for event creation intent
+    if (lowerText.includes("event") || 
+        lowerText.includes("appointment") || 
+        lowerText.includes("schedule") ||
+        lowerText.includes("meeting") ||
+        lowerText.includes("calendar")) {
+      return extractEventData(userText, aiResponse);
+    }
   }
   
-  // Check for reminder creation intent
-  if (lowerText.includes("remind me") || 
-      lowerText.includes("set reminder") || 
-      lowerText.includes("create reminder") ||
-      lowerText.includes("new reminder")) {
-    return extractReminderData(userText, aiResponse);
-  }
-  
-  // Check for event creation intent
-  if (lowerText.includes("create event") || 
-      lowerText.includes("new event") || 
-      lowerText.includes("schedule event") ||
-      (lowerText.includes("event") && (lowerText.includes("create") || lowerText.includes("add")))) {
-    return extractEventData(userText, aiResponse);
+  // Check for image generation intent in any mode
+  // Though this is better in creative mode
+  if (lowerText.startsWith("/image") || 
+      lowerText.includes("generate image") || 
+      lowerText.includes("create image") ||
+      lowerText.includes("draw") ||
+      lowerText.includes("picture of")) {
+    
+    return {
+      intent: "generate_image",
+      data: {
+        prompt: extractImagePrompt(userText)
+      }
+    };
   }
   
   // If no specific intent is detected
@@ -155,50 +278,149 @@ function analyzeForIntent(userText: string, aiResponse: string) {
   };
 }
 
+// Extract image prompt from text
+function extractImagePrompt(text: string): string {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.startsWith("/image")) {
+    return text.substring(6).trim();
+  }
+  
+  // Handle various image generation phrases
+  const patterns = [
+    "generate image of ", 
+    "create image of ",
+    "draw ",
+    "create a picture of ",
+    "make an image of ",
+    "generate a picture of ",
+    "show me a picture of ",
+    "visualize "
+  ];
+  
+  for (const pattern of patterns) {
+    if (lowerText.includes(pattern)) {
+      const startIndex = lowerText.indexOf(pattern) + pattern.length;
+      return text.substring(startIndex).trim();
+    }
+  }
+  
+  // If no pattern matches, use the whole text but remove trigger words
+  return text.replace(/generate image|create image|draw|picture/gi, '').trim();
+}
+
 // Extract task data from text
 function extractTaskData(userText: string, aiResponse: string) {
+  // Use regex to try to extract date information
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = userText.match(dateRegex);
+  
+  // Extract priority keywords
+  const priorityRegex = /\b(high|medium|low|urgent|critical)\b priority/i;
+  const priorityMatch = userText.match(priorityRegex);
+  
   // Basic extraction logic - in real implementation this would be more sophisticated
   let title = userText.replace(/create task|new task|add task|make task|task/gi, "").trim();
   if (!title) title = "New task";
+  
+  // Try to clean up the title by removing date and priority information
+  if (dateMatch) {
+    dateMatch.forEach(date => {
+      title = title.replace(date, "").trim();
+    });
+  }
+  
+  if (priorityMatch) {
+    title = title.replace(priorityMatch[0], "").trim();
+  }
+  
+  // Remove any multiple spaces
+  title = title.replace(/\s+/g, " ").trim();
   
   return {
     intent: "create_task",
     data: {
       title: title,
       description: "",
-      priority: "medium",
-      dueDate: null
+      priority: priorityMatch ? priorityMatch[1].toLowerCase() : "medium",
+      dueDate: dateMatch ? dateMatch[0] : null
     }
   };
 }
 
 // Extract reminder data from text
 function extractReminderData(userText: string, aiResponse: string) {
+  // Use regex to try to extract date information
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = userText.match(dateRegex);
+  
   let title = userText.replace(/remind me|set reminder|create reminder|new reminder|reminder/gi, "").trim();
   if (!title) title = "New reminder";
+  
+  // Try to clean up the title by removing date information
+  if (dateMatch) {
+    dateMatch.forEach(date => {
+      title = title.replace(date, "").trim();
+    });
+  }
+  
+  // Remove any multiple spaces
+  title = title.replace(/\s+/g, " ").trim();
   
   return {
     intent: "create_reminder",
     data: {
       title: title,
-      dueDate: null
+      dueDate: dateMatch ? dateMatch[0] : null
     }
   };
 }
 
 // Extract event data from text
 function extractEventData(userText: string, aiResponse: string) {
-  let title = userText.replace(/create event|new event|schedule event|event/gi, "").trim();
+  // Use regex to try to extract date information
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = userText.match(dateRegex);
+  
+  // Try to extract time information
+  const timeRegex = /(\d{1,2})(:)(\d{2})(\s?)(am|pm)?|(\d{1,2})(\s?)(am|pm)/gi;
+  const timeMatch = userText.match(timeRegex);
+  
+  // Try to extract location
+  const locationRegex = /at ([^,\.]+)/i;
+  const locationMatch = userText.match(locationRegex);
+  
+  let title = userText.replace(/create event|new event|schedule event|event|meeting|appointment|schedule/gi, "").trim();
   if (!title) title = "New event";
+  
+  // Clean up title by removing date, time and location
+  if (dateMatch) {
+    dateMatch.forEach(date => {
+      title = title.replace(date, "").trim();
+    });
+  }
+  
+  if (timeMatch) {
+    timeMatch.forEach(time => {
+      title = title.replace(time, "").trim();
+    });
+  }
+  
+  if (locationMatch) {
+    title = title.replace(locationMatch[0], "").trim();
+  }
+  
+  // Remove any multiple spaces
+  title = title.replace(/\s+/g, " ").trim();
   
   return {
     intent: "create_event",
     data: {
       title: title,
       description: "",
-      startTime: null,
+      startTime: dateMatch ? dateMatch[0] : null,
       endTime: null,
-      location: null
+      location: locationMatch ? locationMatch[1] : null
     }
   };
 }

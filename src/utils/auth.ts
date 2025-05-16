@@ -7,6 +7,17 @@ export async function signOut() {
   return await supabase.auth.signOut();
 }
 
+// Get current session - useful for checking authentication state
+export async function getCurrentSession() {
+  return await supabase.auth.getSession();
+}
+
+// Get current user
+export async function getCurrentUser() {
+  const { data } = await supabase.auth.getUser();
+  return data?.user;
+}
+
 // Update profile function
 export async function updateProfile(data: { user_metadata: { 
   display_name?: string; 
