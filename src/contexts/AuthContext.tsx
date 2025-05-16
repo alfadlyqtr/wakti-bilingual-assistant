@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -45,24 +45,35 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const navigationInProgress = useRef(false);
+  
+  // Debug helper to track auth state changes
+  const logAuthState = (message: string, details?: any) => {
+    console.log(`AuthContext: ${message}`, {
+      hasUser: !!user,
+      hasSession: !!session,
+      isLoading: loading,
+      currentPath: location.pathname,
+      ...(details || {})
+    });
+  };
 
   useEffect(() => {
-    console.log('AuthProvider: Setting up authentication listeners');
+    logAuthState('Setting up authentication listeners');
     
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        console.log('AuthProvider: Auth state change event:', event);
-        console.log('AuthProvider: Session exists:', !!currentSession);
+        logAuthState(`Auth state change event: ${event}`, { hasNewSession: !!currentSession });
         
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
 
-        // Only redirect on signout if explicitly required
+        // Only redirect on signout if explicitly required and we're not already navigating
         if (event === 'SIGNED_OUT' && requireAuth && !navigationInProgress.current) {
-          console.log('AuthProvider: User signed out, redirecting to login');
+          logAuthState('User signed out, redirecting to login');
           navigationInProgress.current = true;
           // Use a timeout to avoid potential race conditions
           setTimeout(() => {
@@ -76,9 +87,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     // THEN check for existing session
     const initializeAuth = async () => {
       try {
-        console.log('AuthProvider: Checking for existing session');
+        logAuthState('Checking for existing session');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        console.log('AuthProvider: Initial session exists:', !!currentSession);
+        logAuthState('Initial session check complete', { hasSession: !!currentSession });
         
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
@@ -86,8 +97,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setInitialized(true);
         
         // Only redirect if authentication is required but user is not logged in
-        if (requireAuth && !currentSession && !navigationInProgress.current) {
-          console.log('AuthProvider: No session found, redirecting to login');
+        // Remove the automatic redirect to dashboard - let the router handle where the user should go
+        if (requireAuth && !currentSession && !navigationInProgress.current && !location.pathname.includes('/login')) {
+          logAuthState('No session found, redirecting to login');
           navigationInProgress.current = true;
           navigate('/login');
           navigationInProgress.current = false;
@@ -96,7 +108,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         console.error('AuthProvider: Error initializing auth', error);
         setLoading(false);
         setInitialized(true);
-        if (requireAuth && !navigationInProgress.current) {
+        if (requireAuth && !navigationInProgress.current && !location.pathname.includes('/login')) {
           navigationInProgress.current = true;
           navigate('/login');
           navigationInProgress.current = false;
@@ -107,19 +119,19 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     initializeAuth();
 
     return () => {
-      console.log('AuthProvider: Cleaning up auth subscription');
+      logAuthState('Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, [navigate, requireAuth]);
+  }, [navigate, requireAuth, location.pathname]);
 
   const signIn = async (email: string, password: string) => {
-    console.log('AuthProvider: Attempting sign in for email:', email);
+    logAuthState('Attempting sign in for email:', { email });
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         console.error("AuthProvider: Error signing in:", error);
       } else {
-        console.log("AuthProvider: Sign in successful");
+        logAuthState("Sign in successful");
       }
       return error;
     } catch (error) {

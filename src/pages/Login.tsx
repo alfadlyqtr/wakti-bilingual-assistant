@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -12,6 +13,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Define the type for location state
+interface LocationState {
+  from?: string;
+}
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,6 +29,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigationInProgress = useRef(false);
+  
+  // Get the location state to know where to redirect after login
+  const locationState = location.state as LocationState;
+  const from = locationState?.from || "/dashboard";
 
   // Add effect to check auth state and redirect if already logged in
   useEffect(() => {
@@ -30,18 +40,19 @@ export default function Login() {
       user: !!user, 
       session: !!session, 
       authLoading,
-      currentPath: location.pathname
+      currentPath: location.pathname,
+      redirectTo: from
     });
     
     if (user && session && !authLoading && !navigationInProgress.current) {
-      console.log("Login: User already authenticated, redirecting to dashboard");
+      console.log("Login: User already authenticated, redirecting to:", from);
       navigationInProgress.current = true;
       setTimeout(() => {
-        navigate("/dashboard");
+        navigate(from);
         navigationInProgress.current = false;
       }, 100);
     }
-  }, [user, session, authLoading, navigate, location.pathname]);
+  }, [user, session, authLoading, navigate, location.pathname, from]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,6 +82,7 @@ export default function Login() {
         });
       } else if (data?.user) {
         console.log("Login: Login successful, user:", data.user.id);
+        console.log("Login: Will redirect to:", from);
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
@@ -80,7 +92,7 @@ export default function Login() {
         if (!navigationInProgress.current) {
           navigationInProgress.current = true;
           setTimeout(() => {
-            navigate("/dashboard");
+            navigate(from);
             navigationInProgress.current = false;
           }, 300);
         }

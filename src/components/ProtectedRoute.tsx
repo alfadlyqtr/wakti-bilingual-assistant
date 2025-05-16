@@ -24,7 +24,8 @@ export default function ProtectedRoute() {
 
   if (!user || !session) {
     console.log("ProtectedRoute: No authenticated user or session found, redirecting to login");
-    return <Navigate to="/login" replace />;
+    // Save the path the user was trying to access
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }
 
   console.log("ProtectedRoute: User authenticated, rendering protected content");

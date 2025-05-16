@@ -25,12 +25,25 @@ import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
 
-// Create a simple route tracker component to debug navigation
+// Enhanced route tracker component to debug navigation
 function RouteTracker() {
   const location = useLocation();
+  const prevPathRef = React.useRef<string | null>(null);
   
   useEffect(() => {
-    console.log("App: Navigation occurred to:", location.pathname);
+    const prevPath = prevPathRef.current;
+    prevPathRef.current = location.pathname;
+    
+    console.log("App: Navigation occurred", { 
+      to: location.pathname,
+      from: prevPath,
+      state: location.state,
+      search: location.search
+    });
+    
+    return () => {
+      console.log("App: Component unmounting at path:", location.pathname);
+    };
   }, [location]);
   
   return null;
