@@ -46,6 +46,31 @@ serve(async (req) => {
       );
     }
     
+    // Before deleting the user, attempt to delete any avatar files
+    try {
+      const { data: objects, error: listError } = await supabaseAdmin.storage
+        .from('avatars')
+        .list('', {
+          search: user.id
+        });
+      
+      if (!listError && objects && objects.length > 0) {
+        // Delete matching avatar files
+        const filesToDelete = objects
+          .filter(obj => obj.name.includes(user.id))
+          .map(obj => obj.name);
+          
+        if (filesToDelete.length > 0) {
+          await supabaseAdmin.storage
+            .from('avatars')
+            .remove(filesToDelete);
+        }
+      }
+    } catch (storageError) {
+      // Log but don't fail if storage cleanup fails
+      console.error('Error cleaning up user files:', storageError);
+    }
+    
     // Delete the user
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
     

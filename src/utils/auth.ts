@@ -25,10 +25,10 @@ export async function updateProfile(data: { user_metadata: {
       throw error;
     }
     
-    return updatedUser;
+    return { user: updatedUser, error: null };
   } catch (error) {
     console.error("Error updating profile:", error);
-    throw error;
+    return { user: null, error };
   }
 }
 
@@ -55,7 +55,6 @@ export async function deleteUserAccount() {
     }
     
     // Call our serverless function to delete the user account
-    // Fix: Use the SUPABASE_URL from our client configuration instead of accessing the protected property
     const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
     const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
       method: 'POST',

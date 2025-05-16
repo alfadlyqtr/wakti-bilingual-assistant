@@ -53,6 +53,7 @@ export default function Account() {
   const [avatar, setAvatar] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const categories = Object.keys(quotes);
   const { toast, confirm } = useToast();
   const { showSuccess, showError } = useToastHelper();
@@ -162,7 +163,7 @@ export default function Account() {
     });
   };
 
-  // Handle profile changes with proper image upload
+  // Enhanced profile changes with improved error handling
   const handleSaveProfile = async () => {
     if (!user) return;
 
@@ -171,6 +172,7 @@ export default function Account() {
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ تغييرات الملف الشخصي؟" : "Are you sure you want to save profile changes?",
       onConfirm: async () => {
         setIsSaving(true);
+        setUploadError(null);
         try {
           // Handle file upload if a new image was selected
           let avatarUrl = avatar;
@@ -185,7 +187,7 @@ export default function Account() {
                 .from('avatars')
                 .upload(fileName, selectedFile, {
                   cacheControl: '3600',
-                  upsert: false
+                  upsert: true
                 });
                 
               if (error) throw error;
@@ -199,6 +201,7 @@ export default function Account() {
               
             } catch (uploadError) {
               console.error('Error uploading file:', uploadError);
+              setUploadError((uploadError as Error).message || 'Failed to upload image');
               showError(language === 'ar' 
                 ? 'فشل في تحميل الصورة' 
                 : 'Failed to upload image');
@@ -208,14 +211,18 @@ export default function Account() {
           }
           
           // Update user profile data with new avatar URL if available
-          const userUpdate = await updateProfile({
+          const { user: updatedUser, error } = await updateProfile({
             user_metadata: {
               full_name: profile.fullName,
               avatar_url: avatarUrl || avatar
             }
           });
           
-          if (userUpdate) {
+          if (error) {
+            throw error;
+          }
+          
+          if (updatedUser) {
             // Update local state with the new avatar URL
             setAvatar(avatarUrl);
             setImagePreview(avatarUrl);
@@ -227,7 +234,7 @@ export default function Account() {
           }
         } catch (error) {
           console.error('Error updating profile:', error);
-          showError((error as Error).message);
+          showError((error as Error).message || 'Error updating profile');
         } finally {
           setIsSaving(false);
         }
@@ -243,10 +250,29 @@ export default function Account() {
     }));
   };
 
-  // Handle profile picture upload
+  // Handle profile picture upload with preview
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError(language === 'ar' 
+          ? 'يجب أن يكون حجم الملف أقل من 5 ميجابايت' 
+          : 'File size must be less than 5MB');
+        return;
+      }
+      
+      // Validate file type
+      const fileType = file.type.split('/')[0];
+      if (fileType !== 'image') {
+        setUploadError(language === 'ar' 
+          ? 'يجب أن يكون الملف صورة' 
+          : 'File must be an image');
+        return;
+      }
+      
       setSelectedFile(file);
       
       // Create a preview URL
@@ -359,7 +385,7 @@ export default function Account() {
       }
     });
   };
-  
+
   // Get initials for avatar
   const getInitials = () => {
     if (!user) return "?";
@@ -381,6 +407,13 @@ export default function Account() {
   // Function to trigger file upload dialog
   const handleUploadClick = () => {
     fileInputRef.current?.click();
+  };
+
+  // Check if there are changes to save
+  const hasChanges = () => {
+    if (selectedFile) return true;
+    if (user?.user_metadata?.full_name !== profile.fullName) return true;
+    return false;
   };
 
   return (
@@ -427,6 +460,13 @@ export default function Account() {
               />
             </div>
           </div>
+          
+          {/* Display upload error if any */}
+          {uploadError && (
+            <div className="text-destructive text-sm text-center">
+              {uploadError}
+            </div>
+          )}
 
           {/* Profile Form */}
           <div className="space-y-4">
@@ -486,7 +526,7 @@ export default function Account() {
             <Button 
               className="w-full mt-4 flex items-center gap-2" 
               onClick={handleSaveProfile}
-              disabled={isSaving}
+              disabled={isSaving || (!hasChanges() && !selectedFile)}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
