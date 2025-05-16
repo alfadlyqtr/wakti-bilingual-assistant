@@ -15,7 +15,7 @@ import {
 import { createContext, useContext } from "react";
 
 const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 5000;
+const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -36,6 +36,21 @@ let count = 0;
 function genId() {
   count = (count + 1) % Number.MAX_VALUE;
   return count.toString();
+}
+
+/**
+ * Safely converts any ReactNode content to a string to satisfy Radix UI's
+ * 'string & ReactNode' type requirements for toast content
+ */
+function renderToastContent(content: React.ReactNode): string {
+  if (content === null || content === undefined) return "";
+  if (typeof content === "string") return content;
+  if (typeof content === "number" || typeof content === "boolean") return content.toString();
+  try {
+    return JSON.stringify(content) ?? "";
+  } catch {
+    return "";
+  }
 }
 
 type ActionType = typeof actionTypes;
@@ -211,21 +226,6 @@ function useToastInternal(): ToastContextValue {
       }),
     confirm: (options: ConfirmOptions) => confirmDialog(options),
   };
-}
-
-/**
- * Safely converts any ReactNode content to a string to satisfy Radix UI's
- * 'string & ReactNode' type requirements for toast content
- */
-function renderToastContent(content: React.ReactNode): string {
-  if (content === null || content === undefined) return "";
-  if (typeof content === "string") return content;
-  if (typeof content === "number" || typeof content === "boolean") return content.toString();
-  try {
-    return JSON.stringify(content) ?? "";
-  } catch {
-    return "";
-  }
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
