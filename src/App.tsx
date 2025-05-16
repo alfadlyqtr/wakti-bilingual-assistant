@@ -34,7 +34,7 @@ function RouteTracker() {
     const prevPath = prevPathRef.current;
     prevPathRef.current = location.pathname;
     
-    console.log("App: Navigation occurred", { 
+    console.log("NAVIGATION DEBUG: Route changed", { 
       to: location.pathname,
       from: prevPath,
       state: location.state,
@@ -42,7 +42,7 @@ function RouteTracker() {
     });
     
     return () => {
-      console.log("App: Component unmounting at path:", location.pathname);
+      console.log("NAVIGATION DEBUG: Component unmounting at path:", location.pathname);
     };
   }, [location]);
   
@@ -67,7 +67,7 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* Protected routes */}
+              {/* Protected routes - but now without redirect */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/calendar" element={<Calendar />} />

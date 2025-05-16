@@ -1,6 +1,6 @@
 
 import React, { useEffect } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Loading from "@/components/ui/loading";
 
@@ -22,12 +22,7 @@ export default function ProtectedRoute() {
     return <Loading />;
   }
 
-  if (!user || !session) {
-    console.log("ProtectedRoute: No authenticated user or session found, redirecting to login");
-    // Save the path the user was trying to access
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
-  }
-
-  console.log("ProtectedRoute: User authenticated, rendering protected content");
+  // DISABLED AUTHENTICATION REDIRECT - Just pass through and render content
+  console.log("ProtectedRoute: Rendering content without authentication check");
   return <Outlet />;
 }
