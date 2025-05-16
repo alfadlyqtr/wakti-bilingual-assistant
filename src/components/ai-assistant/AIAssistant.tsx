@@ -14,6 +14,7 @@ import {
   Calculator,
   PlusCircle,
   Loader2,
+  Settings,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTheme } from "next-themes";
@@ -392,24 +393,20 @@ export const AIAssistant: React.FC = () => {
         className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full"
         dir={language === "ar" ? "rtl" : "ltr"}
       >
-        <div
-          className={`flex ${isMobile ? "items-end" : "items-center"} gap-2 max-w-md mx-auto`}
-        >
+        <div className="flex items-center gap-2 max-w-md mx-auto">
+          {/* Left Menu Button (Hamburger) */}
           <Button
             size="icon"
             variant="ghost"
             onClick={() => setIsLeftDrawerOpen(true)}
-            className="h-9 w-9 rounded-full"
+            className="h-9 w-9 rounded-full flex-shrink-0"
           >
             <Menu className="h-5 w-5" />
           </Button>
 
+          {/* Input Box with Voice Button */}
           <div className="flex-1 flex flex-col">
-            <div
-              className={`flex ${
-                isMobile ? "flex-col" : "flex-row"
-              } items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg`}
-            >
+            <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg">
               <Input
                 ref={inputRef}
                 value={inputValue}
@@ -449,13 +446,14 @@ export const AIAssistant: React.FC = () => {
             )}
           </div>
 
+          {/* Right Menu Button (Settings/Tools) */}
           <Button
             size="icon"
             variant="ghost"
             onClick={() => setIsRightDrawerOpen(true)}
-            className="h-9 w-9 rounded-full"
+            className="h-9 w-9 rounded-full flex-shrink-0"
           >
-            <PlusCircle className="h-5 w-5" />
+            <Settings className="h-5 w-5" />
           </Button>
         </div>
       </div>

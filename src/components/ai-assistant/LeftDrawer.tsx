@@ -1,8 +1,9 @@
+
 import React from "react";
-import { X } from "lucide-react";
+import { X, Menu } from "lucide-react";
 import { Button } from "../ui/button";
 import { AIMode } from "./types";
-import { toast } from "@/hooks/use-toast"; // Fixed import
+import { useToast } from "@/hooks/use-toast";
 
 interface LeftDrawerProps {
   isOpen: boolean;
@@ -24,9 +25,12 @@ export const LeftDrawer: React.FC<LeftDrawerProps> = ({
       }`}
     >
       <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-        <h2 className="text-lg font-semibold">
-          {language === "ar" ? "المحادثات السابقة" : "Previous Chats"}
-        </h2>
+        <div className="flex items-center">
+          <Menu className="h-5 w-5 mr-2" />
+          <h2 className="text-lg font-semibold">
+            {language === "ar" ? "المحادثات السابقة" : "Previous Chats"}
+          </h2>
+        </div>
         <Button size="icon" variant="ghost" onClick={onClose}>
           <X className="h-5 w-5" />
         </Button>

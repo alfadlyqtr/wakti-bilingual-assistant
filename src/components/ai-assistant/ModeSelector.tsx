@@ -4,15 +4,7 @@ import { motion } from "framer-motion";
 import { useTheme } from "next-themes";
 import { AIMode, ASSISTANT_MODES } from "./types";
 import { Button } from "@/components/ui/button";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
-
-// Helper function to translate mode names
-const getModeLabel = (mode: AIMode, language: "en" | "ar"): string => {
-  // Translation key naming convention: mode_[mode_id]
-  const translationKey = `mode_${mode}` as TranslationKey;
-  return t(translationKey, language) || mode;
-};
+import { MessageSquare, Edit3, Paintbrush, Calendar } from "lucide-react";
 
 export interface ModeSelectorProps {
   activeMode: AIMode;
@@ -27,6 +19,43 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
 }) => {
   const { theme } = useTheme();
   const currentTheme = theme === "dark" ? "dark" : "light";
+
+  // Icon mapping for each mode
+  const getIconForMode = (mode: AIMode) => {
+    switch (mode) {
+      case "general":
+        return <MessageSquare className="h-4 w-4 mr-2" />;
+      case "writer":
+        return <Edit3 className="h-4 w-4 mr-2" />;
+      case "creative":
+        return <Paintbrush className="h-4 w-4 mr-2" />;
+      case "assistant":
+        return <Calendar className="h-4 w-4 mr-2" />;
+      default:
+        return <MessageSquare className="h-4 w-4 mr-2" />;
+    }
+  };
+
+  // Mode name mapping
+  const getModeDisplayName = (mode: AIMode, lang: "en" | "ar") => {
+    if (lang === "ar") {
+      switch (mode) {
+        case "general": return "عام";
+        case "writer": return "كاتب";
+        case "creative": return "إبداعي";
+        case "assistant": return "مساعد";
+        default: return "عام";
+      }
+    } else {
+      switch (mode) {
+        case "general": return "General";
+        case "writer": return "Writer";
+        case "creative": return "Creative";
+        case "assistant": return "Assistant";
+        default: return "General";
+      }
+    }
+  };
 
   return (
     <div className="flex justify-center py-2 px-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto hide-scrollbar">
@@ -58,8 +87,9 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
                   transition={{ type: "spring", bounce: 0.3, duration: 0.6 }}
                 />
               )}
-              <span className="relative z-10 text-xs font-medium">
-                {getModeLabel(mode.id as AIMode, language)}
+              <span className="relative z-10 flex items-center text-xs font-medium">
+                {getIconForMode(mode.id as AIMode)}
+                {getModeDisplayName(mode.id as AIMode, language)}
               </span>
             </Button>
           );
