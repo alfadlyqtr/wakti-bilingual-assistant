@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { PageContainer } from "@/components/PageContainer";
 import { ConversationsList } from "@/components/messaging/ConversationsList";
 import { ConversationView } from "@/components/messaging/ConversationView";
 import { Button } from "@/components/ui/button";
@@ -48,10 +47,7 @@ export default function Messages() {
   };
 
   return (
-    <PageContainer
-      title={t("messaging", language)}
-      showUserMenu={!activeConversation}
-    >
+    <div className="flex-1 overflow-y-auto pb-16">
       {/* Search bar - at top */}
       {!activeConversation && (
         <div className="px-4 py-2 w-full">
@@ -117,6 +113,6 @@ export default function Messages() {
           setShowNewMessageModal(false);
         }}
       />
-    </PageContainer>
+    </div>
   );
 }
