@@ -174,13 +174,16 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         ) : isRecording ? (
           <MicOff className="h-5 w-5" />
         ) : (
-          <Mic className="h-5 w-5" />
+          <Mic className="h-5 w-5 text-primary" />
         )}
       </Button>
 
       {isRecording && (
-        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-xs font-mono bg-background border rounded px-2 py-1 shadow-md">
-          {formatTime(recordingTime)} / {formatTime(MAX_RECORDING_TIME)}
+        <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-xs font-mono bg-background border rounded px-2 py-1 shadow-md z-10">
+          {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
+          {(recordingTime % 60).toString().padStart(2, '0')} / 
+          {Math.floor(MAX_RECORDING_TIME / 60).toString().padStart(2, '0')}:
+          {(MAX_RECORDING_TIME % 60).toString().padStart(2, '0')}
         </div>
       )}
     </div>

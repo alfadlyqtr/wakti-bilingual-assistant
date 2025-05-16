@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -638,35 +639,35 @@ export const AIAssistant: React.FC = () => {
           theme={currentTheme}
         />
 
-        {/* Input Area */}
+        {/* Fixed Bottom Bar */}
         <div
-          className="py-2 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 w-full shadow-lg"
+          className="py-3 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 left-0 right-0 w-full z-10 shadow-lg"
           dir={language === "ar" ? "rtl" : "ltr"}
         >
           <div className="flex items-center gap-2 max-w-md mx-auto">
             {/* Left Menu Button (Hamburger) */}
             <Button
               size="icon"
-              variant="ghost"
+              variant="outline"
               onClick={() => setIsLeftDrawerOpen(true)}
-              className="h-9 w-9 rounded-full flex-shrink-0"
+              className="h-10 w-10 rounded-full flex-shrink-0"
             >
               <Menu className="h-5 w-5" />
             </Button>
 
             {/* Input Box with Voice Button */}
-            <div className="flex-1 flex flex-col">
-              <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg">
+            <div className="flex-1">
+              <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-full border border-zinc-300 dark:border-zinc-700">
                 <Input
                   ref={inputRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyPress}
                   placeholder={t("typeMessage" as TranslationKey, language)}
-                  className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="flex-1 bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 pl-4 pr-1 h-10 rounded-full"
                   disabled={isSending || !user}
                 />
-                <div className="flex items-center">
+                <div className="flex items-center px-1">
                   <VoiceInput
                     onTranscription={handleVoiceTranscription}
                     language={language}
@@ -699,9 +700,9 @@ export const AIAssistant: React.FC = () => {
             {/* Right Menu Button (Settings/Tools) */}
             <Button
               size="icon"
-              variant="ghost"
+              variant="outline"
               onClick={() => setIsRightDrawerOpen(true)}
-              className="h-9 w-9 rounded-full flex-shrink-0"
+              className="h-10 w-10 rounded-full flex-shrink-0"
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -719,3 +720,4 @@ export const AIAssistant: React.FC = () => {
     </div>
   );
 };
+

@@ -72,9 +72,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 // Wrapper component to render the inner AIAssistant component directly
 function WaktiAIPage() {
   return (
-    <div className="mobile-container">
+    <div className="mobile-container h-full flex flex-col">
       <AppHeader title="WAKTI AI" />
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden relative">
         <AIAssistantInner />
       </div>
       <MobileNav />
