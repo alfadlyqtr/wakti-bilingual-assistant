@@ -14,12 +14,16 @@ export async function updateProfile(data: { user_metadata: {
   full_name?: string; 
 } }) {
   try {
+    console.log("Updating profile with data:", data);
+    
     // Convert to the format expected by Supabase
     const userData: UserAttributes = {
       data: data.user_metadata
     };
     
     const { data: updatedUser, error } = await supabase.auth.updateUser(userData);
+    
+    console.log("Profile update response:", { updatedUser, error });
     
     if (error) {
       throw error;

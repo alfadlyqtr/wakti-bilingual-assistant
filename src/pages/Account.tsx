@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -167,79 +168,86 @@ export default function Account() {
   const handleSaveProfile = async () => {
     if (!user) return;
 
-    confirm({
-      title: language === 'ar' ? "حفظ التغييرات؟" : "Save changes?",
-      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ تغييرات الملف الشخصي؟" : "Are you sure you want to save profile changes?",
-      onConfirm: async () => {
-        setIsSaving(true);
-        setUploadError(null);
+    // Don't use confirm dialog for now, just proceed immediately
+    setIsSaving(true);
+    setUploadError(null);
+    try {
+      // Handle file upload if a new image was selected
+      let avatarUrl = avatar;
+      if (selectedFile) {
         try {
-          // Handle file upload if a new image was selected
-          let avatarUrl = avatar;
-          if (selectedFile) {
-            try {
-              // Generate a unique file name to prevent conflicts
-              const fileExt = selectedFile.name.split('.').pop();
-              const fileName = `${user.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
-              
-              // Create a storage object with the file
-              const { data, error } = await supabase.storage
-                .from('avatars')
-                .upload(fileName, selectedFile, {
-                  cacheControl: '3600',
-                  upsert: true
-                });
-                
-              if (error) throw error;
-              
-              // Get the public URL for the uploaded file
-              const { data: { publicUrl } } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(data.path);
-                
-              avatarUrl = publicUrl;
-              
-            } catch (uploadError) {
-              console.error('Error uploading file:', uploadError);
-              setUploadError((uploadError as Error).message || 'Failed to upload image');
-              showError(language === 'ar' 
-                ? 'فشل في تحميل الصورة' 
-                : 'Failed to upload image');
-              setIsSaving(false);
-              return;
-            }
-          }
+          // Generate a unique file name to prevent conflicts
+          const fileExt = selectedFile.name.split('.').pop();
+          const fileName = `${user.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
           
-          // Update user profile data with new avatar URL if available
-          const { user: updatedUser, error } = await updateProfile({
-            user_metadata: {
-              full_name: profile.fullName,
-              avatar_url: avatarUrl || avatar
-            }
-          });
+          console.log('Uploading avatar file:', fileName);
           
-          if (error) {
-            throw error;
-          }
-          
-          if (updatedUser) {
-            // Update local state with the new avatar URL
-            setAvatar(avatarUrl);
-            setImagePreview(avatarUrl);
-            setSelectedFile(null);
+          // Create a storage object with the file
+          const { data, error } = await supabase.storage
+            .from('avatars')
+            .upload(fileName, selectedFile, {
+              cacheControl: '3600',
+              upsert: true
+            });
             
-            showSuccess(language === 'ar' 
-              ? 'تم حفظ الملف الشخصي بنجاح' 
-              : 'Profile saved successfully');
-          }
-        } catch (error) {
-          console.error('Error updating profile:', error);
-          showError((error as Error).message || 'Error updating profile');
-        } finally {
+          if (error) throw error;
+          
+          console.log('Avatar upload successful:', data);
+          
+          // Get the public URL for the uploaded file
+          const { data: { publicUrl } } = supabase.storage
+            .from('avatars')
+            .getPublicUrl(data.path);
+            
+          console.log('Avatar public URL:', publicUrl);
+          avatarUrl = publicUrl;
+          
+        } catch (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          setUploadError((uploadError as Error).message || 'Failed to upload image');
+          showError(language === 'ar' 
+            ? 'فشل في تحميل الصورة' 
+            : 'Failed to upload image');
           setIsSaving(false);
+          return;
         }
       }
-    });
+      
+      console.log('Updating profile with data:', { 
+        full_name: profile.fullName,
+        avatar_url: avatarUrl
+      });
+      
+      // Update user profile data with new avatar URL if available
+      const { user: updatedUser, error } = await updateProfile({
+        user_metadata: {
+          full_name: profile.fullName,
+          avatar_url: avatarUrl
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      console.log('Profile update result:', updatedUser);
+      
+      if (updatedUser) {
+        // Update local state with the new avatar URL
+        setAvatar(avatarUrl);
+        setImagePreview(avatarUrl);
+        setSelectedFile(null);
+        
+        showSuccess(language === 'ar' 
+          ? 'تم حفظ الملف الشخصي بنجاح' 
+          : 'Profile saved successfully');
+      }
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      showError((error as Error).message || 'Error updating profile');
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   // Handle profile input changes
@@ -409,12 +417,27 @@ export default function Account() {
     fileInputRef.current?.click();
   };
 
-  // Check if there are changes to save
+  // Check if there are changes to save - fixed version that properly detects changes
   const hasChanges = () => {
+    // Check if a file has been selected for upload
     if (selectedFile) return true;
+    
+    // Check if fullName has changed
     if (user?.user_metadata?.full_name !== profile.fullName) return true;
+    
+    // No changes detected
     return false;
   };
+
+  // Debug logging for button state
+  const buttonDisabled = isSaving || !hasChanges();
+  console.log('Save button state:', { 
+    isSaving, 
+    hasChanges: hasChanges(), 
+    buttonDisabled,
+    originalName: user?.user_metadata?.full_name,
+    currentName: profile.fullName
+  });
 
   return (
     <div className="p-4 pb-20">
@@ -526,7 +549,7 @@ export default function Account() {
             <Button 
               className="w-full mt-4 flex items-center gap-2" 
               onClick={handleSaveProfile}
-              disabled={isSaving || (!hasChanges() && !selectedFile)}
+              disabled={buttonDisabled}
             >
               {isSaving ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

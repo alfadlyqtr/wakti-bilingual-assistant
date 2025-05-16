@@ -7,6 +7,7 @@ export function useToastHelper() {
   const { language } = useTheme();
 
   const showSuccess = (message: string) => {
+    console.log('Showing success toast:', message);
     toast({
       title: message,
       variant: "success",
@@ -14,6 +15,7 @@ export function useToastHelper() {
   };
 
   const showError = (message: string) => {
+    console.log('Showing error toast:', message);
     toast({
       title: message,
       variant: "destructive",
@@ -21,6 +23,7 @@ export function useToastHelper() {
   };
 
   const showInfo = (message: string) => {
+    console.log('Showing info toast:', message);
     toast({
       title: message,
     });
