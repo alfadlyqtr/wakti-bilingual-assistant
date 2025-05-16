@@ -103,7 +103,7 @@ export default function Login() {
             variant="ghost"
             size="sm"
             className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/login")}
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs">{t.backToHome}</span>

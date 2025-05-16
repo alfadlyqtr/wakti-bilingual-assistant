@@ -23,6 +23,7 @@ import EventDetail from "@/pages/EventDetail";
 import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
+import Home from "@/pages/Home";
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
           <AuthProvider>
             <Routes>
               {/* Public routes */}
+              <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/forgot-password" element={<ForgotPassword />} />

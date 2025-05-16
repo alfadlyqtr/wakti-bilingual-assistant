@@ -1,262 +1,134 @@
+
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { Logo3D } from "@/components/Logo3D";
-import {
-  Check,
-  Calendar,
-  Bell,
-  MessageSquare,
-  List,
-} from "lucide-react";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
+import { useTheme } from "@/providers/ThemeProvider";
+import { motion } from "framer-motion";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { theme, language, toggleLanguage } = useTheme();
+  const { user } = useAuth();
+  const { language } = useTheme();
+  
+  // If user is already logged in, redirect to dashboard
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
-  // Direct text values for features instead of translation keys
-  const features = language === "en" ? [
-    {
-      icon: List,
-      title: "Task Management",
-      description: "Smart task organization with priorities and sharing",
-    },
-    {
-      icon: Calendar,
-      title: "Calendar",
-      description: "Unified calendar for events, tasks and reminders",
-    },
-    {
-      icon: Bell,
-      title: "Reminders",
-      description: "Smart reminders with recurring options",
-    },
-    {
-      icon: MessageSquare,
-      title: "Messaging",
-      description: "Secure messaging with voice and text",
-    },
-  ] : [
-    {
-      icon: List,
-      title: "إدارة المهام",
-      description: "تنظيم ذكي للمهام مع الأولويات والمشاركة",
-    },
-    {
-      icon: Calendar,
-      title: "التقويم",
-      description: "تقويم موحد للأحداث والمهام والتذكيرات",
-    },
-    {
-      icon: Bell,
-      title: "التذكيرات",
-      description: "تذكيرات ذكية مع خيارات التكرار",
-    },
-    {
-      icon: MessageSquare,
-      title: "المراسلة",
-      description: "مراسلة آمنة بالصوت والنص",
-    },
-  ];
-
-  const pricingPlans = language === "en" ? [
-    {
-      title: "Monthly",
-      priceQAR: 55,
-      priceUSD: 15,
-    },
-    {
-      title: "Yearly",
-      priceQAR: 550,
-      priceUSD: 150,
-    },
-  ] : [
-    {
-      title: "شهري",
-      priceQAR: 55,
-      priceUSD: 15,
-    },
-    {
-      title: "سنوي",
-      priceQAR: 550,
-      priceUSD: 150,
-    },
-  ];
-
-  // Direct content based on language without translation keys
-  const content = {
+  const translations = {
     en: {
-      appName: "WAKTI",
-      tagline: "Manage your time efficiently",
+      welcome: "Welcome to WAKTI",
+      tagline: "Your Bilingual Productivity Assistant",
+      description: "Manage tasks, events, reminders and more with AI-powered productivity tools",
+      loginBtn: "Login",
+      signupBtn: "Sign Up",
       features: "Features",
-      pricing: "Pricing",
-      freeTrialDays: "3-Day Free Trial",
-      taskManagement: "Task Management",
-      aiSummaries: "AI Summaries",
-      startFreeTrial: "Start Free Trial",
-      login: "Login",
-      qar: "QAR",
-      usd: "USD",
+      feature1Title: "Smart Task Management",
+      feature1Desc: "Create, prioritize, and share tasks with advanced AI sorting",
+      feature2Title: "Event Planning",
+      feature2Desc: "Schedule events with RSVP, maps and calendar integration",
+      feature3Title: "Voice Summaries",
+      feature3Desc: "Create audio summaries with AI transcription and analysis"
     },
     ar: {
-      appName: "وكتي",
-      tagline: "إدارة وقتك بكفاءة",
-      features: "الميزات",
-      pricing: "التسعير",
-      freeTrialDays: "3 أيام تجربة مجانية",
-      taskManagement: "إدارة المهام",
-      aiSummaries: "ملخصات الذكاء الاصطناعي",
-      startFreeTrial: "ابدأ النسخة التجريبية المجانية",
-      login: "تسجيل الدخول",
-      qar: "ريال",
-      usd: "دولار",
+      welcome: "مرحبًا بك في وقتي",
+      tagline: "مساعدك الإنتاجي ثنائي اللغة",
+      description: "إدارة المهام والفعاليات والتذكيرات والمزيد مع أدوات الإنتاجية المدعومة بالذكاء الاصطناعي",
+      loginBtn: "تسجيل الدخول",
+      signupBtn: "إنشاء حساب",
+      features: "المميزات",
+      feature1Title: "إدارة المهام الذكية",
+      feature1Desc: "إنشاء وترتيب ومشاركة المهام مع فرز متقدم بالذكاء الاصطناعي",
+      feature2Title: "تخطيط الفعاليات",
+      feature2Desc: "جدولة الفعاليات مع تأكيد الحضور والخرائط ودمج التقويم",
+      feature3Title: "ملخصات صوتية",
+      feature3Desc: "إنشاء ملخصات صوتية مع النسخ والتحليل بالذكاء الاصطناعي"
     }
   };
-
-  const currentContent = content[language];
   
-  // Apply the theme's background colors explicitly
-  const bgClass = theme === "dark" ? "bg-dark-bg text-white" : "bg-light-bg text-light-primary";
+  const t = translations[language];
 
   return (
-    <div className={`min-h-screen flex flex-col ${bgClass} ${language === 'ar' ? 'rtl' : ''}`}>
-      <header className="sticky top-0 z-10 flex items-center justify-between p-4 border-b border-border">
-        <h1 className="text-2xl font-bold">{currentContent.appName}</h1>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleLanguage}
-            className="h-9 px-3 rounded-full text-sm"
-          >
-            {language === "en" ? "العربية" : "English"}
-          </Button>
+    <div className="mobile-container">
+      <header className="mobile-header">
+        <div className="flex items-center">
+          <Logo3D size="sm" className="mr-2" />
+          <h1 className="text-lg font-bold">WAKTI</h1>
         </div>
+        <ThemeLanguageToggle />
       </header>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-10">
-        {/* Hero Section */}
-        <section className="py-6">
-          <motion.div
+      
+      <div className="flex-1 overflow-y-auto pb-16">
+        <div className="px-4 py-10">
+          <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="text-center mb-6"
+            className="text-center mb-10"
           >
-            <div className="mb-4 flex justify-center">
-              <Logo3D size="lg" />
-            </div>
-
-            <h1 className="text-4xl font-bold mb-2">{currentContent.appName}</h1>
-            <p className="text-xl text-muted-foreground mb-6">
-              {currentContent.tagline}
-            </p>
-            <div className="flex flex-col gap-3">
-              <Button
-                size="lg"
-                className="w-full text-base py-6"
-                onClick={() => navigate("/signup")}
+            <Logo3D size="lg" className="mx-auto mb-6" />
+            <h1 className="text-3xl font-bold mb-2">{t.welcome}</h1>
+            <p className="text-lg text-muted-foreground mb-6">{t.tagline}</p>
+            <p className="text-sm text-muted-foreground mb-8">{t.description}</p>
+            
+            <div className="flex justify-center gap-4">
+              <Button 
+                size="lg" 
+                className="px-6" 
+                onClick={() => navigate('/login')}
               >
-                {currentContent.startFreeTrial}
+                {t.loginBtn}
               </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full text-base py-6"
-                onClick={() => navigate("/login")}
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="px-6" 
+                onClick={() => navigate('/signup')}
               >
-                {currentContent.login}
+                {t.signupBtn}
               </Button>
             </div>
           </motion.div>
-
-          {/* Features Section */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-            className="mb-8"
-          >
-            <h2 className="text-2xl font-bold mb-5 text-center">
-              {currentContent.features}
-            </h2>
-            <div className="grid grid-cols-1 gap-4 mb-6">
-              {features.map((feature, index) => (
-                <div
-                  key={index}
-                  className="bg-card p-4 rounded-xl shadow-sm border border-border"
-                >
-                  <div className="flex items-start">
-                    <div className="bg-primary/10 p-2 rounded-lg mr-4">
-                      <feature.icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium mb-1">
-                        {feature.title}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {feature.description}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Pricing Section */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.5 }}
-            className="mb-10"
-          >
-            <h2 className="text-2xl font-bold mb-5 text-center">
-              {currentContent.pricing}
-            </h2>
-            <div className="bg-card p-4 rounded-xl border border-border mb-4">
-              <p className="text-center font-medium mb-2">
-                {currentContent.freeTrialDays}
-              </p>
-              <ul className="space-y-2 mb-4">
-                <li className="flex items-center">
-                  <Check className="h-4 w-4 mr-2 text-green-500" />
-                  <span className="text-sm">
-                    {currentContent.features} {currentContent.taskManagement}
-                  </span>
-                </li>
-                <li className="flex items-center">
-                  <Check className="h-4 w-4 mr-2 text-green-500" />
-                  <span className="text-sm">
-                    {currentContent.aiSummaries}
-                  </span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {pricingPlans.map((plan, index) => (
-                <div
-                  key={index}
-                  className="bg-card p-4 rounded-xl border border-border text-center"
-                >
-                  <h3 className="font-medium mb-2">
-                    {plan.title}
-                  </h3>
-                  <div className="text-2xl font-bold mb-1">
-                    {plan.priceQAR} {currentContent.qar}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    ≈ {plan.priceUSD} {currentContent.usd}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </section>
+          
+          <div className="space-y-8 mt-12">
+            <h2 className="text-xl font-semibold text-center mb-6">{t.features}</h2>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="bg-card rounded-lg p-4 shadow-sm"
+            >
+              <h3 className="font-medium text-lg mb-2">{t.feature1Title}</h3>
+              <p className="text-muted-foreground text-sm">{t.feature1Desc}</p>
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="bg-card rounded-lg p-4 shadow-sm"
+            >
+              <h3 className="font-medium text-lg mb-2">{t.feature2Title}</h3>
+              <p className="text-muted-foreground text-sm">{t.feature2Desc}</p>
+            </motion.div>
+            
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="bg-card rounded-lg p-4 shadow-sm"
+            >
+              <h3 className="font-medium text-lg mb-2">{t.feature3Title}</h3>
+              <p className="text-muted-foreground text-sm">{t.feature3Desc}</p>
+            </motion.div>
+          </div>
+        </div>
       </div>
     </div>
   );
