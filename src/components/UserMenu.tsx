@@ -65,6 +65,9 @@ export function UserMenu() {
   };
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t("user", language);
+  
+  // Check if user has a profile picture
+  const hasProfilePicture = !!user?.user_metadata?.avatar_url;
 
   // User menu options - removed Settings from here
   const menuOptions = [
@@ -82,7 +85,10 @@ export function UserMenu() {
         className="flex items-center space-x-1 bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded-full transition-colors"
       >
         <Avatar className="h-6 w-6">
-          <AvatarImage src={user?.user_metadata?.avatar_url || ''} />
+          <AvatarImage 
+            src={user?.user_metadata?.avatar_url || ''} 
+            alt={displayName}
+          />
           <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
         </Avatar>
         <span className="text-sm max-w-[70px] truncate">{displayName}</span>
@@ -107,8 +113,19 @@ export function UserMenu() {
               className="absolute right-0 mt-1 w-48 bg-background border border-border rounded-md shadow-lg overflow-hidden z-50"
             >
               <div className="py-2 px-3 border-b border-border">
-                <p className="text-sm font-medium truncate">{displayName}</p>
-                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                <div className="flex items-center space-x-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage 
+                      src={user?.user_metadata?.avatar_url || ''} 
+                      alt={displayName}
+                    />
+                    <AvatarFallback>{getInitials()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-medium truncate">{displayName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+                  </div>
+                </div>
               </div>
               
               <div className="py-1">
