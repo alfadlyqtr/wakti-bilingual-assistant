@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+
+import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -44,6 +45,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const navigate = useNavigate();
+  const navigationInProgress = useRef(false);
 
   useEffect(() => {
     console.log('AuthProvider: Setting up authentication listeners');
@@ -59,12 +61,14 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setLoading(false);
 
         // Only redirect on signout if explicitly required
-        if (event === 'SIGNED_OUT' && requireAuth) {
+        if (event === 'SIGNED_OUT' && requireAuth && !navigationInProgress.current) {
           console.log('AuthProvider: User signed out, redirecting to login');
+          navigationInProgress.current = true;
           // Use a timeout to avoid potential race conditions
           setTimeout(() => {
             navigate('/login');
-          }, 0);
+            navigationInProgress.current = false;
+          }, 100);
         }
       }
     );
@@ -82,16 +86,20 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setInitialized(true);
         
         // Only redirect if authentication is required but user is not logged in
-        if (requireAuth && !currentSession) {
+        if (requireAuth && !currentSession && !navigationInProgress.current) {
           console.log('AuthProvider: No session found, redirecting to login');
+          navigationInProgress.current = true;
           navigate('/login');
+          navigationInProgress.current = false;
         }
       } catch (error) {
         console.error('AuthProvider: Error initializing auth', error);
         setLoading(false);
         setInitialized(true);
-        if (requireAuth) {
+        if (requireAuth && !navigationInProgress.current) {
+          navigationInProgress.current = true;
           navigate('/login');
+          navigationInProgress.current = false;
         }
       }
     };

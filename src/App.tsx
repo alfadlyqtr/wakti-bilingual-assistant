@@ -1,6 +1,6 @@
 
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/hooks/use-toast";
@@ -25,6 +25,17 @@ import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
 
+// Create a simple route tracker component to debug navigation
+function RouteTracker() {
+  const location = useLocation();
+  
+  useEffect(() => {
+    console.log("App: Navigation occurred to:", location.pathname);
+  }, [location]);
+  
+  return null;
+}
+
 function App() {
   console.log("App: Initializing application");
   
@@ -33,6 +44,7 @@ function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
+            <RouteTracker />
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Navigate to="/home" replace />} />

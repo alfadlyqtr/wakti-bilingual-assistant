@@ -1,6 +1,5 @@
-
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, theme } = useTheme();
   const { user, session, isLoading: authLoading } = useAuth();
   const [email, setEmail] = useState("");
@@ -22,20 +22,26 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const navigationInProgress = useRef(false);
 
   // Add effect to check auth state and redirect if already logged in
   useEffect(() => {
     console.log("Login: Auth state check", { 
       user: !!user, 
       session: !!session, 
-      authLoading 
+      authLoading,
+      currentPath: location.pathname
     });
     
-    if (user && session && !authLoading) {
+    if (user && session && !authLoading && !navigationInProgress.current) {
       console.log("Login: User already authenticated, redirecting to dashboard");
-      navigate("/dashboard");
+      navigationInProgress.current = true;
+      setTimeout(() => {
+        navigate("/dashboard");
+        navigationInProgress.current = false;
+      }, 100);
     }
-  }, [user, session, authLoading, navigate]);
+  }, [user, session, authLoading, navigate, location.pathname]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,9 +77,13 @@ export default function Login() {
         });
         
         // Small delay to ensure auth state is properly updated
-        setTimeout(() => {
-          navigate("/dashboard");
-        }, 100);
+        if (!navigationInProgress.current) {
+          navigationInProgress.current = true;
+          setTimeout(() => {
+            navigate("/dashboard");
+            navigationInProgress.current = false;
+          }, 300);
+        }
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
@@ -104,7 +114,7 @@ export default function Login() {
       login: "تسجيل الدخول",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
-      forgotPassword: "نسيت كلمة المرور؟",
+      forgotPassword: "نسيت كلم�� المرور؟",
       loading: "جاري التحميل...",
       createAccount: "ليس لديك حساب؟",
       signup: "إنشاء حساب",
@@ -128,7 +138,7 @@ export default function Login() {
             onClick={() => navigate("/home")}  // Updated to navigate to /home
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="text-xs">{t.backToHome}</span>
+            <span className="text-xs">{language === 'en' ? 'Back to Home' : 'العودة للرئيسية'}</span>
           </Button>
         </div>
         <ThemeLanguageToggle />
