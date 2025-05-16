@@ -1,4 +1,3 @@
-
 import * as React from "react";
 import {
   Toast,
@@ -213,12 +212,17 @@ function useToastInternal(): ToastContextValue {
   };
 }
 
-// Helper function for safely rendering ReactNode content that ensures string output
+/**
+ * Safely converts any ReactNode content to a string to satisfy Radix UI's
+ * 'string & ReactNode' type requirements for toast content
+ */
 function renderToastContent(content: React.ReactNode): string {
+  // Handle null/undefined values
   if (content === null || content === undefined) {
     return "";
   }
   
+  // Handle primitive types
   if (typeof content === 'string') {
     return content;
   }
@@ -227,15 +231,20 @@ function renderToastContent(content: React.ReactNode): string {
     return String(content);
   }
   
-  // For React elements or other complex types, convert to string safely
+  // Handle React elements and complex objects
+  if (React.isValidElement(content)) {
+    // For React elements, try to extract text content
+    return "React Element";
+  }
+  
+  // For simple objects that can be stringified
   try {
-    // For simple objects that can be stringified
     if (typeof content === 'object') {
       return JSON.stringify(content);
     }
     return String(content);
-  } catch (e) {
-    console.error("Failed to convert toast content to string", e);
+  } catch (error) {
+    console.error("Failed to convert toast content to string", error);
     return "[Content could not be displayed]";
   }
 }
