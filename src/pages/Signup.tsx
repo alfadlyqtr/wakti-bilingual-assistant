@@ -65,7 +65,7 @@ export default function Signup() {
           title: language === 'en' ? 'Account Created' : 'تم إنشاء الحساب',
           description: language === 'en' ? 'Your account has been created successfully!' : 'تم إنشاء حسابك بنجاح!',
         });
-        navigate("/dashboard");
+        navigate("/"); // Changed from "/dashboard" to "/" to match the route in App.tsx
       }
     } catch (err) {
       console.error("Unexpected error during signup:", err);

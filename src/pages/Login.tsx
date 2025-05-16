@@ -51,7 +51,7 @@ export default function Login() {
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        navigate("/dashboard");
+        navigate("/"); // Changed from "/dashboard" to "/" to match the route in App.tsx
       }
     } catch (err) {
       console.error("Unexpected error during login:", err);
