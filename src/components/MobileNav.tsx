@@ -104,7 +104,7 @@ export const MobileNav = () => {
             key={item.path}
             icon={item.icon}
             label={item.label}
-            isActive={path.startsWith(item.path)}
+            isActive={path === item.path}
             onClick={() => navigate(item.path)}
           />
         ))}

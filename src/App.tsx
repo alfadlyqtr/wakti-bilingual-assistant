@@ -56,12 +56,11 @@ function RouteTracker() {
 function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/'].includes(location.pathname);
-  const isWaktiAIPage = location.pathname === '/wakti-ai';
   
   // Don't show header on auth pages
   return (
     <div className="mobile-container">
-      {!isAuthPage && !isWaktiAIPage && <AppHeader />}
+      {!isAuthPage && <AppHeader />}
       <div className="flex-1 overflow-y-auto pb-24">
         {children}
       </div>
@@ -75,9 +74,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function WaktiAIPage() {
   return (
     <div className="mobile-container">
+      <AppHeader title="WAKTI AI" />
       <div className="flex-1 overflow-hidden">
         <AIAssistantInner />
       </div>
+      <MobileNav />
       <Toaster />
     </div>
   );
