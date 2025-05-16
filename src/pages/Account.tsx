@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,7 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { quotes } from "@/utils/dailyQuotes";
-import { useToast, toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Check, Save, Settings } from "lucide-react";
 import { signOut, updateProfile } from "@/utils/auth";
 import { validateDisplayName } from "@/utils/validations";
@@ -53,12 +52,25 @@ export default function Account() {
   const categories = Object.keys(quotes);
   const { toast, confirm } = useToast();
   
-  // Add state for profile information
+  // Use real user data from auth context
   const [profile, setProfile] = useState({
-    fullName: "Jane Doe",
-    username: "jane_doe",
-    email: "jane@example.com"
+    fullName: user?.user_metadata?.full_name || user?.email?.split('@')[0] || "",
+    username: user?.user_metadata?.username || user?.email?.split('@')[0] || "",
+    email: user?.email || ""
   });
+
+  // Load user data when component mounts
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        fullName: user.user_metadata?.full_name || user.email?.split('@')[0] || "",
+        username: user.user_metadata?.username || user.email?.split('@')[0] || "",
+        email: user.email || ""
+      });
+      setDisplayName(user.user_metadata?.display_name || "");
+      setAvatar(user.user_metadata?.avatar_url || "");
+    }
+  }, [user]);
 
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
@@ -128,19 +140,39 @@ export default function Account() {
     });
   };
 
+  // Handle profile changes
   const handleSaveProfile = () => {
+    if (!user) return;
+
     confirm({
       title: language === 'ar' ? "حفظ التغييرات؟" : "Save changes?",
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ تغييرات الملف الشخصي؟" : "Are you sure you want to save profile changes?",
-      onConfirm: () => {
-        // Save profile data to localStorage
-        localStorage.setItem('userProfile', JSON.stringify(profile));
-        
-        toast({
-          title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
-          description: "",
-          variant: "default"
-        });
+      onConfirm: async () => {
+        setIsSaving(true);
+        try {
+          // Update user profile data
+          const userUpdate = await updateProfile({
+            user_metadata: {
+              full_name: profile.fullName,
+            }
+          });
+          
+          if (userUpdate) {
+            toast({
+              title: language === 'ar' ? "تم حفظ الملف الشخصي بنجاح" : "Profile saved successfully",
+              description: <Check className="h-4 w-4" />,
+              variant: "success"
+            });
+          }
+        } catch (error) {
+          toast({
+            title: language === 'ar' ? "فشل تحديث الملف الشخصي" : "Failed to update profile",
+            description: (error as Error).message,
+            variant: "destructive"
+          });
+        } finally {
+          setIsSaving(false);
+        }
       }
     });
   };
@@ -235,6 +267,21 @@ export default function Account() {
     }
   };
 
+  // Get initials for avatar
+  const getInitials = () => {
+    if (!user) return "?";
+    
+    const name = user.user_metadata?.full_name || user.email || "";
+    if (!name) return "?";
+    
+    if (name.includes(' ')) {
+      const [first, last] = name.split(' ');
+      return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+    }
+    
+    return name.charAt(0).toUpperCase();
+  };
+
   return (
     <PageContainer title={t("account", language)} showBackButton={true}>
       <div className="p-4 pb-20">
@@ -253,7 +300,7 @@ export default function Account() {
             <div className="flex justify-center">
               <div className="relative">
                 <div className="h-24 w-24 rounded-full bg-secondary flex items-center justify-center text-2xl font-bold">
-                  {profile.fullName.split(' ').map(name => name[0]).join('').toUpperCase().substring(0, 2)}
+                  {getInitials()}
                 </div>
                 <Button
                   size="sm"
@@ -314,7 +361,7 @@ export default function Account() {
                       : "Enter your email"
                   }
                   value={profile.email}
-                  onChange={(e) => handleProfileChange('email', e.target.value)}
+                  disabled
                 />
               </div>
 
@@ -323,6 +370,7 @@ export default function Account() {
                 {language === "ar" ? "حفظ التغييرات" : "Save Changes"}
               </Button>
 
+              {/* Change Password Section */}
               <div className="grid gap-2 pt-4">
                 <label className="text-sm font-medium">
                   {language === "ar" ? "تغيير كلمة المرور" : "Change Password"}
