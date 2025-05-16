@@ -55,7 +55,9 @@ export async function deleteUserAccount() {
     }
     
     // Call our serverless function to delete the user account
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/delete-user`, {
+    // Fix: Use the SUPABASE_URL from our client configuration instead of accessing the protected property
+    const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
