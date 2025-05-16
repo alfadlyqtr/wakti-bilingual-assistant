@@ -10,8 +10,7 @@ export function useToastHelper() {
     console.log('Showing success toast:', message);
     toast({
       title: message,
-      variant: "success",
-      duration: 3000
+      variant: "success"
     });
   };
 
@@ -19,24 +18,21 @@ export function useToastHelper() {
     console.log('Showing error toast:', message);
     toast({
       title: message,
-      variant: "destructive",
-      duration: 5000
+      variant: "destructive"
     });
   };
 
   const showInfo = (message: string) => {
     console.log('Showing info toast:', message);
     toast({
-      title: message,
-      duration: 3000
+      title: message
     });
   };
 
   const showLoading = (message: string) => {
     console.log('Showing loading toast:', message);
     return toast({
-      title: message,
-      duration: 9999999, // Long duration to keep it visible until dismissed
+      title: message
     });
   };
 
