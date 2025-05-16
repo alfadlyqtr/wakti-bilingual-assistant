@@ -19,8 +19,9 @@ const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
 
 type ToasterToast = ToastProps & {
   id: string;
-  title?: React.ReactNode;
-  description?: React.ReactNode;
+  // Enforce string type for title and description to match Radix UI requirements
+  title?: string;
+  description?: string;
   action?: ToastActionElement;
 };
 
@@ -40,7 +41,7 @@ function genId() {
 
 /**
  * Safely converts any ReactNode content to a string to satisfy Radix UI's
- * 'string & ReactNode' type requirements for toast content
+ * strict string type requirements for toast content.
  */
 function renderToastContent(content: React.ReactNode): string {
   if (content === null || content === undefined) return "";
@@ -195,12 +196,16 @@ function useToastInternal(): ToastContextValue {
       const dismiss = () =>
         dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
 
+      // Convert ReactNode to string before dispatching to state
+      const stringTitle = title ? renderToastContent(title) : undefined;
+      const stringDescription = description ? renderToastContent(description) : undefined;
+
       dispatch({
         type: actionTypes.ADD_TOAST,
         toast: {
           id,
-          title,
-          description,
+          title: stringTitle,
+          description: stringDescription,
           action,
           variant,
           open: true,
@@ -281,12 +286,12 @@ function ToasterInternal() {
             <div className="grid gap-1">
               {title && (
                 <ToastTitle>
-                  {renderToastContent(title)}
+                  {title}
                 </ToastTitle>
               )}
               {description && (
                 <ToastDescription>
-                  {renderToastContent(description)}
+                  {description}
                 </ToastDescription>
               )}
             </div>
