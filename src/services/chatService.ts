@@ -260,7 +260,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
 };
 
 // Generate image based on prompt using Runware API
-export async function generateImage(prompt: string): Promise<string | null> {
+export async function generateImage(prompt: string): Promise<{ imageUrl: string, metadata?: any } | null> {
   try {
     console.log('Generating image with prompt:', prompt);
     
@@ -294,7 +294,7 @@ export async function generateImage(prompt: string): Promise<string | null> {
     const responseData = await response.json();
     console.log('Image generation response:', responseData);
     
-    const { imageUrl } = responseData;
+    const { imageUrl, metadata } = responseData;
     console.log('Image generated successfully:', imageUrl);
     
     // Add validation to ensure we have a valid image URL
@@ -303,7 +303,7 @@ export async function generateImage(prompt: string): Promise<string | null> {
       throw new Error("Invalid image URL returned from API");
     }
     
-    return imageUrl;
+    return { imageUrl, metadata };
   } catch (error) {
     console.error("Error in image generation:", error);
     return null;

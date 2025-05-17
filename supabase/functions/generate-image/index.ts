@@ -3,6 +3,57 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+
+// Check if text contains Arabic characters
+function containsArabic(text: string): boolean {
+  const arabicPattern = /[\u0600-\u06FF]/;
+  return arabicPattern.test(text);
+}
+
+// Translate text from Arabic to English using DeepSeek API
+async function translateArabicToEnglish(text: string): Promise<string | null> {
+  try {
+    console.log("Translating Arabic text:", text);
+    
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content: "You are a professional translator. Translate the following Arabic text to English. Return ONLY the translation, nothing else."
+          },
+          {
+            role: "user",
+            content: text
+          }
+        ],
+        temperature: 0.1
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("Translation API error response:", errorData);
+      throw new Error(`Translation API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const translation = result.choices[0].message.content.trim();
+    
+    console.log("Translation result:", translation);
+    return translation;
+  } catch (error) {
+    console.error("Error translating Arabic text:", error);
+    return null;
+  }
+}
 
 serve(async (req) => {
   // Handle CORS
@@ -23,7 +74,35 @@ serve(async (req) => {
       );
     }
 
-    console.log("Generating image with prompt:", prompt);
+    console.log("Received image generation prompt:", prompt);
+    
+    // Check if prompt contains Arabic text
+    let translatedPrompt: string | null = null;
+    const hasArabic = containsArabic(prompt);
+    
+    if (hasArabic) {
+      console.log("Arabic text detected, translating...");
+      translatedPrompt = await translateArabicToEnglish(prompt);
+      
+      if (!translatedPrompt) {
+        return new Response(
+          JSON.stringify({ 
+            error: "Translation failed", 
+            details: "This image prompt couldn't be processed. Please try again in English or simplify the input."
+          }),
+          { 
+            status: 422, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          }
+        );
+      }
+      
+      console.log("Translated prompt:", translatedPrompt);
+    }
+
+    // Use translated prompt for image generation if available, otherwise use original
+    const promptToUse = translatedPrompt || prompt;
+    console.log("Using prompt for generation:", promptToUse);
 
     // Ensure proper Runware API call format with taskType
     const taskUUID = crypto.randomUUID();
@@ -41,7 +120,7 @@ serve(async (req) => {
         {
           taskType: "imageInference",
           taskUUID: taskUUID,
-          positivePrompt: prompt,
+          positivePrompt: promptToUse,
           model: "runware:100@1",
           width: 1024,
           height: 1024,
@@ -74,8 +153,22 @@ serve(async (req) => {
     
     console.log("Image successfully generated, URL:", imageData.imageURL);
     
+    // Prepare the response with metadata including both prompts
+    const responseData = { 
+      imageUrl: imageData.imageURL,
+      metadata: {}
+    };
+    
+    // Include translation metadata only if Arabic was detected and translated
+    if (hasArabic && translatedPrompt) {
+      responseData.metadata = {
+        originalPrompt: prompt,
+        translatedPrompt: translatedPrompt
+      };
+    }
+    
     return new Response(
-      JSON.stringify({ imageUrl: imageData.imageURL }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
     

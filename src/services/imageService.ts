@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { modeController } from "@/utils/modeController";
 
@@ -103,7 +102,7 @@ export async function getImageById(
 export async function processImageGeneration(
   prompt: string,
   userId: string
-): Promise<string | null> {
+): Promise<{imageUrl: string, originalPrompt: string} | null> {
   try {
     // Switch to creative mode first
     await modeController.setActiveMode('creative');
@@ -114,21 +113,31 @@ export async function processImageGeneration(
     console.log('Processing image generation with prompt:', imagePrompt);
     
     // Use the existing generateImage function from chatService
-    const imageUrl = await generateImage(imagePrompt);
+    const result = await generateImage(imagePrompt);
     
-    if (!imageUrl) {
+    if (!result || !result.imageUrl) {
       throw new Error('Failed to generate image');
     }
     
-    // Save the image to the database
-    const imageId = await saveImageToDatabase(userId, imagePrompt, imageUrl, {
+    const { imageUrl, metadata } = result;
+    
+    // In case of Arabic text that was translated, keep both versions in metadata
+    const enhancedMetadata = {
       originalPrompt: prompt,
-      timestamp: new Date().toISOString()
-    });
+      timestamp: new Date().toISOString(),
+      ...(metadata || {})
+    };
+    
+    // Save the image to the database with the original prompt visible to the user
+    // but keep the translated prompt in metadata
+    const imageId = await saveImageToDatabase(userId, imagePrompt, imageUrl, enhancedMetadata);
     
     console.log('Image saved to database with ID:', imageId);
     
-    return imageUrl;
+    return {
+      imageUrl, 
+      originalPrompt: prompt
+    };
   } catch (error) {
     console.error('Error in image generation process:', error);
     return null;
