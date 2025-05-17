@@ -202,7 +202,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                     )}
                     
-                    {/* Mode Switch Buttons */}
+                    {/* Mode Switch Button - Modified to handle modeSwitchAction */}
                     {message.modeSwitchAction && (
                       <div className="flex justify-start mt-1">
                         <Button 
@@ -212,6 +212,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           className="text-xs py-1 h-8"
                           style={{ 
                             backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
+                            borderColor: getModeColor(message.modeSwitchAction.targetMode),
                           }}
                         >
                           {message.modeSwitchAction.text}

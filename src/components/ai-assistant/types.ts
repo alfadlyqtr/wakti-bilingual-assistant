@@ -1,4 +1,3 @@
-
 import React from "react";
 
 // Available modes for the AI assistant
@@ -7,33 +6,32 @@ export type AIMode = "general" | "writer" | "creative" | "assistant";
 // Basic structure for chat messages
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
   mode: AIMode;
-  isLoading?: boolean;
   metadata?: {
     imageUrl?: string;
     hasMedia?: boolean;
     intentData?: any;
-    [key: string]: any;
   };
+  originalPrompt?: string;
   actionButtons?: {
     primary?: {
       text: string;
       action: string;
-    },
+    };
     secondary?: {
       text: string;
       action: string;
-    }
+    };
   };
-  originalPrompt?: string; // Added to store the original prompt for mode switching
   modeSwitchAction?: {
     text: string;
     action: string;
     targetMode: AIMode;
-  }; // Added for mode switching functionality
+  };
+  isLoading?: boolean;
 }
 
 // Type for message variables

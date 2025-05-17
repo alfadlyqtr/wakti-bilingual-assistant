@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -273,7 +272,7 @@ export const AIAssistant: React.FC = () => {
       if (suggestedMode) {
         console.log(`Suggesting mode switch from ${activeMode} to ${suggestedMode}`);
         
-        // Create message suggesting mode switch - enhanced with originalPrompt
+        // Create message suggesting mode switch - now with modeSwitchAction instead of actionButtons
         const switchSuggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
@@ -281,15 +280,10 @@ export const AIAssistant: React.FC = () => {
           timestamp: new Date(),
           mode: activeMode,
           originalPrompt: message, // Store the original prompt for later use
-          actionButtons: {
-            primary: {
-              text: `Switch to ${suggestedMode} mode`,
-              action: `switch_to_${suggestedMode}`,
-            },
-            secondary: {
-              text: "Cancel",
-              action: "cancel",
-            },
+          modeSwitchAction: {
+            text: `Switch to ${suggestedMode} mode`,
+            action: `switch_to_${suggestedMode}`,
+            targetMode: suggestedMode
           }
         };
         
@@ -300,7 +294,7 @@ export const AIAssistant: React.FC = () => {
         // Save the suggestion message with the original prompt
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
           originalPrompt: message,
-          actionButtons: switchSuggestionMessage.actionButtons
+          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
         });
         
         setIsTyping(false);
@@ -329,15 +323,10 @@ export const AIAssistant: React.FC = () => {
           timestamp: new Date(),
           mode: activeMode,
           originalPrompt: aiResponse.originalPrompt || message, // Store original prompt from backend or use current message
-          actionButtons: {
-            primary: {
-              text: `Switch to ${aiResponse.suggestedMode} mode`,
-              action: `switch_to_${aiResponse.suggestedMode}`,
-            },
-            secondary: {
-              text: "Cancel",
-              action: "cancel",
-            },
+          modeSwitchAction: {
+            text: `Switch to ${aiResponse.suggestedMode} mode`,
+            action: `switch_to_${aiResponse.suggestedMode}`,
+            targetMode: aiResponse.suggestedMode as AIMode
           }
         };
         
@@ -347,7 +336,7 @@ export const AIAssistant: React.FC = () => {
         // Save the suggestion message
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
           originalPrompt: aiResponse.originalPrompt || message,
-          actionButtons: switchSuggestionMessage.actionButtons
+          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
         });
         
         setIsTyping(false);
