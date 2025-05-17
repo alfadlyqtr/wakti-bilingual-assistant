@@ -2,6 +2,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
+import { modeController } from "@/utils/modeController";
+import { saveImageToDatabase } from "./imageService";
 
 // Define a type for the ai_chat_history table
 interface AIChatHistory {
@@ -283,104 +285,15 @@ export async function generateImage(prompt: string): Promise<string | null> {
 
 // Helper function to check if text contains an image generation request
 export function isImageGenerationRequest(text: string): boolean {
-  const lowerText = text.toLowerCase();
-  return (
-    lowerText.startsWith("/image") ||
-    lowerText.includes("generate image") ||
-    lowerText.includes("create image") ||
-    lowerText.includes("draw") ||
-    lowerText.includes("create a picture") ||
-    lowerText.includes("make an image") ||
-    lowerText.includes("generate a picture") ||
-    lowerText.includes("show me a picture") ||
-    lowerText.includes("visualize") ||
-    lowerText.includes("picture of")
-  );
+  return modeController.isImageGenerationRequest(text);
 }
 
 // Enhanced helper to detect if mode switch is needed based on text content
 export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode | null {
-  const lowerText = text.toLowerCase();
-  
-  // Image generation - creative mode
-  if (isImageGenerationRequest(lowerText)) {
-    console.log("Detected image generation request - suggesting creative mode");
-    return currentMode !== 'creative' ? 'creative' : null;
-  }
-  
-  // Task creation - assistant mode
-  if (
-    lowerText.includes("create task") ||
-    lowerText.includes("add task") ||
-    lowerText.includes("make task") ||
-    lowerText.includes("create reminder") ||
-    lowerText.includes("add reminder") ||
-    lowerText.includes("remind me") ||
-    lowerText.includes("schedule") ||
-    lowerText.includes("create event") ||
-    lowerText.includes("add event") ||
-    lowerText.includes("calendar") ||
-    lowerText.includes("add to my calendar") ||
-    lowerText.includes("plan") ||
-    lowerText.includes("meeting") ||
-    lowerText.includes("appointment")
-  ) {
-    console.log("Detected task/calendar related request - suggesting assistant mode");
-    return currentMode !== 'assistant' ? 'assistant' : null;
-  }
-  
-  // Writing assistance - writer mode
-  if (
-    lowerText.includes("write") ||
-    lowerText.includes("draft") ||
-    lowerText.includes("compose") ||
-    lowerText.includes("email") ||
-    lowerText.includes("letter") ||
-    lowerText.includes("essay") ||
-    lowerText.includes("poem") ||
-    lowerText.includes("story") ||
-    lowerText.includes("message") ||
-    lowerText.includes("edit") ||
-    lowerText.includes("text") ||
-    lowerText.includes("summarize") ||
-    lowerText.includes("rewrite")
-  ) {
-    console.log("Detected writing related request - suggesting writer mode");
-    return currentMode !== 'writer' ? 'writer' : null;
-  }
-  
-  // Default - no mode switch needed
-  return null;
+  return modeController.shouldSwitchMode(text, currentMode);
 }
 
 // Extract prompt from image generation request
 export function extractImagePrompt(text: string): string {
-  const lowerText = text.toLowerCase();
-  
-  if (lowerText.startsWith("/image")) {
-    return text.substring(6).trim();
-  }
-  
-  // Handle other image generation phrases
-  const patterns = [
-    "generate image of ", 
-    "create image of ",
-    "draw ",
-    "create a picture of ",
-    "make an image of ",
-    "generate a picture of ",
-    "show me a picture of ",
-    "picture of ",
-    "visualize "
-  ];
-  
-  for (const pattern of patterns) {
-    if (lowerText.includes(pattern)) {
-      const startIndex = lowerText.indexOf(pattern) + pattern.length;
-      return text.substring(startIndex).trim();
-    }
-  }
-  
-  // Fallback - use the entire text as prompt
-  return text;
+  return modeController.extractImagePrompt(text);
 }

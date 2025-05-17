@@ -9,6 +9,7 @@ import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import ReactMarkdown from 'react-markdown';
 import { Skeleton } from "@/components/ui/skeleton";
+import { modeController } from "@/utils/modeController";
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -89,15 +90,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Track if mode switch was performed for a message
   const [processedSwitchMessages, setProcessedSwitchMessages] = useState<Set<string>>(new Set());
 
+  // Register with mode controller on mount
+  useEffect(() => {
+    const unregister = modeController.registerCallbacks({
+      onBeforeChange: (oldMode, newMode) => {
+        setIsSwitchingMode(true);
+        setLastSwitchedMode(newMode);
+      },
+      onAfterChange: () => {
+        setIsSwitchingMode(false);
+      }
+    });
+    
+    return () => {
+      unregister();
+    };
+  }, []);
+
   // Function to render message content with markdown support and image loading states
   const renderMessageContent = (content: string, messageId: string, message: ChatMessage) => {
     // Don't render images until we're in the correct mode for the message
     const hasImageMarkdown = content.includes('![');
-    const shouldRenderContent = !(hasImageMarkdown && message.mode === 'creative' && activeMode !== 'creative');
-    
-    if (!shouldRenderContent) {
-      return <div className="italic text-sm">Loading content...</div>;
-    }
     
     if (hasImageMarkdown) {
       return (
@@ -116,13 +129,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   )}
                   <img 
                     {...props}
-                    className={`w-full h-auto object-cover transition-opacity duration-500 ${loadingImages[messageId] ? 'opacity-0' : 'opacity-100'}`}
+                    className={`w-full h-auto object-cover transition-all duration-500 ${
+                      loadingImages[messageId] ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                    }`}
                     loading="lazy"
                     onLoad={(e) => {
                       // Add a small delay before showing image to prevent flicker
                       setTimeout(() => {
                         setLoadingImages(prev => ({...prev, [messageId]: false}));
-                      }, 250); // 250ms buffer to ensure mode switch is complete
+                      }, 300); // 300ms buffer to ensure mode switch is complete
                     }}
                     style={{ maxHeight: '300px' }}
                   />
@@ -198,20 +213,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             if (message.modeSwitchAction.autoTrigger === true) {
               console.log("Auto-triggering mode switch for message:", message.id);
               
-              // 1. Set switching mode animation flag
-              setIsSwitchingMode(true);
-              setLastSwitchedMode(message.modeSwitchAction.targetMode);
+              // Use the mode controller to change mode
+              await modeController.setActiveMode(message.modeSwitchAction.targetMode);
               
-              // 2. Update the active mode
+              // Update the active mode in parent component
               setActiveMode(message.modeSwitchAction.targetMode);
               
-              // 3. Wait briefly to allow visual transition before triggering action
-              await new Promise(resolve => setTimeout(resolve, 500));
-              
-              // 4. Reset animation flag
-              setIsSwitchingMode(false);
-              
-              // 5. Trigger the action
+              // Trigger the action
               onConfirm(message.id, message.modeSwitchAction.action);
               console.log("Mode switched to:", message.modeSwitchAction.targetMode);
             }

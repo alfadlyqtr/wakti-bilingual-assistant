@@ -33,6 +33,8 @@ import {
   extractImagePrompt,
   detectAppropriateMode
 } from "@/services/chatService";
+import { modeController } from "@/utils/modeController";
+import { processImageGeneration } from "@/services/imageService";
 
 // Changed this function to accept language as a parameter
 const getDefaultWelcomeMessage = (language: "en" | "ar"): string => {
@@ -64,6 +66,15 @@ export const AIAssistant: React.FC = () => {
   // Language and theme state
   const language = "en" as "en" | "ar"; // This would normally come from user preferences
   const currentTheme = theme || "light";
+
+  // Register with mode controller to keep local state in sync
+  useEffect(() => {
+    modeController.registerCallbacks({
+      onAfterChange: (oldMode, newMode) => {
+        setActiveMode(newMode);
+      }
+    });
+  }, []);
 
   // Set initial welcome message or load chat history
   useEffect(() => {
@@ -160,8 +171,8 @@ export const AIAssistant: React.FC = () => {
       // Store the pending message from the original prompt
       const pendingMessage = originalMessage.originalPrompt;
       
-      // Switch the mode
-      setActiveMode(newMode);
+      // Switch the mode using the controller
+      await modeController.setActiveMode(newMode);
       
       // Add confirmation message with the double-echo pattern
       const confirmMessage: ChatMessage = {
@@ -169,28 +180,20 @@ export const AIAssistant: React.FC = () => {
         role: "assistant",
         content: `We're now in ${newMode} mode.\n\nStill want me to do this: "${pendingMessage}"?`,
         timestamp: new Date(),
-        mode: newMode,
-        actionButtons: {
-          primary: {
-            text: "Yes, do it",
-            action: "execute_pending",
-          },
-          secondary: {
-            text: "Cancel",
-            action: "cancel_pending",
-          },
-        }
+        mode: newMode
       };
       
       setMessages((prev) => [...prev, confirmMessage]);
-      setPendingModeSwitchMessage(pendingMessage);
-      setPendingModeSwitchTarget(newMode);
+      setPendingModeSwitchMessage(null);
+      setPendingModeSwitchTarget(null);
       
       // Save the confirmation message
       await saveChatMessage(user.id, confirmMessage.content, "assistant", newMode, {
-        pendingMessage,
-        actionButtons: confirmMessage.actionButtons
+        pendingMessage
       });
+      
+      // Automatically process the pending message in the new mode
+      await processUserMessage(pendingMessage);
       
     } else if (action === "execute_pending" && pendingModeSwitchMessage && user) {
       // Execute the pending message in the new mode
@@ -258,58 +261,128 @@ export const AIAssistant: React.FC = () => {
     setIsTyping(true);
 
     try {
-      // Special command for image generation
+      // Special handling for image generation - switch to creative mode automatically
       if (isImageGenerationRequest(message)) {
-        await handleImageGeneration(userMessage.content);
+        // Check if we're already in creative mode
+        if (activeMode !== "creative") {
+          // First echo - suggest mode switch
+          const switchSuggestionMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `You asked to: "${message}". This works better in creative mode. Switching now...`,
+            timestamp: new Date(),
+            mode: activeMode,
+            originalPrompt: message,
+          };
+          
+          setMessages((prev) => [...prev, switchSuggestionMessage]);
+          await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
+            originalPrompt: message,
+          });
+          
+          // Actually switch the mode
+          await modeController.setActiveMode("creative");
+          
+          // Second echo - confirm mode switch and proceed
+          const confirmSwitchMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `We're now in creative mode. Generating image for: "${message}"`,
+            timestamp: new Date(),
+            mode: "creative",
+            originalPrompt: message,
+          };
+          
+          setMessages((prev) => [...prev, confirmSwitchMessage]);
+          await saveChatMessage(user.id, confirmSwitchMessage.content, "assistant", "creative", {
+            originalPrompt: message,
+          });
+        }
+        
+        await handleImageGeneration(message);
         setIsSending(false);
         setIsTyping(false);
         return;
       }
 
-      // Check if we should suggest a mode switch
+      // Check if we should suggest a mode switch for other types of requests
       const suggestedMode = detectAppropriateMode(message, activeMode);
       
       if (suggestedMode) {
         console.log(`Suggesting mode switch from ${activeMode} to ${suggestedMode}`);
         
-        // Create message suggesting mode switch with modeSwitchAction
+        // First echo - suggest mode switch
         const switchSuggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
-          content: `You asked to: "${message}". This works better in ${suggestedMode} mode. Would you like me to switch?`,
+          content: `You asked to: "${message}". This works better in ${suggestedMode} mode. Switching now...`,
           timestamp: new Date(),
           mode: activeMode,
-          originalPrompt: message, // Store the original prompt for later use
-          modeSwitchAction: {
-            text: `Switch to ${suggestedMode} mode`,
-            action: `switch_to_${suggestedMode}`,
-            targetMode: suggestedMode
-          }
+          originalPrompt: message
         };
-        
-        console.log("Created modeSwitchAction message:", JSON.stringify(switchSuggestionMessage));
         
         // Add suggestion to UI after small delay for realism
         await new Promise((resolve) => setTimeout(resolve, 500));
         setMessages((prev) => [...prev, switchSuggestionMessage]);
         
-        // Save the suggestion message with the original prompt and modeSwitchAction
+        // Save the suggestion message
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
-          originalPrompt: message,
-          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+          originalPrompt: message
         });
         
-        // Log the state after adding the message
-        setTimeout(() => {
-          console.log("Current messages state after adding modeSwitchAction:", 
-            JSON.stringify(messages.map(m => ({id: m.id, hasModeSwitchAction: !!m.modeSwitchAction}))));
-        }, 100);
+        // Actually switch the mode
+        await modeController.setActiveMode(suggestedMode);
+        
+        // Second echo - confirm mode switch and proceed
+        const confirmSwitchMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `We're now in ${suggestedMode} mode. Still want me to do this: "${message}"?`,
+          timestamp: new Date(),
+          mode: suggestedMode,
+          originalPrompt: message
+        };
+        
+        setMessages((prev) => [...prev, confirmSwitchMessage]);
+        
+        // Save the confirmation message
+        await saveChatMessage(user.id, confirmSwitchMessage.content, "assistant", suggestedMode, {
+          originalPrompt: message
+        });
+        
+        // Automatically process the request in the new mode without waiting for confirmation
+        await processAIInCurrentMode(message);
         
         setIsTyping(false);
         setIsSending(false);
         return;
       }
 
+      // If no mode switch needed, process in current mode
+      await processAIInCurrentMode(message);
+    } catch (error) {
+      console.error("Error processing message:", error);
+      // Show error message
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: t("errorProcessingRequest" as TranslationKey, language),
+        timestamp: new Date(),
+        mode: activeMode,
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+      showError(t("errorProcessingRequest" as TranslationKey, language));
+    } finally {
+      setIsTyping(false);
+      setIsSending(false);
+    }
+  };
+
+  // Process AI request in current mode
+  const processAIInCurrentMode = async (message: string) => {
+    if (!user) return;
+
+    try {
       // Process the message with the AI
       const aiResponse = await processAIRequest(
         message,
@@ -323,19 +396,14 @@ export const AIAssistant: React.FC = () => {
 
       // Check if AI suggests a mode switch (second method of detection)
       if (aiResponse.suggestedMode && aiResponse.suggestedMode !== activeMode) {
-        // The edge function detected that another mode would be better
+        // First echo - suggest mode switch
         const switchSuggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
-          content: aiResponse.response,
+          content: `You asked to: "${aiResponse.originalPrompt || message}". This works better in ${aiResponse.suggestedMode} mode. Switching now...`,
           timestamp: new Date(),
           mode: activeMode,
-          originalPrompt: aiResponse.originalPrompt || message, // Store original prompt from backend or use current message
-          modeSwitchAction: {
-            text: `Switch to ${aiResponse.suggestedMode} mode`,
-            action: `switch_to_${aiResponse.suggestedMode}`,
-            targetMode: aiResponse.suggestedMode as AIMode
-          }
+          originalPrompt: aiResponse.originalPrompt || message
         };
         
         // Add suggestion to UI
@@ -343,12 +411,66 @@ export const AIAssistant: React.FC = () => {
         
         // Save the suggestion message
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
-          originalPrompt: aiResponse.originalPrompt || message,
-          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+          originalPrompt: aiResponse.originalPrompt || message
         });
         
-        setIsTyping(false);
-        setIsSending(false);
+        // Switch the mode
+        await modeController.setActiveMode(aiResponse.suggestedMode as AIMode);
+        
+        // Second echo - confirm mode switch and proceed
+        const confirmSwitchMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `We're now in ${aiResponse.suggestedMode} mode. Still want me to do this: "${aiResponse.originalPrompt || message}"?`,
+          timestamp: new Date(),
+          mode: aiResponse.suggestedMode as AIMode,
+          originalPrompt: aiResponse.originalPrompt || message
+        };
+        
+        setMessages((prev) => [...prev, confirmSwitchMessage]);
+        
+        // Save the confirmation message
+        await saveChatMessage(
+          user.id, 
+          confirmSwitchMessage.content, 
+          "assistant", 
+          aiResponse.suggestedMode as AIMode, 
+          {
+            originalPrompt: aiResponse.originalPrompt || message
+          }
+        );
+        
+        // Process again in new mode
+        const newResponse = await processAIRequest(
+          aiResponse.originalPrompt || message,
+          aiResponse.suggestedMode,
+          user.id
+        );
+        
+        // Create the AI response message in new mode
+        const assistantMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: newResponse.response,
+          timestamp: new Date(),
+          mode: aiResponse.suggestedMode as AIMode,
+        };
+        
+        // Add assistant response to UI
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Save assistant response to database
+        await saveChatMessage(
+          user.id,
+          assistantMessage.content,
+          "assistant",
+          aiResponse.suggestedMode as AIMode,
+          {
+            intentData: newResponse.intentData,
+            actionButtons: assistantMessage.actionButtons
+          }
+        );
+        
         return;
       }
 
@@ -393,20 +515,8 @@ export const AIAssistant: React.FC = () => {
         }
       );
     } catch (error) {
-      console.error("Error processing message:", error);
-      // Show error message
-      const errorMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "assistant",
-        content: t("errorProcessingRequest" as TranslationKey, language),
-        timestamp: new Date(),
-        mode: activeMode,
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-      showError(t("errorProcessingRequest" as TranslationKey, language));
-    } finally {
-      setIsTyping(false);
-      setIsSending(false);
+      console.error("Error in processAIInCurrentMode:", error);
+      throw error;
     }
   };
 
@@ -428,8 +538,8 @@ export const AIAssistant: React.FC = () => {
       };
       setMessages((prev) => [...prev, loadingMessage]);
 
-      // Call the image generation service
-      const imageUrl = await generateImage(imagePrompt);
+      // Call the image generation service and save to database
+      const imageUrl = await processImageGeneration(imagePrompt, user!.id);
 
       // Update the message with the image or error
       if (imageUrl) {
@@ -638,6 +748,12 @@ export const AIAssistant: React.FC = () => {
     );
   };
 
+  // Function to handle mode changes
+  const handleModeChange = async (newMode: AIMode) => {
+    if (newMode === activeMode) return;
+    await modeController.setActiveMode(newMode);
+  };
+
   // Function to get the color based on mode
   const getModeColor = (mode: AIMode): string => {
     const modeData = ASSISTANT_MODES.find((m) => m.id === mode);
@@ -662,7 +778,7 @@ export const AIAssistant: React.FC = () => {
         {/* Mode Selector */}
         <ModeSelector
           activeMode={activeMode}
-          setActiveMode={setActiveMode}
+          setActiveMode={handleModeChange}
           language={language as "en" | "ar"}
         />
 

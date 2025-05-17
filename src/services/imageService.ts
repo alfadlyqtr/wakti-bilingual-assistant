@@ -1,0 +1,111 @@
+
+import { supabase } from "@/integrations/supabase/client";
+import { modeController } from "@/utils/modeController";
+
+// Interface for the images table
+export interface ImageRecord {
+  id?: string;
+  user_id: string;
+  prompt: string;
+  image_url: string;
+  created_at?: string;
+  metadata?: any;
+}
+
+// Save an image to the Supabase database
+export async function saveImageToDatabase(
+  userId: string,
+  prompt: string,
+  imageUrl: string,
+  metadata: any = {}
+): Promise<string | null> {
+  try {
+    console.log('Saving generated image to database:', { prompt, userId });
+    
+    const newImage: ImageRecord = {
+      user_id: userId,
+      prompt,
+      image_url: imageUrl,
+      metadata
+    };
+    
+    const { data, error } = await supabase
+      .from('images')
+      .insert(newImage)
+      .select('id')
+      .single();
+      
+    if (error) {
+      console.error('Error saving image to database:', error);
+      return null;
+    }
+    
+    console.log('Image saved successfully with ID:', data.id);
+    return data.id;
+    
+  } catch (error) {
+    console.error('Exception saving image to database:', error);
+    return null;
+  }
+}
+
+// Get a user's image history
+export async function getUserImages(
+  userId: string,
+  limit: number = 10
+): Promise<ImageRecord[]> {
+  try {
+    const { data, error } = await supabase
+      .from('images')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+      
+    if (error) {
+      console.error('Error fetching user images:', error);
+      return [];
+    }
+    
+    return data || [];
+    
+  } catch (error) {
+    console.error('Exception fetching user images:', error);
+    return [];
+  }
+}
+
+// Process an image generation request
+export async function processImageGeneration(
+  prompt: string,
+  userId: string
+): Promise<string | null> {
+  try {
+    // Extract the image prompt using the controller
+    const imagePrompt = modeController.extractImagePrompt(prompt);
+    
+    console.log('Processing image generation with prompt:', imagePrompt);
+    
+    // Use the existing generateImage function from chatService
+    const imageUrl = await generateImage(imagePrompt);
+    
+    if (!imageUrl) {
+      throw new Error('Failed to generate image');
+    }
+    
+    // Save the image to the database
+    await saveImageToDatabase(userId, imagePrompt, imageUrl, {
+      originalPrompt: prompt,
+      timestamp: new Date().toISOString()
+    });
+    
+    return imageUrl;
+  } catch (error) {
+    console.error('Error in image generation process:', error);
+    return null;
+  }
+}
+
+// Import the generateImage function from chatService
+// This is a workaround to avoid circular dependencies
+import { generateImage } from "@/services/chatService";
