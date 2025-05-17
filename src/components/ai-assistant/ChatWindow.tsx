@@ -19,6 +19,7 @@ interface ChatWindowProps {
   messageEndRef: React.RefObject<HTMLDivElement>;
   language: string;
   theme: string;
+  setActiveMode: (mode: AIMode) => void;
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -29,7 +30,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onConfirm,
   messageEndRef,
   language,
-  theme
+  theme,
+  setActiveMode
 }) => {
   const formatTimestamp = (timestamp: Date) => {
     return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
@@ -37,6 +39,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       minute: 'numeric',
     }).format(timestamp);
   };
+
+  // State to track mode switch animation
+  const [isSwitchingMode, setIsSwitchingMode] = useState(false);
+  const [lastSwitchedMode, setLastSwitchedMode] = useState<AIMode | null>(null);
 
   // Get background and text colors based on mode and message role
   const getMessageStyle = (message: ChatMessage) => {
@@ -80,11 +86,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Track images that are loading
   const [loadingImages, setLoadingImages] = useState<{[key: string]: boolean}>({});
+  // Track if mode switch was performed for a message
+  const [processedSwitchMessages, setProcessedSwitchMessages] = useState<Set<string>>(new Set());
 
   // Function to render message content with markdown support and image loading states
-  const renderMessageContent = (content: string, messageId: string) => {
-    // Check if content contains an image markdown
+  const renderMessageContent = (content: string, messageId: string, message: ChatMessage) => {
+    // Don't render images until we're in the correct mode for the message
     const hasImageMarkdown = content.includes('![');
+    const shouldRenderContent = !(hasImageMarkdown && message.mode === 'creative' && activeMode !== 'creative');
+    
+    if (!shouldRenderContent) {
+      return <div className="italic text-sm">Loading content...</div>;
+    }
     
     if (hasImageMarkdown) {
       return (
@@ -106,8 +119,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     className={`w-full h-auto object-cover transition-opacity duration-500 ${loadingImages[messageId] ? 'opacity-0' : 'opacity-100'}`}
                     loading="lazy"
                     onLoad={(e) => {
-                      // Remove loading state once image loads
-                      setLoadingImages(prev => ({...prev, [messageId]: false}));
+                      // Add a small delay before showing image to prevent flicker
+                      setTimeout(() => {
+                        setLoadingImages(prev => ({...prev, [messageId]: false}));
+                      }, 250); // 250ms buffer to ensure mode switch is complete
                     }}
                     style={{ maxHeight: '300px' }}
                   />
@@ -149,43 +164,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 
-  // Auto-trigger mode switching without waiting for button clicks
-  useEffect(() => {
-    console.log("ChatWindow received messages:", messages.length);
-    const switchMessages = messages.filter(m => m.modeSwitchAction);
-    
-    if (switchMessages.length > 0) {
-      console.log(`Found ${switchMessages.length} messages with modeSwitchAction:`, 
-        switchMessages.map(m => ({
-          id: m.id, 
-          action: m.modeSwitchAction?.action,
-          text: m.modeSwitchAction?.text,
-          targetMode: m.modeSwitchAction?.targetMode,
-          autoTrigger: m.modeSwitchAction?.autoTrigger
-        })));
-      
-      // Auto-trigger mode switch for the latest message with modeSwitchAction
-      // and autoTrigger flag
-      const autoSwitchMessages = switchMessages.filter(m => 
-        m.modeSwitchAction?.autoTrigger === true && 
-        m.modeSwitchAction?.action
-      );
-      
-      if (autoSwitchMessages.length > 0) {
-        const latestSwitchMsg = autoSwitchMessages[autoSwitchMessages.length - 1];
-        console.log("Auto-triggering mode switch for message:", latestSwitchMsg.id);
-        
-        // Immediately trigger the mode switch
-        if (latestSwitchMsg.modeSwitchAction?.action) {
-          onConfirm(latestSwitchMsg.id, latestSwitchMsg.modeSwitchAction.action);
-          console.log("Auto-switched to mode:", latestSwitchMsg.modeSwitchAction?.targetMode);
-        }
-      }
-    } else {
-      console.log("No messages with modeSwitchAction found");
-    }
-  }, [messages, onConfirm]);
-
   // Get mode name for display
   const getModeName = (mode: AIMode): string => {
     switch(mode) {
@@ -197,6 +175,54 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
+  // Auto-trigger mode switching without waiting for button clicks
+  useEffect(() => {
+    const handleModeSwitches = async () => {
+      // Find messages with modeSwitchAction that haven't been processed yet
+      const switchMessages = messages.filter(m => 
+        m.modeSwitchAction && 
+        !processedSwitchMessages.has(m.id)
+      );
+      
+      if (switchMessages.length > 0) {
+        console.log(`Found ${switchMessages.length} unprocessed messages with modeSwitchAction`);
+        
+        // Process each switch message in sequence
+        for (const message of switchMessages) {
+          if (message.modeSwitchAction?.targetMode && message.modeSwitchAction?.action) {
+            console.log(`Processing mode switch for message ${message.id} to mode ${message.modeSwitchAction.targetMode}`);
+            
+            // Mark as being processed to prevent duplicate processing
+            setProcessedSwitchMessages(prev => new Set([...prev, message.id]));
+            
+            if (message.modeSwitchAction.autoTrigger === true) {
+              console.log("Auto-triggering mode switch for message:", message.id);
+              
+              // 1. Set switching mode animation flag
+              setIsSwitchingMode(true);
+              setLastSwitchedMode(message.modeSwitchAction.targetMode);
+              
+              // 2. Update the active mode
+              setActiveMode(message.modeSwitchAction.targetMode);
+              
+              // 3. Wait briefly to allow visual transition before triggering action
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              // 4. Reset animation flag
+              setIsSwitchingMode(false);
+              
+              // 5. Trigger the action
+              onConfirm(message.id, message.modeSwitchAction.action);
+              console.log("Mode switched to:", message.modeSwitchAction.targetMode);
+            }
+          }
+        }
+      }
+    };
+    
+    handleModeSwitches();
+  }, [messages, onConfirm, processedSwitchMessages, setActiveMode]);
+
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
       <div className="max-w-md mx-auto space-y-4">
@@ -205,6 +231,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const isAssistant = message.role === 'assistant';
             const styles = getMessageStyle(message);
             const isLastMessage = index === messages.length - 1;
+            const showModeSwitchBadge = isAssistant && 
+              index > 0 && 
+              messages[index-1].mode !== message.mode && 
+              message.mode !== activeMode;
             
             return (
               <motion.div
@@ -223,6 +253,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </Avatar>
                   )}
                   <div className="flex flex-col gap-1">
+                    {/* Mode switch badge */}
+                    {message.modeSwitchAction?.targetMode && (
+                      <div className={`text-xs text-white px-2 py-0.5 rounded-md self-start mb-1 ${
+                        message.modeSwitchAction.targetMode === 'creative' ? 'bg-amber-500' :
+                        message.modeSwitchAction.targetMode === 'writer' ? 'bg-blue-500' :
+                        message.modeSwitchAction.targetMode === 'assistant' ? 'bg-purple-500' :
+                        'bg-gray-500'
+                      }`}>
+                        🔁 Switched to {getModeName(message.modeSwitchAction.targetMode)} mode
+                      </div>
+                    )}
+                    
                     {/* Message Content */}
                     <div
                       className={`${styles?.bgColor} ${styles?.textColor} p-3 rounded-2xl ${isAssistant ? 'rounded-tl-none' : 'rounded-tr-none'}`}
@@ -233,7 +275,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     >
                       {message.isLoading ? (
                         <ShimmerEffect />
-                      ) : renderMessageContent(message.content, message.id)}
+                      ) : renderMessageContent(message.content, message.id, message)}
                     </div>
                     
                     <span className="text-xs text-muted-foreground self-end">
@@ -263,6 +305,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '150ms'}} />
                 <div className="w-2 h-2 bg-zinc-400 dark:bg-zinc-500 rounded-full animate-bounce" style={{animationDelay: '300ms'}} />
               </div>
+            </div>
+          </motion.div>
+        )}
+        
+        {/* Mode switch animation indicator */}
+        {isSwitchingMode && lastSwitchedMode && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed top-16 left-0 right-0 flex justify-center z-50"
+          >
+            <div className={`px-4 py-2 rounded-md text-white animate-pulse ${
+              lastSwitchedMode === 'creative' ? 'bg-amber-500' :
+              lastSwitchedMode === 'writer' ? 'bg-blue-500' :
+              lastSwitchedMode === 'assistant' ? 'bg-purple-500' :
+              'bg-gray-500'
+            }`}>
+              Switching to {getModeName(lastSwitchedMode)} mode...
             </div>
           </motion.div>
         )}

@@ -159,7 +159,7 @@ serve(async (req) => {
     console.log(`Current mode: ${mode}, Suggested mode: ${suggestedMode || 'none'}`);
 
     // If mode switch is suggested, return that instead of processing normally
-    // Updated to ensure automatic switching with proper double-echo messaging
+    // Updated to implement proper double-echo messaging pattern
     if (suggestedMode) {
       // Get a readable name for the mode
       const getModeName = (mode: string): string => {
@@ -180,11 +180,11 @@ serve(async (req) => {
         autoTrigger: true // Flag to indicate this should trigger automatically
       };
       
-      console.log("Creating mode switch recommendation with explicit action:", 
+      console.log("Creating mode switch recommendation with action:", 
         JSON.stringify(modeSwitchAction));
       
       // First echo - acknowledge the message and switch notification
-      const switchMessage = `You asked to: "${text}" — this works better in ${getModeName(suggestedMode)} mode. Switching now...`;
+      const switchMessage = `You asked to: "${text}"\nThis works better in ${getModeName(suggestedMode)} mode. Switching now...`;
       
       const response = {
         response: switchMessage,
@@ -268,6 +268,30 @@ serve(async (req) => {
     // Extract detected intent and response content
     const responseContent = result.choices[0].message?.content || "";
     
+    // For second echo pattern - if we just switched modes, acknowledge this in the first response
+    if (text.startsWith("__ECHO__")) {
+      // This is a continuation after a mode switch
+      const originalPrompt = text.replace("__ECHO__", "").trim();
+      
+      // Second echo - acknowledge the mode switch and confirm the original message
+      const confirmationMessage = `We're now in ${getModeName(mode)} mode.\n\nStill want me to do this: "${originalPrompt}"?\n\nProcessing your request...`;
+      
+      const response = {
+        response: confirmationMessage,
+        originalPrompt: originalPrompt,
+      };
+      
+      if (mode === 'creative' && isImageGenerationRequest(originalPrompt)) {
+        response.intent = "generate_image";
+        response.intentData = { prompt: extractImagePrompt(originalPrompt) };
+      }
+      
+      return new Response(
+        JSON.stringify(response),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     // Analyze the content for special intents (task creation, reminders, events)
     const intentAnalysis = analyzeForIntent(text, responseContent, mode);
     
@@ -294,6 +318,55 @@ serve(async (req) => {
     );
   }
 });
+
+// Check if text contains an image generation request
+function isImageGenerationRequest(text: string): boolean {
+  const lowerText = text.toLowerCase();
+  return (
+    lowerText.startsWith("/image") ||
+    lowerText.includes("generate image") ||
+    lowerText.includes("create image") ||
+    lowerText.includes("draw") ||
+    lowerText.includes("create a picture") ||
+    lowerText.includes("make an image") ||
+    lowerText.includes("generate a picture") ||
+    lowerText.includes("show me a picture") ||
+    lowerText.includes("visualize") ||
+    lowerText.includes("picture of")
+  );
+}
+
+// Extract image prompt from text
+function extractImagePrompt(text: string): string {
+  const lowerText = text.toLowerCase();
+  
+  if (lowerText.startsWith("/image")) {
+    return text.substring(6).trim();
+  }
+  
+  // Handle various image generation phrases
+  const patterns = [
+    "generate image of ", 
+    "create image of ",
+    "draw ",
+    "create a picture of ",
+    "make an image of ",
+    "generate a picture of ",
+    "show me a picture of ",
+    "picture of ",
+    "visualize "
+  ];
+  
+  for (const pattern of patterns) {
+    if (lowerText.includes(pattern)) {
+      const startIndex = lowerText.indexOf(pattern) + pattern.length;
+      return text.substring(startIndex).trim();
+    }
+  }
+  
+  // If no pattern matches, use the whole text but remove trigger words
+  return text.replace(/generate image|create image|draw|picture/gi, '').trim();
+}
 
 // Function to analyze text for specific intents
 function analyzeForIntent(userText: string, aiResponse: string, mode: string) {
@@ -348,36 +421,15 @@ function analyzeForIntent(userText: string, aiResponse: string, mode: string) {
   };
 }
 
-// Extract image prompt from text
-function extractImagePrompt(text: string): string {
-  const lowerText = text.toLowerCase();
-  
-  if (lowerText.startsWith("/image")) {
-    return text.substring(6).trim();
+// Helper function for mode name display
+function getModeName(mode: string): string {
+  switch(mode) {
+    case "general": return "Chat";
+    case "writer": return "Writer";
+    case "creative": return "Creative";
+    case "assistant": return "Assistant";
+    default: return mode.charAt(0).toUpperCase() + mode.slice(1);
   }
-  
-  // Handle various image generation phrases
-  const patterns = [
-    "generate image of ", 
-    "create image of ",
-    "draw ",
-    "create a picture of ",
-    "make an image of ",
-    "generate a picture of ",
-    "show me a picture of ",
-    "picture of ",
-    "visualize "
-  ];
-  
-  for (const pattern of patterns) {
-    if (lowerText.includes(pattern)) {
-      const startIndex = lowerText.indexOf(pattern) + pattern.length;
-      return text.substring(startIndex).trim();
-    }
-  }
-  
-  // If no pattern matches, use the whole text but remove trigger words
-  return text.replace(/generate image|create image|draw|picture/gi, '').trim();
 }
 
 // Extract task data from text

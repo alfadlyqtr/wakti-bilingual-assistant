@@ -186,9 +186,15 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
 // Process AI request with intent detection
 export const processAIRequest = async (text: string, mode: string, userId: string) => {
   try {
+    // Check if this is an echo from a mode switch
+    const isEchoAfterModeSwitch = text.startsWith("__ECHO__");
+    const processText = isEchoAfterModeSwitch 
+      ? text 
+      : text;
+
     // Call the Supabase Edge Function to process the AI request
     const { data, error } = await supabase.functions.invoke("process-ai-intent", {
-      body: { text, mode, userId },
+      body: { text: processText, mode, userId },
     });
 
     if (error) {
