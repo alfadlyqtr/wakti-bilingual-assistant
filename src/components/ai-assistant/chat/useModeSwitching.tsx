@@ -1,9 +1,7 @@
 
 import { useState, useEffect } from "react";
-import { AIMode, ChatMessage } from "../types";
+import { AIMode, ChatMessage, ASSISTANT_MODES } from "../types";
 import { modeController } from "@/utils/modeController";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
 import { useTheme } from "@/providers/ThemeProvider";
 
 interface UseModeSwitchingProps {
@@ -33,7 +31,8 @@ export const useModeSwitching = ({
 
   // Get mode name for display with proper translation
   const getModeName = (mode: AIMode): string => {
-    return t(mode as TranslationKey, language);
+    const modeConfig = ASSISTANT_MODES.find(m => m.id === mode);
+    return modeConfig ? modeConfig.label[language] : mode;
   };
 
   // Register with mode controller on mount

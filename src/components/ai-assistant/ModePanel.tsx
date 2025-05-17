@@ -4,9 +4,7 @@ import { motion } from 'framer-motion';
 import { TabsContent, Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Notebook, Palette, LifeBuoy } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
-import { AIMode } from './types';
+import { ASSISTANT_MODES, AIMode } from './types';
 
 interface ModePanelProps {
   activeMode: AIMode;
@@ -17,11 +15,17 @@ export const ModePanel: React.FC<ModePanelProps> = ({ activeMode, setActiveMode 
   const { language } = useTheme();
 
   const modes = [
-    { id: 'general', label: 'general', icon: <MessageSquare className="h-4 w-4" /> },
-    { id: 'writer', label: 'writer', icon: <Notebook className="h-4 w-4" /> },
-    { id: 'creative', label: 'creative', icon: <Palette className="h-4 w-4" /> },
-    { id: 'assistant', label: 'assistant', icon: <LifeBuoy className="h-4 w-4" /> },
+    { id: 'general', icon: <MessageSquare className="h-4 w-4" /> },
+    { id: 'writer', icon: <Notebook className="h-4 w-4" /> },
+    { id: 'creative', icon: <Palette className="h-4 w-4" /> },
+    { id: 'assistant', icon: <LifeBuoy className="h-4 w-4" /> },
   ];
+
+  // Get mode label based on current language
+  const getModeLabel = (modeId: string): string => {
+    const mode = ASSISTANT_MODES.find(m => m.id === modeId);
+    return mode ? mode.label[language] : modeId;
+  };
 
   const handleModeChange = (value: string) => {
     setActiveMode(value as AIMode);
@@ -51,7 +55,7 @@ export const ModePanel: React.FC<ModePanelProps> = ({ activeMode, setActiveMode 
             <span className="relative z-10 flex items-center gap-1.5">
               {mode.icon}
               <span className="hidden sm:inline-block">
-                {t(mode.label as TranslationKey, language)}
+                {getModeLabel(mode.id)}
               </span>
             </span>
           </TabsTrigger>

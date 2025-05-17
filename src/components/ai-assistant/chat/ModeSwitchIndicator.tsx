@@ -1,9 +1,8 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { AIMode } from "../types";
+import { AIMode, ASSISTANT_MODES } from "../types";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
 
 interface ModeSwitchIndicatorProps {
   isSwitchingMode: boolean;

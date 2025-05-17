@@ -38,6 +38,15 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
     }
   };
 
+  // Find label based on mode and language
+  const getModeLabel = (modeId: AIMode, lang: "en" | "ar"): string => {
+    const mode = ASSISTANT_MODES.find(m => m.id === modeId);
+    if (mode) {
+      return mode.label[lang];
+    }
+    return modeId; // Fallback to mode ID if not found
+  };
+
   return (
     <div className="flex justify-center py-2 px-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-x-auto hide-scrollbar">
       <div className="flex space-x-2">
@@ -70,7 +79,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
               )}
               <span className="relative z-10 flex items-center text-xs font-medium">
                 {getIconForMode(mode.id as AIMode)}
-                {t(mode.id as TranslationKey, language)}
+                {getModeLabel(mode.id as AIMode, language)}
               </span>
             </Button>
           );
