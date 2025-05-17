@@ -2,6 +2,8 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { AIMode } from "../types";
+import { useTheme } from "@/providers/ThemeProvider";
+import { t } from "@/utils/translations";
 
 interface ModeSwitchIndicatorProps {
   isSwitchingMode: boolean;
@@ -14,6 +16,8 @@ const ModeSwitchIndicator: React.FC<ModeSwitchIndicatorProps> = ({
   lastSwitchedMode,
   getModeName 
 }) => {
+  const { language } = useTheme();
+  
   if (!isSwitchingMode || !lastSwitchedMode) return null;
 
   return (
@@ -29,7 +33,7 @@ const ModeSwitchIndicator: React.FC<ModeSwitchIndicatorProps> = ({
         lastSwitchedMode === 'assistant' ? 'bg-purple-500' :
         'bg-gray-500'
       }`}>
-        Switching to {getModeName(lastSwitchedMode)} mode...
+        {language === 'ar' ? `جاري التحويل إلى وضع ${getModeName(lastSwitchedMode)}...` : `Switching to ${getModeName(lastSwitchedMode)} mode...`}
       </div>
     </motion.div>
   );

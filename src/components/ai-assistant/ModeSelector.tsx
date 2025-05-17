@@ -5,6 +5,8 @@ import { useTheme } from "next-themes";
 import { AIMode, ASSISTANT_MODES } from "./types";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, Edit3, Paintbrush, Calendar } from "lucide-react";
+import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export interface ModeSelectorProps {
   activeMode: AIMode;
@@ -33,27 +35,6 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
         return <Calendar className="h-4 w-4 mr-2" />;
       default:
         return <MessageSquare className="h-4 w-4 mr-2" />;
-    }
-  };
-
-  // Mode name mapping
-  const getModeDisplayName = (mode: AIMode, lang: "en" | "ar") => {
-    if (lang === "ar") {
-      switch (mode) {
-        case "general": return "عام";
-        case "writer": return "كاتب";
-        case "creative": return "إبداعي";
-        case "assistant": return "مساعد";
-        default: return "عام";
-      }
-    } else {
-      switch (mode) {
-        case "general": return "General";
-        case "writer": return "Writer";
-        case "creative": return "Creative";
-        case "assistant": return "Assistant";
-        default: return "General";
-      }
     }
   };
 
@@ -89,7 +70,7 @@ export const ModeSelector: React.FC<ModeSelectorProps> = ({
               )}
               <span className="relative z-10 flex items-center text-xs font-medium">
                 {getIconForMode(mode.id as AIMode)}
-                {getModeDisplayName(mode.id as AIMode, language)}
+                {t(mode.id as TranslationKey, language)}
               </span>
             </Button>
           );

@@ -2,6 +2,9 @@
 import { useState, useEffect } from "react";
 import { AIMode, ChatMessage } from "../types";
 import { modeController } from "@/utils/modeController";
+import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
+import { useTheme } from "@/providers/ThemeProvider";
 
 interface UseModeSwitchingProps {
   activeMode: AIMode;
@@ -16,6 +19,8 @@ export const useModeSwitching = ({
   onConfirm,
   setActiveMode
 }: UseModeSwitchingProps) => {
+  const { language } = useTheme();
+  
   // State to track mode switch animation
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const [lastSwitchedMode, setLastSwitchedMode] = useState<AIMode | null>(null);
@@ -26,15 +31,9 @@ export const useModeSwitching = ({
   // Track if mode switch was performed for a message
   const [processedSwitchMessages, setProcessedSwitchMessages] = useState<Set<string>>(new Set());
 
-  // Get mode name for display
+  // Get mode name for display with proper translation
   const getModeName = (mode: AIMode): string => {
-    switch(mode) {
-      case "general": return "Chat";
-      case "writer": return "Writer";
-      case "creative": return "Creative";
-      case "assistant": return "Assistant";
-      default: return mode;
-    }
+    return t(mode as TranslationKey, language);
   };
 
   // Register with mode controller on mount

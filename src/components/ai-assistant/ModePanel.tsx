@@ -17,10 +17,10 @@ export const ModePanel: React.FC<ModePanelProps> = ({ activeMode, setActiveMode 
   const { language } = useTheme();
 
   const modes = [
-    { id: 'general', label: 'generalMode', icon: <MessageSquare className="h-4 w-4" /> },
-    { id: 'writer', label: 'writerMode', icon: <Notebook className="h-4 w-4" /> },
-    { id: 'creative', label: 'creativeMode', icon: <Palette className="h-4 w-4" /> },
-    { id: 'assistant', label: 'assistantMode', icon: <LifeBuoy className="h-4 w-4" /> },
+    { id: 'general', label: 'general', icon: <MessageSquare className="h-4 w-4" /> },
+    { id: 'writer', label: 'writer', icon: <Notebook className="h-4 w-4" /> },
+    { id: 'creative', label: 'creative', icon: <Palette className="h-4 w-4" /> },
+    { id: 'assistant', label: 'assistant', icon: <LifeBuoy className="h-4 w-4" /> },
   ];
 
   const handleModeChange = (value: string) => {
