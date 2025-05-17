@@ -64,17 +64,28 @@ serve(async (req) => {
     
     console.log(`Retrieved ${data?.length || 0} chat messages`);
     
-    // Debug: Check if any messages have modeSwitchAction in metadata
+    // Detailed check for modeSwitchAction in metadata
     if (data && data.length > 0) {
       const messagesWithAction = data.filter(msg => msg.metadata && msg.metadata.modeSwitchAction);
       console.log(`Found ${messagesWithAction.length} messages with modeSwitchAction`);
       
+      // Enhanced logging for messages with modeSwitchAction
       if (messagesWithAction.length > 0) {
-        console.log("Example message with modeSwitchAction:", {
-          id: messagesWithAction[0].id,
-          role: messagesWithAction[0].role,
-          modeSwitchAction: messagesWithAction[0].metadata.modeSwitchAction
+        messagesWithAction.forEach(msg => {
+          console.log("Message with modeSwitchAction:", {
+            id: msg.id,
+            role: msg.role,
+            modeSwitchAction: msg.metadata.modeSwitchAction,
+            targetMode: msg.metadata.modeSwitchAction.targetMode
+          });
         });
+      }
+      
+      // Log messages without modeSwitchAction but with metadata
+      const messagesWithMetadataNoAction = data.filter(msg => msg.metadata && !msg.metadata.modeSwitchAction);
+      if (messagesWithMetadataNoAction.length > 0) {
+        console.log(`Found ${messagesWithMetadataNoAction.length} messages with metadata but no modeSwitchAction`);
+        console.log("Sample metadata keys:", Object.keys(messagesWithMetadataNoAction[0].metadata));
       }
     }
     

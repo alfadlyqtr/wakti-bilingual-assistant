@@ -159,7 +159,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } else {
       console.log("No messages with modeSwitchAction found");
     }
-  }, [messages]);
+
+    // Auto-trigger mode switch for the latest message with modeSwitchAction
+    if (switchMessages.length > 0) {
+      const latestSwitchMsg = switchMessages[switchMessages.length - 1];
+      console.log("Auto-triggering mode switch for message:", latestSwitchMsg.id);
+      
+      // Add visual feedback before triggering the switch
+      setTimeout(() => {
+        if (latestSwitchMsg.modeSwitchAction?.action) {
+          onConfirm(latestSwitchMsg.id, latestSwitchMsg.modeSwitchAction.action);
+          console.log("Auto-switched to mode:", latestSwitchMsg.modeSwitchAction?.targetMode);
+        }
+      }, 1500); // Slight delay to show the visual cue before switching
+    }
+  }, [messages, onConfirm]);
+
+  // Get mode name for display
+  const getModeName = (mode: AIMode): string => {
+    switch(mode) {
+      case "general": return "Chat";
+      case "writer": return "Writer";
+      case "creative": return "Creative";
+      case "assistant": return "Assistant";
+      default: return mode;
+    }
+  };
 
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
@@ -181,6 +206,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               logMessageProps(message);
             }
             
+            // Check if this message suggests a mode switch
+            const hasModeSwitch = !!message.modeSwitchAction;
+            const suggestedMode = message.modeSwitchAction?.targetMode;
+            
             return (
               <motion.div
                 key={message.id}
@@ -198,11 +227,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </Avatar>
                   )}
                   <div className="flex flex-col gap-1">
+                    {/* Suggested Mode Badge - show at the top for assistant messages with mode switch suggestion */}
+                    {hasModeSwitch && isAssistant && (
+                      <div className="px-2 py-1 mb-1 text-xs font-medium rounded-md self-start animate-pulse"
+                        style={{ 
+                          backgroundColor: suggestedMode ? getModeColor(suggestedMode) : styles?.borderColor,
+                          color: theme === 'dark' ? 'white' : 'black'
+                        }}>
+                        Suggesting {getModeName(suggestedMode as AIMode)} Mode
+                      </div>
+                    )}
+                    
+                    {/* Message Content */}
                     <div
                       className={`${styles?.bgColor} ${styles?.textColor} p-3 rounded-2xl ${isAssistant ? 'rounded-tl-none' : 'rounded-tr-none'}`}
                       style={{ 
                         borderLeft: isAssistant ? `2px solid ${styles?.borderColor}` : 'none',
-                        borderRight: !isAssistant ? `2px solid ${styles?.borderColor}` : 'none'
+                        borderRight: !isAssistant ? `2px solid ${styles?.borderColor}` : 'none',
+                        // Add glowing effect for messages with mode switch suggestion
+                        boxShadow: hasModeSwitch ? `0 0 8px ${suggestedMode ? getModeColor(suggestedMode) : styles?.borderColor}` : 'none'
                       }}
                     >
                       {message.isLoading ? (
@@ -240,7 +283,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                     )}
                     
-                    {/* Mode Switch Button - Enhanced visibility with prominent styling */}
+                    {/* Mode Switch Button with Visual Enhancements */}
                     {message.modeSwitchAction && (
                       <div className="flex justify-start mt-2">
                         <Button 

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -64,9 +63,10 @@ serve(async (req) => {
       }
     };
 
-    // Enhanced detection logic for mode switching
+    // Enhanced detection logic for mode switching with additional logging
     const detectBetterMode = (userText: string, currentMode: string) => {
       const lowerText = userText.toLowerCase();
+      let detectedMode = null;
       
       // Image generation - creative mode
       if (
@@ -81,11 +81,12 @@ serve(async (req) => {
         lowerText.includes("visualize") ||
         lowerText.includes("picture of")
       ) {
-        return currentMode !== 'creative' ? 'creative' : null;
+        detectedMode = currentMode !== 'creative' ? 'creative' : null;
+        console.log("Detected image generation request, suggesting creative mode");
       }
       
       // Task creation - assistant mode
-      if (
+      else if (
         lowerText.includes("create task") ||
         lowerText.includes("add task") ||
         lowerText.includes("make task") ||
@@ -101,11 +102,12 @@ serve(async (req) => {
         lowerText.includes("meeting") ||
         lowerText.includes("appointment")
       ) {
-        return currentMode !== 'assistant' ? 'assistant' : null;
+        detectedMode = currentMode !== 'assistant' ? 'assistant' : null;
+        console.log("Detected task/calendar related request, suggesting assistant mode");
       }
       
       // Writing assistance - writer mode
-      if (
+      else if (
         lowerText.includes("write") ||
         lowerText.includes("draft") ||
         lowerText.includes("compose") ||
@@ -120,11 +122,14 @@ serve(async (req) => {
         lowerText.includes("summarize") ||
         lowerText.includes("rewrite")
       ) {
-        return currentMode !== 'writer' ? 'writer' : null;
+        detectedMode = currentMode !== 'writer' ? 'writer' : null;
+        console.log("Detected writing related request, suggesting writer mode");
       }
       
-      // Default - no mode switch needed
-      return null;
+      // Enhanced logging for the detected mode
+      console.log(`Mode detection result - Current: ${currentMode}, Detected: ${detectedMode || 'none'}`);
+      
+      return detectedMode;
     };
 
     // Check if a mode switch is recommended
@@ -133,12 +138,21 @@ serve(async (req) => {
 
     // If mode switch is suggested, return that instead of processing normally
     if (suggestedMode) {
+      const response = {
+        response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Switching modes for you...`,
+        suggestedMode: suggestedMode,
+        originalPrompt: text, // Store the original prompt for the second step
+        modeSwitchAction: {
+          text: `Switch to ${suggestedMode} mode`,
+          action: `switch_to_${suggestedMode}`,
+          targetMode: suggestedMode
+        }
+      };
+      
+      console.log("Sending mode switch recommendation:", JSON.stringify(response));
+      
       return new Response(
-        JSON.stringify({
-          response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Would you like me to switch?`,
-          suggestedMode: suggestedMode,
-          originalPrompt: text // Store the original prompt for the second step
-        }),
+        JSON.stringify(response),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

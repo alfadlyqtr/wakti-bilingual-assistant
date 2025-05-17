@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -29,7 +28,7 @@ export async function saveChatMessage(
   try {
     console.log('Saving chat message:', { userId, role, mode });
     
-    // Important: Log the full metadata including modeSwitchAction to debug the issue
+    // Enhanced logging for mode switch actions
     if (metadata && metadata.modeSwitchAction) {
       console.log('Found modeSwitchAction in metadata being saved:', JSON.stringify(metadata.modeSwitchAction));
     } else {
@@ -106,7 +105,7 @@ export async function getRecentChatHistory(
     
     // Convert to ChatMessage format
     const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => {
-      // Debug check for modeSwitchAction in each message's metadata
+      // Enhanced debug logging for modeSwitchAction in each message's metadata
       if (item.metadata && item.metadata.modeSwitchAction) {
         console.log(`Message ${item.id} has modeSwitchAction in metadata:`, 
           JSON.stringify(item.metadata.modeSwitchAction));
@@ -267,12 +266,13 @@ export function isImageGenerationRequest(text: string): boolean {
   );
 }
 
-// Helper to detect if mode switch is needed based on text content
+// Enhanced helper to detect if mode switch is needed based on text content
 export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode | null {
   const lowerText = text.toLowerCase();
   
   // Image generation - creative mode
   if (isImageGenerationRequest(lowerText)) {
+    console.log("Detected image generation request - suggesting creative mode");
     return currentMode !== 'creative' ? 'creative' : null;
   }
   
@@ -293,6 +293,7 @@ export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode
     lowerText.includes("meeting") ||
     lowerText.includes("appointment")
   ) {
+    console.log("Detected task/calendar related request - suggesting assistant mode");
     return currentMode !== 'assistant' ? 'assistant' : null;
   }
   
@@ -312,6 +313,7 @@ export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode
     lowerText.includes("summarize") ||
     lowerText.includes("rewrite")
   ) {
+    console.log("Detected writing related request - suggesting writer mode");
     return currentMode !== 'writer' ? 'writer' : null;
   }
   
