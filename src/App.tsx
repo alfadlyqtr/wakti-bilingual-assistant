@@ -69,16 +69,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Wrapper component to render the inner AIAssistant component directly
+// Create a proper WAKTI AI page that uses the AppLayout
 function WaktiAIPage() {
   return (
-    <div className="mobile-container h-full flex flex-col">
-      <AppHeader title="WAKTI AI" />
-      <div className="flex-1 overflow-hidden relative">
-        <AIAssistantInner />
-      </div>
-      <MobileNav />
-      <Toaster />
+    <div className="flex-1 overflow-hidden relative">
+      <AIAssistantInner />
     </div>
   );
 }
@@ -101,8 +96,14 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* WAKTI AI route */}
-              <Route path="/wakti-ai" element={<WaktiAIPage />} />
+              {/* WAKTI AI route - now using AppLayout */}
+              <Route path="/wakti-ai" element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <WaktiAIPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } />
 
               {/* Protected routes - but now without redirect */}
               <Route element={<ProtectedRoute />}>
