@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Logo3D } from "@/components/Logo3D";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, CircleCheck, Sparkles, Brain, Bot, Wand } from "lucide-react";
+import { Check, ArrowRight, CircleCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 
@@ -40,16 +41,7 @@ export default function Home() {
       feature3Title: "Voice Summaries",
       feature3Desc: "Create audio summaries with AI transcription",
       feature4Title: "Bilingual Support",
-      feature4Desc: "Full Arabic and English language support",
-      aiSectionTitle: "WAKTI AI Assistant",
-      aiFeature1Title: "Smart Task Generation",
-      aiFeature1Desc: "Create tasks from natural language descriptions",
-      aiFeature2Title: "Intelligent Summarization",
-      aiFeature2Desc: "Get summaries of meetings, articles and voice recordings",
-      aiFeature3Title: "Creative Content Creation",
-      aiFeature3Desc: "Generate text, charts, and images for your projects",
-      aiFeature4Title: "Learning & Tutoring",
-      aiFeature4Desc: "Get help with complex topics and learning new skills"
+      feature4Desc: "Full Arabic and English language support"
     },
     ar: {
       tagline: "مساعد الإنتاجية الذكي",
@@ -68,16 +60,7 @@ export default function Home() {
       feature3Title: "ملخصات صوتية",
       feature3Desc: "إنشاء ملخصات صوتية مع النسخ بالذكاء الاصطناعي",
       feature4Title: "دعم ثنائي اللغة",
-      feature4Desc: "دعم كامل للغتين العربية والإنجليزية",
-      aiSectionTitle: "مساعد واكتي الذكي",
-      aiFeature1Title: "إنشاء المهام الذكية",
-      aiFeature1Desc: "إنشاء المهام من وصف اللغة الطبيعية",
-      aiFeature2Title: "تلخيص ذكي",
-      aiFeature2Desc: "الحصول على ملخصات للاجتماعات والمقالات والتسجيلات الصوتية",
-      aiFeature3Title: "إنشاء محتوى إبداعي",
-      aiFeature3Desc: "إنشاء نصوص ورسوم بيانية وصور لمشاريعك",
-      aiFeature4Title: "التعلم والتدريس",
-      aiFeature4Desc: "الحصول على مساعدة في المواضيع المعقدة وتعلم مهارات جديدة"
+      feature4Desc: "دعم كامل للغتين العربية والإنجليزية"
     }
   };
   
@@ -213,73 +196,6 @@ export default function Home() {
                     <CircleCheck className="h-5 w-5 mr-2 text-green-500" /> {t.feature4Title}
                   </h3>
                   <p className="text-sm text-muted-foreground">{t.feature4Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </motion.section>
-        
-        {/* WAKTI AI Section */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          variants={containerVariants}
-          className="px-4 py-8 bg-gradient-to-b from-transparent to-blue-500/5 rounded-t-3xl"
-        >
-          <motion.h2 
-            variants={itemVariants}
-            className="text-xl font-bold mb-6 text-center flex items-center justify-center gap-2"
-          >
-            <Sparkles className="h-5 w-5 text-blue-500" />
-            {t.aiSectionTitle}
-          </motion.h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg bg-background/80 backdrop-blur-sm">
-                <div className="bg-gradient-to-r from-indigo-500 to-blue-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <Robot className="h-5 w-5 mr-2 text-indigo-500" /> {t.aiFeature1Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature1Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg bg-background/80 backdrop-blur-sm">
-                <div className="bg-gradient-to-r from-violet-500 to-purple-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <Brain className="h-5 w-5 mr-2 text-violet-500" /> {t.aiFeature2Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature2Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg bg-background/80 backdrop-blur-sm">
-                <div className="bg-gradient-to-r from-fuchsia-500 to-pink-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <Wand className="h-5 w-5 mr-2 text-fuchsia-500" /> {t.aiFeature3Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature3Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg bg-background/80 backdrop-blur-sm">
-                <div className="bg-gradient-to-r from-cyan-500 to-teal-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <Sparkles className="h-5 w-5 mr-2 text-cyan-500" /> {t.aiFeature4Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature4Desc}</p>
                 </div>
               </Card>
             </motion.div>
