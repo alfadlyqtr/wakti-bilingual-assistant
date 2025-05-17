@@ -75,6 +75,30 @@ export async function getUserImages(
   }
 }
 
+// Get a specific image by ID
+export async function getImageById(
+  imageId: string
+): Promise<ImageRecord | null> {
+  try {
+    const { data, error } = await supabase
+      .from('images')
+      .select('*')
+      .eq('id', imageId)
+      .single();
+      
+    if (error) {
+      console.error('Error fetching image:', error);
+      return null;
+    }
+    
+    return data;
+    
+  } catch (error) {
+    console.error('Exception fetching image:', error);
+    return null;
+  }
+}
+
 // Process an image generation request
 export async function processImageGeneration(
   prompt: string,

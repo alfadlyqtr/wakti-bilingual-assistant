@@ -25,7 +25,7 @@ export function RightPanel({ userId, activeMode }: RightPanelProps) {
   }
 
   return (
-    <div className="h-full flex flex-col space-y-6 p-2">
+    <div className="h-full flex flex-col space-y-4 p-3">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold">
           {activeMode === "general" && "Chat Assistant"}
@@ -50,8 +50,8 @@ export function RightPanel({ userId, activeMode }: RightPanelProps) {
       </div>
 
       {activeMode === "creative" && userId && (
-        <div className="flex-1 overflow-y-auto">
-          <h3 className="text-sm font-medium mb-2">Your Generated Images</h3>
+        <div className="flex-1 overflow-y-auto pr-1">
+          <h3 className="text-sm font-medium mb-3">Your Generated Images</h3>
           <ImageGallery userId={userId} />
         </div>
       )}

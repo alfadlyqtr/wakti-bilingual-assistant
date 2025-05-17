@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -47,6 +48,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   
   // Image modal states
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImagePrompt, setSelectedImagePrompt] = useState<string | null>(null);
+  const [selectedImageTime, setSelectedImageTime] = useState<Date | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
 
   // Get background and text colors based on mode and message role
@@ -102,7 +105,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onBeforeChange: (oldMode, newMode) => {
         setIsSwitchingMode(true);
         setLastSwitchedMode(newMode);
-        // If switching to creative, we'll update the flag after the switch is complete
       },
       onAfterChange: (oldMode, newMode) => {
         setIsSwitchingMode(false);
@@ -120,16 +122,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [activeMode]);
 
   // Trigger image download
-  const downloadImage = async (imageUrl: string) => {
+  const downloadImage = async (imageUrl: string, promptText: string = "wakti-image") => {
     try {
       const response = await fetch(imageUrl);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       
+      // Create a sanitized filename from the prompt
+      const sanitizedPrompt = promptText
+        .replace(/[^a-z0-9]/gi, '_')
+        .toLowerCase()
+        .substring(0, 50); // Limit to 50 chars
+      
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = url;
-      a.download = `wakti-image-${Date.now()}.jpg`;
+      a.download = `${sanitizedPrompt}.png`;
       
       document.body.appendChild(a);
       a.click();
@@ -142,9 +150,32 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   // Open the image in a modal
-  const openImageModal = (imageUrl: string) => {
+  const openImageModal = (imageUrl: string, promptText: string = '', timestamp: Date = new Date()) => {
     setSelectedImage(imageUrl);
+    setSelectedImagePrompt(promptText);
+    setSelectedImageTime(timestamp);
     setShowImageModal(true);
+  };
+
+  // Extract prompt text from message content
+  const extractPromptFromContent = (content: string): string => {
+    // Look for markdown image syntax ![...](...)
+    const imgRegex = /!\[([^\]]*)\]\([^)]+\)/;
+    const match = content.match(imgRegex);
+    
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // If no match, try to find any text before the image
+    const lines = content.split('\n');
+    const textLines = lines.filter(line => !line.startsWith('![') && line.trim() !== '');
+    
+    if (textLines.length > 0) {
+      return textLines[0];
+    }
+    
+    return "Generated Image";
   };
 
   // Function to render message content with markdown support and image loading states
@@ -153,6 +184,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const hasImageMarkdown = content.includes('![');
     
     if (hasImageMarkdown) {
+      // Extract the prompt for download filename
+      const promptText = extractPromptFromContent(content);
+      
       return (
         <ReactMarkdown
           components={{
@@ -192,7 +226,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           }, 250); // 250ms buffer for smoother transition
                         }}
                         style={{ maxHeight: '300px' }}
-                        onClick={() => openImageModal(imageUrl)}
+                        onClick={() => openImageModal(imageUrl, promptText, message.timestamp)}
                       />
                       
                       {/* Action buttons */}
@@ -204,7 +238,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
                             onClick={(e) => {
                               e.stopPropagation();
-                              downloadImage(imageUrl);
+                              downloadImage(imageUrl, promptText);
                             }}
                           >
                             <Download className="h-4 w-4" />
@@ -216,7 +250,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openImageModal(imageUrl);
+                              openImageModal(imageUrl, promptText, message.timestamp);
                             }}
                           >
                             <Expand className="h-4 w-4" />
@@ -421,24 +455,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </motion.div>
         )}
         
-        {/* Image viewer modal */}
+        {/* Enhanced image viewer modal */}
         <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
           <DialogContent className="w-full max-w-3xl p-0 bg-transparent border-0 shadow-none">
             <div className="relative w-full flex flex-col items-center">
               {selectedImage && (
                 <>
-                  <img
-                    src={selectedImage}
-                    alt="Full-size image"
-                    className="w-full h-auto rounded-lg"
-                  />
-                  <div className="absolute bottom-4 right-4 flex gap-2">
-                    <Button
-                      onClick={() => downloadImage(selectedImage)}
-                      className="bg-black/30 hover:bg-black/50 text-white rounded-full"
-                    >
-                      <Download className="mr-1 h-4 w-4" /> Download
-                    </Button>
+                  <div className="bg-black/80 backdrop-blur-sm rounded-lg p-5 w-full">
+                    <img
+                      src={selectedImage}
+                      alt="Full-size image"
+                      className="w-full h-auto rounded-lg mx-auto"
+                    />
+                    
+                    <div className="mt-4 text-white">
+                      {selectedImagePrompt && (
+                        <p className="text-sm font-medium mb-1">{selectedImagePrompt}</p>
+                      )}
+                      {selectedImageTime && (
+                        <p className="text-xs text-gray-400">
+                          Generated on {selectedImageTime.toLocaleDateString()} at {selectedImageTime.toLocaleTimeString()}
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="mt-4 flex justify-end">
+                      <Button
+                        onClick={() => downloadImage(selectedImage, selectedImagePrompt || '')}
+                        className="bg-black/30 hover:bg-black/50 text-white"
+                      >
+                        <Download className="mr-1 h-4 w-4" /> Download Image
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}
