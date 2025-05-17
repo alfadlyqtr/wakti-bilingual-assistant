@@ -287,17 +287,23 @@ export const AIAssistant: React.FC = () => {
           }
         };
         
-        console.log("Created modeSwitchAction message:", switchSuggestionMessage);
+        console.log("Created modeSwitchAction message:", JSON.stringify(switchSuggestionMessage));
         
         // Add suggestion to UI after small delay for realism
         await new Promise((resolve) => setTimeout(resolve, 500));
         setMessages((prev) => [...prev, switchSuggestionMessage]);
         
-        // Save the suggestion message with the original prompt
+        // Save the suggestion message with the original prompt and modeSwitchAction
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
           originalPrompt: message,
           modeSwitchAction: switchSuggestionMessage.modeSwitchAction
         });
+        
+        // Log the state after adding the message
+        setTimeout(() => {
+          console.log("Current messages state after adding modeSwitchAction:", 
+            JSON.stringify(messages.map(m => ({id: m.id, hasModeSwitchAction: !!m.modeSwitchAction}))));
+        }, 100);
         
         setIsTyping(false);
         setIsSending(false);

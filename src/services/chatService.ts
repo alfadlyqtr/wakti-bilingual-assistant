@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -27,7 +26,8 @@ export async function saveChatMessage(
   if (!userId) return null;
   
   try {
-    console.log('Saving chat message:', { userId, role, mode, metadata });
+    console.log('Saving chat message:', { userId, role, mode });
+    console.log('Metadata being saved:', JSON.stringify(metadata));
     
     // Check if the message contains an image (for assistant responses)
     const hasMedia = content.includes("![") || (metadata && metadata.hasMedia);
@@ -37,6 +37,11 @@ export async function saveChatMessage(
       ...metadata,
       timestamp: metadata.timestamp || new Date().toISOString(),
     };
+    
+    // Preserve modeSwitchAction if it exists in metadata
+    if (metadata && metadata.modeSwitchAction) {
+      console.log('Found modeSwitchAction in metadata:', metadata.modeSwitchAction);
+    }
     
     // Convert to parameters required by the stored function
     const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
@@ -95,15 +100,26 @@ export async function getRecentChatHistory(
     console.log('Chat history raw data:', data);
     
     // Convert to ChatMessage format
-    const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => ({
-      id: item.id,
-      role: item.role as "user" | "assistant",
-      content: item.content,
-      timestamp: new Date(item.created_at),
-      mode: item.mode as AIMode,
-      metadata: item.metadata || {},
-      originalPrompt: item.metadata?.originalPrompt
-    }));
+    const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => {
+      // Extract modeSwitchAction from metadata if it exists
+      const modeSwitchAction = item.metadata?.modeSwitchAction;
+      
+      if (modeSwitchAction) {
+        console.log('Found modeSwitchAction in retrieved message:', modeSwitchAction);
+      }
+      
+      return {
+        id: item.id,
+        role: item.role as "user" | "assistant",
+        content: item.content,
+        timestamp: new Date(item.created_at),
+        mode: item.mode as AIMode,
+        metadata: item.metadata || {},
+        originalPrompt: item.metadata?.originalPrompt,
+        modeSwitchAction: modeSwitchAction,
+        actionButtons: item.metadata?.actionButtons
+      };
+    });
     
     // Sort by timestamp
     return chatMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());

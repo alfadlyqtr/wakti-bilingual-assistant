@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -134,7 +133,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 
-  // Helper function to log message properties (for debugging)
+  // Enhanced helper function to log message properties (for debugging)
   const logMessageProps = (message: ChatMessage) => {
     console.log("Message props:", {
       id: message.id,
@@ -144,6 +143,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
   };
 
+  // Log all messages with modeSwitchAction on component mount
+  useEffect(() => {
+    const switchMessages = messages.filter(m => m.modeSwitchAction);
+    if (switchMessages.length > 0) {
+      console.log(`Found ${switchMessages.length} messages with modeSwitchAction:`, 
+        switchMessages.map(m => ({id: m.id, action: m.modeSwitchAction?.action})));
+    }
+  }, [messages]);
+
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
       <div className="max-w-md mx-auto space-y-4">
@@ -152,6 +160,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const isAssistant = message.role === 'assistant';
             const styles = getMessageStyle(message);
             const isLastMessage = index === messages.length - 1;
+            
+            // Enhanced logging for all messages with modeSwitchAction
+            if (message.modeSwitchAction) {
+              console.log(`Message ${message.id} has modeSwitchAction:`, message.modeSwitchAction);
+            }
             
             // Log message properties to help with debugging
             if (isLastMessage) {
@@ -217,20 +230,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                     )}
                     
-                    {/* Mode Switch Button - Enhanced visibility and debugging */}
+                    {/* Mode Switch Button - Enhanced visibility with prominent styling */}
                     {message.modeSwitchAction && (
                       <div className="flex justify-start mt-2">
                         <Button 
                           variant="default"
                           size="sm"
                           onClick={() => onConfirm(message.id, message.modeSwitchAction?.action || '')}
-                          className="text-xs py-1 h-8 px-3 animate-pulse"
+                          className="text-xs py-1 h-8 px-3 animate-pulse font-medium"
                           style={{ 
                             backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
                             borderColor: getModeColor(message.modeSwitchAction.targetMode),
                           }}
                         >
-                          {message.modeSwitchAction.text}
+                          {message.modeSwitchAction.text || `Switch to ${message.modeSwitchAction.targetMode} mode`}
                         </Button>
                       </div>
                     )}
