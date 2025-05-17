@@ -1,15 +1,15 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AIMode, ChatMessage } from "./types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Download, Expand } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import ReactMarkdown from 'react-markdown';
 import { Skeleton } from "@/components/ui/skeleton";
 import { modeController } from "@/utils/modeController";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -44,6 +44,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // State to track mode switch animation
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
   const [lastSwitchedMode, setLastSwitchedMode] = useState<AIMode | null>(null);
+  
+  // Image modal states
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Get background and text colors based on mode and message role
   const getMessageStyle = (message: ChatMessage) => {
@@ -89,6 +93,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [loadingImages, setLoadingImages] = useState<{[key: string]: boolean}>({});
   // Track if mode switch was performed for a message
   const [processedSwitchMessages, setProcessedSwitchMessages] = useState<Set<string>>(new Set());
+  // Track if we're ready to show images (active mode is creative)
+  const [isCreativeModeActive, setIsCreativeModeActive] = useState(activeMode === 'creative');
 
   // Register with mode controller on mount
   useEffect(() => {
@@ -96,16 +102,50 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       onBeforeChange: (oldMode, newMode) => {
         setIsSwitchingMode(true);
         setLastSwitchedMode(newMode);
+        // If switching to creative, we'll update the flag after the switch is complete
       },
-      onAfterChange: () => {
+      onAfterChange: (oldMode, newMode) => {
         setIsSwitchingMode(false);
+        // Update the creative mode flag
+        setIsCreativeModeActive(newMode === 'creative');
       }
     });
+    
+    // Initialize creative mode flag
+    setIsCreativeModeActive(activeMode === 'creative');
     
     return () => {
       unregister();
     };
-  }, []);
+  }, [activeMode]);
+
+  // Trigger image download
+  const downloadImage = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `wakti-image-${Date.now()}.jpg`;
+      
+      document.body.appendChild(a);
+      a.click();
+      
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error downloading image:", error);
+    }
+  };
+
+  // Open the image in a modal
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setShowImageModal(true);
+  };
 
   // Function to render message content with markdown support and image loading states
   const renderMessageContent = (content: string, messageId: string, message: ChatMessage) => {
@@ -117,30 +157,75 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <ReactMarkdown
           components={{
             img: ({ node, ...props }) => {
-              // Set this message's image as loading when first rendered
-              if (!loadingImages[messageId]) {
+              const imageUrl = props.src || '';
+              
+              // Only start loading when we're in creative mode AND the URL is valid
+              const shouldStartLoading = isCreativeModeActive && 
+                imageUrl.startsWith('http') && 
+                !isSwitchingMode;
+              
+              // Set this message's image as loading when first encountered
+              if (shouldStartLoading && !loadingImages.hasOwnProperty(messageId)) {
                 setLoadingImages(prev => ({...prev, [messageId]: true}));
               }
               
               return (
-                <div className="mt-2 overflow-hidden rounded-md">
-                  {loadingImages[messageId] && (
+                <div className="relative mt-2 overflow-hidden rounded-md">
+                  {/* Shimmer effect - only show when in creative mode and image is loading */}
+                  {(shouldStartLoading && loadingImages[messageId]) && (
                     <Skeleton className="w-full h-64 animate-pulse bg-zinc-300 dark:bg-zinc-700" />
                   )}
-                  <img 
-                    {...props}
-                    className={`w-full h-auto object-cover transition-all duration-500 ${
-                      loadingImages[messageId] ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
-                    }`}
-                    loading="lazy"
-                    onLoad={(e) => {
-                      // Add a small delay before showing image to prevent flicker
-                      setTimeout(() => {
-                        setLoadingImages(prev => ({...prev, [messageId]: false}));
-                      }, 300); // 300ms buffer to ensure mode switch is complete
-                    }}
-                    style={{ maxHeight: '300px' }}
-                  />
+                  
+                  {/* Only render the image when we're ready to show it */}
+                  {shouldStartLoading && (
+                    <div className="relative group">
+                      <img 
+                        {...props}
+                        className={`w-full h-auto object-cover rounded-md transition-opacity duration-300 ${
+                          loadingImages[messageId] ? 'opacity-0' : 'opacity-100'
+                        }`}
+                        loading="lazy"
+                        onLoad={(e) => {
+                          // Add a small delay before showing image for smoother transition
+                          setTimeout(() => {
+                            setLoadingImages(prev => ({...prev, [messageId]: false}));
+                          }, 250); // 250ms buffer for smoother transition
+                        }}
+                        style={{ maxHeight: '300px' }}
+                        onClick={() => openImageModal(imageUrl)}
+                      />
+                      
+                      {/* Action buttons */}
+                      {!loadingImages[messageId] && (
+                        <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <Button 
+                            size="icon" 
+                            variant="secondary" 
+                            className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadImage(imageUrl);
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                            <span className="sr-only">Download</span>
+                          </Button>
+                          <Button 
+                            size="icon" 
+                            variant="secondary" 
+                            className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openImageModal(imageUrl);
+                            }}
+                          >
+                            <Expand className="h-4 w-4" />
+                            <span className="sr-only">Expand</span>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             },
@@ -335,6 +420,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           </motion.div>
         )}
+        
+        {/* Image viewer modal */}
+        <Dialog open={showImageModal} onOpenChange={setShowImageModal}>
+          <DialogContent className="w-full max-w-3xl p-0 bg-transparent border-0 shadow-none">
+            <div className="relative w-full flex flex-col items-center">
+              {selectedImage && (
+                <>
+                  <img
+                    src={selectedImage}
+                    alt="Full-size image"
+                    className="w-full h-auto rounded-lg"
+                  />
+                  <div className="absolute bottom-4 right-4 flex gap-2">
+                    <Button
+                      onClick={() => downloadImage(selectedImage)}
+                      className="bg-black/30 hover:bg-black/50 text-white rounded-full"
+                    >
+                      <Download className="mr-1 h-4 w-4" /> Download
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
         
         {/* This empty div is for auto-scrolling to the bottom of chat */}
         <div ref={messageEndRef} />

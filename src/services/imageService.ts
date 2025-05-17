@@ -81,6 +81,9 @@ export async function processImageGeneration(
   userId: string
 ): Promise<string | null> {
   try {
+    // Switch to creative mode first
+    await modeController.setActiveMode('creative');
+    
     // Extract the image prompt using the controller
     const imagePrompt = modeController.extractImagePrompt(prompt);
     
@@ -94,10 +97,12 @@ export async function processImageGeneration(
     }
     
     // Save the image to the database
-    await saveImageToDatabase(userId, imagePrompt, imageUrl, {
+    const imageId = await saveImageToDatabase(userId, imagePrompt, imageUrl, {
       originalPrompt: prompt,
       timestamp: new Date().toISOString()
     });
+    
+    console.log('Image saved to database with ID:', imageId);
     
     return imageUrl;
   } catch (error) {

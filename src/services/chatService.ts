@@ -191,8 +191,35 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
     // Check if this is an echo from a mode switch
     const isEchoAfterModeSwitch = text.startsWith("__ECHO__");
     const processText = isEchoAfterModeSwitch 
-      ? text 
+      ? text.replace("__ECHO__", "") 
       : text;
+
+    // First, check if this is an image generation request
+    // If so, we'll handle it separately with special mode switching
+    const isImageRequest = modeController.isImageGenerationRequest(processText);
+    if (isImageRequest) {
+      console.log("Image generation request detected, ensuring creative mode");
+      
+      // Ensure we're in creative mode
+      const currentMode = modeController.getActiveMode();
+      if (currentMode !== 'creative') {
+        // We need to switch to creative mode first
+        return {
+          response: `You asked to create an image based on: "${processText}". This works better in Creative mode. Switching now...`,
+          intent: "mode_switch",
+          intentData: null,
+          suggestedMode: "creative",
+          originalPrompt: processText,
+          modeSwitchAction: {
+            targetMode: "creative",
+            action: "generateImage",
+            autoTrigger: true,
+            prompt: processText,
+          },
+          echoOriginalPrompt: true
+        };
+      }
+    }
 
     // Call the Supabase Edge Function to process the AI request
     const { data, error } = await supabase.functions.invoke("process-ai-intent", {

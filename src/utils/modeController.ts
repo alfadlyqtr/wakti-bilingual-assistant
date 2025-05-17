@@ -36,6 +36,8 @@ class ModeController {
       this.switchInProgress = true;
       const oldMode = this.activeMode;
       
+      console.log(`Mode switch initiated: ${oldMode} → ${newMode}`);
+      
       // Run pre-change callbacks
       for (const callback of this.callbacks) {
         callback.onBeforeChange?.(oldMode, newMode);
@@ -46,6 +48,8 @@ class ModeController {
       
       // Small delay to allow UI to update
       await new Promise(resolve => setTimeout(resolve, 500));
+      
+      console.log(`Mode switch completed: ${oldMode} → ${newMode}`);
       
       // Run post-change callbacks
       for (const callback of this.callbacks) {
@@ -120,7 +124,7 @@ class ModeController {
     return null;
   }
 
-  // Helper to detect image generation requests
+  // Helper to detect image generation requests with expanded keywords
   isImageGenerationRequest(text: string): boolean {
     const lowerText = text.toLowerCase();
     return (
@@ -133,7 +137,16 @@ class ModeController {
       lowerText.includes("generate a picture") ||
       lowerText.includes("show me a picture") ||
       lowerText.includes("visualize") ||
-      lowerText.includes("picture of")
+      lowerText.includes("picture of") ||
+      lowerText.includes("sketch") ||
+      lowerText.includes("illustrate") ||
+      lowerText.includes("render") ||
+      lowerText.includes("design") ||
+      lowerText.includes("depict") ||
+      lowerText.includes("show me") ||
+      lowerText.includes("create art") ||
+      lowerText.includes("generate art") ||
+      lowerText.includes("ai art")
     );
   }
   
@@ -155,7 +168,15 @@ class ModeController {
       "generate a picture of ",
       "show me a picture of ",
       "picture of ",
-      "visualize "
+      "visualize ",
+      "sketch ",
+      "illustrate ",
+      "render ",
+      "design ",
+      "depict ",
+      "show me ",
+      "create art of ",
+      "generate art of "
     ];
     
     for (const pattern of patterns) {
