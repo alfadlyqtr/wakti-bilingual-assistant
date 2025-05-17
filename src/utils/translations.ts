@@ -937,6 +937,42 @@ const translations: TranslationMap = {
   deleteAccount: {
     en: "Delete Account",
     ar: "حذف الحساب"
+  },
+  aiSectionTitle: {
+    en: "WAKTI AI Capabilities",
+    ar: "إمكانيات الذكاء الاصطناعي في WAKTI"
+  },
+  aiFeature1Title: {
+    en: "Smart Task Generation",
+    ar: "إنشاء المهام الذكية"
+  },
+  aiFeature1Desc: {
+    en: "Generate optimized tasks with priorities and deadlines",
+    ar: "توليد مهام محسنة مع أولويات ومواعيد نهائية"
+  },
+  aiFeature2Title: {
+    en: "Content Summarization",
+    ar: "تلخيص المحتوى"
+  },
+  aiFeature2Desc: {
+    en: "Create concise summaries from voice or text inputs",
+    ar: "إنشاء ملخصات موجزة من المدخلات الصوتية أو النصية"
+  },
+  aiFeature3Title: {
+    en: "Creative Content",
+    ar: "المحتوى الإبداعي"
+  },
+  aiFeature3Desc: {
+    en: "Write professional content in multiple tones and styles",
+    ar: "كتابة محتوى احترافي بنبرات وأساليب متعددة"
+  },
+  aiFeature4Title: {
+    en: "Learning Assistant",
+    ar: "مساعد التعلم"
+  },
+  aiFeature4Desc: {
+    en: "Get guidance, tutoring, and knowledge on demand",
+    ar: "الحصول على التوجيه والدروس والمعرفة عند الطلب"
   }
 };
 

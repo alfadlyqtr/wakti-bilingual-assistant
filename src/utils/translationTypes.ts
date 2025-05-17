@@ -231,4 +231,14 @@ export type TranslationKey =
   | "notificationPreferences"
   | "widgetVisibility"
   | "privacyControls"
-  | "deleteAccount";
+  | "deleteAccount"
+  // Add the new AI section keys
+  | "aiSectionTitle"
+  | "aiFeature1Title"
+  | "aiFeature1Desc"
+  | "aiFeature2Title"
+  | "aiFeature2Desc"
+  | "aiFeature3Title"
+  | "aiFeature3Desc"
+  | "aiFeature4Title"
+  | "aiFeature4Desc";
