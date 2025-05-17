@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -237,12 +236,20 @@ export async function generateImage(prompt: string): Promise<string | null> {
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || "Image generation failed");
+      const errorData = await response.json();
+      console.error("Image generation API error:", errorData);
+      throw new Error(errorData.error || errorData.details || "Image generation failed");
     }
 
     const { imageUrl } = await response.json();
     console.log('Image generated successfully:', imageUrl);
+    
+    // Add validation to ensure we have a valid image URL
+    if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+      console.error("Invalid image URL returned:", imageUrl);
+      throw new Error("Invalid image URL returned from API");
+    }
+    
     return imageUrl;
   } catch (error) {
     console.error("Error in image generation:", error);
@@ -353,4 +360,3 @@ export function extractImagePrompt(text: string): string {
   // Fallback - use the entire text as prompt
   return text;
 }
-

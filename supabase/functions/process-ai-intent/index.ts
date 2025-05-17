@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -160,15 +159,21 @@ serve(async (req) => {
 
     // If mode switch is suggested, return that instead of processing normally
     if (suggestedMode) {
+      // Create a properly formatted mode switch action with all required fields
+      const modeSwitchAction = {
+        text: `Switch to ${suggestedMode} mode`,
+        action: `switch_to_${suggestedMode}`,
+        targetMode: suggestedMode
+      };
+      
+      console.log("Creating mode switch recommendation with explicit action:", 
+        JSON.stringify(modeSwitchAction));
+      
       const response = {
         response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Switching modes for you...`,
         suggestedMode: suggestedMode,
-        originalPrompt: text, // Store the original prompt for the second step
-        modeSwitchAction: {
-          text: `Switch to ${suggestedMode} mode`,
-          action: `switch_to_${suggestedMode}`,
-          targetMode: suggestedMode
-        }
+        originalPrompt: text,
+        modeSwitchAction: modeSwitchAction
       };
       
       console.log("Sending mode switch recommendation:", JSON.stringify(response));
