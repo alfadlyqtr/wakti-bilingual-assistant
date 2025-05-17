@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -98,11 +97,9 @@ function App() {
 
               {/* WAKTI AI route - now using AppLayout */}
               <Route path="/wakti-ai" element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <WaktiAIPage />
-                  </AppLayout>
-                </ProtectedRoute>
+                <AppLayout>
+                  <WaktiAIPage />
+                </AppLayout>
               } />
 
               {/* Protected routes - but now without redirect */}
