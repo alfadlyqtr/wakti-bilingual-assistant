@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Logo3D } from "@/components/Logo3D";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, CircleCheck, Sparkles, Brain, Robot, Wand } from "lucide-react";
+import { Check, ArrowRight, CircleCheck, Sparkles, Brain, Bot, Wand } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 

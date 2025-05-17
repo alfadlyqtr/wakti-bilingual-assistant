@@ -155,7 +155,7 @@ export type TranslationKey =
   | "success"
   | "eventCreatedSuccessfully"
   | "errorCreatingEvent"
-  | "eventTitle" 
+  | "eventTitle"
   | "enterEventTitle"
   | "descriptionField"
   | "enterEventDescription"
