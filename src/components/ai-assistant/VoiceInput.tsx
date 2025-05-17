@@ -25,7 +25,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   const [recordingTime, setRecordingTime] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const MAX_RECORDING_TIME = 120; // 2 minutes maximum (120 seconds)
-  const { showError, showInfo } = useToastHelper();
+  const { showError, showInfo, showSuccess } = useToastHelper();
 
   const startRecording = async () => {
     try {
@@ -85,6 +85,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (text) {
             // Log language detection debug info
             console.log('Transcription successful:', text);
+            showSuccess(language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully');
             onTranscription(text);
           } else {
             showError(language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error');
@@ -180,10 +181,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
 
       {isRecording && (
         <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-xs font-mono bg-background border rounded px-2 py-1 shadow-md z-10">
-          {Math.floor(recordingTime / 60).toString().padStart(2, '0')}:
-          {(recordingTime % 60).toString().padStart(2, '0')} / 
-          {Math.floor(MAX_RECORDING_TIME / 60).toString().padStart(2, '0')}:
-          {(MAX_RECORDING_TIME % 60).toString().padStart(2, '0')}
+          {formatTime(recordingTime)} / {formatTime(MAX_RECORDING_TIME)}
         </div>
       )}
     </div>

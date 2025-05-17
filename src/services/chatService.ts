@@ -101,7 +101,8 @@ export async function getRecentChatHistory(
       content: item.content,
       timestamp: new Date(item.created_at),
       mode: item.mode as AIMode,
-      metadata: item.metadata || {}
+      metadata: item.metadata || {},
+      originalPrompt: item.metadata?.originalPrompt
     }));
     
     // Sort by timestamp
@@ -173,7 +174,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
       intent: data.intent || "general_chat",
       intentData: data.intentData || null,
       suggestedMode: data.suggestedMode || null,
-      originalPrompt: data.originalPrompt || null // Add this line to capture the original prompt
+      originalPrompt: data.originalPrompt || text // Always store the original prompt
     };
   } catch (error) {
     console.error("Error in processAIRequest:", error);
@@ -181,10 +182,10 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
   }
 };
 
-// Generate image based on prompt
+// Generate image based on prompt using Runware API
 export async function generateImage(prompt: string): Promise<string | null> {
   try {
-    console.log('Generating image:', prompt);
+    console.log('Generating image with Runware:', prompt);
     
     const getSession = await supabase.auth.getSession();
     const accessToken = getSession.data.session?.access_token;
@@ -213,10 +214,10 @@ export async function generateImage(prompt: string): Promise<string | null> {
     }
 
     const { imageUrl } = await response.json();
-    console.log('Image generated successfully:', imageUrl);
+    console.log('Runware image generated successfully:', imageUrl);
     return imageUrl;
   } catch (error) {
-    console.error("Error in image generation:", error);
+    console.error("Error in Runware image generation:", error);
     return null;
   }
 }
@@ -233,7 +234,8 @@ export function isImageGenerationRequest(text: string): boolean {
     lowerText.includes("make an image") ||
     lowerText.includes("generate a picture") ||
     lowerText.includes("show me a picture") ||
-    lowerText.includes("visualize")
+    lowerText.includes("visualize") ||
+    lowerText.includes("picture of")
   );
 }
 
@@ -256,8 +258,12 @@ export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode
     lowerText.includes("remind me") ||
     lowerText.includes("schedule") ||
     lowerText.includes("create event") ||
+    lowerText.includes("add event") ||
     lowerText.includes("calendar") ||
-    lowerText.includes("add to my calendar")
+    lowerText.includes("add to my calendar") ||
+    lowerText.includes("plan") ||
+    lowerText.includes("meeting") ||
+    lowerText.includes("appointment")
   ) {
     return currentMode !== 'assistant' ? 'assistant' : null;
   }
@@ -273,7 +279,10 @@ export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode
     lowerText.includes("poem") ||
     lowerText.includes("story") ||
     lowerText.includes("message") ||
-    lowerText.includes("edit")
+    lowerText.includes("edit") ||
+    lowerText.includes("text") ||
+    lowerText.includes("summarize") ||
+    lowerText.includes("rewrite")
   ) {
     return currentMode !== 'writer' ? 'writer' : null;
   }
@@ -299,6 +308,7 @@ export function extractImagePrompt(text: string): string {
     "make an image of ",
     "generate a picture of ",
     "show me a picture of ",
+    "picture of ",
     "visualize "
   ];
   
@@ -312,5 +322,3 @@ export function extractImagePrompt(text: string): string {
   // Fallback - use the entire text as prompt
   return text;
 }
-
-// Removed the duplicate saveChatMessage function that was here

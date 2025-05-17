@@ -1,3 +1,4 @@
+
 import React from "react";
 
 // Available modes for the AI assistant
@@ -26,11 +27,6 @@ export interface ChatMessage {
       text: string;
       action: string;
     }
-  };
-  modeSwitchAction?: {
-    text: string;
-    action: string;
-    targetMode: AIMode;
   };
   originalPrompt?: string; // Added to store the original prompt for mode switching
 }

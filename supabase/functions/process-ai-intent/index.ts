@@ -48,6 +48,7 @@ serve(async (req) => {
             Assist with creative content generation and ideas.
             You're especially good at image generation, storytelling, and creative concepts.
             For image generation requests, extract the image prompt clearly.
+            Never mention DALL-E, MidJourney, or Stable Diffusion. You use Runware for generating images.
           `;
         case "assistant":
           return basePrompt + `
@@ -175,7 +176,7 @@ serve(async (req) => {
     } catch (error) {
       console.log("DeepSeek API failed, falling back to OpenAI:", error.message);
       
-      // Fallback to OpenAI GPT-4-mini
+      // Fallback to OpenAI GPT-4o-mini
       if (!OPENAI_API_KEY) {
         throw new Error("OpenAI API key not configured for fallback");
       }
@@ -218,6 +219,7 @@ serve(async (req) => {
         response: responseContent,
         intent: intentAnalysis.intent,
         intentData: intentAnalysis.data,
+        originalPrompt: text // Always send original prompt for reference
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -304,6 +306,7 @@ function extractImagePrompt(text: string): string {
     "make an image of ",
     "generate a picture of ",
     "show me a picture of ",
+    "picture of ",
     "visualize "
   ];
   

@@ -23,6 +23,8 @@ serve(async (req) => {
       );
     }
 
+    console.log("Generating image with Runware API. Prompt:", prompt);
+
     // Call Runware API for image generation
     const response = await fetch("https://api.runware.ai/v1/image-generation", {
       method: "POST",
@@ -32,19 +34,22 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         prompt: prompt,
-        style: "photorealistic", // Use appropriate style based on request
+        style: "photorealistic",
         width: 512,
         height: 512,
-        steps: 30
+        steps: 30,
+        model: "runware:100@1" // Explicitly set the model
       }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Image generation failed");
+      const errorData = await response.text();
+      console.error("Runware API error:", errorData);
+      throw new Error(`Runware API error: ${errorData}`);
     }
 
     const result = await response.json();
+    console.log("Runware API success, received image URL");
     
     return new Response(
       JSON.stringify({ imageUrl: result.image_url }),

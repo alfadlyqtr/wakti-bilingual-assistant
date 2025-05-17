@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -61,7 +62,7 @@ export const AIAssistant: React.FC = () => {
   const { user, session } = useAuth();
   const { showSuccess, showError, showInfo } = useToastHelper();
 
-  // Language and theme state - Changed this to typed string literal
+  // Language and theme state
   const language = "en" as "en" | "ar"; // This would normally come from user preferences
   const currentTheme = theme || "light";
 
@@ -108,8 +109,6 @@ export const AIAssistant: React.FC = () => {
       
       if (history.length > 0) {
         console.log(`Loaded ${history.length} chat messages from history`);
-        // Only set history if it's not empty
-        // We're not replacing the welcome message if there's no history
         setMessages(history);
       } else {
         // If no history, show welcome message
@@ -146,7 +145,7 @@ export const AIAssistant: React.FC = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Enhanced handleModeSwitch function - key part of the fix
+  // Enhanced handleModeSwitch function - key part of the double echo pattern
   const handleModeSwitch = useCallback(async (messageId: string, action: string) => {
     if (action.startsWith("switch_to_") && user) {
       const newMode = action.replace("switch_to_", "") as AIMode;
@@ -282,10 +281,15 @@ export const AIAssistant: React.FC = () => {
           timestamp: new Date(),
           mode: activeMode,
           originalPrompt: message, // Store the original prompt for later use
-          modeSwitchAction: {
-            text: `Switch to ${suggestedMode} mode`,
-            action: `switch_to_${suggestedMode}`,
-            targetMode: suggestedMode
+          actionButtons: {
+            primary: {
+              text: `Switch to ${suggestedMode} mode`,
+              action: `switch_to_${suggestedMode}`,
+            },
+            secondary: {
+              text: "Cancel",
+              action: "cancel",
+            },
           }
         };
         
@@ -296,7 +300,7 @@ export const AIAssistant: React.FC = () => {
         // Save the suggestion message with the original prompt
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
           originalPrompt: message,
-          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+          actionButtons: switchSuggestionMessage.actionButtons
         });
         
         setIsTyping(false);
@@ -325,10 +329,15 @@ export const AIAssistant: React.FC = () => {
           timestamp: new Date(),
           mode: activeMode,
           originalPrompt: aiResponse.originalPrompt || message, // Store original prompt from backend or use current message
-          modeSwitchAction: {
-            text: `Switch to ${aiResponse.suggestedMode} mode`,
-            action: `switch_to_${aiResponse.suggestedMode}`,
-            targetMode: aiResponse.suggestedMode as AIMode
+          actionButtons: {
+            primary: {
+              text: `Switch to ${aiResponse.suggestedMode} mode`,
+              action: `switch_to_${aiResponse.suggestedMode}`,
+            },
+            secondary: {
+              text: "Cancel",
+              action: "cancel",
+            },
           }
         };
         
@@ -338,7 +347,7 @@ export const AIAssistant: React.FC = () => {
         // Save the suggestion message
         await saveChatMessage(user.id, switchSuggestionMessage.content, "assistant", activeMode, {
           originalPrompt: aiResponse.originalPrompt || message,
-          modeSwitchAction: switchSuggestionMessage.modeSwitchAction
+          actionButtons: switchSuggestionMessage.actionButtons
         });
         
         setIsTyping(false);
@@ -433,7 +442,7 @@ export const AIAssistant: React.FC = () => {
             "imageGenerated" as TranslationKey,
             language
           )}\n\n![${t("generatedImage" as TranslationKey, language)}](${imageUrl})`,
-          metadata: { imageUrl },
+          metadata: { imageUrl, hasMedia: true },
           isLoading: false
         };
         setMessages((prev) =>
@@ -478,9 +487,13 @@ export const AIAssistant: React.FC = () => {
   };
 
   const handleVoiceTranscription = (text: string) => {
-    setInputValue(text);
-    // Focus the input field after receiving transcription
-    inputRef.current?.focus();
+    if (text && text.trim()) {
+      setInputValue(text);
+      // Process the voice transcription automatically
+      setTimeout(() => {
+        processUserMessage(text);
+      }, 300);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -668,7 +681,7 @@ export const AIAssistant: React.FC = () => {
           theme={currentTheme}
         />
 
-        {/* Fixed Bottom Bar - MODIFIED: Added pb-20 to create more space above the mobile nav */}
+        {/* Fixed Bottom Bar - Added pb-20 to create more space above the mobile nav */}
         <div
           className="py-3 px-4 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 sticky bottom-0 left-0 right-0 w-full z-10 shadow-lg pb-20"
           dir={language === "ar" ? "rtl" : "ltr"}
