@@ -8,10 +8,11 @@ export default function Index() {
   const navigate = useNavigate();
   
   useEffect(() => {
-    // Show welcome toast
+    // Show welcome toast with 3 second auto-dismiss
     toast.success({
       title: "Welcome to WAKTI",
-      description: "Your smart personal assistant"
+      description: "Your smart personal assistant",
+      duration: 3000 // 3 seconds
     });
     
     // Redirect to home instead of login

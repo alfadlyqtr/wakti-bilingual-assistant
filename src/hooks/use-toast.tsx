@@ -16,6 +16,7 @@ import { createContext, useContext } from "react";
 
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
+const DEFAULT_TOAST_DURATION = 3000; // Default 3 seconds auto-dismiss
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -23,6 +24,7 @@ type ToasterToast = ToastProps & {
   title?: string;
   description?: string;
   action?: ToastActionElement;
+  duration?: number;
 };
 
 const actionTypes = {
@@ -94,6 +96,21 @@ const addToRemoveQueue = (toastId: string) => {
   toastTimeouts.set(toastId, timeout);
 };
 
+// New function to automatically dismiss toast after specified duration
+const addToDismissQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
+  if (duration === Infinity) return;
+
+  // Create dismiss timeout
+  const timeout = setTimeout(() => {
+    dispatch({
+      type: actionTypes.DISMISS_TOAST,
+      toastId,
+    });
+  }, duration);
+
+  return timeout;
+};
+
 export const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case actionTypes.ADD_TOAST:
@@ -162,6 +179,7 @@ export interface ToastContextValue {
     description?: React.ReactNode;
     action?: ToastActionElement;
     variant?: "default" | "destructive" | "success";
+    duration?: number;
   }) => void;
   dismiss: (toastId?: string) => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
@@ -183,7 +201,7 @@ function useToastInternal(): ToastContextValue {
   }, []);
 
   return {
-    toast: ({ title, description, action, variant }) => {
+    toast: ({ title, description, action, variant, duration = DEFAULT_TOAST_DURATION }) => {
       const id = genId();
 
       const update = (props: ToasterToast) =>
@@ -200,6 +218,9 @@ function useToastInternal(): ToastContextValue {
       const stringTitle = title ? renderToastContent(title) : undefined;
       const stringDescription = description ? renderToastContent(description) : undefined;
 
+      // Set up auto dismiss
+      const timeoutId = addToDismissQueue(id, duration);
+
       dispatch({
         type: actionTypes.ADD_TOAST,
         toast: {
@@ -208,6 +229,7 @@ function useToastInternal(): ToastContextValue {
           description: stringDescription,
           action,
           variant,
+          duration,
           open: true,
           onOpenChange: (open) => {
             if (!open) dismiss();
@@ -310,6 +332,7 @@ export const showToast = (props: {
   description?: React.ReactNode;
   action?: ToastActionElement;
   variant?: "default" | "destructive" | "success";
+  duration?: number;
 }): void => {
   // We'll dispatch an event that will be caught by the toast provider
   const event = new CustomEvent("lovable:toast", { detail: props });
@@ -412,27 +435,32 @@ interface ToastFunction {
     description?: React.ReactNode;
     action?: ToastActionElement;
     variant?: "default" | "destructive" | "success";
+    duration?: number;
   }): void;
   success: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
+    duration?: number;
   }) => void;
   error: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
+    duration?: number;
   }) => void;
   default: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
+    duration?: number;
   }) => void;
   show: (props: {
     title?: React.ReactNode;
     description?: React.ReactNode;
     action?: ToastActionElement;
     variant?: "default" | "destructive" | "success";
+    duration?: number;
   }) => void;
 }
 
@@ -444,6 +472,7 @@ const createToastFunction = (): ToastFunction => {
     description?: React.ReactNode;
     action?: ToastActionElement;
     variant?: "default" | "destructive" | "success";
+    duration?: number;
   }) => {
     showToast(props);
   }) as ToastFunction;

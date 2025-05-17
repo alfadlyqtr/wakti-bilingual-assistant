@@ -5,34 +5,39 @@ import { useTheme } from "@/providers/ThemeProvider";
 export function useToastHelper() {
   const { toast } = useToast();
   const { language } = useTheme();
+  const DEFAULT_DURATION = 3000; // 3 seconds
 
-  const showSuccess = (message: string) => {
+  const showSuccess = (message: string, duration = DEFAULT_DURATION) => {
     console.log('Showing success toast:', message);
     toast({
       title: message,
-      variant: "success"
+      variant: "success",
+      duration
     });
   };
 
-  const showError = (message: string) => {
+  const showError = (message: string, duration = DEFAULT_DURATION) => {
     console.log('Showing error toast:', message);
     toast({
       title: message,
-      variant: "destructive"
+      variant: "destructive",
+      duration
     });
   };
 
-  const showInfo = (message: string) => {
+  const showInfo = (message: string, duration = DEFAULT_DURATION) => {
     console.log('Showing info toast:', message);
     toast({
-      title: message
+      title: message,
+      duration
     });
   };
 
-  const showLoading = (message: string) => {
+  const showLoading = (message: string, duration = Infinity) => {
     console.log('Showing loading toast:', message);
     return toast({
-      title: message
+      title: message,
+      duration
     });
   };
 
