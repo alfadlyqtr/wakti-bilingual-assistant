@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -47,7 +48,7 @@ serve(async (req) => {
             Assist with creative content generation and ideas.
             You're especially good at image generation, storytelling, and creative concepts.
             For image generation requests, extract the image prompt clearly.
-            Never mention DALL-E, MidJourney, or Stable Diffusion. You use Runware for generating images.
+            Never mention third-party image generators. When creating images, use descriptions like "I've extracted the image details from your request".
           `;
         case "assistant":
           return basePrompt + `
@@ -131,6 +132,27 @@ serve(async (req) => {
       
       return detectedMode;
     };
+
+    // Check for direct image generation request in creative mode
+    const isImageRequest = text.toLowerCase().match(
+      /(create|generate|make|draw|show me)( an?)? (image|picture|drawing|photo|visualization) (of|showing|with|depicting) (.*)/i
+    );
+    
+    // If we're in creative mode and it's an image request, handle it directly
+    if (mode === 'creative' && isImageRequest) {
+      const imagePrompt = isImageRequest[5] || text;
+      console.log("Direct image generation request detected in creative mode:", imagePrompt);
+      
+      return new Response(
+        JSON.stringify({ 
+          response: `Here's the image prompt extracted for your request:\n\n***${imagePrompt}***\n\n*Note: Image will be generated based on this description.*`,
+          intent: "generate_image",
+          intentData: { prompt: imagePrompt },
+          originalPrompt: text
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Check if a mode switch is recommended
     const suggestedMode = detectBetterMode(text, mode);

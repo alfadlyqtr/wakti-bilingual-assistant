@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -212,7 +213,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
 // Generate image based on prompt using Runware API
 export async function generateImage(prompt: string): Promise<string | null> {
   try {
-    console.log('Generating image with Runware:', prompt);
+    console.log('Generating image with prompt:', prompt);
     
     const getSession = await supabase.auth.getSession();
     const accessToken = getSession.data.session?.access_token;
@@ -241,10 +242,10 @@ export async function generateImage(prompt: string): Promise<string | null> {
     }
 
     const { imageUrl } = await response.json();
-    console.log('Runware image generated successfully:', imageUrl);
+    console.log('Image generated successfully:', imageUrl);
     return imageUrl;
   } catch (error) {
-    console.error("Error in Runware image generation:", error);
+    console.error("Error in image generation:", error);
     return null;
   }
 }
@@ -352,3 +353,4 @@ export function extractImagePrompt(text: string): string {
   // Fallback - use the entire text as prompt
   return text;
 }
+
