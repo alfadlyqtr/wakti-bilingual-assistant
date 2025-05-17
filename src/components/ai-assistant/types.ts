@@ -1,3 +1,4 @@
+
 import React from "react";
 
 // Available modes for the AI assistant
@@ -30,6 +31,7 @@ export interface ChatMessage {
     text: string;
     action: string;
     targetMode: AIMode;
+    autoTrigger?: boolean;
   };
   isLoading?: boolean;
 }
