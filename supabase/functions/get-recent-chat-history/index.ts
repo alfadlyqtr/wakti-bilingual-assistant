@@ -64,6 +64,20 @@ serve(async (req) => {
     
     console.log(`Retrieved ${data?.length || 0} chat messages`);
     
+    // Debug: Check if any messages have modeSwitchAction in metadata
+    if (data && data.length > 0) {
+      const messagesWithAction = data.filter(msg => msg.metadata && msg.metadata.modeSwitchAction);
+      console.log(`Found ${messagesWithAction.length} messages with modeSwitchAction`);
+      
+      if (messagesWithAction.length > 0) {
+        console.log("Example message with modeSwitchAction:", {
+          id: messagesWithAction[0].id,
+          role: messagesWithAction[0].role,
+          modeSwitchAction: messagesWithAction[0].metadata.modeSwitchAction
+        });
+      }
+    }
+    
     return new Response(
       JSON.stringify(data),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

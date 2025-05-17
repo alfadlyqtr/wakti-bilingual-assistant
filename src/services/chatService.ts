@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -27,7 +28,15 @@ export async function saveChatMessage(
   
   try {
     console.log('Saving chat message:', { userId, role, mode });
-    console.log('Metadata being saved:', JSON.stringify(metadata));
+    
+    // Important: Log the full metadata including modeSwitchAction to debug the issue
+    if (metadata && metadata.modeSwitchAction) {
+      console.log('Found modeSwitchAction in metadata being saved:', JSON.stringify(metadata.modeSwitchAction));
+    } else {
+      console.log('No modeSwitchAction in metadata being saved');
+    }
+    
+    console.log('Full metadata being saved:', JSON.stringify(metadata));
     
     // Check if the message contains an image (for assistant responses)
     const hasMedia = content.includes("![") || (metadata && metadata.hasMedia);
@@ -37,11 +46,6 @@ export async function saveChatMessage(
       ...metadata,
       timestamp: metadata.timestamp || new Date().toISOString(),
     };
-    
-    // Preserve modeSwitchAction if it exists in metadata
-    if (metadata && metadata.modeSwitchAction) {
-      console.log('Found modeSwitchAction in metadata:', metadata.modeSwitchAction);
-    }
     
     // Convert to parameters required by the stored function
     const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
@@ -61,6 +65,7 @@ export async function saveChatMessage(
       return null;
     }
     
+    console.log('Message successfully saved to database, returned id:', data);
     return data;
   } catch (error) {
     console.error("Exception saving chat message:", error);
@@ -97,15 +102,14 @@ export async function getRecentChatHistory(
       return [];
     }
     
-    console.log('Chat history raw data:', data);
+    console.log('Chat history raw data received:', data);
     
     // Convert to ChatMessage format
     const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => {
-      // Extract modeSwitchAction from metadata if it exists
-      const modeSwitchAction = item.metadata?.modeSwitchAction;
-      
-      if (modeSwitchAction) {
-        console.log('Found modeSwitchAction in retrieved message:', modeSwitchAction);
+      // Debug check for modeSwitchAction in each message's metadata
+      if (item.metadata && item.metadata.modeSwitchAction) {
+        console.log(`Message ${item.id} has modeSwitchAction in metadata:`, 
+          JSON.stringify(item.metadata.modeSwitchAction));
       }
       
       return {
@@ -116,10 +120,18 @@ export async function getRecentChatHistory(
         mode: item.mode as AIMode,
         metadata: item.metadata || {},
         originalPrompt: item.metadata?.originalPrompt,
-        modeSwitchAction: modeSwitchAction,
+        modeSwitchAction: item.metadata?.modeSwitchAction,
         actionButtons: item.metadata?.actionButtons
       };
     });
+    
+    console.log('Processed chat messages with explicit modeSwitchAction check:', 
+      chatMessages.map(m => ({
+        id: m.id, 
+        hasModeSwitchAction: !!m.modeSwitchAction,
+        modeSwitchAction: m.modeSwitchAction
+      }))
+    );
     
     // Sort by timestamp
     return chatMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());

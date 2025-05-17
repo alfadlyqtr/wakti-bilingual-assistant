@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -99,7 +100,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 />
               </div>
             ),
-            p: ({ node, children, ...props }) => <p className="mb-2" {...props}>{children}</p>,
+            p: ({ node, children }) => <p className="mb-2">{children}</p>,
             a: ({ node, children, ...props }) => (
               <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>
                 {children}
@@ -143,12 +144,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     });
   };
 
-  // Log all messages with modeSwitchAction on component mount
+  // Log all messages with modeSwitchAction on component mount and whenever messages change
   useEffect(() => {
+    console.log("ChatWindow received messages:", messages.length);
     const switchMessages = messages.filter(m => m.modeSwitchAction);
     if (switchMessages.length > 0) {
       console.log(`Found ${switchMessages.length} messages with modeSwitchAction:`, 
-        switchMessages.map(m => ({id: m.id, action: m.modeSwitchAction?.action})));
+        switchMessages.map(m => ({
+          id: m.id, 
+          action: m.modeSwitchAction?.action,
+          text: m.modeSwitchAction?.text,
+          targetMode: m.modeSwitchAction?.targetMode
+        })));
+    } else {
+      console.log("No messages with modeSwitchAction found");
     }
   }, [messages]);
 
@@ -161,13 +170,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const styles = getMessageStyle(message);
             const isLastMessage = index === messages.length - 1;
             
-            // Enhanced logging for all messages with modeSwitchAction
+            // Enhanced logging for debugging
             if (message.modeSwitchAction) {
-              console.log(`Message ${message.id} has modeSwitchAction:`, message.modeSwitchAction);
+              console.log(`Rendering message ${message.id} with modeSwitchAction:`, 
+                JSON.stringify(message.modeSwitchAction));
             }
             
             // Log message properties to help with debugging
-            if (isLastMessage) {
+            if (isLastMessage || message.modeSwitchAction) {
               logMessageProps(message);
             }
             
@@ -237,10 +247,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           variant="default"
                           size="sm"
                           onClick={() => onConfirm(message.id, message.modeSwitchAction?.action || '')}
-                          className="text-xs py-1 h-8 px-3 animate-pulse font-medium"
+                          className="text-xs py-1 h-8 px-3 animate-pulse shadow-lg border-2 font-medium"
                           style={{ 
                             backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
-                            borderColor: getModeColor(message.modeSwitchAction.targetMode),
+                            borderColor: theme === 'dark' ? 'white' : 'black',
                           }}
                         >
                           {message.modeSwitchAction.text || `Switch to ${message.modeSwitchAction.targetMode} mode`}

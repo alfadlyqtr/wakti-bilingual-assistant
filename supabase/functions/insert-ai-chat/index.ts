@@ -27,9 +27,23 @@ serve(async (req) => {
     } = await supabaseClient.auth.getUser();
 
     // Get request body
-    const { userId, content, role, mode, metadata, hasMedia, expiresAt } = await req.json();
+    const requestBody = await req.json();
+    const { userId, content, role, mode, metadata, hasMedia, expiresAt } = requestBody;
     
-    console.log("Insert params:", { userId, role, mode, hasMedia, metadata: !!metadata });
+    console.log("Insert params:", { 
+      userId, 
+      role, 
+      mode, 
+      hasMedia, 
+      hasMetadata: !!metadata,
+      metadataKeys: metadata ? Object.keys(metadata) : []
+    });
+    
+    // Debug check for modeSwitchAction in metadata
+    if (metadata && metadata.modeSwitchAction) {
+      console.log("Found modeSwitchAction in metadata to be inserted:", 
+        JSON.stringify(metadata.modeSwitchAction));
+    }
     
     // Ensure user is authorized
     if (user?.id !== userId) {
@@ -64,6 +78,22 @@ serve(async (req) => {
     }
     
     console.log("Message inserted successfully, id:", data.id);
+    
+    // Verify the message was inserted with metadata
+    if (metadata && metadata.modeSwitchAction) {
+      const { data: verifyData, error: verifyError } = await supabaseClient
+        .from('ai_chat_history')
+        .select('id, metadata')
+        .eq('id', data.id)
+        .single();
+        
+      if (verifyError) {
+        console.error("Error verifying inserted metadata:", verifyError);
+      } else {
+        console.log("Verified inserted metadata:", JSON.stringify(verifyData.metadata));
+        console.log("modeSwitchAction present in DB:", !!verifyData?.metadata?.modeSwitchAction);
+      }
+    }
     
     return new Response(
       JSON.stringify(data?.id),
