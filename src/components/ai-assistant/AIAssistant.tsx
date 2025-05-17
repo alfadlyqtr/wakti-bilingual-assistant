@@ -272,7 +272,7 @@ export const AIAssistant: React.FC = () => {
       if (suggestedMode) {
         console.log(`Suggesting mode switch from ${activeMode} to ${suggestedMode}`);
         
-        // Create message suggesting mode switch - now with modeSwitchAction instead of actionButtons
+        // Create message suggesting mode switch with modeSwitchAction
         const switchSuggestionMessage: ChatMessage = {
           id: uuidv4(),
           role: "assistant",
@@ -286,6 +286,8 @@ export const AIAssistant: React.FC = () => {
             targetMode: suggestedMode
           }
         };
+        
+        console.log("Created modeSwitchAction message:", switchSuggestionMessage);
         
         // Add suggestion to UI after small delay for realism
         await new Promise((resolve) => setTimeout(resolve, 500));

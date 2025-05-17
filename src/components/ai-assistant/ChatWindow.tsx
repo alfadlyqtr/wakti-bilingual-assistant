@@ -134,6 +134,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 
+  // Helper function to log message properties (for debugging)
+  const logMessageProps = (message: ChatMessage) => {
+    console.log("Message props:", {
+      id: message.id,
+      hasModeSwitchAction: !!message.modeSwitchAction,
+      modeSwitchAction: message.modeSwitchAction,
+      hasActionButtons: !!message.actionButtons
+    });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto py-4 px-4 pb-16">
       <div className="max-w-md mx-auto space-y-4">
@@ -142,6 +152,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const isAssistant = message.role === 'assistant';
             const styles = getMessageStyle(message);
             const isLastMessage = index === messages.length - 1;
+            
+            // Log message properties to help with debugging
+            if (isLastMessage) {
+              logMessageProps(message);
+            }
             
             return (
               <motion.div
@@ -202,14 +217,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                     )}
                     
-                    {/* Mode Switch Button - Modified to handle modeSwitchAction */}
+                    {/* Mode Switch Button - Enhanced visibility and debugging */}
                     {message.modeSwitchAction && (
-                      <div className="flex justify-start mt-1">
+                      <div className="flex justify-start mt-2">
                         <Button 
                           variant="default"
                           size="sm"
                           onClick={() => onConfirm(message.id, message.modeSwitchAction?.action || '')}
-                          className="text-xs py-1 h-8"
+                          className="text-xs py-1 h-8 px-3 animate-pulse"
                           style={{ 
                             backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
                             borderColor: getModeColor(message.modeSwitchAction.targetMode),
