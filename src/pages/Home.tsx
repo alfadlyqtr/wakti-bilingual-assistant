@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
+import { ThreeDPhotoCarouselDemo } from "@/components/ui/demo-carousel";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -69,30 +70,68 @@ export default function Home() {
   // Define colors based on theme
   const primaryBg = theme === "dark" ? "bg-dark-bg" : "bg-light-bg";
   const primaryText = theme === "dark" ? "text-white" : "text-light-primary";
-  const accentBg = theme === "dark" ? "bg-dark-tertiary/30" : "bg-light-secondary/30";
+  const accentBg = theme === "dark" ? "bg-dark-tertiary/20" : "bg-light-secondary/20";
   const [pricingPlan, setPricingPlan] = useState("monthly");
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: { 
+      opacity: 1,
+      transition: { 
+        staggerChildren: 0.1,
+        delayChildren: 0.2,
+      }
+    }
+  };
+  
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { 
+      y: 0, 
+      opacity: 1,
+      transition: { duration: 0.5, ease: "easeOut" }
+    }
+  };
 
   return (
     <div className="mobile-container">
       <AppHeader showUserMenu={false} title="WAKTI" />
       
       <div className="flex-1 overflow-y-auto pb-16">
-        {/* Hero Section */}
-        <section className={`${primaryBg} px-4 py-6 text-center`}>
+        {/* Hero Section with 3D Carousel */}
+        <section className={`${primaryBg} px-4 py-6`}>
           <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            initial="hidden"
+            animate="visible"
+            variants={containerVariants}
             className="mb-6"
           >
-            <Logo3D size="lg" className="mx-auto mb-5" />
-            <h1 className={`text-2xl font-bold mb-2 ${primaryText}`}>{t.tagline}</h1>
-            <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">{t.description}</p>
+            <motion.div variants={itemVariants}>
+              <Logo3D size="lg" className="mx-auto mb-2" />
+            </motion.div>
             
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
+            <motion.h1 
+              variants={itemVariants} 
+              className={`text-3xl font-bold mb-2 ${primaryText}`}
+            >
+              {t.tagline}
+            </motion.h1>
+            
+            <motion.p 
+              variants={itemVariants}
+              className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto"
+            >
+              {t.description}
+            </motion.p>
+            
+            <motion.div variants={itemVariants}>
+              <ThreeDPhotoCarouselDemo />
+            </motion.div>
+            
+            <motion.div variants={itemVariants} className="mt-6 flex flex-col gap-3 max-w-xs mx-auto">
               <Button 
                 size="lg" 
-                className="w-full"
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                 onClick={() => navigate('/signup')}
               >
                 {t.trial}
@@ -107,65 +146,89 @@ export default function Home() {
               >
                 {t.loginBtn}
               </Button>
-            </div>
+            </motion.div>
           </motion.div>
         </section>
         
-        {/* Features Section - Stacked Cards */}
-        <section className="px-4 py-8">
-          <h2 className="text-lg font-semibold mb-5 text-center">{t.featureSectionTitle}</h2>
+        {/* Features Section with Modern Cards */}
+        <motion.section 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={containerVariants}
+          className="px-4 py-8"
+        >
+          <motion.h2 
+            variants={itemVariants}
+            className="text-xl font-bold mb-6 text-center"
+          >
+            {t.featureSectionTitle}
+          </motion.h2>
           
-          <div className="space-y-3 max-w-xs mx-auto">
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-            >
-              <Card className="p-3 border shadow-sm">
-                <h3 className="font-medium text-base mb-1">{t.feature1Title}</h3>
-                <p className="text-xs text-muted-foreground">{t.feature1Desc}</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+            <motion.div variants={itemVariants}>
+              <Card className="overflow-hidden border-0 shadow-lg">
+                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2"></div>
+                <div className="p-5">
+                  <h3 className="font-semibold text-lg mb-1 flex items-center">
+                    <CircleCheck className="h-5 w-5 mr-2 text-blue-500" /> {t.feature1Title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{t.feature1Desc}</p>
+                </div>
               </Card>
             </motion.div>
             
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.2 }}
-            >
-              <Card className="p-3 border shadow-sm">
-                <h3 className="font-medium text-base mb-1">{t.feature2Title}</h3>
-                <p className="text-xs text-muted-foreground">{t.feature2Desc}</p>
+            <motion.div variants={itemVariants}>
+              <Card className="overflow-hidden border-0 shadow-lg">
+                <div className="bg-gradient-to-r from-purple-500 to-pink-400 h-2"></div>
+                <div className="p-5">
+                  <h3 className="font-semibold text-lg mb-1 flex items-center">
+                    <CircleCheck className="h-5 w-5 mr-2 text-purple-500" /> {t.feature2Title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{t.feature2Desc}</p>
+                </div>
               </Card>
             </motion.div>
             
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.3 }}
-            >
-              <Card className="p-3 border shadow-sm">
-                <h3 className="font-medium text-base mb-1">{t.feature3Title}</h3>
-                <p className="text-xs text-muted-foreground">{t.feature3Desc}</p>
+            <motion.div variants={itemVariants}>
+              <Card className="overflow-hidden border-0 shadow-lg">
+                <div className="bg-gradient-to-r from-amber-500 to-orange-400 h-2"></div>
+                <div className="p-5">
+                  <h3 className="font-semibold text-lg mb-1 flex items-center">
+                    <CircleCheck className="h-5 w-5 mr-2 text-amber-500" /> {t.feature3Title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{t.feature3Desc}</p>
+                </div>
               </Card>
             </motion.div>
             
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.4 }}
-            >
-              <Card className="p-3 border shadow-sm">
-                <h3 className="font-medium text-base mb-1">{t.feature4Title}</h3>
-                <p className="text-xs text-muted-foreground">{t.feature4Desc}</p>
+            <motion.div variants={itemVariants}>
+              <Card className="overflow-hidden border-0 shadow-lg">
+                <div className="bg-gradient-to-r from-green-500 to-teal-400 h-2"></div>
+                <div className="p-5">
+                  <h3 className="font-semibold text-lg mb-1 flex items-center">
+                    <CircleCheck className="h-5 w-5 mr-2 text-green-500" /> {t.feature4Title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{t.feature4Desc}</p>
+                </div>
               </Card>
             </motion.div>
           </div>
-        </section>
+        </motion.section>
         
-        {/* Pricing Section with Toggle */}
-        <section className={`${accentBg} px-4 py-8 rounded-lg mx-4`}>
-          <div className="text-center mb-5">
-            <div className="inline-flex items-center gap-2 bg-background rounded-full p-1 border mb-6">
+        {/* Pricing Section with Modern Design */}
+        <motion.section 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={containerVariants}
+          className={`px-4 py-8 mx-4 my-4 rounded-2xl ${accentBg} backdrop-blur-sm`}
+        >
+          <motion.div 
+            variants={itemVariants}
+            className="text-center mb-5"
+          >
+            <div className="inline-flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded-full p-1 border mb-6 shadow-sm">
               <Button 
                 size="sm" 
                 variant={pricingPlan === "monthly" ? "default" : "ghost"}
@@ -185,51 +248,52 @@ export default function Home() {
             </div>
             
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-              className="bg-card rounded-lg p-5 shadow-sm border max-w-xs mx-auto"
               key={pricingPlan}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3 }}
+              className="bg-background/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border max-w-xs mx-auto"
             >
-              <div className="flex justify-between items-baseline mb-4">
-                <h3 className="text-lg font-semibold">
+              <div className="flex justify-between items-baseline mb-6">
+                <h3 className="text-2xl font-bold">
                   {pricingPlan === "monthly" ? t.monthlyPrice : t.yearlyPrice}
                 </h3>
                 {pricingPlan === "yearly" && (
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                  <span className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
                     {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
                   </span>
                 )}
               </div>
               
-              <ul className="space-y-2 mb-5 text-sm">
+              <ul className="space-y-3 mb-6 text-sm">
                 <li className="flex items-start">
-                  <CircleCheck className="h-4 w-4 mr-2 shrink-0 text-primary mt-0.5" />
+                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
                   <span>{t.feature1Title}</span>
                 </li>
                 <li className="flex items-start">
-                  <CircleCheck className="h-4 w-4 mr-2 shrink-0 text-primary mt-0.5" />
+                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
                   <span>{t.feature2Title}</span>
                 </li>
                 <li className="flex items-start">
-                  <CircleCheck className="h-4 w-4 mr-2 shrink-0 text-primary mt-0.5" />
+                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
                   <span>{t.feature3Title}</span>
                 </li>
                 <li className="flex items-start">
-                  <CircleCheck className="h-4 w-4 mr-2 shrink-0 text-primary mt-0.5" />
+                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
                   <span>{t.feature4Title}</span>
                 </li>
               </ul>
               
               <Button
-                className="w-full"
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
                 onClick={() => navigate('/signup')}
               >
                 {t.trial}
               </Button>
             </motion.div>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
       </div>
     </div>
   );

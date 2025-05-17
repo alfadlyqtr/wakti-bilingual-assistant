@@ -14,8 +14,8 @@ export default function Index() {
       description: "Your smart personal assistant"
     });
     
-    // Redirect to login or dashboard
-    navigate("/login");
+    // Redirect to home instead of login
+    navigate("/home");
   }, [navigate]);
   
   return <div className="loading">Loading...</div>;
