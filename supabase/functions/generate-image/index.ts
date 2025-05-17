@@ -25,7 +25,8 @@ serve(async (req) => {
 
     console.log("Generating image with prompt:", prompt);
 
-    // Updated Runware API call with proper taskType and parameters
+    // Ensure proper Runware API call format with taskType
+    const taskUUID = crypto.randomUUID();
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
       headers: {
@@ -39,7 +40,7 @@ serve(async (req) => {
         },
         {
           taskType: "imageInference",
-          taskUUID: crypto.randomUUID(),
+          taskUUID: taskUUID,
           positivePrompt: prompt,
           model: "runware:100@1",
           width: 1024,
@@ -58,7 +59,7 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    console.log("Runware API response:", JSON.stringify(result));
+    console.log("Runware API full response:", JSON.stringify(result));
     
     if (!result.data || result.data.length === 0) {
       throw new Error("No image data returned from API");
@@ -67,6 +68,7 @@ serve(async (req) => {
     // Extract the image URL from the response data
     const imageData = result.data.find(item => item.taskType === "imageInference");
     if (!imageData || !imageData.imageURL) {
+      console.error("API response missing imageURL:", JSON.stringify(result));
       throw new Error("No image URL found in the response");
     }
     

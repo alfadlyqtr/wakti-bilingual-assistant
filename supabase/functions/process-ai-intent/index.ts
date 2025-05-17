@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -158,22 +159,39 @@ serve(async (req) => {
     console.log(`Current mode: ${mode}, Suggested mode: ${suggestedMode || 'none'}`);
 
     // If mode switch is suggested, return that instead of processing normally
+    // Updated to ensure automatic switching with proper double-echo messaging
     if (suggestedMode) {
+      // Get a readable name for the mode
+      const getModeName = (mode: string): string => {
+        switch(mode) {
+          case "general": return "Chat";
+          case "writer": return "Writer";
+          case "creative": return "Creative";
+          case "assistant": return "Assistant";
+          default: return mode.charAt(0).toUpperCase() + mode.slice(1);
+        }
+      };
+      
       // Create a properly formatted mode switch action with all required fields
       const modeSwitchAction = {
-        text: `Switch to ${suggestedMode} mode`,
+        text: `Switch to ${getModeName(suggestedMode)} mode`,
         action: `switch_to_${suggestedMode}`,
-        targetMode: suggestedMode
+        targetMode: suggestedMode,
+        autoTrigger: true // Flag to indicate this should trigger automatically
       };
       
       console.log("Creating mode switch recommendation with explicit action:", 
         JSON.stringify(modeSwitchAction));
       
+      // First echo - acknowledge the message and switch notification
+      const switchMessage = `You asked to: "${text}" — this works better in ${getModeName(suggestedMode)} mode. Switching now...`;
+      
       const response = {
-        response: `You asked to: "${text}". This works better in ${suggestedMode} mode. Switching modes for you...`,
+        response: switchMessage,
         suggestedMode: suggestedMode,
         originalPrompt: text,
-        modeSwitchAction: modeSwitchAction
+        modeSwitchAction: modeSwitchAction,
+        echoOriginalPrompt: true // Flag to echo the original message after switch
       };
       
       console.log("Sending mode switch recommendation:", JSON.stringify(response));

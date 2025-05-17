@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
 import ReactMarkdown from 'react-markdown';
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -77,8 +78,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
-  // Function to render message content with markdown support
-  const renderMessageContent = (content: string) => {
+  // Track images that are loading
+  const [loadingImages, setLoadingImages] = useState<{[key: string]: boolean}>({});
+
+  // Function to render message content with markdown support and image loading states
+  const renderMessageContent = (content: string, messageId: string) => {
     // Check if content contains an image markdown
     const hasImageMarkdown = content.includes('![');
     
@@ -86,20 +90,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       return (
         <ReactMarkdown
           components={{
-            img: ({ node, ...props }) => (
-              <div className="mt-2 overflow-hidden rounded-md">
-                <img 
-                  {...props}
-                  className="w-full h-auto object-cover transition-opacity duration-500 opacity-100"
-                  loading="lazy"
-                  onLoad={(e) => {
-                    // Remove shimmer effect once image loads
-                    e.currentTarget.classList.remove('opacity-0');
-                  }}
-                  style={{ maxHeight: '300px' }}
-                />
-              </div>
-            ),
+            img: ({ node, ...props }) => {
+              // Set this message's image as loading when first rendered
+              if (!loadingImages[messageId]) {
+                setLoadingImages(prev => ({...prev, [messageId]: true}));
+              }
+              
+              return (
+                <div className="mt-2 overflow-hidden rounded-md">
+                  {loadingImages[messageId] && (
+                    <Skeleton className="w-full h-64 animate-pulse bg-zinc-300 dark:bg-zinc-700" />
+                  )}
+                  <img 
+                    {...props}
+                    className={`w-full h-auto object-cover transition-opacity duration-500 ${loadingImages[messageId] ? 'opacity-0' : 'opacity-100'}`}
+                    loading="lazy"
+                    onLoad={(e) => {
+                      // Remove loading state once image loads
+                      setLoadingImages(prev => ({...prev, [messageId]: false}));
+                    }}
+                    style={{ maxHeight: '300px' }}
+                  />
+                </div>
+              );
+            },
             p: ({ node, children }) => <p className="mb-2">{children}</p>,
             a: ({ node, children, ...props }) => (
               <a className="text-blue-500 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>
@@ -126,6 +140,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     );
   };
 
+  // Shimmer effect component for loading states
   const ShimmerEffect = () => (
     <div className="animate-pulse space-y-2">
       <div className="h-2 bg-gray-300 dark:bg-gray-700 rounded w-3/4"></div>
@@ -134,44 +149,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 
-  // Enhanced helper function to log message properties (for debugging)
-  const logMessageProps = (message: ChatMessage) => {
-    console.log("Message props:", {
-      id: message.id,
-      hasModeSwitchAction: !!message.modeSwitchAction,
-      modeSwitchAction: message.modeSwitchAction,
-      hasActionButtons: !!message.actionButtons
-    });
-  };
-
-  // Log all messages with modeSwitchAction on component mount and whenever messages change
+  // Auto-trigger mode switching without waiting for button clicks
   useEffect(() => {
     console.log("ChatWindow received messages:", messages.length);
     const switchMessages = messages.filter(m => m.modeSwitchAction);
+    
     if (switchMessages.length > 0) {
       console.log(`Found ${switchMessages.length} messages with modeSwitchAction:`, 
         switchMessages.map(m => ({
           id: m.id, 
           action: m.modeSwitchAction?.action,
           text: m.modeSwitchAction?.text,
-          targetMode: m.modeSwitchAction?.targetMode
+          targetMode: m.modeSwitchAction?.targetMode,
+          autoTrigger: m.modeSwitchAction?.autoTrigger
         })));
-    } else {
-      console.log("No messages with modeSwitchAction found");
-    }
-
-    // Auto-trigger mode switch for the latest message with modeSwitchAction
-    if (switchMessages.length > 0) {
-      const latestSwitchMsg = switchMessages[switchMessages.length - 1];
-      console.log("Auto-triggering mode switch for message:", latestSwitchMsg.id);
       
-      // Add visual feedback before triggering the switch
-      setTimeout(() => {
+      // Auto-trigger mode switch for the latest message with modeSwitchAction
+      // and autoTrigger flag
+      const autoSwitchMessages = switchMessages.filter(m => 
+        m.modeSwitchAction?.autoTrigger === true && 
+        m.modeSwitchAction?.action
+      );
+      
+      if (autoSwitchMessages.length > 0) {
+        const latestSwitchMsg = autoSwitchMessages[autoSwitchMessages.length - 1];
+        console.log("Auto-triggering mode switch for message:", latestSwitchMsg.id);
+        
+        // Immediately trigger the mode switch
         if (latestSwitchMsg.modeSwitchAction?.action) {
           onConfirm(latestSwitchMsg.id, latestSwitchMsg.modeSwitchAction.action);
           console.log("Auto-switched to mode:", latestSwitchMsg.modeSwitchAction?.targetMode);
         }
-      }, 1500); // Slight delay to show the visual cue before switching
+      }
+    } else {
+      console.log("No messages with modeSwitchAction found");
     }
   }, [messages, onConfirm]);
 
@@ -195,21 +206,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             const styles = getMessageStyle(message);
             const isLastMessage = index === messages.length - 1;
             
-            // Enhanced logging for debugging
-            if (message.modeSwitchAction) {
-              console.log(`Rendering message ${message.id} with modeSwitchAction:`, 
-                JSON.stringify(message.modeSwitchAction));
-            }
-            
-            // Log message properties to help with debugging
-            if (isLastMessage || message.modeSwitchAction) {
-              logMessageProps(message);
-            }
-            
-            // Check if this message suggests a mode switch
-            const hasModeSwitch = !!message.modeSwitchAction;
-            const suggestedMode = message.modeSwitchAction?.targetMode;
-            
             return (
               <motion.div
                 key={message.id}
@@ -227,79 +223,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </Avatar>
                   )}
                   <div className="flex flex-col gap-1">
-                    {/* Suggested Mode Badge - show at the top for assistant messages with mode switch suggestion */}
-                    {hasModeSwitch && isAssistant && (
-                      <div className="px-2 py-1 mb-1 text-xs font-medium rounded-md self-start animate-pulse"
-                        style={{ 
-                          backgroundColor: suggestedMode ? getModeColor(suggestedMode) : styles?.borderColor,
-                          color: theme === 'dark' ? 'white' : 'black'
-                        }}>
-                        Suggesting {getModeName(suggestedMode as AIMode)} Mode
-                      </div>
-                    )}
-                    
                     {/* Message Content */}
                     <div
                       className={`${styles?.bgColor} ${styles?.textColor} p-3 rounded-2xl ${isAssistant ? 'rounded-tl-none' : 'rounded-tr-none'}`}
                       style={{ 
                         borderLeft: isAssistant ? `2px solid ${styles?.borderColor}` : 'none',
-                        borderRight: !isAssistant ? `2px solid ${styles?.borderColor}` : 'none',
-                        // Add glowing effect for messages with mode switch suggestion
-                        boxShadow: hasModeSwitch ? `0 0 8px ${suggestedMode ? getModeColor(suggestedMode) : styles?.borderColor}` : 'none'
+                        borderRight: !isAssistant ? `2px solid ${styles?.borderColor}` : 'none'
                       }}
                     >
                       {message.isLoading ? (
                         <ShimmerEffect />
-                      ) : renderMessageContent(message.content)}
+                      ) : renderMessageContent(message.content, message.id)}
                     </div>
-                    
-                    {/* Action Buttons */}
-                    {message.actionButtons && (
-                      <div className={`flex gap-2 mt-1 ${isAssistant ? 'justify-start' : 'justify-end'}`}>
-                        {message.actionButtons.secondary && (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => onConfirm(message.id, message.actionButtons?.secondary?.action || '')}
-                            className="text-xs py-1 h-8"
-                          >
-                            {message.actionButtons.secondary.text}
-                          </Button>
-                        )}
-                        {message.actionButtons.primary && (
-                          <Button 
-                            variant="default"
-                            size="sm"
-                            onClick={() => onConfirm(message.id, message.actionButtons?.primary?.action || '')}
-                            className="text-xs py-1 h-8"
-                            style={{ 
-                              backgroundColor: styles?.borderColor,
-                              borderColor: styles?.borderColor
-                            }}
-                          >
-                            {message.actionButtons.primary.text}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    
-                    {/* Mode Switch Button with Visual Enhancements */}
-                    {message.modeSwitchAction && (
-                      <div className="flex justify-start mt-2">
-                        <Button 
-                          variant="default"
-                          size="sm"
-                          onClick={() => onConfirm(message.id, message.modeSwitchAction?.action || '')}
-                          className="text-xs py-1 h-8 px-3 animate-pulse shadow-lg border-2 font-medium"
-                          style={{ 
-                            backgroundColor: getModeColor(message.modeSwitchAction.targetMode),
-                            borderColor: theme === 'dark' ? 'white' : 'black',
-                          }}
-                        >
-                          {message.modeSwitchAction.text || `Switch to ${message.modeSwitchAction.targetMode} mode`}
-                        </Button>
-                      </div>
-                    )}
                     
                     <span className="text-xs text-muted-foreground self-end">
                       {formatTimestamp(message.timestamp)}
