@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -229,35 +228,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         onClick={() => openImageModal(imageUrl, promptText, message.timestamp)}
                       />
                       
-                      {/* Action buttons */}
-                      {!loadingImages[messageId] && (
-                        <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                          <Button 
-                            size="icon" 
-                            variant="secondary" 
-                            className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              downloadImage(imageUrl, promptText);
-                            }}
-                          >
-                            <Download className="h-4 w-4" />
-                            <span className="sr-only">Download</span>
-                          </Button>
-                          <Button 
-                            size="icon" 
-                            variant="secondary" 
-                            className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openImageModal(imageUrl, promptText, message.timestamp);
-                            }}
-                          >
-                            <Expand className="h-4 w-4" />
-                            <span className="sr-only">Expand</span>
-                          </Button>
-                        </div>
-                      )}
+                      {/* Fixed position action buttons to prevent flickering on hover */}
+                      <div className="absolute bottom-2 right-2 flex gap-2 transition-opacity duration-300 
+                                      opacity-0 group-hover:opacity-100 bg-black/5 backdrop-blur-sm 
+                                      p-1 rounded-full">
+                        <Button 
+                          size="icon" 
+                          variant="secondary" 
+                          className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full
+                                    transition-colors duration-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            downloadImage(imageUrl, promptText);
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                          <span className="sr-only">Download</span>
+                        </Button>
+                        <Button 
+                          size="icon" 
+                          variant="secondary" 
+                          className="h-8 w-8 bg-black/30 hover:bg-black/50 text-white rounded-full
+                                    transition-colors duration-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openImageModal(imageUrl, promptText, message.timestamp);
+                          }}
+                        >
+                          <Expand className="h-4 w-4" />
+                          <span className="sr-only">Expand</span>
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -482,7 +483,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <div className="mt-4 flex justify-end">
                       <Button
                         onClick={() => downloadImage(selectedImage, selectedImagePrompt || '')}
-                        className="bg-black/30 hover:bg-black/50 text-white"
+                        className="bg-black/30 hover:bg-black/50 text-white transition-colors duration-200"
                       >
                         <Download className="mr-1 h-4 w-4" /> Download Image
                       </Button>

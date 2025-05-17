@@ -38,7 +38,7 @@ export function RightPanel({ userId, activeMode }: RightPanelProps) {
           variant="ghost"
           size="icon"
           aria-label="Toggle theme"
-          className="rounded-full"
+          className="rounded-full transition-colors duration-200"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
         >
           {theme === "dark" ? (

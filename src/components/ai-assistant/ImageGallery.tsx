@@ -36,7 +36,12 @@ const ImageGallery = ({ userId }: ImageGalleryProps) => {
   }, [userId]);
 
   // Trigger image download
-  const downloadImage = async (image: ImageRecord) => {
+  const downloadImage = async (image: ImageRecord, event?: React.MouseEvent) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    
     try {
       const response = await fetch(image.image_url);
       const blob = await response.blob();
@@ -114,7 +119,10 @@ const ImageGallery = ({ userId }: ImageGalleryProps) => {
                 }}
               />
               
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-2">
+              {/* Fixed overlay with permanent buttons to prevent flickering */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent 
+                             opacity-0 group-hover:opacity-100 transition-opacity duration-300
+                             flex flex-col justify-end p-2">
                 <p className="text-white text-xs truncate mb-2">{image.prompt}</p>
                 
                 <div className="flex justify-between items-center">
@@ -123,15 +131,12 @@ const ImageGallery = ({ userId }: ImageGalleryProps) => {
                     {formatDate(image.created_at)}
                   </span>
                   
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 bg-black/10 backdrop-blur-sm rounded-full p-1">
                     <Button 
                       size="icon" 
                       variant="ghost" 
-                      className="h-6 w-6 text-white rounded-full hover:bg-white/20"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        downloadImage(image);
-                      }}
+                      className="h-6 w-6 text-white rounded-full hover:bg-white/20 transition-colors duration-200"
+                      onClick={(e) => downloadImage(image, e)}
                     >
                       <Download className="h-3 w-3" />
                       <span className="sr-only">Download</span>
@@ -139,8 +144,9 @@ const ImageGallery = ({ userId }: ImageGalleryProps) => {
                     <Button 
                       size="icon" 
                       variant="ghost" 
-                      className="h-6 w-6 text-white rounded-full hover:bg-white/20"
-                      onClick={() => {
+                      className="h-6 w-6 text-white rounded-full hover:bg-white/20 transition-colors duration-200"
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setSelectedImage(image);
                         setShowImageModal(true);
                       }}
@@ -177,7 +183,7 @@ const ImageGallery = ({ userId }: ImageGalleryProps) => {
               <div className="mt-4 flex justify-end">
                 <Button
                   onClick={() => downloadImage(selectedImage)}
-                  className="bg-black/30 hover:bg-black/50 text-white"
+                  className="bg-black/30 hover:bg-black/50 text-white transition-colors duration-200"
                 >
                   <Download className="mr-1 h-4 w-4" /> Download Image
                 </Button>
