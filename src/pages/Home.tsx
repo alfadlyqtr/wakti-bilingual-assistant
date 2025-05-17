@@ -10,7 +10,6 @@ import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
-import { ThreeDPhotoCarouselDemo } from "@/components/ui/demo-carousel";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -98,7 +97,7 @@ export default function Home() {
       <AppHeader showUserMenu={false} title="WAKTI" />
       
       <div className="flex-1 overflow-y-auto pb-16">
-        {/* Hero Section with 3D Carousel */}
+        {/* Hero Section */}
         <section className={`${primaryBg} px-4 py-6`}>
           <motion.div 
             initial="hidden"
@@ -124,10 +123,6 @@ export default function Home() {
               {t.description}
             </motion.p>
             
-            <motion.div variants={itemVariants}>
-              <ThreeDPhotoCarouselDemo />
-            </motion.div>
-            
             <motion.div variants={itemVariants} className="mt-6 flex flex-col gap-3 max-w-xs mx-auto">
               <Button 
                 size="lg" 
@@ -136,15 +131,6 @@ export default function Home() {
               >
                 {t.trial}
                 <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-              
-              <Button 
-                variant="outline"
-                size="sm" 
-                className="w-fit mx-auto"
-                onClick={() => navigate('/login')}
-              >
-                {t.loginBtn}
               </Button>
             </motion.div>
           </motion.div>

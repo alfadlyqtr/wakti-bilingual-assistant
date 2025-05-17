@@ -1,12 +1,13 @@
 
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, Menu } from "lucide-react";
+import { ChevronLeft, Menu, LogIn } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/UserMenu";
 import { Logo3D } from "@/components/Logo3D";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
+import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 
 interface AppHeaderProps {
   showBackButton?: boolean;
@@ -60,6 +61,12 @@ export function AppHeader({
     return "WAKTI";
   };
 
+  const isHomePage = location.pathname === '/home' || location.pathname === '/';
+  
+  const handleLoginClick = () => {
+    navigate('/login');
+  };
+
   return (
     <header className={cn(
       "sticky top-0 z-30 flex items-center justify-between p-4 border-b",
@@ -84,7 +91,21 @@ export function AppHeader({
         </div>
       </div>
       
-      <div>
+      <div className="flex items-center gap-2">
+        <ThemeLanguageToggle />
+        
+        {isHomePage && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="ml-2 flex items-center gap-1"
+            onClick={handleLoginClick}
+          >
+            <LogIn className="h-4 w-4" /> 
+            Login
+          </Button>
+        )}
+        
         {children ? children : showUserMenu && <UserMenu />}
       </div>
     </header>
