@@ -346,9 +346,15 @@ export const AIAssistant: React.FC = () => {
         setMessages((prev) => [...prev, confirmSwitchMessage]);
         
         // Save the confirmation message
-        await saveChatMessage(user.id, confirmSwitchMessage.content, "assistant", suggestedMode, {
-          originalPrompt: message
-        });
+        await saveChatMessage(
+          user.id, 
+          confirmSwitchMessage.content, 
+          "assistant", 
+          suggestedMode, 
+          {
+            originalPrompt: message
+          }
+        );
         
         // Automatically process the request in the new mode without waiting for confirmation
         await processAIInCurrentMode(message);
@@ -539,17 +545,17 @@ export const AIAssistant: React.FC = () => {
       setMessages((prev) => [...prev, loadingMessage]);
 
       // Call the image generation service and save to database
-      const imageUrl = await processImageGeneration(imagePrompt, user!.id);
+      const result = await processImageGeneration(imagePrompt, user!.id);
 
       // Update the message with the image or error
-      if (imageUrl) {
+      if (result && result.imageUrl) {
         const updatedMessage: ChatMessage = {
           ...loadingMessage,
           content: `${t(
             "imageGenerated" as TranslationKey,
             language
-          )}\n\n![${t("generatedImage" as TranslationKey, language)}](${imageUrl})`,
-          metadata: { imageUrl, hasMedia: true },
+          )}\n\n![${t("generatedImage" as TranslationKey, language)}](${result.imageUrl})`,
+          metadata: { imageUrl: result.imageUrl, hasMedia: true },
           isLoading: false
         };
         setMessages((prev) =>
@@ -564,7 +570,7 @@ export const AIAssistant: React.FC = () => {
           updatedMessage.content,
           "assistant",
           activeMode,
-          { imageUrl, hasMedia: true }
+          { imageUrl: result.imageUrl, hasMedia: true }
         );
       } else {
         throw new Error("Image generation failed");

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { modeController } from "@/utils/modeController";
 
@@ -102,7 +103,7 @@ export async function getImageById(
 export async function processImageGeneration(
   prompt: string,
   userId: string
-): Promise<{imageUrl: string, originalPrompt: string} | null> {
+): Promise<{imageUrl: string; originalPrompt: string} | null> {
   try {
     // Switch to creative mode first
     await modeController.setActiveMode('creative');
