@@ -29,6 +29,11 @@ export interface ChatMessage {
     }
   };
   originalPrompt?: string; // Added to store the original prompt for mode switching
+  modeSwitchAction?: {
+    text: string;
+    action: string;
+    targetMode: AIMode;
+  }; // Added for mode switching functionality
 }
 
 // Type for message variables
