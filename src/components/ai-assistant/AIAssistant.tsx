@@ -676,7 +676,7 @@ export const AIAssistant: React.FC = () => {
           messageEndRef={messageEndRef}
           language={language}
           theme={currentTheme}
-          setActiveMode={setActiveMode}  {/* Add the missing prop here */}
+          setActiveMode={setActiveMode}
         />
 
         {/* Fixed Bottom Bar - Added pb-20 to create more space above the mobile nav */}
