@@ -22,10 +22,11 @@ export default function ProtectedRoute() {
     return <Loading />;
   }
 
-  // Re-enable authentication check - If no user or session, redirect to login
+  // If no user or session, redirect to home instead of login
+  // This helps break potential redirect loops
   if (!user || !session) {
-    console.log("ProtectedRoute: No authenticated user, redirecting to login");
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    console.log("ProtectedRoute: No authenticated user, redirecting to home");
+    return <Navigate to="/home" state={{ from: location }} replace />;
   }
 
   // User is authenticated, render the protected content

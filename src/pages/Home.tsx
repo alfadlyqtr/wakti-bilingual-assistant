@@ -14,16 +14,41 @@ export default function Home() {
   const navigate = useNavigate();
   const { user, session, isLoading } = useAuth();
   const { language, theme } = useTheme();
+  const [redirectAttempted, setRedirectAttempted] = useState(false);
   
-  // If user is already logged in, redirect to dashboard
+  // If user is already logged in, redirect to dashboard with improved logic
   useEffect(() => {
-    console.log("Home: Auth state check", { hasUser: !!user, hasSession: !!session, isLoading });
-    // Only redirect if loading is complete and we have both user and session
-    if (!isLoading && user && session) {
+    console.log("Home: Auth state check", { 
+      hasUser: !!user, 
+      hasSession: !!session, 
+      isLoading,
+      redirectAttempted
+    });
+    
+    // Only redirect if:
+    // 1. Loading is complete
+    // 2. We have both user and session
+    // 3. We haven't attempted a redirect yet (prevents loops)
+    if (!isLoading && user && session && !redirectAttempted) {
       console.log("Home: User is authenticated, redirecting to dashboard");
-      navigate('/dashboard');
+      
+      // Mark that we've attempted redirect to prevent loops
+      setRedirectAttempted(true);
+      
+      // Add a small delay before redirect to ensure state is stable
+      setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 100);
     }
-  }, [user, session, isLoading, navigate]);
+  }, [user, session, isLoading, navigate, redirectAttempted]);
+  
+  // Reset redirect attempted flag if auth state changes to not logged in
+  useEffect(() => {
+    if (!isLoading && (!user || !session) && redirectAttempted) {
+      console.log("Home: Auth state changed to logged out, resetting redirect flag");
+      setRedirectAttempted(false);
+    }
+  }, [user, session, isLoading, redirectAttempted]);
 
   const translations = {
     en: {

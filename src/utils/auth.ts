@@ -2,18 +2,19 @@
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
-// Sign out function
+// Sign out function - removed navigation, will be handled by AuthContext
 export async function signOut() {
   try {
+    console.log("Auth utils: Starting sign out process");
     const { error } = await supabase.auth.signOut();
     if (error) {
-      console.error("Error during sign out:", error);
+      console.error("Auth utils: Error during sign out:", error);
       throw error;
     }
-    console.log("Successfully signed out");
+    console.log("Auth utils: Successfully signed out from Supabase");
     return { error: null };
   } catch (error) {
-    console.error("Exception during sign out:", error);
+    console.error("Auth utils: Exception during sign out:", error);
     return { error };
   }
 }

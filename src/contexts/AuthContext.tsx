@@ -48,6 +48,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const navigate = useNavigate();
   const location = useLocation();
   const navigationInProgress = useRef(false);
+  const lastAuthEvent = useRef<string | null>(null);
   
   // Debug helper to track auth state changes
   const logAuthState = (message: string, details?: any) => {
@@ -56,6 +57,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       hasSession: !!session,
       isLoading: loading,
       currentPath: location.pathname,
+      lastAuthEvent: lastAuthEvent.current,
       ...(details || {})
     });
   };
@@ -66,28 +68,33 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
+        lastAuthEvent.current = event;
         logAuthState(`Auth state change event: ${event}`, { hasNewSession: !!currentSession });
         
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setLoading(false);
-
         // Properly handle sign out event
         if (event === 'SIGNED_OUT') {
-          logAuthState('User signed out, redirecting to login');
-          // We need to clear all states and redirect to login
+          logAuthState('User signed out, clearing state and redirecting to home');
+          // We need to clear all states
           setUser(null);
           setSession(null);
           
-          // Use a timeout to avoid race conditions
+          // Use a timeout to avoid race conditions and ensure state is cleared before redirect
           setTimeout(() => {
             if (!navigationInProgress.current) {
               navigationInProgress.current = true;
-              navigate('/login', { replace: true });
-              navigationInProgress.current = false;
+              navigate('/home', { replace: true });
+              setTimeout(() => {
+                navigationInProgress.current = false;
+              }, 500);
             }
           }, 100);
+        } else {
+          // For other events, update the session and user state
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
         }
+        
+        setLoading(false);
       }
     );
 
@@ -164,19 +171,39 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const signOut = async () => {
     console.log('AuthProvider: Attempting sign out');
+    
+    // Set a flag to prevent multiple navigation attempts
+    if (navigationInProgress.current) {
+      console.log('AuthProvider: Navigation already in progress, skipping');
+      return;
+    }
+    
     try {
+      // First, clear the state to prevent flashing of protected content
+      setUser(null);
+      setSession(null);
+      
+      // Then perform the actual sign out
       const { error } = await supabase.auth.signOut();
       if (error) {
         console.error('AuthProvider: Error signing out:', error);
         throw error;
       }
       
-      console.log('AuthProvider: Sign out successful');
-      // We explicitly navigate to login page here
-      // The onAuthStateChange listener will also handle this, but we want to be explicit
-      navigate('/login');
+      console.log('AuthProvider: Sign out successful, redirecting to home');
+      
+      // Use timeout to ensure state updates have propagated
+      navigationInProgress.current = true;
+      setTimeout(() => {
+        navigate('/home', { replace: true });
+        setTimeout(() => {
+          navigationInProgress.current = false;
+        }, 500);
+      }, 100);
+      
     } catch (error) {
       console.error("AuthProvider: Error signing out:", error);
+      navigationInProgress.current = false;
     }
   };
 

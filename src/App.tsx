@@ -103,7 +103,7 @@ function App() {
                 </AppLayout>
               } />
 
-              {/* Protected routes - with authentication re-enabled */}
+              {/* Protected routes - with improved protection */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                 <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
