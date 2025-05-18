@@ -75,3 +75,19 @@ export async function forceSessionRefresh() {
     return { error };
   }
 }
+
+/**
+ * Checks if the user is currently logged in
+ * This is a simplified version of debugAuthState that just returns a boolean
+ */
+export async function isLoggedIn() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    return !!session && !!user;
+  } catch (error) {
+    console.error(`[${new Date().toISOString()}] Auth Debug: Error checking login status:`, error);
+    return false;
+  }
+}

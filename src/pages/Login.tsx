@@ -56,7 +56,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { signIn, isLoading: authIsLoading } = useAuth();
+  const { signIn, user, session, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localLoading, setLocalLoading] = useState(false);
@@ -73,6 +73,16 @@ export default function Login() {
       details || ""
     );
   };
+
+  // When the user or session changes, check if we need to redirect
+  // This ensures we redirect after authentication is successful
+  useState(() => {
+    if (user && session) {
+      logWithTimestamp("User is authenticated, redirecting to dashboard");
+      const from = location.state?.from?.pathname || "/dashboard";
+      navigate(from, { replace: true });
+    }
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +125,7 @@ export default function Login() {
           variant: 'destructive',
           duration: 5000,
         });
+        setLocalLoading(false);
       } else {
         logWithTimestamp("Login successful via form submission");
         toast({
@@ -123,12 +134,18 @@ export default function Login() {
           duration: 3000,
           variant: 'success',
         });
-        // Don't navigate here - ProtectedRoute will handle redirect
+        
+        // Explicitly navigate to dashboard after successful login
+        // Short timeout to ensure auth state is fully updated
+        setTimeout(() => {
+          const from = location.state?.from?.pathname || "/dashboard";
+          logWithTimestamp("Explicitly navigating to:", from);
+          navigate(from, { replace: true });
+        }, 100);
       }
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-    } finally {
       setLocalLoading(false);
     }
   };
