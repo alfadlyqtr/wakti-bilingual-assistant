@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import WaveformVisualizer from "./WaveformVisualizer";
 import HighlightedTimestamps, { Highlight } from "./HighlightedTimestamps";
 import { getBestSupportedMimeType, getFileExtension, generateRecordingPath, formatRecordingTime } from "@/utils/audioUtils";
+import Loading from "../ui/loading";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -41,19 +41,27 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
-  // Processing states
+  // Processing states with more granular control
   const [isUploading, setIsUploading] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSaveComplete, setIsSaveComplete] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  // Track if user explicitly wants to close dialog
+  const [userWantsToClose, setUserWantsToClose] = useState(false);
   
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const recordingIdRef = useRef<string>("");
 
   // Cleanup on unmount
   useEffect(() => {
@@ -76,6 +84,33 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       generateTitleSuggestion(transcript);
     }
   }, [transcript, title]);
+
+  // Handle dialog close logic with proper state management
+  useEffect(() => {
+    // Only close the dialog when:
+    // 1. User explicitly wants to close AND
+    // 2. We're not in the middle of any async operation
+    const canClose = userWantsToClose && !isUploading && !isTranscribing && !isGeneratingSummary && !isFinalizing;
+    
+    if (canClose) {
+      handleCompleteClose();
+    }
+  }, [userWantsToClose, isUploading, isTranscribing, isGeneratingSummary, isFinalizing]);
+
+  // Effect to manage the save success state
+  useEffect(() => {
+    if (saveSuccess && !isFinalizing && !isGeneratingSummary) {
+      // All processes complete, recording saved successfully
+      if (onRecordingCreated) {
+        onRecordingCreated({
+          id: recordingIdRef.current,
+          title,
+          transcript,
+          summary
+        });
+      }
+    }
+  }, [saveSuccess, isFinalizing, isGeneratingSummary, onRecordingCreated, title, transcript, summary]);
 
   const startRecording = async () => {
     try {
@@ -299,6 +334,65 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   };
   
+  const generateSummary = async (recordingId: string) => {
+    if (!user) return;
+    
+    try {
+      setIsGeneratingSummary(true);
+      
+      // Get auth session for API call
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No auth session');
+      }
+      
+      // Call the generate-summary edge function
+      const response = await fetch(
+        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-summary",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionData.session.access_token}`
+          },
+          body: JSON.stringify({ recordingId }),
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Summary generation error response:', errorText);
+        throw new Error(`Summary generation failed: ${errorText}`);
+      }
+      
+      const { summary } = await response.json();
+      console.log("Generated summary:", summary);
+      
+      // Update the database with the summary
+      const { error: updateError } = await supabase
+        .from('voice_summaries')
+        .update({ summary })
+        .eq('id', recordingId);
+        
+      if (updateError) {
+        console.error('Error updating summary in database:', updateError);
+      }
+      
+      setSummary(summary);
+      
+      return summary;
+    } catch (err) {
+      console.error('Error generating summary:', err);
+      toast.error(language === 'ar' 
+        ? `فشل في إنشاء الملخص: ${err.message}` 
+        : `Failed to generate summary: ${err.message}`);
+      return null;
+    } finally {
+      setIsGeneratingSummary(false);
+      setIsFinalizing(false);
+    }
+  };
+  
   const handleSaveRecording = async () => {
     if (!user) {
       toast.error(language === 'ar' 
@@ -314,14 +408,20 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       return;
     }
     
+    // Reset states
+    setSaveSuccess(false);
+    setSummary(null);
+    
     // Title is no longer mandatory - use a default if not provided
     const recordingTitle = title.trim() || suggestedTitle || (language === 'ar' ? 'تسجيل جديد' : 'New Recording');
     
     try {
       setIsUploading(true);
+      setIsFinalizing(true);
       
       // Create unique ID for the recording
       const recordingId = uuidv4();
+      recordingIdRef.current = recordingId;
       
       // Create standardized file path in storage
       const filePath = generateRecordingPath(user.id, recordingId);
@@ -368,40 +468,58 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         throw new Error(recordingError.message);
       }
       
-      // Mark save as complete
+      // Mark upload as complete but keep dialog open
+      setIsUploading(false);
       setIsSaveComplete(true);
       
-      // If transcript wasn't already generated, trigger transcription function
-      if (!transcript) {
+      // Show success message
+      toast.success(language === 'ar' 
+        ? 'تم حفظ التسجيل بنجاح' 
+        : 'Recording saved successfully');
+        
+      // If transcript exists, generate summary immediately
+      if (transcript) {
+        await generateSummary(recordingId);
+      } else {
+        // If no transcript, initiate transcription process
         try {
+          toast.info(language === 'ar' 
+            ? 'جاري معالجة النص والملخص...' 
+            : 'Processing transcript and summary...');
+            
           await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
             },
-            body: JSON.stringify({ recordingId: filePath, summaryId: recordingId })
+            body: JSON.stringify({ recordingId, summaryId: recordingId })
           });
+          
+          // Wait a bit for transcription to complete before getting summary
+          setTimeout(async () => {
+            // Check if transcription completed
+            const { data: updatedRecording } = await supabase
+              .from('voice_summaries')
+              .select('transcript')
+              .eq('id', recordingId)
+              .single();
+              
+            if (updatedRecording?.transcript) {
+              setTranscript(updatedRecording.transcript);
+              await generateSummary(recordingId);
+            }
+            
+            setIsFinalizing(false);
+          }, 5000); // Give it 5 seconds
         } catch (functionError) {
           console.error('Error triggering transcription function:', functionError);
-          // Continue execution - the error in triggering the function shouldn't block the user
+          setIsFinalizing(false);
         }
       }
       
-      // Show success message
-      toast.success(language === 'ar' 
-        ? 'تم حفظ التسجيل بنجاح' 
-        : 'Recording saved successfully');
-      
-      // Notify the parent component
-      if (onRecordingCreated && recordingData) {
-        onRecordingCreated(recordingData);
-      }
-      
-      // Briefly wait to ensure UI updates before closing dialog
-      setTimeout(() => {
-        handleDialogClose();
-      }, 1000);
+      // Mark save as successful
+      setSaveSuccess(true);
       
     } catch (err) {
       console.error('Error saving recording:', err);
@@ -409,6 +527,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         ? `فشل في حفظ التسجيل: ${err.message}` 
         : `Failed to save recording: ${err.message}`);
       setIsUploading(false);
+      setIsFinalizing(false);
     }
   };
   
@@ -427,11 +546,22 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   };
   
+  // Handle user wanting to close the dialog
   const handleDialogClose = () => {
-    if (isUploading) {
-      return; // Prevent closing while uploading
+    // If still uploading or processing, don't allow close
+    if (isUploading || isTranscribing || isGeneratingSummary) {
+      toast.info(language === 'ar' 
+        ? 'يرجى الانتظار حتى اكتمال العملية...' 
+        : 'Please wait until processing completes...');
+      return;
     }
-    
+
+    // Set flag that user wants to close
+    setUserWantsToClose(true);
+  };
+  
+  // Actual close function when it's safe to do so
+  const handleCompleteClose = () => {
     resetRecording();
     setTitle("");
     setAttendees("");
@@ -439,6 +569,12 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     setCleanAudio(false);
     setIsUploading(false);
     setIsSaveComplete(false);
+    setIsGeneratingSummary(false);
+    setIsFinalizing(false);
+    setSaveSuccess(false);
+    setTranscript(null);
+    setSummary(null);
+    setUserWantsToClose(false);
     onClose();
   };
   
@@ -449,14 +585,23 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   };
 
-  // Determine if we're in a loading state
-  const isLoading = isUploading || isTranscribing;
+  // Determine if we're in a processing state
+  const isProcessing = isUploading || isTranscribing || isGeneratingSummary || isFinalizing;
+  
+  // Determine what status message to show
+  const getStatusMessage = () => {
+    if (isUploading) return language === 'ar' ? 'جارٍ رفع التسجيل...' : 'Uploading recording...';
+    if (isTranscribing) return language === 'ar' ? 'جارٍ تحويل الصوت إلى نص...' : 'Transcribing audio...';
+    if (isGeneratingSummary) return language === 'ar' ? 'جارٍ إنشاء الملخص...' : 'Generating summary...';
+    if (isFinalizing) return language === 'ar' ? 'جارٍ معالجة النص والملخص...' : 'Processing transcript and summary...';
+    return '';
+  };
 
   return (
     <Dialog 
       open={isOpen} 
       onOpenChange={(open) => {
-        if (!open && !isLoading) {
+        if (!open) {
           handleDialogClose();
         }
       }}
@@ -465,19 +610,27 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
-            {!isUploading && (
+            {!isProcessing && (
               <Button 
                 variant="ghost" 
                 size="icon" 
                 className="h-8 w-8" 
                 onClick={handleDialogClose}
-                disabled={isLoading}
               >
                 <X className="h-4 w-4" />
               </Button>
             )}
           </DialogTitle>
         </DialogHeader>
+        
+        {isProcessing && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-50 rounded-lg">
+            <div className="text-center p-4 space-y-3">
+              <Loading />
+              <p className="text-sm font-medium">{getStatusMessage()}</p>
+            </div>
+          </div>
+        )}
         
         <div className="space-y-4 py-2">
           <div className="space-y-2">
@@ -490,7 +643,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={language === 'ar' ? 'عنوان التسجيل (اختياري)' : 'Recording title (optional)'}
-                disabled={isLoading}
+                disabled={isProcessing}
               />
               {suggestedTitle && (
                 <div className="mt-1 flex items-center justify-between text-sm">
@@ -503,6 +656,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                     size="sm" 
                     onClick={useSuggestedTitle} 
                     className="h-6 px-2 text-xs"
+                    disabled={isProcessing}
                   >
                     {language === 'ar' ? 'استخدم' : 'Use'}
                   </Button>
@@ -520,7 +674,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               value={attendees}
               onChange={e => setAttendees(e.target.value)}
               placeholder={language === 'ar' ? 'أسماء مفصولة بفواصل' : 'Names separated by commas'}
-              disabled={isLoading}
+              disabled={isProcessing}
             />
           </div>
           
@@ -533,7 +687,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               value={location}
               onChange={e => setLocation(e.target.value)}
               placeholder={language === 'ar' ? 'مكان التسجيل' : 'Recording location'}
-              disabled={isLoading}
+              disabled={isProcessing}
             />
           </div>
           
@@ -542,7 +696,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               id="clean-audio"
               checked={cleanAudio}
               onCheckedChange={setCleanAudio}
-              disabled={isLoading}
+              disabled={isProcessing}
             />
             <Label htmlFor="clean-audio">
               {language === 'ar' ? 'تحسين جودة الصوت' : 'Clean Audio'} 
@@ -563,7 +717,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                         variant="outline"
                         onClick={startRecording}
                         className="flex items-center gap-1 w-full sm:w-auto"
-                        disabled={isLoading}
+                        disabled={isProcessing}
                       >
                         <Mic className="h-4 w-4 mr-1" />
                         {language === 'ar' ? 'بدء التسجيل' : 'Start Recording'}
@@ -575,7 +729,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           variant="outline"
                           onClick={() => fileInputRef.current?.click()}
                           className="flex items-center gap-1 w-full sm:w-auto"
-                          disabled={isLoading}
+                          disabled={isProcessing}
                         >
                           <Upload className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'تحميل ملف' : 'Upload File'}
@@ -586,7 +740,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           accept="audio/*"
                           className="hidden"
                           onChange={handleFileChange}
-                          disabled={isLoading}
+                          disabled={isProcessing}
                         />
                       </div>
                     </div>
@@ -625,7 +779,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           variant="destructive"
                           onClick={stopRecording}
                           className="flex items-center gap-1"
-                          disabled={isLoading}
+                          disabled={isProcessing}
                         >
                           <Square className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording'}
@@ -636,7 +790,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           variant="ghost"
                           onClick={cancelRecording}
                           className="flex items-center gap-1"
-                          disabled={isLoading}
+                          disabled={isProcessing}
                         >
                           <X className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'إلغاء' : 'Cancel'}
@@ -672,14 +826,14 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                     variant="outline"
                     onClick={resetRecording}
                     className="w-full"
-                    disabled={isLoading}
+                    disabled={isProcessing}
                   >
                     {language === 'ar' ? 'إعادة التسجيل' : 'Record Again'}
                   </Button>
                 </div>
               )}
               
-              {isTranscribing && (
+              {isTranscribing && !isProcessing && (
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>{language === 'ar' ? 'جاري معالجة النص...' : 'Processing transcription...'}</span>
@@ -694,15 +848,15 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
             type="button"
             variant="ghost"
             onClick={handleDialogClose}
-            disabled={isLoading}
+            disabled={isProcessing}
           >
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button
             type="button"
             onClick={handleSaveRecording}
-            disabled={!audioBlob || isLoading}
-            className={isLoading ? 'opacity-70' : ''}
+            disabled={!audioBlob || isProcessing}
+            className={isProcessing ? 'opacity-70' : ''}
           >
             {isUploading ? (
               <div className="flex items-center gap-2">
