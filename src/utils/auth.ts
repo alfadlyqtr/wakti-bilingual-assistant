@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
@@ -12,6 +13,7 @@ export async function signOut() {
     }
     console.log("Auth utils: Successfully signed out");
     return { error: null };
+    // Note: Navigation after logout is handled in the component that calls this function
   } catch (error) {
     console.error("Auth utils: Exception during sign out:", error);
     return { error };

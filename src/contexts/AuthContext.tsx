@@ -212,7 +212,11 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       }
       
       logAuthState('Sign out successful');
-      // Let onAuthStateChange handle the final isLoading=false
+      // Complete loading state now that we're done
+      setIsLoading(false);
+      
+      // Note: We don't handle navigation here since it's better managed in the component
+      // that calls signOut, like UserMenu.tsx
     } catch (error) {
       console.error(`[${getTimestamp()}] AuthContext: Exception during sign out:`, error);
       setIsLoading(false);

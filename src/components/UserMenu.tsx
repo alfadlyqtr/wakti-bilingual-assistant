@@ -37,13 +37,18 @@ export function UserMenu() {
       await signOut();
       toast({
         title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
-        variant: "success"
+        variant: "success",
+        duration: 3000,
       });
+      
+      // Always navigate to login page after successful logout
+      navigate('/login', { replace: true });
     } catch (error) {
       console.error('Error logging out:', error);
       toast({
         title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
-        variant: "destructive"
+        variant: "destructive",
+        duration: 5000,
       });
     }
     closeMenu();
