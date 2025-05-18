@@ -232,7 +232,6 @@ export type TranslationKey =
   | "widgetVisibility"
   | "privacyControls"
   | "deleteAccount"
-  // Add the new AI section keys
   | "aiSectionTitle"
   | "aiFeature1Title"
   | "aiFeature1Desc"
@@ -241,4 +240,12 @@ export type TranslationKey =
   | "aiFeature3Title"
   | "aiFeature3Desc"
   | "aiFeature4Title"
-  | "aiFeature4Desc";
+  | "aiFeature4Desc"
+  // Error messages
+  | "errorOccurred"
+  | "errorProcessingRequest"
+  // Image generation
+  | "generatingImage"
+  | "imageGenerated"
+  | "generatedImage"
+  | "errorGeneratingImage";

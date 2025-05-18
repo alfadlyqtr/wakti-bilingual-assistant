@@ -976,32 +976,32 @@ const translations: TranslationMap = {
   },
   
   // Error messages
-  "errorOccurred": {
+  errorOccurred: {
     en: "An error occurred",
     ar: "حدث خطأ"
   },
-  "errorProcessingRequest": {
+  errorProcessingRequest: {
     en: "Sorry, there was an error processing your request",
     ar: "عذرًا، حدث خطأ أثناء معالجة طلبك"
   },
   
   // Image generation
-  "generatingImage": {
+  generatingImage: {
     en: "Generating image...",
     ar: "جاري إنشاء الصورة..."
   },
-  "imageGenerated": {
+  imageGenerated: {
     en: "Image generated",
     ar: "تم إنشاء الصورة"
   },
-  "generatedImage": {
+  generatedImage: {
     en: "Generated image",
     ar: "الصورة المُنشأة"
   },
-  "errorGeneratingImage": {
+  errorGeneratingImage: {
     en: "Sorry, there was an error generating the image",
     ar: "عذرًا، حدث خطأ أثناء إنشاء الصورة"
-  },
+  }
 };
 
 export const t = (key: TranslationKey, language: Language): string => {
