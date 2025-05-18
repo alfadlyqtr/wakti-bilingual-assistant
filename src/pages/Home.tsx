@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -11,6 +12,7 @@ import { HomeHero } from "@/components/home/HomeHero";
 export default function Home() {
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
+  const navigate = useNavigate();
   
   const translations = {
     en: {
