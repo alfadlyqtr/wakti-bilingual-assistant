@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo3D } from "@/components/Logo3D";
@@ -21,7 +20,7 @@ export default function Login() {
   // Log the initial component state
   console.log(`[${new Date().toISOString()}] Login: Component initializing - isLoading: ${isLoading}`);
 
-  // Handle login form submission - simplified
+  // Handle login form submission - now with proper navigation
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log(`[${new Date().toISOString()}] Login: Attempting login with email: ${email}`);
@@ -29,8 +28,13 @@ export default function Login() {
     setLoading(true);
     
     try {
-      // Call simplified login function that handles navigation internally
-      await login(email, password);
+      const result = await login(email, password);
+      
+      if (result.success) {
+        // Only navigate here after successful login
+        console.log(`[${new Date().toISOString()}] Login: Login successful, redirecting to dashboard`);
+        navigate('/dashboard');
+      }
     } catch (error) {
       console.error(`[${new Date().toISOString()}] Login: Error in login handler:`, error);
     } finally {

@@ -3,15 +3,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from 'react-router-dom';
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean, error?: string }>;
+  logout: () => Promise<{ success: boolean, error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -19,8 +18,8 @@ const AuthContext = createContext<AuthContextValue>({
   session: null,
   isAuthenticated: false,
   isLoading: true,
-  login: async () => {},
-  logout: async () => {}
+  login: async () => ({ success: false }),
+  logout: async () => ({ success: false })
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -30,11 +29,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const { toast } = useToast();
-  const navigate = useNavigate();
 
   const isAuthenticated = !!session;
 
-  // Simple login function with direct navigation
+  // Login function WITHOUT navigation
   const login = async (email: string, password: string) => {
     console.log(`[${new Date().toISOString()}] AuthContext: Login attempt for ${email}`);
     setIsLoading(true);
@@ -53,10 +51,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           variant: "destructive"
         });
         setIsLoading(false);
-        return;
+        return { success: false, error: error.message };
       }
       
       console.log(`[${new Date().toISOString()}] AuthContext: Login successful`, data.user?.id);
+      
+      // Update state but don't navigate - ProtectedRoute will handle this
       setUser(data.user);
       setSession(data.session);
       
@@ -65,9 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "Welcome back!",
       });
       
-      // Immediately navigate to dashboard on successful login
-      console.log(`[${new Date().toISOString()}] AuthContext: Redirecting to dashboard`);
-      navigate('/dashboard');
+      return { success: true };
     } catch (error) {
       console.error(`[${new Date().toISOString()}] AuthContext: Unexpected login error`, error);
       toast({
@@ -75,21 +73,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "An unexpected error occurred",
         variant: "destructive"
       });
+      return { success: false, error: "An unexpected error occurred" };
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Simple logout function with direct navigation
+  // Logout function WITHOUT navigation
   const logout = async () => {
     console.log(`[${new Date().toISOString()}] AuthContext: Logout initiated`);
     
     try {
-      // First clear the auth state
-      setUser(null);
-      setSession(null);
-      
-      // Then call the API
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -99,8 +93,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: error.message,
           variant: "destructive"
         });
-        return;
+        return { success: false, error: error.message };
       }
+      
+      // Clear auth state but don't navigate - ProtectedRoute will handle this
+      setUser(null);
+      setSession(null);
       
       console.log(`[${new Date().toISOString()}] AuthContext: Logout successful`);
       toast({
@@ -108,9 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "You have been logged out successfully.",
       });
       
-      // Immediately navigate to login page
-      console.log(`[${new Date().toISOString()}] AuthContext: Redirecting to login page`);
-      navigate('/login', { replace: true });
+      return { success: true };
     } catch (error) {
       console.error(`[${new Date().toISOString()}] AuthContext: Unexpected logout error`, error);
       toast({
@@ -118,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         description: "An unexpected error occurred",
         variant: "destructive"
       });
+      return { success: false, error: "An unexpected error occurred" };
     }
   };
 
