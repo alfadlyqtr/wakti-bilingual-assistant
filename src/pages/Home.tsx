@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,13 @@ export default function Home() {
   const { user } = useAuth();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
   // Simple redirect if user is logged in - no loading state or complex logic
   useEffect(() => {
     if (user) {
       console.log("Home: User is logged in, redirecting to dashboard");
+      setIsRedirecting(true);
       navigate('/dashboard', { replace: true });
     }
   }, [user, navigate]);
