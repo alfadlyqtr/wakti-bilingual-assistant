@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -51,13 +51,15 @@ const translations = {
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language } = useTheme();
   const { signIn, user, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [redirectTimer, setRedirectTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Get translations for the current language
   const t = translations[language];
@@ -70,6 +72,47 @@ export default function Login() {
     );
   };
 
+  // Redirect to dashboard if user is already authenticated
+  useEffect(() => {
+    if (user && !localLoading) {
+      logWithTimestamp("User already authenticated, redirecting to dashboard", {
+        userId: user.id,
+        isLoading: localLoading,
+        authIsLoading
+      });
+      
+      // Clear any existing timers
+      if (redirectTimer) {
+        clearTimeout(redirectTimer);
+      }
+      
+      // Set a short delay before redirecting to ensure state is consistent
+      const timer = setTimeout(() => {
+        // Get intended destination from location state or default to dashboard
+        const destination = location.state?.from?.pathname || "/dashboard";
+        logWithTimestamp(`Redirecting to ${destination}`);
+        navigate(destination, { replace: true });
+      }, 500);
+      
+      setRedirectTimer(timer);
+      
+      // Clean up function to clear timer if component unmounts
+      return () => {
+        clearTimeout(timer);
+        setRedirectTimer(null);
+      };
+    }
+  }, [user, localLoading, navigate, location]);
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      if (redirectTimer) {
+        clearTimeout(redirectTimer);
+      }
+    };
+  }, [redirectTimer]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -79,7 +122,7 @@ export default function Login() {
       return;
     }
     
-    setIsLoading(true);
+    setLocalLoading(true);
     logWithTimestamp("Attempting login with email:", email);
     
     try {
@@ -93,29 +136,33 @@ export default function Login() {
           description: error.message,
           variant: 'destructive',
         });
-        setIsLoading(false);
+        setLocalLoading(false);
       } else {
         logWithTimestamp("Login successful");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // No setIsLoading(false) here because we're letting ProtectedRoute redirect
+        // Don't set localLoading to false here so the loading state persists
+        // during redirection. The useEffect will handle the redirect.
       }
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-      setIsLoading(false);
+      setLocalLoading(false);
     }
   };
 
-  // Show loading state when authenticated or logging in
-  if (user || (isLoading && !errorMsg)) {
+  // Show loading state when logging in
+  if (localLoading) {
     return (
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-xl font-bold mb-2">{language === 'en' ? t.loggingIn : 'جاري تسجيل الدخول...'}</h2>
+          <h2 className="text-xl font-bold mb-2">{t.loggingIn}</h2>
+          <p className="text-muted-foreground">
+            {language === 'en' ? 'Please wait...' : 'يرجى الانتظار...'}
+          </p>
         </div>
       </div>
     );
@@ -177,7 +224,7 @@ export default function Login() {
                     autoCapitalize="none"
                     autoComplete="email"
                     autoCorrect="off"
-                    disabled={isLoading}
+                    disabled={localLoading}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 py-6 text-base shadow-sm"
@@ -194,7 +241,7 @@ export default function Login() {
                     className="px-0 font-normal text-sm"
                     type="button"
                     onClick={() => navigate("/forgot-password")}
-                    disabled={isLoading}
+                    disabled={localLoading}
                   >
                     {t.forgotPassword}
                   </Button>
@@ -209,7 +256,7 @@ export default function Login() {
                     placeholder={t.passwordPlaceholder}
                     autoCapitalize="none"
                     autoComplete="current-password"
-                    disabled={isLoading}
+                    disabled={localLoading}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 py-6 text-base shadow-sm"
@@ -219,7 +266,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    disabled={isLoading}
+                    disabled={localLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -233,9 +280,9 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                disabled={isLoading}
+                disabled={localLoading}
               >
-                {isLoading ? t.loading : t.login}
+                {localLoading ? t.loading : t.login}
               </Button>
             </form>
 
@@ -246,7 +293,7 @@ export default function Login() {
                   variant="link"
                   className="px-0"
                   onClick={() => navigate("/signup")}
-                  disabled={isLoading}
+                  disabled={localLoading}
                 >
                   {t.signup}
                 </Button>
