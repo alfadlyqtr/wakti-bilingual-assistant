@@ -4,8 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 const AuthDebugger = () => {
   const { user, session, isLoading } = useAuth();
 
+  // Return null in production mode, showing nothing
   if (process.env.NODE_ENV === 'production') {
-    return null; // Hide in production
+    return null;
   }
 
   const formatSession = () => {
