@@ -1,11 +1,9 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Mic, Square, Upload, FileAudio, X } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -33,6 +31,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   const [transcript, setTranscript] = useState<string | null>(null);
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
+  const [recordingFormat, setRecordingFormat] = useState<string>('');
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -56,6 +55,30 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       generateTitleSuggestion(transcript);
     }
   }, [transcript, title]);
+
+  // Helper function to get supported MIME types
+  const getSupportedMimeType = (): string => {
+    const types = [
+      'audio/mp3',
+      'audio/mpeg',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+      'audio/wav'
+    ];
+    
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log(`Browser supports recording in ${type} format`);
+        return type;
+      }
+    }
+    
+    // Fallback to a common format
+    console.log('No preferred MIME types supported, falling back to audio/webm');
+    return 'audio/webm';
+  };
 
   const generateTitleSuggestion = async (text: string) => {
     // Generate a simple title based on the transcript content
@@ -93,7 +116,12 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         } 
       });
       
-      mediaRecorderRef.current = new MediaRecorder(stream);
+      // Use the supported MIME type
+      const mimeType = getSupportedMimeType();
+      console.log(`Using MIME type for recording: ${mimeType}`);
+      setRecordingFormat(mimeType);
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
       
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -102,7 +130,8 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       };
       
       mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log(`Recording complete: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
         const url = URL.createObjectURL(audioBlob);
         setAudioBlob(audioBlob);
         setAudioUrl(url);
@@ -179,9 +208,11 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     if (!user) return;
     
     try {
+      console.log(`Sending audio blob for transcription: ${blob.size} bytes, type: ${blob.type}`);
+      
       // Create a form data object
       const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
+      formData.append('audio', blob, `recording.${getFileExtension(blob.type)}`);
       
       // Get auth session for API call
       const { data } = await supabase.auth.getSession();
@@ -202,14 +233,34 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       );
 
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const errorText = await response.text();
+        console.error('Transcription error response:', errorText);
+        throw new Error(`Transcription failed: ${errorText}`);
       }
       
       const { text } = await response.json();
       setTranscript(text);
     } catch (err) {
       console.error('Error getting transcript:', err);
+      toast({
+        variant: "destructive",
+        description: language === 'ar' 
+          ? `فشل في الحصول على النص: ${err.message}` 
+          : `Failed to transcribe: ${err.message}`,
+      });
     }
+  };
+  
+  // Helper to get file extension from MIME type
+  const getFileExtension = (mimeType: string): string => {
+    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+      return 'mp3';
+    } else if (mimeType.includes('ogg')) {
+      return 'ogg';
+    } else if (mimeType.includes('wav')) {
+      return 'wav';
+    }
+    return 'webm'; // Default
   };
   
   const formatRecordingTime = (seconds: number) => {
@@ -233,7 +284,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         return;
       }
       
+      console.log(`Selected file: ${file.name}, type: ${file.type}, size: ${file.size} bytes`);
       setSelectedFile(file);
+      setRecordingFormat(file.type);
       
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
@@ -287,10 +340,11 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       
       // Create file path in storage
       const fileExt = selectedFile 
-        ? selectedFile.name.split('.').pop() 
-        : 'webm';
+        ? getFileExtension(selectedFile.type)
+        : getFileExtension(recordingFormat);
       
       const filePath = `voice_summaries/${user.id}/${recordingId}/recording.${fileExt}`;
+      console.log(`Saving recording to path: ${filePath}, format: ${recordingFormat || audioBlob?.type}`);
       
       // Upload the audio file to Supabase Storage
       const { data: storageData, error: storageError } = await supabase.storage

@@ -27,6 +27,30 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   const MAX_RECORDING_TIME = 120; // 2 minutes maximum (120 seconds)
   const { showError, showInfo, showSuccess } = useToastHelper();
 
+  // Helper function to get supported MIME types
+  const getSupportedMimeType = (): string => {
+    const types = [
+      'audio/mp3',
+      'audio/mpeg',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+      'audio/wav'
+    ];
+    
+    for (const type of types) {
+      if (MediaRecorder.isTypeSupported(type)) {
+        console.log(`Browser supports recording in ${type} format`);
+        return type;
+      }
+    }
+    
+    // Fallback to a common format that most browsers support
+    console.log('No preferred MIME types supported, falling back to audio/webm');
+    return 'audio/webm';
+  };
+
   const startRecording = async () => {
     try {
       // Get current user - needed for saving the recording
@@ -45,7 +69,11 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         } 
       });
       
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      // Use the supported MIME type
+      const mimeType = getSupportedMimeType();
+      console.log(`Using MIME type for recording: ${mimeType}`);
+      
+      const recorder = new MediaRecorder(stream, { mimeType });
       const audioChunks: Blob[] = [];
 
       recorder.ondataavailable = (e) => {
@@ -57,12 +85,24 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       recorder.onstop = async () => {
         setIsTranscribing(true);
         
-        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        // Get the file extension from the MIME type
+        let fileExt = 'webm'; // Default
+        if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+          fileExt = 'mp3';
+        } else if (mimeType.includes('ogg')) {
+          fileExt = 'ogg';
+        } else if (mimeType.includes('wav')) {
+          fileExt = 'wav';
+        }
+        
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
+        console.log(`Recording complete: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
         
         // Store the recording in Supabase Storage
         try {
-          // Create a unique file name based on timestamp
-          const fileName = `${user.id}/${Date.now()}.webm`;
+          // Create a unique file name based on timestamp with correct extension
+          const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+          console.log(`Uploading to storage with filename: ${fileName}`);
           
           // Upload to Supabase
           const { data: uploadData, error: uploadError } = await supabase.storage
@@ -79,7 +119,8 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           console.log('Recording saved to Supabase:', fileName);
           
           try {
-            // Pass recordingId instead of audio blob
+            // Pass recordingId (full path)
+            console.log('Sending for transcription with path:', fileName);
             const text = await transcribeAudio(fileName);
             setIsTranscribing(false);
             

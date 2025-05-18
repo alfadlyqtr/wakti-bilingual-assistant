@@ -7,6 +7,9 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+// List of audio formats supported by OpenAI Whisper API
+const SUPPORTED_FORMATS = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -39,6 +42,7 @@ serve(async (req) => {
     let audioFile;
     let recordingId;
     let summaryId;
+    let fileFormat;
     
     const contentType = req.headers.get("content-type") || "";
     
@@ -59,7 +63,22 @@ serve(async (req) => {
           );
         }
         
-        console.log(`Received direct audio upload: ${audioFile.size} bytes, type: ${audioFile.type}`);
+        fileFormat = audioFile.name.split('.').pop()?.toLowerCase();
+        console.log(`Received direct audio upload: ${audioFile.size} bytes, type: ${audioFile.type}, format: ${fileFormat}`);
+        
+        // Validate file format
+        if (!validateFileFormat(fileFormat)) {
+          console.error(`Invalid file format: ${fileFormat}`);
+          return new Response(
+            JSON.stringify({ 
+              error: `Invalid file format: ${fileFormat}. Supported formats: ${SUPPORTED_FORMATS.join(', ')}` 
+            }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
       } catch (formError) {
         console.error("Error processing form data:", formError);
         return new Response(
@@ -111,6 +130,13 @@ serve(async (req) => {
           }
         }
         
+        // Extract file format from recordingId
+        fileFormat = recordingId.split('.').pop()?.toLowerCase();
+        if (!validateFileFormat(fileFormat)) {
+          console.error(`Potential invalid file format in path: ${fileFormat}`);
+          // Still continue as we'll detect the actual format from the downloaded file
+        }
+        
         // Download audio file from storage
         const { data: fileData, error: downloadError } = await supabase.storage
           .from("voice_recordings")
@@ -139,8 +165,22 @@ serve(async (req) => {
           );
         }
         
-        audioFile = new File([fileData], "audio.webm", { type: "audio/webm" });
-        console.log(`Successfully retrieved audio file: ${audioFile.size} bytes`);
+        // Determine content type based on the file extension
+        let contentType = 'audio/webm'; // Default
+        if (fileFormat === 'mp3' || fileFormat === 'mpeg' || fileFormat === 'mpga') {
+          contentType = 'audio/mpeg';
+        } else if (fileFormat === 'ogg' || fileFormat === 'oga') {
+          contentType = 'audio/ogg';
+        } else if (fileFormat === 'wav') {
+          contentType = 'audio/wav';
+        } else if (fileFormat === 'flac') {
+          contentType = 'audio/flac';
+        } else if (fileFormat === 'm4a') {
+          contentType = 'audio/m4a';
+        }
+        
+        audioFile = new File([fileData], `audio.${fileFormat}`, { type: contentType });
+        console.log(`Successfully retrieved audio file: ${audioFile.size} bytes, format: ${fileFormat}, type: ${contentType}`);
       } catch (jsonError) {
         console.error("Error processing JSON data:", jsonError);
         return new Response(
@@ -207,7 +247,7 @@ serve(async (req) => {
         await supabase
           .from("voice_summaries")
           .update({ 
-            transcript: "Error: Transcription failed",
+            transcript: `Error: ${result.error?.message || "Transcription failed"}`,
             title: "Transcription Error"
           })
           .eq("id", summaryId);
@@ -272,3 +312,9 @@ serve(async (req) => {
     );
   }
 });
+
+// Helper function to validate file formats
+function validateFileFormat(format: string | undefined): boolean {
+  if (!format) return false;
+  return SUPPORTED_FORMATS.includes(format.toLowerCase());
+}
