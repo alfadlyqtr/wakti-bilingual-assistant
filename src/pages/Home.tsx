@@ -12,18 +12,26 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading: authIsLoading } = useAuth();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
-  // Simplified redirect if user is logged in
+  // Improved redirect logic if user is logged in
   useEffect(() => {
-    // Only redirect if we have a user
-    if (user) {
+    // Only redirect if we have a user and auth is not still loading
+    if (user && !authIsLoading && !isRedirecting) {
       console.log("Home: User is logged in, redirecting to dashboard");
-      navigate('/dashboard');
+      setIsRedirecting(true);
+      
+      // Small delay to ensure all auth state is properly synchronized
+      const redirectTimer = setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 300);
+      
+      return () => clearTimeout(redirectTimer);
     }
-  }, [user, navigate]);
+  }, [user, authIsLoading, navigate, isRedirecting]);
 
   const translations = {
     en: {
@@ -110,6 +118,20 @@ export default function Home() {
       transition: { duration: 0.5, ease: "easeOut" }
     }
   };
+
+  // Show loading indicator if we're about to redirect
+  if (isRedirecting) {
+    return (
+      <div className="mobile-container flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold mb-2">
+            {language === 'en' ? 'Redirecting to Dashboard...' : 'جاري التوجيه إلى لوحة التحكم...'}
+          </h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mobile-container">

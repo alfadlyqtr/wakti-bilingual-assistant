@@ -28,6 +28,7 @@ import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAss
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+import AuthDebugger from "@/components/AuthDebugger";
 
 // Layout component that adds header and mobile navigation
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -37,6 +38,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       {children}
       <MobileNav />
       <Toaster />
+      {process.env.NODE_ENV !== 'production' && <AuthDebugger />}
     </div>
   );
 }

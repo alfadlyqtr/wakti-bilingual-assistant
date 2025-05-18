@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -14,12 +15,36 @@ import { useAuth } from "@/contexts/AuthContext";
 export default function Login() {
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { signIn } = useAuth();
+  const { signIn, user, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loginSuccessful, setLoginSuccessful] = useState(false);
+
+  // Effect to handle successful authentication state
+  useEffect(() => {
+    // Only redirect if we have a user AND loginSuccessful flag is true
+    // This prevents premature redirects from initial auth state
+    if (user && loginSuccessful) {
+      console.log("Login: User authenticated, redirecting to dashboard", { userId: user.id });
+      // Small delay to ensure all auth state is properly propagated
+      const redirectTimer = setTimeout(() => {
+        navigate("/dashboard", { replace: true });
+      }, 500);
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [user, loginSuccessful, navigate]);
+
+  // Check if user is already authenticated on mount
+  useEffect(() => {
+    if (user && !loginSuccessful) {
+      console.log("Login: User already authenticated on mount, redirecting to dashboard");
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, navigate, loginSuccessful]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,17 +69,20 @@ export default function Login() {
           description: error.message,
           variant: 'destructive',
         });
+        setLoginSuccessful(false);
       } else {
-        console.log("Login: Login successful");
+        console.log("Login: Login successful, setting success flag");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // Remove navigation - let the auth context handle redirection
+        // Set flag to indicate successful login
+        setLoginSuccessful(true);
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      setLoginSuccessful(false);
     } finally {
       setIsLoading(false);
     }
@@ -69,6 +97,7 @@ export default function Login() {
       password: "Password",
       forgotPassword: "Forgot Password?",
       loading: "Loading...",
+      redirecting: "Redirecting to Dashboard...",
       createAccount: "Don't have an account?",
       signup: "Sign Up",
       backToHome: "Back to Home",
@@ -83,6 +112,7 @@ export default function Login() {
       password: "كلمة المرور",
       forgotPassword: "نسيت كلم المرور؟",
       loading: "جاري التحميل...",
+      redirecting: "جاري التوجيه إلى لوحة التحكم...",
       createAccount: "ليس لديك حساب؟",
       signup: "إنشاء حساب",
       backToHome: "العودة للرئيسية",
@@ -93,6 +123,18 @@ export default function Login() {
   };
 
   const t = translations[language];
+
+  // Show redirecting message if login was successful
+  if (loginSuccessful && user) {
+    return (
+      <div className="mobile-container flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold mb-2">{t.redirecting}</h2>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mobile-container">
@@ -123,7 +165,7 @@ export default function Login() {
               {/* App logo with navigation to home */}
               <div 
                 className="inline-block cursor-pointer mb-4"
-                onClick={() => navigate("/home")}  // Updated to navigate to /home
+                onClick={() => navigate("/home")}
               >
                 <Logo3D size="lg" />
               </div>
@@ -150,7 +192,7 @@ export default function Login() {
                     autoCapitalize="none"
                     autoComplete="email"
                     autoCorrect="off"
-                    disabled={isLoading}
+                    disabled={isLoading || loginSuccessful}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 py-6 text-base shadow-sm"
@@ -167,6 +209,7 @@ export default function Login() {
                     className="px-0 font-normal text-sm"
                     type="button"
                     onClick={() => navigate("/forgot-password")}
+                    disabled={isLoading || loginSuccessful}
                   >
                     {t.forgotPassword}
                   </Button>
@@ -181,7 +224,7 @@ export default function Login() {
                     placeholder={t.passwordPlaceholder}
                     autoCapitalize="none"
                     autoComplete="current-password"
-                    disabled={isLoading}
+                    disabled={isLoading || loginSuccessful}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 py-6 text-base shadow-sm"
@@ -191,6 +234,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    disabled={isLoading || loginSuccessful}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -204,9 +248,9 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                disabled={isLoading}
+                disabled={isLoading || loginSuccessful}
               >
-                {isLoading ? t.loading : t.login}
+                {isLoading ? t.loading : loginSuccessful ? t.redirecting : t.login}
               </Button>
             </form>
 
@@ -217,6 +261,7 @@ export default function Login() {
                   variant="link"
                   className="px-0"
                   onClick={() => navigate("/signup")}
+                  disabled={isLoading || loginSuccessful}
                 >
                   {t.signup}
                 </Button>
