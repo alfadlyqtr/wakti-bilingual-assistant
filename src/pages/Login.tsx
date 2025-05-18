@@ -1,5 +1,6 @@
+
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,43 @@ import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import Loading from "@/components/ui/loading";
+
+// Translations
+const translations = {
+  en: {
+    appName: "WAKTI",
+    login: "Login",
+    email: "Email",
+    password: "Password",
+    forgotPassword: "Forgot Password?",
+    loading: "Loading...",
+    redirecting: "Redirecting to Dashboard...",
+    createAccount: "Don't have an account?",
+    signup: "Sign Up",
+    backToHome: "Back to Home",
+    loggingIn: "Logging in...",
+    // Placeholders
+    emailPlaceholder: "example@email.com",
+    passwordPlaceholder: "Enter your password"
+  },
+  ar: {
+    appName: "وقتي",
+    login: "تسجيل الدخول",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور",
+    forgotPassword: "نسيت كلم المرور؟",
+    loading: "جاري التحميل...",
+    redirecting: "جاري التوجيه إلى لوحة التحكم...",
+    createAccount: "ليس لديك حساب؟",
+    signup: "إنشاء حساب",
+    backToHome: "العودة للرئيسية",
+    loggingIn: "جاري تسجيل الدخول...",
+    // Placeholders
+    emailPlaceholder: "example@email.com",
+    passwordPlaceholder: "أدخل كلمة المرور"
+  }
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,8 +59,16 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // We'll let ProtectedRoute handle navigation once authenticated
-  // The user will see the loading state here until ProtectedRoute redirects
+  // Get translations for the current language
+  const t = translations[language];
+
+  // Helper function for consistent log formatting
+  const logWithTimestamp = (message: string, details?: any) => {
+    console.log(
+      `[${new Date().toISOString()}] Login: ${message}`,
+      details || ""
+    );
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,13 +80,13 @@ export default function Login() {
     }
     
     setIsLoading(true);
-    console.log("Login: Attempting login with email:", email);
+    logWithTimestamp("Attempting login with email:", email);
     
     try {
       const error = await signIn(email, password);
 
       if (error) {
-        console.error("Login: Login error:", error);
+        logWithTimestamp("Login error:", error);
         setErrorMsg(error.message);
         toast({
           title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
@@ -49,7 +95,7 @@ export default function Login() {
         });
         setIsLoading(false);
       } else {
-        console.log("Login: Login successful");
+        logWithTimestamp("Login successful");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
@@ -57,47 +103,11 @@ export default function Login() {
         // No setIsLoading(false) here because we're letting ProtectedRoute redirect
       }
     } catch (err) {
-      console.error("Login: Unexpected error during login:", err);
+      logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
       setIsLoading(false);
     }
   };
-
-  // Translations
-  const translations = {
-    en: {
-      appName: "WAKTI",
-      login: "Login",
-      email: "Email",
-      password: "Password",
-      forgotPassword: "Forgot Password?",
-      loading: "Loading...",
-      redirecting: "Redirecting to Dashboard...",
-      createAccount: "Don't have an account?",
-      signup: "Sign Up",
-      backToHome: "Back to Home",
-      // Placeholders
-      emailPlaceholder: "example@email.com",
-      passwordPlaceholder: "Enter your password"
-    },
-    ar: {
-      appName: "وقتي",
-      login: "تسجيل الدخول",
-      email: "البريد الإلكتروني",
-      password: "كلمة المرور",
-      forgotPassword: "نسيت كلم المرور؟",
-      loading: "جاري التحميل...",
-      redirecting: "جاري التوجيه إلى لوحة التحكم...",
-      createAccount: "ليس لديك حساب؟",
-      signup: "إنشاء حساب",
-      backToHome: "العودة للرئيسية",
-      // Placeholders
-      emailPlaceholder: "example@email.com",
-      passwordPlaceholder: "أدخل كلمة المرور"
-    }
-  };
-
-  const t = translations[language];
 
   // Show loading state when authenticated or logging in
   if (user || (isLoading && !errorMsg)) {
@@ -105,7 +115,7 @@ export default function Login() {
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-xl font-bold mb-2">{language === 'en' ? 'Logging in...' : 'جاري تسجيل الدخول...'}</h2>
+          <h2 className="text-xl font-bold mb-2">{language === 'en' ? t.loggingIn : 'جاري تسجيل الدخول...'}</h2>
         </div>
       </div>
     );
@@ -122,7 +132,7 @@ export default function Login() {
             onClick={() => navigate("/home")}
           >
             <ArrowLeft className="h-4 w-4" />
-            <span className="text-xs">{language === 'en' ? 'Back to Home' : 'العودة للرئيسية'}</span>
+            <span className="text-xs">{t.backToHome}</span>
           </Button>
         </div>
         <ThemeLanguageToggle />
@@ -147,7 +157,7 @@ export default function Login() {
               <h1 className="text-2xl font-bold">{t.login}</h1>
               
               {errorMsg && (
-                <div className="mt-3 text-sm text-red-500">
+                <div className="mt-3 p-2 bg-red-50 text-red-500 rounded-md">
                   {errorMsg}
                 </div>
               )}
