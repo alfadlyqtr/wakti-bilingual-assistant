@@ -17,15 +17,15 @@ export default function ProtectedRoute() {
     });
   }, [isLoading, user, session, location.pathname]);
 
+  // Show loading indicator while authentication state is being determined
   if (isLoading) {
-    console.log("ProtectedRoute: Still loading auth state, showing loading");
+    console.log("ProtectedRoute: Still loading auth state, showing loading indicator");
     return <Loading />;
   }
 
-  // If no user or session, redirect to home instead of login
-  // This helps break potential redirect loops
+  // If not authenticated, redirect to home
   if (!user || !session) {
-    console.log("ProtectedRoute: No authenticated user, redirecting to home");
+    console.log("ProtectedRoute: Not authenticated, redirecting to home");
     return <Navigate to="/home" state={{ from: location }} replace />;
   }
 

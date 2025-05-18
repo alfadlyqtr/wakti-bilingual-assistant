@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -28,53 +27,38 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const navigationInProgress = useRef(false);
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   
   // Get the location state to know where to redirect after login
   const locationState = location.state as LocationState;
   const from = locationState?.from || "/dashboard";
 
-  // Add effect to check auth state and redirect if already logged in
+  // Simplified auth check and redirect logic
   useEffect(() => {
     console.log("Login: Auth state check", { 
       user: !!user, 
       session: !!session, 
       authLoading,
+      hasCheckedAuth,
       currentPath: location.pathname,
-      redirectTo: from,
-      redirectAttempted
+      redirectTo: from
     });
     
+    // Only mark auth as checked once loading completes
+    if (!authLoading && !hasCheckedAuth) {
+      console.log("Login: Auth check completed");
+      setHasCheckedAuth(true);
+    }
+    
     // Only redirect if:
-    // 1. User is authenticated
-    // 2. Auth loading is complete
-    // 3. We haven't attempted a redirect yet
-    // 4. Navigation is not already in progress
-    if (user && session && !authLoading && !redirectAttempted && !navigationInProgress.current) {
-      console.log("Login: User already authenticated, redirecting to:", from);
-      
-      // Mark that we've attempted redirect to prevent loops
-      setRedirectAttempted(true);
-      
-      // Use a timeout to ensure state is stable
-      navigationInProgress.current = true;
-      setTimeout(() => {
-        navigate(from, { replace: true });
-        setTimeout(() => {
-          navigationInProgress.current = false;
-        }, 500);
-      }, 100);
+    // 1. Auth check is complete
+    // 2. User is authenticated
+    // 3. Not currently loading
+    if (hasCheckedAuth && user && session && !authLoading && !isLoading) {
+      console.log("Login: User authenticated, redirecting to:", from);
+      navigate(from, { replace: true });
     }
-  }, [user, session, authLoading, navigate, location.pathname, from, redirectAttempted]);
-
-  // Reset redirect flag if auth state changes
-  useEffect(() => {
-    if (!user && !session && !authLoading && redirectAttempted) {
-      console.log("Login: Auth state changed to logged out, resetting redirect flag");
-      setRedirectAttempted(false);
-    }
-  }, [user, session, authLoading, redirectAttempted]);
+  }, [user, session, authLoading, hasCheckedAuth, navigate, from, isLoading]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,16 +69,10 @@ export default function Login() {
       return;
     }
     
-    if (navigationInProgress.current) {
-      console.log("Login: Navigation in progress, skipping login attempt");
-      return;
-    }
-    
     setIsLoading(true);
     console.log("Login: Attempting login with email:", email);
     
     try {
-      // Use the AuthContext signIn method instead of direct Supabase call
       const error = await signIn(email, password);
 
       if (error) {
@@ -105,21 +83,18 @@ export default function Login() {
           description: error.message,
           variant: 'destructive',
         });
-        setIsLoading(false);
       } else {
-        console.log("Login: Login successful, waiting for auth state to update");
+        console.log("Login: Login successful");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        
-        // The redirect will be handled by the useEffect above when auth state updates
-        // We don't need to navigate manually here
-        setIsLoading(false);
+        // The redirect will be handled by the useEffect when auth state updates
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
       setIsLoading(false);
     }
   };

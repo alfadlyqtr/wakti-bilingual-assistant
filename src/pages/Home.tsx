@@ -15,40 +15,42 @@ export default function Home() {
   const { user, session, isLoading } = useAuth();
   const { language, theme } = useTheme();
   const [redirectAttempted, setRedirectAttempted] = useState(false);
+  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   
-  // If user is already logged in, redirect to dashboard with improved logic
+  // Simplified and more reliable auth redirect logic
   useEffect(() => {
     console.log("Home: Auth state check", { 
       hasUser: !!user, 
       hasSession: !!session, 
       isLoading,
-      redirectAttempted
+      redirectAttempted,
+      hasCheckedAuth
     });
     
-    // Only redirect if:
-    // 1. Loading is complete
-    // 2. We have both user and session
-    // 3. We haven't attempted a redirect yet (prevents loops)
-    if (!isLoading && user && session && !redirectAttempted) {
-      console.log("Home: User is authenticated, redirecting to dashboard");
-      
-      // Mark that we've attempted redirect to prevent loops
-      setRedirectAttempted(true);
-      
-      // Add a small delay before redirect to ensure state is stable
-      setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 100);
+    // Only set hasCheckedAuth to true once loading is complete
+    if (!isLoading && !hasCheckedAuth) {
+      setHasCheckedAuth(true);
     }
-  }, [user, session, isLoading, navigate, redirectAttempted]);
+    
+    // Only redirect if:
+    // 1. We've completed an auth check
+    // 2. Not still loading
+    // 3. User is authenticated
+    // 4. Haven't attempted redirect yet
+    if (hasCheckedAuth && !isLoading && user && session && !redirectAttempted) {
+      console.log("Home: User is authenticated, redirecting to dashboard");
+      setRedirectAttempted(true);
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, session, isLoading, hasCheckedAuth, navigate, redirectAttempted]);
   
-  // Reset redirect attempted flag if auth state changes to not logged in
+  // Reset redirect flag if user signs out
   useEffect(() => {
-    if (!isLoading && (!user || !session) && redirectAttempted) {
-      console.log("Home: Auth state changed to logged out, resetting redirect flag");
+    if (hasCheckedAuth && !isLoading && (!user || !session) && redirectAttempted) {
+      console.log("Home: User signed out, resetting redirect flag");
       setRedirectAttempted(false);
     }
-  }, [user, session, isLoading, redirectAttempted]);
+  }, [user, session, hasCheckedAuth, isLoading, redirectAttempted]);
 
   const translations = {
     en: {
@@ -83,7 +85,7 @@ export default function Home() {
       tagline: "مساعد الإنتاجية الذكي",
       description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعومة بالذكاء الاصطناعي",
       loginBtn: "تسجيل الدخول",
-      trial: "ابدأ التجربة المجانية لمدة 3 أيام",
+      trial: "ا��دأ التجربة المجانية لمدة 3 أيام",
       monthly: "شهري",
       yearly: "سنوي (وفر 17٪)",
       monthlyPrice: "55 ر.ق",

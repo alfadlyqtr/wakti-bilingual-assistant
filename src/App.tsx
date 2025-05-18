@@ -103,7 +103,7 @@ function App() {
                 </AppLayout>
               } />
 
-              {/* Protected routes - with improved protection */}
+              {/* Protected routes */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                 <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />

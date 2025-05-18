@@ -2,7 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
-// Sign out function - removed navigation, will be handled by AuthContext
+// Sign out function - simplifying to focus on just the auth action, navigation handled by AuthContext
 export async function signOut() {
   try {
     console.log("Auth utils: Starting sign out process");
