@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,7 +18,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useTheme } from "next-themes";
+import { useTheme } from "@/providers/ThemeProvider";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "./types";
 import { ModeSelector } from "./ModeSelector";
 import { v4 as uuidv4 } from "uuid";
@@ -59,12 +60,11 @@ export const AIAssistant: React.FC = () => {
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { isMobile } = useIsMobile();
-  const { theme } = useTheme();
   const { user, session } = useAuth();
   const { showSuccess, showError, showInfo } = useToastHelper();
 
-  // Language and theme state
-  const language = "en" as "en" | "ar"; // This would normally come from user preferences
+  // Language and theme state - Use from ThemeProvider instead of hardcoding
+  const { theme, language } = useTheme();
   const currentTheme = theme || "light";
 
   // Register with mode controller to keep local state in sync
@@ -533,6 +533,8 @@ export const AIAssistant: React.FC = () => {
       // Extract the image prompt
       const imagePrompt = extractImagePrompt(prompt);
       
+      console.log(`Generating image with prompt: "${imagePrompt}" in language: ${language}`);
+      
       // Create loading message to show we're generating the image
       const loadingMessage: ChatMessage = {
         id: uuidv4(),
@@ -884,3 +886,4 @@ export const AIAssistant: React.FC = () => {
     </div>
   );
 };
+
