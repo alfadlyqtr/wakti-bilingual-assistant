@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -49,6 +49,9 @@ const translations = {
   }
 };
 
+// Maximum time to wait in loading state before auto-recovery (ms)
+const MAX_LOADING_TIME = 8000;
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,8 +62,9 @@ export default function Login() {
   const [localLoading, setLocalLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [redirectTimer, setRedirectTimer] = useState<NodeJS.Timeout | null>(null);
-
+  const [redirectionInProgress, setRedirectionInProgress] = useState(false);
+  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Get translations for the current language
   const t = translations[language];
 
@@ -72,46 +76,66 @@ export default function Login() {
     );
   };
 
-  // Redirect to dashboard if user is already authenticated
-  useEffect(() => {
-    if (user && !localLoading) {
-      logWithTimestamp("User already authenticated, redirecting to dashboard", {
-        userId: user.id,
-        isLoading: localLoading,
-        authIsLoading
-      });
-      
-      // Clear any existing timers
-      if (redirectTimer) {
-        clearTimeout(redirectTimer);
-      }
-      
-      // Set a short delay before redirecting to ensure state is consistent
-      const timer = setTimeout(() => {
-        // Get intended destination from location state or default to dashboard
-        const destination = location.state?.from?.pathname || "/dashboard";
-        logWithTimestamp(`Redirecting to ${destination}`);
-        navigate(destination, { replace: true });
-      }, 500);
-      
-      setRedirectTimer(timer);
-      
-      // Clean up function to clear timer if component unmounts
-      return () => {
-        clearTimeout(timer);
-        setRedirectTimer(null);
-      };
-    }
-  }, [user, localLoading, navigate, location]);
-
-  // Clean up on unmount
+  // Clear any loading timers when component unmounts
   useEffect(() => {
     return () => {
-      if (redirectTimer) {
-        clearTimeout(redirectTimer);
+      if (loadingTimerRef.current) {
+        logWithTimestamp("Clearing loading recovery timer on unmount");
+        clearTimeout(loadingTimerRef.current);
       }
     };
-  }, [redirectTimer]);
+  }, []);
+
+  // Set up loading timeout recovery
+  useEffect(() => {
+    if (localLoading) {
+      logWithTimestamp(`Setting loading recovery timer for ${MAX_LOADING_TIME}ms`);
+      loadingTimerRef.current = setTimeout(() => {
+        logWithTimestamp("Loading recovery triggered - resetting loading state");
+        setLocalLoading(false);
+        toast({
+          title: language === 'en' ? 'Login Process Timeout' : 'انتهت مهلة عملية تسجيل الدخول',
+          description: language === 'en' ? 
+            'The login process is taking longer than expected. Please try again.' : 
+            'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
+          variant: 'destructive',
+        });
+      }, MAX_LOADING_TIME);
+
+      return () => {
+        if (loadingTimerRef.current) {
+          logWithTimestamp("Clearing loading recovery timer on loading state change");
+          clearTimeout(loadingTimerRef.current);
+          loadingTimerRef.current = null;
+        }
+      };
+    }
+  }, [localLoading, language]);
+
+  // Handle redirection if user is already authenticated
+  useEffect(() => {
+    if (user && !redirectionInProgress) {
+      logWithTimestamp("User already authenticated, initiating redirection", {
+        userId: user.id,
+        localLoading,
+        authIsLoading,
+        redirectionInProgress
+      });
+      
+      // Mark that redirection process has started to avoid multiple redirects
+      setRedirectionInProgress(true);
+      
+      // Clear any loading state
+      setLocalLoading(false);
+      
+      // Get intended destination from location state or default to dashboard
+      const destination = location.state?.from?.pathname || "/dashboard";
+      logWithTimestamp(`Redirecting to ${destination}`);
+      
+      // Navigate to destination
+      navigate(destination, { replace: true });
+    }
+  }, [user, localLoading, navigate, location, redirectionInProgress]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +152,7 @@ export default function Login() {
     try {
       const error = await signIn(email, password);
 
+      // CRITICAL: Reset localLoading on both success and error paths
       if (error) {
         logWithTimestamp("Login error:", error);
         setErrorMsg(error.message);
@@ -138,17 +163,21 @@ export default function Login() {
         });
         setLocalLoading(false);
       } else {
-        logWithTimestamp("Login successful");
+        logWithTimestamp("Login successful, resetting loading state");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // Don't set localLoading to false here so the loading state persists
-        // during redirection. The useEffect will handle the redirect.
+        
+        // CRITICAL: Reset localLoading immediately after successful login
+        setLocalLoading(false);
+        
+        // Redirection will be handled by the useEffect watching for authenticated user
       }
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      // CRITICAL: Always reset loading state, even in catch block
       setLocalLoading(false);
     }
   };
