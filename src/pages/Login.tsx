@@ -99,6 +99,7 @@ export default function Login() {
             'The login process is taking longer than expected. Please try again.' : 
             'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
           variant: 'destructive',
+          duration: 5000, // 5 seconds for error messages
         });
       }, MAX_LOADING_TIME);
 
@@ -160,6 +161,7 @@ export default function Login() {
           title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
           description: error.message,
           variant: 'destructive',
+          duration: 5000, // 5 seconds for error messages
         });
         setLocalLoading(false);
       } else {
@@ -167,6 +169,8 @@ export default function Login() {
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
+          duration: 3000, // 3 seconds for success messages
+          variant: 'success', // Use success variant for better visual distinction
         });
         
         // CRITICAL: Reset localLoading immediately after successful login
