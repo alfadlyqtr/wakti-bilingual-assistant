@@ -91,12 +91,12 @@ serve(async (req) => {
     const summaryResponse = await deepseekResponse.json();
     const summary = summaryResponse.choices[0].message.content;
 
-    // Update the recording with the summary
+    // Update the recording with the summary - fixed by removing updated_at field
     const { error: updateError } = await supabase
       .from("voice_summaries")
       .update({
-        summary: summary,
-        updated_at: new Date().toISOString()
+        summary: summary
+        // Removed updated_at as it doesn't exist in the schema
       })
       .eq("id", recordingId);
 

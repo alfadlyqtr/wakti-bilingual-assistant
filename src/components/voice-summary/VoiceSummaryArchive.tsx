@@ -58,10 +58,45 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
   };
 
   const calculateDaysRemaining = (expiresAt: string): number => {
-    const expiryDate = new Date(expiresAt);
-    const now = new Date();
-    const diffTime = expiryDate.getTime() - now.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (!expiresAt) return 0;
+    
+    try {
+      const expiryDate = new Date(expiresAt);
+      
+      // Check if the date is valid
+      if (isNaN(expiryDate.getTime())) {
+        return 0;
+      }
+      
+      const now = new Date();
+      const diffTime = expiryDate.getTime() - now.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    } catch (error) {
+      console.error("Error calculating days remaining:", error);
+      return 0;
+    }
+  };
+
+  // Helper function to safely format date
+  const safeFormatDistanceToNow = (dateString: string | null | undefined) => {
+    if (!dateString) return "";
+    
+    try {
+      const date = new Date(dateString);
+      
+      // Check if the date is valid
+      if (isNaN(date.getTime())) {
+        return language === 'ar' ? 'تاريخ غير صالح' : 'Invalid date';
+      }
+      
+      return formatDistanceToNow(date, { 
+        addSuffix: true, 
+        locale 
+      });
+    } catch (error) {
+      console.error("Error formatting date:", error, dateString);
+      return language === 'ar' ? 'تاريخ غير صالح' : 'Invalid date';
+    }
   };
 
   const handleDownload = async (url: string, filename: string) => {
@@ -233,6 +268,8 @@ ${recording.summary || ''}
     <>
       <div className="space-y-3">
         {recordings.map((recording) => {
+          if (!recording) return null; // Skip if recording is null/undefined
+          
           const daysRemaining = calculateDaysRemaining(recording.expires_at);
           
           return (
@@ -253,10 +290,9 @@ ${recording.summary || ''}
                         {recording.title || (language === 'ar' ? 'تسجيل بدون عنوان' : 'Untitled Recording')}
                       </h3>
                       <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1">
-                        <span>{formatDistanceToNow(new Date(recording.created_at), { 
-                          addSuffix: true, 
-                          locale 
-                        })}</span>
+                        {recording.created_at && (
+                          <span>{safeFormatDistanceToNow(recording.created_at)}</span>
+                        )}
                         
                         {daysRemaining > 0 && (
                           <span className="text-xs px-1.5 py-0.5 bg-muted rounded-sm">
