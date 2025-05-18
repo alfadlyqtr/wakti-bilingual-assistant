@@ -2,7 +2,6 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
-import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/hooks/use-toast";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
@@ -12,12 +11,8 @@ import Events from "@/pages/Events";
 import VoiceSummary from "@/pages/VoiceSummary";
 import VoiceSummaryDetail from "@/pages/VoiceSummaryDetail";
 import Settings from "@/pages/Settings";
-import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
-import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "@/pages/NotFound";
-import ProtectedRoute from "@/components/ProtectedRoute";
 import EventCreate from "@/pages/EventCreate";
 import EventDetail from "@/pages/EventDetail";
 import Messages from "@/pages/Messages";
@@ -28,7 +23,6 @@ import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAss
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
-import AuthDebugger from "@/components/AuthDebugger";
 
 // Layout component that adds header and mobile navigation
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +32,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       {children}
       <MobileNav />
       <Toaster />
-      {process.env.NODE_ENV !== 'production' && <AuthDebugger />}
     </div>
   );
 }
@@ -59,44 +52,37 @@ function App() {
     <Router>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Navigate to="/home" replace />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
+          <Routes>
+            {/* Public routes */}
+            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/home" element={<Home />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
 
-              {/* WAKTI AI route */}
-              <Route path="/wakti-ai" element={
-                <AppLayout>
-                  <WaktiAIPage />
-                </AppLayout>
-              } />
+            {/* WAKTI AI route */}
+            <Route path="/wakti-ai" element={
+              <AppLayout>
+                <WaktiAIPage />
+              </AppLayout>
+            } />
 
-              {/* Protected routes under a single ProtectedRoute component */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-                <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-                <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
-                <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
-                <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
-                <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
-                <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-                <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-                <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-                <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
-                <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-                <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
-              </Route>
+            {/* Regular routes - temporarily accessible without authentication */}
+            <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
+            <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
+            <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
+            <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
+            <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
+            <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
+            <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
+            <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
+            <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
+            <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+            <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
+            <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
+            <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
 
-              {/* 404 route */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
+            {/* 404 route */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </ToastProvider>
       </ThemeProvider>
     </Router>
