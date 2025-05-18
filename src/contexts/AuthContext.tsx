@@ -72,14 +72,20 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setUser(currentSession?.user ?? null);
         setLoading(false);
 
-        // Only redirect on signout if explicitly required and we're not already navigating
-        if (event === 'SIGNED_OUT' && requireAuth && !navigationInProgress.current) {
+        // Properly handle sign out event
+        if (event === 'SIGNED_OUT') {
           logAuthState('User signed out, redirecting to login');
-          navigationInProgress.current = true;
-          // Use a timeout to avoid potential race conditions
+          // We need to clear all states and redirect to login
+          setUser(null);
+          setSession(null);
+          
+          // Use a timeout to avoid race conditions
           setTimeout(() => {
-            navigate('/login');
-            navigationInProgress.current = false;
+            if (!navigationInProgress.current) {
+              navigationInProgress.current = true;
+              navigate('/login', { replace: true });
+              navigationInProgress.current = false;
+            }
           }, 100);
         }
       }
@@ -96,24 +102,10 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setUser(currentSession?.user ?? null);
         setLoading(false);
         setInitialized(true);
-        
-        // Only redirect if authentication is required but user is not logged in
-        // Remove the automatic redirect to dashboard - let the router handle where the user should go
-        if (requireAuth && !currentSession && !navigationInProgress.current && !location.pathname.includes('/login')) {
-          logAuthState('No session found, redirecting to login');
-          navigationInProgress.current = true;
-          navigate('/login');
-          navigationInProgress.current = false;
-        }
       } catch (error) {
         console.error('AuthProvider: Error initializing auth', error);
         setLoading(false);
         setInitialized(true);
-        if (requireAuth && !navigationInProgress.current && !location.pathname.includes('/login')) {
-          navigationInProgress.current = true;
-          navigate('/login');
-          navigationInProgress.current = false;
-        }
       }
     };
 
@@ -123,7 +115,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       logAuthState('Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, [navigate, requireAuth, location.pathname]);
+  }, [navigate, location.pathname]);
 
   // Add a function to refresh the session
   const refreshSession = async () => {
@@ -173,8 +165,15 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const signOut = async () => {
     console.log('AuthProvider: Attempting sign out');
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('AuthProvider: Error signing out:', error);
+        throw error;
+      }
+      
       console.log('AuthProvider: Sign out successful');
+      // We explicitly navigate to login page here
+      // The onAuthStateChange listener will also handle this, but we want to be explicit
       navigate('/login');
     } catch (error) {
       console.error("AuthProvider: Error signing out:", error);

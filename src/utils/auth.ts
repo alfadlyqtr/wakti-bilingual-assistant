@@ -4,7 +4,18 @@ import { UserAttributes } from "@supabase/supabase-js";
 
 // Sign out function
 export async function signOut() {
-  return await supabase.auth.signOut();
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Error during sign out:", error);
+      throw error;
+    }
+    console.log("Successfully signed out");
+    return { error: null };
+  } catch (error) {
+    console.error("Exception during sign out:", error);
+    return { error };
+  }
 }
 
 // Get current session - useful for checking authentication state

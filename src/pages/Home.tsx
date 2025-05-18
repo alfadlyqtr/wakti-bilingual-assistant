@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,15 +12,18 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, session, isLoading } = useAuth();
   const { language, theme } = useTheme();
   
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
-    if (user) {
+    console.log("Home: Auth state check", { hasUser: !!user, hasSession: !!session, isLoading });
+    // Only redirect if loading is complete and we have both user and session
+    if (!isLoading && user && session) {
+      console.log("Home: User is authenticated, redirecting to dashboard");
       navigate('/dashboard');
     }
-  }, [user, navigate]);
+  }, [user, session, isLoading, navigate]);
 
   const translations = {
     en: {
@@ -149,6 +151,16 @@ export default function Home() {
               >
                 {t.trial}
                 <ArrowRight className="h-4 w-4 ml-1" />
+              </Button>
+              
+              {/* Add Login button for existing users */}
+              <Button 
+                variant="outline"
+                size="lg" 
+                className="w-full"
+                onClick={() => navigate('/login')}
+              >
+                {t.loginBtn}
               </Button>
             </motion.div>
           </motion.div>

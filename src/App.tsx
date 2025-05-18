@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -102,7 +103,7 @@ function App() {
                 </AppLayout>
               } />
 
-              {/* Protected routes - but now without redirect */}
+              {/* Protected routes - with authentication re-enabled */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                 <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
