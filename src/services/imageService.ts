@@ -117,6 +117,7 @@ export async function processImageGeneration(
     const result = await generateImage(imagePrompt);
     
     if (!result || !result.imageUrl) {
+      console.error('Failed to generate image, result:', result);
       throw new Error('Failed to generate image');
     }
     

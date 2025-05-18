@@ -547,7 +547,7 @@ export const AIAssistant: React.FC = () => {
       // Call the image generation service and save to database
       const result = await processImageGeneration(imagePrompt, user!.id);
 
-      // Update the message with the image or error
+      // FIX: Properly check for imageUrl property in the returned object
       if (result && result.imageUrl) {
         const updatedMessage: ChatMessage = {
           ...loadingMessage,
@@ -573,7 +573,9 @@ export const AIAssistant: React.FC = () => {
           { imageUrl: result.imageUrl, hasMedia: true }
         );
       } else {
-        throw new Error("Image generation failed");
+        // More informative error handling for troubleshooting
+        console.error("Image generation failed - result:", result);
+        throw new Error("Image generation failed or returned no URL");
       }
     } catch (error) {
       console.error("Error generating image:", error);
