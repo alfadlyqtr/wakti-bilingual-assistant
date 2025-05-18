@@ -19,6 +19,7 @@ import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
+import Login from "@/pages/Login"; // Import the new Login page
 import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAssistant";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
@@ -56,6 +57,7 @@ function App() {
             {/* Public routes */}
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<Home />} />
+            <Route path="/login" element={<Login />} /> {/* Add the new Login route */}
             <Route path="/forgot-password" element={<ForgotPassword />} />
 
             {/* WAKTI AI route */}
