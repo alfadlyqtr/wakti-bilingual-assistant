@@ -322,15 +322,8 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       return;
     }
     
-    if (!title.trim()) {
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? 'يرجى إدخال عنوان للتسجيل' 
-          : 'Please enter a title for the recording',
-      });
-      return;
-    }
+    // Title is no longer mandatory - use a default if not provided
+    const recordingTitle = title.trim() || suggestedTitle || (language === 'ar' ? 'تسجيل جديد' : 'New Recording');
     
     try {
       setIsUploading(true);
@@ -371,7 +364,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         .from('voice_summaries')
         .insert({
           id: recordingId,
-          title: title,
+          title: recordingTitle,
           audio_url: publicUrlData.publicUrl,
           type: 'meeting',
           host: user.id,
@@ -475,16 +468,16 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         <div className="space-y-4 py-2">
           <div className="space-y-2">
             <Label htmlFor="title">
-              {language === 'ar' ? 'العنوان' : 'Title'} *
+              {language === 'ar' ? 'العنوان' : 'Title'} 
+              {/* Removed the mandatory asterisk */}
             </Label>
             <div className="relative">
               <Input
                 id="title"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder={language === 'ar' ? 'عنوان التسجيل' : 'Recording title'}
+                placeholder={language === 'ar' ? 'عنوان التسجيل (اختياري)' : 'Recording title (optional)'}
                 disabled={isUploading}
-                required
               />
               {suggestedTitle && (
                 <div className="mt-1 flex items-center justify-between text-sm">
@@ -648,7 +641,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           <Button
             type="button"
             onClick={handleSaveRecording}
-            disabled={!audioBlob || !title.trim() || isUploading}
+            disabled={!audioBlob || isUploading}
             className={isUploading ? 'opacity-70 cursor-not-allowed' : ''}
           >
             {isUploading 

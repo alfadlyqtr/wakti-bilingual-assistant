@@ -262,21 +262,49 @@ serve(async (req) => {
     if (summaryId && result.text) {
       console.log(`Updating voice_summary record ${summaryId} with transcript`);
       
-      // Generate smart title from the transcript
+      // Generate smart title from the transcript - improved algorithm
       let smartTitle = "Untitled Recording";
       
-      // Extract a smart title based on the first sentence or keywords
+      // Extract a smart title based on the transcript content
       if (result.text && result.text.trim().length > 0) {
-        // Take first 5-10 words or first sentence (whichever is shorter)
+        // Try to identify key topics or subject matter
+        const text = result.text.toLowerCase();
+        
+        // Common meeting or conversation patterns to identify context
+        const patterns = {
+          meeting: /\b(meeting|discussion|sync|standup|review|planning|retrospective)\b/i,
+          interview: /\b(interview|candidate|hiring|recruitment)\b/i,
+          presentation: /\b(presentation|slides|deck|demonstrate|showing|demo)\b/i,
+          lecture: /\b(lecture|class|course|teaching|lesson)\b/i,
+          call: /\b(call with|speaking with|talked to|conversation with)\b/i
+        };
+        
+        // Check for pattern matches to categorize the recording
+        let recordingType = "";
+        for (const [type, pattern] of Object.entries(patterns)) {
+          if (pattern.test(text)) {
+            recordingType = type;
+            break;
+          }
+        }
+        
+        // Take first sentence or segment
         const firstSentence = result.text.split(/[.!?]/, 1)[0].trim();
         
-        if (firstSentence.length <= 50) {
+        if (firstSentence.length <= 60) {
+          // Use first sentence directly if it's reasonable length
           smartTitle = firstSentence;
         } else {
-          // If first sentence is too long, take first few words
+          // Extract meaningful parts from longer sentences
+          // Extract first 3-7 words based on sentence length
           const words = firstSentence.split(' ');
-          const shortTitle = words.slice(0, 5).join(' ');
-          smartTitle = shortTitle + (words.length > 5 ? '...' : '');
+          const wordCount = Math.min(Math.max(3, Math.floor(words.length / 5)), 7);
+          smartTitle = words.slice(0, wordCount).join(' ') + "...";
+        }
+        
+        // If we detected a type, prefix it (unless it's already in the title)
+        if (recordingType && !smartTitle.toLowerCase().includes(recordingType)) {
+          smartTitle = recordingType.charAt(0).toUpperCase() + recordingType.slice(1) + ": " + smartTitle;
         }
       }
       
@@ -284,7 +312,7 @@ serve(async (req) => {
         .from("voice_summaries")
         .update({ 
           transcript: result.text,
-          title: smartTitle
+          title: smartTitle  // Apply our smart title
         })
         .eq("id", summaryId);
         
