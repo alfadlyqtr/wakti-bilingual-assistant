@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Logo3D } from "@/components/Logo3D";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -16,62 +15,24 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { language } = useTheme();
-  const { login, isAuthenticated, isLoading } = useAuth();
+  const { login, isLoading } = useAuth();
   
   // Log the initial component state
-  console.log(`[${new Date().toISOString()}] Login: Component initializing - isAuthenticated: ${isAuthenticated}, isLoading: ${isLoading}`);
+  console.log(`[${new Date().toISOString()}] Login: Component initializing - isLoading: ${isLoading}`);
 
-  // Redirect authenticated users to dashboard
-  useEffect(() => {
-    if (isAuthenticated && !isLoading) {
-      console.log(`[${new Date().toISOString()}] Login: User already authenticated, redirecting to dashboard`);
-      navigate('/dashboard');
-    }
-  }, [isAuthenticated, isLoading, navigate]);
-
-  // Handle login form submission
+  // Handle login form submission - simplified
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log(`[${new Date().toISOString()}] Login: Attempting login with email: ${email}`);
     
+    setLoading(true);
+    
     try {
-      setLoading(true);
-      
-      // Call login function from AuthContext
-      const { user, error } = await login(email, password);
-      
-      if (error) {
-        console.error(`[${new Date().toISOString()}] Login: Error during login:`, error.message);
-        toast({
-          title: t("login_failed", language),
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Log successful login
-      console.log(`[${new Date().toISOString()}] Login: Successful login for user:`, user?.id);
-      
-      // Show success toast
-      toast({
-        title: t("login_successful", language),
-        description: t("welcome_back", language),
-        variant: "default",
-      });
-      
-      // Navigate to dashboard immediately on successful login
-      console.log(`[${new Date().toISOString()}] Login: Redirecting to dashboard after successful login`);
-      navigate("/dashboard");
+      // Call simplified login function that handles navigation internally
+      await login(email, password);
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] Login: Unexpected error:`, error);
-      toast({
-        title: t("login_failed", language),
-        description: t("unexpected_error", language),
-        variant: "destructive",
-      });
+      console.error(`[${new Date().toISOString()}] Login: Error in login handler:`, error);
     } finally {
       setLoading(false);
     }

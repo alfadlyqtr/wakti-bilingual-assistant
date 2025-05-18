@@ -10,14 +10,14 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { t } from "@/utils/translations";
 import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { useLogout } from "@/hooks/use-logout";
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { user, logout } = useAuth();
-  const { toast } = useToast();
+  const { user } = useAuth();
+  const { handleLogout } = useLogout();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -30,25 +30,6 @@ export function UserMenu() {
   const handleMenuItemClick = (path: string) => {
     navigate(path);
     closeMenu();
-  };
-
-  const handleLogout = async () => {
-    console.log(`[${new Date().toISOString()}] UserMenu: Initiating logout process`);
-    closeMenu();
-    
-    try {
-      // Call the logout function from AuthContext
-      await logout();
-      console.log(`[${new Date().toISOString()}] UserMenu: Logout successful, navigation should be handled by ProtectedRoute`);
-      // Note: Navigation to login page will be handled automatically by ProtectedRoute
-    } catch (error) {
-      console.error(`[${new Date().toISOString()}] UserMenu: Error during logout:`, error);
-      toast({
-        title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
-        variant: "destructive",
-        duration: 5000,
-      });
-    }
   };
 
   // Shorthand for avatar display name
