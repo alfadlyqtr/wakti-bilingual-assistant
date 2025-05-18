@@ -33,18 +33,22 @@ export function UserMenu() {
   };
 
   const handleLogout = async () => {
+    console.log(`[${new Date().toISOString()}] UserMenu: Initiating logout process`);
+    closeMenu();
+    
     try {
+      // Call the logout function from AuthContext
       await logout();
-      // Navigation to login page will be handled by the ProtectedRoute component
+      console.log(`[${new Date().toISOString()}] UserMenu: Logout successful, navigation should be handled by ProtectedRoute`);
+      // Note: Navigation to login page will be handled automatically by ProtectedRoute
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] UserMenu: Error logging out:`, error);
+      console.error(`[${new Date().toISOString()}] UserMenu: Error during logout:`, error);
       toast({
         title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
         variant: "destructive",
         duration: 5000,
       });
     }
-    closeMenu();
   };
 
   // Shorthand for avatar display name

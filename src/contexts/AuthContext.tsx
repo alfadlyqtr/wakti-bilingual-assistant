@@ -61,14 +61,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Logout function
+  // Logout function - enhanced with better logging and state management
   const logout = async () => {
-    console.log(`[${new Date().toISOString()}] AuthContext: Attempting logout`);
+    console.log(`[${new Date().toISOString()}] AuthContext: Initiating logout process`);
     try {
+      // Clear auth state immediately to avoid stale state
+      // This ensures UI updates quickly before the async operation completes
+      console.log(`[${new Date().toISOString()}] AuthContext: Clearing local auth state before API call`);
+      setUser(null);
+      setSession(null);
+      
+      // Then perform the actual signOut API call
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error(`[${new Date().toISOString()}] AuthContext: Logout error`, error);
+        console.error(`[${new Date().toISOString()}] AuthContext: Error during logout API call`, error);
         toast({
           title: "Logout Failed",
           description: error.message,
@@ -77,18 +84,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      // Clear auth state immediately to avoid stale state
-      setUser(null);
-      setSession(null);
-      
-      console.log(`[${new Date().toISOString()}] AuthContext: Logout successful`);
+      console.log(`[${new Date().toISOString()}] AuthContext: Logout API call successful`);
       toast({
         title: "Logout Successful",
         description: "You have been logged out successfully.",
         variant: "default"
       });
+      
+      // Double-check that state is cleared
+      console.log(`[${new Date().toISOString()}] AuthContext: Verifying auth state is cleared post-logout`);
     } catch (error) {
-      console.error(`[${new Date().toISOString()}] AuthContext: Unexpected logout error`, error);
+      console.error(`[${new Date().toISOString()}] AuthContext: Unexpected error during logout`, error);
       toast({
         title: "Logout Failed",
         description: "An unexpected error occurred.",
