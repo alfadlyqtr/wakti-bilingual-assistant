@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
@@ -16,18 +15,37 @@ serve(async (req) => {
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: authData, error: authError } = await supabase.auth.getUser(
-      req.headers.get("Authorization")?.split(" ")[1] || ""
-    );
-
-    if (authError || !authData.user) {
+    
+    // Check if the request has a valid authentication token
+    // When called from the UI or directly by user
+    let authUser = null;
+    
+    const authHeader = req.headers.get("Authorization");
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      
+      // Check if it's the service role key (internal call)
+      if (token === SUPABASE_SERVICE_ROLE_KEY) {
+        console.log("Request authenticated with service role key");
+      } else {
+        // Otherwise verify user token
+        const { data: authData, error: authError } = await supabase.auth.getUser(token);
+        if (authError || !authData.user) {
+          return new Response(
+            JSON.stringify({ error: "Unauthorized" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        authUser = authData.user;
+      }
+    } else {
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Authorization header required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { recordingId, voiceGender, language } = await req.json();
+    const { recordingId, voiceGender = "male", language = "en" } = await req.json();
 
     if (!recordingId) {
       return new Response(
@@ -50,7 +68,7 @@ serve(async (req) => {
       );
     }
 
-    // Field name change: use summary instead of summary_text
+    // Check if summary is available
     if (!recording.summary) {
       return new Response(
         JSON.stringify({ error: "Summary not available" }),
@@ -125,8 +143,8 @@ serve(async (req) => {
       .from("voice_summaries")
       .update({
         summary_audio_url: publicUrl.publicUrl,
-        summary_language: language || "en",
-        voice_gender: voiceGender || "male",
+        summary_language: language,
+        voice_gender: voiceGender,
         updated_at: new Date().toISOString()
       })
       .eq("id", recordingId);

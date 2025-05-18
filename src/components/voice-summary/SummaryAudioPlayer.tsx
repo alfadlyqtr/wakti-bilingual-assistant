@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
-import { Play, Pause, RotateCcw, Download } from "lucide-react";
+import { Play, Pause, RotateCcw, Download, Volume, Volume2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 interface SummaryAudioPlayerProps {
   recordingId: string;
@@ -33,16 +34,42 @@ export default function SummaryAudioPlayer({
   const [isGenerating, setIsGenerating] = useState(false);
   const [voiceGender, setVoiceGender] = useState<"male" | "female">("male");
   const [audioLanguage, setAudioLanguage] = useState<"en" | "ar">(language === "ar" ? "ar" : "en");
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const intervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      if (intervalRef.current) {
+        window.clearInterval(intervalRef.current);
+      }
     };
   }, []);
+
+  // Update audio progress
+  const startProgressTimer = () => {
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+    }
+    
+    intervalRef.current = window.setInterval(() => {
+      if (audioRef.current) {
+        setProgress(audioRef.current.currentTime);
+      }
+    }, 100);
+  };
+
+  const stopProgressTimer = () => {
+    if (intervalRef.current) {
+      window.clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  };
 
   const handleGenerateAudio = async () => {
     if (!summaryText) {
@@ -110,6 +137,7 @@ export default function SummaryAudioPlayer({
       audioRef.current.play()
         .then(() => {
           setIsPlaying(true);
+          startProgressTimer();
         })
         .catch((error) => {
           console.error("Error playing audio:", error);
@@ -126,15 +154,18 @@ export default function SummaryAudioPlayer({
     if (audioRef.current) {
       audioRef.current.pause();
       setIsPlaying(false);
+      stopProgressTimer();
     }
   };
 
   const handleRestart = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
+      setProgress(0);
       audioRef.current.play()
         .then(() => {
           setIsPlaying(true);
+          startProgressTimer();
         })
         .catch((error) => {
           console.error("Error restarting audio:", error);
@@ -151,6 +182,12 @@ export default function SummaryAudioPlayer({
       link.click();
       document.body.removeChild(link);
     }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   return (
@@ -197,31 +234,67 @@ export default function SummaryAudioPlayer({
               disabled={isGenerating || !summaryText}
               variant="outline"
               size="sm"
+              className="gap-1"
             >
-              {isGenerating
-                ? language === "ar"
-                  ? "جار الإنشاء..."
-                  : "Generating..."
-                : language === "ar"
-                ? "إنشاء"
-                : "Generate"}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  {language === "ar" ? "جارٍ الإنشاء..." : "Generating..."}
+                </>
+              ) : (
+                <>
+                  <Volume2 className="h-4 w-4 mr-1" />
+                  {language === "ar" ? "إنشاء الصوت" : "Generate Audio"}
+                </>
+              )}
             </Button>
           )}
         </div>
       </div>
 
       {audioUrl && (
-        <div className="flex flex-col space-y-2">
+        <div className="flex flex-col space-y-2 border rounded-md p-3">
           <audio
             ref={audioRef}
             src={audioUrl}
-            onEnded={() => setIsPlaying(false)}
-            onPause={() => setIsPlaying(false)}
-            onPlay={() => setIsPlaying(true)}
+            onEnded={() => {
+              setIsPlaying(false);
+              stopProgressTimer();
+              setProgress(0);
+            }}
+            onPause={() => {
+              setIsPlaying(false);
+              stopProgressTimer();
+            }}
+            onPlay={() => {
+              setIsPlaying(true);
+              startProgressTimer();
+            }}
+            onLoadedMetadata={(e) => {
+              if (audioRef.current) {
+                setDuration(audioRef.current.duration);
+              }
+            }}
             className="hidden"
           />
           
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-muted-foreground">
+              {formatTime(progress)}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {formatTime(duration)}
+            </span>
+          </div>
+          
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary rounded-full" 
+              style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
+            ></div>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {isPlaying ? (
               <Button 
                 onClick={handlePause} 

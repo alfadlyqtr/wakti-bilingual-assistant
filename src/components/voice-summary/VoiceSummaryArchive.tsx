@@ -83,13 +83,42 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
     }
   };
 
-  const handleExportPDF = (e: React.MouseEvent, recordingId: string) => {
+  const handleExportPDF = async (e: React.MouseEvent, recording: any) => {
     e.stopPropagation();
-    // This is a placeholder for the PDF export functionality
-    // Will be implemented in a future update
-    toast.info(language === 'ar' 
-      ? 'سيتم تنفيذ تصدير PDF في تحديث قادم'
-      : 'PDF export will be implemented in a future update');
+    
+    if (!recording.transcript) {
+      toast.error(language === 'ar' ? 'لا يوجد نص للتصدير' : 'No transcript to export');
+      return;
+    }
+    
+    try {
+      // Create a simple formatted text for PDF export
+      const content = `
+${recording.title || 'Untitled Recording'}
+${new Date(recording.created_at).toLocaleDateString()}
+
+${language === 'ar' ? 'النص:' : 'Transcript:'}
+${recording.transcript}
+
+${recording.summary ? (language === 'ar' ? 'الملخص:' : 'Summary:') : ''}
+${recording.summary || ''}
+      `;
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${recording.title || 'recording'}-export.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success(language === 'ar' ? 'تم تصدير المحتوى بنجاح' : 'Content exported successfully');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error(language === 'ar' ? 'فشل في تصدير المحتوى' : 'Export failed');
+    }
   };
 
   const handleDelete = async () => {
@@ -255,8 +284,8 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={(e) => handleExportPDF(e, recording.id)}
-                      title={language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+                      onClick={(e) => handleExportPDF(e, recording)}
+                      title={language === 'ar' ? 'تصدير نص' : 'Export Text'}
                       disabled={!recording.transcript}
                     >
                       <FileIcon className="h-4 w-4" />

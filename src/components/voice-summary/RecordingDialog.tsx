@@ -112,6 +112,24 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   }, [saveSuccess, isFinalizing, isGeneratingSummary, onRecordingCreated, title, transcript, summary]);
 
+  // Listen for the transcript and automatically generate the summary when ready
+  useEffect(() => {
+    const checkAndGenerateSummary = async () => {
+      if (transcript && recordingIdRef.current && !isGeneratingSummary && !summary) {
+        try {
+          await generateSummary(recordingIdRef.current);
+        } catch (error) {
+          console.error("Failed to auto-generate summary:", error);
+        }
+      }
+    };
+
+    // Only run if we have a transcript and a recording ID
+    if (transcript && recordingIdRef.current) {
+      checkAndGenerateSummary();
+    }
+  }, [transcript, isGeneratingSummary, summary]);
+
   const startRecording = async () => {
     try {
       // Get current user - needed for saving the recording
@@ -393,6 +411,50 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   };
   
+  const generateTTSAudio = async (recordingId: string, summaryText: string) => {
+    if (!user || !summaryText) return;
+    
+    try {
+      // Get auth session for API call
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        throw new Error('No auth session');
+      }
+      
+      // Call the generate-tts edge function with default settings
+      const response = await fetch(
+        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-tts",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${sessionData.session.access_token}`
+          },
+          body: JSON.stringify({
+            recordingId,
+            voiceGender: "male",
+            language: language === "ar" ? "ar" : "en"
+          }),
+        }
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('TTS generation error response:', errorText);
+        throw new Error(`TTS generation failed: ${errorText}`);
+      }
+      
+      const { audioUrl } = await response.json();
+      console.log("Generated TTS audio URL:", audioUrl);
+      
+      return audioUrl;
+    } catch (err) {
+      console.error('Error generating TTS audio:', err);
+      // Don't show error toast for TTS - it's a background process
+      return null;
+    }
+  };
+  
   const handleSaveRecording = async () => {
     if (!user) {
       toast.error(language === 'ar' 
@@ -480,6 +542,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       // If transcript exists, generate summary immediately
       if (transcript) {
         await generateSummary(recordingId);
+        setIsFinalizing(false);
       } else {
         // If no transcript, initiate transcription process
         try {
@@ -487,30 +550,34 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
             ? 'جاري معالجة النص والملخص...' 
             : 'Processing transcript and summary...');
             
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+          await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
             },
-            body: JSON.stringify({ recordingId, summaryId: recordingId })
+            body: JSON.stringify({ recordingId })
           });
           
           // Wait a bit for transcription to complete before getting summary
           setTimeout(async () => {
-            // Check if transcription completed
-            const { data: updatedRecording } = await supabase
-              .from('voice_summaries')
-              .select('transcript')
-              .eq('id', recordingId)
-              .single();
-              
-            if (updatedRecording?.transcript) {
-              setTranscript(updatedRecording.transcript);
-              await generateSummary(recordingId);
+            try {
+              // Check if transcription completed
+              const { data: updatedRecording } = await supabase
+                .from('voice_summaries')
+                .select('transcript')
+                .eq('id', recordingId)
+                .single();
+                
+              if (updatedRecording?.transcript) {
+                setTranscript(updatedRecording.transcript);
+                await generateSummary(recordingId);
+              }
+            } catch (error) {
+              console.error('Error checking for transcript:', error);
+            } finally {
+              setIsFinalizing(false);
             }
-            
-            setIsFinalizing(false);
           }, 5000); // Give it 5 seconds
         } catch (functionError) {
           console.error('Error triggering transcription function:', functionError);
@@ -549,7 +616,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   // Handle user wanting to close the dialog
   const handleDialogClose = () => {
     // If still uploading or processing, don't allow close
-    if (isUploading || isTranscribing || isGeneratingSummary) {
+    if (isUploading || isTranscribing || isGeneratingSummary || isFinalizing) {
       toast.info(language === 'ar' 
         ? 'يرجى الانتظار حتى اكتمال العملية...' 
         : 'Please wait until processing completes...');

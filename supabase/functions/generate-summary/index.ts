@@ -49,7 +49,7 @@ serve(async (req) => {
       );
     }
 
-    // Field name change: use transcript instead of transcription_text
+    // Use transcript field
     if (!recording.transcript) {
       return new Response(
         JSON.stringify({ error: "Transcription not available" }),
@@ -91,11 +91,11 @@ serve(async (req) => {
     const summaryResponse = await deepseekResponse.json();
     const summary = summaryResponse.choices[0].message.content;
 
-    // Field name change: use summary instead of summary_text
+    // Update the recording with the summary
     const { error: updateError } = await supabase
       .from("voice_summaries")
       .update({
-        summary: summary, // Changed from summary_text to summary
+        summary: summary,
         updated_at: new Date().toISOString()
       })
       .eq("id", recordingId);
@@ -105,6 +105,26 @@ serve(async (req) => {
         JSON.stringify({ error: "Failed to update recording", details: updateError }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Automatically generate TTS for the summary
+    try {
+      fetch(`${SUPABASE_URL}/functions/v1/generate-tts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify({
+          recordingId,
+          voiceGender: "male", // Default
+          language: "en" // Default
+        })
+      });
+      console.log("Initiated background TTS generation");
+    } catch (ttsError) {
+      console.error("Error initiating TTS generation:", ttsError);
+      // Continue with response - don't fail if TTS generation fails
     }
 
     return new Response(

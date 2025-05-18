@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -41,7 +40,6 @@ serve(async (req) => {
     // Get request body - can be either FormData with audio file OR JSON with recordingId
     let audioFile;
     let recordingId;
-    let summaryId;
     let fileFormat = 'mp3'; // Default to mp3
     
     const contentType = req.headers.get("content-type") || "";
@@ -95,7 +93,6 @@ serve(async (req) => {
       try {
         const data = await req.json();
         recordingId = data.recordingId;
-        summaryId = data.summaryId;
         
         if (!recordingId) {
           console.error("Missing recordingId in request");
@@ -111,68 +108,67 @@ serve(async (req) => {
         console.log(`Fetching recording with ID: ${recordingId}`);
         
         // Check if the voice_summary record exists
-        if (summaryId) {
-          const { data: summaryData, error: summaryError } = await supabase
-            .from("voice_summaries")
-            .select("id, title, transcript")
-            .eq("id", summaryId)
-            .single();
-            
-          if (summaryError) {
-            console.error("Error checking summary record:", summaryError);
-            return new Response(
-              JSON.stringify({ error: `Summary record error: ${summaryError.message}` }),
-              { 
-                status: 500, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-              }
-            );
-          }
+        const { data: summaryData, error: summaryError } = await supabase
+          .from("voice_summaries")
+          .select("id, title, transcript")
+          .eq("id", recordingId)
+          .single();
           
-          if (!summaryData) {
-            console.error("Summary record not found");
-            return new Response(
-              JSON.stringify({ error: "Summary record not found" }),
-              { 
-                status: 404, 
-                headers: { ...corsHeaders, "Content-Type": "application/json" }
-              }
-            );
-          }
-          
-          // Skip processing if transcript already exists
-          if (summaryData.transcript) {
-            console.log("Summary already has a transcript, returning existing transcript");
-            return new Response(
-              JSON.stringify({ text: summaryData.transcript }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
+        if (summaryError) {
+          console.error("Error checking summary record:", summaryError);
+          return new Response(
+            JSON.stringify({ error: `Summary record error: ${summaryError.message}` }),
+            { 
+              status: 500, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        if (!summaryData) {
+          console.error("Summary record not found");
+          return new Response(
+            JSON.stringify({ error: "Summary record not found" }),
+            { 
+              status: 404, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        // Skip processing if transcript already exists
+        if (summaryData.transcript) {
+          console.log("Summary already has a transcript, returning existing transcript");
+          return new Response(
+            JSON.stringify({ text: summaryData.transcript }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
         
         // Extract file format from recordingId
         // But always default to MP3 as that's our standard format now
         fileFormat = 'mp3';
         
+        // Construct the storage path
+        const filePath = `voice_recordings/${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`;
+        
         // Download audio file from storage
-        console.log(`Attempting to download file from storage: ${recordingId}`);
+        console.log(`Attempting to download file from storage: ${filePath}`);
         const { data: fileData, error: downloadError } = await supabase.storage
           .from("voice_recordings")
-          .download(recordingId);
+          .download(filePath);
         
         if (downloadError) {
           console.error("Error downloading recording:", downloadError);
           
           // Update the voice_summaries record to indicate there was an error
-          if (summaryId) {
-            await supabase
-              .from("voice_summaries")
-              .update({ 
-                transcript: "Error: Could not retrieve audio file",
-                title: "Recording Error"
-              })
-              .eq("id", summaryId);
-          }
+          await supabase
+            .from("voice_summaries")
+            .update({ 
+              transcript: "Error: Could not retrieve audio file",
+              title: "Recording Error"
+            })
+            .eq("id", recordingId);
           
           return new Response(
             JSON.stringify({ error: `Failed to download recording: ${downloadError.message}` }),
@@ -260,15 +256,15 @@ serve(async (req) => {
     if (!response.ok) {
       console.error("Whisper API error:", result);
       
-      // Update the voice_summaries record to indicate there was an error
-      if (summaryId) {
+      // Update the voice_summaries record to indicate there was an error if recordingId exists
+      if (recordingId) {
         await supabase
           .from("voice_summaries")
           .update({ 
             transcript: `Error: ${result.error?.message || "Transcription failed"}`,
             title: "Transcription Error"
           })
-          .eq("id", summaryId);
+          .eq("id", recordingId);
       }
       
       throw new Error(result.error?.message || "Transcription failed");
@@ -276,9 +272,9 @@ serve(async (req) => {
 
     console.log("Transcription successful");
     
-    // If we have a summaryId, update the voice_summaries table with the transcript
-    if (summaryId && result.text) {
-      console.log(`Updating voice_summary record ${summaryId} with transcript`);
+    // If we have a recordingId, update the voice_summaries table with the transcript
+    if (recordingId && result.text) {
+      console.log(`Updating voice_summary record ${recordingId} with transcript`);
       
       // Generate smart title from the transcript - improved algorithm
       let smartTitle = "Untitled Recording";
@@ -294,7 +290,9 @@ serve(async (req) => {
           interview: /\b(interview|candidate|hiring|recruitment)\b/i,
           presentation: /\b(presentation|slides|deck|demonstrate|showing|demo)\b/i,
           lecture: /\b(lecture|class|course|teaching|lesson)\b/i,
-          call: /\b(call with|speaking with|talked to|conversation with)\b/i
+          call: /\b(call with|speaking with|talked to|conversation with)\b/i,
+          project: /\b(project|initiative|program|development)\b/i,
+          report: /\b(report|status|update|progress|numbers|metrics)\b/i
         };
         
         // Check for pattern matches to categorize the recording
@@ -306,24 +304,33 @@ serve(async (req) => {
           }
         }
         
-        // Take first sentence or segment
+        // Improved title extraction - try to get a coherent phrase
         const firstSentence = result.text.split(/[.!?]/, 1)[0].trim();
+        const firstSegment = firstSentence.split(',', 1)[0].trim();
         
-        if (firstSentence.length <= 60) {
-          // Use first sentence directly if it's reasonable length
-          smartTitle = firstSentence;
-        } else {
-          // Extract meaningful parts from longer sentences
-          // Extract first 3-7 words based on sentence length
-          const words = firstSentence.split(' ');
-          const wordCount = Math.min(Math.max(3, Math.floor(words.length / 5)), 7);
+        // If the segment is a reasonable length, use it directly
+        if (firstSegment.length >= 10 && firstSegment.length <= 60) {
+          smartTitle = firstSegment;
+        } 
+        // Otherwise for longer text, extract key parts
+        else if (firstSegment.length > 60) {
+          // Look for subject + verb + object pattern
+          const words = firstSegment.split(' ');
+          const wordCount = Math.min(Math.max(4, Math.floor(words.length / 3)), 8);
           smartTitle = words.slice(0, wordCount).join(' ') + "...";
+        }
+        // For very short segments, use the longer form if available
+        else {
+          smartTitle = firstSentence.length <= 60 ? firstSentence : firstSegment + "...";
         }
         
         // If we detected a type, prefix it (unless it's already in the title)
         if (recordingType && !smartTitle.toLowerCase().includes(recordingType)) {
           smartTitle = recordingType.charAt(0).toUpperCase() + recordingType.slice(1) + ": " + smartTitle;
         }
+        
+        // Ensure first letter is capitalized
+        smartTitle = smartTitle.charAt(0).toUpperCase() + smartTitle.slice(1);
       }
       
       try {
@@ -333,13 +340,31 @@ serve(async (req) => {
             transcript: result.text,
             title: smartTitle  // Apply our smart title
           })
-          .eq("id", summaryId);
+          .eq("id", recordingId);
           
         if (updateError) {
           console.error("Error updating voice summary with transcript:", updateError);
           // Continue anyway - we'll return the transcript to the client even if DB update fails
         } else {
           console.log("Voice summary successfully updated with transcript and smart title");
+          
+          // Automatically trigger summary generation after successful transcription
+          try {
+            // We don't await this - let it run in the background
+            fetch(`${SUPABASE_URL}/functions/v1/generate-summary`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                // Use service role key for admin access
+                "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+              },
+              body: JSON.stringify({ recordingId }),
+            });
+            console.log(`Initiated background summary generation for recording ${recordingId}`);
+          } catch (summaryError) {
+            console.error("Error initiating summary generation:", summaryError);
+            // Don't fail the request if summary generation fails
+          }
         }
       } catch (dbError) {
         console.error("Database error updating voice summary:", dbError);

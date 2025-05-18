@@ -1,6 +1,5 @@
 
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
 import VoiceSummaryDetail from "@/components/voice-summary/VoiceSummaryDetail";
 
 export default function VoiceSummaryDetailPage() {
