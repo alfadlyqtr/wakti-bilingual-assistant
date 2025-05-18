@@ -32,7 +32,8 @@ import {
   generateImage,
   isImageGenerationRequest,
   extractImagePrompt,
-  detectAppropriateMode
+  detectAppropriateMode,
+  directImageGeneration
 } from "@/services/chatService";
 import { modeController } from "@/utils/modeController";
 import { processImageGeneration } from "@/services/imageService";
@@ -56,6 +57,7 @@ export const AIAssistant: React.FC = () => {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [pendingModeSwitchMessage, setPendingModeSwitchMessage] = useState<string | null>(null);
   const [pendingModeSwitchTarget, setPendingModeSwitchTarget] = useState<AIMode | null>(null);
+  const [useDirectImageGeneration, setUseDirectImageGeneration] = useState(false);
 
   const messageEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,6 +74,8 @@ export const AIAssistant: React.FC = () => {
     modeController.registerCallbacks({
       onAfterChange: (oldMode, newMode) => {
         setActiveMode(newMode);
+        // Reset direct generation flag on successful mode change
+        setUseDirectImageGeneration(false);
       }
     });
   }, []);
@@ -172,29 +176,59 @@ export const AIAssistant: React.FC = () => {
       const pendingMessage = originalMessage.originalPrompt;
       
       // Switch the mode using the controller
-      await modeController.setActiveMode(newMode);
+      const success = await modeController.setActiveMode(newMode);
       
-      // Add confirmation message with the double-echo pattern
-      const confirmMessage: ChatMessage = {
-        id: uuidv4(),
-        role: "assistant",
-        content: `We're now in ${newMode} mode.\n\nStill want me to do this: "${pendingMessage}"?`,
-        timestamp: new Date(),
-        mode: newMode
-      };
-      
-      setMessages((prev) => [...prev, confirmMessage]);
-      setPendingModeSwitchMessage(null);
-      setPendingModeSwitchTarget(null);
-      
-      // Save the confirmation message
-      await saveChatMessage(user.id, confirmMessage.content, "assistant", newMode, {
-        pendingMessage
-      });
-      
-      // Automatically process the pending message in the new mode
-      await processUserMessage(pendingMessage);
-      
+      if (success) {
+        // Add confirmation message with the double-echo pattern
+        const confirmMessage: ChatMessage = {
+          id: uuidv4(),
+          role: "assistant",
+          content: `We're now in ${newMode} mode.\n\nStill want me to do this: "${pendingMessage}"?`,
+          timestamp: new Date(),
+          mode: newMode
+        };
+        
+        setMessages((prev) => [...prev, confirmMessage]);
+        setPendingModeSwitchMessage(null);
+        setPendingModeSwitchTarget(null);
+        
+        // Save the confirmation message
+        await saveChatMessage(user.id, confirmMessage.content, "assistant", newMode, {
+          pendingMessage
+        });
+        
+        // Automatically process the pending message in the new mode
+        await processUserMessage(pendingMessage);
+      } else {
+        // Handle mode switch failure - try direct image generation if this was an image request
+        if (newMode === 'creative' && isImageGenerationRequest(pendingMessage)) {
+          setUseDirectImageGeneration(true);
+          showInfo("Mode switch failed. Using direct image generation instead...");
+          console.log("Using direct image generation after mode switch failure");
+          
+          // Process the message directly without mode change
+          await processUserMessage(pendingMessage);
+        } else {
+          const errorMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `Failed to switch to ${newMode} mode. Please try again.`,
+            timestamp: new Date(),
+            mode: activeMode
+          };
+          
+          setMessages((prev) => [...prev, errorMessage]);
+          
+          if (user) {
+            await saveChatMessage(
+              user.id, 
+              errorMessage.content, 
+              "assistant", 
+              activeMode
+            );
+          }
+        }
+      }
     } else if (action === "execute_pending" && pendingModeSwitchMessage && user) {
       // Execute the pending message in the new mode
       console.log("Executing pending message after mode switch:", pendingModeSwitchMessage);
@@ -261,6 +295,15 @@ export const AIAssistant: React.FC = () => {
     setIsTyping(true);
 
     try {
+      // Direct path for image generation if mode switching is problematic or if requested
+      if ((useDirectImageGeneration || activeMode === 'creative') && isImageGenerationRequest(message)) {
+        console.log("Processing image generation directly without mode switching");
+        await handleDirectImageGeneration(message);
+        setIsSending(false);
+        setIsTyping(false);
+        return;
+      }
+      
       // Special handling for image generation - switch to creative mode automatically
       if (isImageGenerationRequest(message)) {
         // Check if we're already in creative mode
@@ -281,28 +324,42 @@ export const AIAssistant: React.FC = () => {
           });
           
           // Actually switch the mode
-          await modeController.setActiveMode("creative");
+          const switchSuccess = await modeController.setActiveMode("creative");
           
-          // Second echo - confirm mode switch and proceed
-          const confirmSwitchMessage: ChatMessage = {
-            id: uuidv4(),
-            role: "assistant",
-            content: `We're now in creative mode. Generating image for: "${message}"`,
-            timestamp: new Date(),
-            mode: "creative",
-            originalPrompt: message,
-          };
+          if (switchSuccess) {
+            // Second echo - confirm mode switch and proceed
+            const confirmSwitchMessage: ChatMessage = {
+              id: uuidv4(),
+              role: "assistant",
+              content: `We're now in creative mode. Generating image for: "${message}"`,
+              timestamp: new Date(),
+              mode: "creative",
+              originalPrompt: message,
+            };
+            
+            setMessages((prev) => [...prev, confirmSwitchMessage]);
+            await saveChatMessage(user.id, confirmSwitchMessage.content, "assistant", "creative", {
+              originalPrompt: message,
+            });
+            
+            await handleImageGeneration(message);
+          } else {
+            // Mode switch failed, use direct generation instead
+            console.log("Mode switch failed, using direct image generation instead");
+            setUseDirectImageGeneration(true);
+            await handleDirectImageGeneration(message);
+          }
           
-          setMessages((prev) => [...prev, confirmSwitchMessage]);
-          await saveChatMessage(user.id, confirmSwitchMessage.content, "assistant", "creative", {
-            originalPrompt: message,
-          });
+          setIsSending(false);
+          setIsTyping(false);
+          return;
+        } else {
+          // Already in creative mode, process image normally
+          await handleImageGeneration(message);
+          setIsSending(false);
+          setIsTyping(false);
+          return;
         }
-        
-        await handleImageGeneration(message);
-        setIsSending(false);
-        setIsTyping(false);
-        return;
       }
 
       // Check if we should suggest a mode switch for other types of requests
@@ -331,33 +388,51 @@ export const AIAssistant: React.FC = () => {
         });
         
         // Actually switch the mode
-        await modeController.setActiveMode(suggestedMode);
+        const switchSuccess = await modeController.setActiveMode(suggestedMode);
         
-        // Second echo - confirm mode switch and proceed
-        const confirmSwitchMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: `We're now in ${suggestedMode} mode. Still want me to do this: "${message}"?`,
-          timestamp: new Date(),
-          mode: suggestedMode,
-          originalPrompt: message
-        };
-        
-        setMessages((prev) => [...prev, confirmSwitchMessage]);
-        
-        // Save the confirmation message
-        await saveChatMessage(
-          user.id, 
-          confirmSwitchMessage.content, 
-          "assistant", 
-          suggestedMode, 
-          {
+        if (switchSuccess) {
+          // Second echo - confirm mode switch and proceed
+          const confirmSwitchMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `We're now in ${suggestedMode} mode. Still want me to do this: "${message}"?`,
+            timestamp: new Date(),
+            mode: suggestedMode,
             originalPrompt: message
-          }
-        );
-        
-        // Automatically process the request in the new mode without waiting for confirmation
-        await processAIInCurrentMode(message);
+          };
+          
+          setMessages((prev) => [...prev, confirmSwitchMessage]);
+          
+          // Save the confirmation message
+          await saveChatMessage(
+            user.id, 
+            confirmSwitchMessage.content, 
+            "assistant", 
+            suggestedMode, 
+            {
+              originalPrompt: message
+            }
+          );
+          
+          // Automatically process the request in the new mode
+          await processAIInCurrentMode(message);
+        } else {
+          // Handle mode switch failure
+          console.error("Mode switch failed, processing in current mode");
+          const errorMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `Failed to switch modes. Processing your request in ${activeMode} mode instead.`,
+            timestamp: new Date(),
+            mode: activeMode
+          };
+          
+          setMessages((prev) => [...prev, errorMessage]);
+          await saveChatMessage(user.id, errorMessage.content, "assistant", activeMode);
+          
+          // Process in current mode as fallback
+          await processAIInCurrentMode(message);
+        }
         
         setIsTyping(false);
         setIsSending(false);
@@ -421,63 +496,78 @@ export const AIAssistant: React.FC = () => {
         });
         
         // Switch the mode
-        await modeController.setActiveMode(aiResponse.suggestedMode as AIMode);
+        const switchSuccess = await modeController.setActiveMode(aiResponse.suggestedMode as AIMode);
         
-        // Second echo - confirm mode switch and proceed
-        const confirmSwitchMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: `We're now in ${aiResponse.suggestedMode} mode. Still want me to do this: "${aiResponse.originalPrompt || message}"?`,
-          timestamp: new Date(),
-          mode: aiResponse.suggestedMode as AIMode,
-          originalPrompt: aiResponse.originalPrompt || message
-        };
-        
-        setMessages((prev) => [...prev, confirmSwitchMessage]);
-        
-        // Save the confirmation message
-        await saveChatMessage(
-          user.id, 
-          confirmSwitchMessage.content, 
-          "assistant", 
-          aiResponse.suggestedMode as AIMode, 
-          {
+        if (switchSuccess) {
+          // Second echo - confirm mode switch and proceed
+          const confirmSwitchMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `We're now in ${aiResponse.suggestedMode} mode. Still want me to do this: "${aiResponse.originalPrompt || message}"?`,
+            timestamp: new Date(),
+            mode: aiResponse.suggestedMode as AIMode,
             originalPrompt: aiResponse.originalPrompt || message
-          }
-        );
-        
-        // Process again in new mode
-        const newResponse = await processAIRequest(
-          aiResponse.originalPrompt || message,
-          aiResponse.suggestedMode,
-          user.id
-        );
-        
-        // Create the AI response message in new mode
-        const assistantMessage: ChatMessage = {
-          id: uuidv4(),
-          role: "assistant",
-          content: newResponse.response,
-          timestamp: new Date(),
-          mode: aiResponse.suggestedMode as AIMode,
-        };
-        
-        // Add assistant response to UI
-        setMessages((prev) => [...prev, assistantMessage]);
-        
-        // Save assistant response to database
-        await saveChatMessage(
-          user.id,
-          assistantMessage.content,
-          "assistant",
-          aiResponse.suggestedMode as AIMode,
-          {
-            intentData: newResponse.intentData,
-            actionButtons: assistantMessage.actionButtons
-          }
-        );
-        
-        return;
+          };
+          
+          setMessages((prev) => [...prev, confirmSwitchMessage]);
+          
+          // Save the confirmation message
+          await saveChatMessage(
+            user.id, 
+            confirmSwitchMessage.content, 
+            "assistant", 
+            aiResponse.suggestedMode as AIMode, 
+            {
+              originalPrompt: aiResponse.originalPrompt || message
+            }
+          );
+          
+          // Process again in new mode
+          const newResponse = await processAIRequest(
+            aiResponse.originalPrompt || message,
+            aiResponse.suggestedMode,
+            user.id
+          );
+          
+          // Create the AI response message in new mode
+          const assistantMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: newResponse.response,
+            timestamp: new Date(),
+            mode: aiResponse.suggestedMode as AIMode,
+          };
+          
+          // Add assistant response to UI
+          setMessages((prev) => [...prev, assistantMessage]);
+          
+          // Save assistant response to database
+          await saveChatMessage(
+            user.id,
+            assistantMessage.content,
+            "assistant",
+            aiResponse.suggestedMode as AIMode,
+            {
+              intentData: newResponse.intentData,
+              actionButtons: assistantMessage.actionButtons
+            }
+          );
+          
+          return;
+        } else {
+          // Handle mode switch failure
+          console.error("Mode switch failed, processing in current mode");
+          const errorMessage: ChatMessage = {
+            id: uuidv4(),
+            role: "assistant",
+            content: `Failed to switch modes. Processing your request in ${activeMode} mode instead.`,
+            timestamp: new Date(),
+            mode: activeMode
+          };
+          
+          setMessages((prev) => [...prev, errorMessage]);
+          await saveChatMessage(user.id, errorMessage.content, "assistant", activeMode);
+        }
       }
 
       // Create the AI response message
@@ -577,7 +667,21 @@ export const AIAssistant: React.FC = () => {
       } else {
         // More informative error handling for troubleshooting
         console.error("Image generation failed - result:", result);
-        throw new Error("Image generation failed or returned no URL");
+        
+        // If standard generation failed, try direct method
+        if (useDirectImageGeneration) {
+          throw new Error("Both standard and direct image generation failed");
+        } else {
+          console.log("Standard image generation failed, trying direct method");
+          setUseDirectImageGeneration(true);
+          await handleDirectImageGeneration(prompt);
+          
+          // Remove the loading message since we're showing a different one
+          setMessages((prev) => 
+            prev.filter((msg) => msg.id !== loadingMessage.id)
+          );
+          return;
+        }
       }
     } catch (error) {
       console.error("Error generating image:", error);
@@ -595,6 +699,85 @@ export const AIAssistant: React.FC = () => {
           msg.content === t("generatingImage" as TranslationKey, language) && msg.isLoading
             ? errorMessage 
             : msg
+        )
+      );
+      showError(t("errorGeneratingImage" as TranslationKey, language));
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  // Direct image generation function (bypassing complex mode switching logic)
+  const handleDirectImageGeneration = async (prompt: string) => {
+    setIsGeneratingImage(true);
+    
+    try {
+      // Extract the image prompt
+      const imagePrompt = extractImagePrompt(prompt);
+      
+      console.log(`Direct image generation with prompt: "${imagePrompt}"`);
+      
+      // Create loading message
+      const loadingMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: `${t("generatingImage" as TranslationKey, language)} (direct mode)`,
+        timestamp: new Date(),
+        mode: activeMode,
+        isLoading: true
+      };
+      setMessages((prev) => [...prev, loadingMessage]);
+      
+      // Call direct image generation
+      const result = await directImageGeneration(imagePrompt, user!.id);
+      
+      if (result && result.imageUrl) {
+        const updatedMessage: ChatMessage = {
+          ...loadingMessage,
+          content: `${t(
+            "imageGenerated" as TranslationKey,
+            language
+          )}\n\n![${t("generatedImage" as TranslationKey, language)}](${result.imageUrl})`,
+          metadata: { 
+            imageUrl: result.imageUrl, 
+            hasMedia: true,
+            directGeneration: true
+          },
+          isLoading: false
+        };
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === loadingMessage.id ? updatedMessage : msg
+          )
+        );
+        
+        // Save the message with the image URL
+        await saveChatMessage(
+          user!.id,
+          updatedMessage.content,
+          "assistant",
+          activeMode,
+          { 
+            imageUrl: result.imageUrl, 
+            hasMedia: true,
+            directGeneration: true
+          }
+        );
+      } else {
+        throw new Error("Direct image generation failed");
+      }
+    } catch (error) {
+      console.error("Error in direct image generation:", error);
+      const errorMessage: ChatMessage = {
+        id: uuidv4(),
+        role: "assistant",
+        content: `${t("errorGeneratingImage" as TranslationKey, language)} - Please try again with a different prompt.`,
+        timestamp: new Date(),
+        mode: activeMode,
+      };
+      setMessages((prev) => 
+        prev.map((msg) => 
+          msg.isLoading ? errorMessage : msg
         )
       );
       showError(t("errorGeneratingImage" as TranslationKey, language));
@@ -718,7 +901,12 @@ export const AIAssistant: React.FC = () => {
       case "generate_image":
         // Handle image generation through the separate flow
         const imagePrompt = message.metadata?.intentData?.data?.prompt || "abstract art";
-        await handleImageGeneration(imagePrompt);
+        
+        if (useDirectImageGeneration) {
+          await handleDirectImageGeneration(imagePrompt);
+        } else {
+          await handleImageGeneration(imagePrompt);
+        }
         break;
 
       case "cancel":
@@ -886,4 +1074,3 @@ export const AIAssistant: React.FC = () => {
     </div>
   );
 };
-

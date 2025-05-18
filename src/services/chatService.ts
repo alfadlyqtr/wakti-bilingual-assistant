@@ -50,7 +50,7 @@ export async function saveChatMessage(
     };
     
     // Convert to parameters required by the stored function
-    const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
+    const { data, error } = await supabase.functions.invokeWithRetry('insert-ai-chat', {
       body: {
         userId,
         content,
@@ -86,8 +86,8 @@ export async function getRecentChatHistory(
   try {
     console.log('Fetching chat history:', { userId, mode, limit });
     
-    // Using a stored function
-    const { data, error } = await supabase.functions.invoke('get-recent-chat-history', {
+    // Using a stored function with retry
+    const { data, error } = await supabase.functions.invokeWithRetry('get-recent-chat-history', {
       body: {
         userId,
         mode,
@@ -221,8 +221,8 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
       }
     }
 
-    // Call the Supabase Edge Function to process the AI request
-    const { data, error } = await supabase.functions.invoke("process-ai-intent", {
+    // Call the Supabase Edge Function to process the AI request with retry
+    const { data, error } = await supabase.functions.invokeWithRetry("process-ai-intent", {
       body: { text: processText, mode, userId },
     });
 
@@ -258,6 +258,78 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
     throw error;
   }
 };
+
+// Direct image generation from prompt - FALLBACK METHOD
+export async function directImageGeneration(prompt: string, userId: string): Promise<{ imageUrl: string, metadata?: any } | null> {
+  try {
+    console.log('Generating image directly with prompt (bypassing mode switch):', prompt);
+    
+    // Get current mode and save it - we'll want to return to this after
+    const originalMode = modeController.getActiveMode();
+    console.log('Original mode before direct generation:', originalMode);
+
+    // Call the edge function directly
+    const getSession = await supabase.auth.getSession();
+    const accessToken = getSession.data.session?.access_token;
+    
+    if (!accessToken) {
+      throw new Error('No auth session');
+    }
+    
+    // Include auth header to work regardless of logged in state
+    const response = await fetch(
+      "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-image",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({
+          prompt,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Direct image generation API error:", errorData);
+      throw new Error(errorData.error || errorData.details || "Image generation failed");
+    }
+
+    const responseData = await response.json();
+    console.log('Direct image generation response:', responseData);
+    
+    const { imageUrl, metadata } = responseData;
+    console.log('Image generated successfully:', imageUrl);
+    
+    // Add validation to ensure we have a valid image URL
+    if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.startsWith('http')) {
+      console.error("Invalid image URL returned:", imageUrl);
+      throw new Error("Invalid image URL returned from API");
+    }
+    
+    // Save the image to the database
+    const enhancedMetadata = {
+      originalPrompt: prompt,
+      originalMode: originalMode,
+      directGeneration: true,
+      ...metadata
+    };
+    
+    try {
+      await saveImageToDatabase(userId, prompt, imageUrl, enhancedMetadata);
+    } catch (saveError) {
+      // Still return image even if saving fails
+      console.error("Failed to save image to database:", saveError);
+    }
+    
+    return { imageUrl, metadata: enhancedMetadata };
+  } catch (error) {
+    console.error("Error in direct image generation:", error);
+    return null;
+  }
+}
 
 // Generate image based on prompt using Runware API
 export async function generateImage(prompt: string): Promise<{ imageUrl: string, metadata?: any } | null> {
@@ -306,6 +378,15 @@ export async function generateImage(prompt: string): Promise<{ imageUrl: string,
     return { imageUrl, metadata };
   } catch (error) {
     console.error("Error in image generation:", error);
+    
+    // Fallback to direct generation if mode switching is the issue
+    if (error instanceof Error && 
+        (error.message.includes("mode") || 
+         error.message.includes("switch"))) {
+      console.log("Attempting fallback to direct image generation");
+      return null; // Signal the caller to try direct image generation
+    }
+    
     return null;
   }
 }

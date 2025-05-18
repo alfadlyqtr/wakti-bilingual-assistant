@@ -9,6 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Create client with better error logging and service worker compatibility
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
@@ -17,6 +18,14 @@ export const supabase = createClient<Database>(
       storage: localStorage,
       persistSession: true,
       autoRefreshToken: true,
+    },
+    global: {
+      fetch: (...args) => {
+        return fetch(...args).catch(error => {
+          console.error('Supabase fetch error:', error);
+          throw error;
+        });
+      },
     }
   }
 );
@@ -25,3 +34,34 @@ export const supabase = createClient<Database>(
 supabase.auth.onAuthStateChange((event, session) => {
   console.log('Supabase client: Auth state change:', event, !!session);
 });
+
+// Add a method to create a function invocation with retries
+supabase.functions.invokeWithRetry = async function<T = any>(
+  name: string, 
+  { body, headers, ...options }: { body?: any, headers?: Record<string, string>, [key: string]: any } = {},
+  maxRetries = 2
+): Promise<{ data: T | null; error: Error | null; status?: number }> {
+  let retries = 0;
+  let lastError = null;
+  
+  while (retries <= maxRetries) {
+    try {
+      console.log(`Invoking function ${name}${retries > 0 ? ` (retry ${retries}/${maxRetries})` : ''}`);
+      const response = await this.invoke(name, { body, headers, ...options });
+      return response;
+    } catch (error) {
+      console.error(`Error invoking function ${name} (attempt ${retries + 1}/${maxRetries + 1}):`, error);
+      lastError = error;
+      retries++;
+      
+      if (retries <= maxRetries) {
+        // Add exponential backoff with jitter
+        const backoffTime = Math.min(1000 * (2 ** retries) + Math.random() * 1000, 10000);
+        console.log(`Retrying in ${(backoffTime/1000).toFixed(1)}s...`);
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+      }
+    }
+  }
+  
+  return { data: null, error: lastError || new Error(`Failed to invoke ${name} after ${maxRetries + 1} attempts`) };
+};

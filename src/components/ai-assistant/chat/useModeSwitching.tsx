@@ -28,6 +28,9 @@ export const useModeSwitching = ({
   
   // Track if mode switch was performed for a message
   const [processedSwitchMessages, setProcessedSwitchMessages] = useState<Set<string>>(new Set());
+  
+  // Track any errors that occurred during mode switching
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   // Get mode name for display with proper translation
   const getModeName = (mode: AIMode): string => {
@@ -39,13 +42,17 @@ export const useModeSwitching = ({
   useEffect(() => {
     const unregister = modeController.registerCallbacks({
       onBeforeChange: (oldMode, newMode) => {
+        console.log(`Mode switching from ${oldMode} to ${newMode}: started`);
         setIsSwitchingMode(true);
         setLastSwitchedMode(newMode);
       },
       onAfterChange: (oldMode, newMode) => {
+        console.log(`Mode switching from ${oldMode} to ${newMode}: completed`);
         setIsSwitchingMode(false);
         // Update the creative mode flag
         setIsCreativeModeActive(newMode === 'creative');
+        // Clear any error when a successful mode switch happens
+        setSwitchError(null);
       }
     });
     
@@ -57,9 +64,36 @@ export const useModeSwitching = ({
     };
   }, [activeMode]);
 
+  // Reset controller if it gets stuck
+  useEffect(() => {
+    // If switching mode takes too long (over 5 seconds), reset the controller
+    let timeoutId: number | null = null;
+    
+    if (isSwitchingMode) {
+      timeoutId = window.setTimeout(() => {
+        console.log("Mode switch taking too long, resetting controller");
+        modeController.resetState();
+        setIsSwitchingMode(false);
+        setSwitchError("Mode switch timed out. Please try again.");
+      }, 5000);
+    }
+    
+    return () => {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isSwitchingMode]);
+
   // Auto-trigger mode switching without waiting for button clicks
   useEffect(() => {
     const handleModeSwitches = async () => {
+      // Skip processing if we're already in the middle of a mode switch
+      if (isSwitchingMode) {
+        console.log("Mode switch already in progress, skipping");
+        return;
+      }
+      
       // Find messages with modeSwitchAction that haven't been processed yet
       const switchMessages = messages.filter(m => 
         m.modeSwitchAction && 
@@ -80,15 +114,30 @@ export const useModeSwitching = ({
             if (message.modeSwitchAction.autoTrigger === true) {
               console.log("Auto-triggering mode switch for message:", message.id);
               
-              // Use the mode controller to change mode
-              await modeController.setActiveMode(message.modeSwitchAction.targetMode);
-              
-              // Update the active mode in parent component
-              setActiveMode(message.modeSwitchAction.targetMode);
-              
-              // Trigger the action
-              onConfirm(message.id, message.modeSwitchAction.action);
-              console.log("Mode switched to:", message.modeSwitchAction.targetMode);
+              try {
+                // Use the mode controller to change mode
+                const success = await modeController.setActiveMode(message.modeSwitchAction.targetMode);
+                
+                if (success) {
+                  // Update the active mode in parent component
+                  setActiveMode(message.modeSwitchAction.targetMode);
+                  
+                  // Trigger the action
+                  onConfirm(message.id, message.modeSwitchAction.action);
+                  console.log("Mode switched to:", message.modeSwitchAction.targetMode);
+                } else {
+                  // Handle error case
+                  const error = modeController.getLastError();
+                  console.error("Mode switch failed:", error);
+                  setSwitchError(`Failed to switch to ${getModeName(message.modeSwitchAction.targetMode)} mode. Please try again.`);
+                  
+                  // Reset the controller
+                  modeController.resetState();
+                }
+              } catch (error) {
+                console.error("Error during mode switch:", error);
+                setSwitchError(`Error switching modes: ${error instanceof Error ? error.message : String(error)}`);
+              }
             }
           }
         }
@@ -96,12 +145,14 @@ export const useModeSwitching = ({
     };
     
     handleModeSwitches();
-  }, [messages, onConfirm, processedSwitchMessages, setActiveMode]);
+  }, [messages, onConfirm, processedSwitchMessages, setActiveMode, isSwitchingMode]);
 
   return {
     isSwitchingMode,
     lastSwitchedMode,
     isCreativeModeActive,
-    getModeName
+    getModeName,
+    switchError,
+    resetSwitchError: () => setSwitchError(null)
   };
 };

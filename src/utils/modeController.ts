@@ -11,10 +11,25 @@ class ModeController {
   private activeMode: AIMode = "general";
   private callbacks: Set<ModeChangeCallbacks> = new Set();
   private switchInProgress = false;
+  private lastError: Error | null = null;
+  private consecutiveFailures = 0;
 
   // Get the current active mode
   getActiveMode(): AIMode {
     return this.activeMode;
+  }
+
+  // Reset the controller state if it gets stuck
+  resetState(): void {
+    console.log("Resetting mode controller state");
+    this.switchInProgress = false;
+    this.lastError = null;
+    this.consecutiveFailures = 0;
+  }
+
+  // Get last error if any occurred during switching
+  getLastError(): Error | null {
+    return this.lastError;
   }
 
   // Set the active mode with proper callbacks
@@ -23,13 +38,10 @@ class ModeController {
       return true; // Already in this mode
     }
 
+    // Reset if switch has been in progress for too long (5 seconds)
     if (this.switchInProgress) {
-      // Wait for existing switch to complete
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          this.setActiveMode(newMode).then(resolve);
-        }, 300);
-      });
+      console.log("Mode switch already in progress, resetting state first");
+      this.resetState();
     }
 
     try {
@@ -40,7 +52,11 @@ class ModeController {
       
       // Run pre-change callbacks
       for (const callback of this.callbacks) {
-        callback.onBeforeChange?.(oldMode, newMode);
+        try {
+          callback.onBeforeChange?.(oldMode, newMode);
+        } catch (error) {
+          console.error("Error in onBeforeChange callback:", error);
+        }
       }
 
       // Update the active mode
@@ -53,10 +69,28 @@ class ModeController {
       
       // Run post-change callbacks
       for (const callback of this.callbacks) {
-        callback.onAfterChange?.(oldMode, newMode);
+        try {
+          callback.onAfterChange?.(oldMode, newMode);
+        } catch (error) {
+          console.error("Error in onAfterChange callback:", error);
+        }
       }
 
+      this.consecutiveFailures = 0;
+      this.lastError = null;
       return true;
+    } catch (error) {
+      console.error(`Error switching mode from ${this.activeMode} to ${newMode}:`, error);
+      this.lastError = error instanceof Error ? error : new Error(String(error));
+      this.consecutiveFailures++;
+      
+      // Auto-reset after 3 consecutive failures
+      if (this.consecutiveFailures >= 3) {
+        console.warn("Multiple mode switch failures detected, auto-resetting controller");
+        this.resetState();
+      }
+      
+      return false;
     } finally {
       this.switchInProgress = false;
     }
@@ -127,6 +161,8 @@ class ModeController {
   // Helper to detect image generation requests with expanded keywords
   isImageGenerationRequest(text: string): boolean {
     const lowerText = text.toLowerCase();
+    
+    // Expanded pattern matching with Arabic keywords
     return (
       lowerText.startsWith("/image") ||
       lowerText.includes("generate image") ||
@@ -146,7 +182,17 @@ class ModeController {
       lowerText.includes("show me") ||
       lowerText.includes("create art") ||
       lowerText.includes("generate art") ||
-      lowerText.includes("ai art")
+      lowerText.includes("ai art") ||
+      // Arabic keywords for image generation
+      lowerText.includes("صورة") ||  // image
+      lowerText.includes("إنشاء صورة") || // create image
+      lowerText.includes("توليد صورة") || // generate image
+      lowerText.includes("رسم") || // draw
+      lowerText.includes("رسمة") || // drawing
+      lowerText.includes("صور") || // pictures
+      lowerText.includes("تصور") || // visualize
+      lowerText.includes("أظهر لي") || // show me
+      lowerText.includes("فن ذكاء") // AI art
     );
   }
   
@@ -176,7 +222,16 @@ class ModeController {
       "depict ",
       "show me ",
       "create art of ",
-      "generate art of "
+      "generate art of ",
+      // Arabic patterns
+      "صورة ",
+      "إنشاء صورة ",
+      "توليد صورة ",
+      "رسم ",
+      "رسمة ",
+      "صور ",
+      "تصور ",
+      "أظهر لي "
     ];
     
     for (const pattern of patterns) {

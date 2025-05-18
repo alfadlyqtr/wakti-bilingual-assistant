@@ -27,7 +27,7 @@ async function translateArabicToEnglish(text: string): Promise<string | null> {
         messages: [
           {
             role: "system",
-            content: "You are a professional translator. Translate the following Arabic text to English. Return ONLY the translation, nothing else."
+            content: "You are a professional translator. Translate the following Arabic text to English. Return ONLY the translation, nothing else. If the text contains both Arabic and English, translate only the Arabic parts and keep the English parts intact."
           },
           {
             role: "user",
@@ -104,8 +104,14 @@ serve(async (req) => {
     const promptToUse = translatedPrompt || prompt;
     console.log("Using prompt for generation:", promptToUse);
 
-    // Ensure proper Runware API call format with taskType
+    // Ensure API key is available
+    if (!RUNWARE_API_KEY) {
+      throw new Error("RUNWARE_API_KEY is not configured");
+    }
+
+    // Ensure proper Runware API call format with taskType and proper error handling
     const taskUUID = crypto.randomUUID();
+    
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
       headers: {
@@ -131,10 +137,17 @@ serve(async (req) => {
       ]),
     });
 
+    // Enhanced error handling with response contents
     if (!response.ok) {
-      const errorData = await response.text();
-      console.error("Runware API error response:", errorData);
-      throw new Error(`Runware API error: ${errorData}`);
+      let errorMessage = `Runware API error: ${response.status}`;
+      try {
+        const errorData = await response.text();
+        console.error("Runware API error response:", errorData);
+        errorMessage = `Runware API error: ${errorData}`;
+      } catch (e) {
+        console.error("Failed to parse error response:", e);
+      }
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
