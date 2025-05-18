@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ForgotPassword() {
@@ -37,25 +37,26 @@ export default function ForgotPassword() {
       
       if (error) {
         toast({
-          title: "Password reset failed",
-          description: error.message,
+          title: language === 'en' ? "Password reset failed" : "فشل إعادة تعيين كلمة المرور",
+          description: error.error.message,
           variant: "destructive",
         });
+        setErrorMsg(error.error.message);
       } else {
+        setIsSubmitted(true);
         toast({
-          title: "Password reset link sent",
-          description: "Check your email for the reset link",
+          title: language === 'en' ? "Password reset link sent" : "تم إرسال رابط إعادة تعيين كلمة المرور",
+          description: language === 'en' ? "Check your email for the reset link" : "تحقق من بريدك الإلكتروني للحصول على رابط إعادة التعيين",
           variant: "success",
         });
-        // Redirect to login after a short delay
-        setTimeout(() => navigate('/login'), 2000);
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
-        title: "Password reset failed",
-        description: "An unexpected error occurred",
+        title: language === 'en' ? "Password reset failed" : "فشل إعادة تعيين كلمة المرور",
+        description: language === 'en' ? "An unexpected error occurred" : "حدث خطأ غير متوقع",
         variant: "destructive",
       });
+      setErrorMsg(language === 'en' ? "An unexpected error occurred" : "حدث خطأ غير متوقع");
     } finally {
       setIsLoading(false);
     }
