@@ -1,8 +1,10 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
 import { modeController } from "@/utils/modeController";
 import { saveImageToDatabase } from "./imageService";
+import { promptBrain } from "@/utils/promptBrain";
 
 // Define a type for the ai_chat_history table
 interface AIChatHistory {
@@ -212,24 +214,46 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
 // Process AI request with intent detection
 export const processAIRequest = async (text: string, mode: string, userId: string) => {
   try {
+    // Process with our new prompt brain
+    const originalText = text;
+    const memory = promptBrain.getMemory();
+    
     // Check if this is an echo from a mode switch
     const isEchoAfterModeSwitch = text.startsWith("__ECHO__");
     const processText = isEchoAfterModeSwitch 
       ? text.replace("__ECHO__", "") 
       : text;
+    
+    // Preprocess the prompt for improved understanding
+    const enhancedText = promptBrain.preprocessPrompt(processText, mode as AIMode);
+    
+    // Store the prompt in memory
+    if (!isEchoAfterModeSwitch) {
+      promptBrain.updateMemory({
+        lastPrompt: enhancedText,
+        lastMode: mode as AIMode,
+        lastAction: "general_chat"
+      });
+    }
 
     // First, check if this is an image generation request
     // If so, we'll handle it separately with special mode switching
-    const isImageRequest = modeController.isImageGenerationRequest(processText);
+    const isImageRequest = modeController.isImageGenerationRequest(enhancedText);
     if (isImageRequest) {
       console.log("Image generation request detected, ensuring creative mode");
+      
+      // Store the image prompt in memory
+      promptBrain.updateMemory({
+        lastImagePrompt: modeController.extractImagePrompt(enhancedText),
+        lastAction: "image_generation"
+      });
       
       // Ensure we're in creative mode
       const currentMode = modeController.getActiveMode();
       if (currentMode !== 'creative') {
         // We need to switch to creative mode first
         return {
-          response: `You asked to create an image based on: "${processText}". This works better in Creative mode. Switching now...`,
+          response: `You asked to create an image based on: "${enhancedText}". This works better in Creative mode. Switching now...`,
           intent: "mode_switch",
           intentData: null,
           suggestedMode: "creative",
@@ -238,17 +262,17 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
             targetMode: "creative",
             action: "generateImage",
             autoTrigger: true,
-            prompt: processText,
+            prompt: enhancedText,
           },
           echoOriginalPrompt: true
         };
       }
     }
 
-    // Call the standard invoke method but catch and handle errors manually
+    // Call the standard invoke method with error handling
     try {
       const { data, error } = await supabase.functions.invoke("process-ai-intent", {
-        body: { text: processText, mode, userId },
+        body: { text: enhancedText, mode, userId },
       });
 
       if (error) {
@@ -274,7 +298,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
         intent: data.intent || "general_chat",
         intentData: data.intentData || null,
         suggestedMode: data.suggestedMode || null,
-        originalPrompt: data.originalPrompt || text, // Always store the original prompt
+        originalPrompt: data.originalPrompt || originalText, // Always store the original prompt
         modeSwitchAction: data.modeSwitchAction || null,
         echoOriginalPrompt: data.echoOriginalPrompt || false
       };
@@ -283,7 +307,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
       // Try once more
       try {
         const { data, error } = await supabase.functions.invoke("process-ai-intent", {
-          body: { text: processText, mode, userId },
+          body: { text: enhancedText, mode, userId },
         });
         
         if (error) {
@@ -295,7 +319,7 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
           intent: data.intent || "general_chat",
           intentData: data.intentData || null,
           suggestedMode: data.suggestedMode || null,
-          originalPrompt: data.originalPrompt || text,
+          originalPrompt: data.originalPrompt || originalText,
           modeSwitchAction: data.modeSwitchAction || null,
           echoOriginalPrompt: data.echoOriginalPrompt || false
         };
@@ -318,6 +342,9 @@ export async function directImageGeneration(prompt: string, userId: string): Pro
     const originalMode = modeController.getActiveMode();
     console.log('Original mode before direct generation:', originalMode);
 
+    // Process prompt with the brain
+    const enhancedPrompt = promptBrain.preprocessPrompt(prompt, 'creative');
+
     // Call the edge function directly
     const getSession = await supabase.auth.getSession();
     const accessToken = getSession.data.session?.access_token;
@@ -336,7 +363,7 @@ export async function directImageGeneration(prompt: string, userId: string): Pro
           Authorization: `Bearer ${accessToken}`
         },
         body: JSON.stringify({
-          prompt,
+          prompt: enhancedPrompt,
         }),
       }
     );
@@ -367,8 +394,14 @@ export async function directImageGeneration(prompt: string, userId: string): Pro
       ...metadata
     };
     
+    // Store in memory
+    promptBrain.updateMemory({
+      lastImagePrompt: prompt,
+      lastImageUrl: imageUrl
+    });
+    
     try {
-      await saveImageToDatabase(userId, prompt, imageUrl, enhancedMetadata);
+      await saveImageToDatabase(userId, enhancedPrompt, imageUrl, enhancedMetadata);
     } catch (saveError) {
       // Still return image even if saving fails
       console.error("Failed to save image to database:", saveError);
@@ -386,6 +419,9 @@ export async function generateImage(prompt: string): Promise<{ imageUrl: string,
   try {
     console.log('Generating image with prompt:', prompt);
     
+    // Process with promptBrain
+    const enhancedPrompt = promptBrain.preprocessPrompt(prompt, 'creative');
+    
     const getSession = await supabase.auth.getSession();
     const accessToken = getSession.data.session?.access_token;
     
@@ -402,7 +438,7 @@ export async function generateImage(prompt: string): Promise<{ imageUrl: string,
           Authorization: `Bearer ${accessToken}`
         },
         body: JSON.stringify({
-          prompt,
+          prompt: enhancedPrompt,
         }),
       }
     );
@@ -424,6 +460,12 @@ export async function generateImage(prompt: string): Promise<{ imageUrl: string,
       console.error("Invalid image URL returned:", imageUrl);
       throw new Error("Invalid image URL returned from API");
     }
+    
+    // Store in memory
+    promptBrain.updateMemory({
+      lastImagePrompt: prompt,
+      lastImageUrl: imageUrl
+    });
     
     return { imageUrl, metadata };
   } catch (error) {
@@ -448,7 +490,9 @@ export function isImageGenerationRequest(text: string): boolean {
 
 // Enhanced helper to detect if mode switch is needed based on text content
 export function detectAppropriateMode(text: string, currentMode: AIMode): AIMode | null {
-  return modeController.shouldSwitchMode(text, currentMode);
+  // Use our promptBrain for smarter detection
+  const intent = promptBrain.detectIntent(text);
+  return intent.suggestedMode !== currentMode ? intent.suggestedMode : null;
 }
 
 // Extract prompt from image generation request

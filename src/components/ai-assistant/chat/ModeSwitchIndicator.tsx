@@ -1,40 +1,79 @@
 
-import React from "react";
-import { motion } from "framer-motion";
-import { AIMode, ASSISTANT_MODES } from "../types";
-import { useTheme } from "@/providers/ThemeProvider";
+import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
+import { AIMode, ASSISTANT_MODES } from '../types';
+import { useTheme } from '@/providers/ThemeProvider';
 
 interface ModeSwitchIndicatorProps {
-  isSwitchingMode: boolean;
-  lastSwitchedMode: AIMode | null;
-  getModeName: (mode: AIMode) => string;
+  isVisible: boolean;
+  targetMode: AIMode | null;
+  language: 'en' | 'ar';
+  theme: 'light' | 'dark';
 }
 
-const ModeSwitchIndicator: React.FC<ModeSwitchIndicatorProps> = ({ 
-  isSwitchingMode, 
-  lastSwitchedMode,
-  getModeName 
+export const ModeSwitchIndicator: React.FC<ModeSwitchIndicatorProps> = ({
+  isVisible,
+  targetMode,
+  language,
+  theme
 }) => {
-  const { language } = useTheme();
-  
-  if (!isSwitchingMode || !lastSwitchedMode) return null;
+  // Get mode info
+  const getModeInfo = () => {
+    if (!targetMode) return null;
+    return ASSISTANT_MODES.find(m => m.id === targetMode);
+  };
+
+  // Get color based on mode
+  const getColor = () => {
+    const mode = getModeInfo();
+    if (!mode) return '#3498db';
+    
+    const colorKey = theme === 'dark' ? 'dark' : 'light';
+    return mode.color[colorKey];
+  };
+
+  // Get localized mode name
+  const getModeName = () => {
+    const mode = getModeInfo();
+    if (!mode) return targetMode || 'unknown';
+    
+    return mode.label[language];
+  };
+
+  // Get localized text for switching message
+  const getSwitchingText = () => {
+    if (language === 'ar') {
+      return `جاري التبديل إلى وضع ${getModeName()}...`;
+    }
+    return `Switching to ${getModeName()} mode...`;
+  };
 
   return (
-    <motion.div 
-      initial={{ opacity: 0 }} 
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed top-16 left-0 right-0 flex justify-center z-50"
-    >
-      <div className={`px-4 py-2 rounded-md text-white animate-pulse ${
-        lastSwitchedMode === 'creative' ? 'bg-amber-500' :
-        lastSwitchedMode === 'writer' ? 'bg-blue-500' :
-        lastSwitchedMode === 'assistant' ? 'bg-purple-500' :
-        'bg-gray-500'
-      }`}>
-        {language === 'ar' ? `جاري التحويل إلى وضع ${getModeName(lastSwitchedMode)}...` : `Switching to ${getModeName(lastSwitchedMode)} mode...`}
-      </div>
-    </motion.div>
+    <AnimatePresence>
+      {isVisible && targetMode && (
+        <motion.div
+          className="fixed top-20 left-0 right-0 z-50 flex justify-center"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3 }}
+        >
+          <div 
+            className="bg-white dark:bg-zinc-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2"
+            style={{ 
+              borderLeft: `4px solid ${getColor()}`, 
+              direction: language === 'ar' ? 'rtl' : 'ltr'
+            }}
+          >
+            <Loader2 className="h-4 w-4 animate-spin" style={{ color: getColor() }} />
+            <span className="text-sm font-medium">
+              {getSwitchingText()}
+            </span>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

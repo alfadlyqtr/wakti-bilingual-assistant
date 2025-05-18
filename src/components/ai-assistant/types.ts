@@ -1,129 +1,88 @@
-
-import React from "react";
-
-// Available modes for the AI assistant
 export type AIMode = "general" | "writer" | "creative" | "assistant";
 
-// Basic structure for chat messages
+export const ASSISTANT_MODES = [
+  {
+    id: "general",
+    label: {
+      en: "General",
+      ar: "عام",
+    },
+    color: {
+      light: "#78716c",
+      dark: "#a8a29e",
+    },
+  },
+  {
+    id: "writer",
+    label: {
+      en: "Writer",
+      ar: "كاتب",
+    },
+    color: {
+      light: "#eab308",
+      dark: "#fde047",
+    },
+  },
+  {
+    id: "creative",
+    label: {
+      en: "Creative",
+      ar: "مبدع",
+    },
+    color: {
+      light: "#db2777",
+      dark: "#f472b6",
+    },
+  },
+  {
+    id: "assistant",
+    label: {
+      en: "Assistant",
+      ar: "مساعد",
+    },
+    color: {
+      light: "#10b981",
+      dark: "#6ee7b7",
+    },
+  },
+];
+
+export interface ActionButton {
+  text: string;
+  action: string;
+}
+
+export interface ActionButtons {
+  primary?: ActionButton;
+  secondary?: ActionButton;
+}
+
+export interface ModeSwitchAction {
+  targetMode: AIMode;
+  action: string;
+  autoTrigger?: boolean;
+  prompt?: string;
+}
+
+// Update modal actions to include the directGeneration property
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
   mode: AIMode;
-  metadata?: {
-    imageUrl?: string;
-    hasMedia?: boolean;
-    intentData?: any;
-  };
-  originalPrompt?: string;
-  actionButtons?: {
-    primary?: {
-      text: string;
-      action: string;
-    };
-    secondary?: {
-      text: string;
-      action: string;
-    };
-  };
-  modeSwitchAction?: {
-    text: string;
-    action: string;
-    targetMode: AIMode;
-    autoTrigger?: boolean;
-  };
+  metadata?: any;
   isLoading?: boolean;
+  actionButtons?: ActionButtons;
+  originalPrompt?: string;
+  modeSwitchAction?: ModeSwitchAction;
 }
 
-// Type for message variables
-export interface MessageVariable {
-  key: string;
-  value: string;
-}
-
-// Define mode parameters
-interface AssistantMode {
-  id: AIMode;
-  label: {
-    en: string;
-    ar: string;
-  };
-  description: {
-    en: string;
-    ar: string;
-  };
-  icon: React.ReactNode;
-  color: {
-    light: string;
-    dark: string;
+export interface ImageMetadata {
+  imageUrl?: string;
+  hasMedia?: boolean;
+  intentData?: {
+    directGeneration?: boolean;
+    [key: string]: any;
   };
 }
-
-// Available modes with their configurations
-export const ASSISTANT_MODES: AssistantMode[] = [
-  {
-    id: "general",
-    label: {
-      en: "Chat",
-      ar: "دردشة",
-    },
-    description: {
-      en: "General conversation and information",
-      ar: "محادثة عامة ومعلومات",
-    },
-    icon: null,
-    color: {
-      light: "#3498db",
-      dark: "#2980b9",
-    },
-  },
-  {
-    id: "writer",
-    label: {
-      en: "Type",
-      ar: "كتابة",
-    },
-    description: {
-      en: "Writing, editing and text refinement",
-      ar: "الكتابة والتحرير وتحسين النص",
-    },
-    icon: null,
-    color: {
-      light: "#2ecc71",
-      dark: "#27ae60",
-    },
-  },
-  {
-    id: "creative",
-    label: {
-      en: "Create",
-      ar: "إنشاء",
-    },
-    description: {
-      en: "Creative content and image generation",
-      ar: "محتوى إبداعي وإنشاء الصور",
-    },
-    icon: null,
-    color: {
-      light: "#e74c3c",
-      dark: "#c0392b",
-    },
-  },
-  {
-    id: "assistant",
-    label: {
-      en: "Plan",
-      ar: "تخطيط",
-    },
-    description: {
-      en: "Task management and scheduling",
-      ar: "إدارة المهام والجدولة",
-    },
-    icon: null,
-    color: {
-      light: "#9b59b6",
-      dark: "#8e44ad",
-    },
-  },
-];

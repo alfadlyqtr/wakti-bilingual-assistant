@@ -80,4 +80,3 @@ supabase.functions.invokeWithRetry = async function<T = any>(
   
   return { data: null, error: lastError || new Error(`Failed to invoke ${name} after ${maxRetries + 1} attempts`) };
 };
-

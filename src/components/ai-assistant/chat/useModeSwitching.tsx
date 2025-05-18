@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { AIMode, ChatMessage, ASSISTANT_MODES } from "../types";
 import { modeController } from "@/utils/modeController";
 import { useTheme } from "@/providers/ThemeProvider";
+import { toast } from "sonner";
 
 interface UseModeSwitchingProps {
   activeMode: AIMode;
@@ -32,6 +33,9 @@ export const useModeSwitching = ({
   // Track any errors that occurred during mode switching
   const [switchError, setSwitchError] = useState<string | null>(null);
 
+  // Additional shimmer delay for creative mode
+  const [creativeModeReady, setCreativeModeReady] = useState(false);
+
   // Get mode name for display with proper translation
   const getModeName = (mode: AIMode): string => {
     const modeConfig = ASSISTANT_MODES.find(m => m.id === mode);
@@ -44,20 +48,35 @@ export const useModeSwitching = ({
       onBeforeChange: (oldMode, newMode) => {
         console.log(`Mode switching from ${oldMode} to ${newMode}: started`);
         setIsSwitchingMode(true);
+        setCreativeModeReady(false); // Reset creative mode readiness
         setLastSwitchedMode(newMode);
       },
       onAfterChange: (oldMode, newMode) => {
         console.log(`Mode switching from ${oldMode} to ${newMode}: completed`);
         setIsSwitchingMode(false);
+        
         // Update the creative mode flag
-        setIsCreativeModeActive(newMode === 'creative');
+        const isCreative = newMode === 'creative';
+        setIsCreativeModeActive(isCreative);
+        
+        // If switching to creative mode, add a shimmer delay before marking ready
+        if (isCreative) {
+          setTimeout(() => {
+            setCreativeModeReady(true);
+          }, 250); // 250ms buffer delay for creative mode
+        } else {
+          setCreativeModeReady(true); // Immediately ready for non-creative modes
+        }
+        
         // Clear any error when a successful mode switch happens
         setSwitchError(null);
       }
     });
     
-    // Initialize creative mode flag
-    setIsCreativeModeActive(activeMode === 'creative');
+    // Initialize creative mode flag and readiness
+    const isCreative = activeMode === 'creative';
+    setIsCreativeModeActive(isCreative);
+    setCreativeModeReady(true); // Initially ready
     
     return () => {
       unregister();
@@ -74,7 +93,14 @@ export const useModeSwitching = ({
         console.log("Mode switch taking too long, resetting controller");
         modeController.resetState();
         setIsSwitchingMode(false);
-        setSwitchError("Mode switch timed out. Please try again.");
+        setSwitchError(language === 'ar' 
+          ? "انتهت مهلة تبديل الوضع. يرجى المحاولة مرة أخرى."
+          : "Mode switch timed out. Please try again."
+        );
+        toast.error(language === 'ar' 
+          ? "فشل في تبديل الوضع"
+          : "Failed to switch mode"
+        );
       }, 5000);
     }
     
@@ -83,7 +109,7 @@ export const useModeSwitching = ({
         clearTimeout(timeoutId);
       }
     };
-  }, [isSwitchingMode]);
+  }, [isSwitchingMode, language]);
 
   // Auto-trigger mode switching without waiting for button clicks
   useEffect(() => {
@@ -122,21 +148,30 @@ export const useModeSwitching = ({
                   // Update the active mode in parent component
                   setActiveMode(message.modeSwitchAction.targetMode);
                   
-                  // Trigger the action
-                  onConfirm(message.id, message.modeSwitchAction.action);
-                  console.log("Mode switched to:", message.modeSwitchAction.targetMode);
+                  // Short delay to allow UI to update before triggering the action
+                  setTimeout(() => {
+                    // Trigger the action
+                    onConfirm(message.id, message.modeSwitchAction!.action);
+                    console.log("Mode switched to:", message.modeSwitchAction!.targetMode);
+                  }, 300);
                 } else {
                   // Handle error case
                   const error = modeController.getLastError();
                   console.error("Mode switch failed:", error);
-                  setSwitchError(`Failed to switch to ${getModeName(message.modeSwitchAction.targetMode)} mode. Please try again.`);
+                  setSwitchError(language === 'ar'
+                    ? `فشل في التبديل إلى وضع ${getModeName(message.modeSwitchAction.targetMode)}. يرجى المحاولة مرة أخرى.`
+                    : `Failed to switch to ${getModeName(message.modeSwitchAction.targetMode)} mode. Please try again.`
+                  );
                   
                   // Reset the controller
                   modeController.resetState();
                 }
               } catch (error) {
                 console.error("Error during mode switch:", error);
-                setSwitchError(`Error switching modes: ${error instanceof Error ? error.message : String(error)}`);
+                setSwitchError(language === 'ar'
+                  ? `خطأ أثناء تبديل الأوضاع: ${error instanceof Error ? error.message : String(error)}`
+                  : `Error switching modes: ${error instanceof Error ? error.message : String(error)}`
+                );
               }
             }
           }
@@ -145,12 +180,13 @@ export const useModeSwitching = ({
     };
     
     handleModeSwitches();
-  }, [messages, onConfirm, processedSwitchMessages, setActiveMode, isSwitchingMode]);
+  }, [messages, onConfirm, processedSwitchMessages, setActiveMode, isSwitchingMode, language]);
 
   return {
     isSwitchingMode,
     lastSwitchedMode,
     isCreativeModeActive,
+    creativeModeReady,
     getModeName,
     switchError,
     resetSwitchError: () => setSwitchError(null)
