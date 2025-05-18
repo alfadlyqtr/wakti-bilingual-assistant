@@ -16,6 +16,7 @@ interface ChatMessageProps {
   formatTimestamp: (timestamp: Date) => string;
   openImageModal: (imageUrl: string, promptText: string, timestamp: Date) => void;
   downloadImage: (imageUrl: string, promptText: string) => void;
+  onConfirm: (messageId: string, action: string) => void;
 }
 
 const ChatMessageComponent: React.FC<ChatMessageProps> = ({
@@ -28,7 +29,8 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
   getModeName,
   formatTimestamp,
   openImageModal,
-  downloadImage
+  downloadImage,
+  onConfirm
 }) => {
   return (
     <motion.div
@@ -78,6 +80,7 @@ const ChatMessageComponent: React.FC<ChatMessageProps> = ({
                 isSwitchingMode={isSwitchingMode}
                 openImageModal={openImageModal}
                 downloadImage={downloadImage}
+                onConfirm={onConfirm}
               />
             )}
           </div>

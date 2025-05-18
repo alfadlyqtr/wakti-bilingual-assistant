@@ -66,15 +66,18 @@ export const AIAssistant: React.FC = () => {
 
   // Register with mode controller
   useEffect(() => {
-    modeController.registerCallbacks({
+    // Store the unregister function returned by registerCallbacks
+    const unregister = modeController.registerCallbacks({
       onAfterChange: (oldMode, newMode) => {
         setActiveMode(newMode);
       }
     });
     
     return () => {
-      // Cleanup
-      modeController.unregisterCallbacks();
+      // Use the returned function for cleanup
+      if (unregister) {
+        unregister();
+      }
     };
   }, []);
 
