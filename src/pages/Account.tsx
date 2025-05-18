@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -331,8 +330,7 @@ export default function Account() {
       const { user: updatedUser, error } = await updateUserPassword(newPassword);
       
       if (error) {
-        // Correctly access the error message - AuthError doesn't have an 'error' property directly
-        setPasswordError(error.message || 'Error updating password');
+        setPasswordError(error.error?.message || 'Error updating password'); // Fixed: Access message through error.error
       } else {
         showSuccess(language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
         setCurrentPassword("");

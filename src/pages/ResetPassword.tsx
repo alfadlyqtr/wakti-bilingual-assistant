@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -48,7 +47,7 @@ export default function ResetPassword() {
       if (error) {
         toast({
           title: language === 'en' ? "Password reset failed" : "فشل إعادة تعيين كلمة المرور",
-          description: error.message || "An error occurred during password reset",
+          description: error.error?.message || "An error occurred during password reset",
           variant: "destructive", 
         });
       } else {

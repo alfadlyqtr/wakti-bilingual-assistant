@@ -1,6 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
-import { User, Session, AuthError } from '@supabase/supabase-js';
+import { User, Session } from '@supabase/supabase-js';
 
 // Get the current session
 export async function getCurrentSession() {
