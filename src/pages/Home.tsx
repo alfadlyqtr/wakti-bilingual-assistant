@@ -8,6 +8,7 @@ import { Check, ArrowRight, CircleCheck, Bot } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 import { HomeHero } from "@/components/home/HomeHero";
+import { HomeFeatures } from "@/components/home/HomeFeatures";
 
 export default function Home() {
   const { language, theme } = useTheme();
@@ -45,9 +46,9 @@ export default function Home() {
     },
     ar: {
       tagline: "مساعد الإنتاجية الذكي",
-      description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعوم�� بالذكاء الاصطناعي",
+      description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعومة بالذكاء الاصطناعي",
       loginBtn: "تسجيل الدخول",
-      trial: "ا��دأ التجربة المجانية لمدة 3 أيام",
+      trial: "ابدأ التجربة المجانية لمدة 3 أيام",
       monthly: "شهري",
       yearly: "سنوي (وفر 17٪)",
       monthlyPrice: "55 ر.ق",
@@ -63,7 +64,7 @@ export default function Home() {
       feature4Desc: "دعم كامل للغتين العربية والإنجليزية",
       aiSectionTitle: "إمكانيات الذكاء الاصطناعي في WAKTI",
       aiFeature1Title: "إنشاء المهام الذكية",
-      aiFeature1Desc: "توليد مهام محسنة مع أولويات و��واعيد نهائية",
+      aiFeature1Desc: "توليد مهام محسنة مع أولويات ومواعيد نهائية",
       aiFeature2Title: "تلخيص المحتوى",
       aiFeature2Desc: "إنشاء ملخصات موجزة من المدخلات الصوتية أو النصية",
       aiFeature3Title: "المحتوى الإبداعي",
@@ -114,71 +115,20 @@ export default function Home() {
           }} 
         />
         
-        {/* Features Section with Modern Cards */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={containerVariants}
-          className="px-4 py-8"
-        >
-          <motion.h2 
-            variants={itemVariants}
-            className="text-xl font-bold mb-6 text-center"
-          >
-            {t.featureSectionTitle}
-          </motion.h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-blue-500" /> {t.feature1Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature1Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-purple-500" /> {t.feature2Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature2Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-amber-500 to-orange-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-amber-500" /> {t.feature3Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature3Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-green-500 to-teal-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-green-500" /> {t.feature4Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature4Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </motion.section>
+        {/* Features Section */}
+        <HomeFeatures
+          translations={{
+            featureSectionTitle: t.featureSectionTitle,
+            feature1Title: t.feature1Title,
+            feature1Desc: t.feature1Desc,
+            feature2Title: t.feature2Title,
+            feature2Desc: t.feature2Desc,
+            feature3Title: t.feature3Title,
+            feature3Desc: t.feature3Desc,
+            feature4Title: t.feature4Title,
+            feature4Desc: t.feature4Desc
+          }}
+        />
         
         {/* WAKTI AI Section */}
         <motion.section 
