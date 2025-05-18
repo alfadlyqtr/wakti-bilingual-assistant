@@ -171,13 +171,10 @@ export async function getRecentChatHistory(
 }
 
 // Handle audio transcription
-export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
+export async function transcribeAudio(recordingId: string): Promise<string | null> {
   try {
-    console.log('Starting audio transcription...');
-    // Create form data
-    const formData = new FormData();
-    formData.append("audio", audioBlob);
-
+    console.log('Starting audio transcription with recordingId:', recordingId);
+    
     // Get auth session
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
@@ -185,20 +182,24 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string | null> {
       return null;
     }
 
-    // Call the Supabase Edge Function
+    // Call the Supabase Edge Function with recordingId instead of FormData
     const response = await fetch(
       "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
       {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${data.session.access_token}`
         },
-        body: formData,
+        body: JSON.stringify({
+          recordingId: recordingId
+        }),
       }
     );
 
     if (!response.ok) {
       const error = await response.json();
+      console.error("Transcription API error response:", error);
       throw new Error(error.error || "Transcription failed");
     }
 

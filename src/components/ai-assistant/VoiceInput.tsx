@@ -65,37 +65,42 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           const fileName = `${user.id}/${Date.now()}.webm`;
           
           // Upload to Supabase
-          const { error: uploadError } = await supabase.storage
+          const { data: uploadData, error: uploadError } = await supabase.storage
             .from('voice_recordings')
             .upload(fileName, audioBlob);
             
           if (uploadError) {
             console.error('Error uploading recording:', uploadError);
-          } else {
-            console.log('Recording saved to Supabase');
+            setIsTranscribing(false);
+            showError(language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording');
+            return;
+          }
+          
+          console.log('Recording saved to Supabase:', fileName);
+          
+          try {
+            // Pass recordingId instead of audio blob
+            const text = await transcribeAudio(fileName);
+            setIsTranscribing(false);
+            
+            if (text) {
+              console.log('Transcription successful:', text);
+              showSuccess(language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully');
+              onTranscription(text);
+            } else {
+              showError(language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error');
+            }
+          } catch (error) {
+            setIsTranscribing(false);
+            console.error('Error during transcription:', error);
+            showError(language === 'ar' 
+              ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
+              : 'An error occurred while processing the voice recording');
           }
         } catch (storageErr) {
+          setIsTranscribing(false);
           console.error('Error storing recording:', storageErr);
-        }
-        
-        try {
-          const text = await transcribeAudio(audioBlob);
-          setIsTranscribing(false);
-          
-          if (text) {
-            // Log language detection debug info
-            console.log('Transcription successful:', text);
-            showSuccess(language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully');
-            onTranscription(text);
-          } else {
-            showError(language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error');
-          }
-        } catch (error) {
-          setIsTranscribing(false);
-          console.error('Error during transcription:', error);
-          showError(language === 'ar' 
-            ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
-            : 'An error occurred while processing the voice recording');
+          showError(language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording');
         }
 
         // Clean up stream tracks
