@@ -88,7 +88,7 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             error: "Translation failed", 
-            details: "This image prompt couldn't be processed. Please try again in English or simplify the input."
+            details: "تعذر معالجة هذا الوصف. يرجى تبسيطه أو إعادة المحاولة لاحقًا."
           }),
           { 
             status: 422, 
