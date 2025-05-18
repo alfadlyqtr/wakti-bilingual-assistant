@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,7 +15,7 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<User | null>;
   updateEmail: (email: string) => Promise<AuthError | null>;
   updatePassword: (password: string) => Promise<AuthError | null>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<Session | null>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -32,7 +31,7 @@ const AuthContext = createContext<AuthContextType>({
   updateProfile: async () => null,
   updateEmail: async () => null,
   updatePassword: async () => null,
-  refreshSession: async () => {},
+  refreshSession: async () => null,
 });
 
 interface AuthProviderProps {
