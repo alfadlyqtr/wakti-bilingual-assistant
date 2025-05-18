@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -662,7 +661,13 @@ export const AIAssistant: React.FC = () => {
           updatedMessage.content,
           "assistant",
           activeMode,
-          { imageUrl: result.imageUrl, hasMedia: true }
+          { 
+            imageUrl: result.imageUrl, 
+            hasMedia: true,
+            intentData: { 
+              directGeneration: false 
+            }
+          }
         );
       } else {
         // More informative error handling for troubleshooting
@@ -740,8 +745,7 @@ export const AIAssistant: React.FC = () => {
           )}\n\n![${t("generatedImage" as TranslationKey, language)}](${result.imageUrl})`,
           metadata: { 
             imageUrl: result.imageUrl, 
-            hasMedia: true,
-            directGeneration: true
+            hasMedia: true
           },
           isLoading: false
         };
@@ -760,7 +764,9 @@ export const AIAssistant: React.FC = () => {
           { 
             imageUrl: result.imageUrl, 
             hasMedia: true,
-            directGeneration: true
+            intentData: { 
+              directGeneration: true 
+            }
           }
         );
       } else {

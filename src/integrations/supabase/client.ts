@@ -9,6 +9,21 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Extend the FunctionsClient type to include our custom invokeWithRetry method
+declare module '@supabase/supabase-js' {
+  interface FunctionsClient {
+    invokeWithRetry<T = any>(
+      name: string, 
+      options?: { 
+        body?: any, 
+        headers?: Record<string, string>,
+        [key: string]: any 
+      },
+      maxRetries?: number
+    ): Promise<{ data: T | null; error: Error | null; status?: number }>;
+  }
+}
+
 // Create client with better error logging and service worker compatibility
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
@@ -38,7 +53,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Add a method to create a function invocation with retries
 supabase.functions.invokeWithRetry = async function<T = any>(
   name: string, 
-  { body, headers, ...options }: { body?: any, headers?: Record<string, string>, [key: string]: any } = {},
+  options: { body?: any, headers?: Record<string, string>, [key: string]: any } = {},
   maxRetries = 2
 ): Promise<{ data: T | null; error: Error | null; status?: number }> {
   let retries = 0;
@@ -47,7 +62,7 @@ supabase.functions.invokeWithRetry = async function<T = any>(
   while (retries <= maxRetries) {
     try {
       console.log(`Invoking function ${name}${retries > 0 ? ` (retry ${retries}/${maxRetries})` : ''}`);
-      const response = await this.invoke(name, { body, headers, ...options });
+      const response = await this.invoke(name, options);
       return response;
     } catch (error) {
       console.error(`Error invoking function ${name} (attempt ${retries + 1}/${maxRetries + 1}):`, error);
@@ -65,3 +80,4 @@ supabase.functions.invokeWithRetry = async function<T = any>(
   
   return { data: null, error: lastError || new Error(`Failed to invoke ${name} after ${maxRetries + 1} attempts`) };
 };
+

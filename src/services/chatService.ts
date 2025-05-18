@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import { AIMode, ChatMessage } from "@/components/ai-assistant/types";
@@ -49,26 +48,55 @@ export async function saveChatMessage(
       timestamp: metadata.timestamp || new Date().toISOString(),
     };
     
-    // Convert to parameters required by the stored function
-    const { data, error } = await supabase.functions.invokeWithRetry('insert-ai-chat', {
-      body: {
-        userId,
-        content,
-        role,
-        mode,
-        metadata: enhancedMetadata,
-        hasMedia,
-        expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
+    // Call the standard invoke method but catch and handle errors manually
+    try {
+      // Convert to parameters required by the stored function
+      const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
+        body: {
+          userId,
+          content,
+          role,
+          mode,
+          metadata: enhancedMetadata,
+          hasMedia,
+          expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString() // 3 days
+        }
+      });
+        
+      if (error) {
+        console.error("Error saving chat message:", error);
+        return null;
       }
-    });
       
-    if (error) {
-      console.error("Error saving chat message:", error);
-      return null;
+      console.log('Message successfully saved to database, returned id:', data);
+      return data;
+    } catch (error) {
+      console.error("Exception invoking insert-ai-chat function:", error);
+      // Retry once on failure
+      try {
+        const { data, error } = await supabase.functions.invoke('insert-ai-chat', {
+          body: {
+            userId,
+            content,
+            role,
+            mode,
+            metadata: enhancedMetadata,
+            hasMedia,
+            expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+          }
+        });
+        
+        if (error) {
+          console.error("Error on retry saving chat message:", error);
+          return null;
+        }
+        
+        return data;
+      } catch (retryError) {
+        console.error("Failed to save chat message after retry:", retryError);
+        return null;
+      }
     }
-    
-    console.log('Message successfully saved to database, returned id:', data);
-    return data;
   } catch (error) {
     console.error("Exception saving chat message:", error);
     return null;
@@ -86,58 +114,54 @@ export async function getRecentChatHistory(
   try {
     console.log('Fetching chat history:', { userId, mode, limit });
     
-    // Using a stored function with retry
-    const { data, error } = await supabase.functions.invokeWithRetry('get-recent-chat-history', {
-      body: {
-        userId,
-        mode,
-        limit
-      }
-    });
-    
-    if (error) {
-      console.error("Error fetching chat history:", error);
-      return [];
-    }
-    
-    if (!data || !Array.isArray(data)) {
-      return [];
-    }
-    
-    console.log('Chat history raw data received:', data);
-    
-    // Convert to ChatMessage format
-    const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => {
-      // Enhanced debug logging for modeSwitchAction in each message's metadata
-      if (item.metadata && item.metadata.modeSwitchAction) {
-        console.log(`Message ${item.id} has modeSwitchAction in metadata:`, 
-          JSON.stringify(item.metadata.modeSwitchAction));
+    // Call the standard invoke method but catch and handle errors manually
+    try {
+      const { data, error } = await supabase.functions.invoke('get-recent-chat-history', {
+        body: {
+          userId,
+          mode,
+          limit
+        }
+      });
+      
+      if (error) {
+        console.error("Error fetching chat history:", error);
+        return [];
       }
       
-      return {
-        id: item.id,
-        role: item.role as "user" | "assistant",
-        content: item.content,
-        timestamp: new Date(item.created_at),
-        mode: item.mode as AIMode,
-        metadata: item.metadata || {},
-        originalPrompt: item.metadata?.originalPrompt,
-        modeSwitchAction: item.metadata?.modeSwitchAction,
-        actionButtons: item.metadata?.actionButtons
-      };
-    });
-    
-    console.log('Processed chat messages with explicit modeSwitchAction check:', 
-      chatMessages.map(m => ({
-        id: m.id, 
-        hasModeSwitchAction: !!m.modeSwitchAction,
-        modeSwitchAction: m.modeSwitchAction
-      }))
-    );
-    
-    // Sort by timestamp
-    return chatMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+      if (!data || !Array.isArray(data)) {
+        return [];
+      }
       
+      console.log('Chat history raw data received:', data);
+      
+      // Convert to ChatMessage format
+      const chatMessages: ChatMessage[] = (data as AIChatHistory[]).map((item: any) => {
+        // Enhanced debug logging for modeSwitchAction in each message's metadata
+        if (item.metadata && item.metadata.modeSwitchAction) {
+          console.log(`Message ${item.id} has modeSwitchAction in metadata:`, 
+            JSON.stringify(item.metadata.modeSwitchAction));
+        }
+        
+        return {
+          id: item.id,
+          role: item.role as "user" | "assistant",
+          content: item.content,
+          timestamp: new Date(item.created_at),
+          mode: item.mode as AIMode,
+          metadata: item.metadata || {},
+          originalPrompt: item.metadata?.originalPrompt,
+          modeSwitchAction: item.metadata?.modeSwitchAction,
+          actionButtons: item.metadata?.actionButtons
+        };
+      });
+      
+      // Sort by timestamp
+      return chatMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    } catch (error) {
+      console.error("Exception invoking get-recent-chat-history function:", error);
+      return [];
+    }
   } catch (error) {
     console.error("Exception fetching chat history:", error);
     return [];
@@ -221,38 +245,64 @@ export const processAIRequest = async (text: string, mode: string, userId: strin
       }
     }
 
-    // Call the Supabase Edge Function to process the AI request with retry
-    const { data, error } = await supabase.functions.invokeWithRetry("process-ai-intent", {
-      body: { text: processText, mode, userId },
-    });
+    // Call the standard invoke method but catch and handle errors manually
+    try {
+      const { data, error } = await supabase.functions.invoke("process-ai-intent", {
+        body: { text: processText, mode, userId },
+      });
 
-    if (error) {
-      console.error("Error processing AI request:", error);
-      throw new Error(`Error processing AI request: ${error.message}`);
-    }
+      if (error) {
+        console.error("Error processing AI request:", error);
+        throw new Error(`Error processing AI request: ${error.message}`);
+      }
 
-    console.log("AI request processed, raw data:", data);
-    
-    // Enhanced mode switch handling with echoOriginalPrompt flag
-    if (data.modeSwitchAction) {
-      console.log("Mode switch action detected:", JSON.stringify(data.modeSwitchAction));
+      console.log("AI request processed, raw data:", data);
       
-      // Adding auto trigger flag if not present
-      if (data.modeSwitchAction.autoTrigger === undefined) {
-        data.modeSwitchAction.autoTrigger = true;
+      // Enhanced mode switch handling with echoOriginalPrompt flag
+      if (data.modeSwitchAction) {
+        console.log("Mode switch action detected:", JSON.stringify(data.modeSwitchAction));
+        
+        // Adding auto trigger flag if not present
+        if (data.modeSwitchAction.autoTrigger === undefined) {
+          data.modeSwitchAction.autoTrigger = true;
+        }
+      }
+
+      // Return the processed data
+      return {
+        response: data.response,
+        intent: data.intent || "general_chat",
+        intentData: data.intentData || null,
+        suggestedMode: data.suggestedMode || null,
+        originalPrompt: data.originalPrompt || text, // Always store the original prompt
+        modeSwitchAction: data.modeSwitchAction || null,
+        echoOriginalPrompt: data.echoOriginalPrompt || false
+      };
+    } catch (error) {
+      console.error("Error invoking process-ai-intent function:", error);
+      // Try once more
+      try {
+        const { data, error } = await supabase.functions.invoke("process-ai-intent", {
+          body: { text: processText, mode, userId },
+        });
+        
+        if (error) {
+          throw error;
+        }
+        
+        return {
+          response: data.response,
+          intent: data.intent || "general_chat",
+          intentData: data.intentData || null,
+          suggestedMode: data.suggestedMode || null,
+          originalPrompt: data.originalPrompt || text,
+          modeSwitchAction: data.modeSwitchAction || null,
+          echoOriginalPrompt: data.echoOriginalPrompt || false
+        };
+      } catch (retryError) {
+        throw new Error(`Failed to process AI request after retry: ${retryError}`);
       }
     }
-
-    // Return the processed data
-    return {
-      response: data.response,
-      intent: data.intent || "general_chat",
-      intentData: data.intentData || null,
-      suggestedMode: data.suggestedMode || null,
-      originalPrompt: data.originalPrompt || text, // Always store the original prompt
-      modeSwitchAction: data.modeSwitchAction || null,
-      echoOriginalPrompt: data.echoOriginalPrompt || false
-    };
   } catch (error) {
     console.error("Error in processAIRequest:", error);
     throw error;
