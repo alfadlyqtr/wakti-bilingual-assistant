@@ -1,7 +1,6 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, VolumeUp, Pause } from "lucide-react";
+import { ArrowLeft, Download, Copy, Volume, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -288,7 +287,7 @@ export default function VoiceSummaryDetail() {
             onClick={() => handlePlay(summary.audio_url)}
             className="gap-1"
           >
-            <VolumeUp className="h-4 w-4" />
+            <Volume className="h-4 w-4" />
             {language === 'ar' ? 'استماع للتسجيل' : 'Play Recording'}
           </Button>
         )}
