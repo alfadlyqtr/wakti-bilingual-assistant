@@ -91,6 +91,26 @@ serve(async (req) => {
         
         console.log(`Fetching recording with ID: ${recordingId}`);
         
+        // Check if the voice_summary record exists
+        if (summaryId) {
+          const { data: summaryData, error: summaryError } = await supabase
+            .from("voice_summaries")
+            .select("id")
+            .eq("id", summaryId)
+            .single();
+            
+          if (summaryError || !summaryData) {
+            console.error("Summary record not found:", summaryError);
+            return new Response(
+              JSON.stringify({ error: "Summary record not found" }),
+              { 
+                status: 404, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              }
+            );
+          }
+        }
+        
         // Download audio file from storage
         const { data: fileData, error: downloadError } = await supabase.storage
           .from("voice_recordings")
@@ -98,8 +118,20 @@ serve(async (req) => {
         
         if (downloadError || !fileData) {
           console.error("Error downloading recording:", downloadError);
+          
+          // Update the voice_summaries record to indicate there was an error
+          if (summaryId) {
+            await supabase
+              .from("voice_summaries")
+              .update({ 
+                transcript: "Error: Could not retrieve audio file",
+                title: "Recording Error"
+              })
+              .eq("id", summaryId);
+          }
+          
           return new Response(
-            JSON.stringify({ error: `Failed to download recording: ${downloadError?.message || "Unknown error"}` }),
+            JSON.stringify({ error: `Failed to download recording: ${downloadError?.message || "File not found"}` }),
             { 
               status: 404, 
               headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -169,6 +201,18 @@ serve(async (req) => {
 
     if (!response.ok) {
       console.error("Whisper API error:", result);
+      
+      // Update the voice_summaries record to indicate there was an error
+      if (summaryId) {
+        await supabase
+          .from("voice_summaries")
+          .update({ 
+            transcript: "Error: Transcription failed",
+            title: "Transcription Error"
+          })
+          .eq("id", summaryId);
+      }
+      
       throw new Error(result.error?.message || "Transcription failed");
     }
 
@@ -177,16 +221,38 @@ serve(async (req) => {
     // If we have a summaryId, update the voice_summaries table with the transcript
     if (summaryId && result.text) {
       console.log(`Updating voice_summary record ${summaryId} with transcript`);
+      
+      // Generate smart title from the transcript
+      let smartTitle = "Untitled Recording";
+      
+      // Extract a smart title based on the first sentence or keywords
+      if (result.text && result.text.trim().length > 0) {
+        // Take first 5-10 words or first sentence (whichever is shorter)
+        const firstSentence = result.text.split(/[.!?]/, 1)[0].trim();
+        
+        if (firstSentence.length <= 50) {
+          smartTitle = firstSentence;
+        } else {
+          // If first sentence is too long, take first few words
+          const words = firstSentence.split(' ');
+          const shortTitle = words.slice(0, 5).join(' ');
+          smartTitle = shortTitle + (words.length > 5 ? '...' : '');
+        }
+      }
+      
       const { error: updateError } = await supabase
         .from("voice_summaries")
-        .update({ transcript: result.text })
+        .update({ 
+          transcript: result.text,
+          title: smartTitle
+        })
         .eq("id", summaryId);
         
       if (updateError) {
         console.error("Error updating voice summary with transcript:", updateError);
         // Continue anyway - we'll return the transcript to the client even if DB update fails
       } else {
-        console.log("Voice summary successfully updated with transcript");
+        console.log("Voice summary successfully updated with transcript and smart title");
       }
     }
     

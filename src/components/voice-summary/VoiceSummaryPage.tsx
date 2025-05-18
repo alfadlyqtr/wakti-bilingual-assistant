@@ -48,6 +48,10 @@ export default function VoiceSummaryPage() {
     setRecordings([newRecording, ...recordings]);
     setShowRecordingDialog(false);
   };
+  
+  const handleRecordingDeleted = (recordingId: string) => {
+    setRecordings(recordings.filter(recording => recording.id !== recordingId));
+  };
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -70,7 +74,10 @@ export default function VoiceSummaryPage() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : recordings.length > 0 ? (
-          <VoiceSummaryArchive recordings={recordings} />
+          <VoiceSummaryArchive 
+            recordings={recordings}
+            onRecordingDeleted={handleRecordingDeleted} 
+          />
         ) : (
           <div className="flex flex-col items-center justify-center h-40 text-center">
             <div className="text-muted-foreground mb-2">
