@@ -65,6 +65,7 @@ export default function Login() {
   const [redirectionInProgress, setRedirectionInProgress] = useState(false);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const successToastShownRef = useRef(false);
+  const redirectionAttemptedRef = useRef(false);
   
   // Get translations for the current language
   const t = translations[language];
@@ -117,17 +118,24 @@ export default function Login() {
   // Reset the success toast flag when the component mounts
   useEffect(() => {
     successToastShownRef.current = false;
+    redirectionAttemptedRef.current = false;
+    
+    // Reset states when component mounts
+    setRedirectionInProgress(false);
+    
     return () => {
-      // Reset the flag when component unmounts
+      // Reset flags when component unmounts
       successToastShownRef.current = false;
+      redirectionAttemptedRef.current = false;
     };
   }, []);
 
   // Handle redirection if user is already authenticated
   useEffect(() => {
-    if (user && !redirectionInProgress) {
-      logWithTimestamp("User already authenticated, initiating redirection", {
+    if (user && !redirectionAttemptedRef.current) {
+      logWithTimestamp("User authenticated, initiating redirection", {
         userId: user.id,
+        path: location.pathname,
         localLoading,
         authIsLoading,
         redirectionInProgress
@@ -135,6 +143,7 @@ export default function Login() {
       
       // Mark that redirection process has started to avoid multiple redirects
       setRedirectionInProgress(true);
+      redirectionAttemptedRef.current = true;
       
       // Clear any loading state
       setLocalLoading(false);
@@ -154,10 +163,27 @@ export default function Login() {
       const destination = location.state?.from?.pathname || "/dashboard";
       logWithTimestamp(`Redirecting to ${destination}`);
       
-      // Navigate to destination
-      navigate(destination, { replace: true });
+      // Add a slight delay before navigation to ensure state updates complete
+      setTimeout(() => {
+        logWithTimestamp(`Executing navigation to ${destination}`);
+        navigate(destination, { replace: true });
+      }, 100);
     }
-  }, [user, localLoading, navigate, location, redirectionInProgress, language]);
+  }, [user, navigate, location, language]);
+
+  // Add a safety net for redirection
+  useEffect(() => {
+    // If we have a user but somehow didn't redirect after a second,
+    // force a redirection to dashboard
+    if (user && redirectionInProgress) {
+      const safetyTimer = setTimeout(() => {
+        logWithTimestamp("Safety redirection triggered");
+        navigate("/dashboard", { replace: true });
+      }, 1000);
+      
+      return () => clearTimeout(safetyTimer);
+    }
+  }, [user, redirectionInProgress, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,6 +198,10 @@ export default function Login() {
     logWithTimestamp("Attempting login with email:", email);
     
     try {
+      // Reset redirection flags before sign-in attempt
+      redirectionAttemptedRef.current = false;
+      setRedirectionInProgress(false);
+      
       const error = await signIn(email, password);
 
       // Reset localLoading on both success and error paths
@@ -188,7 +218,6 @@ export default function Login() {
       } else {
         logWithTimestamp("Login successful, resetting loading state");
         // Note: Success toast is shown in the effect when user is detected
-        // This prevents duplicate toasts and ensures the toast shows after redirect
         
         // Reset localLoading immediately after successful login
         setLocalLoading(false);

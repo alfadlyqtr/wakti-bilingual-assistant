@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
@@ -103,5 +102,24 @@ export async function deleteUserAccount() {
   } catch (error) {
     console.error("Error deleting account:", error);
     return { error };
+  }
+}
+
+// Function to ensure session is refreshed and valid
+export async function refreshSession() {
+  try {
+    console.log("Auth utils: Refreshing session");
+    const { data, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.error("Auth utils: Error refreshing session:", error);
+      throw error;
+    }
+    
+    console.log("Auth utils: Session refreshed successfully");
+    return data.session;
+  } catch (error) {
+    console.error("Auth utils: Exception during session refresh:", error);
+    return null;
   }
 }
