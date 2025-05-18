@@ -1,19 +1,13 @@
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { Button } from "@/components/ui/button";
-import { motion } from "framer-motion";
-import { Check, ArrowRight, CircleCheck, Bot } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
 import { HomeHero } from "@/components/home/HomeHero";
 import { HomeFeatures } from "@/components/home/HomeFeatures";
+import { HomeAICapabilities } from "@/components/home/HomeAICapabilities";
+import { HomePricing } from "@/components/home/HomePricing";
 
 export default function Home() {
   const { language, theme } = useTheme();
-  const [pricingPlan, setPricingPlan] = useState("monthly");
-  const navigate = useNavigate();
   
   const translations = {
     en: {
@@ -80,26 +74,6 @@ export default function Home() {
   const primaryBg = theme === "dark" ? "bg-dark-bg" : "bg-light-bg";
   const accentBg = theme === "dark" ? "bg-dark-tertiary/20" : "bg-light-secondary/20";
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { 
-      opacity: 1,
-      transition: { 
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
-      }
-    }
-  };
-  
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { 
-      y: 0, 
-      opacity: 1,
-      transition: { duration: 0.5, ease: "easeOut" }
-    }
-  };
-
   return (
     <div className="mobile-container">
       <AppHeader showUserMenu={false} title="WAKTI" />
@@ -131,150 +105,36 @@ export default function Home() {
         />
         
         {/* WAKTI AI Section */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={containerVariants}
-          className="px-4 py-8 bg-gradient-to-b from-transparent to-slate-50/5"
-        >
-          <motion.h2 
-            variants={itemVariants}
-            className="text-xl font-bold mb-6 text-center flex items-center justify-center gap-2"
-          >
-            <Bot className="h-5 w-5 text-blue-500" />
-            {t.aiSectionTitle}
-          </motion.h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-indigo-500 to-blue-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-indigo-500" /> {t.aiFeature1Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature1Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-fuchsia-500 to-violet-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-fuchsia-500" /> {t.aiFeature2Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature2Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-rose-500 to-red-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-rose-500" /> {t.aiFeature3Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature3Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-emerald-500 to-green-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-emerald-500" /> {t.aiFeature4Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature4Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </motion.section>
+        <HomeAICapabilities
+          translations={{
+            aiSectionTitle: t.aiSectionTitle,
+            aiFeature1Title: t.aiFeature1Title,
+            aiFeature1Desc: t.aiFeature1Desc,
+            aiFeature2Title: t.aiFeature2Title,
+            aiFeature2Desc: t.aiFeature2Desc,
+            aiFeature3Title: t.aiFeature3Title,
+            aiFeature3Desc: t.aiFeature3Desc,
+            aiFeature4Title: t.aiFeature4Title,
+            aiFeature4Desc: t.aiFeature4Desc
+          }}
+        />
         
-        {/* Pricing Section with Modern Design */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-50px" }}
-          variants={containerVariants}
-          className={`px-4 py-8 mx-4 my-4 rounded-2xl ${accentBg} backdrop-blur-sm`}
-        >
-          <motion.div 
-            variants={itemVariants}
-            className="text-center mb-5"
-          >
-            <div className="inline-flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded-full p-1 border mb-6 shadow-sm">
-              <Button 
-                size="sm" 
-                variant={pricingPlan === "monthly" ? "default" : "ghost"}
-                className="rounded-full text-xs px-4"
-                onClick={() => setPricingPlan("monthly")}
-              >
-                {t.monthly}
-              </Button>
-              <Button 
-                size="sm"
-                variant={pricingPlan === "yearly" ? "default" : "ghost"}
-                className="rounded-full text-xs px-4"
-                onClick={() => setPricingPlan("yearly")}
-              >
-                {t.yearly}
-              </Button>
-            </div>
-            
-            <motion.div 
-              key={pricingPlan}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="bg-background/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border max-w-xs mx-auto"
-            >
-              <div className="flex justify-between items-baseline mb-6">
-                <h3 className="text-2xl font-bold">
-                  {pricingPlan === "monthly" ? t.monthlyPrice : t.yearlyPrice}
-                </h3>
-                {pricingPlan === "yearly" && (
-                  <span className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
-                    {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
-                  </span>
-                )}
-              </div>
-              
-              <ul className="space-y-3 mb-6 text-sm">
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature1Title}</span>
-                </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature2Title}</span>
-                </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature3Title}</span>
-                </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature4Title}</span>
-                </li>
-              </ul>
-              
-              <Button
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                onClick={() => navigate('/signup')}
-              >
-                {t.trial}
-              </Button>
-            </motion.div>
-          </motion.div>
-        </motion.section>
+        {/* Pricing Section */}
+        <HomePricing
+          translations={{
+            monthly: t.monthly,
+            yearly: t.yearly,
+            monthlyPrice: t.monthlyPrice,
+            yearlyPrice: t.yearlyPrice,
+            trial: t.trial,
+            feature1Title: t.feature1Title,
+            feature2Title: t.feature2Title,
+            feature3Title: t.feature3Title,
+            feature4Title: t.feature4Title
+          }}
+          accentBg={accentBg}
+          language={language}
+        />
       </div>
     </div>
   );
