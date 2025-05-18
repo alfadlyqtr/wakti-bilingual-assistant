@@ -25,6 +25,7 @@ import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAss
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Layout component that adds header and mobile navigation
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -59,30 +60,156 @@ function App() {
               {/* Public routes */}
               <Route path="/" element={<Home />} />
               <Route path="/home" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
+              
+              {/* Auth routes (automatically redirects to dashboard if already authenticated) */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/login" element={<Login />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+              </Route>
 
-              {/* WAKTI AI route */}
-              <Route path="/wakti-ai" element={
-                <AppLayout>
-                  <WaktiAIPage />
-                </AppLayout>
-              } />
+              {/* WAKTI AI route - Protected */}
+              <Route 
+                path="/wakti-ai" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <WaktiAIPage />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
 
-              {/* Regular routes - temporarily accessible without authentication */}
-              <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-              <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-              <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
-              <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
-              <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-              <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
-              <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
-              <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-              <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-              <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-              <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
-              <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-              <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
+              {/* Protected routes */}
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Dashboard />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/calendar" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Calendar />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/tasks" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Tasks />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/reminders" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Reminders />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/events" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Events />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/voice-summary" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <VoiceSummary />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/voice-summary/:id" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <VoiceSummaryDetail />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/settings" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Settings />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/event/create" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <EventCreate />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/event/:id" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <EventDetail />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/messages" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Messages />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/contacts" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Contacts />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/account" 
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Account />
+                    </AppLayout>
+                  </ProtectedRoute>
+                } 
+              />
 
               {/* 404 route */}
               <Route path="*" element={<NotFound />} />
