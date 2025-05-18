@@ -50,8 +50,7 @@ export default function Login() {
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // Navigate to dashboard after successful login
-        navigate('/dashboard');
+        // Remove navigation - let the auth context handle redirection
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
@@ -82,7 +81,7 @@ export default function Login() {
       login: "تسجيل الدخول",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
-      forgotPassword: "نسيت كلم�� المرور؟",
+      forgotPassword: "نسيت كلم المرور؟",
       loading: "جاري التحميل...",
       createAccount: "ليس لديك حساب؟",
       signup: "إنشاء حساب",

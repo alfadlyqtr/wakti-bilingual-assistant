@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -57,27 +58,39 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   useEffect(() => {
     logAuthState('Setting up authentication');
     
-    // Set up auth state listener
+    // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         logAuthState(`Auth state change: ${event}`, { hasNewSession: !!currentSession });
         
+        // Handle sign out
         if (event === 'SIGNED_OUT') {
           logAuthState('User signed out, clearing state');
+          // Immediately clear user state to prevent flashes of content
           setUser(null);
           setSession(null);
-        } else if (currentSession) {
-          logAuthState('Session updated', { userId: currentSession?.user?.id });
-          setSession(currentSession);
-          setUser(currentSession?.user ?? null);
+          setLoading(false);
+          return;
         }
         
-        // Mark loading as complete
-        setLoading(false);
+        // Handle sign in and token refresh
+        if (currentSession) {
+          logAuthState('Session updated', { userId: currentSession?.user?.id, event });
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          setLoading(false);
+          return;
+        }
+        
+        // Only set loading to false if we have an explicit auth event without a session
+        // (this avoids race conditions where loading is set to false too early)
+        if (['SIGNED_OUT', 'USER_UPDATED'].includes(event)) {
+          setLoading(false);
+        }
       }
     );
 
-    // Check for existing session
+    // Then check for existing session
     const initializeAuth = async () => {
       try {
         logAuthState('Checking for existing session');
@@ -91,6 +104,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           logAuthState('No existing session found');
         }
         
+        // Set loading to false regardless of session
         setLoading(false);
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -106,14 +120,20 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   }, []);
 
   const refreshSession = async () => {
+    logAuthState('Manually refreshing session');
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      logAuthState('Refresh session result', { hasSession: !!currentSession });
+      
       if (currentSession) {
         setSession(currentSession);
         setUser(currentSession.user);
       }
+      
+      return currentSession;
     } catch (error) {
       console.error("Error refreshing session:", error);
+      return null;
     }
   };
 
@@ -126,6 +146,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         console.error("Error signing in:", error);
       } else {
         logAuthState("Sign in successful");
+        // Session will be updated via the onAuthStateChange listener
       }
       
       return error;

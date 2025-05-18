@@ -12,17 +12,18 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, isLoading } = useAuth();
+  const { user } = useAuth();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
   
-  // Simple redirect if user is logged in
+  // Simplified redirect if user is logged in
   useEffect(() => {
-    if (!isLoading && user) {
+    // Only redirect if we have a user
+    if (user) {
       console.log("Home: User is logged in, redirecting to dashboard");
       navigate('/dashboard');
     }
-  }, [user, isLoading, navigate]);
+  }, [user, navigate]);
 
   const translations = {
     en: {
