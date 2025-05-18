@@ -1,17 +1,14 @@
 
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Logo3D } from "@/components/Logo3D";
-import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
+import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck, Bot } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { AppHeader } from "@/components/AppHeader";
+import { HomeHero } from "@/components/home/HomeHero";
 
 export default function Home() {
-  const navigate = useNavigate();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
   
@@ -78,7 +75,6 @@ export default function Home() {
   
   // Define colors based on theme
   const primaryBg = theme === "dark" ? "bg-dark-bg" : "bg-light-bg";
-  const primaryText = theme === "dark" ? "text-white" : "text-light-primary";
   const accentBg = theme === "dark" ? "bg-dark-tertiary/20" : "bg-light-secondary/20";
 
   const containerVariants = {
@@ -107,53 +103,14 @@ export default function Home() {
       
       <div className="flex-1 overflow-y-auto pb-16">
         {/* Hero Section */}
-        <section className={`${primaryBg} px-4 py-6`}>
-          <motion.div 
-            initial="hidden"
-            animate="visible"
-            variants={containerVariants}
-            className="mb-6"
-          >
-            <motion.div variants={itemVariants}>
-              <Logo3D size="lg" className="mx-auto mb-2" />
-            </motion.div>
-            
-            <motion.h1 
-              variants={itemVariants} 
-              className={`text-3xl font-bold mb-2 ${primaryText}`}
-            >
-              {t.tagline}
-            </motion.h1>
-            
-            <motion.p 
-              variants={itemVariants}
-              className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto"
-            >
-              {t.description}
-            </motion.p>
-            
-            <motion.div variants={itemVariants} className="mt-6 flex flex-col gap-3 max-w-xs mx-auto">
-              <Button 
-                size="lg" 
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                onClick={() => navigate('/signup')}
-              >
-                {t.trial}
-                <ArrowRight className="h-4 w-4 ml-1" />
-              </Button>
-              
-              {/* Add Login button for existing users */}
-              <Button 
-                variant="outline"
-                size="lg" 
-                className="w-full"
-                onClick={() => navigate('/login')}
-              >
-                {t.loginBtn}
-              </Button>
-            </motion.div>
-          </motion.div>
-        </section>
+        <HomeHero 
+          translations={{
+            tagline: t.tagline,
+            description: t.description,
+            trial: t.trial,
+            loginBtn: t.loginBtn
+          }} 
+        />
         
         {/* Features Section with Modern Cards */}
         <motion.section 
