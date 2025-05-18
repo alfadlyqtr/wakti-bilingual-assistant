@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 interface AuthContextType {
   user: User | null;
   session: Session | null;
-  loading: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
   signUp: (email: string, password: string) => Promise<AuthError | null>;
@@ -22,7 +20,6 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
-  loading: true,
   isLoading: true,
   signIn: async () => null,
   signUp: async () => null,
@@ -46,7 +43,7 @@ const getTimestamp = () => new Date().toISOString();
 export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Debug helper with timestamp
   const logAuthState = (message: string, details?: any) => {
@@ -54,7 +51,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       hasUser: !!user,
       userId: user?.id,
       hasSession: !!session,
-      isLoading: loading,
+      isLoading,
       ...(details || {})
     });
   };
@@ -62,7 +59,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   useEffect(() => {
     logAuthState('Setting up authentication');
     
-    // Set up auth state listener
+    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         logAuthState(`Auth state change: ${event}`, { 
@@ -76,6 +73,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           logAuthState('User signed out, clearing auth state');
           setUser(null);
           setSession(null);
+          setIsLoading(false);
         } else if (currentSession) {
           logAuthState('Updating auth state with new session', {
             userId: currentSession.user?.id,
@@ -83,14 +81,15 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           });
           setSession(currentSession);
           setUser(currentSession.user ?? null);
+          setIsLoading(false);
+        } else {
+          // Handle other auth events - ensure we're not stuck loading
+          setIsLoading(false);
         }
-        
-        // Always ensure loading is false after auth state changes
-        setLoading(false);
       }
     );
 
-    // Check for existing session immediately
+    // THEN check for existing session
     const initializeAuth = async () => {
       try {
         logAuthState('Checking for existing session');
@@ -109,10 +108,10 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         }
         
         // Always set loading to false after initialization
-        setLoading(false);
+        setIsLoading(false);
       } catch (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error initializing auth:`, error);
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -149,36 +148,47 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const signIn = async (email: string, password: string) => {
     logAuthState('Attempting sign in', { email });
+    setIsLoading(true);
+    
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error signing in:`, error);
+        setIsLoading(false);
       } else {
         logAuthState("Sign in successful");
+        // We'll let onAuthStateChange handle setting isLoading to false 
+        // after the session is properly established
       }
       
       return error;
     } catch (error) {
       console.error(`[${getTimestamp()}] AuthContext: Exception during sign in:`, error);
+      setIsLoading(false);
       return error as AuthError;
     }
   };
 
   const signUp = async (email: string, password: string) => {
     logAuthState('Attempting sign up', { email });
+    setIsLoading(true);
+    
     try {
       const { error } = await supabase.auth.signUp({ email, password });
       
       if (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error signing up:`, error);
+        setIsLoading(false);
       } else {
         logAuthState("Sign up successful");
+        // We'll let onAuthStateChange handle setting isLoading to false
       }
       
       return error;
     } catch (error) {
       console.error(`[${getTimestamp()}] AuthContext: Exception during sign up:`, error);
+      setIsLoading(false);
       return error as AuthError;
     }
   };
@@ -186,6 +196,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const signOut = async () => {
     logAuthState('Attempting sign out');
     try {
+      // Set loading state to indicate logout in progress
+      setIsLoading(true);
+      
       // Clear auth state first for better UX
       setUser(null);
       setSession(null);
@@ -194,12 +207,15 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       
       if (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error signing out:`, error);
+        setIsLoading(false);
         throw error;
       }
       
       logAuthState('Sign out successful');
+      // Let onAuthStateChange handle the final isLoading=false
     } catch (error) {
       console.error(`[${getTimestamp()}] AuthContext: Exception during sign out:`, error);
+      setIsLoading(false);
     }
   };
 
@@ -303,8 +319,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const value = {
     user,
     session,
-    loading,
-    isLoading: loading,  // Simplified loading state
+    isLoading,  // Only export a single loading state
     signIn,
     signUp,
     signOut,
