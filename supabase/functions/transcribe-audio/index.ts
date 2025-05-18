@@ -43,14 +43,27 @@ serve(async (req) => {
     const contentType = req.headers.get("content-type") || "";
     
     if (contentType.includes("multipart/form-data")) {
-      // Handle direct file upload (legacy approach)
-      const formData = await req.formData();
-      audioFile = formData.get("audio");
-      
-      if (!audioFile || !(audioFile instanceof File)) {
-        console.error("Missing audio file in request");
+      // Handle direct file upload (form data approach)
+      try {
+        const formData = await req.formData();
+        audioFile = formData.get("audio");
+        
+        if (!audioFile || !(audioFile instanceof File)) {
+          console.error("Missing audio file in request");
+          return new Response(
+            JSON.stringify({ error: "Audio file is required" }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        console.log(`Received direct audio upload: ${audioFile.size} bytes, type: ${audioFile.type}`);
+      } catch (formError) {
+        console.error("Error processing form data:", formError);
         return new Response(
-          JSON.stringify({ error: "Audio file is required" }),
+          JSON.stringify({ error: `Failed to process form data: ${formError.message}` }),
           { 
             status: 400, 
             headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -59,42 +72,64 @@ serve(async (req) => {
       }
     } 
     else {
-      // Handle recordingId approach (new approach)
-      const data = await req.json();
-      recordingId = data.recordingId;
-      summaryId = data.summaryId;
-      
-      if (!recordingId) {
-        console.error("Missing recordingId in request");
+      // Handle recordingId approach (JSON data)
+      try {
+        const data = await req.json();
+        recordingId = data.recordingId;
+        summaryId = data.summaryId;
+        
+        if (!recordingId) {
+          console.error("Missing recordingId in request");
+          return new Response(
+            JSON.stringify({ error: "recordingId is required" }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        console.log(`Fetching recording with ID: ${recordingId}`);
+        
+        // Download audio file from storage
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from("voice_recordings")
+          .download(recordingId);
+        
+        if (downloadError || !fileData) {
+          console.error("Error downloading recording:", downloadError);
+          return new Response(
+            JSON.stringify({ error: `Failed to download recording: ${downloadError?.message || "Unknown error"}` }),
+            { 
+              status: 404, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        audioFile = new File([fileData], "audio.webm", { type: "audio/webm" });
+        console.log(`Successfully retrieved audio file: ${audioFile.size} bytes`);
+      } catch (jsonError) {
+        console.error("Error processing JSON data:", jsonError);
         return new Response(
-          JSON.stringify({ error: "recordingId is required" }),
+          JSON.stringify({ error: `Failed to process request data: ${jsonError.message}` }),
           { 
             status: 400, 
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           }
         );
       }
-      
-      console.log(`Fetching recording with ID: ${recordingId}`);
-      
-      // Download audio file from storage
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from("voice_recordings")
-        .download(recordingId);
-      
-      if (downloadError || !fileData) {
-        console.error("Error downloading recording:", downloadError);
-        return new Response(
-          JSON.stringify({ error: `Failed to download recording: ${downloadError?.message || "Unknown error"}` }),
-          { 
-            status: 404, 
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          }
-        );
-      }
-      
-      audioFile = new File([fileData], "audio.webm", { type: "audio/webm" });
-      console.log(`Successfully retrieved audio file: ${audioFile.size} bytes`);
+    }
+    
+    if (!audioFile) {
+      console.error("No audio file was obtained from the request");
+      return new Response(
+        JSON.stringify({ error: "No audio file was provided or retrieved" }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        }
+      );
     }
     
     // Maximum allowed audio duration (2 minutes = ~40MB approximate for high quality audio)

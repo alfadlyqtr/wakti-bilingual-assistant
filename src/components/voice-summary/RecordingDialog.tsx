@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Mic, Square, Upload, FileAudio } from "lucide-react";
+import { Mic, Square, Upload, FileAudio, X } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +30,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
+  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -47,9 +50,49 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     };
   }, [audioUrl]);
 
+  // Generate title from transcript
+  useEffect(() => {
+    if (transcript && !title.trim()) {
+      generateTitleSuggestion(transcript);
+    }
+  }, [transcript, title]);
+
+  const generateTitleSuggestion = async (text: string) => {
+    // Generate a simple title based on the transcript content
+    setIsGeneratingSuggestion(true);
+    try {
+      // Split the transcript into sentences
+      const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+      
+      // Take the first sentence or part of it if it's long
+      let suggestion = sentences[0]?.trim() || text.substring(0, 30);
+      
+      // If it's too long, truncate it to a reasonable length
+      if (suggestion.length > 50) {
+        suggestion = suggestion.substring(0, 47) + '...';
+      }
+      
+      // Ensure the first letter is capitalized
+      suggestion = suggestion.charAt(0).toUpperCase() + suggestion.slice(1);
+      
+      setSuggestedTitle(suggestion);
+    } catch (err) {
+      console.error('Error generating title suggestion:', err);
+    } finally {
+      setIsGeneratingSuggestion(false);
+    }
+  };
+
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
       mediaRecorderRef.current = new MediaRecorder(stream);
       
       mediaRecorderRef.current.ondataavailable = (event) => {
@@ -63,6 +106,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         const url = URL.createObjectURL(audioBlob);
         setAudioBlob(audioBlob);
         setAudioUrl(url);
+        
+        // Quick check for transcript of the recording
+        getTranscript(audioBlob);
       };
       
       audioChunksRef.current = [];
@@ -102,6 +148,69 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       }
     }
   };
+
+  const cancelRecording = () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      
+      setIsRecording(false);
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      // Reset recording state
+      audioChunksRef.current = [];
+      setRecordingTime(0);
+      
+      toast({
+        description: language === 'ar' 
+          ? 'تم إلغاء التسجيل' 
+          : 'Recording cancelled',
+      });
+    }
+  };
+  
+  const getTranscript = async (blob: Blob) => {
+    if (!user) return;
+    
+    try {
+      // Create a form data object
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      
+      // Get auth session for API call
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        throw new Error('No auth session');
+      }
+      
+      // Call the transcribe-audio edge function directly with the blob
+      const response = await fetch(
+        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Transcription failed');
+      }
+      
+      const { text } = await response.json();
+      setTranscript(text);
+    } catch (err) {
+      console.error('Error getting transcript:', err);
+    }
+  };
   
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -133,6 +242,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       const url = URL.createObjectURL(file);
       setAudioUrl(url);
       setAudioBlob(file);
+      
+      // Try to generate transcript from the uploaded file too
+      getTranscript(file);
     }
   };
   
@@ -212,7 +324,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           user_id: user.id,
           attendees: attendees || null,
           location: location || null,
-          transcript: null,
+          transcript: transcript || null,
           summary: null,
           expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days from now
         })
@@ -228,19 +340,21 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         onRecordingCreated(recordingData);
       }
       
-      // Trigger transcription function
-      try {
-        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-          },
-          body: JSON.stringify({ recordingId })
-        });
-      } catch (functionError) {
-        console.error('Error triggering transcription function:', functionError);
-        // Continue execution - the error in triggering the function shouldn't block the user
+      // If transcript wasn't already generated, trigger transcription function
+      if (!transcript) {
+        try {
+          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-audio`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({ recordingId: filePath, summaryId: recordingId })
+          });
+        } catch (functionError) {
+          console.error('Error triggering transcription function:', functionError);
+          // Continue execution - the error in triggering the function shouldn't block the user
+        }
       }
       
       // Show success message
@@ -273,6 +387,8 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     setAudioBlob(null);
     setAudioUrl(null);
     setSelectedFile(null);
+    setTranscript(null);
+    setSuggestedTitle(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -284,6 +400,13 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     setAttendees("");
     setLocation("");
     onClose();
+  };
+  
+  const useSuggestedTitle = () => {
+    if (suggestedTitle) {
+      setTitle(suggestedTitle);
+      setSuggestedTitle(null); // Clear the suggestion after using it
+    }
   };
 
   return (
@@ -300,14 +423,32 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
             <Label htmlFor="title">
               {language === 'ar' ? 'العنوان' : 'Title'} *
             </Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder={language === 'ar' ? 'عنوان التسجيل' : 'Recording title'}
-              disabled={isUploading}
-              required
-            />
+            <div className="relative">
+              <Input
+                id="title"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder={language === 'ar' ? 'عنوان التسجيل' : 'Recording title'}
+                disabled={isUploading}
+                required
+              />
+              {suggestedTitle && (
+                <div className="mt-1 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">
+                    {language === 'ar' ? 'العنوان المقترح: ' : 'Suggested title: '}
+                    <span className="font-medium text-primary">{suggestedTitle}</span>
+                  </span>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={useSuggestedTitle} 
+                    className="h-6 px-2 text-xs"
+                  >
+                    {language === 'ar' ? 'استخدم' : 'Use'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
           
           <div className="space-y-2">
@@ -386,16 +527,29 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                         {formatRecordingTime(recordingTime)}
                       </div>
                       
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={stopRecording}
-                        className="flex items-center gap-1"
-                        disabled={isUploading}
-                      >
-                        <Square className="h-4 w-4 mr-1" />
-                        {language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording'}
-                      </Button>
+                      <div className="flex items-center justify-center gap-3">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          onClick={stopRecording}
+                          className="flex items-center gap-1"
+                          disabled={isUploading}
+                        >
+                          <Square className="h-4 w-4 mr-1" />
+                          {language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording'}
+                        </Button>
+                        
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={cancelRecording}
+                          className="flex items-center gap-1"
+                          disabled={isUploading}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </>
