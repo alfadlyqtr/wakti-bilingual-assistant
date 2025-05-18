@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -328,10 +327,10 @@ export default function Account() {
       }
       
       // Now change the password
-      const error = await updateUserPassword(newPassword);
+      const { user: updatedUser, error } = await updateUserPassword(newPassword);
       
       if (error) {
-        setPasswordError(error.message);
+        setPasswordError(error.error?.message || 'Error updating password'); // Fixed: Access message through error.error
       } else {
         showSuccess(language === 'ar' ? 'تم تغيير كلمة المرور بنجاح' : 'Password changed successfully');
         setCurrentPassword("");
@@ -915,7 +914,7 @@ export default function Account() {
               <div className="flex items-center justify-between">
                 <span>
                   {language === "ar"
-                    ? "إشعارات الرسائل"
+                    ? "إشعارات الرسائ��"
                     : "Message Notifications"}
                 </span>
                 <Switch id="message-notifications" defaultChecked />

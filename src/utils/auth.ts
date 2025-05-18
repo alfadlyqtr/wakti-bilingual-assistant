@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from '@supabase/supabase-js';
 
@@ -67,7 +66,7 @@ export async function updateUserPassword(password: string) {
     console.error("[AUTH_UTILS] Update password error:", error);
   }
   
-  return { user: data.user, error };
+  return { user: data?.user, error };
 }
 
 // Delete user account
