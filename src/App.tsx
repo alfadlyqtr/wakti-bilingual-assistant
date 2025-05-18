@@ -1,6 +1,6 @@
 
-import React, { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/hooks/use-toast";
@@ -29,39 +29,11 @@ import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
 
-// Enhanced route tracker component to debug navigation
-function RouteTracker() {
-  const location = useLocation();
-  const prevPathRef = React.useRef<string | null>(null);
-  
-  useEffect(() => {
-    const prevPath = prevPathRef.current;
-    prevPathRef.current = location.pathname;
-    
-    console.log("NAVIGATION DEBUG: Route changed", { 
-      to: location.pathname,
-      from: prevPath,
-      state: location.state,
-      search: location.search
-    });
-    
-    return () => {
-      console.log("NAVIGATION DEBUG: Component unmounting at path:", location.pathname);
-    };
-  }, [location]);
-  
-  return null;
-}
-
 // Layout component that adds header and mobile navigation
 function AppLayout({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  const isAuthPage = ['/login', '/signup', '/forgot-password', '/reset-password', '/home', '/'].includes(location.pathname);
-  
-  // Don't show header on auth pages
   return (
     <div className="mobile-container">
-      {!isAuthPage && <AppHeader />}
+      <AppHeader />
       {children}
       <MobileNav />
       <Toaster />
@@ -86,7 +58,6 @@ function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
-            <RouteTracker />
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<Navigate to="/home" replace />} />

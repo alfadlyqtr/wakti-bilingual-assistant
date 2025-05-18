@@ -1,8 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
-// Sign out function - simplifying to focus on just the auth action, navigation handled by AuthContext
+// Sign out function - simplifying to focus on just the auth action
 export async function signOut() {
   try {
     console.log("Auth utils: Starting sign out process");
@@ -11,7 +10,7 @@ export async function signOut() {
       console.error("Auth utils: Error during sign out:", error);
       throw error;
     }
-    console.log("Auth utils: Successfully signed out from Supabase");
+    console.log("Auth utils: Successfully signed out");
     return { error: null };
   } catch (error) {
     console.error("Auth utils: Exception during sign out:", error);
@@ -45,8 +44,6 @@ export async function updateProfile(data: { user_metadata: {
     };
     
     const { data: updatedUser, error } = await supabase.auth.updateUser(userData);
-    
-    console.log("Profile update response:", { updatedUser, error });
     
     if (error) {
       throw error;

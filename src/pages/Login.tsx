@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -8,57 +8,18 @@ import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
-// Define the type for location state
-interface LocationState {
-  from?: string;
-}
-
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { language, theme } = useTheme();
-  const { user, session, isLoading: authLoading, signIn } = useAuth();
+  const { language } = useTheme();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
-  
-  // Get the location state to know where to redirect after login
-  const locationState = location.state as LocationState;
-  const from = locationState?.from || "/dashboard";
-
-  // Simplified auth check and redirect logic
-  useEffect(() => {
-    console.log("Login: Auth state check", { 
-      user: !!user, 
-      session: !!session, 
-      authLoading,
-      hasCheckedAuth,
-      currentPath: location.pathname,
-      redirectTo: from
-    });
-    
-    // Only mark auth as checked once loading completes
-    if (!authLoading && !hasCheckedAuth) {
-      console.log("Login: Auth check completed");
-      setHasCheckedAuth(true);
-    }
-    
-    // Only redirect if:
-    // 1. Auth check is complete
-    // 2. User is authenticated
-    // 3. Not currently loading
-    if (hasCheckedAuth && user && session && !authLoading && !isLoading) {
-      console.log("Login: User authenticated, redirecting to:", from);
-      navigate(from, { replace: true });
-    }
-  }, [user, session, authLoading, hasCheckedAuth, navigate, from, isLoading]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +50,8 @@ export default function Login() {
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // The redirect will be handled by the useEffect when auth state updates
+        // Navigate to dashboard after successful login
+        navigate('/dashboard');
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
@@ -141,7 +103,7 @@ export default function Login() {
             variant="ghost"
             size="sm"
             className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/home")}  // Updated to navigate to /home
+            onClick={() => navigate("/home")}
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs">{language === 'en' ? 'Back to Home' : 'العودة للرئيسية'}</span>

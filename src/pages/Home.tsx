@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -12,45 +12,16 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, session, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
   const { language, theme } = useTheme();
-  const [redirectAttempted, setRedirectAttempted] = useState(false);
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
   
-  // Simplified and more reliable auth redirect logic
+  // Simple redirect if user is logged in
   useEffect(() => {
-    console.log("Home: Auth state check", { 
-      hasUser: !!user, 
-      hasSession: !!session, 
-      isLoading,
-      redirectAttempted,
-      hasCheckedAuth
-    });
-    
-    // Only set hasCheckedAuth to true once loading is complete
-    if (!isLoading && !hasCheckedAuth) {
-      setHasCheckedAuth(true);
+    if (!isLoading && user) {
+      console.log("Home: User is logged in, redirecting to dashboard");
+      navigate('/dashboard');
     }
-    
-    // Only redirect if:
-    // 1. We've completed an auth check
-    // 2. Not still loading
-    // 3. User is authenticated
-    // 4. Haven't attempted redirect yet
-    if (hasCheckedAuth && !isLoading && user && session && !redirectAttempted) {
-      console.log("Home: User is authenticated, redirecting to dashboard");
-      setRedirectAttempted(true);
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, session, isLoading, hasCheckedAuth, navigate, redirectAttempted]);
-  
-  // Reset redirect flag if user signs out
-  useEffect(() => {
-    if (hasCheckedAuth && !isLoading && (!user || !session) && redirectAttempted) {
-      console.log("Home: User signed out, resetting redirect flag");
-      setRedirectAttempted(false);
-    }
-  }, [user, session, hasCheckedAuth, isLoading, redirectAttempted]);
+  }, [user, isLoading, navigate]);
 
   const translations = {
     en: {
@@ -83,7 +54,7 @@ export default function Home() {
     },
     ar: {
       tagline: "مساعد الإنتاجية الذكي",
-      description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعومة بالذكاء الاصطناعي",
+      description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعوم�� بالذكاء الاصطناعي",
       loginBtn: "تسجيل الدخول",
       trial: "ا��دأ التجربة المجانية لمدة 3 أيام",
       monthly: "شهري",

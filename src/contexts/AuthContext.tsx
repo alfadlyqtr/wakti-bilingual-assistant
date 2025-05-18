@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate, useLocation } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -44,104 +43,68 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const navigationInProgress = useRef(false);
-  const authStateUpdateInProgress = useRef(false);
   
-  // Debug helper to track auth state changes
+  // Debug helper
   const logAuthState = (message: string, details?: any) => {
     console.log(`AuthContext: ${message}`, {
       hasUser: !!user,
       hasSession: !!session,
       isLoading: loading,
-      currentPath: location.pathname,
       ...(details || {})
     });
   };
 
   useEffect(() => {
-    logAuthState('Setting up authentication listeners');
+    logAuthState('Setting up authentication');
     
-    // Set up auth state listener FIRST
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        logAuthState(`Auth state change event: ${event}`, { hasNewSession: !!currentSession });
+        logAuthState(`Auth state change: ${event}`, { hasNewSession: !!currentSession });
         
-        // Prevent multiple state updates from happening simultaneously
-        if (authStateUpdateInProgress.current) {
-          logAuthState('Auth state update already in progress, waiting');
-          return;
-        }
-        
-        authStateUpdateInProgress.current = true;
-        
-        // Properly handle sign out event
         if (event === 'SIGNED_OUT') {
           logAuthState('User signed out, clearing state');
-          
-          // Clear auth state
           setUser(null);
           setSession(null);
-          
-          // Only navigate if not already navigating
-          if (!navigationInProgress.current && location.pathname !== '/home' && location.pathname !== '/login') {
-            logAuthState('Navigating to home after sign out');
-            navigationInProgress.current = true;
-            
-            // Add a small delay to ensure state updates have propagated
-            setTimeout(() => {
-              navigate('/home', { replace: true });
-              // Reset navigation flag after a small delay
-              setTimeout(() => {
-                navigationInProgress.current = false;
-              }, 100);
-            }, 50);
-          }
-        } else {
-          // For other events, update the session and user state
+        } else if (currentSession) {
+          logAuthState('Session updated', { userId: currentSession?.user?.id });
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
         }
         
         // Mark loading as complete
         setLoading(false);
-        
-        // Reset auth state update flag after a small delay
-        setTimeout(() => {
-          authStateUpdateInProgress.current = false;
-        }, 100);
       }
     );
 
-    // THEN check for existing session
+    // Check for existing session
     const initializeAuth = async () => {
       try {
         logAuthState('Checking for existing session');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        logAuthState('Initial session check complete', { hasSession: !!currentSession });
         
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+        if (currentSession) {
+          logAuthState('Found existing session', { userId: currentSession?.user?.id });
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+        } else {
+          logAuthState('No existing session found');
+        }
+        
         setLoading(false);
-        setInitialized(true);
       } catch (error) {
-        console.error('AuthProvider: Error initializing auth', error);
+        console.error('Error initializing auth:', error);
         setLoading(false);
-        setInitialized(true);
       }
     };
 
     initializeAuth();
 
     return () => {
-      logAuthState('Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, []); // Removed location.pathname from dependencies to prevent reinitializing auth on route changes
+  }, []);
 
-  // Add a function to refresh the session
   const refreshSession = async () => {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -155,64 +118,58 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   };
 
   const signIn = async (email: string, password: string) => {
-    logAuthState('Attempting sign in for email:', { email });
+    logAuthState('Attempting sign in', { email });
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
       if (error) {
-        console.error("AuthProvider: Error signing in:", error);
+        console.error("Error signing in:", error);
       } else {
         logAuthState("Sign in successful");
       }
+      
       return error;
     } catch (error) {
-      console.error("AuthProvider: Exception during sign in:", error);
+      console.error("Exception during sign in:", error);
       return error as AuthError;
     }
   };
 
   const signUp = async (email: string, password: string) => {
-    console.log('AuthProvider: Attempting sign up for email:', email);
+    logAuthState('Attempting sign up', { email });
     try {
       const { error } = await supabase.auth.signUp({ email, password });
+      
       if (error) {
-        console.error("AuthProvider: Error signing up:", error);
+        console.error("Error signing up:", error);
       } else {
-        console.log("AuthProvider: Sign up successful");
+        logAuthState("Sign up successful");
       }
+      
       return error;
     } catch (error) {
-      console.error("AuthProvider: Exception during sign up:", error);
+      console.error("Exception during sign up:", error);
       return error as AuthError;
     }
   };
 
   const signOut = async () => {
     logAuthState('Attempting sign out');
-    
-    // If navigation already in progress, prevent duplicate sign out
-    if (navigationInProgress.current) {
-      logAuthState('Navigation already in progress, skipping sign out');
-      return;
-    }
-    
-    navigationInProgress.current = true;
-    
     try {
-      // Clear auth state first
+      // Clear auth state first to avoid flash of protected content
       setUser(null);
       setSession(null);
       
-      // Perform the actual sign out
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Error signing out:", error);
+        throw error;
+      }
       
       logAuthState('Sign out successful');
-      
-      // Note: No need to navigate here, the onAuthStateChange handler will handle this
     } catch (error) {
-      console.error("AuthProvider: Error signing out:", error);
-      // Reset navigation flag on error
-      navigationInProgress.current = false;
+      console.error("Exception during sign out:", error);
     }
   };
 
