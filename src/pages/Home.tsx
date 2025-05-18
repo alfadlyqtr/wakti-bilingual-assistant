@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,19 +12,19 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
   const [isRedirecting, setIsRedirecting] = useState(false);
   
-  // Simple redirect if user is logged in - no loading state or complex logic
+  // Simplified redirect logic
   useEffect(() => {
-    if (user) {
+    if (user && !authLoading && !isRedirecting) {
       console.log("Home: User is logged in, redirecting to dashboard");
       setIsRedirecting(true);
       navigate('/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, authLoading, navigate, isRedirecting]);
 
   const translations = {
     en: {
@@ -121,6 +120,20 @@ export default function Home() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <h2 className="text-xl font-bold mb-2">
             {language === 'en' ? 'Redirecting to Dashboard...' : 'جاري التوجيه إلى لوحة التحكم...'}
+          </h2>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading indicator while auth is loading
+  if (authLoading) {
+    return (
+      <div className="mobile-container flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold mb-2">
+            {language === 'en' ? 'Loading...' : 'جاري التحميل...'}
           </h2>
         </div>
       </div>

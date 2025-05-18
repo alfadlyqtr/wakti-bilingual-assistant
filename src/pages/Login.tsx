@@ -47,18 +47,18 @@ export default function Login() {
           description: error.message,
           variant: 'destructive',
         });
+        setIsLoading(false);
       } else {
         console.log("Login: Login successful");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
         });
-        // No navigation here - we'll let ProtectedRoute handle it
+        // No setIsLoading(false) here because we're letting ProtectedRoute redirect
       }
     } catch (err) {
       console.error("Login: Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -99,8 +99,8 @@ export default function Login() {
 
   const t = translations[language];
 
-  // Show loading state when authenticated - ProtectedRoute will handle redirect
-  if (user) {
+  // Show loading state when authenticated or logging in
+  if (user || (isLoading && !errorMsg)) {
     return (
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">

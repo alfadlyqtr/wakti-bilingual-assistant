@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -43,7 +44,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initializationComplete, setInitializationComplete] = useState(false);
   
   // Debug helper
   const logAuthState = (message: string, details?: any) => {
@@ -52,7 +52,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       userId: user?.id,
       hasSession: !!session,
       isLoading: loading,
-      initComplete: initializationComplete,
       ...(details || {})
     });
   };
@@ -60,7 +59,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   useEffect(() => {
     logAuthState('Setting up authentication');
     
-    // Set up auth state listener first to ensure we don't miss any events
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         logAuthState(`Auth state change: ${event}`, { 
@@ -68,43 +67,23 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           hasNewUser: !!currentSession?.user
         });
         
-        // Handle sign out
+        // Update state based on auth events
         if (event === 'SIGNED_OUT') {
-          logAuthState('User signed out, clearing state');
-          // Immediately clear user state to prevent flashes of content
           setUser(null);
           setSession(null);
-          setLoading(false);
-          return;
-        }
-        
-        // Handle sign in and token refresh events
-        if (currentSession) {
-          logAuthState('Session updated', { 
-            userId: currentSession.user?.id, 
-            event,
-            expiry: new Date(currentSession.expires_at! * 1000)
-          });
-          
+        } else if (currentSession) {
           setSession(currentSession);
           setUser(currentSession.user ?? null);
-          setLoading(false);
-          return;
         }
         
-        // For other events without a session, ensure loading state is updated
-        if (['SIGNED_OUT', 'USER_UPDATED'].includes(event)) {
-          setLoading(false);
-        }
+        // Always ensure loading is false after auth state changes
+        setLoading(false);
       }
     );
 
-    // Then check for existing session, with a small delay to ensure listener is set up
+    // Check for existing session immediately
     const initializeAuth = async () => {
       try {
-        // Small delay to ensure listener is registered first
-        await new Promise(resolve => setTimeout(resolve, 50));
-        
         logAuthState('Checking for existing session');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         
@@ -120,13 +99,11 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           logAuthState('No existing session found');
         }
         
-        // Set loading to false AND mark initialization as complete
+        // Always set loading to false after initialization
         setLoading(false);
-        setInitializationComplete(true);
       } catch (error) {
         console.error('Error initializing auth:', error);
         setLoading(false);
-        setInitializationComplete(true); // Still mark as complete even on error
       }
     };
 
@@ -141,11 +118,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     logAuthState('Manually refreshing session');
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
-      logAuthState('Refresh session result', { 
-        hasSession: !!currentSession,
-        userId: currentSession?.user?.id,
-        expiry: currentSession ? new Date(currentSession.expires_at! * 1000) : null
-      });
       
       if (currentSession) {
         setSession(currentSession);
@@ -168,15 +140,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         console.error("Error signing in:", error);
       } else {
         logAuthState("Sign in successful");
-        // Session will be updated via the onAuthStateChange listener
-        
-        // If session doesn't update via listener within 1 second, try refresh
-        setTimeout(async () => {
-          if (!session) {
-            logAuthState("Session not updated via listener, attempting manual refresh");
-            await refreshSession();
-          }
-        }, 1000);
       }
       
       return error;
@@ -207,7 +170,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const signOut = async () => {
     logAuthState('Attempting sign out');
     try {
-      // Clear auth state first to avoid flash of protected content
+      // Clear auth state first for better UX
       setUser(null);
       setSession(null);
       
@@ -294,7 +257,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     user,
     session,
     loading,
-    isLoading: loading || !initializationComplete,  // Account for initialization state
+    isLoading: loading,  // Simplified loading state
     signIn,
     signUp,
     signOut,
