@@ -69,14 +69,14 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* WAKTI AI route - now using AppLayout */}
+              {/* WAKTI AI route */}
               <Route path="/wakti-ai" element={
                 <AppLayout>
                   <WaktiAIPage />
                 </AppLayout>
               } />
 
-              {/* Protected routes */}
+              {/* Protected routes under a single ProtectedRoute component */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                 <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />

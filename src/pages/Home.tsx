@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -12,26 +12,17 @@ import { AppHeader } from "@/components/AppHeader";
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user, isLoading: authIsLoading } = useAuth();
+  const { user } = useAuth();
   const { language, theme } = useTheme();
   const [pricingPlan, setPricingPlan] = useState("monthly");
-  const [isRedirecting, setIsRedirecting] = useState(false);
   
-  // Improved redirect logic if user is logged in
+  // Simple redirect if user is logged in - no loading state or complex logic
   useEffect(() => {
-    // Only redirect if we have a user and auth is not still loading
-    if (user && !authIsLoading && !isRedirecting) {
+    if (user) {
       console.log("Home: User is logged in, redirecting to dashboard");
-      setIsRedirecting(true);
-      
-      // Small delay to ensure all auth state is properly synchronized
-      const redirectTimer = setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 300);
-      
-      return () => clearTimeout(redirectTimer);
+      navigate('/dashboard', { replace: true });
     }
-  }, [user, authIsLoading, navigate, isRedirecting]);
+  }, [user, navigate]);
 
   const translations = {
     en: {
