@@ -16,7 +16,7 @@ export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
 
   const toggleMenu = () => {
@@ -34,17 +34,10 @@ export function UserMenu() {
 
   const handleLogout = async () => {
     try {
-      await signOut();
-      toast({
-        title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
-        variant: "success",
-        duration: 3000,
-      });
-      
-      // Always navigate to login page after successful logout
-      navigate('/login', { replace: true });
+      await logout();
+      // Navigation to login page will be handled by the ProtectedRoute component
     } catch (error) {
-      console.error('Error logging out:', error);
+      console.error(`[${new Date().toISOString()}] UserMenu: Error logging out:`, error);
       toast({
         title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
         variant: "destructive",

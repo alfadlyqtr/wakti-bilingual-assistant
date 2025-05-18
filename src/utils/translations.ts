@@ -1,7 +1,9 @@
+
 // Translation utility for WAKTI app
 // Supports English (en) and Arabic (ar)
 
-import { Language } from "@/providers/ThemeProvider";
+// Import the Language type from ThemeProvider
+export type Language = "en" | "ar";
 
 // Type for translation keys
 export type TranslationKey = keyof typeof translations;
@@ -16,7 +18,7 @@ export const t = (key: TranslationKey, language: Language = "en"): string => {
   return translations[key][language] || translations[key]["en"] || key;
 };
 
-// Add translations for login page
+// Translations for the app
 export const translations = {
   // Common translations
   calendar: {
@@ -101,6 +103,10 @@ export const translations = {
     en: "Login Failed",
     ar: "فشل تسجيل الدخول"
   },
+  logout_successful: {
+    en: "Logout Successful",
+    ar: "تم تسجيل الخروج بنجاح"
+  },
   unexpected_error: {
     en: "An unexpected error occurred. Please try again.",
     ar: "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى."
@@ -156,5 +162,45 @@ export const translations = {
   logout: {
     en: "Logout",
     ar: "تسجيل الخروج"
+  },
+  
+  // Account page translations
+  current_password: {
+    en: "Current Password",
+    ar: "كلمة المرور الحالية"
+  },
+  new_password: {
+    en: "New Password",
+    ar: "كلمة المرور الجديدة"
+  },
+  confirm_password: {
+    en: "Confirm Password",
+    ar: "تأكيد كلمة المرور"
+  },
+  update_password: {
+    en: "Update Password",
+    ar: "تحديث كلمة المرور"
+  },
+  delete_account: {
+    en: "Delete Account",
+    ar: "حذف الحساب"
+  },
+  
+  // Forgot password translations
+  reset_password: {
+    en: "Reset Password",
+    ar: "إعادة تعيين كلمة المرور"
+  },
+  reset_instructions: {
+    en: "Enter your email to receive password reset instructions",
+    ar: "أدخل بريدك الإلكتروني لتلقي تعليمات إعادة تعيين كلمة المرور"
+  },
+  send_instructions: {
+    en: "Send Instructions",
+    ar: "إرسال التعليمات"
+  },
+  back_to_login: {
+    en: "Back to Login",
+    ar: "العودة إلى تسجيل الدخول"
   }
 };

@@ -1,13 +1,13 @@
 
-import React, { useState } from "react";
-import { useNavigate, Navigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Logo3D } from "@/components/Logo3D";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
@@ -15,16 +15,21 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState(supabase.auth.getUser());
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { language, theme } = useTheme();
+  const { language } = useTheme();
+  const { login, isAuthenticated, isLoading } = useAuth();
   
-  // Check if user is already authenticated
-  const isAuthenticated = !!user;
-  
-  // Log the initial authentication state
-  console.log(`[${new Date().toISOString()}] Login: Initial authentication state:`, isAuthenticated ? "authenticated" : "not authenticated");
+  // Log the initial component state
+  console.log(`[${new Date().toISOString()}] Login: Component initializing - isAuthenticated: ${isAuthenticated}, isLoading: ${isLoading}`);
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      console.log(`[${new Date().toISOString()}] Login: User already authenticated, redirecting to dashboard`);
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   // Handle login form submission
   const handleLogin = async (e: React.FormEvent) => {
@@ -34,11 +39,8 @@ export default function Login() {
     try {
       setLoading(true);
       
-      // Call Supabase auth sign-in API
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      // Call login function from AuthContext
+      const { user, error } = await login(email, password);
       
       if (error) {
         console.error(`[${new Date().toISOString()}] Login: Error during login:`, error.message);
@@ -51,7 +53,7 @@ export default function Login() {
       }
       
       // Log successful login
-      console.log(`[${new Date().toISOString()}] Login: Successful login for user:`, data.user?.id);
+      console.log(`[${new Date().toISOString()}] Login: Successful login for user:`, user?.id);
       
       // Show success toast
       toast({
@@ -74,12 +76,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-  
-  // If already authenticated, redirect to dashboard
-  if (isAuthenticated) {
-    console.log(`[${new Date().toISOString()}] Login: User already authenticated, redirecting to dashboard`);
-    return <Navigate to="/dashboard" replace />;
-  }
   
   return (
     <div className="flex min-h-screen flex-col">

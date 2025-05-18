@@ -1,8 +1,9 @@
 
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { ToastProvider } from "@/hooks/use-toast";
+import { AuthProvider } from "@/contexts/AuthContext";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
@@ -19,7 +20,7 @@ import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
-import Login from "@/pages/Login"; // Import the new Login page
+import Login from "@/pages/Login"; 
 import { AIAssistant as AIAssistantInner } from "@/components/ai-assistant/AIAssistant";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
@@ -47,44 +48,46 @@ function WaktiAIPage() {
 }
 
 function App() {
-  console.log("App: Initializing application");
+  console.log(`[${new Date().toISOString()}] App: Initializing application`);
   
   return (
     <Router>
       <ThemeProvider>
         <ToastProvider>
-          <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Navigate to="/home" replace />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/login" element={<Login />} /> {/* Add the new Login route */}
-            <Route path="/forgot-password" element={<ForgotPassword />} />
+          <AuthProvider>
+            <Routes>
+              {/* Public routes */}
+              <Route path="/" element={<Home />} />
+              <Route path="/home" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
 
-            {/* WAKTI AI route */}
-            <Route path="/wakti-ai" element={
-              <AppLayout>
-                <WaktiAIPage />
-              </AppLayout>
-            } />
+              {/* WAKTI AI route */}
+              <Route path="/wakti-ai" element={
+                <AppLayout>
+                  <WaktiAIPage />
+                </AppLayout>
+              } />
 
-            {/* Regular routes - temporarily accessible without authentication */}
-            <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-            <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-            <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
-            <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
-            <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-            <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
-            <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
-            <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-            <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-            <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-            <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
-            <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-            <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
+              {/* Regular routes - temporarily accessible without authentication */}
+              <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
+              <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
+              <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
+              <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
+              <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
+              <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
+              <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
+              <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
+              <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
+              <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+              <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
+              <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
+              <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
 
-            {/* 404 route */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+              {/* 404 route */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </Router>
