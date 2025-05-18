@@ -5,11 +5,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mic, Square, Upload, FileAudio, X } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { Mic, Square, Upload, FileAudio, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from 'uuid';
+import WaveformVisualizer from "./WaveformVisualizer";
+import HighlightedTimestamps, { Highlight } from "./HighlightedTimestamps";
+import { getBestSupportedMimeType, getFileExtension, generateRecordingPath, formatRecordingTime } from "@/utils/audioUtils";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -20,26 +24,38 @@ interface RecordingDialogProps {
 export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }: RecordingDialogProps) {
   const { language } = useTheme();
   const { user } = useAuth();
+  
+  // Recording states
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [recordingFormat, setRecordingFormat] = useState<string>('');
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  
+  // UI states
   const [title, setTitle] = useState("");
   const [attendees, setAttendees] = useState("");
   const [location, setLocation] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [cleanAudio, setCleanAudio] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<string | null>(null);
-  const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
-  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
-  const [recordingFormat, setRecordingFormat] = useState<string>('');
-  const [isSaveComplete, setIsSaveComplete] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
+  // Processing states
+  const [isUploading, setIsUploading] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSaveComplete, setIsSaveComplete] = useState(false);
+  const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
+  const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  
+  // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) {
@@ -48,8 +64,11 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       if (audioUrl) {
         URL.revokeObjectURL(audioUrl);
       }
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+      }
     };
-  }, [audioUrl]);
+  }, [audioUrl, audioStream]);
 
   // Generate title from transcript
   useEffect(() => {
@@ -58,30 +77,173 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   }, [transcript, title]);
 
-  // Helper function to get supported MIME types
-  const getSupportedMimeType = (): string => {
-    const types = [
-      'audio/mp3',
-      'audio/mpeg',
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/ogg',
-      'audio/wav'
-    ];
-    
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        console.log(`Browser supports recording in ${type} format`);
-        return type;
+  const startRecording = async () => {
+    try {
+      // Get current user - needed for saving the recording
+      if (!user) {
+        toast.error(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input');
+        return;
       }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      setAudioStream(stream);
+      
+      // Use the supported MIME type - prioritize MP3
+      const mimeType = getBestSupportedMimeType();
+      console.log(`Using MIME type for recording: ${mimeType}`);
+      setRecordingFormat(mimeType);
+      
+      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
+      
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      
+      mediaRecorderRef.current.onstop = async () => {
+        setIsRecording(false);
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        console.log(`Recording complete: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+        const url = URL.createObjectURL(audioBlob);
+        setAudioBlob(audioBlob);
+        setAudioUrl(url);
+        
+        // Process transcription if desired
+        processTranscription(audioBlob);
+      };
+      
+      audioChunksRef.current = [];
+      mediaRecorderRef.current.start(1000); // Collect data in 1-second chunks
+      setIsRecording(true);
+      
+      // Start timer
+      setRecordingTime(0);
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+      
+      toast.info(language === 'ar' ? 'بدأ التسجيل... تحدث الآن' : 'Recording started... speak now');
+      
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      toast.error(language === 'ar' 
+        ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
+        : 'Please allow microphone access to use voice input feature');
     }
-    
-    // Fallback to a common format
-    console.log('No preferred MIME types supported, falling back to audio/webm');
-    return 'audio/webm';
   };
 
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+      }
+      setAudioStream(null);
+      
+      // Clear the timer
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      toast.info(language === 'ar' ? 'جارِ معالجة التسجيل' : 'Processing recording');
+    }
+  };
+
+  const cancelRecording = () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+      
+      setIsRecording(false);
+      setAudioStream(null);
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      // Reset recording state
+      audioChunksRef.current = [];
+      setRecordingTime(0);
+      setHighlights([]);
+      
+      toast.info(language === 'ar' ? 'تم إلغاء التسجيل' : 'Recording cancelled');
+    }
+  };
+  
+  const addHighlight = () => {
+    setHighlights(prev => [...prev, { timestamp: recordingTime }]);
+    toast.success(
+      language === 'ar' 
+        ? `تمت إضافة علامة عند ${formatRecordingTime(recordingTime)}` 
+        : `Highlight added at ${formatRecordingTime(recordingTime)}`
+    );
+  };
+  
+  const removeHighlight = (index: number) => {
+    setHighlights(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const processTranscription = async (blob: Blob) => {
+    if (!user) return;
+    
+    try {
+      console.log(`Processing audio blob for transcription: ${blob.size} bytes, type: ${blob.type}`);
+      
+      // Create a form data object
+      const formData = new FormData();
+      formData.append('audio', blob, `recording.${getFileExtension(blob.type)}`);
+      
+      // Get auth session for API call
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        throw new Error('No auth session');
+      }
+      
+      setIsTranscribing(true);
+      
+      // Call the transcribe-audio edge function directly with the blob
+      const response = await fetch(
+        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Transcription error response:', errorText);
+        throw new Error(`Transcription failed: ${errorText}`);
+      }
+      
+      const { text } = await response.json();
+      setTranscript(text);
+      setIsTranscribing(false);
+    } catch (err) {
+      console.error('Error getting transcript:', err);
+      setIsTranscribing(false);
+      toast.error(language === 'ar' 
+        ? `فشل في الحصول على النص: ${err.message}` 
+        : `Failed to transcribe: ${err.message}`);
+    }
+  };
+  
   const generateTitleSuggestion = async (text: string) => {
     // Generate a simple title based on the transcript content
     setIsGeneratingSuggestion(true);
@@ -107,169 +269,6 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       setIsGeneratingSuggestion(false);
     }
   };
-
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        } 
-      });
-      
-      // Use the supported MIME type
-      const mimeType = getSupportedMimeType();
-      console.log(`Using MIME type for recording: ${mimeType}`);
-      setRecordingFormat(mimeType);
-      
-      mediaRecorderRef.current = new MediaRecorder(stream, { mimeType });
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        console.log(`Recording complete: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
-        const url = URL.createObjectURL(audioBlob);
-        setAudioBlob(audioBlob);
-        setAudioUrl(url);
-        
-        // Quick check for transcript of the recording
-        getTranscript(audioBlob);
-      };
-      
-      audioChunksRef.current = [];
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      
-      // Start timer
-      setRecordingTime(0);
-      timerRef.current = window.setInterval(() => {
-        setRecordingTime((prevTime) => prevTime + 1);
-      }, 1000);
-      
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? 'فشل في الوصول إلى الميكروفون' 
-          : 'Failed to access the microphone',
-      });
-    }
-  };
-  
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      
-      // Stop all audio tracks
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      
-      setIsRecording(false);
-      
-      // Clear the timer
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    }
-  };
-
-  const cancelRecording = () => {
-    if (isRecording) {
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-      
-      setIsRecording(false);
-      
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      
-      // Reset recording state
-      audioChunksRef.current = [];
-      setRecordingTime(0);
-      
-      toast({
-        description: language === 'ar' 
-          ? 'تم إلغاء التسجيل' 
-          : 'Recording cancelled',
-      });
-    }
-  };
-  
-  const getTranscript = async (blob: Blob) => {
-    if (!user) return;
-    
-    try {
-      console.log(`Sending audio blob for transcription: ${blob.size} bytes, type: ${blob.type}`);
-      
-      // Create a form data object
-      const formData = new FormData();
-      formData.append('audio', blob, `recording.${getFileExtension(blob.type)}`);
-      
-      // Get auth session for API call
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        throw new Error('No auth session');
-      }
-      
-      // Call the transcribe-audio edge function directly with the blob
-      const response = await fetch(
-        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${data.session.access_token}`
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Transcription error response:', errorText);
-        throw new Error(`Transcription failed: ${errorText}`);
-      }
-      
-      const { text } = await response.json();
-      setTranscript(text);
-    } catch (err) {
-      console.error('Error getting transcript:', err);
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? `فشل في الحصول على النص: ${err.message}` 
-          : `Failed to transcribe: ${err.message}`,
-      });
-    }
-  };
-  
-  // Helper to get file extension from MIME type
-  const getFileExtension = (mimeType: string): string => {
-    if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
-      return 'mp3';
-    } else if (mimeType.includes('ogg')) {
-      return 'ogg';
-    } else if (mimeType.includes('wav')) {
-      return 'wav';
-    }
-    return 'webm'; // Default
-  };
-  
-  const formatRecordingTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -277,12 +276,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       
       // Check if file is an audio file
       if (!file.type.startsWith('audio/')) {
-        toast({
-          variant: "destructive",
-          description: language === 'ar' 
-            ? 'يرجى تحديد ملف صوتي' 
-            : 'Please select an audio file',
-        });
+        toast.error(language === 'ar' 
+          ? 'يرجى تحديد ملف صوتي' 
+          : 'Please select an audio file');
         return;
       }
       
@@ -299,28 +295,22 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       setAudioBlob(file);
       
       // Try to generate transcript from the uploaded file too
-      getTranscript(file);
+      processTranscription(file);
     }
   };
   
   const handleSaveRecording = async () => {
     if (!user) {
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? 'يجب تسجيل الدخول لحفظ التسجيل' 
-          : 'You must be logged in to save a recording',
-      });
+      toast.error(language === 'ar' 
+        ? 'يجب تسجيل الدخول لحفظ التسجيل' 
+        : 'You must be logged in to save a recording');
       return;
     }
     
     if (!audioBlob) {
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? 'لا يوجد تسجيل للحفظ' 
-          : 'No recording to save',
-      });
+      toast.error(language === 'ar' 
+        ? 'لا يوجد تسجيل للحفظ' 
+        : 'No recording to save');
       return;
     }
     
@@ -333,21 +323,20 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       // Create unique ID for the recording
       const recordingId = uuidv4();
       
-      // Create file path in storage
-      const fileExt = selectedFile 
-        ? getFileExtension(selectedFile.type)
-        : getFileExtension(recordingFormat);
-      
-      const filePath = `voice_summaries/${user.id}/${recordingId}/recording.${fileExt}`;
-      console.log(`Saving recording to path: ${filePath}, format: ${recordingFormat || audioBlob?.type}`);
+      // Create standardized file path in storage
+      const filePath = generateRecordingPath(user.id, recordingId);
+      console.log(`Saving recording to path: ${filePath}`);
       
       // Upload the audio file to Supabase Storage
-      const { data: storageData, error: storageError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('voice_recordings')
-        .upload(filePath, audioBlob);
+        .upload(filePath, audioBlob, {
+          contentType: 'audio/mpeg', // Always use MP3 content type
+          upsert: false
+        });
       
-      if (storageError) {
-        throw new Error(storageError.message);
+      if (uploadError) {
+        throw new Error(uploadError.message);
       }
       
       // Get public URL for the file
@@ -368,7 +357,8 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           attendees: attendees || null,
           location: location || null,
           transcript: transcript || null,
-          summary: null,
+          clean_audio: cleanAudio,
+          highlighted_timestamps: highlights.length > 0 ? highlights : null,
           expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() // 10 days from now
         })
         .select()
@@ -378,7 +368,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         throw new Error(recordingError.message);
       }
       
-      // Mark save as complete to prevent dialog from immediately closing
+      // Mark save as complete
       setIsSaveComplete(true);
       
       // If transcript wasn't already generated, trigger transcription function
@@ -399,11 +389,9 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       }
       
       // Show success message
-      toast({
-        description: language === 'ar' 
-          ? 'تم حفظ التسجيل بنجاح' 
-          : 'Recording saved successfully',
-      });
+      toast.success(language === 'ar' 
+        ? 'تم حفظ التسجيل بنجاح' 
+        : 'Recording saved successfully');
       
       // Notify the parent component
       if (onRecordingCreated && recordingData) {
@@ -413,16 +401,13 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
       // Briefly wait to ensure UI updates before closing dialog
       setTimeout(() => {
         handleDialogClose();
-      }, 500);
+      }, 1000);
       
     } catch (err) {
       console.error('Error saving recording:', err);
-      toast({
-        variant: "destructive",
-        description: language === 'ar' 
-          ? `فشل في حفظ التسجيل: ${err.message}` 
-          : `Failed to save recording: ${err.message}`,
-      });
+      toast.error(language === 'ar' 
+        ? `فشل في حفظ التسجيل: ${err.message}` 
+        : `Failed to save recording: ${err.message}`);
       setIsUploading(false);
     }
   };
@@ -436,6 +421,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     setSelectedFile(null);
     setTranscript(null);
     setSuggestedTitle(null);
+    setHighlights([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -450,6 +436,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     setTitle("");
     setAttendees("");
     setLocation("");
+    setCleanAudio(false);
     setIsUploading(false);
     setIsSaveComplete(false);
     onClose();
@@ -462,19 +449,33 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
     }
   };
 
+  // Determine if we're in a loading state
+  const isLoading = isUploading || isTranscribing;
+
   return (
     <Dialog 
       open={isOpen} 
       onOpenChange={(open) => {
-        if (!open && !isUploading) {
+        if (!open && !isLoading) {
           handleDialogClose();
         }
       }}
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {language === 'ar' ? 'تسجيل جديد' : 'New Recording'}
+          <DialogTitle className="flex items-center justify-between">
+            <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
+            {!isUploading && (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8" 
+                onClick={handleDialogClose}
+                disabled={isLoading}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </DialogTitle>
         </DialogHeader>
         
@@ -489,7 +490,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={language === 'ar' ? 'عنوان التسجيل (اختياري)' : 'Recording title (optional)'}
-                disabled={isUploading}
+                disabled={isLoading}
               />
               {suggestedTitle && (
                 <div className="mt-1 flex items-center justify-between text-sm">
@@ -519,7 +520,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               value={attendees}
               onChange={e => setAttendees(e.target.value)}
               placeholder={language === 'ar' ? 'أسماء مفصولة بفواصل' : 'Names separated by commas'}
-              disabled={isUploading}
+              disabled={isLoading}
             />
           </div>
           
@@ -532,8 +533,23 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               value={location}
               onChange={e => setLocation(e.target.value)}
               placeholder={language === 'ar' ? 'مكان التسجيل' : 'Recording location'}
-              disabled={isUploading}
+              disabled={isLoading}
             />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="clean-audio"
+              checked={cleanAudio}
+              onCheckedChange={setCleanAudio}
+              disabled={isLoading}
+            />
+            <Label htmlFor="clean-audio">
+              {language === 'ar' ? 'تحسين جودة الصوت' : 'Clean Audio'} 
+              <span className="text-xs text-muted-foreground block">
+                {language === 'ar' ? 'إزالة الضوضاء والخلفية' : 'Remove noise and background sounds'}
+              </span>
+            </Label>
           </div>
           
           <div className="border rounded-md p-4">
@@ -541,25 +557,25 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
               {!audioBlob ? (
                 <>
                   {!isRecording ? (
-                    <div className="flex items-center justify-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                       <Button
                         type="button"
                         variant="outline"
                         onClick={startRecording}
-                        className="flex items-center gap-1"
-                        disabled={isUploading}
+                        className="flex items-center gap-1 w-full sm:w-auto"
+                        disabled={isLoading}
                       >
                         <Mic className="h-4 w-4 mr-1" />
                         {language === 'ar' ? 'بدء التسجيل' : 'Start Recording'}
                       </Button>
                       
-                      <div className="relative">
+                      <div className="relative w-full sm:w-auto">
                         <Button
                           type="button"
                           variant="outline"
                           onClick={() => fileInputRef.current?.click()}
-                          className="flex items-center gap-1"
-                          disabled={isUploading}
+                          className="flex items-center gap-1 w-full sm:w-auto"
+                          disabled={isLoading}
                         >
                           <Upload className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'تحميل ملف' : 'Upload File'}
@@ -570,7 +586,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           accept="audio/*"
                           className="hidden"
                           onChange={handleFileChange}
-                          disabled={isUploading}
+                          disabled={isLoading}
                         />
                       </div>
                     </div>
@@ -586,13 +602,30 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                         {formatRecordingTime(recordingTime)}
                       </div>
                       
+                      {/* Waveform visualization */}
+                      <div className="w-full h-16 bg-muted/20 rounded-md overflow-hidden">
+                        <WaveformVisualizer 
+                          isRecording={isRecording} 
+                          audioStream={audioStream}
+                        />
+                      </div>
+                      
+                      {/* Highlight timestamps */}
+                      <HighlightedTimestamps 
+                        highlights={highlights}
+                        onRemove={removeHighlight}
+                        recordingTime={recordingTime}
+                        onAddHighlight={addHighlight}
+                        isRecording={isRecording}
+                      />
+                      
                       <div className="flex items-center justify-center gap-3">
                         <Button
                           type="button"
                           variant="destructive"
                           onClick={stopRecording}
                           className="flex items-center gap-1"
-                          disabled={isUploading}
+                          disabled={isLoading}
                         >
                           <Square className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'إيقاف التسجيل' : 'Stop Recording'}
@@ -603,7 +636,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                           variant="ghost"
                           onClick={cancelRecording}
                           className="flex items-center gap-1"
-                          disabled={isUploading}
+                          disabled={isLoading}
                         >
                           <X className="h-4 w-4 mr-1" />
                           {language === 'ar' ? 'إلغاء' : 'Cancel'}
@@ -621,20 +654,35 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
                   </div>
                   
                   <div className="text-center text-sm text-muted-foreground">
-                    {selectedFile ? selectedFile.name : 'recording.webm'}
+                    {selectedFile ? selectedFile.name : 'recording.mp3'}
                   </div>
                   
                   <audio src={audioUrl || ''} controls className="w-full" />
+                  
+                  {/* Display highlights if any */}
+                  {highlights.length > 0 && (
+                    <HighlightedTimestamps 
+                      highlights={highlights}
+                      onRemove={removeHighlight}
+                    />
+                  )}
                   
                   <Button
                     type="button"
                     variant="outline"
                     onClick={resetRecording}
                     className="w-full"
-                    disabled={isUploading}
+                    disabled={isLoading}
                   >
                     {language === 'ar' ? 'إعادة التسجيل' : 'Record Again'}
                   </Button>
+                </div>
+              )}
+              
+              {isTranscribing && (
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{language === 'ar' ? 'جاري معالجة النص...' : 'Processing transcription...'}</span>
                 </div>
               )}
             </div>
@@ -646,19 +694,24 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
             type="button"
             variant="ghost"
             onClick={handleDialogClose}
-            disabled={isUploading}
+            disabled={isLoading}
           >
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
           <Button
             type="button"
             onClick={handleSaveRecording}
-            disabled={!audioBlob || isUploading}
-            className={isUploading ? 'opacity-70 cursor-not-allowed' : ''}
+            disabled={!audioBlob || isLoading}
+            className={isLoading ? 'opacity-70' : ''}
           >
-            {isUploading 
-              ? (language === 'ar' ? 'جار الحفظ...' : 'Saving...') 
-              : (language === 'ar' ? 'حفظ التسجيل' : 'Save Recording')}
+            {isUploading ? (
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{language === 'ar' ? 'جار الحفظ...' : 'Saving...'}</span>
+              </div>
+            ) : (
+              language === 'ar' ? 'حفظ التسجيل' : 'Save Recording'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

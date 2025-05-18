@@ -50,7 +50,8 @@ serve(async (req) => {
       );
     }
 
-    if (!recording.summary_text) {
+    // Field name change: use summary instead of summary_text
+    if (!recording.summary) {
       return new Response(
         JSON.stringify({ error: "Summary not available" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -80,7 +81,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "tts-1",
-        input: recording.summary_text,
+        input: recording.summary,
         voice: voice,
         response_format: "mp3"
       })
@@ -96,8 +97,8 @@ serve(async (req) => {
 
     const audioData = await response.arrayBuffer();
     
-    // Upload the TTS audio to Supabase Storage
-    const fileName = `${recording.user_id}/${recordingId}_summary.mp3`;
+    // Upload the TTS audio to Supabase Storage using standardized path
+    const fileName = `voice_recordings/${recording.user_id}/${recordingId}/summary.mp3`;
     const { error: uploadError } = await supabase
       .storage
       .from("voice_recordings")

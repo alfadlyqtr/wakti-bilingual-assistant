@@ -1,13 +1,19 @@
+
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, Volume, Pause } from "lucide-react";
+import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FilePdf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { withRetry } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDistanceToNow } from "date-fns";
+import { arSA, enUS } from "date-fns/locale";
+import { formatRecordingTime } from "@/utils/audioUtils";
+import { Highlight } from "./HighlightedTimestamps";
+import SummaryAudioPlayer from "./SummaryAudioPlayer";
+import { toast } from "sonner";
 
 interface VoiceSummaryData {
   id: string;
@@ -17,10 +23,12 @@ interface VoiceSummaryData {
   audio_url: string;
   summary_audio_url: string | null;
   created_at: string;
+  expires_at: string;
   type: string;
   host?: string;
   attendees?: string;
   location?: string;
+  highlighted_timestamps?: Highlight[] | null;
 }
 
 export default function VoiceSummaryDetail() {
@@ -35,6 +43,8 @@ export default function VoiceSummaryDetail() {
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+
+  const locale = language === 'ar' ? arSA : enUS;
 
   // Fetch summary data
   useEffect(() => {
@@ -79,8 +89,8 @@ export default function VoiceSummaryDetail() {
   
   const handleCopyText = (text: string) => {
     navigator.clipboard.writeText(text)
-      .then(() => showSuccess(language === 'ar' ? 'تم النسخ إلى الحافظة' : 'Copied to clipboard'))
-      .catch(() => showError(language === 'ar' ? 'فشل في النسخ' : 'Failed to copy'));
+      .then(() => toast.success(language === 'ar' ? 'تم النسخ إلى الحافظة' : 'Copied to clipboard'))
+      .catch(() => toast.error(language === 'ar' ? 'فشل في النسخ' : 'Failed to copy'));
   };
   
   const generateTranscript = async () => {
@@ -94,9 +104,12 @@ export default function VoiceSummaryDetail() {
         throw new Error('No auth session');
       }
       
-      console.log('Generating transcript for recording:', summary.audio_url);
+      // Construct standardized file path for the storage
+      const userId = summary.host || 'unknown';
+      const filePath = `voice_recordings/${userId}/${summary.id}/recording.mp3`;
+      console.log('Generating transcript for recording path:', filePath);
       
-      // Call the transcribe-audio edge function with the recording ID
+      // Call the transcribe-audio edge function
       const response = await fetch(
         "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
         {
@@ -106,7 +119,7 @@ export default function VoiceSummaryDetail() {
             Authorization: `Bearer ${data.session.access_token}`
           },
           body: JSON.stringify({
-            recordingId: summary.audio_url,
+            recordingId: filePath,
             summaryId: summary.id
           }),
         }
@@ -116,8 +129,6 @@ export default function VoiceSummaryDetail() {
         const error = await response.json();
         throw new Error(error.error || 'Transcription failed');
       }
-      
-      const { text } = await response.json();
       
       // Refresh the summary data to get the updated transcript
       const { data: updatedSummary, error: summaryError } = await supabase
@@ -129,10 +140,10 @@ export default function VoiceSummaryDetail() {
       if (summaryError) throw summaryError;
       
       setSummary(updatedSummary);
-      showSuccess(language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Transcript generated successfully');
+      toast.success(language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Transcript generated successfully');
     } catch (error) {
       console.error('Error generating transcript:', error);
-      showError(language === 'ar' 
+      toast.error(language === 'ar' 
         ? 'فشل في إنشاء النص'
         : 'Failed to generate transcript');
     } finally {
@@ -161,8 +172,7 @@ export default function VoiceSummaryDetail() {
             Authorization: `Bearer ${data.session.access_token}`
           },
           body: JSON.stringify({
-            summaryId: summary.id,
-            transcript: summary.transcript
+            recordingId: summary.id
           }),
         }
       );
@@ -182,10 +192,10 @@ export default function VoiceSummaryDetail() {
       if (summaryError) throw summaryError;
       
       setSummary(updatedSummary);
-      showSuccess(language === 'ar' ? 'تم إنشاء الملخص بنجاح' : 'Summary generated successfully');
+      toast.success(language === 'ar' ? 'تم إنشاء الملخص بنجاح' : 'Summary generated successfully');
     } catch (error) {
       console.error('Error generating summary:', error);
-      showError(language === 'ar' 
+      toast.error(language === 'ar' 
         ? 'فشل في إنشاء الملخص'
         : 'Failed to generate summary');
     } finally {
@@ -203,7 +213,7 @@ export default function VoiceSummaryDetail() {
     audio.onended = () => setIsPlaying(false);
     audio.onpause = () => setIsPlaying(false);
     audio.onerror = () => {
-      showError(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
+      toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
       setIsPlaying(false);
     };
     
@@ -211,7 +221,7 @@ export default function VoiceSummaryDetail() {
       .then(() => setIsPlaying(true))
       .catch(error => {
         console.error('Error playing audio:', error);
-        showError(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
+        toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
       });
       
     setAudioElement(audio);
@@ -222,6 +232,30 @@ export default function VoiceSummaryDetail() {
       audioElement.pause();
     }
     setIsPlaying(false);
+  };
+
+  const handleExportPDF = () => {
+    // This is a placeholder for the PDF export functionality
+    // Implement PDF export functionality in a future update
+    toast.info(language === 'ar' 
+      ? 'سيتم تنفيذ تصدير PDF في تحديث قادم'
+      : 'PDF export will be implemented in a future update');
+  };
+  
+  const calculateDaysRemaining = (expiresAt: string): number => {
+    const expiryDate = new Date(expiresAt);
+    const now = new Date();
+    const diffTime = expiryDate.getTime() - now.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+  
+  const handleAudioGenerated = (url: string) => {
+    if (summary) {
+      setSummary({
+        ...summary,
+        summary_audio_url: url
+      });
+    }
   };
   
   if (isLoading) {
@@ -260,14 +294,32 @@ export default function VoiceSummaryDetail() {
       </div>
     );
   }
+
+  const daysRemaining = calculateDaysRemaining(summary.expires_at);
   
   return (
     <div className="p-4 space-y-4 pb-20">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={handleBackClick}>
-          <ArrowLeft />
-        </Button>
-        <h1 className="text-xl font-semibold truncate">{summary.title}</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={handleBackClick}>
+            <ArrowLeft />
+          </Button>
+          <h1 className="text-xl font-semibold truncate">{summary.title}</h1>
+        </div>
+        
+        <div className="text-sm text-muted-foreground">
+          {daysRemaining > 0 ? (
+            <span>
+              {language === 'ar' 
+                ? `${daysRemaining} أيام متبقية`
+                : `${daysRemaining} days remaining`}
+            </span>
+          ) : (
+            <span className="text-destructive">
+              {language === 'ar' ? 'انتهت الصلاحية' : 'Expired'}
+            </span>
+          )}
+        </div>
       </div>
       
       {/* Audio controls */}
@@ -291,7 +343,60 @@ export default function VoiceSummaryDetail() {
             {language === 'ar' ? 'استماع للتسجيل' : 'Play Recording'}
           </Button>
         )}
+        
+        <Button
+          variant="outline"
+          onClick={handleExportPDF}
+          className="gap-1"
+        >
+          <FilePdf className="h-4 w-4" />
+          {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+        </Button>
       </div>
+      
+      {/* Highlighted timestamps section */}
+      {summary.highlighted_timestamps && summary.highlighted_timestamps.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg">
+              {language === 'ar' ? 'لحظات مهمة' : 'Key Moments'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {summary.highlighted_timestamps.map((highlight, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-1 bg-primary/10 py-1 px-2 rounded-full"
+                  role="button"
+                  onClick={() => {
+                    if (audioElement) {
+                      audioElement.currentTime = highlight.timestamp;
+                      audioElement.play()
+                        .then(() => setIsPlaying(true))
+                        .catch(console.error);
+                    } else if (summary.audio_url) {
+                      const audio = new Audio(summary.audio_url);
+                      audio.currentTime = highlight.timestamp;
+                      audio.onended = () => setIsPlaying(false);
+                      audio.onpause = () => setIsPlaying(false);
+                      audio.play()
+                        .then(() => {
+                          setIsPlaying(true);
+                          setAudioElement(audio);
+                        })
+                        .catch(console.error);
+                    }
+                  }}
+                >
+                  <Clock className="h-3 w-3" />
+                  <span>{formatRecordingTime(highlight.timestamp)}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
       
       {/* Transcript section */}
       <Card className="mb-4">
@@ -351,8 +456,20 @@ export default function VoiceSummaryDetail() {
           </CardHeader>
           <CardContent>
             {summary.summary ? (
-              <div className="whitespace-pre-wrap text-sm">
-                {summary.summary}
+              <div>
+                <div className="whitespace-pre-wrap text-sm mb-4">
+                  {summary.summary}
+                </div>
+                
+                {/* Audio Player for Summary */}
+                <div className="mt-4 pt-4 border-t">
+                  <SummaryAudioPlayer 
+                    recordingId={summary.id}
+                    summaryText={summary.summary}
+                    existingAudioUrl={summary.summary_audio_url}
+                    onAudioGenerated={handleAudioGenerated}
+                  />
+                </div>
               </div>
             ) : (
               <div className="text-center py-4">
@@ -410,7 +527,12 @@ export default function VoiceSummaryDetail() {
             
             <div className="flex justify-between">
               <dt className="font-medium">{language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}</dt>
-              <dd>{new Date(summary.created_at).toLocaleString()}</dd>
+              <dd>{formatDistanceToNow(new Date(summary.created_at), { addSuffix: true, locale })}</dd>
+            </div>
+            
+            <div className="flex justify-between">
+              <dt className="font-medium">{language === 'ar' ? 'تاريخ انتهاء الصلاحية' : 'Expires'}</dt>
+              <dd>{formatDistanceToNow(new Date(summary.expires_at), { addSuffix: true, locale })}</dd>
             </div>
           </dl>
         </CardContent>

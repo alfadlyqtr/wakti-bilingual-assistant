@@ -8,7 +8,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 // List of audio formats supported by OpenAI Whisper API
-const SUPPORTED_FORMATS = ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm'];
+const SUPPORTED_FORMATS = ['mp3', 'mp4', 'mpeg', 'mpga', 'wav', 'webm'];
 
 serve(async (req) => {
   // Handle CORS
@@ -42,7 +42,7 @@ serve(async (req) => {
     let audioFile;
     let recordingId;
     let summaryId;
-    let fileFormat;
+    let fileFormat = 'mp3'; // Default to mp3
     
     const contentType = req.headers.get("content-type") || "";
     
@@ -63,7 +63,7 @@ serve(async (req) => {
           );
         }
         
-        fileFormat = audioFile.name.split('.').pop()?.toLowerCase();
+        fileFormat = audioFile.name.split('.').pop()?.toLowerCase() || 'mp3';
         console.log(`Received direct audio upload: ${audioFile.size} bytes, type: ${audioFile.type}, format: ${fileFormat}`);
         
         // Validate file format
@@ -151,11 +151,8 @@ serve(async (req) => {
         }
         
         // Extract file format from recordingId
-        fileFormat = recordingId.split('.').pop()?.toLowerCase();
-        if (!validateFileFormat(fileFormat)) {
-          console.error(`Potential invalid file format in path: ${fileFormat}`);
-          // Still continue as we'll detect the actual format from the downloaded file
-        }
+        // But always default to MP3 as that's our standard format now
+        fileFormat = 'mp3';
         
         // Download audio file from storage
         console.log(`Attempting to download file from storage: ${recordingId}`);
@@ -197,21 +194,10 @@ serve(async (req) => {
           );
         }
         
-        // Determine content type based on the file extension
-        let contentType = 'audio/webm'; // Default
-        if (fileFormat === 'mp3' || fileFormat === 'mpeg' || fileFormat === 'mpga') {
-          contentType = 'audio/mpeg';
-        } else if (fileFormat === 'ogg' || fileFormat === 'oga') {
-          contentType = 'audio/ogg';
-        } else if (fileFormat === 'wav') {
-          contentType = 'audio/wav';
-        } else if (fileFormat === 'flac') {
-          contentType = 'audio/flac';
-        } else if (fileFormat === 'm4a') {
-          contentType = 'audio/m4a';
-        }
+        // Set content type to MP3 for standardization
+        const contentType = 'audio/mpeg';
         
-        audioFile = new File([fileData], `audio.${fileFormat}`, { type: contentType });
+        audioFile = new File([fileData], `audio.mp3`, { type: contentType });
         console.log(`Successfully retrieved audio file: ${audioFile.size} bytes, format: ${fileFormat}, type: ${contentType}`);
       } catch (jsonError) {
         console.error("Error processing JSON data:", jsonError);

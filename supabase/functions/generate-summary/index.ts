@@ -49,7 +49,8 @@ serve(async (req) => {
       );
     }
 
-    if (!recording.transcription_text) {
+    // Field name change: use transcript instead of transcription_text
+    if (!recording.transcript) {
       return new Response(
         JSON.stringify({ error: "Transcription not available" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -72,7 +73,7 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: `Please summarize the following transcription in bullet points. Extract key points, decisions, action items, and dates if present:\n\n${recording.transcription_text}`
+            content: `Please summarize the following transcription in bullet points. Extract key points, decisions, action items, and dates if present:\n\n${recording.transcript}`
           }
         ],
         max_tokens: 1000
@@ -90,11 +91,11 @@ serve(async (req) => {
     const summaryResponse = await deepseekResponse.json();
     const summary = summaryResponse.choices[0].message.content;
 
-    // Update the recording with the summary
+    // Field name change: use summary instead of summary_text
     const { error: updateError } = await supabase
       .from("voice_summaries")
       .update({
-        summary_text: summary,
+        summary: summary, // Changed from summary_text to summary
         updated_at: new Date().toISOString()
       })
       .eq("id", recordingId);
