@@ -96,7 +96,7 @@ const addToRemoveQueue = (toastId: string) => {
   toastTimeouts.set(toastId, timeout);
 };
 
-// New function to automatically dismiss toast after specified duration
+// Function to automatically dismiss toast after specified duration
 const addToDismissQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
   if (duration === Infinity) return;
 
@@ -219,7 +219,7 @@ function useToastInternal(): ToastContextValue {
       const stringDescription = description ? renderToastContent(description) : undefined;
 
       // Set up auto dismiss
-      const timeoutId = addToDismissQueue(id, duration);
+      addToDismissQueue(id, duration);
 
       dispatch({
         type: actionTypes.ADD_TOAST,
