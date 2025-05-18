@@ -14,6 +14,7 @@ interface MessageContentProps {
   isSwitchingMode: boolean;
   openImageModal: (imageUrl: string, promptText: string, timestamp: Date) => void;
   downloadImage: (imageUrl: string, promptText: string) => void;
+  onConfirm: (messageId: string, action: string) => void;
 }
 
 const MessageContent: React.FC<MessageContentProps> = ({
@@ -23,7 +24,8 @@ const MessageContent: React.FC<MessageContentProps> = ({
   isCreativeModeActive,
   isSwitchingMode,
   openImageModal,
-  downloadImage
+  downloadImage,
+  onConfirm
 }) => {
   // Track images that are loading
   const [loadingImages, setLoadingImages] = useState<{[key: string]: boolean}>({});
