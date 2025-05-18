@@ -21,3 +21,10 @@ export function getEntryTypeColor(type: string): string {
       return 'gray-500';
   }
 }
+
+// Safe date formatting helper
+export function isValidDate(date: any): boolean {
+  if (!date) return false;
+  const d = new Date(date);
+  return !isNaN(d.getTime());
+}

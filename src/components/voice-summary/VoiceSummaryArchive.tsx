@@ -57,7 +57,7 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
     return language === 'ar' ? 'قيد المعالجة' : 'Processing';
   };
 
-  const calculateDaysRemaining = (expiresAt: string): number => {
+  const calculateDaysRemaining = (expiresAt: string | null | undefined): number => {
     if (!expiresAt) return 0;
     
     try {
@@ -130,7 +130,7 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
       // Create a simple formatted text for PDF export
       const content = `
 ${recording.title || 'Untitled Recording'}
-${new Date(recording.created_at).toLocaleDateString()}
+${recording.created_at ? new Date(recording.created_at).toLocaleDateString() : 'Unknown date'}
 
 ${language === 'ar' ? 'النص:' : 'Transcript:'}
 ${recording.transcript}
@@ -230,8 +230,13 @@ ${recording.summary || ''}
     setDeleteDialogOpen(true);
   };
 
-  const handlePlayAudio = (e: React.MouseEvent, url: string, recordingId: string) => {
+  const handlePlayAudio = (e: React.MouseEvent, url: string | null | undefined, recordingId: string) => {
     e.stopPropagation();
+    
+    if (!url) {
+      toast.error(language === 'ar' ? 'عنوان URL للتسجيل غير متوفر' : 'Recording URL not available');
+      return;
+    }
     
     // Stop any currently playing audio
     if (audioElement) {
@@ -263,6 +268,18 @@ ${recording.summary || ''}
         toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
       });
   };
+
+  // Safely check if recordings array is valid before rendering
+  if (!Array.isArray(recordings)) {
+    console.error("Expected recordings to be an array but got:", recordings);
+    return (
+      <div className="text-center py-10">
+        <p className="text-lg text-muted-foreground mb-2">
+          {language === 'ar' ? 'خطأ في تحميل التسجيلات' : 'Error loading recordings'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -335,6 +352,7 @@ ${recording.summary || ''}
                       title={isPlaying === recording.id 
                         ? (language === 'ar' ? 'إيقاف' : 'Pause') 
                         : (language === 'ar' ? 'تشغيل' : 'Play')}
+                      disabled={!recording.audio_url}
                     >
                       {isPlaying === recording.id ? (
                         <Clock className="h-4 w-4 animate-pulse text-primary" />
