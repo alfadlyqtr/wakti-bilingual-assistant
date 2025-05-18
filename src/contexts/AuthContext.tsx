@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -6,6 +6,7 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
+  authInitialized: boolean; // New flag to track full initialization
   signIn: (email: string, password: string) => Promise<AuthError | null>;
   signUp: (email: string, password: string) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   isLoading: true,
+  authInitialized: false, // Add to default context
   signIn: async () => null,
   signUp: async () => null,
   signOut: async () => {},
@@ -44,6 +46,16 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false); // Track complete initialization
+  const authStateRef = useRef<{
+    user: User | null;
+    session: Session | null;
+    isStabilizing: boolean;
+  }>({ 
+    user: null,
+    session: null,
+    isStabilizing: false
+  });
   
   // Debug helper with timestamp
   const logAuthState = (message: string, details?: any) => {
@@ -52,9 +64,34 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       userId: user?.id,
       hasSession: !!session,
       isLoading,
+      authInitialized,
+      isStabilizing: authStateRef.current.isStabilizing,
       ...(details || {})
     });
   };
+
+  // Stabilize auth state changes with a small delay
+  const stabilizeAuthState = useCallback(() => {
+    if (authStateRef.current.isStabilizing) {
+      return; // Already in progress
+    }
+
+    authStateRef.current.isStabilizing = true;
+    logAuthState('Stabilizing auth state');
+    
+    // Allow a small delay to ensure all auth events are processed
+    setTimeout(() => {
+      setUser(authStateRef.current.user);
+      setSession(authStateRef.current.session);
+      setIsLoading(false);
+      setAuthInitialized(true);
+      authStateRef.current.isStabilizing = false;
+      logAuthState('Auth state stabilized', { 
+        userId: authStateRef.current.user?.id,
+        hasSession: !!authStateRef.current.session
+      });
+    }, 50); // Small delay to batch updates
+  }, []);
 
   useEffect(() => {
     logAuthState('Setting up authentication');
@@ -77,20 +114,22 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           return;
         }
         
+        // Update reference first (used by stabilizeAuthState)
+        authStateRef.current.user = currentSession?.user ?? null;
+        authStateRef.current.session = currentSession;
+        
         // Update state based on auth events
         if (event === 'SIGNED_OUT') {
           logAuthState('User signed out, clearing auth state');
-          setUser(null);
-          setSession(null);
-          setIsLoading(false);
+          authStateRef.current.user = null;
+          authStateRef.current.session = null;
+          stabilizeAuthState();
         } else if (currentSession) {
           logAuthState('Updating auth state with new session', {
             userId: currentSession.user?.id,
             sessionExpiresAt: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
           });
-          setSession(currentSession);
-          setUser(currentSession.user ?? null);
-          setIsLoading(false);
+          stabilizeAuthState();
         } else if (event === 'SIGNED_IN') {
           // Handle event without session data
           logAuthState('Got SIGNED_IN event without session data, will fetch session');
@@ -99,7 +138,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           });
         } else {
           // Handle other auth events - ensure we're not stuck loading
-          setIsLoading(false);
+          if (isLoading) {
+            stabilizeAuthState();
+          }
         }
       }
     );
@@ -122,18 +163,22 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
             expiry: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
           });
           
-          setSession(currentSession);
-          setUser(currentSession.user ?? null);
+          // Update reference
+          authStateRef.current.user = currentSession.user;
+          authStateRef.current.session = currentSession;
         } else {
           logAuthState('No existing session found');
+          authStateRef.current.user = null;
+          authStateRef.current.session = null; 
         }
         
-        // Always set loading to false after initialization
-        setIsLoading(false);
+        // Always stabilize after initialization
+        stabilizeAuthState();
       } catch (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error initializing auth:`, error);
         if (isMounted) {
           setIsLoading(false);
+          setAuthInitialized(true); // Mark as initialized even on error
         }
       }
     };
@@ -145,7 +190,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [stabilizeAuthState]);
 
   const refreshSession = async () => {
     logAuthState('Manually refreshing session');
@@ -346,7 +391,8 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const value = {
     user,
     session,
-    isLoading,  // Only export a single loading state
+    isLoading,
+    authInitialized, // New flag exposed via context
     signIn,
     signUp,
     signOut,

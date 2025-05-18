@@ -56,20 +56,22 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { signIn, user, isLoading: authIsLoading } = useAuth();
+  const { signIn, user, session, isLoading: authIsLoading, authInitialized } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localLoading, setLocalLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [loginSuccess, setLoginSuccess] = useState(false);
   
   // Get translations for the current language
-  const t = translations[language];
+  const t = translations[language === 'ar' ? 'ar' : 'en'];
   
   // Single reference for tracking redirections
   const redirectStateRef = useRef({
     redirectAttempted: false,
-    successToastShown: false
+    successToastShown: false,
+    redirectTimer: null as NodeJS.Timeout | null
   });
 
   // Helper function for consistent log formatting
@@ -78,6 +80,15 @@ export default function Login() {
       `[${new Date().toISOString()}] Login: ${message}`,
       details || ""
     );
+  };
+
+  // Clean up function to clear timers
+  const clearTimers = () => {
+    logWithTimestamp("Cleaning up timers");
+    if (redirectStateRef.current.redirectTimer) {
+      clearTimeout(redirectStateRef.current.redirectTimer);
+      redirectStateRef.current.redirectTimer = null;
+    }
   };
 
   // Clear any loading timers when component unmounts
@@ -99,38 +110,55 @@ export default function Login() {
 
     return () => {
       clearTimeout(loadingTimer);
+      clearTimers();
       logWithTimestamp("Cleanup: component unmounting, clearing timers and flags");
     };
   }, [localLoading, language]);
 
-  // Reset flags when component mounts or unmounts
+  // Reset flags when component mounts
   useEffect(() => {
     logWithTimestamp("Component mounted, resetting all redirect flags");
+    setLoginSuccess(false);
     redirectStateRef.current = {
       redirectAttempted: false,
-      successToastShown: false
+      successToastShown: false,
+      redirectTimer: null
     };
     
     return () => {
       logWithTimestamp("Component unmounting, final cleanup");
-      redirectStateRef.current = {
-        redirectAttempted: false,
-        successToastShown: false
-      };
+      clearTimers();
     };
   }, []);
 
   // This effect handles redirection ONLY when authentication state changes
   useEffect(() => {
+    // Log auth state for debugging
+    logWithTimestamp("Auth state check", {
+      hasUser: !!user,
+      hasSession: !!session, 
+      authInitialized,
+      authIsLoading,
+      localLoading,
+      loginSuccess,
+      currentPath: location.pathname
+    });
+    
     // Only proceed with redirect if:
-    // 1. We have a user object
-    // 2. We haven't already attempted a redirect
-    // 3. We're not in a loading state
-    if (user && !redirectStateRef.current.redirectAttempted && !localLoading && !authIsLoading) {
-      logWithTimestamp("🔑 Auth redirect condition met", {
-        userId: user.id,
-        currentPath: location.pathname,
-        redirectAttempted: redirectStateRef.current.redirectAttempted
+    // 1. Authentication is fully initialized 
+    // 2. We have a user object and session
+    // 3. We've just completed a successful login
+    // 4. We're not in a loading state
+    if (user && 
+        session && 
+        authInitialized && 
+        !authIsLoading && 
+        !localLoading && 
+        loginSuccess && 
+        !redirectStateRef.current.redirectAttempted) {
+      
+      logWithTimestamp("🔑 Auth redirect condition met - preparing redirection", {
+        userId: user.id
       });
       
       // Mark that we've attempted a redirect to prevent multiple redirects
@@ -147,14 +175,18 @@ export default function Login() {
         });
       }
       
-      // Get intended destination or default to dashboard
-      const destination = location.state?.from?.pathname || "/dashboard";
-      logWithTimestamp(`🚀 Executing navigation to ${destination}`);
-      
-      // Use replace to prevent back-button issues
-      navigate(destination, { replace: true });
+      // Use a short delay to ensure all auth state propagation is complete
+      // before attempting navigation
+      redirectStateRef.current.redirectTimer = setTimeout(() => {
+        // Get intended destination or default to dashboard
+        const destination = location.state?.from?.pathname || "/dashboard";
+        logWithTimestamp(`🚀 Executing navigation to ${destination}`);
+        
+        // Use replace to prevent back-button issues
+        navigate(destination, { replace: true });
+      }, 100);
     }
-  }, [user, navigate, location, language, localLoading, authIsLoading]);
+  }, [user, session, navigate, location, language, localLoading, authIsLoading, loginSuccess, authInitialized]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,9 +197,11 @@ export default function Login() {
       return;
     }
     
-    // Reset redirect tracking before new login attempt
+    // Reset login state before new login attempt
+    setLoginSuccess(false);
     redirectStateRef.current.redirectAttempted = false;
     redirectStateRef.current.successToastShown = false;
+    clearTimers();
     
     setLocalLoading(true);
     logWithTimestamp("Attempting login with email:", email);
@@ -187,6 +221,7 @@ export default function Login() {
         setLocalLoading(false);
       } else {
         logWithTimestamp("Login successful via form submission");
+        setLoginSuccess(true); // Mark login as successful
         setLocalLoading(false);
         // Redirect will be handled by the useEffect when user state updates
       }
@@ -213,8 +248,8 @@ export default function Login() {
   }
 
   // If user is authenticated, show a message that we're redirecting
-  // This helps prevent the login form flash before redirect completes
-  if (user) {
+  if (user && session && loginSuccess) {
+    logWithTimestamp("Showing redirect UI while waiting for navigation");
     return (
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">
@@ -228,7 +263,7 @@ export default function Login() {
     );
   }
 
-  // Main login form (only shown when not logged in)
+  // Main login form (only shown when not logged in or when not in redirect state)
   return (
     <div className="mobile-container">
       <header className="mobile-header">
