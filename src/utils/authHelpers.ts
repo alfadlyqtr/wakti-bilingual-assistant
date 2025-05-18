@@ -2,92 +2,33 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Extracts and logs the current authentication state from Supabase
- * This is useful for debugging auth issues
+ * Checks if the user is currently logged in
  */
-export async function debugAuthState() {
+export async function isLoggedIn() {
   try {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Auth Debug: Checking current auth state`);
-    
-    // Get current session
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    
-    if (sessionError) {
-      console.error(`[${timestamp}] Auth Debug: Error getting session:`, sessionError);
-      return { error: sessionError };
-    }
-    
-    // Get current user
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    
-    if (userError) {
-      console.error(`[${timestamp}] Auth Debug: Error getting user:`, userError);
-      return { error: userError };
-    }
-    
-    const authState = {
-      hasSession: !!sessionData?.session,
-      hasUser: !!userData?.user,
-      userId: userData?.user?.id,
-      sessionExpiry: sessionData?.session?.expires_at 
-        ? new Date(sessionData.session.expires_at * 1000).toISOString()
-        : null,
-      // Capturing the current timestamp for reference
-      lastCheckedAt: timestamp
-    };
-    
-    console.log(`[${timestamp}] Auth Debug: Current auth state:`, authState);
-    return { sessionData, userData, authState };
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Auth Debug: Unexpected error:`, error);
-    return { error };
+    console.error("Error checking login status:", error);
+    return false;
   }
 }
 
 /**
  * Forces a refresh of the current session
  */
-export async function forceSessionRefresh() {
+export async function refreshSession() {
   try {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] Auth Debug: Forcing session refresh`);
-    
     const { data, error } = await supabase.auth.refreshSession();
     
     if (error) {
-      console.error(`[${timestamp}] Auth Debug: Error refreshing session:`, error);
-      return { error };
+      console.error("Error refreshing session:", error);
+      return null;
     }
     
-    console.log(`[${timestamp}] Auth Debug: Session refreshed successfully:`, {
-      hasSession: !!data.session,
-      userId: data.user?.id,
-      sessionExpiry: data.session?.expires_at 
-        ? new Date(data.session.expires_at * 1000).toISOString()
-        : null,
-      refreshedAt: timestamp
-    });
-    
-    return { data };
+    return data.session;
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Auth Debug: Unexpected error during refresh:`, error);
-    return { error };
-  }
-}
-
-/**
- * Checks if the user is currently logged in
- * This is a simplified version of debugAuthState that just returns a boolean
- */
-export async function isLoggedIn() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    return !!session && !!user;
-  } catch (error) {
-    console.error(`[${new Date().toISOString()}] Auth Debug: Error checking login status:`, error);
-    return false;
+    console.error("Unexpected error during refresh:", error);
+    return null;
   }
 }

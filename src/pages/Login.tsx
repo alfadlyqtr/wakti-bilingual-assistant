@@ -11,7 +11,6 @@ import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import Loading from "@/components/ui/loading";
 
 // Translations
 const translations = {
@@ -22,12 +21,10 @@ const translations = {
     password: "Password",
     forgotPassword: "Forgot Password?",
     loading: "Loading...",
-    redirecting: "Redirecting to Dashboard...",
+    loggingIn: "Logging in...",
     createAccount: "Don't have an account?",
     signup: "Sign Up",
     backToHome: "Back to Home",
-    loggingIn: "Logging in...",
-    // Placeholders
     emailPlaceholder: "example@email.com",
     passwordPlaceholder: "Enter your password"
   },
@@ -38,51 +35,31 @@ const translations = {
     password: "كلمة المرور",
     forgotPassword: "نسيت كلم المرور؟",
     loading: "جاري التحميل...",
-    redirecting: "جاري التوجيه إلى لوحة التحكم...",
+    loggingIn: "جاري تسجيل الدخول...",
     createAccount: "ليس لديك حساب؟",
     signup: "إنشاء حساب",
     backToHome: "العودة للرئيسية",
-    loggingIn: "جاري تسجيل الدخول...",
-    // Placeholders
     emailPlaceholder: "example@email.com",
     passwordPlaceholder: "أدخل كلمة المرور"
   }
 };
 
-// Maximum time to wait in loading state before auto-recovery (ms)
-const MAX_LOADING_TIME = 8000;
-
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { signIn, user, session, isLoading: authIsLoading } = useAuth();
+  const { signIn, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [localLoading, setLocalLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   // Get translations for the current language
   const t = translations[language === 'ar' ? 'ar' : 'en'];
-
-  // Helper function for consistent log formatting
-  const logWithTimestamp = (message: string, details?: any) => {
-    console.log(
-      `[${new Date().toISOString()}] Login: ${message}`,
-      details || ""
-    );
-  };
-
-  // When the user or session changes, check if we need to redirect
-  // This ensures we redirect after authentication is successful
-  useState(() => {
-    if (user && session) {
-      logWithTimestamp("User is authenticated, redirecting to dashboard");
-      const from = location.state?.from?.pathname || "/dashboard";
-      navigate(from, { replace: true });
-    }
-  });
+  
+  // Combined loading state
+  const isLoading = isSubmitting || authIsLoading;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,31 +70,14 @@ export default function Login() {
       return;
     }
     
-    setLocalLoading(true);
-    logWithTimestamp("Attempting login with email:", email);
+    setIsSubmitting(true);
+    console.log("Login: Attempting login with email:", email);
     
     try {
-      // Set a safety timeout to prevent infinite loading state
-      const safetyTimeout = setTimeout(() => {
-        if (localLoading) {
-          setLocalLoading(false);
-          logWithTimestamp("Login safety timeout triggered");
-          toast({
-            title: language === 'en' ? 'Login Process Timeout' : 'انتهت مهلة عملية تسجيل الدخول',
-            description: language === 'en' ? 
-              'The login process is taking longer than expected. Please try again.' : 
-              'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
-            variant: 'destructive',
-            duration: 5000,
-          });
-        }
-      }, MAX_LOADING_TIME);
-
       const error = await signIn(email, password);
-      clearTimeout(safetyTimeout);
-
+      
       if (error) {
-        logWithTimestamp("Login error:", error);
+        console.log("Login: Failed login attempt:", error.message);
         setErrorMsg(error.message);
         toast({
           title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
@@ -125,9 +85,8 @@ export default function Login() {
           variant: 'destructive',
           duration: 5000,
         });
-        setLocalLoading(false);
       } else {
-        logWithTimestamp("Login successful via form submission");
+        console.log("Login: Login successful");
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
@@ -135,23 +94,18 @@ export default function Login() {
           variant: 'success',
         });
         
-        // Explicitly navigate to dashboard after successful login
-        // Short timeout to ensure auth state is fully updated
-        setTimeout(() => {
-          const from = location.state?.from?.pathname || "/dashboard";
-          logWithTimestamp("Explicitly navigating to:", from);
-          navigate(from, { replace: true });
-        }, 100);
+        // Auth state change will trigger ProtectedRoute to handle redirect
       }
     } catch (err) {
-      logWithTimestamp("Unexpected error during login:", err);
+      console.error("Login: Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-      setLocalLoading(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   // Show loading state when logging in
-  if (localLoading || authIsLoading) {
+  if (isLoading) {
     return (
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">
@@ -222,7 +176,7 @@ export default function Login() {
                     autoCapitalize="none"
                     autoComplete="email"
                     autoCorrect="off"
-                    disabled={localLoading}
+                    disabled={isLoading}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 py-6 text-base shadow-sm"
@@ -239,7 +193,7 @@ export default function Login() {
                     className="px-0 font-normal text-sm"
                     type="button"
                     onClick={() => navigate("/forgot-password")}
-                    disabled={localLoading}
+                    disabled={isLoading}
                   >
                     {t.forgotPassword}
                   </Button>
@@ -254,7 +208,7 @@ export default function Login() {
                     placeholder={t.passwordPlaceholder}
                     autoCapitalize="none"
                     autoComplete="current-password"
-                    disabled={localLoading}
+                    disabled={isLoading}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 py-6 text-base shadow-sm"
@@ -264,7 +218,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    disabled={localLoading}
+                    disabled={isLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5 text-muted-foreground" />
@@ -278,9 +232,9 @@ export default function Login() {
               <Button
                 type="submit"
                 className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                disabled={localLoading}
+                disabled={isLoading}
               >
-                {localLoading ? t.loading : t.login}
+                {isLoading ? t.loading : t.login}
               </Button>
             </form>
 
@@ -291,7 +245,7 @@ export default function Login() {
                   variant="link"
                   className="px-0"
                   onClick={() => navigate("/signup")}
-                  disabled={localLoading}
+                  disabled={isLoading}
                 >
                   {t.signup}
                 </Button>

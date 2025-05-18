@@ -9,10 +9,8 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Ensure we're not creating multiple instances
-let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null;
-
-export const supabase = supabaseInstance || createClient<Database>(
+// Create the Supabase client with explicit auth configuration
+export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_PUBLISHABLE_KEY,
   {
@@ -25,19 +23,6 @@ export const supabase = supabaseInstance || createClient<Database>(
     }
   }
 );
-
-// Store instance to avoid recreating
-supabaseInstance = supabase;
-
-// Add debugging listener for auth state changes
-supabase.auth.onAuthStateChange((event, session) => {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] Supabase client: Auth state change: ${event}`, {
-    hasSession: !!session,
-    sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
-    userId: session?.user?.id
-  });
-});
 
 // Log init completion
 console.log(`[${new Date().toISOString()}] Supabase client initialized`);

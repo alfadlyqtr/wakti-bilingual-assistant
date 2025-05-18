@@ -1,22 +1,18 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { Session, User, AuthError } from '@supabase/supabase-js';
+
+import { createContext, useContext, useEffect, useState } from 'react';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { debugAuthState, forceSessionRefresh } from '@/utils/authHelpers';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
   authInitialized: boolean;
-  signIn: (email: string, password: string) => Promise<AuthError | null>;
-  signUp: (email: string, password: string) => Promise<AuthError | null>;
+  signIn: (email: string, password: string) => Promise<any>;
+  signUp: (email: string, password: string) => Promise<any>;
   signOut: () => Promise<void>;
-  resetPassword: (token: string, newPassword: string) => Promise<AuthError | null>;
-  forgotPassword: (email: string) => Promise<AuthError | null>;
-  updateProfile: (data: Partial<User>) => Promise<User | null>;
-  updateEmail: (email: string) => Promise<AuthError | null>;
-  updatePassword: (password: string) => Promise<AuthError | null>;
-  refreshSession: () => Promise<Session | null>;
+  resetPassword: (token: string, newPassword: string) => Promise<any>;
+  forgotPassword: (email: string) => Promise<any>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -29,207 +25,129 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
   resetPassword: async () => null,
   forgotPassword: async () => null,
-  updateProfile: async () => null,
-  updateEmail: async () => null,
-  updatePassword: async () => null,
-  refreshSession: async () => null,
 });
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-  requireAuth?: boolean;
-}
-
-// Helper function to get current timestamp for logging
-const getTimestamp = () => new Date().toISOString();
-
-export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [authInitialized, setAuthInitialized] = useState(false);
-
-  // Debug helper with timestamp
-  const logAuthState = (message: string, details?: any) => {
-    console.log(`[${getTimestamp()}] AuthContext: ${message}`, {
-      hasUser: !!user,
-      userId: user?.id,
-      hasSession: !!session,
-      isLoading,
-      authInitialized,
-      ...(details || {})
-    });
-  };
-
+  
+  // Set up auth state listener and check for existing session
   useEffect(() => {
-    logAuthState('Setting up authentication');
+    console.log("AuthProvider: Setting up auth listeners");
     
-    // Critical synchronization flag
+    // Flag to avoid state updates after component unmount
     let isMounted = true;
     
+    // Set up auth state change subscription
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        logAuthState(`Auth state change: ${event}`, { 
-          hasNewSession: !!currentSession,
-          hasNewUser: !!currentSession?.user,
-          sessionExpiresAt: currentSession?.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
-        });
+        console.log(`AuthProvider: Auth state changed - ${event}`);
         
-        // Safe updates - only if component is still mounted
-        if (!isMounted) {
-          logAuthState('Auth state change received but component unmounted, ignoring');
-          return;
-        }
-
-        // Update state based on auth events
+        if (!isMounted) return;
+        
         if (event === 'SIGNED_OUT') {
-          logAuthState('User signed out, clearing auth state');
           setUser(null);
           setSession(null);
-          setIsLoading(false);
-          setAuthInitialized(true);
         } else if (currentSession) {
-          logAuthState('Updating auth state with new session', {
-            userId: currentSession.user?.id,
-            sessionExpiresAt: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
-          });
           setUser(currentSession.user);
           setSession(currentSession);
-          setIsLoading(false);
-          setAuthInitialized(true);
-        } else {
-          // Ensure we're not stuck loading
-          setAuthInitialized(true);
-          setIsLoading(false);
         }
+        
+        setIsLoading(false);
+        setAuthInitialized(true);
       }
     );
-
+    
     // Check for existing session
     const initializeAuth = async () => {
       try {
-        logAuthState('Checking for existing session');
+        console.log("AuthProvider: Checking for existing session");
         const { data: { session: currentSession } } = await supabase.auth.getSession();
         
-        // Safe updates - only if component is still mounted
-        if (!isMounted) {
-          logAuthState('Got session data but component unmounted, ignoring');
-          return;
-        }
+        if (!isMounted) return;
         
         if (currentSession) {
-          logAuthState('Found existing session', { 
-            userId: currentSession.user?.id,
-            expiry: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
-          });
-          
+          console.log("AuthProvider: Found existing session");
           setUser(currentSession.user);
           setSession(currentSession);
         } else {
-          logAuthState('No existing session found');
+          console.log("AuthProvider: No existing session found");
         }
         
-        // Always mark as initialized after checking
         setIsLoading(false);
         setAuthInitialized(true);
-        
-        // For debugging
-        debugAuthState();
       } catch (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error initializing auth:`, error);
+        console.error("AuthProvider: Error initializing auth", error);
+        
         if (isMounted) {
           setIsLoading(false);
-          setAuthInitialized(true); // Mark as initialized even on error
+          setAuthInitialized(true);
         }
       }
     };
-
-    // Initialize auth
+    
     initializeAuth();
-
+    
+    // Clean up subscription on unmount
     return () => {
-      logAuthState('Cleaning up auth subscription');
+      console.log("AuthProvider: Cleaning up auth subscription");
       isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
-
-  const refreshSession = async () => {
-    logAuthState('Manually refreshing session');
-    try {
-      const { data, error } = await forceSessionRefresh();
-      
-      if (error) {
-        logAuthState('Error refreshing session', { error });
-        return null;
-      }
-      
-      if (data.session) {
-        logAuthState('Session refresh successful', {
-          userId: data.session.user?.id,
-          sessionExpiresAt: data.session.expires_at ? new Date(data.session.expires_at * 1000).toISOString() : null
-        });
-        setSession(data.session);
-        setUser(data.session.user);
-      } else {
-        logAuthState('Session refresh returned no session');
-      }
-      
-      return data.session;
-    } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Error refreshing session:`, error);
-      return null;
-    }
-  };
-
+  
+  // Sign in function
   const signIn = async (email: string, password: string) => {
-    logAuthState('Attempting sign in', { email });
-    
-    setIsLoading(true);
-    
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      console.log("AuthProvider: Attempting sign in");
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
-        logAuthState('Error signing in:', { error });
-        setIsLoading(false);
+        console.error("AuthProvider: Sign in error", error);
+        return error;
       }
       
-      return error;
+      console.log("AuthProvider: Sign in successful");
+      return null;
     } catch (error) {
-      logAuthState('Exception during sign in:', { error });
+      console.error("AuthProvider: Sign in exception", error);
+      return error;
+    } finally {
       setIsLoading(false);
-      return error as AuthError;
     }
   };
-
+  
+  // Sign up function
   const signUp = async (email: string, password: string) => {
-    logAuthState('Attempting sign up', { email });
-    setIsLoading(true);
-    
     try {
-      const { error } = await supabase.auth.signUp({ email, password });
+      console.log("AuthProvider: Attempting sign up");
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.auth.signUp({ email, password });
       
       if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error signing up:`, error);
-        setIsLoading(false);
-      } else {
-        logAuthState("Sign up successful");
-        // We'll let onAuthStateChange handle setting isLoading to false
+        console.error("AuthProvider: Sign up error", error);
+        return error;
       }
       
-      return error;
+      console.log("AuthProvider: Sign up successful");
+      return null;
     } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during sign up:`, error);
+      console.error("AuthProvider: Sign up exception", error);
+      return error;
+    } finally {
       setIsLoading(false);
-      return error as AuthError;
     }
   };
-
+  
+  // Sign out function
   const signOut = async () => {
-    logAuthState('Attempting sign out');
     try {
-      // Set loading state to indicate logout in progress
+      console.log("AuthProvider: Attempting sign out");
       setIsLoading(true);
       
       // Clear auth state first for better UX
@@ -239,117 +157,41 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        logAuthState('Error signing out:', { error });
-        setIsLoading(false);
+        console.error("AuthProvider: Sign out error", error);
         throw error;
       }
       
-      logAuthState('Sign out successful');
-      // Complete loading state now that we're done
-      setIsLoading(false);
+      console.log("AuthProvider: Sign out successful");
     } catch (error) {
-      logAuthState('Exception during sign out:', { error });
+      console.error("AuthProvider: Sign out exception", error);
+    } finally {
       setIsLoading(false);
     }
   };
-
+  
+  // Reset password function
   const resetPassword = async (token: string, newPassword: string) => {
-    logAuthState('Attempting password reset');
     try {
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
       
-      if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error resetting password:`, error);
-      } else {
-        logAuthState('Password reset successful');
-      }
-      
       return error;
     } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during password reset:`, error);
-      return error as AuthError;
+      return error;
     }
   };
-
+  
+  // Forgot password function
   const forgotPassword = async (email: string) => {
-    logAuthState('Attempting password recovery', { email });
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
-      
-      if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error sending password reset email:`, error);
-      } else {
-        logAuthState('Password recovery email sent');
-      }
-      
       return error;
     } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during password recovery:`, error);
-      return error as AuthError;
-    }
-  };
-
-  const updateProfile = async (data: Partial<User>) => {
-    logAuthState('Attempting profile update');
-    try {
-      const { data: userData, error } = await supabase.auth.updateUser(data);
-      if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error updating profile:`, error);
-        return null;
-      }
-      
-      logAuthState('Profile update successful');
-      
-      // Refresh the session after profile update
-      await refreshSession();
-      
-      return userData.user;
-    } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during profile update:`, error);
-      return null;
-    }
-  };
-
-  const updateEmail = async (email: string) => {
-    logAuthState('Attempting email update', { newEmail: email });
-    try {
-      const { error } = await supabase.auth.updateUser({ email });
-      
-      if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error updating email:`, error);
-      } else {
-        logAuthState('Email update successful');
-        // Refresh the session after email update
-        await refreshSession();
-      }
-      
       return error;
-    } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during email update:`, error);
-      return error as AuthError;
     }
   };
-
-  const updatePassword = async (password: string) => {
-    logAuthState('Attempting password update');
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      
-      if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error updating password:`, error);
-      } else {
-        logAuthState('Password update successful');
-      }
-      
-      return error;
-    } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during password update:`, error);
-      return error as AuthError;
-    }
-  };
-
+  
   const value = {
     user,
     session,
@@ -360,17 +202,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     signOut,
     resetPassword,
     forgotPassword,
-    updateProfile,
-    updateEmail,
-    updatePassword,
-    refreshSession
   };
-
+  
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);
-
-export const AuthRoute = ({ children }: { children: React.ReactNode }) => {
-  return <AuthProvider requireAuth={true}>{children}</AuthProvider>;
-};
