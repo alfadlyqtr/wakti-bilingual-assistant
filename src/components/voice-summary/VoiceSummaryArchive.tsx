@@ -4,7 +4,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { formatDistanceToNow } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
-import { Mic, FileText, CheckCircle, Clock, DownloadCloud, Trash2, FilePdf, Volume } from "lucide-react";
+import { Mic, FileText, CheckCircle, Clock, DownloadCloud, Trash2, FileText as FileIcon, Volume } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -259,7 +259,7 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
                       title={language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
                       disabled={!recording.transcript}
                     >
-                      <FilePdf className="h-4 w-4" />
+                      <FileIcon className="h-4 w-4" />
                     </Button>
                     
                     <Button

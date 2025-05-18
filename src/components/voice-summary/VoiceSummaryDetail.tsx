@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FilePdf } from "lucide-react";
+import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FileText as FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -349,7 +349,7 @@ export default function VoiceSummaryDetail() {
           onClick={handleExportPDF}
           className="gap-1"
         >
-          <FilePdf className="h-4 w-4" />
+          <FileIcon className="h-4 w-4" />
           {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
         </Button>
       </div>
