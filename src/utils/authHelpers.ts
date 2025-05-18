@@ -33,9 +33,9 @@ export async function debugAuthState() {
       sessionExpiry: sessionData?.session?.expires_at 
         ? new Date(sessionData.session.expires_at * 1000).toISOString()
         : null,
-      lastRefresh: sessionData?.session?.last_refresh_at
-        ? new Date(sessionData.session.last_refresh_at * 1000).toISOString()
-        : null,
+      // Removing the last_refresh_at property access since it doesn't exist on the Session type
+      // Instead, capture the current timestamp for reference
+      lastCheckedAt: timestamp
     };
     
     console.log(`[${timestamp}] Auth Debug: Current auth state:`, authState);
@@ -66,7 +66,9 @@ export async function forceSessionRefresh() {
       userId: data.user?.id,
       sessionExpiry: data.session?.expires_at 
         ? new Date(data.session.expires_at * 1000).toISOString()
-        : null
+        : null,
+      // Using timestamp instead of accessing non-existent property
+      refreshedAt: timestamp
     });
     
     return { data };
