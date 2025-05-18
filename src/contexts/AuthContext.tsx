@@ -59,6 +59,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   useEffect(() => {
     logAuthState('Setting up authentication');
     
+    // Critical synchronization flag
+    let isMounted = true;
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
@@ -67,6 +70,12 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           hasNewUser: !!currentSession?.user,
           sessionExpiresAt: currentSession?.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
         });
+        
+        // Safe updates - only if component is still mounted
+        if (!isMounted) {
+          logAuthState('Auth state change received but component unmounted, ignoring');
+          return;
+        }
         
         // Update state based on auth events
         if (event === 'SIGNED_OUT') {
@@ -82,6 +91,12 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           setSession(currentSession);
           setUser(currentSession.user ?? null);
           setIsLoading(false);
+        } else if (event === 'SIGNED_IN') {
+          // Handle event without session data
+          logAuthState('Got SIGNED_IN event without session data, will fetch session');
+          refreshSession().catch(error => {
+            logAuthState('Error refreshing session after SIGNED_IN event', { error });
+          });
         } else {
           // Handle other auth events - ensure we're not stuck loading
           setIsLoading(false);
@@ -94,6 +109,12 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       try {
         logAuthState('Checking for existing session');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        // Safe updates - only if component is still mounted
+        if (!isMounted) {
+          logAuthState('Got session data but component unmounted, ignoring');
+          return;
+        }
         
         if (currentSession) {
           logAuthState('Found existing session', { 
@@ -111,7 +132,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
         setIsLoading(false);
       } catch (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error initializing auth:`, error);
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -119,6 +142,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
     return () => {
       logAuthState('Cleaning up auth subscription');
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -148,23 +172,25 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
 
   const signIn = async (email: string, password: string) => {
     logAuthState('Attempting sign in', { email });
+    
+    // Set loading state to indicate authentication in progress
     setIsLoading(true);
     
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
       if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error signing in:`, error);
+        logAuthState('Error signing in:', { error });
         setIsLoading(false);
       } else {
-        logAuthState("Sign in successful");
+        logAuthState('Sign in successful, session update will happen via onAuthStateChange');
         // We'll let onAuthStateChange handle setting isLoading to false 
-        // after the session is properly established
+        // and updating user/session state
       }
       
       return error;
     } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during sign in:`, error);
+      logAuthState('Exception during sign in:', { error });
       setIsLoading(false);
       return error as AuthError;
     }
@@ -206,7 +232,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       const { error } = await supabase.auth.signOut();
       
       if (error) {
-        console.error(`[${getTimestamp()}] AuthContext: Error signing out:`, error);
+        logAuthState('Error signing out:', { error });
         setIsLoading(false);
         throw error;
       }
@@ -214,11 +240,8 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       logAuthState('Sign out successful');
       // Complete loading state now that we're done
       setIsLoading(false);
-      
-      // Note: We don't handle navigation here since it's better managed in the component
-      // that calls signOut, like UserMenu.tsx
     } catch (error) {
-      console.error(`[${getTimestamp()}] AuthContext: Exception during sign out:`, error);
+      logAuthState('Exception during sign out:', { error });
       setIsLoading(false);
     }
   };

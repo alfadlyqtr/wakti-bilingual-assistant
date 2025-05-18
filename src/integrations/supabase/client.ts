@@ -17,11 +17,15 @@ export const supabase = createClient<Database>(
       storage: localStorage,
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: false // Disable auto detection of OAuth redirect to prevent loops
     }
   }
 );
 
 // Add debugging listener for auth state changes
 supabase.auth.onAuthStateChange((event, session) => {
-  console.log('Supabase client: Auth state change:', event, !!session);
+  console.log(`Supabase client: Auth state change: ${event}`, !!session, {
+    sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
+    userId: session?.user?.id
+  });
 });

@@ -62,13 +62,15 @@ export default function Login() {
   const [localLoading, setLocalLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [redirectionInProgress, setRedirectionInProgress] = useState(false);
-  const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const successToastShownRef = useRef(false);
-  const redirectionAttemptedRef = useRef(false);
   
   // Get translations for the current language
   const t = translations[language];
+  
+  // Single reference for tracking redirections
+  const redirectStateRef = useRef({
+    redirectAttempted: false,
+    successToastShown: false
+  });
 
   // Helper function for consistent log formatting
   const logWithTimestamp = (message: string, details?: any) => {
@@ -80,19 +82,8 @@ export default function Login() {
 
   // Clear any loading timers when component unmounts
   useEffect(() => {
-    return () => {
-      if (loadingTimerRef.current) {
-        logWithTimestamp("Clearing loading recovery timer on unmount");
-        clearTimeout(loadingTimerRef.current);
-      }
-    };
-  }, []);
-
-  // Set up loading timeout recovery
-  useEffect(() => {
-    if (localLoading) {
-      logWithTimestamp(`Setting loading recovery timer for ${MAX_LOADING_TIME}ms`);
-      loadingTimerRef.current = setTimeout(() => {
+    const loadingTimer = setTimeout(() => {
+      if (localLoading) {
         logWithTimestamp("Loading recovery triggered - resetting loading state");
         setLocalLoading(false);
         toast({
@@ -101,89 +92,69 @@ export default function Login() {
             'The login process is taking longer than expected. Please try again.' : 
             'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
           variant: 'destructive',
-          duration: 5000, // 5 seconds for error messages
+          duration: 5000,
         });
-      }, MAX_LOADING_TIME);
+      }
+    }, MAX_LOADING_TIME);
 
-      return () => {
-        if (loadingTimerRef.current) {
-          logWithTimestamp("Clearing loading recovery timer on loading state change");
-          clearTimeout(loadingTimerRef.current);
-          loadingTimerRef.current = null;
-        }
-      };
-    }
+    return () => {
+      clearTimeout(loadingTimer);
+      logWithTimestamp("Cleanup: component unmounting, clearing timers and flags");
+    };
   }, [localLoading, language]);
 
-  // Reset the success toast flag when the component mounts
+  // Reset flags when component mounts or unmounts
   useEffect(() => {
-    successToastShownRef.current = false;
-    redirectionAttemptedRef.current = false;
-    
-    // Reset states when component mounts
-    setRedirectionInProgress(false);
+    logWithTimestamp("Component mounted, resetting all redirect flags");
+    redirectStateRef.current = {
+      redirectAttempted: false,
+      successToastShown: false
+    };
     
     return () => {
-      // Reset flags when component unmounts
-      successToastShownRef.current = false;
-      redirectionAttemptedRef.current = false;
+      logWithTimestamp("Component unmounting, final cleanup");
+      redirectStateRef.current = {
+        redirectAttempted: false,
+        successToastShown: false
+      };
     };
   }, []);
 
-  // Handle redirection if user is already authenticated
+  // This effect handles redirection ONLY when authentication state changes
   useEffect(() => {
-    if (user && !redirectionAttemptedRef.current) {
-      logWithTimestamp("User authenticated, initiating redirection", {
+    // Only proceed with redirect if:
+    // 1. We have a user object
+    // 2. We haven't already attempted a redirect
+    // 3. We're not in a loading state
+    if (user && !redirectStateRef.current.redirectAttempted && !localLoading && !authIsLoading) {
+      logWithTimestamp("🔑 Auth redirect condition met", {
         userId: user.id,
-        path: location.pathname,
-        localLoading,
-        authIsLoading,
-        redirectionInProgress
+        currentPath: location.pathname,
+        redirectAttempted: redirectStateRef.current.redirectAttempted
       });
       
-      // Mark that redirection process has started to avoid multiple redirects
-      setRedirectionInProgress(true);
-      redirectionAttemptedRef.current = true;
+      // Mark that we've attempted a redirect to prevent multiple redirects
+      redirectStateRef.current.redirectAttempted = true;
       
-      // Clear any loading state
-      setLocalLoading(false);
-      
-      // Show success toast only once
-      if (!successToastShownRef.current) {
-        successToastShownRef.current = true;
+      // Show success toast only once per login flow
+      if (!redirectStateRef.current.successToastShown) {
+        redirectStateRef.current.successToastShown = true;
         toast({
           title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
           description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
-          duration: 3000, // 3 seconds for success messages
-          variant: 'success', // Use success variant for better visual distinction
+          duration: 3000,
+          variant: 'success',
         });
       }
       
-      // Get intended destination from location state or default to dashboard
+      // Get intended destination or default to dashboard
       const destination = location.state?.from?.pathname || "/dashboard";
-      logWithTimestamp(`Redirecting to ${destination}`);
+      logWithTimestamp(`🚀 Executing navigation to ${destination}`);
       
-      // Add a slight delay before navigation to ensure state updates complete
-      setTimeout(() => {
-        logWithTimestamp(`Executing navigation to ${destination}`);
-        navigate(destination, { replace: true });
-      }, 100);
+      // Use replace to prevent back-button issues
+      navigate(destination, { replace: true });
     }
-  }, [user, navigate, location, language]);
-
-  // Add a safety net for redirection
-  useEffect(() => {
-    // If we have a user but somehow didn't redirect after a second,
-    // force a redirection to dashboard
-    if (user && redirectionInProgress) {
-      const safetyTimer = setTimeout(() => {
-        logWithTimestamp("Safety redirection triggered");
-        navigate("/dashboard", { replace: true });
-      }, 1000);
-      
-      return () => clearTimeout(safetyTimer);
-    }
-  }, [user, redirectionInProgress, navigate]);
+  }, [user, navigate, location, language, localLoading, authIsLoading]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,17 +165,16 @@ export default function Login() {
       return;
     }
     
+    // Reset redirect tracking before new login attempt
+    redirectStateRef.current.redirectAttempted = false;
+    redirectStateRef.current.successToastShown = false;
+    
     setLocalLoading(true);
     logWithTimestamp("Attempting login with email:", email);
     
     try {
-      // Reset redirection flags before sign-in attempt
-      redirectionAttemptedRef.current = false;
-      setRedirectionInProgress(false);
-      
       const error = await signIn(email, password);
 
-      // Reset localLoading on both success and error paths
       if (error) {
         logWithTimestamp("Login error:", error);
         setErrorMsg(error.message);
@@ -212,22 +182,17 @@ export default function Login() {
           title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
           description: error.message,
           variant: 'destructive',
-          duration: 5000, // 5 seconds for error messages
+          duration: 5000,
         });
         setLocalLoading(false);
       } else {
-        logWithTimestamp("Login successful, resetting loading state");
-        // Note: Success toast is shown in the effect when user is detected
-        
-        // Reset localLoading immediately after successful login
+        logWithTimestamp("Login successful via form submission");
         setLocalLoading(false);
-        
-        // Redirection will be handled by the useEffect watching for authenticated user
+        // Redirect will be handled by the useEffect when user state updates
       }
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-      // Always reset loading state, even in catch block
       setLocalLoading(false);
     }
   };
@@ -247,6 +212,23 @@ export default function Login() {
     );
   }
 
+  // If user is authenticated, show a message that we're redirecting
+  // This helps prevent the login form flash before redirect completes
+  if (user) {
+    return (
+      <div className="mobile-container flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-xl font-bold mb-2">{t.redirecting}</h2>
+          <p className="text-muted-foreground">
+            {language === 'en' ? 'Please wait...' : 'يرجى الانتظار...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Main login form (only shown when not logged in)
   return (
     <div className="mobile-container">
       <header className="mobile-header">

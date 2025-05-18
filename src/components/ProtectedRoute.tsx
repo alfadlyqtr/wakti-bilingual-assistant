@@ -39,10 +39,17 @@ export default function ProtectedRoute() {
 
   // Auth check complete, but not authenticated
   if (!user || !session) {
-    logWithTimestamp("User not authenticated, redirecting to login", {
-      from: location.pathname
-    });
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // Only redirect to login if we're not already there (prevents loops)
+    if (location.pathname !== '/login') {
+      logWithTimestamp("User not authenticated, redirecting to login", {
+        from: location.pathname
+      });
+      return <Navigate to="/login" replace state={{ from: location }} />;
+    } else {
+      // If we're already at login, just render the login page
+      logWithTimestamp("Already at login page while not authenticated");
+      return <Outlet />;
+    }
   }
 
   // User is authenticated, render the protected content
