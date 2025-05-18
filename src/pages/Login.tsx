@@ -1,6 +1,6 @@
 
-import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
@@ -56,23 +56,15 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { signIn, user, session, isLoading: authIsLoading, authInitialized } = useAuth();
+  const { signIn, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localLoading, setLocalLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [loginSuccess, setLoginSuccess] = useState(false);
   
   // Get translations for the current language
   const t = translations[language === 'ar' ? 'ar' : 'en'];
-  
-  // Single reference for tracking redirections
-  const redirectStateRef = useRef({
-    redirectAttempted: false,
-    successToastShown: false,
-    redirectTimer: null as NodeJS.Timeout | null
-  });
 
   // Helper function for consistent log formatting
   const logWithTimestamp = (message: string, details?: any) => {
@@ -81,112 +73,6 @@ export default function Login() {
       details || ""
     );
   };
-
-  // Clean up function to clear timers
-  const clearTimers = () => {
-    logWithTimestamp("Cleaning up timers");
-    if (redirectStateRef.current.redirectTimer) {
-      clearTimeout(redirectStateRef.current.redirectTimer);
-      redirectStateRef.current.redirectTimer = null;
-    }
-  };
-
-  // Clear any loading timers when component unmounts
-  useEffect(() => {
-    const loadingTimer = setTimeout(() => {
-      if (localLoading) {
-        logWithTimestamp("Loading recovery triggered - resetting loading state");
-        setLocalLoading(false);
-        toast({
-          title: language === 'en' ? 'Login Process Timeout' : 'انتهت مهلة عملية تسجيل الدخول',
-          description: language === 'en' ? 
-            'The login process is taking longer than expected. Please try again.' : 
-            'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
-          variant: 'destructive',
-          duration: 5000,
-        });
-      }
-    }, MAX_LOADING_TIME);
-
-    return () => {
-      clearTimeout(loadingTimer);
-      clearTimers();
-      logWithTimestamp("Cleanup: component unmounting, clearing timers and flags");
-    };
-  }, [localLoading, language]);
-
-  // Reset flags when component mounts
-  useEffect(() => {
-    logWithTimestamp("Component mounted, resetting all redirect flags");
-    setLoginSuccess(false);
-    redirectStateRef.current = {
-      redirectAttempted: false,
-      successToastShown: false,
-      redirectTimer: null
-    };
-    
-    return () => {
-      logWithTimestamp("Component unmounting, final cleanup");
-      clearTimers();
-    };
-  }, []);
-
-  // This effect handles redirection ONLY when authentication state changes
-  useEffect(() => {
-    // Log auth state for debugging
-    logWithTimestamp("Auth state check", {
-      hasUser: !!user,
-      hasSession: !!session, 
-      authInitialized,
-      authIsLoading,
-      localLoading,
-      loginSuccess,
-      currentPath: location.pathname
-    });
-    
-    // Only proceed with redirect if:
-    // 1. Authentication is fully initialized 
-    // 2. We have a user object and session
-    // 3. We've just completed a successful login
-    // 4. We're not in a loading state
-    if (user && 
-        session && 
-        authInitialized && 
-        !authIsLoading && 
-        !localLoading && 
-        loginSuccess && 
-        !redirectStateRef.current.redirectAttempted) {
-      
-      logWithTimestamp("🔑 Auth redirect condition met - preparing redirection", {
-        userId: user.id
-      });
-      
-      // Mark that we've attempted a redirect to prevent multiple redirects
-      redirectStateRef.current.redirectAttempted = true;
-      
-      // Show success toast only once per login flow
-      if (!redirectStateRef.current.successToastShown) {
-        redirectStateRef.current.successToastShown = true;
-        toast({
-          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
-          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
-          duration: 3000,
-          variant: 'success',
-        });
-      }
-      
-      // Use a short delay to ensure all auth state propagation is complete
-      // before attempting navigation
-      redirectStateRef.current.redirectTimer = setTimeout(() => {
-        // Get intended destination or default to dashboard
-        const destination = location.state?.from?.pathname || "/dashboard";
-        logWithTimestamp(`🚀 Executing navigation to ${destination}`);
-        
-        // Use replace to prevent back-button issues
-        navigate(destination, { replace: true });
-      }, 100);
-    }
-  }, [user, session, navigate, location, language, localLoading, authIsLoading, loginSuccess, authInitialized]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,17 +83,28 @@ export default function Login() {
       return;
     }
     
-    // Reset login state before new login attempt
-    setLoginSuccess(false);
-    redirectStateRef.current.redirectAttempted = false;
-    redirectStateRef.current.successToastShown = false;
-    clearTimers();
-    
     setLocalLoading(true);
     logWithTimestamp("Attempting login with email:", email);
     
     try {
+      // Set a safety timeout to prevent infinite loading state
+      const safetyTimeout = setTimeout(() => {
+        if (localLoading) {
+          setLocalLoading(false);
+          logWithTimestamp("Login safety timeout triggered");
+          toast({
+            title: language === 'en' ? 'Login Process Timeout' : 'انتهت مهلة عملية تسجيل الدخول',
+            description: language === 'en' ? 
+              'The login process is taking longer than expected. Please try again.' : 
+              'عملية تسجيل الدخول تستغرق وقتًا أطول من المتوقع. يرجى المحاولة مرة أخرى.',
+            variant: 'destructive',
+            duration: 5000,
+          });
+        }
+      }, MAX_LOADING_TIME);
+
       const error = await signIn(email, password);
+      clearTimeout(safetyTimeout);
 
       if (error) {
         logWithTimestamp("Login error:", error);
@@ -218,22 +115,26 @@ export default function Login() {
           variant: 'destructive',
           duration: 5000,
         });
-        setLocalLoading(false);
       } else {
         logWithTimestamp("Login successful via form submission");
-        setLoginSuccess(true); // Mark login as successful
-        setLocalLoading(false);
-        // Redirect will be handled by the useEffect when user state updates
+        toast({
+          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
+          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
+          duration: 3000,
+          variant: 'success',
+        });
+        // Don't navigate here - ProtectedRoute will handle redirect
       }
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
       setLocalLoading(false);
     }
   };
 
   // Show loading state when logging in
-  if (localLoading) {
+  if (localLoading || authIsLoading) {
     return (
       <div className="mobile-container flex items-center justify-center">
         <div className="text-center">
@@ -247,23 +148,7 @@ export default function Login() {
     );
   }
 
-  // If user is authenticated, show a message that we're redirecting
-  if (user && session && loginSuccess) {
-    logWithTimestamp("Showing redirect UI while waiting for navigation");
-    return (
-      <div className="mobile-container flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-xl font-bold mb-2">{t.redirecting}</h2>
-          <p className="text-muted-foreground">
-            {language === 'en' ? 'Please wait...' : 'يرجى الانتظار...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Main login form (only shown when not logged in or when not in redirect state)
+  // Main login form
   return (
     <div className="mobile-container">
       <header className="mobile-header">

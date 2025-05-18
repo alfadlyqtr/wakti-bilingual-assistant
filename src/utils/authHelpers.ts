@@ -33,8 +33,7 @@ export async function debugAuthState() {
       sessionExpiry: sessionData?.session?.expires_at 
         ? new Date(sessionData.session.expires_at * 1000).toISOString()
         : null,
-      // Removing the last_refresh_at property access since it doesn't exist on the Session type
-      // Instead, capture the current timestamp for reference
+      // Capturing the current timestamp for reference
       lastCheckedAt: timestamp
     };
     
@@ -67,7 +66,6 @@ export async function forceSessionRefresh() {
       sessionExpiry: data.session?.expires_at 
         ? new Date(data.session.expires_at * 1000).toISOString()
         : null,
-      // Using timestamp instead of accessing non-existent property
       refreshedAt: timestamp
     });
     

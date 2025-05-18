@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { Session, User, AuthError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { debugAuthState, forceSessionRefresh } from '@/utils/authHelpers';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  authInitialized: boolean; // New flag to track full initialization
+  authInitialized: boolean;
   signIn: (email: string, password: string) => Promise<AuthError | null>;
   signUp: (email: string, password: string) => Promise<AuthError | null>;
   signOut: () => Promise<void>;
@@ -22,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   isLoading: true,
-  authInitialized: false, // Add to default context
+  authInitialized: false,
   signIn: async () => null,
   signUp: async () => null,
   signOut: async () => {},
@@ -46,17 +47,8 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [authInitialized, setAuthInitialized] = useState(false); // Track complete initialization
-  const authStateRef = useRef<{
-    user: User | null;
-    session: Session | null;
-    isStabilizing: boolean;
-  }>({ 
-    user: null,
-    session: null,
-    isStabilizing: false
-  });
-  
+  const [authInitialized, setAuthInitialized] = useState(false);
+
   // Debug helper with timestamp
   const logAuthState = (message: string, details?: any) => {
     console.log(`[${getTimestamp()}] AuthContext: ${message}`, {
@@ -65,33 +57,9 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       hasSession: !!session,
       isLoading,
       authInitialized,
-      isStabilizing: authStateRef.current.isStabilizing,
       ...(details || {})
     });
   };
-
-  // Stabilize auth state changes with a small delay
-  const stabilizeAuthState = useCallback(() => {
-    if (authStateRef.current.isStabilizing) {
-      return; // Already in progress
-    }
-
-    authStateRef.current.isStabilizing = true;
-    logAuthState('Stabilizing auth state');
-    
-    // Allow a small delay to ensure all auth events are processed
-    setTimeout(() => {
-      setUser(authStateRef.current.user);
-      setSession(authStateRef.current.session);
-      setIsLoading(false);
-      setAuthInitialized(true);
-      authStateRef.current.isStabilizing = false;
-      logAuthState('Auth state stabilized', { 
-        userId: authStateRef.current.user?.id,
-        hasSession: !!authStateRef.current.session
-      });
-    }, 50); // Small delay to batch updates
-  }, []);
 
   useEffect(() => {
     logAuthState('Setting up authentication');
@@ -99,7 +67,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     // Critical synchronization flag
     let isMounted = true;
     
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
         logAuthState(`Auth state change: ${event}`, { 
@@ -113,39 +80,32 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
           logAuthState('Auth state change received but component unmounted, ignoring');
           return;
         }
-        
-        // Update reference first (used by stabilizeAuthState)
-        authStateRef.current.user = currentSession?.user ?? null;
-        authStateRef.current.session = currentSession;
-        
+
         // Update state based on auth events
         if (event === 'SIGNED_OUT') {
           logAuthState('User signed out, clearing auth state');
-          authStateRef.current.user = null;
-          authStateRef.current.session = null;
-          stabilizeAuthState();
+          setUser(null);
+          setSession(null);
+          setIsLoading(false);
+          setAuthInitialized(true);
         } else if (currentSession) {
           logAuthState('Updating auth state with new session', {
             userId: currentSession.user?.id,
             sessionExpiresAt: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
           });
-          stabilizeAuthState();
-        } else if (event === 'SIGNED_IN') {
-          // Handle event without session data
-          logAuthState('Got SIGNED_IN event without session data, will fetch session');
-          refreshSession().catch(error => {
-            logAuthState('Error refreshing session after SIGNED_IN event', { error });
-          });
+          setUser(currentSession.user);
+          setSession(currentSession);
+          setIsLoading(false);
+          setAuthInitialized(true);
         } else {
-          // Handle other auth events - ensure we're not stuck loading
-          if (isLoading) {
-            stabilizeAuthState();
-          }
+          // Ensure we're not stuck loading
+          setAuthInitialized(true);
+          setIsLoading(false);
         }
       }
     );
 
-    // THEN check for existing session
+    // Check for existing session
     const initializeAuth = async () => {
       try {
         logAuthState('Checking for existing session');
@@ -163,17 +123,18 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
             expiry: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
           });
           
-          // Update reference
-          authStateRef.current.user = currentSession.user;
-          authStateRef.current.session = currentSession;
+          setUser(currentSession.user);
+          setSession(currentSession);
         } else {
           logAuthState('No existing session found');
-          authStateRef.current.user = null;
-          authStateRef.current.session = null; 
         }
         
-        // Always stabilize after initialization
-        stabilizeAuthState();
+        // Always mark as initialized after checking
+        setIsLoading(false);
+        setAuthInitialized(true);
+        
+        // For debugging
+        debugAuthState();
       } catch (error) {
         console.error(`[${getTimestamp()}] AuthContext: Error initializing auth:`, error);
         if (isMounted) {
@@ -183,6 +144,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       }
     };
 
+    // Initialize auth
     initializeAuth();
 
     return () => {
@@ -190,25 +152,30 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [stabilizeAuthState]);
+  }, []);
 
   const refreshSession = async () => {
     logAuthState('Manually refreshing session');
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const { data, error } = await forceSessionRefresh();
       
-      if (currentSession) {
+      if (error) {
+        logAuthState('Error refreshing session', { error });
+        return null;
+      }
+      
+      if (data.session) {
         logAuthState('Session refresh successful', {
-          userId: currentSession.user?.id,
-          sessionExpiresAt: currentSession.expires_at ? new Date(currentSession.expires_at * 1000).toISOString() : null
+          userId: data.session.user?.id,
+          sessionExpiresAt: data.session.expires_at ? new Date(data.session.expires_at * 1000).toISOString() : null
         });
-        setSession(currentSession);
-        setUser(currentSession.user);
+        setSession(data.session);
+        setUser(data.session.user);
       } else {
         logAuthState('Session refresh returned no session');
       }
       
-      return currentSession;
+      return data.session;
     } catch (error) {
       console.error(`[${getTimestamp()}] AuthContext: Error refreshing session:`, error);
       return null;
@@ -218,7 +185,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
   const signIn = async (email: string, password: string) => {
     logAuthState('Attempting sign in', { email });
     
-    // Set loading state to indicate authentication in progress
     setIsLoading(true);
     
     try {
@@ -227,10 +193,6 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       if (error) {
         logAuthState('Error signing in:', { error });
         setIsLoading(false);
-      } else {
-        logAuthState('Sign in successful, session update will happen via onAuthStateChange');
-        // We'll let onAuthStateChange handle setting isLoading to false 
-        // and updating user/session state
       }
       
       return error;
@@ -392,7 +354,7 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     user,
     session,
     isLoading,
-    authInitialized, // New flag exposed via context
+    authInitialized,
     signIn,
     signUp,
     signOut,
