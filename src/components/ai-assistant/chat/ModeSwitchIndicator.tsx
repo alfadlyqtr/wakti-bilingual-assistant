@@ -30,7 +30,7 @@ export const ModeSwitchIndicator: React.FC<ModeSwitchIndicatorProps> = ({
     if (!mode) return '#3498db';
     
     const colorKey = theme === 'dark' ? 'dark' : 'light';
-    return mode.color[colorKey];
+    return mode.color[colorKey] || '#3498db';
   };
 
   // Get localized mode name

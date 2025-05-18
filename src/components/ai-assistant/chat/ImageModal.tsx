@@ -1,121 +1,116 @@
 
 import React from 'react';
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { X, Download, Share2 } from "lucide-react";
-import { motion } from "framer-motion";
-import { useTheme } from "@/providers/ThemeProvider";
-import { formatDistanceToNow } from 'date-fns';
-import { arAR, enUS } from 'date-fns/locale';
-import { toast } from "sonner";
+import { format } from 'date-fns';
+import { ar, enUS } from 'date-fns/locale';
+import { X, Download } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
+import { TranslationKey } from '@/utils/translationTypes';
 
 interface ImageModalProps {
-  isOpen: boolean;
+  isVisible: boolean;
   onClose: () => void;
   imageUrl: string | null;
-  prompt: string | null;
+  promptText: string | null;
   timestamp: Date | null;
-  onDownload: () => void;
+  onDownload: (url: string, prompt: string) => void;
 }
 
-export const ImageModal: React.FC<ImageModalProps> = ({ 
-  isOpen, 
+const ImageModal: React.FC<ImageModalProps> = ({ 
+  isVisible, 
   onClose, 
   imageUrl, 
-  prompt,
-  timestamp,
+  promptText, 
+  timestamp, 
   onDownload
 }) => {
-  const { theme, language } = useTheme();
-  
-  const handleShare = async () => {
-    if (!imageUrl) return;
-    
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'WAKTI Generated Image',
-          text: prompt || 'Check out this AI-generated image!',
-          url: imageUrl,
-        });
-      } else {
-        // Fallback: Copy URL to clipboard
-        await navigator.clipboard.writeText(imageUrl);
-        toast.success(language === 'ar' ? 'تم نسخ عنوان الصورة إلى الحافظة' : 'Image URL copied to clipboard');
-      }
-    } catch (error) {
-      console.error('Error sharing image:', error);
-    }
-  };
-  
-  const formatTime = (date: Date | null) => {
-    if (!date) return '';
-    
-    return formatDistanceToNow(date, { 
-      addSuffix: true,
-      locale: language === 'ar' ? arAR : enUS
+  const { language } = useTheme();
+
+  // Format date according to user's language
+  const formatDate = (date: Date) => {
+    return format(date, 'PPpp', { 
+      locale: language === 'ar' ? ar : enUS
     });
   };
-  
+
+  // Handle download click
+  const handleDownload = () => {
+    if (imageUrl && promptText) {
+      onDownload(imageUrl, promptText);
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[90vw] max-h-[90vh] flex flex-col p-0 gap-0 bg-black dark:bg-black">
-        <div className="absolute top-2 right-2 z-10 flex gap-2">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleShare}
-            className="bg-black/60 text-white border-gray-600 hover:bg-black/80 rounded-full"
+    <AnimatePresence>
+      {isVisible && imageUrl && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
           >
-            <Share2 className="h-4 w-4" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={onDownload}
-            className="bg-black/60 text-white border-gray-600 hover:bg-black/80 rounded-full"
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={onClose} 
-            className="bg-black/60 text-white border-gray-600 hover:bg-black/80 rounded-full"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-        
-        {/* Image container with proper sizing */}
-        <div className="flex items-center justify-center flex-1 w-full overflow-auto">
-          {imageUrl && (
-            <motion.img 
-              src={imageUrl} 
-              alt={prompt || 'Generated image'} 
-              className="max-w-full max-h-[70vh] object-contain"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            />
-          )}
-        </div>
-        
-        {/* Image info footer */}
-        <div className="bg-black/80 p-4 text-white">
-          {prompt && (
-            <p className="text-sm mb-1 font-medium">
-              {prompt}
-            </p>
-          )}
-          {timestamp && (
-            <p className="text-xs text-gray-400">
-              {formatTime(timestamp)}
-            </p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            {/* Header */}
+            <div className="flex justify-between items-center p-4 border-b border-zinc-200 dark:border-zinc-800">
+              <h3 className="font-semibold text-lg">
+                {t("generatedImage" as TranslationKey, language)}
+              </h3>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleDownload}
+                  className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  title={t("download" as TranslationKey, language)}
+                >
+                  <Download size={20} />
+                </button>
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            
+            {/* Image Container */}
+            <div className="flex-1 overflow-auto">
+              <div className="relative">
+                <img 
+                  src={imageUrl} 
+                  alt={promptText || t("generatedImage" as TranslationKey, language)} 
+                  className="w-full h-auto object-contain"
+                />
+              </div>
+            </div>
+            
+            {/* Footer - Prompt and Date info */}
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+              {promptText && (
+                <p className="mb-2 text-sm font-medium">
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {t("prompt" as TranslationKey, language)}:
+                  </span>{" "}
+                  {promptText}
+                </p>
+              )}
+              {timestamp && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  {formatDate(timestamp)}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
 

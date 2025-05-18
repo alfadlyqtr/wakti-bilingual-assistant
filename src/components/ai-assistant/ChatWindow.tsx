@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useRef, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { AIMode, ChatMessage } from "./types";
 import ChatMessageComponent from "./chat/ChatMessage";
@@ -16,7 +16,6 @@ interface ChatWindowProps {
   activeMode: AIMode;
   getModeColor: (mode: AIMode) => string;
   onConfirm: (messageId: string, action: string) => void;
-  messageEndRef: React.RefObject<HTMLDivElement>;
   language: string;
   theme: string;
   setActiveMode: (mode: AIMode) => void;
@@ -28,11 +27,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   activeMode,
   getModeColor,
   onConfirm,
-  messageEndRef,
   language,
   theme,
   setActiveMode
 }) => {
+  const messageEndRef = useRef<HTMLDivElement>(null);
+  
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
   const formatTimestamp = (timestamp: Date) => {
     return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
       hour: 'numeric',
@@ -79,11 +84,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 isLastMessage={isLastMessage}
                 styles={styles}
                 isCreativeModeActive={isCreativeModeActive}
-                isSwitchingMode={isSwitchingMode}
-                getModeName={getModeName}
                 formatTimestamp={formatTimestamp}
                 openImageModal={openImageModal}
                 downloadImage={downloadImage}
+                onConfirm={onConfirm}
               />
             );
           })}
@@ -94,19 +98,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         
         {/* Mode switch animation indicator */}
         <ModeSwitchIndicator 
-          isSwitchingMode={isSwitchingMode} 
-          lastSwitchedMode={lastSwitchedMode}
-          getModeName={getModeName}
+          isVisible={isSwitchingMode}
+          targetMode={lastSwitchedMode}
+          language={language as "en" | "ar"}
+          theme={theme as "light" | "dark"}
         />
         
         {/* Enhanced image viewer modal */}
         <ImageModal 
-          showImageModal={showImageModal}
-          setShowImageModal={setShowImageModal}
-          selectedImage={selectedImage}
-          selectedImagePrompt={selectedImagePrompt}
-          selectedImageTime={selectedImageTime}
-          downloadImage={downloadImage}
+          isVisible={showImageModal}
+          onClose={() => setShowImageModal(false)}
+          imageUrl={selectedImage}
+          promptText={selectedImagePrompt}
+          timestamp={selectedImageTime}
+          onDownload={downloadImage}
         />
         
         {/* This empty div is for auto-scrolling to the bottom of chat */}
@@ -115,3 +120,5 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     </div>
   );
 };
+
+export default ChatWindow;
