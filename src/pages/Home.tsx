@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ export default function Home() {
   const navigate = useNavigate();
   const { user, isLoading } = useAuth();
   const { language, theme } = useTheme();
+  const [pricingPlan, setPricingPlan] = useState("monthly");
   
   // Simple redirect if user is logged in
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function Home() {
       feature4Desc: "دعم كامل للغتين العربية والإنجليزية",
       aiSectionTitle: "إمكانيات الذكاء الاصطناعي في WAKTI",
       aiFeature1Title: "إنشاء المهام الذكية",
-      aiFeature1Desc: "توليد مهام محسنة مع أولويات ومواعيد نهائية",
+      aiFeature1Desc: "توليد مهام محسنة مع أولويات و��واعيد نهائية",
       aiFeature2Title: "تلخيص المحتوى",
       aiFeature2Desc: "إنشاء ملخصات موجزة من المدخلات الصوتية أو النصية",
       aiFeature3Title: "المحتوى الإبداعي",
@@ -88,7 +89,6 @@ export default function Home() {
   const primaryBg = theme === "dark" ? "bg-dark-bg" : "bg-light-bg";
   const primaryText = theme === "dark" ? "text-white" : "text-light-primary";
   const accentBg = theme === "dark" ? "bg-dark-tertiary/20" : "bg-light-secondary/20";
-  const [pricingPlan, setPricingPlan] = useState("monthly");
 
   const containerVariants = {
     hidden: { opacity: 0 },
