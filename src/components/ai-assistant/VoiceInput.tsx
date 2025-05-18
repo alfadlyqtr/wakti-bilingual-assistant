@@ -24,8 +24,24 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
+  const [isProcessingRequest, setIsProcessingRequest] = useState(false);
   const MAX_RECORDING_TIME = 120; // 2 minutes maximum (120 seconds)
   const { showError, showInfo, showSuccess } = useToastHelper();
+
+  // Cleanup effect
+  useEffect(() => {
+    return () => {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
+      
+      // Stop recording if component is unmounted while recording
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [timerInterval, mediaRecorder]);
 
   // Helper function to get supported MIME types
   const getSupportedMimeType = (): string => {
@@ -52,12 +68,20 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   };
 
   const startRecording = async () => {
+    // Prevent multiple clicks
+    if (isProcessingRequest) {
+      return;
+    }
+    
+    setIsProcessingRequest(true);
+    
     try {
       // Get current user - needed for saving the recording
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         showError(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input');
+        setIsProcessingRequest(false);
         return;
       }
 
@@ -112,6 +136,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (uploadError) {
             console.error('Error uploading recording:', uploadError);
             setIsTranscribing(false);
+            setIsProcessingRequest(false);
             showError(language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording');
             return;
           }
@@ -123,6 +148,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             console.log('Sending for transcription with path:', fileName);
             const text = await transcribeAudio(fileName);
             setIsTranscribing(false);
+            setIsProcessingRequest(false);
             
             if (text) {
               console.log('Transcription successful:', text);
@@ -133,6 +159,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             }
           } catch (error) {
             setIsTranscribing(false);
+            setIsProcessingRequest(false);
             console.error('Error during transcription:', error);
             showError(language === 'ar' 
               ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
@@ -140,6 +167,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           }
         } catch (storageErr) {
           setIsTranscribing(false);
+          setIsProcessingRequest(false);
           console.error('Error storing recording:', storageErr);
           showError(language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording');
         }
@@ -163,6 +191,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       recorder.start(1000); // Collect data in 1-second chunks
       setMediaRecorder(recorder);
       setIsRecording(true);
+      setIsProcessingRequest(false);
 
       // Set up timer
       const interval = setInterval(() => {
@@ -184,6 +213,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       setTimerInterval(interval);
     } catch (error) {
       console.error('Error accessing microphone:', error);
+      setIsProcessingRequest(false);
       showError(language === 'ar' 
         ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
         : 'Please allow microphone access to use voice input feature');
@@ -207,7 +237,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     <div className="relative flex items-center">
       <Button
         onClick={isRecording ? stopRecording : startRecording}
-        disabled={disabled || isTranscribing}
+        disabled={disabled || isTranscribing || isProcessingRequest}
         size="icon"
         variant={isRecording ? "destructive" : "ghost"}
         type="button"
@@ -216,7 +246,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         }`}
         title={language === 'ar' ? 'إدخال صوتي' : 'Voice input'}
       >
-        {isTranscribing ? (
+        {isTranscribing || isProcessingRequest ? (
           <Loader2 className="h-5 w-5 animate-spin" />
         ) : isRecording ? (
           <MicOff className="h-5 w-5" />

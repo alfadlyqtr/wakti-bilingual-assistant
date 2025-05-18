@@ -114,18 +114,38 @@ serve(async (req) => {
         if (summaryId) {
           const { data: summaryData, error: summaryError } = await supabase
             .from("voice_summaries")
-            .select("id")
+            .select("id, title, transcript")
             .eq("id", summaryId)
             .single();
             
-          if (summaryError || !summaryData) {
-            console.error("Summary record not found:", summaryError);
+          if (summaryError) {
+            console.error("Error checking summary record:", summaryError);
+            return new Response(
+              JSON.stringify({ error: `Summary record error: ${summaryError.message}` }),
+              { 
+                status: 500, 
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              }
+            );
+          }
+          
+          if (!summaryData) {
+            console.error("Summary record not found");
             return new Response(
               JSON.stringify({ error: "Summary record not found" }),
               { 
                 status: 404, 
                 headers: { ...corsHeaders, "Content-Type": "application/json" }
               }
+            );
+          }
+          
+          // Skip processing if transcript already exists
+          if (summaryData.transcript) {
+            console.log("Summary already has a transcript, returning existing transcript");
+            return new Response(
+              JSON.stringify({ text: summaryData.transcript }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
         }
@@ -138,11 +158,12 @@ serve(async (req) => {
         }
         
         // Download audio file from storage
+        console.log(`Attempting to download file from storage: ${recordingId}`);
         const { data: fileData, error: downloadError } = await supabase.storage
           .from("voice_recordings")
           .download(recordingId);
         
-        if (downloadError || !fileData) {
+        if (downloadError) {
           console.error("Error downloading recording:", downloadError);
           
           // Update the voice_summaries record to indicate there was an error
@@ -157,7 +178,18 @@ serve(async (req) => {
           }
           
           return new Response(
-            JSON.stringify({ error: `Failed to download recording: ${downloadError?.message || "File not found"}` }),
+            JSON.stringify({ error: `Failed to download recording: ${downloadError.message}` }),
+            { 
+              status: 404, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
+        if (!fileData) {
+          console.error("File data is null after successful download");
+          return new Response(
+            JSON.stringify({ error: "File not found or empty" }),
             { 
               status: 404, 
               headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -308,19 +340,24 @@ serve(async (req) => {
         }
       }
       
-      const { error: updateError } = await supabase
-        .from("voice_summaries")
-        .update({ 
-          transcript: result.text,
-          title: smartTitle  // Apply our smart title
-        })
-        .eq("id", summaryId);
-        
-      if (updateError) {
-        console.error("Error updating voice summary with transcript:", updateError);
-        // Continue anyway - we'll return the transcript to the client even if DB update fails
-      } else {
-        console.log("Voice summary successfully updated with transcript and smart title");
+      try {
+        const { error: updateError } = await supabase
+          .from("voice_summaries")
+          .update({ 
+            transcript: result.text,
+            title: smartTitle  // Apply our smart title
+          })
+          .eq("id", summaryId);
+          
+        if (updateError) {
+          console.error("Error updating voice summary with transcript:", updateError);
+          // Continue anyway - we'll return the transcript to the client even if DB update fails
+        } else {
+          console.log("Voice summary successfully updated with transcript and smart title");
+        }
+      } catch (dbError) {
+        console.error("Database error updating voice summary:", dbError);
+        // Continue - we'll still return the transcript to the client
       }
     }
     

@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -32,6 +33,7 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   const [suggestedTitle, setSuggestedTitle] = useState<string | null>(null);
   const [isGeneratingSuggestion, setIsGeneratingSuggestion] = useState(false);
   const [recordingFormat, setRecordingFormat] = useState<string>('');
+  const [isSaveComplete, setIsSaveComplete] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -353,12 +355,6 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         .from('voice_recordings')
         .getPublicUrl(filePath);
       
-      // Create metadata object
-      const metadata = {
-        location: location || null,
-        attendees: attendees ? attendees.split(',').map(a => a.trim()) : [],
-      };
-      
       // Create a new voice_summaries entry in the database
       const { data: recordingData, error: recordingError } = await supabase
         .from('voice_summaries')
@@ -382,10 +378,8 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
         throw new Error(recordingError.message);
       }
       
-      // Notify the parent component
-      if (onRecordingCreated && recordingData) {
-        onRecordingCreated(recordingData);
-      }
+      // Mark save as complete to prevent dialog from immediately closing
+      setIsSaveComplete(true);
       
       // If transcript wasn't already generated, trigger transcription function
       if (!transcript) {
@@ -411,8 +405,15 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           : 'Recording saved successfully',
       });
       
-      // Close the dialog
-      onClose();
+      // Notify the parent component
+      if (onRecordingCreated && recordingData) {
+        onRecordingCreated(recordingData);
+      }
+      
+      // Briefly wait to ensure UI updates before closing dialog
+      setTimeout(() => {
+        handleDialogClose();
+      }, 500);
       
     } catch (err) {
       console.error('Error saving recording:', err);
@@ -422,7 +423,6 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           ? `فشل في حفظ التسجيل: ${err.message}` 
           : `Failed to save recording: ${err.message}`,
       });
-    } finally {
       setIsUploading(false);
     }
   };
@@ -442,10 +442,16 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   };
   
   const handleDialogClose = () => {
+    if (isUploading) {
+      return; // Prevent closing while uploading
+    }
+    
     resetRecording();
     setTitle("");
     setAttendees("");
     setLocation("");
+    setIsUploading(false);
+    setIsSaveComplete(false);
     onClose();
   };
   
@@ -457,7 +463,14 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+    <Dialog 
+      open={isOpen} 
+      onOpenChange={(open) => {
+        if (!open && !isUploading) {
+          handleDialogClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -469,7 +482,6 @@ export default function RecordingDialog({ isOpen, onClose, onRecordingCreated }:
           <div className="space-y-2">
             <Label htmlFor="title">
               {language === 'ar' ? 'العنوان' : 'Title'} 
-              {/* Removed the mandatory asterisk */}
             </Label>
             <div className="relative">
               <Input
