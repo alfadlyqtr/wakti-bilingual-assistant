@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
   children?: React.ReactNode;
+  requireAuth?: boolean; // Added this property to fix the TypeScript error
 }
 
 /**
@@ -11,7 +12,10 @@ interface ProtectedRouteProps {
  * Redirects unauthenticated users to the login page.
  * Redirects authenticated users away from auth pages (login, signup) to dashboard.
  */
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  requireAuth = true // Default to requiring auth
+}) => {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
   const currentPath = location.pathname;
@@ -34,16 +38,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     return null; // Return nothing while loading to avoid flash of content
   }
 
-  // If user is authenticated but trying to access an auth page, redirect to dashboard
-  if (isAuthenticated && isAuthPage) {
-    console.log(`[${new Date().toISOString()}] ProtectedRoute: Authenticated user attempting to access auth page "${currentPath}", redirecting to /dashboard`);
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  // If user is not authenticated and trying to access a protected route, redirect to login
-  if (!isAuthenticated && !isAuthPage) {
+  // If this is a protected route (requireAuth=true) and user is not authenticated,
+  // redirect to login
+  if (requireAuth && !isAuthenticated) {
     console.log(`[${new Date().toISOString()}] ProtectedRoute: Unauthenticated user attempting to access protected page "${currentPath}", redirecting to /login`);
     return <Navigate to="/login" replace />;
+  }
+
+  // If this is an auth route (requireAuth=false) and user is authenticated,
+  // redirect to dashboard
+  if (!requireAuth && isAuthenticated) {
+    console.log(`[${new Date().toISOString()}] ProtectedRoute: Authenticated user attempting to access auth page "${currentPath}", redirecting to /dashboard`);
+    return <Navigate to="/dashboard" replace />;
   }
 
   // Otherwise, render the children or outlet
