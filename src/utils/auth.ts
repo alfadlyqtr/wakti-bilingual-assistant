@@ -1,125 +1,38 @@
+
 import { supabase } from "@/integrations/supabase/client";
-import { UserAttributes } from "@supabase/supabase-js";
 
-// Sign out function - simplifying to focus on just the auth action
+// Temporary placeholder functions during auth rebuild
 export async function signOut() {
-  try {
-    console.log("Auth utils: Starting sign out process");
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.error("Auth utils: Error during sign out:", error);
-      throw error;
-    }
-    console.log("Auth utils: Successfully signed out");
-    return { error: null };
-    // Note: Navigation after logout is handled in the component that calls this function
-  } catch (error) {
-    console.error("Auth utils: Exception during sign out:", error);
-    return { error };
-  }
+  console.log("REBUILD: Using temporary signOut function");
+  return { error: null };
 }
 
-// Get current session - useful for checking authentication state
 export async function getCurrentSession() {
-  return await supabase.auth.getSession();
+  console.log("REBUILD: Using temporary getCurrentSession function");
+  return { data: { session: null } };
 }
 
-// Get current user
 export async function getCurrentUser() {
-  const { data } = await supabase.auth.getUser();
-  return data?.user;
+  console.log("REBUILD: Using temporary getCurrentUser function");
+  return null;
 }
 
-// Update profile function
-export async function updateProfile(data: { user_metadata: { 
-  display_name?: string; 
-  avatar_url?: string;
-  full_name?: string; 
-} }) {
-  try {
-    console.log("Updating profile with data:", data);
-    
-    // Convert to the format expected by Supabase
-    const userData: UserAttributes = {
-      data: data.user_metadata
-    };
-    
-    const { data: updatedUser, error } = await supabase.auth.updateUser(userData);
-    
-    if (error) {
-      throw error;
-    }
-    
-    return { user: updatedUser, error: null };
-  } catch (error) {
-    console.error("Error updating profile:", error);
-    return { user: null, error };
-  }
+export async function updateProfile() {
+  console.log("REBUILD: Using temporary updateProfile function");
+  return { user: null, error: null };
 }
 
-// Update password function
-export async function updateUserPassword(newPassword: string) {
-  try {
-    const { error } = await supabase.auth.updateUser({ 
-      password: newPassword 
-    });
-    return error;
-  } catch (error) {
-    console.error("Error updating password:", error);
-    throw error;
-  }
+export async function updateUserPassword() {
+  console.log("REBUILD: Using temporary updateUserPassword function");
+  return null;
 }
 
-// Delete account function
 export async function deleteUserAccount() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      return { error: new Error('No active session found') };
-    }
-    
-    // Call our serverless function to delete the user account
-    const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok) {
-      return { error: new Error(result.error || 'Failed to delete account') };
-    }
-    
-    // Sign out the user locally after successful deletion
-    await supabase.auth.signOut();
-    
-    return { error: null };
-  } catch (error) {
-    console.error("Error deleting account:", error);
-    return { error };
-  }
+  console.log("REBUILD: Using temporary deleteUserAccount function");
+  return { error: null };
 }
 
-// Function to ensure session is refreshed and valid
 export async function refreshSession() {
-  try {
-    console.log("Auth utils: Refreshing session");
-    const { data, error } = await supabase.auth.refreshSession();
-    
-    if (error) {
-      console.error("Auth utils: Error refreshing session:", error);
-      throw error;
-    }
-    
-    console.log("Auth utils: Session refreshed successfully");
-    return data.session;
-  } catch (error) {
-    console.error("Auth utils: Exception during session refresh:", error);
-    return null;
-  }
+  console.log("REBUILD: Using temporary refreshSession function");
+  return null;
 }

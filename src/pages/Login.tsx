@@ -1,258 +1,55 @@
 
 import { useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-
-// Translations
-const translations = {
-  en: {
-    appName: "WAKTI",
-    login: "Login",
-    email: "Email",
-    password: "Password",
-    forgotPassword: "Forgot Password?",
-    loading: "Loading...",
-    loggingIn: "Logging in...",
-    createAccount: "Don't have an account?",
-    signup: "Sign Up",
-    backToHome: "Back to Home",
-    emailPlaceholder: "example@email.com",
-    passwordPlaceholder: "Enter your password"
-  },
-  ar: {
-    appName: "وقتي",
-    login: "تسجيل الدخول",
-    email: "البريد الإلكتروني",
-    password: "كلمة المرور",
-    forgotPassword: "نسيت كلم المرور؟",
-    loading: "جاري التحميل...",
-    loggingIn: "جاري تسجيل الدخول...",
-    createAccount: "ليس لديك حساب؟",
-    signup: "إنشاء حساب",
-    backToHome: "العودة للرئيسية",
-    emailPlaceholder: "example@email.com",
-    passwordPlaceholder: "أدخل كلمة المرور"
-  }
-};
 
 export default function Login() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { language } = useTheme();
-  const { signIn, isLoading: authIsLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
-  // Get translations for the current language
-  const t = translations[language === 'ar' ? 'ar' : 'en'];
-  
-  // Combined loading state
-  const isLoading = isSubmitting || authIsLoading;
+  console.log("REBUILD: Using temporary Login placeholder");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMsg(null);
-    
-    if (!email || !password) {
-      setErrorMsg(language === 'en' ? 'Please fill in all fields' : 'يرجى تعبئة جميع الحقول');
-      return;
-    }
-    
-    setIsSubmitting(true);
-    console.log("Login: Attempting login with email:", email);
-    
-    try {
-      const error = await signIn(email, password);
-      
-      if (error) {
-        console.log("Login: Failed login attempt:", error.message);
-        setErrorMsg(error.message);
-        toast({
-          title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
-          description: error.message,
-          variant: 'destructive',
-          duration: 5000,
-        });
-      } else {
-        console.log("Login: Login successful");
-        toast({
-          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
-          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
-          duration: 3000,
-          variant: 'success',
-        });
-        
-        // Auth state change will trigger ProtectedRoute to handle redirect
-      }
-    } catch (err) {
-      console.error("Login: Unexpected error during login:", err);
-      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-    } finally {
-      setIsSubmitting(false);
-    }
+    console.log("REBUILD: Login placeholder - navigating to dashboard");
+    navigate("/dashboard");
   };
 
-  // Show loading state when logging in
-  if (isLoading) {
-    return (
-      <div className="mobile-container flex items-center justify-center">
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-xl font-bold mb-2">{t.loggingIn}</h2>
-          <p className="text-muted-foreground">
-            {language === 'en' ? 'Please wait...' : 'يرجى الانتظار...'}
+          <h1 className="text-2xl font-bold">Login (Rebuilding)</h1>
+          <p className="text-sm text-muted-foreground">
+            Auth system is being rebuilt - temporary login
           </p>
         </div>
-      </div>
-    );
-  }
 
-  // Main login form
-  return (
-    <div className="mobile-container">
-      <header className="mobile-header">
-        <div className="flex items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/home")}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="text-xs">{t.backToHome}</span>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Input
+              placeholder="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          
+          <div>
+            <Input
+              placeholder="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          
+          <Button type="submit" className="w-full">
+            Continue to Dashboard (Temporary)
           </Button>
-        </div>
-        <ThemeLanguageToggle />
-      </header>
-
-      <div className="flex-1 overflow-y-auto">
-        <div className="flex min-h-[80vh] flex-col justify-center py-6 px-6 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full max-w-md mx-auto"
-          >
-            <div className="mb-8 text-center">
-              {/* App logo with navigation to home */}
-              <div 
-                className="inline-block cursor-pointer mb-4"
-                onClick={() => navigate("/home")}
-              >
-                <Logo3D size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold">{t.login}</h1>
-              
-              {errorMsg && (
-                <div className="mt-3 p-2 bg-red-50 text-red-500 rounded-md">
-                  {errorMsg}
-                </div>
-              )}
-            </div>
-
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-base">{t.email}</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Mail className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="email"
-                    placeholder={t.emailPlaceholder}
-                    type="email"
-                    autoCapitalize="none"
-                    autoComplete="email"
-                    autoCorrect="off"
-                    disabled={isLoading}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 py-6 text-base shadow-sm"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-base">{t.password}</Label>
-                  <Button
-                    variant="link"
-                    className="px-0 font-normal text-sm"
-                    type="button"
-                    onClick={() => navigate("/forgot-password")}
-                    disabled={isLoading}
-                  >
-                    {t.forgotPassword}
-                  </Button>
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <Lock className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder={t.passwordPlaceholder}
-                    autoCapitalize="none"
-                    autoComplete="current-password"
-                    disabled={isLoading}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 pr-10 py-6 text-base shadow-sm"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    disabled={isLoading}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-muted-foreground" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              <Button
-                type="submit"
-                className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                disabled={isLoading}
-              >
-                {isLoading ? t.loading : t.login}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                {t.createAccount}{" "}
-                <Button
-                  variant="link"
-                  className="px-0"
-                  onClick={() => navigate("/signup")}
-                  disabled={isLoading}
-                >
-                  {t.signup}
-                </Button>
-              </p>
-            </div>
-          </motion.div>
-        </div>
+        </form>
       </div>
     </div>
   );
