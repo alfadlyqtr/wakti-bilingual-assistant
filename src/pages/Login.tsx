@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -63,6 +64,7 @@ export default function Login() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [redirectionInProgress, setRedirectionInProgress] = useState(false);
   const loadingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const successToastShownRef = useRef(false);
   
   // Get translations for the current language
   const t = translations[language];
@@ -112,6 +114,15 @@ export default function Login() {
     }
   }, [localLoading, language]);
 
+  // Reset the success toast flag when the component mounts
+  useEffect(() => {
+    successToastShownRef.current = false;
+    return () => {
+      // Reset the flag when component unmounts
+      successToastShownRef.current = false;
+    };
+  }, []);
+
   // Handle redirection if user is already authenticated
   useEffect(() => {
     if (user && !redirectionInProgress) {
@@ -128,6 +139,17 @@ export default function Login() {
       // Clear any loading state
       setLocalLoading(false);
       
+      // Show success toast only once
+      if (!successToastShownRef.current) {
+        successToastShownRef.current = true;
+        toast({
+          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
+          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
+          duration: 3000, // 3 seconds for success messages
+          variant: 'success', // Use success variant for better visual distinction
+        });
+      }
+      
       // Get intended destination from location state or default to dashboard
       const destination = location.state?.from?.pathname || "/dashboard";
       logWithTimestamp(`Redirecting to ${destination}`);
@@ -135,7 +157,7 @@ export default function Login() {
       // Navigate to destination
       navigate(destination, { replace: true });
     }
-  }, [user, localLoading, navigate, location, redirectionInProgress]);
+  }, [user, localLoading, navigate, location, redirectionInProgress, language]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,7 +174,7 @@ export default function Login() {
     try {
       const error = await signIn(email, password);
 
-      // CRITICAL: Reset localLoading on both success and error paths
+      // Reset localLoading on both success and error paths
       if (error) {
         logWithTimestamp("Login error:", error);
         setErrorMsg(error.message);
@@ -165,14 +187,10 @@ export default function Login() {
         setLocalLoading(false);
       } else {
         logWithTimestamp("Login successful, resetting loading state");
-        toast({
-          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
-          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
-          duration: 3000, // 3 seconds for success messages
-          variant: 'success', // Use success variant for better visual distinction
-        });
+        // Note: Success toast is shown in the effect when user is detected
+        // This prevents duplicate toasts and ensures the toast shows after redirect
         
-        // CRITICAL: Reset localLoading immediately after successful login
+        // Reset localLoading immediately after successful login
         setLocalLoading(false);
         
         // Redirection will be handled by the useEffect watching for authenticated user
@@ -180,7 +198,7 @@ export default function Login() {
     } catch (err) {
       logWithTimestamp("Unexpected error during login:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
-      // CRITICAL: Always reset loading state, even in catch block
+      // Always reset loading state, even in catch block
       setLocalLoading(false);
     }
   };

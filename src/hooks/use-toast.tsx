@@ -15,7 +15,7 @@ import {
 import { createContext, useContext } from "react";
 
 const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
+const TOAST_REMOVE_DELAY = 1000; // 1 second timeout after close animation
 const DEFAULT_TOAST_DURATION = 3000; // Default 3 seconds auto-dismiss
 
 type ToasterToast = ToastProps & {
@@ -78,7 +78,24 @@ interface State {
   toasts: ToasterToast[];
 }
 
+// Store all timeouts so we can clean them up
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+const autoDismissTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+// Clear all timeouts associated with a toast
+const clearToastTimeouts = (toastId: string) => {
+  // Clear remove timeout
+  if (toastTimeouts.has(toastId)) {
+    clearTimeout(toastTimeouts.get(toastId)!);
+    toastTimeouts.delete(toastId);
+  }
+  
+  // Clear auto-dismiss timeout
+  if (autoDismissTimeouts.has(toastId)) {
+    clearTimeout(autoDismissTimeouts.get(toastId)!);
+    autoDismissTimeouts.delete(toastId);
+  }
+};
 
 const addToRemoveQueue = (toastId: string) => {
   if (toastTimeouts.has(toastId)) {
@@ -98,9 +115,16 @@ const addToRemoveQueue = (toastId: string) => {
 
 // Function to automatically dismiss toast after specified duration
 const addToDismissQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
+  // Clear any existing auto-dismiss timeout first
+  if (autoDismissTimeouts.has(toastId)) {
+    clearTimeout(autoDismissTimeouts.get(toastId)!);
+    autoDismissTimeouts.delete(toastId);
+  }
+  
+  // Skip if duration is Infinity (toast shouldn't auto-dismiss)
   if (duration === Infinity) return;
 
-  // Create dismiss timeout
+  // Create new dismiss timeout
   const timeout = setTimeout(() => {
     dispatch({
       type: actionTypes.DISMISS_TOAST,
@@ -108,7 +132,7 @@ const addToDismissQueue = (toastId: string, duration: number = DEFAULT_TOAST_DUR
     });
   }, duration);
 
-  return timeout;
+  autoDismissTimeouts.set(toastId, timeout);
 };
 
 export const reducer = (state: State, action: Action): State => {
@@ -130,7 +154,14 @@ export const reducer = (state: State, action: Action): State => {
     case actionTypes.DISMISS_TOAST: {
       const { toastId } = action;
 
-      if (toastId) {
+      if (toastId === "all") {
+        // Clean up all timeouts when dismissing all toasts
+        state.toasts.forEach((toast) => {
+          clearToastTimeouts(toast.id);
+          addToRemoveQueue(toast.id);
+        });
+      } else if (toastId) {
+        clearToastTimeouts(toastId);
         addToRemoveQueue(toastId);
       }
 
@@ -148,11 +179,18 @@ export const reducer = (state: State, action: Action): State => {
     }
     case actionTypes.REMOVE_TOAST:
       if (action.toastId === "all") {
+        state.toasts.forEach((toast) => {
+          clearToastTimeouts(toast.id);
+        });
         return {
           ...state,
           toasts: [],
         };
       }
+      
+      // Make sure to clean up any timeouts
+      clearToastTimeouts(action.toastId);
+      
       return {
         ...state,
         toasts: state.toasts.filter((t) => t.id !== action.toastId),
@@ -218,9 +256,6 @@ function useToastInternal(): ToastContextValue {
       const stringTitle = title ? renderToastContent(title) : undefined;
       const stringDescription = description ? renderToastContent(description) : undefined;
 
-      // Set up auto dismiss
-      addToDismissQueue(id, duration);
-
       dispatch({
         type: actionTypes.ADD_TOAST,
         toast: {
@@ -232,10 +267,16 @@ function useToastInternal(): ToastContextValue {
           duration,
           open: true,
           onOpenChange: (open) => {
-            if (!open) dismiss();
+            if (!open) {
+              // User clicked close or swiped away
+              dismiss();
+            }
           },
         },
       });
+      
+      // Set up auto dismiss AFTER the toast is added to the state
+      addToDismissQueue(id, duration);
 
       return {
         id,
@@ -479,19 +520,19 @@ const createToastFunction = (): ToastFunction => {
   
   // Add methods
   toastFn.success = (props) => {
-    showToast({ ...props, variant: "success" });
+    showToast({ ...props, variant: "success", duration: props.duration || 3000 });
   };
   
   toastFn.error = (props) => {
-    showToast({ ...props, variant: "destructive" });
+    showToast({ ...props, variant: "destructive", duration: props.duration || 5000 });
   };
   
   toastFn.default = (props) => {
-    showToast({ ...props, variant: "default" });
+    showToast({ ...props, variant: "default", duration: props.duration || 3000 });
   };
   
   toastFn.show = (props) => {
-    showToast(props);
+    showToast({ ...props, duration: props.duration || 3000 });
   };
   
   return toastFn;
