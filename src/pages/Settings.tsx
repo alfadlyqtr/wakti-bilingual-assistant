@@ -1,11 +1,13 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { toast } from "@/components/ui/use-toast";
@@ -347,17 +349,17 @@ export default function Settings() {
         <Save className="h-4 w-4" />
         {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
       </Button>
+      
+      {/* Custom Quote Manager Dialog */}
+      <CustomQuoteManager 
+        open={customQuoteDialogOpen} 
+        onOpenChange={setCustomQuoteDialogOpen}
+        onUpdate={() => {
+          // Refresh any state if needed after quotes are updated
+          const updatedPrefs = getQuotePreferences();
+          setQuotePreferences(updatedPrefs);
+        }}
+      />
     </div>
-    
-    {/* Custom Quote Manager Dialog */}
-    <CustomQuoteManager 
-      open={customQuoteDialogOpen} 
-      onOpenChange={setCustomQuoteDialogOpen}
-      onUpdate={() => {
-        // Refresh any state if needed after quotes are updated
-        const updatedPrefs = getQuotePreferences();
-        setQuotePreferences(updatedPrefs);
-      }}
-    />
   );
 }
