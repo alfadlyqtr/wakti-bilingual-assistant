@@ -1,4 +1,3 @@
-
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { formatDistanceToNow } from "date-fns";
@@ -39,6 +38,24 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted, is
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   const locale = language === 'ar' ? arSA : enUS;
+
+  // Verify recordings are fully ready before rendering
+  const readyRecordings = recordings.filter(recording => {
+    // First check the is_ready flag (new approach)
+    if (recording.is_ready === true) {
+      return true;
+    }
+    
+    // Fall back to checking full fields for backwards compatibility
+    const isComplete = Boolean(
+      recording && 
+      recording.id &&
+      recording.title &&
+      recording.audio_url
+    );
+    
+    return isComplete;
+  });
 
   const getStatusIcon = (recording: any) => {
     const status = getRecordingStatus(recording);
@@ -320,7 +337,7 @@ ${recording.summary || ''}
           </div>
         )}
         
-        {recordings.map((recording) => {
+        {readyRecordings.map((recording) => {
           if (!recording) return null; // Skip if recording is null/undefined
           
           const daysRemaining = calculateDaysRemaining(recording.expires_at);
@@ -333,15 +350,7 @@ ${recording.summary || ''}
                 daysRemaining <= 2 ? 'border-amber-200' : ''} ${
                 status !== 'complete' ? 'border-dashed' : ''}`}
               onClick={() => {
-                if (status === 'complete' || status === 'processing') {
-                  navigate(`/voice-summary/${recording.id}`);
-                } else {
-                  toast.info(
-                    language === 'ar'
-                      ? 'هذا التسجيل قيد المعالجة. يرجى الانتظار.'
-                      : 'This recording is still processing. Please wait.'
-                  );
-                }
+                navigate(`/voice-summary/${recording.id}`);
               }}
             >
               <CardContent className="p-3">
@@ -460,7 +469,7 @@ ${recording.summary || ''}
           );
         })}
 
-        {recordings.length === 0 && (
+        {readyRecordings.length === 0 && (
           <div className="text-center py-10">
             <p className="text-lg text-muted-foreground mb-2">
               {language === 'ar' ? 'لا توجد تسجيلات' : 'No recordings found'}

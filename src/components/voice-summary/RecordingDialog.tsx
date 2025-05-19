@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -6,6 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { useVoiceSummaryController } from "@/hooks/useVoiceSummaryController";
 import { useNavigate } from "react-router-dom";
+import { Progress } from "@/components/ui/progress";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -26,21 +26,37 @@ export default function RecordingDialog({
     startRecording, 
     stopRecording, 
     cancelRecording, 
-    resetRecording 
+    resetRecording,
+    waitForCompletion
   } = useVoiceSummaryController();
   
-  // When recording completes successfully, notify parent and close dialog
+  const [isClosing, setIsClosing] = useState(false);
+  
+  // When recording completes successfully and is fully ready, notify parent and close dialog
   useEffect(() => {
-    if (state.recordingState === "completed" && state.recordingId) {
-      onRecordingCreated(state.recordingId);
-      resetRecording();
-    }
-  }, [state.recordingState, state.recordingId, onRecordingCreated, resetRecording]);
+    const handleRecordingCompleted = async () => {
+      if (state.isFullyReady && state.recordingId) {
+        console.log("[RecordingDialog] Recording is fully ready:", state.recordingId);
+        
+        // Notify parent about the completed recording
+        onRecordingCreated(state.recordingId);
+        
+        // Reset internal state
+        resetRecording();
+        
+        // Allow the dialog to close
+        setIsClosing(false);
+      }
+    };
+    
+    handleRecordingCompleted();
+  }, [state.isFullyReady, state.recordingId, onRecordingCreated, resetRecording]);
   
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {
       resetRecording();
+      setIsClosing(false);
     }
   }, [isOpen, resetRecording]);
   
@@ -48,7 +64,18 @@ export default function RecordingDialog({
   const handleDialogClose = () => {
     if (state.recordingState === "recording") {
       cancelRecording();
+      onClose();
+      return;
     }
+    
+    // If we're processing, don't close immediately
+    if (state.recordingState === "processing") {
+      console.log("[RecordingDialog] Waiting for processing to complete before closing");
+      setIsClosing(true);
+      return;
+    }
+    
+    // Otherwise reset and close
     resetRecording();
     onClose();
   };
@@ -66,12 +93,20 @@ export default function RecordingDialog({
       case "recording":
         return language === 'ar' ? 'جارِ التسجيل...' : 'Recording...';
       case "processing":
-        if (state.processingStep === "transcribing") {
-          return language === 'ar' ? 'جارِ التعرف على الصوت...' : 'Transcribing audio...';
-        } else if (state.processingStep === "summarizing") {
-          return language === 'ar' ? 'جارِ إنشاء الملخص...' : 'Generating summary...';
+        switch (state.processingStep) {
+          case "uploading":
+            return language === 'ar' ? 'جارِ تحميل الملف...' : 'Uploading audio...';
+          case "transcribing":
+            return language === 'ar' ? 'جارِ التعرف على الصوت...' : 'Transcribing audio...';
+          case "summarizing":
+            return language === 'ar' ? 'جارِ إنشاء الملخص...' : 'Generating summary...';
+          case "generating_tts":
+            return language === 'ar' ? 'جارِ إنشاء الصوت...' : 'Generating audio...';
+          case "finalizing":
+            return language === 'ar' ? 'جارٍ الإنهاء...' : 'Finalizing...';
+          default:
+            return language === 'ar' ? 'جارِ المعالجة...' : 'Processing...';
         }
-        return language === 'ar' ? 'جارِ المعالجة...' : 'Processing...';
       case "error":
         return state.errorMessage || (language === 'ar' ? 'حدث خطأ' : 'An error occurred');
       default:
@@ -83,7 +118,14 @@ export default function RecordingDialog({
   const isProcessing = state.recordingState === "processing";
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleDialogClose()}>
+    <Dialog 
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !isClosing) {
+          handleDialogClose();
+        }
+      }}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
@@ -102,6 +144,16 @@ export default function RecordingDialog({
             {state.recordingState === "recording" && (
               <div className="text-xl font-mono mt-2">
                 {formatTime(state.recordingTime)} / {formatTime(120)}
+              </div>
+            )}
+            
+            {/* Show progress during processing */}
+            {state.recordingState === "processing" && (
+              <div className="w-full mt-4">
+                <Progress value={state.progress} className="h-2" />
+                <p className="text-sm text-muted-foreground mt-1">
+                  {state.progress}%
+                </p>
               </div>
             )}
             
@@ -155,9 +207,17 @@ export default function RecordingDialog({
         
         {/* Action buttons */}
         <div className="flex justify-end gap-2 mt-4">
-          {!isProcessing && (
+          {!isProcessing && state.recordingState !== "completed" && (
             <Button variant="outline" onClick={handleDialogClose}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+          )}
+          
+          {isProcessing && (
+            <Button variant="outline" disabled={isClosing}>
+              {isClosing 
+                ? (language === 'ar' ? 'جارٍ الإغلاق...' : 'Closing...') 
+                : (language === 'ar' ? 'انتظر من فضلك...' : 'Please wait...')}
             </Button>
           )}
         </div>

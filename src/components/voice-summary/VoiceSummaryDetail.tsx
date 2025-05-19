@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FileText as FileIcon } from "lucide-react";
@@ -29,6 +28,7 @@ interface VoiceSummaryData {
   attendees?: string;
   location?: string;
   highlighted_timestamps?: Highlight[] | null;
+  is_ready?: boolean;
 }
 
 export default function VoiceSummaryDetail() {
@@ -46,6 +46,11 @@ export default function VoiceSummaryDetail() {
 
   const locale = language === 'ar' ? arSA : enUS;
 
+  // New state for polling incomplete records
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollingAttempts, setPollingAttempts] = useState(0);
+  const MAX_POLLING_ATTEMPTS = 30; // 30 attempts at 2-second intervals = 1 minute
+
   // Fetch summary data
   useEffect(() => {
     const fetchSummary = async () => {
@@ -58,11 +63,28 @@ export default function VoiceSummaryDetail() {
           .single();
           
         if (error) throw error;
+
+        console.log("[VoiceSummaryDetail] Fetched summary data:", data);
         
+        // Check if the record is fully ready
+        const isReady = data.is_ready === true || (
+          data.transcript && 
+          data.summary && 
+          data.summary_audio_url
+        );
+
         setSummary(data);
+        
+        // If not ready, start polling
+        if (!isReady && pollingAttempts < MAX_POLLING_ATTEMPTS) {
+          setIsPolling(true);
+        } else {
+          setIsPolling(false);
+        }
       } catch (error) {
-        console.error('Error fetching summary:', error);
+        console.error('[VoiceSummaryDetail] Error fetching summary:', error);
         showError(language === 'ar' ? 'فشل في تحميل الملخص' : 'Failed to load summary');
+        setIsPolling(false);
       } finally {
         setIsLoading(false);
       }
@@ -71,7 +93,29 @@ export default function VoiceSummaryDetail() {
     if (id) {
       fetchSummary();
     }
-  }, [id, showError, language]);
+    
+    // Set up polling for incomplete records
+    let pollingInterval: NodeJS.Timeout | null = null;
+    
+    if (isPolling && id && pollingAttempts < MAX_POLLING_ATTEMPTS) {
+      pollingInterval = setInterval(() => {
+        fetchSummary();
+        setPollingAttempts(prev => prev + 1);
+      }, 2000);
+    }
+    
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [id, showError, language, isPolling, pollingAttempts]);
+  
+  // Reset polling attempts when id changes
+  useEffect(() => {
+    setPollingAttempts(0);
+    setIsPolling(false);
+  }, [id]);
   
   // Handle audio playback
   useEffect(() => {
@@ -278,6 +322,37 @@ export default function VoiceSummaryDetail() {
             <Skeleton className="h-4 w-5/6" />
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+  
+  if (isPolling) {
+    return (
+      <div className="p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={handleBackClick}>
+            <ArrowLeft />
+          </Button>
+          <h1 className="text-xl font-semibold">
+            {summary?.title || (language === 'ar' ? 'جاري التحميل...' : 'Loading...')}
+          </h1>
+        </div>
+        
+        <div className="flex flex-col items-center justify-center py-10">
+          <div className="animate-spin mb-4">
+            <Clock className="h-8 w-8 text-primary" />
+          </div>
+          <p className="text-center mb-2">
+            {language === 'ar'
+              ? 'جاري معالجة التسجيل، يرجى الانتظار...'
+              : 'Processing recording, please wait...'}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar'
+              ? 'قد يستغرق هذا بضع دقائق'
+              : 'This may take a few minutes'}
+          </p>
+        </div>
       </div>
     );
   }

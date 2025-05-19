@@ -14,38 +14,14 @@ import { getRecordingStatus } from "@/lib/utils";
 export default function VoiceSummaryPage() {
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
   const [recordings, setRecordings] = useState<any[]>([]);
+  const [inProgressRecordings, setInProgressRecordings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Poll for updates to recording statuses
-  useEffect(() => {
-    if (!user) return;
-    
-    // Initial fetch
-    fetchRecordings();
-    
-    // Set up polling for recordings in progress
-    const hasIncompleteRecordings = () => {
-      return recordings.some(recording => {
-        const status = getRecordingStatus(recording);
-        return status === 'processing' || status === 'transcribing';
-      });
-    };
-    
-    // Check for updates more frequently if there are pending recordings
-    let pollingInterval = hasIncompleteRecordings() ? 5000 : 20000;
-    const intervalId = setInterval(() => {
-      if (hasIncompleteRecordings()) {
-        fetchRecordings(true); // Silent refresh
-      }
-    }, pollingInterval);
-    
-    return () => clearInterval(intervalId);
-  }, [user, recordings]);
-  
+  // Fetch recordings - separating ready and in-progress recordings
   const fetchRecordings = async (silent = false) => {
     try {
       if (!silent) {
@@ -53,6 +29,8 @@ export default function VoiceSummaryPage() {
       } else {
         setIsRefreshing(true);
       }
+      
+      console.log("[VoiceSummaryPage] Fetching recordings");
       
       const { data, error } = await supabase
         .from('voice_summaries')
@@ -72,9 +50,39 @@ export default function VoiceSummaryPage() {
       
       // Validate each recording before setting state
       const validRecordings = Array.isArray(data) ? data.filter(rec => rec && rec.id) : [];
-      console.log(`Fetched ${validRecordings.length} recordings`);
+      console.log(`[VoiceSummaryPage] Fetched ${validRecordings.length} recordings`);
       
-      setRecordings(validRecordings);
+      // Split recordings into ready and in-progress
+      const readyRecordings = validRecordings.filter(recording => {
+        // Check for the is_ready flag first
+        if (recording.is_ready === true) {
+          return true;
+        }
+        
+        // Fall back to checking status using utility function for backwards compatibility
+        const status = getRecordingStatus(recording);
+        return status === 'complete';
+      });
+      
+      const processingRecordings = validRecordings.filter(recording => {
+        // If is_ready is explicitly false, it's in progress
+        if (recording.is_ready === false) {
+          return true;
+        }
+        
+        // If is_ready is not defined, check status using utility function
+        if (recording.is_ready === undefined || recording.is_ready === null) {
+          const status = getRecordingStatus(recording);
+          return status !== 'complete';
+        }
+        
+        return false;
+      });
+      
+      console.log(`[VoiceSummaryPage] Ready recordings: ${readyRecordings.length}, In progress: ${processingRecordings.length}`);
+      
+      setRecordings(readyRecordings);
+      setInProgressRecordings(processingRecordings);
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
@@ -89,15 +97,32 @@ export default function VoiceSummaryPage() {
     }
   };
 
+  // Poll for updates to recording statuses
+  useEffect(() => {
+    if (!user) return;
+    
+    // Initial fetch
+    fetchRecordings();
+    
+    // Set up polling for recordings in progress
+    const intervalId = setInterval(() => {
+      if (inProgressRecordings.length > 0) {
+        fetchRecordings(true); // Silent refresh
+      }
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [user, inProgressRecordings.length]);
+  
   const handleRecordingCreated = async (recordingId: string) => {
-    // Instead of immediately adding the recording, refresh the list
-    // This ensures we get the full DB record with all fields
+    // Refresh the list to include the new recording
     await fetchRecordings();
     setShowRecordingDialog(false);
   };
   
   const handleRecordingDeleted = (recordingId: string) => {
     setRecordings(recordings.filter(recording => recording.id !== recordingId));
+    setInProgressRecordings(inProgressRecordings.filter(recording => recording.id !== recordingId));
   };
   
   const handleManualRefresh = () => {
@@ -135,6 +160,25 @@ export default function VoiceSummaryPage() {
             </Button>
           </div>
         </div>
+
+        {/* Show processing recordings with progress indicator */}
+        {inProgressRecordings.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-2">
+              {language === 'ar' ? 'قيد المعالجة' : 'Processing'}
+            </h3>
+            <div className="border border-border/30 bg-muted/30 rounded-md p-3">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <span className="text-sm">
+                  {language === 'ar' 
+                    ? `جارٍ معالجة ${inProgressRecordings.length} تسجيل(ات)...`
+                    : `Processing ${inProgressRecordings.length} recording(s)...`}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center items-center h-40">

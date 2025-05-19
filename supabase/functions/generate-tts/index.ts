@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
@@ -14,6 +15,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log("Starting generate-tts function");
+    
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
     // Check if the request has a valid authentication token
@@ -31,6 +34,7 @@ serve(async (req) => {
         // Otherwise verify user token
         const { data: authData, error: authError } = await supabase.auth.getUser(token);
         if (authError || !authData.user) {
+          console.error("Authentication error:", authError);
           return new Response(
             JSON.stringify({ error: "Unauthorized" }),
             { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -39,6 +43,7 @@ serve(async (req) => {
         authUser = authData.user;
       }
     } else {
+      console.error("No Authorization header in request");
       return new Response(
         JSON.stringify({ error: "Authorization header required" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -46,12 +51,28 @@ serve(async (req) => {
     }
 
     const { recordingId, voiceGender = "male", language = "en" } = await req.json();
+    console.log(`Processing TTS for recording: ${recordingId}`);
 
     if (!recordingId) {
+      console.error("No recording ID provided");
       return new Response(
         JSON.stringify({ error: "Recording ID is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Update the recording to indicate TTS processing has started
+    const { error: updateStartError } = await supabase
+      .from("voice_summaries")
+      .update({
+        is_processing_tts: true,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", recordingId);
+      
+    if (updateStartError) {
+      console.error("Failed to update TTS processing start status:", updateStartError);
+      // Continue anyway
     }
 
     // Get the recording details
@@ -62,6 +83,7 @@ serve(async (req) => {
       .single();
 
     if (recordingError || !recording) {
+      console.error("Recording not found:", recordingError);
       return new Response(
         JSON.stringify({ error: "Recording not found" }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -70,12 +92,26 @@ serve(async (req) => {
 
     // Check if summary is available
     if (!recording.summary) {
+      console.error("Summary not available for:", recordingId);
+      
+      // Update status to indicate TTS failed
+      await supabase
+        .from("voice_summaries")
+        .update({
+          is_processing_tts: false,
+          tts_error: "Summary not available for TTS generation",
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", recordingId);
+      
       return new Response(
         JSON.stringify({ error: "Summary not available" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    console.log("Initializing OpenAI for TTS");
+    
     // Initialize OpenAI client
     const openai = new OpenAI({
       apiKey: OPENAI_API_KEY,
@@ -90,6 +126,8 @@ serve(async (req) => {
       voice = voiceGender === "female" ? "nova" : "onyx"; // English voices
     }
 
+    console.log(`Using voice: ${voice} for language: ${language}`);
+    
     // Generate TTS using OpenAI API
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -107,15 +145,29 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.json();
+      console.error("OpenAI TTS API error:", errorData);
+      
+      // Update status to indicate TTS generation failed
+      await supabase
+        .from("voice_summaries")
+        .update({
+          is_processing_tts: false,
+          tts_error: JSON.stringify(errorData),
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", recordingId);
+      
       return new Response(
         JSON.stringify({ error: "TTS generation failed", details: errorData }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    console.log("Received audio data from OpenAI TTS API");
     const audioData = await response.arrayBuffer();
     
     // Upload the TTS audio to Supabase Storage using standardized path
+    console.log("Uploading TTS audio to storage");
     const fileName = `voice_recordings/${recording.user_id}/${recordingId}/summary.mp3`;
     const { error: uploadError } = await supabase
       .storage
@@ -126,6 +178,18 @@ serve(async (req) => {
       });
 
     if (uploadError) {
+      console.error("Failed to upload TTS audio:", uploadError);
+      
+      // Update status to indicate TTS upload failed
+      await supabase
+        .from("voice_summaries")
+        .update({
+          is_processing_tts: false,
+          tts_error: `Failed to upload TTS audio: ${uploadError.message}`,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", recordingId);
+      
       return new Response(
         JSON.stringify({ error: "Failed to upload TTS audio", details: uploadError }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -138,29 +202,41 @@ serve(async (req) => {
       .from("voice_recordings")
       .getPublicUrl(fileName);
 
-    // Update the recording with the TTS audio URL and preferences
+    console.log("TTS audio uploaded, URL:", publicUrl.publicUrl);
+    
+    // Final update with success status
     const { error: updateError } = await supabase
       .from("voice_summaries")
       .update({
         summary_audio_url: publicUrl.publicUrl,
         summary_language: language,
         voice_gender: voiceGender,
+        is_processing_tts: false,
+        tts_completed_at: new Date().toISOString(),
+        is_ready: true,  // Mark the recording as fully ready
         updated_at: new Date().toISOString()
       })
       .eq("id", recordingId);
 
     if (updateError) {
+      console.error("Failed to update recording with TTS URL:", updateError);
       return new Response(
         JSON.stringify({ error: "Failed to update recording", details: updateError }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
+    console.log("TTS generation process completed successfully");
     return new Response(
-      JSON.stringify({ success: true, audioUrl: publicUrl.publicUrl }),
+      JSON.stringify({ 
+        success: true, 
+        audioUrl: publicUrl.publicUrl,
+        message: "TTS generation completed successfully" 
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("Unexpected error in generate-tts function:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
