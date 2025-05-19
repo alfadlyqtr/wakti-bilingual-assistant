@@ -1,6 +1,6 @@
-// Types for translations
-export type SupportedLanguage = 'en' | 'ar';
-export type TranslationKey = keyof typeof translations;
+// Import the translation type
+import { TranslationKey } from './translationTypes';
+import { SupportedLanguage } from './translationTypes';
 
 // Default language
 export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
@@ -15,7 +15,7 @@ export function t(key: TranslationKey, language: string = DEFAULT_LANGUAGE): str
   return translations[key][lang] || translations[key][DEFAULT_LANGUAGE];
 }
 
-export const translations: Record<TranslationKey, Record<SupportedLanguage, string>> = {
+export const translations: Record<string, Record<SupportedLanguage, string>> = {
   // App-wide
   appName: {
     en: "Companion",

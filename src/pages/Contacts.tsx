@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { Badge } from "@/components/ui/badge";
-import { ContactsIcon, Bell, ShieldCheck } from "lucide-react";
+import { Contact, Bell, ShieldCheck } from "lucide-react";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -57,7 +57,7 @@ function ContactsContent({
       >
         <TabsList className="grid grid-cols-3 mb-6">
           <TabsTrigger value="contacts" className="flex gap-2 items-center">
-            <ContactsIcon className="h-4 w-4" />
+            <Contact className="h-4 w-4" />
             <span>{t("contacts", language)}</span>
           </TabsTrigger>
           <TabsTrigger value="requests" className="flex gap-2 items-center">

@@ -1,4 +1,6 @@
 
+export type SupportedLanguage = 'en' | 'ar';
+
 export type TranslationKey =
   | "dashboard"
   | "tasks"
@@ -255,6 +257,7 @@ export type TranslationKey =
   | "errorUnblockingContact"
   | "errorLoadingBlockedUsers"
   | "noBlockedUsers"
+  | "noBlockedUsersDescription"  // Added
   | "unblock"
   | "errorCreatingConversation"
   | "errorBlockingContact"
@@ -289,4 +292,17 @@ export type TranslationKey =
   // Notification messages
   | "messagesSent"
   | "messagesDelivered"
-  | "policiesUpdated";
+  | "policiesUpdated"
+  // Contact settings
+  | "appearance" // Added
+  | "appearanceSettings" // Added
+  | "contactsSettings" // Added
+  | "contactsSettingsDescription" // Added
+  | "autoApproveRequests" // Added
+  | "autoApproveExplanation" // Added
+  | "settingsUpdated" // Added
+  | "contactSettingsUpdated" // Added
+  | "errorUpdatingSettings" // Added
+  | "requests" // Added
+  | "blocked" // Added
+  | "waitingForRequests"; // Added

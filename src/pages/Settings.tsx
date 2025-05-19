@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -183,7 +182,7 @@ export default function Settings() {
       {/* Quote Settings */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}</h2>
+          <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتبا�� اليومي' : 'Daily Quote Settings'}</h2>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
