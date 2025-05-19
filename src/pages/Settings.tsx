@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -16,6 +17,27 @@ import { quotes } from "@/utils/dailyQuotes";
 import { Check, Save, Settings as SettingsIcon } from "lucide-react";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+
+// Interface for widget settings
+interface WidgetSettings {
+  tasksWidget: boolean;
+  calendarWidget: boolean;
+  remindersWidget: boolean;
+  quoteWidget: boolean;
+}
+
+// Interface for notification settings
+interface NotificationSettings {
+  pushNotifications: boolean;
+  emailNotifications: boolean;
+}
+
+// Interface for privacy settings
+interface PrivacySettings {
+  profileVisibility: boolean;
+  activityStatus: boolean;
+}
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -24,11 +46,123 @@ export default function Settings() {
   const categories = Object.keys(quotes);
   const { confirm } = useToast();
   const queryClient = useQueryClient();
+  
+  // Get widget settings from localStorage or use defaults
+  const getWidgetSettings = (): WidgetSettings => {
+    try {
+      const storedSettings = localStorage.getItem('widgetVisibility');
+      if (storedSettings) {
+        return JSON.parse(storedSettings);
+      }
+    } catch (error) {
+      console.error('Error loading widget settings:', error);
+    }
+    
+    // Default settings if nothing is stored
+    return {
+      tasksWidget: true,
+      calendarWidget: true,
+      remindersWidget: true,
+      quoteWidget: true
+    };
+  };
+  
+  // Get notification settings from localStorage or use defaults
+  const getNotificationSettings = (): NotificationSettings => {
+    try {
+      const storedSettings = localStorage.getItem('notificationSettings');
+      if (storedSettings) {
+        return JSON.parse(storedSettings);
+      }
+    } catch (error) {
+      console.error('Error loading notification settings:', error);
+    }
+    
+    // Default settings if nothing is stored
+    return {
+      pushNotifications: true,
+      emailNotifications: false
+    };
+  };
+  
+  // Get privacy settings from localStorage or use defaults
+  const getPrivacySettings = (): PrivacySettings => {
+    try {
+      const storedSettings = localStorage.getItem('privacySettings');
+      if (storedSettings) {
+        return JSON.parse(storedSettings);
+      }
+    } catch (error) {
+      console.error('Error loading privacy settings:', error);
+    }
+    
+    // Default settings if nothing is stored
+    return {
+      profileVisibility: true,
+      activityStatus: true
+    };
+  };
+  
+  // Initialize state for all settings
+  const [widgetSettings, setWidgetSettings] = useState<WidgetSettings>(getWidgetSettings());
+  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
+  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getPrivacySettings());
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
 
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: getCurrentUserProfile,
   });
+
+  // Load settings from localStorage on component mount
+  useEffect(() => {
+    setWidgetSettings(getWidgetSettings());
+    setNotificationSettings(getNotificationSettings());
+    setPrivacySettings(getPrivacySettings());
+  }, []);
+
+  // Save widget settings to localStorage and broadcast change
+  const saveWidgetSettings = (newSettings: WidgetSettings) => {
+    localStorage.setItem('widgetVisibility', JSON.stringify(newSettings));
+    // Dispatch storage event to notify other components
+    window.dispatchEvent(new Event('storage'));
+  };
+  
+  // Save notification settings to localStorage
+  const saveNotificationSettings = (newSettings: NotificationSettings) => {
+    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
+    window.dispatchEvent(new Event('storage'));
+  };
+  
+  // Save privacy settings to localStorage
+  const savePrivacySettings = (newSettings: PrivacySettings) => {
+    localStorage.setItem('privacySettings', JSON.stringify(newSettings));
+    window.dispatchEvent(new Event('storage'));
+  };
+
+  // Save all settings to Supabase
+  const saveSettingsToSupabase = async () => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          settings: {
+            widgets: widgetSettings,
+            notifications: notificationSettings,
+            privacy: privacySettings,
+            quotes: quotePreferences
+          }
+        })
+        .eq('id', userProfile?.id);
+      
+      if (error) throw error;
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving settings to Supabase:', error);
+      return false;
+    }
+  };
 
   const autoApproveMutation = useMutation({
     mutationFn: (autoApprove: boolean) => updateAutoApproveContacts(autoApprove),
@@ -49,6 +183,47 @@ export default function Settings() {
     }
   });
 
+  // Widget setting handlers
+  const handleWidgetToggle = (widgetKey: keyof WidgetSettings, checked: boolean) => {
+    const updatedSettings = { ...widgetSettings, [widgetKey]: checked };
+    setWidgetSettings(updatedSettings);
+    saveWidgetSettings(updatedSettings);
+    
+    toast({
+      title: checked 
+        ? t("widgetEnabled", language) 
+        : t("widgetDisabled", language),
+      description: t(widgetKey as any, language),
+      variant: "default"
+    });
+  };
+  
+  // Notification setting handlers
+  const handleNotificationToggle = (settingKey: keyof NotificationSettings, checked: boolean) => {
+    const updatedSettings = { ...notificationSettings, [settingKey]: checked };
+    setNotificationSettings(updatedSettings);
+    saveNotificationSettings(updatedSettings);
+    
+    toast({
+      title: t("settingsUpdated", language),
+      description: t("notificationSettingsUpdated", language),
+      variant: "default"
+    });
+  };
+  
+  // Privacy setting handlers
+  const handlePrivacyToggle = (settingKey: keyof PrivacySettings, checked: boolean) => {
+    const updatedSettings = { ...privacySettings, [settingKey]: checked };
+    setPrivacySettings(updatedSettings);
+    savePrivacySettings(updatedSettings);
+    
+    toast({
+      title: t("settingsUpdated", language),
+      description: t("privacySettingsUpdated", language),
+      variant: "default"
+    });
+  };
+
   const handleAutoApproveToggle = (checked: boolean) => {
     autoApproveMutation.mutate(checked);
   };
@@ -65,7 +240,7 @@ export default function Settings() {
     
     toast({
       title: language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated",
-      variant: "success"
+      variant: "default"
     });
   };
   
@@ -76,33 +251,45 @@ export default function Settings() {
     
     toast({
       title: language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated",
-      variant: "success"
+      variant: "default"
     });
   };
   
-  // Update the handleSaveAllSettings function to use the new confirm syntax
+  // Save all settings
   const handleSaveAllSettings = () => {
     confirm({
       title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
-      onConfirm: () => {
-        // Already saving on change, but we can add additional save logic here
-        // Save widget visibility settings
-        const widgetSettings = {
-          tasksWidget: true,
-          calendarWidget: true,
-          remindersWidget: true,
-          quoteWidget: true
-        };
+      onConfirm: async () => {
+        setIsSettingsSaving(true);
         
-        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
-        
-        toast({
-          title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
-          description: <Check className="h-4 w-4" />, // Use description to show the icon
-          variant: "success"
-        });
+        try {
+          // Save all settings to localStorage
+          saveWidgetSettings(widgetSettings);
+          saveNotificationSettings(notificationSettings);
+          savePrivacySettings(privacySettings);
+          saveQuotePreferences(quotePreferences);
+          
+          // Save settings to Supabase if the user is logged in
+          if (userProfile?.id) {
+            await saveSettingsToSupabase();
+          }
+          
+          toast({
+            title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
+            description: <Check className="h-4 w-4" />,
+            variant: "success"
+          });
+        } catch (error) {
+          console.error('Error saving settings:', error);
+          toast({
+            title: language === 'ar' ? "خطأ في حفظ الإعدادات" : "Error saving settings",
+            description: language === 'ar' ? "حدث خطأ أثناء حفظ الإعدادات. يرجى المحاولة مرة أخرى." : "An error occurred while saving settings. Please try again.",
+            variant: "destructive"
+          });
+        } finally {
+          setIsSettingsSaving(false);
+        }
       }
     });
   };
@@ -272,11 +459,19 @@ export default function Settings() {
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'إشعارات الدفع' : 'Push Notifications'}</span>
-            <Switch defaultChecked id="push-notifications" />
+            <Switch 
+              id="push-notifications" 
+              checked={notificationSettings.pushNotifications}
+              onCheckedChange={(checked) => handleNotificationToggle('pushNotifications', checked)}
+            />
           </div>
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'إشعارات البريد الإلكتروني' : 'Email Notifications'}</span>
-            <Switch id="email-notifications" />
+            <Switch 
+              id="email-notifications" 
+              checked={notificationSettings.emailNotifications}
+              onCheckedChange={(checked) => handleNotificationToggle('emailNotifications', checked)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -289,19 +484,35 @@ export default function Settings() {
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'أداة المهام المصغرة' : 'Tasks Widget'}</span>
-            <Switch defaultChecked id="tasks-widget" />
+            <Switch 
+              id="tasks-widget" 
+              checked={widgetSettings.tasksWidget}
+              onCheckedChange={(checked) => handleWidgetToggle('tasksWidget', checked)}
+            />
           </div>
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'أداة التقويم المصغرة' : 'Calendar Widget'}</span>
-            <Switch defaultChecked id="calendar-widget" />
+            <Switch 
+              id="calendar-widget" 
+              checked={widgetSettings.calendarWidget}
+              onCheckedChange={(checked) => handleWidgetToggle('calendarWidget', checked)}
+            />
           </div>
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'أداة التذكيرات المصغرة' : 'Reminders Widget'}</span>
-            <Switch defaultChecked id="reminders-widget" />
+            <Switch 
+              id="reminders-widget" 
+              checked={widgetSettings.remindersWidget}
+              onCheckedChange={(checked) => handleWidgetToggle('remindersWidget', checked)}
+            />
           </div>
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'أداة الاقتباس اليومي المصغرة' : 'Daily Quote Widget'}</span>
-            <Switch defaultChecked id="quote-widget" />
+            <Switch 
+              id="quote-widget" 
+              checked={widgetSettings.quoteWidget}
+              onCheckedChange={(checked) => handleWidgetToggle('quoteWidget', checked)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -314,11 +525,19 @@ export default function Settings() {
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'رؤية الملف الشخصي' : 'Profile Visibility'}</span>
-            <Switch defaultChecked id="profile-visibility" />
+            <Switch 
+              id="profile-visibility" 
+              checked={privacySettings.profileVisibility}
+              onCheckedChange={(checked) => handlePrivacyToggle('profileVisibility', checked)}
+            />
           </div>
           <div className="flex justify-between items-center">
             <span>{language === 'ar' ? 'حالة النشاط' : 'Activity Status'}</span>
-            <Switch defaultChecked id="activity-status" />
+            <Switch 
+              id="activity-status" 
+              checked={privacySettings.activityStatus}
+              onCheckedChange={(checked) => handlePrivacyToggle('activityStatus', checked)}
+            />
           </div>
         </CardContent>
       </Card>
@@ -344,8 +563,13 @@ export default function Settings() {
       <Button 
         className="w-full mt-6 flex items-center gap-2" 
         onClick={handleSaveAllSettings}
+        disabled={isSettingsSaving}
       >
-        <Save className="h-4 w-4" />
+        {isSettingsSaving ? (
+          <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+        ) : (
+          <Save className="h-4 w-4" />
+        )}
         {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
       </Button>
       

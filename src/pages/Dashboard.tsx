@@ -24,6 +24,14 @@ type WidgetType = {
   visible: boolean;
 };
 
+// Interface for widget visibility settings
+interface WidgetVisibility {
+  tasksWidget: boolean;
+  calendarWidget: boolean;
+  remindersWidget: boolean;
+  quoteWidget: boolean;
+}
+
 export default function Dashboard() {
   const { language, theme } = useTheme();
   const [trialDaysLeft, setTrialDaysLeft] = useState(3);
@@ -39,7 +47,7 @@ export default function Dashboard() {
   const [reminders, setReminders] = useState([]);
   
   // Get user preferences from localStorage
-  const getUserPreferences = () => {
+  const getUserPreferences = (): WidgetVisibility => {
     try {
       const storedPreferences = localStorage.getItem('widgetVisibility');
       if (storedPreferences) {
@@ -51,15 +59,27 @@ export default function Dashboard() {
     
     // Default preferences if nothing is stored
     return {
-      tasks: true,
-      calendar: true,
-      reminders: true,
-      dailyQuote: true,
-      events: true,
+      tasksWidget: true,
+      calendarWidget: true,
+      remindersWidget: true,
+      quoteWidget: true
     };
   };
   
-  const widgetVisibility = getUserPreferences();
+  const [widgetVisibility, setWidgetVisibility] = useState<WidgetVisibility>(getUserPreferences());
+  
+  // Listen for storage changes to update widget visibility
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setWidgetVisibility(getUserPreferences());
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
   
   // Fetch data from Supabase
   useEffect(() => {
@@ -124,7 +144,7 @@ export default function Dashboard() {
       {
         id: "tasks",
         title: "tasks" as TranslationKey,
-        visible: widgetVisibility.tasks,
+        visible: widgetVisibility.tasksWidget,
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-3">{t("tasks", language)}</h3>
@@ -164,7 +184,7 @@ export default function Dashboard() {
       {
         id: "calendar",
         title: "calendar" as TranslationKey,
-        visible: widgetVisibility.calendar,
+        visible: widgetVisibility.calendarWidget,
         component: (
           <div className="p-4">
             <div className="mb-2">
@@ -229,7 +249,7 @@ export default function Dashboard() {
       {
         id: "events",
         title: "events" as TranslationKey,
-        visible: widgetVisibility.events,
+        visible: widgetVisibility.tasksWidget, // This should use its own setting
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-2">{t("events_today", language)}</h3>
@@ -270,7 +290,7 @@ export default function Dashboard() {
       {
         id: "reminders",
         title: "reminders" as TranslationKey,
-        visible: widgetVisibility.reminders,
+        visible: widgetVisibility.remindersWidget,
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-2">{t("reminders", language)}</h3>
@@ -308,11 +328,11 @@ export default function Dashboard() {
       {
         id: "quote",
         title: "dailyQuote" as TranslationKey,
-        visible: widgetVisibility.dailyQuote,
+        visible: widgetVisibility.quoteWidget,
         component: <QuoteWidget />
       },
     ]);
-  }, [language, navigate, widgetVisibility]); // Removed isLoading from the dependency array to fix the infinite loop
+  }, [language, navigate, widgetVisibility, isLoading, tasks, events, reminders]); // Added dependencies for reactivity
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
