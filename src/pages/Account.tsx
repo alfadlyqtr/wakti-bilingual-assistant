@@ -42,6 +42,7 @@ export default function Account() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
@@ -145,14 +146,22 @@ export default function Account() {
       return;
     }
     
+    if (!currentPassword) {
+      toast(t("currentPasswordRequired", language));
+      return;
+    }
+    
     setIsUpdatingPassword(true);
     
     try {
-      const error = await updatePassword(password);
+      const { error } = await updateUserPassword(currentPassword, password);
       if (error) {
-        toast(t("errorUpdatingPassword", language));
+        toast.error(t("error", language), {
+          description: error.message || t("errorUpdatingPassword", language)
+        });
       } else {
         toast.success(t("passwordUpdated", language));
+        setCurrentPassword("");
         setPassword("");
         setConfirmPassword("");
       }
@@ -379,7 +388,17 @@ export default function Account() {
                 <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
                   <div className="space-y-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="password">{t("password", language)}</Label>
+                      <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
+                      <Input
+                        id="current-password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        disabled={isUpdatingPassword}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="password">{t("newPassword", language)}</Label>
                       <Input
                         id="password"
                         type="password"
@@ -401,7 +420,7 @@ export default function Account() {
                   </div>
                   <div className="mt-4">
                     <Button 
-                      disabled={isUpdatingPassword}
+                      disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
                       type="submit"
                     >
                       {isUpdatingPassword

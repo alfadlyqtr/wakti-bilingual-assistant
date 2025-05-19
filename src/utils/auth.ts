@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
@@ -48,15 +47,25 @@ export async function updateProfile(data: { user_metadata: {
 }
 
 // Update password function
-export async function updateUserPassword(newPassword: string) {
+export async function updateUserPassword(currentPassword: string, newPassword: string) {
   try {
+    // First verify the current password is correct
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: (await getCurrentUser())?.email || '',
+      password: currentPassword
+    });
+    
+    if (verifyError) {
+      return { error: { message: 'Current password is incorrect' } };
+    }
+    
     const { error } = await supabase.auth.updateUser({ 
       password: newPassword 
     });
-    return error;
+    return { error };
   } catch (error) {
     console.error("Error updating password:", error);
-    throw error;
+    return { error: { message: 'Failed to update password' } };
   }
 }
 

@@ -361,7 +361,7 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   },
   autoApproveExplanation: {
     en: "When enabled, all contact requests will be automatically approved",
-    ar: "عند التفعيل، ستتم الموافقة تلقائياً على جميع طلبات الاتصال"
+    ar: "عند التفعيل، ستتم الموا��قة تلقائياً على جميع طلبات الاتصال"
   },
   contactSettingsUpdated: {
     en: "Contact settings updated successfully",
@@ -734,5 +734,19 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   quotePreferencesUpdated: {
     en: "Quote preferences updated",
     ar: "تم تحديث تفضيلات الاقتباس"
+  },
+  
+  // Add new translation keys for password fields
+  currentPassword: {
+    en: "Current Password",
+    ar: "كلمة المرور الحالية"
+  },
+  newPassword: {
+    en: "New Password",
+    ar: "كلمة المرور الجديدة"
+  },
+  currentPasswordRequired: {
+    en: "Current password is required",
+    ar: "كلمة المرور الحالية مطلوبة"
   }
 };
