@@ -43,7 +43,7 @@ export default function Account() {
     
     try {
       const data = { user_metadata: { full_name: name } };
-      const { error } = await updateProfile(data);
+      const { user: updatedUser, error } = await updateProfile(data);
       if (error) {
         toast(language === 'ar' ? "فشل تحديث الاسم" : "Failed to update name");
       } else {

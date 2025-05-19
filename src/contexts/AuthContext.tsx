@@ -13,7 +13,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<AuthError | null>;
   forgotPassword: (email: string) => Promise<AuthError | null>;
-  updateProfile: (data: Partial<User>) => Promise<User | null>;
+  updateProfile: (data: Partial<User>) => Promise<{ user: User | null, error: any | null }>;
   updateEmail: (email: string) => Promise<AuthError | null>;
   updatePassword: (password: string) => Promise<AuthError | null>;
   refreshSession: () => Promise<void>;
@@ -208,16 +208,16 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       const { data: userData, error } = await supabase.auth.updateUser(data);
       if (error) {
         console.error("Error updating profile:", error);
-        return null;
+        return { user: null, error };
       }
       
       // Refresh the session after profile update
       await refreshSession();
       
-      return userData.user;
+      return { user: userData.user, error: null };
     } catch (error) {
       console.error("Error updating profile:", error);
-      return null;
+      return { user: null, error };
     }
   };
 
