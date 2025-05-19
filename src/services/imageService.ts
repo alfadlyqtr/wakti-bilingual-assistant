@@ -1,6 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { modeController } from "@/utils/modeController";
+import { generateImage } from "@/services/chatService";
 
 // Interface for the images table
 export interface ImageRecord {
@@ -113,7 +113,7 @@ export async function processImageGeneration(
     
     console.log('Processing image generation with prompt:', imagePrompt);
     
-    // Use the existing generateImage function from chatService
+    // Use the imported generateImage function from chatService
     const result = await generateImage(imagePrompt);
     
     if (!result || !result.imageUrl) {
@@ -145,7 +145,3 @@ export async function processImageGeneration(
     return null;
   }
 }
-
-// Import the generateImage function from chatService
-// This is a workaround to avoid circular dependencies
-import { generateImage } from "@/services/chatService";
