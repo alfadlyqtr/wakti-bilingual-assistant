@@ -74,6 +74,17 @@ serve(async (req) => {
     // Use transcript field
     if (!recording.transcript) {
       console.error("Transcription not available for:", recordingId);
+      
+      // Update status to indicate failure
+      await supabase
+        .from("voice_summaries")
+        .update({ 
+          is_processing_summary: false,
+          summary_error: "Transcription not available",
+          summary_completed_at: new Date().toISOString()
+        })
+        .eq("id", recordingId);
+        
       return new Response(
         JSON.stringify({ error: "Transcription not available" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -115,6 +126,7 @@ serve(async (req) => {
         .update({
           is_processing_summary: false,
           summary_error: JSON.stringify(deepseekError),
+          summary_completed_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq("id", recordingId);
@@ -193,6 +205,7 @@ serve(async (req) => {
               .update({
                 is_processing_tts: false,
                 tts_error: "Failed to generate TTS",
+                tts_completed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
               .eq("id", recordingId);
@@ -206,9 +219,33 @@ serve(async (req) => {
               .from("voice_summaries")
               .update({
                 is_processing_tts: false,
+                tts_completed_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
               .eq("id", recordingId);
+              
+            // Now check if everything is complete to mark the recording as ready
+            const { data: updatedRecording } = await supabase
+              .from("voice_summaries")
+              .select("transcript, summary, summary_audio_url")
+              .eq("id", recordingId)
+              .single();
+              
+            if (updatedRecording && 
+                updatedRecording.transcript && 
+                updatedRecording.summary && 
+                updatedRecording.summary_audio_url) {
+              // Everything is complete, mark as ready
+              await supabase
+                .from("voice_summaries")
+                .update({
+                  is_ready: true,
+                  ready_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", recordingId);
+              console.log("Recording marked as fully ready:", recordingId);
+            }
           }
         } catch (ttsError) {
           console.error("Error in TTS generation:", ttsError);
@@ -219,6 +256,7 @@ serve(async (req) => {
             .update({
               is_processing_tts: false,
               tts_error: String(ttsError),
+              tts_completed_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
             .eq("id", recordingId);

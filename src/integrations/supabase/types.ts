@@ -360,13 +360,24 @@ export type Database = {
           highlighted_timestamps: Json | null
           host: string | null
           id: string
+          is_processing_summary: boolean | null
+          is_processing_transcript: boolean | null
+          is_processing_tts: boolean | null
+          is_ready: boolean | null
           location: string | null
+          ready_at: string | null
           summary: string | null
           summary_audio_url: string | null
+          summary_completed_at: string | null
+          summary_error: string | null
           summary_language: string | null
           summary_voice: string | null
           title: string
           transcript: string | null
+          transcript_completed_at: string | null
+          transcript_error: string | null
+          tts_completed_at: string | null
+          tts_error: string | null
           type: string
           user_id: string | null
         }
@@ -379,13 +390,24 @@ export type Database = {
           highlighted_timestamps?: Json | null
           host?: string | null
           id?: string
+          is_processing_summary?: boolean | null
+          is_processing_transcript?: boolean | null
+          is_processing_tts?: boolean | null
+          is_ready?: boolean | null
           location?: string | null
+          ready_at?: string | null
           summary?: string | null
           summary_audio_url?: string | null
+          summary_completed_at?: string | null
+          summary_error?: string | null
           summary_language?: string | null
           summary_voice?: string | null
           title: string
           transcript?: string | null
+          transcript_completed_at?: string | null
+          transcript_error?: string | null
+          tts_completed_at?: string | null
+          tts_error?: string | null
           type: string
           user_id?: string | null
         }
@@ -398,13 +420,24 @@ export type Database = {
           highlighted_timestamps?: Json | null
           host?: string | null
           id?: string
+          is_processing_summary?: boolean | null
+          is_processing_transcript?: boolean | null
+          is_processing_tts?: boolean | null
+          is_ready?: boolean | null
           location?: string | null
+          ready_at?: string | null
           summary?: string | null
           summary_audio_url?: string | null
+          summary_completed_at?: string | null
+          summary_error?: string | null
           summary_language?: string | null
           summary_voice?: string | null
           title?: string
           transcript?: string | null
+          transcript_completed_at?: string | null
+          transcript_error?: string | null
+          tts_completed_at?: string | null
+          tts_error?: string | null
           type?: string
           user_id?: string | null
         }

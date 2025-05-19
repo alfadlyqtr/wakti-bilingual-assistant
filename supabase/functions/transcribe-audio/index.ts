@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -145,6 +146,20 @@ serve(async (req) => {
           );
         }
         
+        // Update to set is_processing_transcript to true
+        const { error: updateError } = await supabase
+          .from("voice_summaries")
+          .update({ 
+            is_processing_transcript: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", recordingId);
+        
+        if (updateError) {
+          console.error("Error updating processing status:", updateError);
+          // Continue anyway as this is not critical
+        }
+        
         // Extract file format from recordingId
         // But always default to MP3 as that's our standard format now
         fileFormat = 'mp3';
@@ -165,8 +180,9 @@ serve(async (req) => {
           await supabase
             .from("voice_summaries")
             .update({ 
-              transcript: "Error: Could not retrieve audio file",
-              title: "Recording Error"
+              transcript_error: "Error: Could not retrieve audio file",
+              is_processing_transcript: false,
+              transcript_completed_at: new Date().toISOString()
             })
             .eq("id", recordingId);
           
@@ -181,6 +197,15 @@ serve(async (req) => {
         
         if (!fileData) {
           console.error("File data is null after successful download");
+          await supabase
+            .from("voice_summaries")
+            .update({ 
+              transcript_error: "Error: File not found or empty",
+              is_processing_transcript: false,
+              transcript_completed_at: new Date().toISOString()
+            })
+            .eq("id", recordingId);
+            
           return new Response(
             JSON.stringify({ error: "File not found or empty" }),
             { 
@@ -223,6 +248,18 @@ serve(async (req) => {
     
     if (audioFile.size > MAX_AUDIO_SIZE) {
       console.error(`Audio file too large: ${audioFile.size} bytes`);
+      
+      if (recordingId) {
+        await supabase
+          .from("voice_summaries")
+          .update({ 
+            transcript_error: "Audio file exceeds maximum allowed duration (2 minutes)",
+            is_processing_transcript: false,
+            transcript_completed_at: new Date().toISOString()
+          })
+          .eq("id", recordingId);
+      }
+      
       return new Response(
         JSON.stringify({ error: "Audio file exceeds maximum allowed duration (2 minutes)" }),
         { 
@@ -261,8 +298,9 @@ serve(async (req) => {
         await supabase
           .from("voice_summaries")
           .update({ 
-            transcript: `Error: ${result.error?.message || "Transcription failed"}`,
-            title: "Transcription Error"
+            transcript_error: `Error: ${result.error?.message || "Transcription failed"}`,
+            is_processing_transcript: false,
+            transcript_completed_at: new Date().toISOString()
           })
           .eq("id", recordingId);
       }
@@ -338,7 +376,9 @@ serve(async (req) => {
           .from("voice_summaries")
           .update({ 
             transcript: result.text,
-            title: smartTitle  // Apply our smart title
+            title: smartTitle,
+            is_processing_transcript: false,
+            transcript_completed_at: new Date().toISOString()
           })
           .eq("id", recordingId);
           

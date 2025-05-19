@@ -54,7 +54,7 @@ export default function VoiceSummaryPage() {
       
       // Split recordings into ready and in-progress
       const readyRecordings = validRecordings.filter(recording => {
-        // Check for the is_ready flag first
+        // Primarily use the is_ready flag 
         if (recording.is_ready === true) {
           return true;
         }
@@ -67,6 +67,15 @@ export default function VoiceSummaryPage() {
       const processingRecordings = validRecordings.filter(recording => {
         // If is_ready is explicitly false, it's in progress
         if (recording.is_ready === false) {
+          return true;
+        }
+        
+        // Check for any active processing flags
+        if (
+          recording.is_processing_transcript === true || 
+          recording.is_processing_summary === true || 
+          recording.is_processing_tts === true
+        ) {
           return true;
         }
         
