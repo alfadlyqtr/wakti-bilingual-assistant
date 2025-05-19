@@ -14,10 +14,10 @@ type RecordingState = "idle" | "recording" | "processing" | "stopped" | "error";
 type ProcessingStep = "uploading" | "transcribing" | "summarizing" | "generating_tts" | "finalizing";
 
 // Define a type for the recording status
-type RecordingStatus = {
+interface RecordingStatus {
   status: "pending" | "processing" | "complete" | "transcribing";
   errorMessage?: string;
-};
+}
 
 export default function useVoiceSummaryController() {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
@@ -144,10 +144,13 @@ export default function useVoiceSummaryController() {
       }
       
       // Get recording status using the lib/utils function
-      const statusResponse = await getRecordingStatus(recording.id) as RecordingStatus;
+      const statusResponse = await getRecordingStatus(recording.id);
       
-      if (statusResponse && statusResponse.errorMessage) {
-        console.error("Error getting recording status:", statusResponse.errorMessage);
+      // Cast the response to RecordingStatus type after ensuring it's valid
+      const typedStatusResponse = statusResponse as unknown as RecordingStatus;
+      
+      if (typedStatusResponse && typedStatusResponse.errorMessage) {
+        console.error("Error getting recording status:", typedStatusResponse.errorMessage);
         setErrorMessage(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         toast(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         setRecordingState("error");
