@@ -37,7 +37,7 @@ export async function getContacts() {
 
   const userId = session.session.user.id;
 
-  // Modified query to use explicit join instead of relying on foreign key references
+  // Get contacts where current user is either the requester or the recipient
   const { data: contacts, error } = await supabase
     .from("contacts")
     .select(`
@@ -46,7 +46,7 @@ export async function getContacts() {
       contact_id,
       status,
       created_at,
-      profiles:profiles!contact_id (
+      profiles!contacts_contact_id_fkey (
         display_name,
         username,
         avatar_url
@@ -84,7 +84,7 @@ export async function getContactRequests() {
 
   const userId = session.session.user.id;
 
-  // Modified to use explicit join syntax
+  // Only get requests where current user is the recipient
   const { data: requests, error } = await supabase
     .from("contacts")
     .select(`
@@ -93,7 +93,7 @@ export async function getContactRequests() {
       contact_id,
       status,
       created_at,
-      profiles:profiles!user_id (
+      profiles!contacts_user_id_fkey (
         display_name,
         username,
         avatar_url
@@ -119,7 +119,7 @@ export async function getBlockedContacts() {
 
   const userId = session.session.user.id;
 
-  // Modified to use explicit join syntax
+  // Only get contacts where current user is the blocker
   const { data: blocked, error } = await supabase
     .from("contacts")
     .select(`
@@ -128,7 +128,7 @@ export async function getBlockedContacts() {
       contact_id,
       status,
       created_at,
-      profiles:profiles!contact_id (
+      profiles!contacts_contact_id_fkey (
         display_name,
         username,
         avatar_url
