@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -12,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getContacts } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface NewMessageModalProps {
   isOpen: boolean;
@@ -36,7 +35,6 @@ type ContactType = {
 
 export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessageModalProps) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
@@ -58,13 +56,9 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   // Show error toast if contacts fail to load
   useEffect(() => {
     if (error) {
-      toast({
-        title: t("error", language),
-        description: t("errorLoadingContacts", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorLoadingContacts", language));
     }
-  }, [error, toast, language]);
+  }, [error, language]);
 
   // Filter contacts based on search query
   const filteredContacts = contacts?.filter((contact: ContactType) => {
@@ -88,11 +82,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
       onClose();
     } catch (error) {
       console.error("Error creating conversation:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorCreatingConversation", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorCreatingConversation", language));
     } finally {
       setIsCreatingConversation(false);
     }

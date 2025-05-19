@@ -1,7 +1,7 @@
 
 import { useEffect } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
 
 export default function Index() {
@@ -9,8 +9,7 @@ export default function Index() {
   
   useEffect(() => {
     // Show welcome toast with 3 second auto-dismiss
-    toast.success({
-      title: "Welcome to WAKTI",
+    toast.success("Welcome to WAKTI", {
       description: "Your smart personal assistant",
       duration: 3000 // 3 seconds
     });

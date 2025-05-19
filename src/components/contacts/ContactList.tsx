@@ -1,9 +1,7 @@
-
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX, UserSearch } from "lucide-react";
@@ -12,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { toast } from "sonner";
 
 type UserProfile = {
   display_name?: string;
@@ -28,7 +27,6 @@ type ContactType = {
 };
 
 export function ContactList() {
-  const { toast } = useToast();
   const { language } = useTheme();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -48,11 +46,7 @@ export function ContactList() {
     },
     onError: (error) => {
       console.error("Error creating conversation:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorCreatingConversation", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorCreatingConversation", language));
     }
   });
 
@@ -60,30 +54,19 @@ export function ContactList() {
   const blockContactMutation = useMutation({
     mutationFn: (contactId: string) => blockContact(contactId),
     onSuccess: () => {
-      toast({
-        title: t("contactBlocked", language),
-        description: t("userBlockedDescription", language)
-      });
+      toast.success(t("contactBlocked", language));
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },
     onError: (error) => {
       console.error("Error blocking contact:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorBlockingContact", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorBlockingContact", language));
     }
   });
 
   const handleMessage = (contactId: string, name: string) => {
     createConversationMutation.mutate(contactId);
-    
-    toast({
-      title: t("messageStarted", language),
-      description: t("chattingWithUser", language) + " " + name
-    });
+    toast(t("messageStarted", language) + " " + name);
   };
 
   const handleToggleFavorite = (id: string, name: string) => {
@@ -93,10 +76,7 @@ export function ContactList() {
       [id]: !isFavorite
     });
     
-    toast({
-      title: isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language),
-      description: ""
-    });
+    toast(isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language));
   };
 
   const handleBlock = (contactId: string) => {

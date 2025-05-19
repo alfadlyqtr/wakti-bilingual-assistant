@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -6,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { searchUsers, sendContactRequest } from "@/services/contactsService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +14,6 @@ import { LoadingSpinner } from "@/components/ui/loading";
 
 export function ContactSearch() {
   const { language } = useTheme();
-  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
@@ -35,10 +33,7 @@ export function ContactSearch() {
   const sendRequestMutation = useMutation({
     mutationFn: (userId: string) => sendContactRequest(userId),
     onSuccess: () => {
-      toast({
-        title: t("requestSent", language),
-        description: t("contactRequestSent", language)
-      });
+      toast.success(t("requestSent", language));
       
       // Invalidate queries that might be affected
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
@@ -50,11 +45,7 @@ export function ContactSearch() {
     },
     onError: (error) => {
       console.error("Error sending contact request:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorSendingRequest", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorSendingRequest", language));
     }
   });
 

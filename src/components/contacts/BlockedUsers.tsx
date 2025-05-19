@@ -1,15 +1,14 @@
-
 import { useState } from "react";
 import { UserPlus, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getBlockedContacts, unblockContact } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { toast } from "sonner";
 
 type UserProfile = {
   display_name?: string;
@@ -26,7 +25,6 @@ type BlockedUserType = {
 };
 
 export function BlockedUsers() {
-  const { toast } = useToast();
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
@@ -40,19 +38,12 @@ export function BlockedUsers() {
   const unblockContactMutation = useMutation({
     mutationFn: (contactId: string) => unblockContact(contactId),
     onSuccess: () => {
-      toast({
-        title: t("contactUnblocked", language),
-        description: t("userUnblockedDescription", language)
-      });
+      toast.success(t("contactUnblocked", language));
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },
     onError: (error) => {
       console.error("Error unblocking contact:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorUnblockingContact", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorUnblockingContact", language));
     }
   });
 

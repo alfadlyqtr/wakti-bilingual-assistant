@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -10,7 +9,7 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 // Define the type for location state
@@ -75,18 +74,11 @@ export default function Login() {
       if (error) {
         console.error("Login: Login error:", error);
         setErrorMsg(error.message);
-        toast({
-          title: language === 'en' ? 'Login Failed' : 'فشل تسجيل الدخول',
-          description: error.message,
-          variant: 'destructive',
-        });
+        toast.error(language === 'en' ? 'Login Failed: ' + error.message : 'فشل تسجيل الدخول: ' + error.message);
       } else if (data?.user) {
         console.log("Login: Login successful, user:", data.user.id);
         console.log("Login: Will redirect to:", from);
-        toast({
-          title: language === 'en' ? 'Login Successful' : 'تم تسجيل الدخول بنجاح',
-          description: language === 'en' ? 'Welcome back!' : 'مرحبا بعودتك!',
-        });
+        toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
         
         // Small delay to ensure auth state is properly updated
         if (!navigationInProgress.current) {

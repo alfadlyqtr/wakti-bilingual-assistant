@@ -9,7 +9,7 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -54,16 +54,9 @@ export default function Signup() {
       if (error) {
         console.error("Signup error:", error);
         setErrorMsg(error.message);
-        toast({
-          title: language === 'en' ? 'Signup Failed' : 'فشل إنشاء الحساب',
-          description: error.message,
-          variant: 'destructive',
-        });
+        toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
-        toast({
-          title: language === 'en' ? 'Account Created' : 'تم إنشاء الحساب',
-          description: language === 'en' ? 'Your account has been created successfully!' : 'تم إنشاء حسابك بنجاح!',
-        });
+        toast.success(language === 'en' ? 'Account Created: Your account has been created successfully!' : 'تم إنشاء الحساب: تم إنشاء حسابك بنجاح!');
         navigate("/dashboard"); // Updated to redirect to /dashboard instead of /
       }
     } catch (err) {

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -9,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ForgotPassword() {
@@ -36,26 +35,14 @@ export default function ForgotPassword() {
       const error = await forgotPassword(email);
       
       if (error) {
-        toast({
-          title: "Password reset failed",
-          description: error.message,
-          variant: "destructive",
-        });
+        toast.error("Password reset failed: " + error.message);
       } else {
-        toast({
-          title: "Password reset link sent",
-          description: "Check your email for the reset link",
-          variant: "success",
-        });
+        toast.success("Password reset link sent. Check your email for the reset link");
         // Redirect to login after a short delay
         setTimeout(() => navigate('/login'), 2000);
       }
     } catch (error) {
-      toast({
-        title: "Password reset failed",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
+      toast.error("Password reset failed: An unexpected error occurred");
     } finally {
       setIsLoading(false);
     }

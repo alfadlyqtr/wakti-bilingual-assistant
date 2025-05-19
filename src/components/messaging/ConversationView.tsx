@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -10,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { MessageSquare } from "lucide-react";
 
 interface ConversationViewProps {
@@ -20,7 +19,6 @@ interface ConversationViewProps {
 
 export function ConversationView({ conversationId, onBack }: ConversationViewProps) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -56,11 +54,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     },
     onError: (error) => {
       console.error("Error sending message:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorSendingMessage", language),
-        variant: "destructive"
-      });
+      toast.error(t("errorSendingMessage", language));
     }
   });
 

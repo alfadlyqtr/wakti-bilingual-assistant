@@ -1,10 +1,9 @@
-
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -13,7 +12,6 @@ export default function ResetPassword() {
   const { resetPassword } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   // Get token from URL parameters
   const token = searchParams.get("token");
@@ -22,20 +20,12 @@ export default function ResetPassword() {
     e.preventDefault();
     
     if (!token) {
-      toast({
-        title: "Invalid reset link",
-        description: "Please request a new password reset link",
-        variant: "destructive",
-      });
+      toast.error("Invalid reset link. Please request a new password reset link");
       return;
     }
     
     if (password !== confirmPassword) {
-      toast({
-        title: "Passwords don't match",
-        description: "Please make sure both passwords match",
-        variant: "destructive",
-      });
+      toast.error("Passwords don't match. Please make sure both passwords match");
       return;
     }
     
@@ -44,25 +34,13 @@ export default function ResetPassword() {
     try {
       const error = await resetPassword(token, password);
       if (error) {
-        toast({
-          title: "Password reset failed",
-          description: error.message,
-          variant: "destructive", 
-        });
+        toast.error(error.message);
       } else {
-        toast({
-          title: "Password reset successful",
-          description: "You can now log in with your new password",
-          variant: "success",
-        });
+        toast.success("Password reset successful. You can now log in with your new password");
         navigate("/login");
       }
     } catch (error) {
-      toast({
-        title: "Password reset failed",
-        description: "Please try again or request a new reset link",
-        variant: "destructive",
-      });
+      toast.error("Password reset failed. Please try again or request a new reset link");
     } finally {
       setIsLoading(false);
     }

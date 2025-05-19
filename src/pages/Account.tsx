@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -41,6 +40,7 @@ import { validateDisplayName } from "@/utils/validations";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function Account() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -120,11 +120,7 @@ export default function Account() {
         localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
         
         // Show success toast
-        toast({
-          title: language === 'ar' ? "تم حفظ الإعدادات بنجاح" : "Settings saved successfully",
-          description: "",
-          variant: "default"
-        });
+        toast.success("Settings saved successfully");
       }
     });
   };
@@ -155,11 +151,7 @@ export default function Account() {
         localStorage.setItem('privacySettings', JSON.stringify(privacySettings));
         
         // Show success toast
-        toast({
-          title: language === 'ar' ? "تم حفظ جميع الإعدادات بنجاح" : "All settings saved successfully",
-          description: "",
-          variant: "default"
-        });
+        toast.success("All settings saved successfully");
       }
     });
   };
@@ -915,7 +907,7 @@ export default function Account() {
               <div className="flex items-center justify-between">
                 <span>
                   {language === "ar"
-                    ? "إشعارات الرسائل"
+                    ? "إ��عارات الرسائل"
                     : "Message Notifications"}
                 </span>
                 <Switch id="message-notifications" defaultChecked />
