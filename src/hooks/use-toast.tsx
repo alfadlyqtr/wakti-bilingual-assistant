@@ -3,7 +3,6 @@ import * as React from "react";
 import {
   Toast,
   ToastProps,
-  ToastActionElement,
   ToastProvider as ToastUiProvider,
   ToastViewport,
   ToastTitle,
@@ -13,6 +12,9 @@ import {
 } from "@/components/ui/toast";
 
 import { createContext, useContext } from "react";
+
+// Export the ToastActionElement type so it can be re-exported
+export type ToastActionElement = React.ReactElement<typeof ToastAction>;
 
 const TOAST_LIMIT = 5;
 const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
