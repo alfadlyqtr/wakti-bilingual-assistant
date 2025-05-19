@@ -1144,6 +1144,20 @@ const translations: TranslationMap = {
   goToContactsPage: {
     en: "Visit the contacts page to add people",
     ar: "قم بزيارة صفحة جهات الاتصال لإضافة أشخاص"
+  },
+  
+  // New message terms
+  messagesSent: {
+    en: "Messages sent",
+    ar: "تم إرسال الرسائل"
+  },
+  messagesDelivered: {
+    en: "Messages delivered",
+    ar: "تم توصيل الرسائل"
+  },
+  policiesUpdated: {
+    en: "Security policies updated",
+    ar: "تم تحديث سياسات الأمان"
   }
 };
 
