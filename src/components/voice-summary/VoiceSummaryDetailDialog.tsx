@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FileText as FileIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -49,6 +48,8 @@ export default function VoiceSummaryDetailDialog({
   isOpen,
   onClose
 }: VoiceSummaryDetailDialogProps) {
+  console.log('VoiceSummaryDetailDialog render:', { recordingId, isOpen });
+  
   const { theme, language } = useTheme();
   const isMobile = useMediaQuery("(max-width: 640px)");
   
@@ -623,6 +624,19 @@ export default function VoiceSummaryDetailDialog({
     );
   };
 
+  // Temporarily simplify to just use Dialog for testing
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto z-50">
+        <DialogHeader>
+          <DialogTitle>{summary?.title || (language === 'ar' ? 'تفاصيل التسجيل' : 'Recording Details')}</DialogTitle>
+        </DialogHeader>
+        {renderContent()}
+      </DialogContent>
+    </Dialog>
+  );
+
+  /* Original conditional rendering that we'll restore after debugging
   // Use a Sheet on mobile and Dialog on desktop
   if (isMobile) {
     return (
@@ -649,4 +663,5 @@ export default function VoiceSummaryDetailDialog({
       </DialogContent>
     </Dialog>
   );
+  */
 }

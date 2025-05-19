@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -89,7 +88,7 @@ export default function VoiceSummaryPage() {
       if (!success) {
         console.error('Error deleting stuck recordings:', error);
         toast({
-          title: language === 'ar' ? 'فشل في حذف التسجيلات العالقة' : 'Failed to delete stuck recordings',
+          title: language === 'ar' ? 'فشل في حذف التسجيلات الع��لقة' : 'Failed to delete stuck recordings',
           variant: "destructive"
         });
         return;
@@ -245,9 +244,20 @@ export default function VoiceSummaryPage() {
   };
 
   const handleRecordingSelected = (recordingId: string) => {
+    console.log('Recording selected in VoiceSummaryPage:', recordingId);
     setSelectedRecordingId(recordingId);
     setShowDetailDialog(true);
+    console.log('Dialog state set to:', true);
   };
+
+  // Add debugging for dialog state changes
+  useEffect(() => {
+    console.log('Current dialog state:', { 
+      showDetailDialog, 
+      selectedRecordingId,
+      isDialogOpen: showDetailDialog && selectedRecordingId !== null
+    });
+  }, [showDetailDialog, selectedRecordingId]);
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -416,10 +426,17 @@ export default function VoiceSummaryPage() {
         />
 
         {/* Voice Summary Detail Dialog */}
+        {console.log('Rendering VoiceSummaryDetailDialog with:', { 
+          recordingId: selectedRecordingId, 
+          isOpen: showDetailDialog 
+        })}
         <VoiceSummaryDetailDialog
           recordingId={selectedRecordingId}
           isOpen={showDetailDialog}
-          onClose={() => setShowDetailDialog(false)}
+          onClose={() => {
+            console.log('Closing dialog');
+            setShowDetailDialog(false);
+          }}
         />
       </div>
     </div>

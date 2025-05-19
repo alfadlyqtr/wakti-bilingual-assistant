@@ -1,3 +1,4 @@
+
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { formatDistanceToNow } from "date-fns";
@@ -320,7 +321,9 @@ ${recording.summary || ''}
   };
 
   const handleRecordingClick = (recordingId: string) => {
+    console.log('Recording clicked:', recordingId);
     if (onRecordingSelected) {
+      console.log('Calling onRecordingSelected with:', recordingId);
       onRecordingSelected(recordingId);
     }
   };
