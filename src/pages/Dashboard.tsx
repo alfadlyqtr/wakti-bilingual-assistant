@@ -16,6 +16,8 @@ import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
 import { GripVertical, CalendarIcon, CheckCircle, BellRing, Calendar as CalendarIconFull } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSettings } from "@/hooks/useSettings";
+import { loadUserSettings } from "@/utils/auth";
 
 type WidgetType = {
   id: string;
@@ -23,14 +25,6 @@ type WidgetType = {
   component: React.ReactNode;
   visible: boolean;
 };
-
-// Interface for widget visibility settings
-interface WidgetVisibility {
-  tasksWidget: boolean;
-  calendarWidget: boolean;
-  remindersWidget: boolean;
-  quoteWidget: boolean;
-}
 
 export default function Dashboard() {
   const { language, theme } = useTheme();
@@ -46,40 +40,8 @@ export default function Dashboard() {
   const [events, setEvents] = useState([]);
   const [reminders, setReminders] = useState([]);
   
-  // Get user preferences from localStorage
-  const getUserPreferences = (): WidgetVisibility => {
-    try {
-      const storedPreferences = localStorage.getItem('widgetVisibility');
-      if (storedPreferences) {
-        return JSON.parse(storedPreferences);
-      }
-    } catch (error) {
-      console.error('Error loading widget preferences:', error);
-    }
-    
-    // Default preferences if nothing is stored
-    return {
-      tasksWidget: true,
-      calendarWidget: true,
-      remindersWidget: true,
-      quoteWidget: true
-    };
-  };
-  
-  const [widgetVisibility, setWidgetVisibility] = useState<WidgetVisibility>(getUserPreferences());
-  
-  // Listen for storage changes to update widget visibility
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setWidgetVisibility(getUserPreferences());
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
+  // Use our settings hook
+  const { settings, isLoading: isLoadingSettings } = useSettings();
   
   // Fetch data from Supabase
   useEffect(() => {
@@ -87,6 +49,9 @@ export default function Dashboard() {
       setIsLoading(true);
       
       try {
+        // Load user settings first
+        await loadUserSettings();
+        
         // Fetch tasks
         const { data: tasksData, error: tasksError } = await supabase
           .from('tasks')
@@ -140,11 +105,13 @@ export default function Dashboard() {
   
   // Initialize widgets
   useEffect(() => {
+    if (isLoadingSettings) return;
+    
     setWidgets([
       {
         id: "tasks",
         title: "tasks" as TranslationKey,
-        visible: widgetVisibility.tasksWidget,
+        visible: settings.widgets.tasksWidget,
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-3">{t("tasks", language)}</h3>
@@ -184,7 +151,7 @@ export default function Dashboard() {
       {
         id: "calendar",
         title: "calendar" as TranslationKey,
-        visible: widgetVisibility.calendarWidget,
+        visible: settings.widgets.calendarWidget,
         component: (
           <div className="p-4">
             <div className="mb-2">
@@ -249,7 +216,7 @@ export default function Dashboard() {
       {
         id: "events",
         title: "events" as TranslationKey,
-        visible: widgetVisibility.tasksWidget, // This should use its own setting
+        visible: settings.widgets.tasksWidget, // Use its own setting
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-2">{t("events_today", language)}</h3>
@@ -290,7 +257,7 @@ export default function Dashboard() {
       {
         id: "reminders",
         title: "reminders" as TranslationKey,
-        visible: widgetVisibility.remindersWidget,
+        visible: settings.widgets.remindersWidget,
         component: (
           <div className="p-4">
             <h3 className="font-medium mb-2">{t("reminders", language)}</h3>
@@ -328,11 +295,11 @@ export default function Dashboard() {
       {
         id: "quote",
         title: "dailyQuote" as TranslationKey,
-        visible: widgetVisibility.quoteWidget,
+        visible: settings.widgets.quoteWidget,
         component: <QuoteWidget />
       },
     ]);
-  }, [language, navigate, widgetVisibility, isLoading, tasks, events, reminders]); // Added dependencies for reactivity
+  }, [language, navigate, isLoading, tasks, events, reminders, settings, isLoadingSettings]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
@@ -348,28 +315,7 @@ export default function Dashboard() {
     toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
   };
 
-  // Handle long press start - Modified to use dedicated drag handle instead of the whole card
-  const handleLongPressStart = (e: React.TouchEvent) => {
-    // No longer needed as we're using the handle instead
-  };
-  
-  // Handle touch end - Only needed for the drag handle now
-  const handleTouchEnd = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-  
-  // Handle touch move - Only needed for the drag handle now
-  const handleTouchMove = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  // Dedicated handle drag mode activator
+  // Handle long press on drag handle
   const handleDragHandlePress = (e: React.TouchEvent) => {
     e.stopPropagation(); // Prevent event from bubbling up
     
@@ -387,11 +333,39 @@ export default function Dashboard() {
     }, longPressDuration);
   };
   
+  // Clear timer on touch end/move
+  const handleTouchEnd = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
+  const handleTouchMove = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
   // Exit drag mode
   const exitDragMode = () => {
     setIsDragging(false);
     toast.info(language === 'ar' ? "تم إلغاء تفعيل وضع السحب" : "Drag mode deactivated");
   };
+
+  // Show loading state while settings are loading
+  if (isLoadingSettings) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="space-y-4 w-full">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-[150px] w-full" />
+          <Skeleton className="h-[150px] w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28">
@@ -447,10 +421,13 @@ export default function Dashboard() {
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                       >
-                        {/* New dedicated drag handle that appears in the corner when in drag mode */}
+                        {/* Drag handle that appears in the corner when in drag mode */}
                         {isDragging && (
                           <div 
                             className="absolute top-0 right-0 bg-primary/10 p-1 rounded-bl-md rounded-tr-md z-20"
+                            onTouchStart={handleDragHandlePress}
+                            onTouchEnd={handleTouchEnd}
+                            onTouchMove={handleTouchMove}
                           >
                             <GripVertical className="h-5 w-5 text-muted-foreground" />
                           </div>

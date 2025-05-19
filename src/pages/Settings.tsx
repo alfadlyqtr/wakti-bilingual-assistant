@@ -9,35 +9,16 @@ import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
-import { toast } from "@/components/ui/use-toast";
+import { getQuotePreferences } from "@/utils/quoteService";
+import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
 import { Check, Save, Settings as SettingsIcon } from "lucide-react";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-
-// Interface for widget settings
-interface WidgetSettings {
-  tasksWidget: boolean;
-  calendarWidget: boolean;
-  remindersWidget: boolean;
-  quoteWidget: boolean;
-}
-
-// Interface for notification settings
-interface NotificationSettings {
-  pushNotifications: boolean;
-  emailNotifications: boolean;
-}
-
-// Interface for privacy settings
-interface PrivacySettings {
-  profileVisibility: boolean;
-  activityStatus: boolean;
-}
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useSettings } from "@/hooks/useSettings";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -45,138 +26,46 @@ export default function Settings() {
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
   const { confirm } = useToast();
-  const queryClient = useQueryClient();
   
-  // Get widget settings from localStorage or use defaults
-  const getWidgetSettings = (): WidgetSettings => {
-    try {
-      const storedSettings = localStorage.getItem('widgetVisibility');
-      if (storedSettings) {
-        return JSON.parse(storedSettings);
-      }
-    } catch (error) {
-      console.error('Error loading widget settings:', error);
-    }
-    
-    // Default settings if nothing is stored
-    return {
-      tasksWidget: true,
-      calendarWidget: true,
-      remindersWidget: true,
-      quoteWidget: true
-    };
-  };
-  
-  // Get notification settings from localStorage or use defaults
-  const getNotificationSettings = (): NotificationSettings => {
-    try {
-      const storedSettings = localStorage.getItem('notificationSettings');
-      if (storedSettings) {
-        return JSON.parse(storedSettings);
-      }
-    } catch (error) {
-      console.error('Error loading notification settings:', error);
-    }
-    
-    // Default settings if nothing is stored
-    return {
-      pushNotifications: true,
-      emailNotifications: false
-    };
-  };
-  
-  // Get privacy settings from localStorage or use defaults
-  const getPrivacySettings = (): PrivacySettings => {
-    try {
-      const storedSettings = localStorage.getItem('privacySettings');
-      if (storedSettings) {
-        return JSON.parse(storedSettings);
-      }
-    } catch (error) {
-      console.error('Error loading privacy settings:', error);
-    }
-    
-    // Default settings if nothing is stored
-    return {
-      profileVisibility: true,
-      activityStatus: true
-    };
-  };
-  
-  // Initialize state for all settings
-  const [widgetSettings, setWidgetSettings] = useState<WidgetSettings>(getWidgetSettings());
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings>(getNotificationSettings());
-  const [privacySettings, setPrivacySettings] = useState<PrivacySettings>(getPrivacySettings());
-  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  // Use our new settings hook
+  const { 
+    settings, 
+    isLoading, 
+    isSaving, 
+    updateSettings, 
+    saveSettings 
+  } = useSettings();
 
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: getCurrentUserProfile,
   });
 
-  // Load settings from localStorage on component mount
+  // Setting state hooks - these will all be synced with our settings hook
+  const [widgetSettings, setWidgetSettings] = useState(settings.widgets);
+  const [notificationSettings, setNotificationSettings] = useState(settings.notifications);
+  const [privacySettings, setPrivacySettings] = useState(settings.privacy);
+
+  // Initialize local state from settings when they load
   useEffect(() => {
-    setWidgetSettings(getWidgetSettings());
-    setNotificationSettings(getNotificationSettings());
-    setPrivacySettings(getPrivacySettings());
-  }, []);
-
-  // Save widget settings to localStorage and broadcast change
-  const saveWidgetSettings = (newSettings: WidgetSettings) => {
-    localStorage.setItem('widgetVisibility', JSON.stringify(newSettings));
-    // Dispatch storage event to notify other components
-    window.dispatchEvent(new Event('storage'));
-  };
-  
-  // Save notification settings to localStorage
-  const saveNotificationSettings = (newSettings: NotificationSettings) => {
-    localStorage.setItem('notificationSettings', JSON.stringify(newSettings));
-    window.dispatchEvent(new Event('storage'));
-  };
-  
-  // Save privacy settings to localStorage
-  const savePrivacySettings = (newSettings: PrivacySettings) => {
-    localStorage.setItem('privacySettings', JSON.stringify(newSettings));
-    window.dispatchEvent(new Event('storage'));
-  };
-
-  // Save all settings to Supabase
-  const saveSettingsToSupabase = async () => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          settings: {
-            widgets: widgetSettings,
-            notifications: notificationSettings,
-            privacy: privacySettings,
-            quotes: quotePreferences
-          }
-        })
-        .eq('id', userProfile?.id);
-      
-      if (error) throw error;
-      
-      return true;
-    } catch (error) {
-      console.error('Error saving settings to Supabase:', error);
-      return false;
+    if (!isLoading) {
+      setWidgetSettings(settings.widgets);
+      setNotificationSettings(settings.notifications);
+      setPrivacySettings(settings.privacy);
+      setQuotePreferences(settings.quotes);
     }
-  };
+  }, [isLoading, settings]);
 
   const autoApproveMutation = useMutation({
     mutationFn: (autoApprove: boolean) => updateAutoApproveContacts(autoApprove),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-      toast({
-        title: t("settingsUpdated", language),
+      toast(t("settingsUpdated", language), {
         description: t("contactSettingsUpdated", language)
       });
     },
     onError: (error) => {
       console.error("Error updating contact settings:", error);
-      toast({
-        title: t("error", language),
+      toast(t("error", language), {
         description: t("errorUpdatingSettings", language),
         variant: "destructive"
       });
@@ -184,43 +73,37 @@ export default function Settings() {
   });
 
   // Widget setting handlers
-  const handleWidgetToggle = (widgetKey: keyof WidgetSettings, checked: boolean) => {
+  const handleWidgetToggle = (widgetKey: keyof typeof widgetSettings, checked: boolean) => {
     const updatedSettings = { ...widgetSettings, [widgetKey]: checked };
     setWidgetSettings(updatedSettings);
-    saveWidgetSettings(updatedSettings);
+    updateSettings('widgets', updatedSettings);
     
-    toast({
-      title: checked 
-        ? t("widgetEnabled", language) 
-        : t("widgetDisabled", language),
-      description: t(widgetKey as any, language),
-      variant: "default"
+    toast(checked 
+      ? t("widgetEnabled", language) 
+      : t("widgetDisabled", language), {
+      description: t(widgetKey as any, language)
     });
   };
   
   // Notification setting handlers
-  const handleNotificationToggle = (settingKey: keyof NotificationSettings, checked: boolean) => {
+  const handleNotificationToggle = (settingKey: keyof typeof notificationSettings, checked: boolean) => {
     const updatedSettings = { ...notificationSettings, [settingKey]: checked };
     setNotificationSettings(updatedSettings);
-    saveNotificationSettings(updatedSettings);
+    updateSettings('notifications', updatedSettings);
     
-    toast({
-      title: t("settingsUpdated", language),
-      description: t("notificationSettingsUpdated", language),
-      variant: "default"
+    toast(t("settingsUpdated", language), {
+      description: t("notificationSettingsUpdated", language)
     });
   };
   
   // Privacy setting handlers
-  const handlePrivacyToggle = (settingKey: keyof PrivacySettings, checked: boolean) => {
+  const handlePrivacyToggle = (settingKey: keyof typeof privacySettings, checked: boolean) => {
     const updatedSettings = { ...privacySettings, [settingKey]: checked };
     setPrivacySettings(updatedSettings);
-    savePrivacySettings(updatedSettings);
+    updateSettings('privacy', updatedSettings);
     
-    toast({
-      title: t("settingsUpdated", language),
-      description: t("privacySettingsUpdated", language),
-      variant: "default"
+    toast(t("settingsUpdated", language), {
+      description: t("privacySettingsUpdated", language)
     });
   };
 
@@ -231,28 +114,22 @@ export default function Settings() {
   const handleQuoteCategoryChange = (category: string) => {
     const newPreferences = { ...quotePreferences, category };
     setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
+    updateSettings('quotes', newPreferences);
     
     // Open dialog when custom is selected
     if (category === 'custom') {
       setCustomQuoteDialogOpen(true);
     }
     
-    toast({
-      title: language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated",
-      variant: "default"
-    });
+    toast(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
   };
   
   const handleQuoteFrequencyChange = (frequency: string) => {
     const newPreferences = { ...quotePreferences, frequency };
     setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
+    updateSettings('quotes', newPreferences);
     
-    toast({
-      title: language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated",
-      variant: "default"
-    });
+    toast(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
   };
   
   // Save all settings
@@ -261,34 +138,17 @@ export default function Settings() {
       title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
       description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
       onConfirm: async () => {
-        setIsSettingsSaving(true);
+        const success = await saveSettings({
+          widgets: widgetSettings,
+          notifications: notificationSettings,
+          privacy: privacySettings,
+          quotes: quotePreferences
+        });
         
-        try {
-          // Save all settings to localStorage
-          saveWidgetSettings(widgetSettings);
-          saveNotificationSettings(notificationSettings);
-          savePrivacySettings(privacySettings);
-          saveQuotePreferences(quotePreferences);
-          
-          // Save settings to Supabase if the user is logged in
-          if (userProfile?.id) {
-            await saveSettingsToSupabase();
-          }
-          
-          toast({
-            title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
+        if (success) {
+          toast(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
             description: <Check className="h-4 w-4" />,
-            variant: "success"
           });
-        } catch (error) {
-          console.error('Error saving settings:', error);
-          toast({
-            title: language === 'ar' ? "خطأ في حفظ الإعدادات" : "Error saving settings",
-            description: language === 'ar' ? "حدث خطأ أثناء حفظ الإعدادات. يرجى المحاولة مرة أخرى." : "An error occurred while saving settings. Please try again.",
-            variant: "destructive"
-          });
-        } finally {
-          setIsSettingsSaving(false);
         }
       }
     });
@@ -300,6 +160,15 @@ export default function Settings() {
       setCustomQuoteDialogOpen(true);
     }
   }, []); // Only run once on component mount
+
+  // Show loading state while settings are being fetched
+  if (isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
   
   return (
     <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
@@ -369,7 +238,7 @@ export default function Settings() {
       {/* Quote Settings */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتبا�� اليومي' : 'Daily Quote Settings'}</h2>
+          <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}</h2>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
@@ -563,9 +432,9 @@ export default function Settings() {
       <Button 
         className="w-full mt-6 flex items-center gap-2" 
         onClick={handleSaveAllSettings}
-        disabled={isSettingsSaving}
+        disabled={isSaving}
       >
-        {isSettingsSaving ? (
+        {isSaving ? (
           <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
         ) : (
           <Save className="h-4 w-4" />
@@ -581,6 +450,7 @@ export default function Settings() {
           // Refresh any state if needed after quotes are updated
           const updatedPrefs = getQuotePreferences();
           setQuotePreferences(updatedPrefs);
+          updateSettings('quotes', updatedPrefs);
         }}
       />
     </div>
