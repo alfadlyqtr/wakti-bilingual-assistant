@@ -361,7 +361,7 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   },
   autoApproveExplanation: {
     en: "When enabled, all contact requests will be automatically approved",
-    ar: "عند التفعيل، ستتم الموافقة تلقائياً على جميع طلبات الاتصال"
+    ar: "عند التفعيل، ستتم الموافقة تلقا��ياً على جميع طلبات الاتصال"
   },
   contactSettingsUpdated: {
     en: "Contact settings updated successfully",
@@ -564,5 +564,179 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   version: {
     en: "Version",
     ar: "الإصدار"
+  },
+  
+  // Additional translations for account and settings
+  profileManagement: {
+    en: "Manage your profile information.",
+    ar: "إدارة معلومات الملف الشخصي الخاص بك."
+  },
+  usernameHelpText: {
+    en: "Your account username. Cannot be changed.",
+    ar: "اسم المستخدم للحساب الخاص بك. لا يمكن تغييره."
+  },
+  updating: {
+    en: "Updating...",
+    ar: "جاري التحديث..."
+  },
+  updateName: {
+    en: "Update Name",
+    ar: "تحديث الاسم"
+  },
+  updateEmail: {
+    en: "Update Email",
+    ar: "تحديث البريد الإلكتروني"
+  },
+  updatePassword: {
+    en: "Update Password",
+    ar: "تحديث كلمة المرور"
+  },
+  passwordsDoNotMatch: {
+    en: "Passwords do not match",
+    ar: "كلمات السر غير متطابقة"
+  },
+  profileUpdated: {
+    en: "Profile updated successfully",
+    ar: "تم تحديث الملف الشخصي بنجاح"
+  },
+  emailUpdated: {
+    en: "Email updated successfully",
+    ar: "تم تحديث البريد الإلكتروني بنجاح"
+  },
+  passwordUpdated: {
+    en: "Password updated successfully",
+    ar: "تم تحديث كلمة المرور بنجاح"
+  },
+  errorUpdatingName: {
+    en: "Failed to update name",
+    ar: "فشل تحديث الاسم"
+  },
+  errorUpdatingProfile: {
+    en: "Failed to update profile",
+    ar: "فشل تحديث الملف الشخصي"
+  },
+  errorUpdatingEmail: {
+    en: "Failed to update email",
+    ar: "فشل تحديث البريد الإلكتروني"
+  },
+  errorUpdatingPassword: {
+    en: "Failed to update password",
+    ar: "فشل تحديث كلمة المرور"
+  },
+  errorSigningOut: {
+    en: "Failed to sign out",
+    ar: "فشل تسجيل الخروج"
+  },
+  accountOptions: {
+    en: "Account Options",
+    ar: "خيارات الحساب"
+  },
+  profile: {
+    en: "Profile",
+    ar: "الملف الشخصي"
+  },
+  profileImage: {
+    en: "Profile image",
+    ar: "صورة الملف الشخصي"
+  },
+  changeImage: {
+    en: "Change Image",
+    ar: "تغيير الصورة"
+  },
+  profileImageUpdated: {
+    en: "Profile image updated successfully",
+    ar: "تم تحديث صورة الملف الشخصي بنجاح"
+  },
+  dailyQuoteSettings: {
+    en: "Daily Quote Settings",
+    ar: "إعدادات الاقتباس اليومي"
+  },
+  quoteCategory: {
+    en: "Quote Category",
+    ar: "فئة الاقتباس"
+  },
+  quoteChangeFrequency: {
+    en: "Quote Change Frequency",
+    ar: "تكرار تغيير الاقتباس"
+  },
+  manageCustomQuotes: {
+    en: "Manage Custom Quotes",
+    ar: "إدارة الاقتباسات المخصصة"
+  },
+  twiceDaily: {
+    en: "2 times a day",
+    ar: "مرتان في اليوم"
+  },
+  fourTimesDaily: {
+    en: "4 times a day",
+    ar: "4 مرات في اليوم"
+  },
+  sixTimesDaily: {
+    en: "6 times a day",
+    ar: "6 مرات في اليوم"
+  },
+  everyAppStart: {
+    en: "Every app start",
+    ar: "مع كل بدء تشغيل للتطبيق"
+  },
+  saveAllSettingsQuestion: {
+    en: "Save all settings?",
+    ar: "حفظ جميع الإعدادات؟"
+  },
+  saveAllSettingsConfirmation: {
+    en: "Are you sure you want to save all changes?",
+    ar: "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟"
+  },
+  allSettingsSaved: {
+    en: "All settings saved",
+    ar: "تم حفظ جميع الإعدادات"
+  },
+  saveAllSettings: {
+    en: "Save All Settings",
+    ar: "حفظ جميع الإعدادات"
+  },
+  pushNotifications: {
+    en: "Push Notifications",
+    ar: "إشعارات الدفع"
+  },
+  emailNotifications: {
+    en: "Email Notifications",
+    ar: "إشعارات البريد الإلكتروني"
+  },
+  tasksWidget: {
+    en: "Tasks Widget",
+    ar: "أداة المهام المصغرة"
+  },
+  calendarWidget: {
+    en: "Calendar Widget",
+    ar: "أداة التقويم المصغرة"
+  },
+  remindersWidget: {
+    en: "Reminders Widget",
+    ar: "أداة التذكيرات المصغرة"
+  },
+  dailyQuoteWidget: {
+    en: "Daily Quote Widget",
+    ar: "أداة الاقتباس اليومي المصغرة"
+  },
+  profileVisibility: {
+    en: "Profile Visibility",
+    ar: "رؤية الملف الشخصي"
+  },
+  activityStatus: {
+    en: "Activity Status",
+    ar: "حالة النشاط"
+  },
+  deleteMyAccount: {
+    en: "Delete My Account",
+    ar: "حذف حسابي"
+  },
+  deleteAccountDescription: {
+    en: "Permanently delete your account and all associated data. This action cannot be undone.",
+    ar: "حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء."
+  },
+  quotePreferencesUpdated: {
+    en: "Quote preferences updated",
+    ar: "تم تحديث تفضيلات الاقتباس"
   }
 };

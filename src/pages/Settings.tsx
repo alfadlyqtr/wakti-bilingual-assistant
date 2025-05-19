@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -60,7 +61,7 @@ export default function Settings() {
       setCustomQuoteDialogOpen(true);
     }
     
-    toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
+    toast.success(t("quotePreferencesUpdated", language));
   };
   
   const handleQuoteFrequencyChange = (frequency: string) => {
@@ -68,14 +69,14 @@ export default function Settings() {
     setQuotePreferences(newPreferences);
     saveQuotePreferences(newPreferences);
     
-    toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
+    toast.success(t("quotePreferencesUpdated", language));
   };
   
   // Update the handleSaveAllSettings function to use the new confirm syntax
   const handleSaveAllSettings = () => {
     confirm({
-      title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
-      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
+      title: t("saveAllSettingsQuestion", language),
+      description: t("saveAllSettingsConfirmation", language),
       onConfirm: () => {
         // Already saving on change, but we can add additional save logic here
         // Save widget visibility settings
@@ -89,7 +90,7 @@ export default function Settings() {
         localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
         localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
         
-        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+        toast.success(t("allSettingsSaved", language), {
           description: <Check className="h-4 w-4" />
         });
       }
@@ -115,20 +116,20 @@ export default function Settings() {
         <CardContent className="space-y-4">
           {/* Language & Theme Settings */}
           <div className="flex justify-between items-center">
-            <span>{language === "en" ? "Language" : "اللغة"}</span>
+            <span>{t("language", language)}</span>
             <Button
               variant="outline"
               size="sm"
               onClick={toggleLanguage}
               className="h-9 px-3 rounded-full text-sm"
             >
-              {t("language", language)}
+              {language === "en" ? t("arabic", language) : t("english", language)}
             </Button>
           </div>
           
           {/* Theme Toggle */}
           <div className="flex justify-between items-center">
-            <span>{language === "ar" ? "السمة" : "Theme"}</span>
+            <span>{t("theme", language)}</span>
             <Button
               variant="outline"
               size="sm"
@@ -171,12 +172,12 @@ export default function Settings() {
       {/* Quote Settings */}
       <Card className="mb-4">
         <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{language === 'ar' ? 'إعدادات الاقتبا�� اليومي' : 'Daily Quote Settings'}</h2>
+          <h2 className="text-lg font-medium">{t("dailyQuoteSettings", language)}</h2>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
             <label className="text-sm font-medium">
-              {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
+              {t("quoteCategory", language)}
             </label>
             <Select 
               value={quotePreferences.category} 
@@ -188,24 +189,7 @@ export default function Settings() {
               <SelectContent>
                 {categories.map((category) => (
                   <SelectItem key={category} value={category}>
-                    {language === 'ar' ? 
-                      (
-                        category === 'motivational' ? 'تحفيزي' : 
-                        category === 'islamic' ? 'إسلامي' : 
-                        category === 'positive' ? 'إيجابي' : 
-                        category === 'health' ? 'صحي' : 
-                        category === 'mixed' ? 'متنوع' : 
-                        category === 'custom' ? 'مخصص' :
-                        category === 'productivity' ? 'إنتاجية' :
-                        category === 'discipline' ? 'انضباط' :
-                        category === 'gratitude' ? 'امتنان' :
-                        category === 'leadership' ? 'قيادة' :
-                        category
-                      ) : 
-                      (
-                        category.charAt(0).toUpperCase() + category.slice(1)
-                      )
-                    }
+                    {t(category, language)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -214,7 +198,7 @@ export default function Settings() {
 
           <div className="grid gap-2">
             <label className="text-sm font-medium">
-              {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
+              {t("quoteChangeFrequency", language)}
             </label>
             <Select 
               value={quotePreferences.frequency}
@@ -225,16 +209,16 @@ export default function Settings() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="2xday">
-                  {language === 'ar' ? 'مرتان في اليوم' : '2 times a day'}
+                  {t("twiceDaily", language)}
                 </SelectItem>
                 <SelectItem value="4xday">
-                  {language === 'ar' ? '4 مرات في اليوم' : '4 times a day'}
+                  {t("fourTimesDaily", language)}
                 </SelectItem>
                 <SelectItem value="6xday">
-                  {language === 'ar' ? '6 مرات في اليوم' : '6 times a day'}
+                  {t("sixTimesDaily", language)}
                 </SelectItem>
                 <SelectItem value="appStart">
-                  {language === 'ar' ? 'مع كل بدء تشغيل للتطبيق' : 'Every app start'}
+                  {t("everyAppStart", language)}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -247,7 +231,7 @@ export default function Settings() {
               className="w-full mt-4" 
               onClick={() => setCustomQuoteDialogOpen(true)}
             >
-              {language === 'ar' ? 'إدارة الاقتباسات المخصصة' : 'Manage Custom Quotes'}
+              {t("manageCustomQuotes", language)}
             </Button>
           )}
         </CardContent>
@@ -260,11 +244,11 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'إشعارات الدفع' : 'Push Notifications'}</span>
+            <span>{t("pushNotifications", language)}</span>
             <Switch defaultChecked id="push-notifications" />
           </div>
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'إشعارات البريد الإلكتروني' : 'Email Notifications'}</span>
+            <span>{t("emailNotifications", language)}</span>
             <Switch id="email-notifications" />
           </div>
         </CardContent>
@@ -277,19 +261,19 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'أداة المهام المصغرة' : 'Tasks Widget'}</span>
+            <span>{t("tasksWidget", language)}</span>
             <Switch defaultChecked id="tasks-widget" />
           </div>
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'أداة التقويم المصغرة' : 'Calendar Widget'}</span>
+            <span>{t("calendarWidget", language)}</span>
             <Switch defaultChecked id="calendar-widget" />
           </div>
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'أداة التذكيرات المصغرة' : 'Reminders Widget'}</span>
+            <span>{t("remindersWidget", language)}</span>
             <Switch defaultChecked id="reminders-widget" />
           </div>
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'أداة الاقتباس اليومي المصغرة' : 'Daily Quote Widget'}</span>
+            <span>{t("dailyQuoteWidget", language)}</span>
             <Switch defaultChecked id="quote-widget" />
           </div>
         </CardContent>
@@ -302,11 +286,11 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'رؤية الملف الشخصي' : 'Profile Visibility'}</span>
+            <span>{t("profileVisibility", language)}</span>
             <Switch defaultChecked id="profile-visibility" />
           </div>
           <div className="flex justify-between items-center">
-            <span>{language === 'ar' ? 'حالة النشاط' : 'Activity Status'}</span>
+            <span>{t("activityStatus", language)}</span>
             <Switch defaultChecked id="activity-status" />
           </div>
         </CardContent>
@@ -319,12 +303,10 @@ export default function Settings() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            {language === 'ar' 
-              ? 'حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء.'
-              : 'Permanently delete your account and all associated data. This action cannot be undone.'}
+            {t("deleteAccountDescription", language)}
           </p>
           <Button variant="destructive">
-            {language === 'ar' ? 'حذف حسابي' : 'Delete My Account'}
+            {t("deleteMyAccount", language)}
           </Button>
         </CardContent>
       </Card>
@@ -335,7 +317,7 @@ export default function Settings() {
         onClick={handleSaveAllSettings}
       >
         <Save className="h-4 w-4" />
-        {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
+        {t("saveAllSettings", language)}
       </Button>
       
       {/* Custom Quote Manager Dialog */}

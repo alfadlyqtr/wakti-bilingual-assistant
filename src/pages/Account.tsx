@@ -93,12 +93,12 @@ export default function Account() {
         user_metadata: { full_name: name }
       });
       if (error) {
-        toast(language === 'ar' ? "فشل تحديث الاسم" : "Failed to update name");
+        toast(t("errorUpdatingName", language));
       } else {
-        toast.success(language === 'ar' ? "تم تحديث الملف الشخصي" : "Profile updated successfully");
+        toast.success(t("profileUpdated", language));
       }
     } catch (error) {
-      toast(language === 'ar' ? "فشل تحديث الملف الشخصي" : "Failed to update profile");
+      toast(t("errorUpdatingProfile", language));
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -111,12 +111,12 @@ export default function Account() {
     try {
       const error = await updateEmail(email);
       if (error) {
-        toast(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
+        toast(t("errorUpdatingEmail", language));
       } else {
-        toast.success(language === 'ar' ? "تم تحديث البريد الإلكتروني" : "Email updated successfully");
+        toast.success(t("emailUpdated", language));
       }
     } catch (error) {
-      toast(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
+      toast(t("errorUpdatingEmail", language));
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -126,7 +126,7 @@ export default function Account() {
     e.preventDefault();
     
     if (password !== confirmPassword) {
-      toast(language === 'ar' ? "كلمات السر غير متطابقة" : "Passwords do not match");
+      toast(t("passwordsDoNotMatch", language));
       return;
     }
     
@@ -135,14 +135,14 @@ export default function Account() {
     try {
       const error = await updatePassword(password);
       if (error) {
-        toast(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
+        toast(t("errorUpdatingPassword", language));
       } else {
-        toast.success(language === 'ar' ? "تم تحديث كلمة المرور" : "Password updated successfully");
+        toast.success(t("passwordUpdated", language));
         setPassword("");
         setConfirmPassword("");
       }
     } catch (error) {
-      toast(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
+      toast(t("errorUpdatingPassword", language));
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -153,7 +153,7 @@ export default function Account() {
       await signOut();
       navigate("/login");
     } catch (error) {
-      toast(language === 'ar' ? "فشل تسجيل الخروج" : "Failed to sign out");
+      toast(t("errorSigningOut", language));
     }
   };
   
@@ -172,7 +172,7 @@ export default function Account() {
       setCustomQuoteDialogOpen(true);
     }
     
-    toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
+    toast.success(t("quotePreferencesUpdated", language));
   };
   
   const handleQuoteFrequencyChange = (frequency: string) => {
@@ -180,13 +180,13 @@ export default function Account() {
     setQuotePreferences(newPreferences);
     saveQuotePreferences(newPreferences);
     
-    toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
+    toast.success(t("quotePreferencesUpdated", language));
   };
   
   const handleSaveAllSettings = () => {
     confirm({
-      title: language === 'ar' ? "حفظ جميع الإعدادات؟" : "Save all settings?",
-      description: language === 'ar' ? "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟" : "Are you sure you want to save all changes?",
+      title: t("saveAllSettingsQuestion", language),
+      description: t("saveAllSettingsConfirmation", language),
       onConfirm: () => {
         // Save widget visibility settings
         const widgetSettings = {
@@ -199,7 +199,7 @@ export default function Account() {
         localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
         localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
         
-        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+        toast.success(t("allSettingsSaved", language), {
           description: <Check className="h-4 w-4" />
         });
       }
@@ -210,16 +210,16 @@ export default function Account() {
     <PageContainer showHeader={false}>
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-6">
-          {language === 'ar' ? "حسابي" : "My Account"}
+          {t("account", language)}
         </h1>
         
         <Tabs defaultValue="account" className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="account">
-              {language === 'ar' ? "الحساب" : "Account"}
+              {t("account", language)}
             </TabsTrigger>
             <TabsTrigger value="settings">
-              {language === 'ar' ? "الإعدادات" : "Settings"}
+              {t("settings", language)}
             </TabsTrigger>
           </TabsList>
           
@@ -227,11 +227,9 @@ export default function Account() {
           <TabsContent value="account" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>{language === 'ar' ? "الملف الشخصي" : "Profile"}</CardTitle>
+                <CardTitle>{t("profile", language)}</CardTitle>
                 <CardDescription>
-                  {language === 'ar' 
-                    ? "إدارة معلومات الملف الشخصي الخاص بك."
-                    : "Manage your profile information."}
+                  {t("profileManagement", language)}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -239,7 +237,7 @@ export default function Account() {
                 
                 {/* Username - Read-only */}
                 <div className="grid gap-2">
-                  <Label htmlFor="username">{language === 'ar' ? "اسم المستخدم" : "Username"}</Label>
+                  <Label htmlFor="username">{t("username", language)}</Label>
                   <Input
                     id="username"
                     type="text"
@@ -248,16 +246,14 @@ export default function Account() {
                     className="bg-muted cursor-not-allowed"
                   />
                   <p className="text-xs text-muted-foreground">
-                    {language === 'ar' 
-                      ? "اسم المستخدم للحساب الخاص بك. لا يمكن تغييره."
-                      : "Your account username. Cannot be changed."}
+                    {t("usernameHelpText", language)}
                   </p>
                 </div>
                 
                 {/* Name */}
                 <form onSubmit={handleUpdateProfile}>
                   <div className="grid gap-2">
-                    <Label htmlFor="name">{language === 'ar' ? "الاسم" : "Name"}</Label>
+                    <Label htmlFor="name">{t("name", language)}</Label>
                     <Input
                       id="name"
                       type="text"
@@ -272,12 +268,8 @@ export default function Account() {
                       type="submit"
                     >
                       {isUpdatingProfile
-                        ? language === 'ar'
-                          ? "جاري التحديث..."
-                          : "Updating..."
-                        : language === 'ar'
-                          ? "تحديث الاسم"
-                          : "Update Name"}
+                        ? t("updating", language)
+                        : t("updateName", language)}
                     </Button>
                   </div>
                 </form>
@@ -285,7 +277,7 @@ export default function Account() {
                 {/* Email */}
                 <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
                   <div className="grid gap-2">
-                    <Label htmlFor="email">{language === 'ar' ? "البريد الإلكتروني" : "Email"}</Label>
+                    <Label htmlFor="email">{t("email", language)}</Label>
                     <Input
                       id="email"
                       type="email"
@@ -300,12 +292,8 @@ export default function Account() {
                       type="submit"
                     >
                       {isUpdatingEmail
-                        ? language === 'ar'
-                          ? "جاري التحديث..."
-                          : "Updating..."
-                        : language === 'ar'
-                          ? "تحديث البريد الإلكتروني"
-                          : "Update Email"}
+                        ? t("updating", language)
+                        : t("updateEmail", language)}
                     </Button>
                   </div>
                 </form>
@@ -314,7 +302,7 @@ export default function Account() {
                 <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
                   <div className="space-y-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="password">{language === 'ar' ? "كلمة المرور" : "Password"}</Label>
+                      <Label htmlFor="password">{t("password", language)}</Label>
                       <Input
                         id="password"
                         type="password"
@@ -324,7 +312,7 @@ export default function Account() {
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="confirm-password">{language === 'ar' ? "تأكيد كلمة المرور" : "Confirm Password"}</Label>
+                      <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
                       <Input
                         id="confirm-password"
                         type="password"
@@ -340,12 +328,8 @@ export default function Account() {
                       type="submit"
                     >
                       {isUpdatingPassword
-                        ? language === 'ar'
-                          ? "جاري التحديث..."
-                          : "Updating..."
-                        : language === 'ar'
-                          ? "تحديث كلمة المرور"
-                          : "Update Password"}
+                        ? t("updating", language)
+                        : t("updatePassword", language)}
                     </Button>
                   </div>
                 </form>
@@ -354,14 +338,14 @@ export default function Account() {
             
             <Card>
               <CardHeader>
-                <CardTitle>{language === 'ar' ? "خيارات الحساب" : "Account Options"}</CardTitle>
+                <CardTitle>{t("accountOptions", language)}</CardTitle>
               </CardHeader>
               <CardContent>
                 <Button 
                   variant="destructive" 
                   onClick={handleSignout}
                 >
-                  {language === 'ar' ? "تسجيل الخروج" : "Sign Out"}
+                  {t("logout", language)}
                 </Button>
               </CardContent>
             </Card>
@@ -378,19 +362,19 @@ export default function Account() {
               <CardContent className="space-y-4">
                 {/* Theme & Language Toggles */}
                 <div className="flex justify-between items-center">
-                  <span>{language === "en" ? "Language" : "اللغة"}</span>
+                  <span>{t("language", language)}</span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={toggleLanguage}
                     className="h-9 px-3 rounded-full text-sm"
                   >
-                    {language === "en" ? "العربية" : "English"}
+                    {language === "en" ? t("arabic", language) : t("english", language)}
                   </Button>
                 </div>
                 
                 <div className="flex justify-between items-center">
-                  <span>{language === "ar" ? "السمة" : "Theme"}</span>
+                  <span>{t("theme", language)}</span>
                   <Button
                     variant="outline"
                     size="sm"
@@ -434,12 +418,12 @@ export default function Account() {
             {/* Quote Settings */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>{language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}</CardTitle>
+                <CardTitle>{t("dailyQuoteSettings", language)}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">
-                    {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
+                    {t("quoteCategory", language)}
                   </label>
                   <Select 
                     value={quotePreferences.category} 
@@ -451,24 +435,7 @@ export default function Account() {
                     <SelectContent>
                       {categories.map((category) => (
                         <SelectItem key={category} value={category}>
-                          {language === 'ar' ? 
-                            (
-                              category === 'motivational' ? 'تحفيزي' : 
-                              category === 'islamic' ? 'إسلامي' : 
-                              category === 'positive' ? 'إيجابي' : 
-                              category === 'health' ? 'صحي' : 
-                              category === 'mixed' ? 'متنوع' : 
-                              category === 'custom' ? 'مخصص' :
-                              category === 'productivity' ? 'إنتاجية' :
-                              category === 'discipline' ? 'انضباط' :
-                              category === 'gratitude' ? 'امتنان' :
-                              category === 'leadership' ? 'قيادة' :
-                              category
-                            ) : 
-                            (
-                              category.charAt(0).toUpperCase() + category.slice(1)
-                            )
-                          }
+                          {t(category, language)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -477,7 +444,7 @@ export default function Account() {
 
                 <div className="grid gap-2">
                   <label className="text-sm font-medium">
-                    {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
+                    {t("quoteChangeFrequency", language)}
                   </label>
                   <Select 
                     value={quotePreferences.frequency}
@@ -488,16 +455,16 @@ export default function Account() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="2xday">
-                        {language === 'ar' ? 'مرتان في اليوم' : '2 times a day'}
+                        {t("twiceDaily", language)}
                       </SelectItem>
                       <SelectItem value="4xday">
-                        {language === 'ar' ? '4 مرات في اليوم' : '4 times a day'}
+                        {t("fourTimesDaily", language)}
                       </SelectItem>
                       <SelectItem value="6xday">
-                        {language === 'ar' ? '6 مرات في اليوم' : '6 times a day'}
+                        {t("sixTimesDaily", language)}
                       </SelectItem>
                       <SelectItem value="appStart">
-                        {language === 'ar' ? 'مع كل بدء تشغيل للتطبيق' : 'Every app start'}
+                        {t("everyAppStart", language)}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -512,11 +479,11 @@ export default function Account() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'إشعارات الدفع' : 'Push Notifications'}</span>
+                  <span>{t("pushNotifications", language)}</span>
                   <Switch defaultChecked id="push-notifications" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'إشعارات البريد الإلكتروني' : 'Email Notifications'}</span>
+                  <span>{t("emailNotifications", language)}</span>
                   <Switch id="email-notifications" />
                 </div>
               </CardContent>
@@ -529,19 +496,19 @@ export default function Account() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'أداة المهام المصغرة' : 'Tasks Widget'}</span>
+                  <span>{t("tasksWidget", language)}</span>
                   <Switch defaultChecked id="tasks-widget" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'أداة التقويم المصغرة' : 'Calendar Widget'}</span>
+                  <span>{t("calendarWidget", language)}</span>
                   <Switch defaultChecked id="calendar-widget" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'أداة التذكيرات المصغرة' : 'Reminders Widget'}</span>
+                  <span>{t("remindersWidget", language)}</span>
                   <Switch defaultChecked id="reminders-widget" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'أداة الاقتباس اليومي المصغرة' : 'Daily Quote Widget'}</span>
+                  <span>{t("dailyQuoteWidget", language)}</span>
                   <Switch defaultChecked id="quote-widget" />
                 </div>
               </CardContent>
@@ -554,11 +521,11 @@ export default function Account() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'رؤية الملف الشخصي' : 'Profile Visibility'}</span>
+                  <span>{t("profileVisibility", language)}</span>
                   <Switch defaultChecked id="profile-visibility" />
                 </div>
                 <div className="flex justify-between items-center">
-                  <span>{language === 'ar' ? 'حالة النشاط' : 'Activity Status'}</span>
+                  <span>{t("activityStatus", language)}</span>
                   <Switch defaultChecked id="activity-status" />
                 </div>
               </CardContent>
@@ -571,12 +538,10 @@ export default function Account() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {language === 'ar' 
-                    ? 'حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء.'
-                    : 'Permanently delete your account and all associated data. This action cannot be undone.'}
+                  {t("deleteAccountDescription", language)}
                 </p>
                 <Button variant="destructive">
-                  {language === 'ar' ? 'حذف حسابي' : 'Delete My Account'}
+                  {t("deleteMyAccount", language)}
                 </Button>
               </CardContent>
             </Card>
@@ -587,7 +552,7 @@ export default function Account() {
               onClick={handleSaveAllSettings}
             >
               <Save className="h-4 w-4" />
-              {language === 'ar' ? 'حفظ جميع الإعدادات' : 'Save All Settings'}
+              {t("saveAllSettings", language)}
             </Button>
           </TabsContent>
         </Tabs>

@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -257,7 +256,7 @@ export type TranslationKey =
   | "errorUnblockingContact"
   | "errorLoadingBlockedUsers"
   | "noBlockedUsers"
-  | "noBlockedUsersDescription"  // Added
+  | "noBlockedUsersDescription"  
   | "unblock"
   | "errorCreatingConversation"
   | "errorBlockingContact"
@@ -294,15 +293,70 @@ export type TranslationKey =
   | "messagesDelivered"
   | "policiesUpdated"
   // Contact settings
-  | "appearance" // Added
-  | "appearanceSettings" // Added
-  | "contactsSettings" // Added
-  | "contactsSettingsDescription" // Added
-  | "autoApproveRequests" // Added
-  | "autoApproveExplanation" // Added
-  | "settingsUpdated" // Added
-  | "contactSettingsUpdated" // Added
-  | "errorUpdatingSettings" // Added
-  | "requests" // Added
-  | "blocked" // Added
-  | "waitingForRequests"; // Added
+  | "appearance"
+  | "appearanceSettings"
+  | "contactsSettings"
+  | "contactsSettingsDescription"
+  | "autoApproveRequests"
+  | "autoApproveExplanation"
+  | "settingsUpdated"
+  | "contactSettingsUpdated"
+  | "errorUpdatingSettings"
+  | "requests"
+  | "blocked"
+  | "waitingForRequests"
+  // Daily quote settings
+  | "dailyQuoteSettings"
+  | "quoteCategory"
+  | "quoteChangeFrequency"
+  | "manageCustomQuotes"
+  | "twiceDaily"
+  | "fourTimesDaily"
+  | "sixTimesDaily"
+  | "everyAppStart"
+  | "saveAllSettingsQuestion"
+  | "saveAllSettingsConfirmation"
+  | "allSettingsSaved"
+  | "saveAllSettings"
+  | "pushNotifications"
+  | "emailNotifications"
+  | "tasksWidget"
+  | "calendarWidget"
+  | "remindersWidget"
+  | "dailyQuoteWidget"
+  | "profileVisibility"
+  | "activityStatus"
+  | "deleteMyAccount"
+  | "deleteAccountDescription"
+  | "quotePreferencesUpdated"
+  // Quote categories
+  | "motivational"
+  | "islamic"
+  | "positive"
+  | "health"
+  | "mixed"
+  | "custom"
+  | "productivity"
+  | "discipline"
+  | "gratitude"
+  | "leadership"
+  | "profileManagement"
+  | "usernameHelpText"
+  | "updating"
+  | "updateName"
+  | "updateEmail"
+  | "updatePassword"
+  | "passwordsDoNotMatch"
+  | "profileUpdated"
+  | "emailUpdated"
+  | "passwordUpdated"
+  | "errorUpdatingName"
+  | "errorUpdatingProfile"
+  | "errorUpdatingEmail"
+  | "errorUpdatingPassword"
+  | "errorSigningOut"
+  | "accountOptions"
+  | "profile"
+  | "profileImage"
+  | "changeImage"
+  | "profileImageUpdated";

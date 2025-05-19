@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
+import { t } from "@/utils/translations";
 
 export const ProfileImageUpload = () => {
   const { user, updateProfile } = useAuth();
@@ -55,7 +56,7 @@ export const ProfileImageUpload = () => {
       const avatarUrl = storageData.publicUrl;
       
       // Update user metadata with the correct structure expected by Supabase Auth
-      const { user: updatedUser, error } = await updateProfile({
+      const { error } = await updateProfile({
         user_metadata: { 
           avatar_url: avatarUrl 
         }
@@ -66,9 +67,9 @@ export const ProfileImageUpload = () => {
       }
       
       setAvatarUrl(avatarUrl);
-      toast.success(language === 'ar' ? "تم تحميل الصورة بنجاح" : "Profile image updated successfully");
+      toast.success(t("profileImageUpdated", language));
     } catch (error: any) {
-      toast.error(language === 'ar' ? `خطأ: ${error.message}` : `Error: ${error.message}`);
+      toast.error(`${t("error", language)}: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -77,7 +78,7 @@ export const ProfileImageUpload = () => {
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar className="w-24 h-24">
-        <AvatarImage src={avatarUrl} alt="Profile image" />
+        <AvatarImage src={avatarUrl} alt={t("profileImage", language)} />
         <AvatarFallback className="text-lg">{getUserInitials()}</AvatarFallback>
       </Avatar>
       
@@ -91,8 +92,8 @@ export const ProfileImageUpload = () => {
         >
           <Camera className="h-4 w-4 mr-2" />
           {uploading 
-            ? (language === 'ar' ? "جاري التحميل..." : "Uploading...") 
-            : (language === 'ar' ? "تغيير الصورة" : "Change Image")}
+            ? t("uploading", language)
+            : t("changeImage", language)}
           <input
             id="avatar-upload"
             type="file"

@@ -2,6 +2,7 @@
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Moon, Sun } from "lucide-react";
+import { t } from "@/utils/translations";
 
 export function ThemeLanguageToggle() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -21,8 +22,8 @@ export function ThemeLanguageToggle() {
         )}
         <span className="sr-only">
           {theme === "dark"
-            ? (language === "en" ? "Light Mode" : "الوضع الفاتح")
-            : (language === "en" ? "Dark Mode" : "الوضع الداكن")}
+            ? t("lightMode", language)
+            : t("darkMode", language)}
         </span>
       </Button>
       <Button
@@ -31,7 +32,7 @@ export function ThemeLanguageToggle() {
         onClick={toggleLanguage}
         className="h-9 px-3 rounded-full text-sm"
       >
-        {language === "en" ? "العربية" : "English"}
+        {language === "en" ? t("arabic", language) : t("english", language)}
       </Button>
     </div>
   );
