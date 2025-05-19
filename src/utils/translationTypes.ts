@@ -1,3 +1,4 @@
+
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -359,4 +360,9 @@ export type TranslationKey =
   | "profile"
   | "profileImage"
   | "changeImage"
-  | "profileImageUpdated";
+  | "profileImageUpdated"
+  // Add the missing translation keys
+  | "currentPassword"
+  | "newPassword"
+  | "currentPasswordRequired";
+

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,7 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
-import { deleteUserAccount } from "@/utils/auth";
+import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
 import { 
   Dialog,
   DialogContent,
