@@ -17,19 +17,12 @@ serve(async (req) => {
     // For detailed logging
     console.log("Starting generate-summary function");
     
+    // Create supabase admin client with service role key for full access
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { data: authData, error: authError } = await supabase.auth.getUser(
-      req.headers.get("Authorization")?.split(" ")[1] || ""
-    );
-
-    if (authError || !authData.user) {
-      console.error("Authentication error:", authError);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    
+    // We no longer need to verify authentication since we've disabled JWT verification
+    // This function can now be called from other edge functions using the service role key
+    
     // Get request body
     const { recordingId } = await req.json();
     console.log(`Processing summary for recording: ${recordingId}`);

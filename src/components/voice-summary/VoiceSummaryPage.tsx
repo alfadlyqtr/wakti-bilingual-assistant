@@ -5,11 +5,12 @@ import { useTheme } from "@/providers/ThemeProvider";
 import VoiceSummaryArchive from "./VoiceSummaryArchive";
 import RecordingDialog from "./RecordingDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Plus, Loader2, RefreshCw, AlertCircle, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getRecordingStatus } from "@/lib/utils";
+import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady } from "@/services/voiceSummaryService";
 
 export default function VoiceSummaryPage() {
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
@@ -18,14 +19,13 @@ export default function VoiceSummaryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [stuckRecordings, setStuckRecordings] = useState<any[]>([]);
+  const [recoverableRecordings, setRecoverableRecordings] = useState<any[]>([]);
+  const [isRecovering, setIsRecovering] = useState(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Maximum processing time before considering a recording as stuck (in milliseconds)
-  const MAX_PROCESSING_TIME = 10 * 60 * 1000; // 10 minutes
-
-  // Fetch recordings - separating ready, in-progress, and stuck recordings
+  // Fetch recordings - separating ready, in-progress, stuck, and recoverable recordings
   const fetchRecordings = async (silent = false) => {
     try {
       if (!silent) {
@@ -36,10 +36,7 @@ export default function VoiceSummaryPage() {
       
       console.log("[VoiceSummaryPage] Fetching recordings");
       
-      const { data, error } = await supabase
-        .from('voice_summaries')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { ready, processing, stuck, recoverable, error } = await getAllRecordings(true);
           
       if (error) {
         console.error('Error fetching recordings:', error);
@@ -52,70 +49,12 @@ export default function VoiceSummaryPage() {
         return;
       }
       
-      // Validate each recording before setting state
-      const validRecordings = Array.isArray(data) ? data.filter(rec => rec && rec.id) : [];
-      console.log(`[VoiceSummaryPage] Fetched ${validRecordings.length} recordings`);
+      console.log(`[VoiceSummaryPage] Ready: ${ready.length}, Processing: ${processing.length}, Stuck: ${stuck.length}, Recoverable: ${recoverable.length}`);
       
-      // Get current time for stuck recording detection
-      const now = new Date().getTime();
-      
-      // Split recordings into ready, in-progress and stuck
-      const readyRecordings = validRecordings.filter(recording => {
-        // Primarily use the is_ready flag 
-        if (recording.is_ready === true) {
-          return true;
-        }
-        
-        // Fall back to checking status using utility function for backwards compatibility
-        const status = getRecordingStatus(recording);
-        return status === 'complete';
-      });
-      
-      const processingAndStuckRecordings = validRecordings.filter(recording => {
-        // If is_ready is explicitly false, it's in progress
-        if (recording.is_ready === false) {
-          return true;
-        }
-        
-        // Check for any active processing flags
-        if (
-          recording.is_processing_transcript === true || 
-          recording.is_processing_summary === true || 
-          recording.is_processing_tts === true
-        ) {
-          return true;
-        }
-        
-        // If is_ready is not defined, check status using utility function
-        if (recording.is_ready === undefined || recording.is_ready === null) {
-          const status = getRecordingStatus(recording);
-          return status !== 'complete';
-        }
-        
-        return false;
-      });
-      
-      // Separate stuck recordings from regular processing ones
-      const stuck: any[] = [];
-      const processing: any[] = [];
-      
-      processingAndStuckRecordings.forEach(recording => {
-        // Check if the recording has been processing for too long
-        const createdAt = new Date(recording.created_at).getTime();
-        const processingTime = now - createdAt;
-        
-        if (processingTime > MAX_PROCESSING_TIME) {
-          stuck.push(recording);
-        } else {
-          processing.push(recording);
-        }
-      });
-      
-      console.log(`[VoiceSummaryPage] Ready: ${readyRecordings.length}, Processing: ${processing.length}, Stuck: ${stuck.length}`);
-      
-      setRecordings(readyRecordings);
+      setRecordings(ready);
       setInProgressRecordings(processing);
       setStuckRecordings(stuck);
+      setRecoverableRecordings(recoverable);
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
@@ -141,12 +80,9 @@ export default function VoiceSummaryPage() {
       const stuckIds = stuckRecordings.map(recording => recording.id);
       
       // Delete stuck recordings
-      const { error } = await supabase
-        .from('voice_summaries')
-        .delete()
-        .in('id', stuckIds);
+      const { success, error } = await deleteStuckRecordings(stuckIds);
         
-      if (error) {
+      if (!success) {
         console.error('Error deleting stuck recordings:', error);
         toast({
           title: language === 'ar' ? 'فشل في حذف التسجيلات العالقة' : 'Failed to delete stuck recordings',
@@ -168,6 +104,44 @@ export default function VoiceSummaryPage() {
       console.error('Error in cleanupStuckRecordings:', err);
     } finally {
       setIsRefreshing(false);
+    }
+  };
+  
+  // Helper function to recover stalled recordings that have transcripts but aren't marked ready
+  const recoverStuckRecordings = async () => {
+    if (recoverableRecordings.length === 0) return;
+    
+    try {
+      setIsRecovering(true);
+      
+      // Get IDs of recoverable recordings
+      const recoverableIds = recoverableRecordings.map(recording => recording.id);
+      
+      // Mark recordings as ready
+      const { success, count, error } = await markRecordingsAsReady(recoverableIds);
+        
+      if (!success) {
+        console.error('Error recovering recordings:', error);
+        toast({
+          title: language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings',
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Refresh the recordings
+      await fetchRecordings(true);
+      
+      toast({
+        title: language === 'ar' 
+          ? `تم استعادة ${count} تسجيلات` 
+          : `Recovered ${count} recordings`,
+        variant: "default"
+      });
+    } catch (err) {
+      console.error('Error in recoverStuckRecordings:', err);
+    } finally {
+      setIsRecovering(false);
     }
   };
 
@@ -198,6 +172,7 @@ export default function VoiceSummaryPage() {
     setRecordings(recordings.filter(recording => recording.id !== recordingId));
     setInProgressRecordings(inProgressRecordings.filter(recording => recording.id !== recordingId));
     setStuckRecordings(stuckRecordings.filter(recording => recording.id !== recordingId));
+    setRecoverableRecordings(recoverableRecordings.filter(recording => recording.id !== recordingId));
   };
   
   const handleManualRefresh = () => {
@@ -235,6 +210,44 @@ export default function VoiceSummaryPage() {
             </Button>
           </div>
         </div>
+
+        {/* Show recoverable recordings with recovery option */}
+        {recoverableRecordings.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-amber-500 flex items-center gap-1 mb-2">
+              <Wrench className="h-4 w-4" />
+              {language === 'ar' ? 'تسجيلات قابلة للاستعادة' : 'Recoverable Recordings'}
+            </h3>
+            <div className="border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-900/30 rounded-md p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-amber-500" />
+                  <span className="text-sm">
+                    {language === 'ar' 
+                      ? `${recoverableRecordings.length} تسجيل(ات) يمكن استعادتها`
+                      : `${recoverableRecordings.length} recording(s) can be recovered`}
+                  </span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={recoverStuckRecordings}
+                  disabled={isRecovering}
+                  className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
+                >
+                  {isRecovering ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      {language === 'ar' ? 'جارٍ الاستعادة...' : 'Recovering...'}
+                    </>
+                  ) : (
+                    language === 'ar' ? 'استعادة التسجيلات' : 'Recover Recordings'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Show stuck recordings with warning */}
         {stuckRecordings.length > 0 && (

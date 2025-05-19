@@ -31,6 +31,42 @@ export async function deleteStuckRecordings(recordingIds: string[]): Promise<{su
 }
 
 /**
+ * Mark recordings as ready if they have both transcript and summary but aren't marked ready
+ * @param recordingIds Array of recording IDs to mark as ready
+ * @returns Promise with success status and count of updated recordings
+ */
+export async function markRecordingsAsReady(recordingIds: string[]): Promise<{success: boolean, count: number, error?: any}> {
+  try {
+    if (!recordingIds || recordingIds.length === 0) {
+      return { success: false, count: 0, error: "No recording IDs provided" };
+    }
+
+    // Update the recordings to mark them as ready
+    const { data, error } = await supabase
+      .from('voice_summaries')
+      .update({
+        is_ready: true,
+        is_processing_transcript: false,
+        is_processing_summary: false,
+        is_processing_tts: false,
+        ready_at: new Date().toISOString()
+      })
+      .in('id', recordingIds)
+      .select();
+
+    if (error) {
+      console.error("Error marking recordings as ready:", error);
+      return { success: false, count: 0, error };
+    }
+
+    return { success: true, count: data?.length || 0 };
+  } catch (error) {
+    console.error("Exception in markRecordingsAsReady:", error);
+    return { success: false, count: 0, error };
+  }
+}
+
+/**
  * Retrieve all recordings with status information
  * @param includeStuck Whether to include stuck recordings
  * @returns Promise with recordings data
@@ -39,6 +75,7 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
   ready: any[],
   processing: any[],
   stuck: any[],
+  recoverable: any[],
   error?: any
 }> {
   try {
@@ -46,7 +83,8 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
     const result = {
       ready: [],
       processing: [],
-      stuck: []
+      stuck: [],
+      recoverable: []
     };
 
     // Fetch all recordings
@@ -92,7 +130,10 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
         const createdAt = new Date(recording.created_at).getTime();
         const processingTime = now - createdAt;
         
-        if (processingTime > MAX_PROCESSING_TIME && includeStuck) {
+        // Check if it's recoverable (has transcript but no summary or vice versa)
+        if (recording.transcript && !recording.is_ready) {
+          result.recoverable.push(recording);
+        } else if (processingTime > MAX_PROCESSING_TIME && includeStuck) {
           result.stuck.push(recording);
         } else {
           result.processing.push(recording);
@@ -103,6 +144,6 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
     return result;
   } catch (error) {
     console.error("Exception in getAllRecordings:", error);
-    return { ready: [], processing: [], stuck: [], error };
+    return { ready: [], processing: [], stuck: [], recoverable: [], error };
   }
 }

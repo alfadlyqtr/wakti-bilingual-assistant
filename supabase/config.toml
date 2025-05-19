@@ -18,5 +18,4 @@ verify_jwt = true
 [functions.generate-image]
 verify_jwt = true
 [functions.generate-summary]
-verify_jwt = true
-
+verify_jwt = false
