@@ -40,16 +40,40 @@ export default function SummaryAudioPlayer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<number | null>(null);
 
+  // Initialize audio element when component mounts or when audioUrl changes
   useEffect(() => {
+    if (audioUrl && !audioRef.current) {
+      const audio = new Audio(audioUrl);
+      audio.onloadedmetadata = () => {
+        setDuration(audio.duration);
+      };
+      audio.onended = () => {
+        setIsPlaying(false);
+        stopProgressTimer();
+        setProgress(0);
+      };
+      audio.onpause = () => {
+        setIsPlaying(false);
+        stopProgressTimer();
+      };
+      audio.onplay = () => {
+        setIsPlaying(true);
+        startProgressTimer();
+      };
+      audioRef.current = audio;
+    }
+    
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
       }
       if (intervalRef.current) {
         window.clearInterval(intervalRef.current);
       }
     };
-  }, []);
+  }, [audioUrl]);
 
   // Update audio progress
   const startProgressTimer = () => {
@@ -97,6 +121,7 @@ export default function SummaryAudioPlayer({
           },
           body: JSON.stringify({
             recordingId,
+            text: summaryText, // Add text explicitly
             voiceGender,
             language: audioLanguage,
           }),
@@ -104,11 +129,18 @@ export default function SummaryAudioPlayer({
       );
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to generate audio");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to generate audio");
       }
 
       const result = await response.json();
+      
+      // Create audio element with the new URL
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      
       setAudioUrl(result.audioUrl);
       
       if (onAudioGenerated) {
@@ -133,6 +165,27 @@ export default function SummaryAudioPlayer({
   };
 
   const handlePlay = () => {
+    if (!audioRef.current && audioUrl) {
+      const audio = new Audio(audioUrl);
+      audio.onloadedmetadata = () => {
+        setDuration(audio.duration);
+      };
+      audio.onended = () => {
+        setIsPlaying(false);
+        stopProgressTimer();
+        setProgress(0);
+      };
+      audio.onpause = () => {
+        setIsPlaying(false);
+        stopProgressTimer();
+      };
+      audio.onplay = () => {
+        setIsPlaying(true);
+        startProgressTimer();
+      };
+      audioRef.current = audio;
+    }
+    
     if (audioRef.current) {
       audioRef.current.play()
         .then(() => {
@@ -181,6 +234,12 @@ export default function SummaryAudioPlayer({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      toast.success(
+        language === "ar"
+          ? "جارٍ تنزيل الملف الصوتي"
+          : "Downloading audio file"
+      );
     }
   };
 
@@ -254,30 +313,6 @@ export default function SummaryAudioPlayer({
 
       {audioUrl && (
         <div className="flex flex-col space-y-2 border rounded-md p-3">
-          <audio
-            ref={audioRef}
-            src={audioUrl}
-            onEnded={() => {
-              setIsPlaying(false);
-              stopProgressTimer();
-              setProgress(0);
-            }}
-            onPause={() => {
-              setIsPlaying(false);
-              stopProgressTimer();
-            }}
-            onPlay={() => {
-              setIsPlaying(true);
-              startProgressTimer();
-            }}
-            onLoadedMetadata={(e) => {
-              if (audioRef.current) {
-                setDuration(audioRef.current.duration);
-              }
-            }}
-            className="hidden"
-          />
-          
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-muted-foreground">
               {formatTime(progress)}

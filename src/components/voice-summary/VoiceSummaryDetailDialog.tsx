@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FileText as FileIcon } from "lucide-react";
+import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,14 +12,13 @@ import { formatRecordingTime } from "@/utils/audioUtils";
 import { Highlight } from "./HighlightedTimestamps";
 import SummaryAudioPlayer from "./SummaryAudioPlayer";
 import { toast } from "sonner";
+import { generateSummaryPDF } from "@/utils/pdfUtils";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useMediaQuery } from "@/hooks/use-mobile";
 
 interface VoiceSummaryData {
   id: string;
@@ -51,12 +51,12 @@ export default function VoiceSummaryDetailDialog({
   console.log('VoiceSummaryDetailDialog render:', { recordingId, isOpen });
   
   const { theme, language } = useTheme();
-  const isMobile = useMediaQuery("(max-width: 640px)");
   
   const [summary, setSummary] = useState<VoiceSummaryData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingTranscript, setIsGeneratingTranscript] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
@@ -301,10 +301,54 @@ export default function VoiceSummaryDetailDialog({
     setIsPlaying(false);
   };
 
-  const handleExportPDF = () => {
-    toast.info(language === 'ar' 
-      ? 'سيتم تنفيذ تصدير PDF في تحديث قادم'
-      : 'PDF export will be implemented in a future update');
+  const handleExportPDF = async () => {
+    if (!summary) return;
+    
+    try {
+      setIsExportingPDF(true);
+      
+      // Generate PDF using our utility
+      const pdfBlob = generateSummaryPDF({
+        title: summary.title,
+        content: {
+          transcript: summary.transcript,
+          summary: summary.summary
+        },
+        metadata: {
+          createdAt: summary.created_at,
+          expiresAt: summary.expires_at,
+          type: summary.type,
+          host: summary.host,
+          attendees: summary.attendees,
+          location: summary.location
+        },
+        language: language === 'ar' ? 'ar' : 'en'
+      });
+      
+      // Create a download link for the PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${summary.title.replace(/\s+/g, '-')}-summary.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success(
+        language === 'ar'
+          ? 'تم تصدير ملف PDF بنجاح'
+          : 'PDF exported successfully'
+      );
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error(
+        language === 'ar'
+          ? 'فشل في تصدير ملف PDF'
+          : 'Failed to export PDF'
+      );
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
   
   const calculateDaysRemaining = (expiresAt: string): number => {
@@ -430,10 +474,13 @@ export default function VoiceSummaryDetailDialog({
           <Button
             variant="outline"
             onClick={handleExportPDF}
+            disabled={isExportingPDF || !summary.transcript}
             className="gap-1"
           >
-            <FileIcon className="h-4 w-4" />
-            {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+            <FileText className="h-4 w-4" />
+            {isExportingPDF 
+              ? (language === 'ar' ? 'جارٍ التصدير...' : 'Exporting...')
+              : (language === 'ar' ? 'تصدير PDF' : 'Export PDF')}
           </Button>
         </div>
         
@@ -624,7 +671,6 @@ export default function VoiceSummaryDetailDialog({
     );
   };
 
-  // Temporarily simplify to just use Dialog for testing
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto z-50">
@@ -635,33 +681,4 @@ export default function VoiceSummaryDetailDialog({
       </DialogContent>
     </Dialog>
   );
-
-  /* Original conditional rendering that we'll restore after debugging
-  // Use a Sheet on mobile and Dialog on desktop
-  if (isMobile) {
-    return (
-      <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent className="w-full p-0 sm:max-w-full overflow-y-auto">
-          <SheetHeader className="p-4 border-b sticky top-0 bg-background z-10">
-            <SheetTitle>{summary?.title || (language === 'ar' ? 'تفاصيل التسجيل' : 'Recording Details')}</SheetTitle>
-          </SheetHeader>
-          <div className="p-4 overflow-y-auto h-[calc(100vh-80px)]">
-            {renderContent()}
-          </div>
-        </SheetContent>
-      </Sheet>
-    );
-  }
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{summary?.title || (language === 'ar' ? 'تفاصيل التسجيل' : 'Recording Details')}</DialogTitle>
-        </DialogHeader>
-        {renderContent()}
-      </DialogContent>
-    </Dialog>
-  );
-  */
 }

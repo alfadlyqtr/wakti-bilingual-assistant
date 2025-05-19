@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText, FileText as FileIcon } from "lucide-react";
+import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -13,6 +14,7 @@ import { formatRecordingTime } from "@/utils/audioUtils";
 import { Highlight } from "./HighlightedTimestamps";
 import SummaryAudioPlayer from "./SummaryAudioPlayer";
 import { toast } from "sonner";
+import { generateSummaryPDF } from "@/utils/pdfUtils";
 
 interface VoiceSummaryData {
   id: string;
@@ -41,6 +43,7 @@ export default function VoiceSummaryDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [isGeneratingTranscript, setIsGeneratingTranscript] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
@@ -278,12 +281,54 @@ export default function VoiceSummaryDetail() {
     setIsPlaying(false);
   };
 
-  const handleExportPDF = () => {
-    // This is a placeholder for the PDF export functionality
-    // Implement PDF export functionality in a future update
-    toast.info(language === 'ar' 
-      ? 'سيتم تنفيذ تصدير PDF في تحديث قادم'
-      : 'PDF export will be implemented in a future update');
+  const handleExportPDF = async () => {
+    if (!summary) return;
+    
+    try {
+      setIsExportingPDF(true);
+      
+      // Generate PDF using our utility
+      const pdfBlob = generateSummaryPDF({
+        title: summary.title,
+        content: {
+          transcript: summary.transcript,
+          summary: summary.summary
+        },
+        metadata: {
+          createdAt: summary.created_at,
+          expiresAt: summary.expires_at,
+          type: summary.type,
+          host: summary.host,
+          attendees: summary.attendees,
+          location: summary.location
+        },
+        language: language === 'ar' ? 'ar' : 'en'
+      });
+      
+      // Create a download link for the PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${summary.title.replace(/\s+/g, '-')}-summary.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success(
+        language === 'ar'
+          ? 'تم تصدير ملف PDF بنجاح'
+          : 'PDF exported successfully'
+      );
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      toast.error(
+        language === 'ar'
+          ? 'فشل في تصدير ملف PDF'
+          : 'Failed to export PDF'
+      );
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
   
   const calculateDaysRemaining = (expiresAt: string): number => {
@@ -422,10 +467,13 @@ export default function VoiceSummaryDetail() {
         <Button
           variant="outline"
           onClick={handleExportPDF}
+          disabled={isExportingPDF || !summary.transcript}
           className="gap-1"
         >
-          <FileIcon className="h-4 w-4" />
-          {language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+          <FileText className="h-4 w-4" />
+          {isExportingPDF 
+            ? (language === 'ar' ? 'جارٍ التصدير...' : 'Exporting...')
+            : (language === 'ar' ? 'تصدير PDF' : 'Export PDF')}
         </Button>
       </div>
       
