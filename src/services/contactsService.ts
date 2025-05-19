@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Contact {
@@ -37,45 +36,38 @@ export async function getContacts() {
 
   const userId = session.session.user.id;
 
-  // Get contacts where current user is either the requester or the recipient
-  const { data: contacts, error } = await supabase
-    .from("contacts")
-    .select(`
-      id,
-      user_id,
-      contact_id,
-      status,
-      created_at,
-      profiles(
-        display_name,
-        username,
-        avatar_url
-      )
-    `)
-    .or(`user_id.eq.${userId},contact_id.eq.${userId}`)
-    .eq("status", "approved")
-    .filter('contact_id', 'in', (qb) => {
-      qb.select('id').from('profiles');
-    });
-
-  if (error) {
-    console.error("Error fetching contacts:", error);
-    throw error;
+  // Step 1: Get contact IDs from the contacts table
+  const { data: rows, error: err1 } = await supabase
+    .from('contacts')
+    .select('contact_id')
+    .eq('user_id', userId)
+    .eq('status', 'approved');
+  
+  if (err1) {
+    console.error("Error fetching contacts:", err1);
+    throw err1;
   }
 
-  // Transform data to normalize the contact structure
-  return contacts.map((contact) => {
-    // If current user is the contact_id, then the other user is user_id
-    const isCurrentUserContact = contact.contact_id === userId;
-    const contactId = isCurrentUserContact ? contact.user_id : contact.contact_id;
-    
-    // We need to fetch profile for the other user
-    return {
-      ...contact,
-      contact_id: contactId,
-      profile: contact.profiles
-    };
-  });
+  const ids = rows.map(r => r.contact_id);
+  if (!ids.length) return [];
+
+  // Step 2: Get profiles for those IDs
+  const { data: profiles, error: err2 } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', ids);
+  
+  if (err2) {
+    console.error("Error fetching contact profiles:", err2);
+    throw err2;
+  }
+
+  // Transform data to match expected format
+  return profiles.map(profile => ({
+    id: profile.id,
+    contact_id: profile.id,
+    profile: profile
+  }));
 }
 
 // Get all pending contact requests for the current user
@@ -87,33 +79,51 @@ export async function getContactRequests() {
 
   const userId = session.session.user.id;
 
-  // Only get requests where current user is the recipient
-  const { data: requests, error } = await supabase
-    .from("contacts")
-    .select(`
-      id,
-      user_id,
-      contact_id,
-      status,
-      created_at,
-      profiles(
-        display_name,
-        username,
-        avatar_url
-      )
-    `)
-    .eq("contact_id", userId)
-    .eq("status", "pending")
-    .filter('user_id', 'in', (qb) => {
-      qb.select('id').from('profiles');
-    });
-
-  if (error) {
-    console.error("Error fetching contact requests:", error);
-    throw error;
+  // Step 1: Get user IDs of people who sent requests
+  const { data: rows, error: err1 } = await supabase
+    .from('contacts')
+    .select('id, user_id, created_at')
+    .eq('contact_id', userId)
+    .eq('status', 'pending');
+  
+  if (err1) {
+    console.error("Error fetching contact requests:", err1);
+    throw err1;
   }
 
-  return requests;
+  const requestIds = rows.map(r => r.id);
+  const userIds = rows.map(r => r.user_id);
+  const createdDates = rows.reduce((acc, row) => {
+    acc[row.user_id] = row.created_at;
+    acc[row.id] = row.id;
+    return acc;
+  }, {});
+  
+  if (!userIds.length) return [];
+
+  // Step 2: Get profiles for those IDs
+  const { data: profiles, error: err2 } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', userIds);
+  
+  if (err2) {
+    console.error("Error fetching requestor profiles:", err2);
+    throw err2;
+  }
+
+  // Transform data to match expected format
+  return profiles.map(profile => {
+    const requestId = Object.entries(createdDates).find(([id, userId]) => userId === profile.id)?.[0];
+    return {
+      id: requestId,
+      user_id: profile.id,
+      contact_id: userId,
+      status: 'pending' as const,
+      created_at: createdDates[profile.id],
+      profiles: profile
+    };
+  });
 }
 
 // Get all blocked contacts for the current user
@@ -125,33 +135,49 @@ export async function getBlockedContacts() {
 
   const userId = session.session.user.id;
 
-  // Only get contacts where current user is the blocker
-  const { data: blocked, error } = await supabase
-    .from("contacts")
-    .select(`
-      id,
-      user_id,
-      contact_id,
-      status,
-      created_at,
-      profiles(
-        display_name,
-        username,
-        avatar_url
-      )
-    `)
-    .eq("user_id", userId)
-    .eq("status", "blocked")
-    .filter('contact_id', 'in', (qb) => {
-      qb.select('id').from('profiles');
-    });
-
-  if (error) {
-    console.error("Error fetching blocked contacts:", error);
-    throw error;
+  // Step 1: Get IDs of blocked contacts
+  const { data: rows, error: err1 } = await supabase
+    .from('contacts')
+    .select('id, contact_id, created_at')
+    .eq('user_id', userId)
+    .eq('status', 'blocked');
+  
+  if (err1) {
+    console.error("Error fetching blocked contacts:", err1);
+    throw err1;
   }
 
-  return blocked;
+  const ids = rows.map(r => r.contact_id);
+  const contactInfo = rows.reduce((acc, row) => {
+    acc[row.contact_id] = {
+      id: row.id,
+      created_at: row.created_at
+    };
+    return acc;
+  }, {});
+  
+  if (!ids.length) return [];
+
+  // Step 2: Get profiles for those IDs
+  const { data: profiles, error: err2 } = await supabase
+    .from('profiles')
+    .select('id, username, display_name, avatar_url')
+    .in('id', ids);
+  
+  if (err2) {
+    console.error("Error fetching blocked profiles:", err2);
+    throw err2;
+  }
+
+  // Transform data to match expected format
+  return profiles.map(profile => ({
+    id: contactInfo[profile.id].id,
+    user_id: userId,
+    contact_id: profile.id,
+    status: 'blocked' as const,
+    created_at: contactInfo[profile.id].created_at,
+    profiles: profile
+  }));
 }
 
 // Search for users to add as contacts
