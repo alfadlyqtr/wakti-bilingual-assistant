@@ -48,11 +48,11 @@ export const ProfileImageUpload = () => {
       }
       
       // Get the public URL
-      const { data } = supabase.storage
+      const { data: storageData } = supabase.storage
         .from('avatars')
         .getPublicUrl(filePath);
       
-      const avatarUrl = data.publicUrl;
+      const avatarUrl = storageData.publicUrl;
       
       // Update user metadata with the correct structure expected by Supabase Auth
       const { user: updatedUser, error } = await updateProfile({

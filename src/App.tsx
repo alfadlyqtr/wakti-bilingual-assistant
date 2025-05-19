@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/hooks/use-toast";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
@@ -27,6 +28,9 @@ import Home from "@/pages/Home";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+
+// Create a client
+const queryClient = new QueryClient();
 
 // Enhanced route tracker component to debug navigation
 function RouteTracker() {
@@ -89,51 +93,53 @@ function App() {
   console.log("App: Initializing application");
   
   return (
-    <Router>
-      <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <RouteTracker />
-            <Routes>
-              {/* Public routes */}
-              <Route path="/" element={<Navigate to="/home" replace />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/forgot-password" element={<ForgotPassword />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <ThemeProvider>
+          <ToastProvider>
+            <AuthProvider>
+              <RouteTracker />
+              <Routes>
+                {/* Public routes */}
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/home" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
 
-              {/* WAKTI AI route - now using AppLayout */}
-              <Route path="/wakti-ai" element={
-                <AppLayout>
-                  <WaktiAIPage />
-                </AppLayout>
-              } />
+                {/* WAKTI AI route - now using AppLayout */}
+                <Route path="/wakti-ai" element={
+                  <AppLayout>
+                    <WaktiAIPage />
+                  </AppLayout>
+                } />
 
-              {/* Protected routes - but now without redirect */}
-              <Route element={<ProtectedRoute />}>
-                <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-                <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-                <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
-                <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
-                <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
-                <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
-                <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-                <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-                <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-                <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
-                <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-                <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
-              </Route>
+                {/* Protected routes - but now without redirect */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
+                  <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
+                  <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
+                  <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
+                  <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
+                  <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
+                  <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
+                  <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
+                  <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
+                  <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+                  <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
+                  <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
+                  <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
+                </Route>
 
-              {/* 404 route */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </AuthProvider>
-        </ToastProvider>
-      </ThemeProvider>
-    </Router>
+                {/* 404 route */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </AuthProvider>
+          </ToastProvider>
+        </ThemeProvider>
+      </Router>
+    </QueryClientProvider>
   );
 }
 
