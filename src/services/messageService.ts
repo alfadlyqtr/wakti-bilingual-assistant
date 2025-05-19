@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Conversation {
@@ -9,7 +8,7 @@ export interface Conversation {
   last_message_at: string;
   last_message_by: string | null;
   is_group: boolean;
-  participants: {
+  participants?: {
     user_id: string;
     profile?: {
       display_name: string;
@@ -40,7 +39,7 @@ export interface Message {
 }
 
 // Get all conversations for current user
-export async function getConversations() {
+export async function getConversations(): Promise<Conversation[]> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
     throw new Error("User not authenticated");
@@ -88,7 +87,7 @@ export async function getConversations() {
   }
 
   // Get participants and unread messages count for each conversation
-  const enhancedConversations = await Promise.all(
+  const enhancedConversations: Conversation[] = await Promise.all(
     conversations.map(async (conversation) => {
       // Get participants
       const { data: participants, error: participantsError } = await supabase
@@ -105,7 +104,10 @@ export async function getConversations() {
 
       if (participantsError) {
         console.error("Error fetching participants:", participantsError);
-        return conversation;
+        return {
+          ...conversation,
+          participants: []
+        } as Conversation;
       }
 
       // Get unread messages count
@@ -124,7 +126,7 @@ export async function getConversations() {
         ...conversation,
         participants,
         unread_count: count || 0
-      };
+      } as Conversation;
     })
   );
 
@@ -147,12 +149,14 @@ export async function searchConversations(query: string) {
     }
     
     // Check participant names
-    for (const participant of conversation.participants) {
-      if (participant.profile) {
-        const { display_name, username } = participant.profile;
-        if ((display_name && display_name.toLowerCase().includes(lowerCaseQuery)) || 
-            (username && username.toLowerCase().includes(lowerCaseQuery))) {
-          return true;
+    if (conversation.participants) {
+      for (const participant of conversation.participants) {
+        if (participant.profile) {
+          const { display_name, username } = participant.profile;
+          if ((display_name && display_name.toLowerCase().includes(lowerCaseQuery)) || 
+              (username && username.toLowerCase().includes(lowerCaseQuery))) {
+            return true;
+          }
         }
       }
     }
@@ -203,7 +207,7 @@ export async function getConversationById(conversationId: string): Promise<Conve
   return {
     ...data,
     participants
-  };
+  } as Conversation;
 }
 
 // Create a new conversation with another user

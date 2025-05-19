@@ -19,4 +19,4 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = "md" }) =
   );
 };
 
-export default Loading;
+export default LoadingSpinner;

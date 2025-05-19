@@ -22,6 +22,16 @@ interface ConversationsListProps {
 export function ConversationsList({ onSelectConversation, activeConversationId, searchQuery = "" }: ConversationsListProps) {
   const { language, theme } = useTheme();
   const [filteredConversations, setFilteredConversations] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  
+  // Get current user id
+  useEffect(() => {
+    async function getUserId() {
+      const { data } = await supabase.auth.getSession();
+      setCurrentUserId(data.session?.user.id || null);
+    }
+    getUserId();
+  }, []);
   
   const { data: conversations, isLoading, isError, error } = useQuery({
     queryKey: ['conversations'],
@@ -99,14 +109,18 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
 
   // Get other participant details for display
   const getConversationDisplayInfo = (conversation: any) => {
-    if (!conversation || !conversation.participants) {
+    if (!conversation) {
+      return { name: "Unknown", avatar: "" };
+    }
+    
+    // Handle participants missing from conversation type
+    const participants = conversation.participants || [];
+    if (participants.length === 0) {
       return { name: "Unknown", avatar: "" };
     }
 
     // Get other participants (exclude current user)
-    const { data: sessionData } = supabase.auth.getSession();
-    const currentUserId = sessionData?.session?.user?.id;
-    const otherParticipants = conversation.participants.filter(
+    const otherParticipants = participants.filter(
       (p: any) => p.user_id !== currentUserId
     );
     
@@ -118,8 +132,8 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
     const profile = otherUser.profile || {};
     
     return {
-      name: profile.display_name || profile.username || "Unknown",
-      avatar: profile.avatar_url || "",
+      name: (profile.display_name as string) || (profile.username as string) || "Unknown",
+      avatar: (profile.avatar_url as string) || "",
     };
   };
 

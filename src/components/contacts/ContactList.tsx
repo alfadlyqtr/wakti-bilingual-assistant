@@ -120,8 +120,8 @@ export function ContactList() {
       ) : (
         contacts.map(contact => {
           const contactProfile = contact.profile || {};
-          const displayName = (contactProfile.display_name as string) || (contactProfile.username as string) || "Unknown User";
-          const username = (contactProfile.username as string) || "user";
+          const displayName = ((contactProfile as any).display_name as string) || ((contactProfile as any).username as string) || "Unknown User";
+          const username = ((contactProfile as any).username as string) || "user";
           
           return (
             <Card key={contact.id} className="overflow-hidden">
@@ -129,7 +129,7 @@ export function ContactList() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={(contactProfile.avatar_url as string) || ""} />
+                      <AvatarImage src={((contactProfile as any).avatar_url as string) || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
                     <div>

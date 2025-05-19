@@ -153,7 +153,7 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     if (otherParticipants.length === 0) return "";
     
     const profile = otherParticipants[0].profile || {};
-    return profile.display_name || profile.username || "";
+    return ((profile as any).display_name as string) || ((profile as any).username as string) || "";
   };
 
   return (

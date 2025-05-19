@@ -141,8 +141,8 @@ export function ContactRequests() {
       ) : (
         requests.map(request => {
           const userProfile = request.profiles || {};
-          const displayName = (userProfile.display_name as string) || (userProfile.username as string) || "Unknown User";
-          const username = (userProfile.username as string) || "user";
+          const displayName = ((userProfile as any).display_name as string) || ((userProfile as any).username as string) || "Unknown User";
+          const username = ((userProfile as any).username as string) || "user";
           
           return (
             <Card key={request.id} className="overflow-hidden">
@@ -150,7 +150,7 @@ export function ContactRequests() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={(userProfile.avatar_url as string) || ""} />
+                      <AvatarImage src={((userProfile as any).avatar_url as string) || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
                     <div>
