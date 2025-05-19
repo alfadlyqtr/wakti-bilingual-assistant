@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from "react";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { transcribeAudio } from "@/services/chatService";
 import { supabase } from "@/integrations/supabase/client";
 import {

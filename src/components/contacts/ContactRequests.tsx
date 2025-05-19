@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +15,6 @@ import { formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
 
 export function ContactRequests() {
-  const { toast } = useToast();
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
@@ -29,20 +28,19 @@ export function ContactRequests() {
   const acceptRequestMutation = useMutation({
     mutationFn: (requestId: string) => acceptContactRequest(requestId),
     onSuccess: () => {
-      toast({
-        title: t("requestAccepted", language),
-        description: t("contactAddedDescription", language)
-      });
+      toast.success(
+        t("requestAccepted", language),
+        { description: t("contactAddedDescription", language) }
+      );
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
     onError: (error) => {
       console.error("Error accepting request:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorAcceptingRequest", language),
-        variant: "destructive"
-      });
+      toast.error(
+        t("error", language),
+        { description: t("errorAcceptingRequest", language) }
+      );
     }
   });
 
@@ -50,19 +48,18 @@ export function ContactRequests() {
   const rejectRequestMutation = useMutation({
     mutationFn: (requestId: string) => rejectContactRequest(requestId),
     onSuccess: () => {
-      toast({
-        title: t("requestRejected", language),
-        description: t("contactRejectedDescription", language)
-      });
+      toast.success(
+        t("requestRejected", language),
+        { description: t("contactRejectedDescription", language) }
+      );
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
     },
     onError: (error) => {
       console.error("Error rejecting request:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorRejectingRequest", language),
-        variant: "destructive"
-      });
+      toast.error(
+        t("error", language),
+        { description: t("errorRejectingRequest", language) }
+      );
     }
   });
 
@@ -70,20 +67,19 @@ export function ContactRequests() {
   const blockUserMutation = useMutation({
     mutationFn: (userId: string) => blockContact(userId),
     onSuccess: () => {
-      toast({
-        title: t("contactBlocked", language),
-        description: t("blockedUserDescription", language)
-      });
+      toast.success(
+        t("contactBlocked", language),
+        { description: t("blockedUserDescription", language) }
+      );
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },
     onError: (error) => {
       console.error("Error blocking user:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorBlockingUser", language),
-        variant: "destructive"
-      });
+      toast.error(
+        t("error", language),
+        { description: t("errorBlockingUser", language) }
+      );
     }
   });
 

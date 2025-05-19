@@ -12,7 +12,7 @@ import {
 } from '@/utils/quoteService';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
-import { toast } from '@/hooks/use-toast';
+import { toast } from "sonner";
 import { useSettings } from '@/hooks/useSettings';
 
 interface QuoteWidgetProps {

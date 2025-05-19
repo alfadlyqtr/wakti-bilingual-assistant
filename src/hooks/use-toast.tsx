@@ -11,6 +11,7 @@ import {
   ToastAction,
 } from "@/components/ui/toast";
 
+import { toast as sonnerToast } from "sonner";
 import { createContext, useContext } from "react";
 
 // Export the ToastActionElement type so it can be re-exported
@@ -18,6 +19,7 @@ export type ToastActionElement = React.ReactElement<typeof ToastAction>;
 
 // Re-export the toast from sonner directly
 export { toast } from "sonner";
+export { Toaster } from "@/components/ui/sonner";
 
 // Confirmation dialog types
 export interface ConfirmOptions {
@@ -29,12 +31,9 @@ export interface ConfirmOptions {
   onCancel?: () => void;
 }
 
-// Expose the Toaster component from Sonner
-export { Toaster } from "@/components/ui/sonner";
-
 const ToastContext = createContext<{ 
   confirm: (options: ConfirmOptions) => Promise<boolean>;
-  toast: typeof import("sonner").toast;
+  toast: typeof sonnerToast;
 } | null>(null);
 
 // Confirmation dialog implementation
@@ -120,7 +119,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   // Create a context value with the confirm function and toast function
   const contextValue = React.useMemo(() => ({
     confirm: confirmDialog,
-    toast: toast,
+    toast: sonnerToast,
   }), []);
   
   return (
@@ -149,10 +148,10 @@ export const showToast = (props: {
   const { variant, title, description, ...restProps } = props;
   
   if (variant === "destructive") {
-    toast.error(title as string, { description, ...restProps });
+    sonnerToast.error(title as string, { description, ...restProps });
   } else if (variant === "success") {
-    toast.success(title as string, { description, ...restProps });
+    sonnerToast.success(title as string, { description, ...restProps });
   } else {
-    toast(title as string, { description, ...restProps });
+    sonnerToast(title as string, { description, ...restProps });
   }
 };
