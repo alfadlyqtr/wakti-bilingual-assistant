@@ -32,7 +32,10 @@ export interface ConfirmOptions {
 // Expose the Toaster component from Sonner
 export { Toaster } from "@/components/ui/sonner";
 
-const ToastContext = createContext<{ confirm: (options: ConfirmOptions) => Promise<boolean> } | null>(null);
+const ToastContext = createContext<{ 
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  toast: typeof import("sonner").toast;
+} | null>(null);
 
 // Confirmation dialog implementation
 export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
@@ -114,9 +117,10 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  // Create a context value with the confirm function
+  // Create a context value with the confirm function and toast function
   const contextValue = React.useMemo(() => ({
     confirm: confirmDialog,
+    toast: toast,
   }), []);
   
   return (
@@ -142,13 +146,13 @@ export const showToast = (props: {
   variant?: "default" | "destructive" | "success";
   duration?: number;
 }): void => {
-  const { variant, ...restProps } = props;
+  const { variant, title, description, ...restProps } = props;
   
   if (variant === "destructive") {
-    toast.error(props.title as string, restProps);
+    toast.error(title as string, { description, ...restProps });
   } else if (variant === "success") {
-    toast.success(props.title as string, restProps);
+    toast.success(title as string, { description, ...restProps });
   } else {
-    toast(props.title as string, restProps);
+    toast(title as string, { description, ...restProps });
   }
 };

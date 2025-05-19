@@ -26,7 +26,7 @@ type BlockedUserType = {
 };
 
 export function BlockedUsers() {
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
