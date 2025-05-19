@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -10,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 import { getRecordingStatus } from "@/lib/utils";
-import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady } from "@/services/voiceSummaryService";
+import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady, regenerateSummary } from "@/services/voiceSummaryService";
 
 export default function VoiceSummaryPage() {
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
@@ -21,6 +20,7 @@ export default function VoiceSummaryPage() {
   const [stuckRecordings, setStuckRecordings] = useState<any[]>([]);
   const [recoverableRecordings, setRecoverableRecordings] = useState<any[]>([]);
   const [isRecovering, setIsRecovering] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -144,6 +144,57 @@ export default function VoiceSummaryPage() {
       setIsRecovering(false);
     }
   };
+  
+  // Helper function to regenerate summaries for recordings with transcripts but failed summaries
+  const handleRegenerateSummaries = async () => {
+    if (recoverableRecordings.length === 0) return;
+    
+    try {
+      setIsRegenerating(true);
+      let successCount = 0;
+      
+      // Process each recoverable recording
+      for (const recording of recoverableRecordings) {
+        // Attempt to regenerate the summary
+        const { success, error } = await regenerateSummary(recording.id);
+        
+        if (success) {
+          successCount++;
+        } else {
+          console.error(`Failed to regenerate summary for recording ${recording.id}:`, error);
+        }
+      }
+      
+      // Refresh the recordings
+      await fetchRecordings(true);
+      
+      if (successCount > 0) {
+        toast({
+          title: language === 'ar' 
+            ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
+            : `Regenerated ${successCount} summary/summaries`,
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: language === 'ar'
+            ? 'فشل في إعادة إنشاء الملخصات'
+            : 'Failed to regenerate summaries',
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error('Error in handleRegenerateSummaries:', err);
+      toast({
+        title: language === 'ar'
+          ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
+          : 'Error regenerating summaries',
+        variant: "destructive"
+      });
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   // Poll for updates to recording statuses
   useEffect(() => {
@@ -228,22 +279,41 @@ export default function VoiceSummaryPage() {
                       : `${recoverableRecordings.length} recording(s) can be recovered`}
                   </span>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={recoverStuckRecordings}
-                  disabled={isRecovering}
-                  className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
-                >
-                  {isRecovering ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      {language === 'ar' ? 'جارٍ الاستعادة...' : 'Recovering...'}
-                    </>
-                  ) : (
-                    language === 'ar' ? 'استعادة التسجيلات' : 'Recover Recordings'
-                  )}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={recoverStuckRecordings}
+                    disabled={isRecovering || isRegenerating}
+                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
+                  >
+                    {isRecovering ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        {language === 'ar' ? 'جارٍ الاستعادة...' : 'Recovering...'}
+                      </>
+                    ) : (
+                      language === 'ar' ? 'استعادة التسجيلات' : 'Mark as Ready'
+                    )}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRegenerateSummaries}
+                    disabled={isRecovering || isRegenerating}
+                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
+                  >
+                    {isRegenerating ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        {language === 'ar' ? 'جارٍ إعادة الإنشاء...' : 'Regenerating...'}
+                      </>
+                    ) : (
+                      language === 'ar' ? 'إعادة إنشاء الملخصات' : 'Regenerate Summaries'
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

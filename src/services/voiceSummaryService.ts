@@ -67,6 +67,80 @@ export async function markRecordingsAsReady(recordingIds: string[]): Promise<{su
 }
 
 /**
+ * Force regeneration of a summary for a recording that already has a transcript
+ * @param recordingId ID of the recording to regenerate summary for
+ * @returns Promise with success status
+ */
+export async function regenerateSummary(recordingId: string): Promise<{success: boolean, error?: any}> {
+  try {
+    if (!recordingId) {
+      return { success: false, error: "No recording ID provided" };
+    }
+
+    // Get the recording to check if it has a transcript
+    const { data: recording, error: fetchError } = await supabase
+      .from('voice_summaries')
+      .select('transcript')
+      .eq('id', recordingId)
+      .single();
+
+    if (fetchError || !recording) {
+      console.error("Error fetching recording:", fetchError);
+      return { success: false, error: fetchError || "Recording not found" };
+    }
+
+    if (!recording.transcript) {
+      return { success: false, error: "Recording has no transcript" };
+    }
+
+    // Update the recording to mark it for summary regeneration
+    const { error: updateError } = await supabase
+      .from('voice_summaries')
+      .update({
+        is_processing_summary: true,
+        summary_error: null,
+        summary: null
+      })
+      .eq('id', recordingId);
+
+    if (updateError) {
+      console.error("Error updating recording for summary regeneration:", updateError);
+      return { success: false, error: updateError };
+    }
+
+    // Call the generate-summary edge function
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      return { success: false, error: "No auth session" };
+    }
+
+    const generateResponse = await fetch(
+      "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-summary",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.session.access_token}`
+        },
+        body: JSON.stringify({
+          recordingId
+        }),
+      }
+    );
+
+    if (!generateResponse.ok) {
+      const errorData = await generateResponse.json();
+      return { success: false, error: errorData.error || "Summary regeneration failed" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error("Exception in regenerateSummary:", error);
+    return { success: false, error };
+  }
+}
+
+/**
  * Retrieve all recordings with status information
  * @param includeStuck Whether to include stuck recordings
  * @returns Promise with recordings data
@@ -108,14 +182,29 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
 
     // Process the results
     data.forEach(recording => {
-      if (recording.is_ready === true) {
+      // Check if it has transcript but no summary
+      const hasTranscriptNoSummary = recording.transcript && !recording.summary && 
+        recording.summary_error === null && !recording.is_processing_summary;
+        
+      if (hasTranscriptNoSummary) {
+        // These are recoverable records - they have transcript but summary failed silently
+        result.recoverable.push(recording);
+        return;
+      }
+      
+      // Check if it's fully ready
+      if (recording.is_ready === true && recording.transcript) {
         result.ready.push(recording);
-      } else if (
+        return;
+      }
+      
+      // Check if it's in active processing
+      if (
         recording.is_processing_transcript === true || 
         recording.is_processing_summary === true || 
         recording.is_processing_tts === true
       ) {
-        // Check if the recording is stuck
+        // Check if the recording is stuck in processing too long
         const createdAt = new Date(recording.created_at).getTime();
         const processingTime = now - createdAt;
         
@@ -124,20 +213,25 @@ export async function getAllRecordings(includeStuck: boolean = true): Promise<{
         } else {
           result.processing.push(recording);
         }
+        return;
+      }
+      
+      // If it has a summary_error, it's recoverable
+      if (recording.summary_error) {
+        result.recoverable.push(recording);
+        return;
+      }
+      
+      // If no processing flags are set but it's not ready,
+      // check when it was created to determine if it's stuck
+      const createdAt = new Date(recording.created_at).getTime();
+      const processingTime = now - createdAt;
+      
+      // Check if it's old enough to be considered stuck
+      if (processingTime > MAX_PROCESSING_TIME && includeStuck) {
+        result.stuck.push(recording);
       } else {
-        // If no processing flags are set but it's not ready,
-        // check when it was created to determine if it's stuck
-        const createdAt = new Date(recording.created_at).getTime();
-        const processingTime = now - createdAt;
-        
-        // Check if it's recoverable (has transcript but no summary or vice versa)
-        if (recording.transcript && !recording.is_ready) {
-          result.recoverable.push(recording);
-        } else if (processingTime > MAX_PROCESSING_TIME && includeStuck) {
-          result.stuck.push(recording);
-        } else {
-          result.processing.push(recording);
-        }
+        result.processing.push(recording);
       }
     });
 

@@ -17,11 +17,17 @@ serve(async (req) => {
     // For detailed logging
     console.log("Starting generate-summary function");
     
+    // Validate the DeepSeek API key before proceeding
+    if (!DEEPSEEK_API_KEY) {
+      console.error("DEEPSEEK_API_KEY is not set");
+      return new Response(
+        JSON.stringify({ error: "DeepSeek API key is not configured." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     // Create supabase admin client with service role key for full access
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
-    // We no longer need to verify authentication since we've disabled JWT verification
-    // This function can now be called from other edge functions using the service role key
     
     // Get request body
     const { recordingId } = await req.json();
@@ -40,7 +46,6 @@ serve(async (req) => {
       .from("voice_summaries")
       .update({
         is_processing_summary: true,
-        updated_at: new Date().toISOString(),
       })
       .eq("id", recordingId);
       
@@ -87,45 +92,62 @@ serve(async (req) => {
     console.log("Calling DeepSeek API for summary generation");
     
     // Generate summary using DeepSeek API
-    const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: "You are an intelligent assistant that creates clear, concise summaries of voice recordings. Focus on extracting key information, action items, and important details."
-          },
-          {
-            role: "user",
-            content: `Please summarize the following transcription in bullet points. Extract key points, decisions, action items, and dates if present:\n\n${recording.transcript}`
-          }
-        ],
-        max_tokens: 1000
-      })
-    });
+    let deepseekResponse;
+    try {
+      deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            {
+              role: "system",
+              content: "You are an intelligent assistant that creates clear, concise summaries of voice recordings. Focus on extracting key information, action items, and important details."
+            },
+            {
+              role: "user",
+              content: `Please summarize the following transcription in bullet points. Extract key points, decisions, action items, and dates if present:\n\n${recording.transcript}`
+            }
+          ],
+          max_tokens: 1000
+        })
+      });
 
-    if (!deepseekResponse.ok) {
-      const deepseekError = await deepseekResponse.json();
-      console.error("DeepSeek API error:", deepseekError);
+      if (!deepseekResponse.ok) {
+        const deepseekErrorData = await deepseekResponse.text();
+        console.error("DeepSeek API error status:", deepseekResponse.status);
+        console.error("DeepSeek API error response:", deepseekErrorData);
+        
+        let errorMessage;
+        try {
+          // Try to parse as JSON to get a structured error
+          const jsonError = JSON.parse(deepseekErrorData);
+          errorMessage = jsonError.error?.message || jsonError.error || deepseekErrorData;
+        } catch {
+          // If parsing fails, use the raw text
+          errorMessage = deepseekErrorData;
+        }
+        
+        throw new Error(`DeepSeek API error (${deepseekResponse.status}): ${errorMessage}`);
+      }
+    } catch (apiError) {
+      console.error("Failed to call DeepSeek API:", apiError);
       
       // Update the recording to indicate failure
       await supabase
         .from("voice_summaries")
         .update({
           is_processing_summary: false,
-          summary_error: JSON.stringify(deepseekError),
-          summary_completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          summary_error: String(apiError),
+          summary_completed_at: new Date().toISOString()
         })
         .eq("id", recordingId);
       
       return new Response(
-        JSON.stringify({ error: "Summary generation failed", details: deepseekError }),
+        JSON.stringify({ error: "Summary generation failed", details: String(apiError) }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -142,8 +164,7 @@ serve(async (req) => {
       .update({
         summary: summary,
         is_processing_summary: false,
-        summary_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        summary_completed_at: new Date().toISOString()
       })
       .eq("id", recordingId);
 
@@ -171,8 +192,7 @@ serve(async (req) => {
           await supabase
             .from("voice_summaries")
             .update({
-              is_processing_tts: true,
-              updated_at: new Date().toISOString()
+              is_processing_tts: true
             })
             .eq("id", recordingId);
           
@@ -198,8 +218,7 @@ serve(async (req) => {
               .update({
                 is_processing_tts: false,
                 tts_error: "Failed to generate TTS",
-                tts_completed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                tts_completed_at: new Date().toISOString()
               })
               .eq("id", recordingId);
             
@@ -212,33 +231,30 @@ serve(async (req) => {
               .from("voice_summaries")
               .update({
                 is_processing_tts: false,
-                tts_completed_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                tts_completed_at: new Date().toISOString()
               })
               .eq("id", recordingId);
-              
-            // Now check if everything is complete to mark the recording as ready
-            const { data: updatedRecording } = await supabase
+          }
+          
+          // Now check if everything is complete to mark the recording as ready
+          const { data: updatedRecording } = await supabase
+            .from("voice_summaries")
+            .select("transcript, summary, summary_audio_url")
+            .eq("id", recordingId)
+            .single();
+            
+          if (updatedRecording && 
+              updatedRecording.transcript && 
+              updatedRecording.summary) {
+            // Mark as ready only if we have transcript and summary
+            await supabase
               .from("voice_summaries")
-              .select("transcript, summary, summary_audio_url")
-              .eq("id", recordingId)
-              .single();
-              
-            if (updatedRecording && 
-                updatedRecording.transcript && 
-                updatedRecording.summary && 
-                updatedRecording.summary_audio_url) {
-              // Everything is complete, mark as ready
-              await supabase
-                .from("voice_summaries")
-                .update({
-                  is_ready: true,
-                  ready_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString()
-                })
-                .eq("id", recordingId);
-              console.log("Recording marked as fully ready:", recordingId);
-            }
+              .update({
+                is_ready: true,
+                ready_at: new Date().toISOString()
+              })
+              .eq("id", recordingId);
+            console.log("Recording marked as ready:", recordingId);
           }
         } catch (ttsError) {
           console.error("Error in TTS generation:", ttsError);
@@ -249,8 +265,7 @@ serve(async (req) => {
             .update({
               is_processing_tts: false,
               tts_error: String(ttsError),
-              tts_completed_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
+              tts_completed_at: new Date().toISOString()
             })
             .eq("id", recordingId);
         }
