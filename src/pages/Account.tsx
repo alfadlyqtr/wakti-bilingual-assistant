@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -10,7 +11,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 
 export default function Account() {
-  const { user, updateName, updateEmail, updatePassword, signout } = useAuth();
+  const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const { language } = useTheme();
   
@@ -41,7 +42,8 @@ export default function Account() {
     setIsUpdatingProfile(true);
     
     try {
-      const error = await updateName(name);
+      const data = { user_metadata: { full_name: name } };
+      const { error } = await updateProfile(data);
       if (error) {
         toast.error(language === 'ar' ? "فشل تحديث الاسم" : "Failed to update name");
       } else {
@@ -100,7 +102,7 @@ export default function Account() {
   
   const handleSignout = async () => {
     try {
-      await signout();
+      await signOut();
       navigate("/login");
     } catch (error) {
       toast.error(language === 'ar' ? "فشل تسجيل الخروج" : "Failed to sign out");

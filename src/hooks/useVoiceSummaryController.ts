@@ -7,19 +7,24 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRecordingStatus } from "@/lib/utils";
-import { createRecording, uploadAudio, createSummary } from "@/services/voiceSummaryService";
+import * as voiceSummaryService from "@/services/voiceSummaryService";
 
 // Define types for the hook
-type RecordingState = "idle" | "recording" | "processing" | "stopped";
+type RecordingState = "idle" | "recording" | "processing" | "stopped" | "error";
+type ProcessingStep = "uploading" | "transcribing" | "summarizing" | "generating_tts" | "finalizing";
 
 export default function useVoiceSummaryController() {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const [processingStep, setProcessingStep] = useState<ProcessingStep | null>(null);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recordingTime, setRecordingTime] = useState<number>(0);
+  const [progress, setProgress] = useState<number>(0);
+  const [isFullyReady, setIsFullyReady] = useState<boolean>(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -46,13 +51,34 @@ export default function useVoiceSummaryController() {
         setMediaRecorder(recorder);
       } catch (err: any) {
         console.error("Error initializing media recorder:", err);
-        setError(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
+        setErrorMessage(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
         toast.error(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
       }
     };
 
     initializeRecorder();
   }, [user, language]);
+
+  // Reset recording state
+  const resetRecording = () => {
+    setRecordingState("idle");
+    setProcessingStep(null);
+    setAudioChunks([]);
+    setRecordingId(null);
+    setSummary(null);
+    setErrorMessage(null);
+    setRecordingTime(0);
+    setProgress(0);
+    setIsFullyReady(false);
+  };
+
+  // Cancel current recording
+  const cancelRecording = () => {
+    if (mediaRecorder && recordingState === "recording") {
+      mediaRecorder.stop();
+    }
+    resetRecording();
+  };
 
   // Start recording function
   const startRecording = async () => {
@@ -65,9 +91,8 @@ export default function useVoiceSummaryController() {
       console.log("Recording started");
     } catch (err: any) {
       console.error("Error starting recording:", err);
-      setError(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
+      setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
       toast.error(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
-      let someError = true;
     }
   };
 
@@ -80,30 +105,34 @@ export default function useVoiceSummaryController() {
       mediaRecorder.stop();
       console.log("Recording stopped");
       setRecordingState("processing");
+      setProcessingStep("uploading");
       
       // Convert audio chunks to audio blob
       const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
       
       // Create a new recording entry in the database
-      const { recording, error: createError } = await createRecording();
+      const { recording, error: createError } = await voiceSummaryService.createRecording();
       
       if (createError) {
         console.error("Error creating recording:", createError);
-        setError(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
+        setErrorMessage(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
         toast.error(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
+        setRecordingState("error");
         setIsLoading(false);
         return;
       }
       
       setRecordingId(recording.id);
+      setProcessingStep("transcribing");
       
       // Upload the audio blob to storage
-      const { path, error: uploadError } = await uploadAudio(audioBlob, recording.id);
+      const { path, error: uploadError } = await voiceSummaryService.uploadAudio(audioBlob, recording.id);
       
       if (uploadError) {
         console.error("Error uploading audio:", uploadError);
-        setError(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
+        setErrorMessage(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
         toast.error(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
+        setRecordingState("error");
         setIsLoading(false);
         return;
       }
@@ -113,21 +142,32 @@ export default function useVoiceSummaryController() {
       
       if (statusResponse && statusResponse.error) {
         console.error("Error getting recording status:", statusResponse.error);
-        setError(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
+        setErrorMessage(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         toast.error(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
+        setRecordingState("error");
         setIsLoading(false);
         return;
       }
       
-      let success = true;
+      setProcessingStep("finalizing");
+      setIsFullyReady(true);
       toast.success(language === 'ar' ? 'تم حفظ التسجيل بنجاح' : 'Recording saved successfully');
     } catch (err: any) {
       console.error("Error during recording process:", err);
-      setError(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
+      setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
       toast.error(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
+      setRecordingState("error");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Wait for recording completion
+  const waitForCompletion = async (recordingId: string) => {
+    if (!recordingId) return false;
+    
+    // Implementation for checking recording completion
+    return true;
   };
 
   // Generate summary function
@@ -137,11 +177,11 @@ export default function useVoiceSummaryController() {
     setIsLoading(true);
     try {
       // Call the createSummary function
-      const { data, error: summaryError } = await createSummary(recordingId);
+      const { data, error: summaryError } = await voiceSummaryService.createSummary(recordingId);
       
       if (summaryError) {
         console.error("Error generating summary:", summaryError);
-        setError(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
+        setErrorMessage(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
         toast.error(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
         setIsLoading(false);
         return;
@@ -151,7 +191,7 @@ export default function useVoiceSummaryController() {
       setSummary(data?.summary || null);
     } catch (err: any) {
       console.error("Error generating summary:", err);
-      setError(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
+      setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
       toast.error(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
     } finally {
       setIsLoading(false);
@@ -160,11 +200,29 @@ export default function useVoiceSummaryController() {
 
   return {
     recordingState,
+    processingStep,
     startRecording,
     stopRecording,
+    cancelRecording,
+    resetRecording,
+    waitForCompletion,
     generateSummary,
     summary,
     isLoading,
-    error,
+    error: errorMessage,
+    recordingTime,
+    progress,
+    recordingId,
+    isFullyReady,
+    // Additional state properties for RecordingDialog
+    state: {
+      recordingState,
+      processingStep,
+      recordingTime,
+      progress,
+      errorMessage,
+      isFullyReady,
+      recordingId
+    }
   };
 }

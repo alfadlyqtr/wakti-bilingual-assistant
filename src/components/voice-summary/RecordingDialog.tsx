@@ -22,14 +22,15 @@ export default function RecordingDialog({
   const { language } = useTheme();
   const navigate = useNavigate();
   
+  const controller = useVoiceSummaryController();
   const { 
-    state, 
     startRecording, 
     stopRecording, 
     cancelRecording, 
     resetRecording,
-    waitForCompletion
-  } = useVoiceSummaryController();
+    waitForCompletion,
+    state 
+  } = controller;
   
   const [isClosing, setIsClosing] = useState(false);
   
