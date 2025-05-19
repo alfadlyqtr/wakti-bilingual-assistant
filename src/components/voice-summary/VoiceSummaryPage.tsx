@@ -5,7 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import VoiceSummaryArchive from "./VoiceSummaryArchive";
 import RecordingDialog from "./RecordingDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2, RefreshCw } from "lucide-react";
+import { Plus, Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
@@ -17,11 +17,15 @@ export default function VoiceSummaryPage() {
   const [inProgressRecordings, setInProgressRecordings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [stuckRecordings, setStuckRecordings] = useState<any[]>([]);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // Fetch recordings - separating ready and in-progress recordings
+  // Maximum processing time before considering a recording as stuck (in milliseconds)
+  const MAX_PROCESSING_TIME = 10 * 60 * 1000; // 10 minutes
+
+  // Fetch recordings - separating ready, in-progress, and stuck recordings
   const fetchRecordings = async (silent = false) => {
     try {
       if (!silent) {
@@ -52,7 +56,10 @@ export default function VoiceSummaryPage() {
       const validRecordings = Array.isArray(data) ? data.filter(rec => rec && rec.id) : [];
       console.log(`[VoiceSummaryPage] Fetched ${validRecordings.length} recordings`);
       
-      // Split recordings into ready and in-progress
+      // Get current time for stuck recording detection
+      const now = new Date().getTime();
+      
+      // Split recordings into ready, in-progress and stuck
       const readyRecordings = validRecordings.filter(recording => {
         // Primarily use the is_ready flag 
         if (recording.is_ready === true) {
@@ -64,7 +71,7 @@ export default function VoiceSummaryPage() {
         return status === 'complete';
       });
       
-      const processingRecordings = validRecordings.filter(recording => {
+      const processingAndStuckRecordings = validRecordings.filter(recording => {
         // If is_ready is explicitly false, it's in progress
         if (recording.is_ready === false) {
           return true;
@@ -88,10 +95,27 @@ export default function VoiceSummaryPage() {
         return false;
       });
       
-      console.log(`[VoiceSummaryPage] Ready recordings: ${readyRecordings.length}, In progress: ${processingRecordings.length}`);
+      // Separate stuck recordings from regular processing ones
+      const stuck: any[] = [];
+      const processing: any[] = [];
+      
+      processingAndStuckRecordings.forEach(recording => {
+        // Check if the recording has been processing for too long
+        const createdAt = new Date(recording.created_at).getTime();
+        const processingTime = now - createdAt;
+        
+        if (processingTime > MAX_PROCESSING_TIME) {
+          stuck.push(recording);
+        } else {
+          processing.push(recording);
+        }
+      });
+      
+      console.log(`[VoiceSummaryPage] Ready: ${readyRecordings.length}, Processing: ${processing.length}, Stuck: ${stuck.length}`);
       
       setRecordings(readyRecordings);
-      setInProgressRecordings(processingRecordings);
+      setInProgressRecordings(processing);
+      setStuckRecordings(stuck);
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
@@ -102,6 +126,47 @@ export default function VoiceSummaryPage() {
       }
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
+  
+  // Helper function to clean up stuck recordings
+  const cleanupStuckRecordings = async () => {
+    if (stuckRecordings.length === 0) return;
+    
+    try {
+      setIsRefreshing(true);
+      
+      // Get IDs of stuck recordings
+      const stuckIds = stuckRecordings.map(recording => recording.id);
+      
+      // Delete stuck recordings
+      const { error } = await supabase
+        .from('voice_summaries')
+        .delete()
+        .in('id', stuckIds);
+        
+      if (error) {
+        console.error('Error deleting stuck recordings:', error);
+        toast({
+          title: language === 'ar' ? 'فشل في حذف التسجيلات العالقة' : 'Failed to delete stuck recordings',
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Refresh the recordings
+      await fetchRecordings(true);
+      
+      toast({
+        title: language === 'ar' 
+          ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
+          : `Removed ${stuckIds.length} stuck recordings`,
+        variant: "default"
+      });
+    } catch (err) {
+      console.error('Error in cleanupStuckRecordings:', err);
+    } finally {
       setIsRefreshing(false);
     }
   };
@@ -132,6 +197,7 @@ export default function VoiceSummaryPage() {
   const handleRecordingDeleted = (recordingId: string) => {
     setRecordings(recordings.filter(recording => recording.id !== recordingId));
     setInProgressRecordings(inProgressRecordings.filter(recording => recording.id !== recordingId));
+    setStuckRecordings(stuckRecordings.filter(recording => recording.id !== recordingId));
   };
   
   const handleManualRefresh = () => {
@@ -169,6 +235,36 @@ export default function VoiceSummaryPage() {
             </Button>
           </div>
         </div>
+
+        {/* Show stuck recordings with warning */}
+        {stuckRecordings.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-destructive flex items-center gap-1 mb-2">
+              <AlertCircle className="h-4 w-4" />
+              {language === 'ar' ? 'تسجيلات عالقة' : 'Stuck Recordings'}
+            </h3>
+            <div className="border border-destructive/30 bg-destructive/10 rounded-md p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                  <span className="text-sm">
+                    {language === 'ar' 
+                      ? `${stuckRecordings.length} تسجيل(ات) عالقة في المعالجة`
+                      : `${stuckRecordings.length} recording(s) stuck in processing`}
+                  </span>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={cleanupStuckRecordings}
+                  disabled={isRefreshing}
+                >
+                  {language === 'ar' ? 'حذف التسجيلات العالقة' : 'Remove Stuck Recordings'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Show processing recordings with progress indicator */}
         {inProgressRecordings.length > 0 && (
