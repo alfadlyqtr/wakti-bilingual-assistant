@@ -631,10 +631,6 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
     en: "Account Options",
     ar: "خيارات الحساب"
   },
-  profile: {
-    en: "Profile",
-    ar: "الملف الشخصي"
-  },
   profileImage: {
     en: "Profile image",
     ar: "صورة الملف الشخصي"
