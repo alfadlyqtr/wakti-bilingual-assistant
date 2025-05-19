@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { UserPlus } from "lucide-react";
+import { UserPlus, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -85,9 +85,12 @@ export function BlockedUsers() {
   return (
     <div className="space-y-3">
       {!blockedUsers || blockedUsers.length === 0 ? (
-        <Card className="p-6 text-center text-muted-foreground">
-          <p>{t("noBlockedUsers", language)}</p>
-          <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
+        <Card className="p-6">
+          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
+            <UserX className="h-12 w-12 opacity-50" />
+            <p className="font-medium text-lg">{t("noBlockedUsers", language)}</p>
+            <p className="text-sm">{t("noBlockedUsersDescription", language)}</p>
+          </div>
         </Card>
       ) : (
         blockedUsers.map((user: BlockedUserType) => {
@@ -116,7 +119,11 @@ export function BlockedUsers() {
                     disabled={unblockContactMutation.isPending}
                     className="flex gap-1"
                   >
-                    <UserPlus className="h-4 w-4" />
+                    {unblockContactMutation.isPending ? (
+                      <LoadingSpinner size="sm" className="mr-2" />
+                    ) : (
+                      <UserPlus className="h-4 w-4 mr-1" />
+                    )}
                     {t("unblock", language)}
                   </Button>
                 </div>

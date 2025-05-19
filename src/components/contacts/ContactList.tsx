@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { MessageSquare, Star, UserX } from "lucide-react";
+import { MessageSquare, Star, UserX, UserSearch } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact } from "@/services/contactsService";
@@ -128,9 +128,12 @@ export function ContactList() {
   return (
     <div className="space-y-3">
       {!contacts || contacts.length === 0 ? (
-        <Card className="p-6 text-center text-muted-foreground">
-          <p>{t("noContacts", language)}</p>
-          <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
+        <Card className="p-6">
+          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
+            <UserSearch className="h-12 w-12 opacity-50" />
+            <p className="font-medium text-lg">{t("noContacts", language)}</p>
+            <p className="text-sm">{t("searchToAddContacts", language)}</p>
+          </div>
         </Card>
       ) : (
         contacts.map((contact: ContactType) => {
@@ -158,7 +161,7 @@ export function ContactList() {
                       variant="ghost"
                       onClick={() => handleToggleFavorite(contact.id, displayName)}
                     >
-                      <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+                      <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`} />
                     </Button>
                     <Button 
                       size="icon" 

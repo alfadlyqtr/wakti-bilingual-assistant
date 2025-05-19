@@ -11,6 +11,7 @@ import { searchUsers, sendContactRequest } from "@/services/contactsService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 export function ContactSearch() {
   const { language } = useTheme();
@@ -20,7 +21,11 @@ export function ContactSearch() {
   const queryClient = useQueryClient();
 
   // Search users query
-  const { data: searchResults, refetch: performSearch } = useQuery({
+  const { 
+    data: searchResults, 
+    refetch: performSearch, 
+    isLoading: isSearchLoading
+  } = useQuery({
     queryKey: ['searchUsers', searchQuery],
     queryFn: () => searchUsers(searchQuery),
     enabled: false,
@@ -70,6 +75,7 @@ export function ContactSearch() {
   };
 
   const getInitials = (name: string) => {
+    if (!name) return "??";
     return name.substring(0, 2).toUpperCase();
   };
 
@@ -87,7 +93,13 @@ export function ContactSearch() {
         </div>
       </div>
 
-      {isSearching && searchResults && searchResults.length > 0 && (
+      {isSearching && isSearchLoading && (
+        <div className="flex justify-center items-center py-8">
+          <LoadingSpinner size="md" />
+        </div>
+      )}
+
+      {isSearching && !isSearchLoading && searchResults && searchResults.length > 0 && (
         <div className="mt-4">
           <Separator className="my-2" />
           <p className="text-sm text-muted-foreground mb-2">{t("searchResults", language)}</p>
@@ -109,6 +121,9 @@ export function ContactSearch() {
                   disabled={sendRequestMutation.isPending}
                   size="sm"
                 >
+                  {sendRequestMutation.isPending ? (
+                    <LoadingSpinner size="sm" className="mr-2" />
+                  ) : null}
                   {t("sendRequest", language)}
                 </Button>
               </div>
@@ -117,7 +132,7 @@ export function ContactSearch() {
         </div>
       )}
 
-      {isSearching && searchResults && searchResults.length === 0 && (
+      {isSearching && !isSearchLoading && searchResults && searchResults.length === 0 && (
         <div className="mt-4 text-center text-muted-foreground p-4">
           <p>{t("noUsersFound", language)}</p>
         </div>

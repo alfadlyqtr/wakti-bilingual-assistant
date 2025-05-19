@@ -163,7 +163,7 @@ export async function searchUsers(query: string) {
       display_name,
       avatar_url
     `)
-    .or(`username.ilike.%${query}%,display_name.ilike.%${query}%`)
+    .or(`username.ilike.%${query}%,display_name.ilike.%${query}%,email.ilike.%${query}%`)
     .neq('id', userId)
     .limit(10);
 
@@ -183,13 +183,28 @@ export async function sendContactRequest(contactId: string) {
   }
 
   const userId = session.session.user.id;
+  
+  // Check if recipient has auto-approve enabled
+  const { data: recipientProfile, error: profileError } = await supabase
+    .from("profiles")
+    .select("auto_approve_contacts")
+    .eq("id", contactId)
+    .single();
 
+  if (profileError) {
+    console.error("Error checking recipient auto-approve settings:", profileError);
+    throw profileError;
+  }
+
+  // If auto-approve is enabled, insert as approved
+  const status = recipientProfile.auto_approve_contacts === true ? "approved" : "pending";
+  
   const { data, error } = await supabase
     .from("contacts")
     .insert({
       user_id: userId,
       contact_id: contactId,
-      status: "pending"
+      status: status
     })
     .select();
 
@@ -333,7 +348,7 @@ export async function unblockContact(contactId: string) {
 export async function getUserProfile(userId: string) {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, username, display_name, avatar_url")
+    .select("id, username, display_name, avatar_url, auto_approve_contacts")
     .eq("id", userId)
     .single();
 
@@ -353,4 +368,27 @@ export async function getCurrentUserProfile() {
   }
 
   return getUserProfile(session.session.user.id);
+}
+
+// Update user auto-approve contacts setting
+export async function updateAutoApproveContacts(autoApprove: boolean) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const userId = session.session.user.id;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .update({ auto_approve_contacts: autoApprove })
+    .eq("id", userId)
+    .select("auto_approve_contacts");
+
+  if (error) {
+    console.error("Error updating auto-approve setting:", error);
+    throw error;
+  }
+
+  return data[0];
 }

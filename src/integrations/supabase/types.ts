@@ -346,25 +346,31 @@ export type Database = {
       }
       profiles: {
         Row: {
+          auto_approve_contacts: boolean | null
           avatar_url: string | null
           created_at: string | null
           display_name: string | null
+          email: string | null
           id: string
           updated_at: string | null
           username: string | null
         }
         Insert: {
+          auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           created_at?: string | null
           display_name?: string | null
+          email?: string | null
           id: string
           updated_at?: string | null
           username?: string | null
         }
         Update: {
+          auto_approve_contacts?: boolean | null
           avatar_url?: string | null
           created_at?: string | null
           display_name?: string | null
+          email?: string | null
           id?: string
           updated_at?: string | null
           username?: string | null
@@ -614,6 +620,38 @@ export type Database = {
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
       }
       user_is_conversation_participant: {
         Args: { conversation_id: string }

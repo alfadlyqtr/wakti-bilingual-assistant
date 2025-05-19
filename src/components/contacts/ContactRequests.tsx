@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Check, X, User } from "lucide-react";
+import { Check, X, User, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -100,6 +100,7 @@ export function ContactRequests() {
   };
 
   const getInitials = (name: string) => {
+    if (!name) return "??";
     return name.substring(0, 2).toUpperCase();
   };
 
@@ -135,8 +136,12 @@ export function ContactRequests() {
   return (
     <div className="space-y-3">
       {!requests || requests.length === 0 ? (
-        <Card className="p-6 text-center text-muted-foreground">
-          {t("noContactRequests", language)}
+        <Card className="p-6">
+          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
+            <UserCog className="h-12 w-12 opacity-50" />
+            <p className="font-medium text-lg">{t("noContactRequests", language)}</p>
+            <p className="text-sm">{t("waitingForRequests", language)}</p>
+          </div>
         </Card>
       ) : (
         requests.map(request => {
@@ -161,23 +166,26 @@ export function ContactRequests() {
                   <div className="flex items-center gap-2">
                     <Button 
                       size="icon" 
-                      variant="ghost"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full border-green-500/50 hover:border-green-500 hover:bg-green-500/10"
                       onClick={() => handleAccept(request.id)}
                       disabled={acceptRequestMutation.isPending}
                     >
-                      <Check className="h-4 w-4" />
+                      <Check className="h-4 w-4 text-green-500" />
                     </Button>
                     <Button 
                       size="icon" 
-                      variant="ghost"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full border-red-500/50 hover:border-red-500 hover:bg-red-500/10"
                       onClick={() => handleReject(request.id)}
                       disabled={rejectRequestMutation.isPending}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4 text-red-500" />
                     </Button>
                     <Button 
                       size="icon" 
-                      variant="ghost"
+                      variant="outline"
+                      className="h-8 w-8 rounded-full"
                       onClick={() => handleBlock(request.user_id)}
                       disabled={blockUserMutation.isPending}
                     >
@@ -185,7 +193,7 @@ export function ContactRequests() {
                     </Button>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
+                <div className="text-xs text-muted-foreground mt-2">
                   <Badge variant="secondary">
                     {formatTime(request.created_at)}
                   </Badge>

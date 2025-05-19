@@ -1,138 +1,37 @@
-import { TranslationKey } from "./translationTypes";
+// Types for translations
+export type SupportedLanguage = 'en' | 'ar';
+export type TranslationKey = keyof typeof translations;
 
-type Language = "en" | "ar";
+// Default language
+export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
 
-type TranslationMap = {
-  [K in TranslationKey]: {
-    en: string;
-    ar: string;
-  };
-};
+// Translation function
+export function t(key: TranslationKey, language: string = DEFAULT_LANGUAGE): string {
+  const lang = language as SupportedLanguage;
+  if (!translations[key]) {
+    console.warn(`Translation key not found: ${key}`);
+    return key;
+  }
+  return translations[key][lang] || translations[key][DEFAULT_LANGUAGE];
+}
 
-const translations: TranslationMap = {
-  dashboard: {
-    en: "Dashboard",
-    ar: "لوحة التحكم"
+export const translations: Record<TranslationKey, Record<SupportedLanguage, string>> = {
+  // App-wide
+  appName: {
+    en: "Companion",
+    ar: "رفيق"
   },
-  tasks: {
-    en: "Tasks",
-    ar: "المهام"
+  loading: {
+    en: "Loading...",
+    ar: "جاري التحميل..."
   },
-  reminders: {
-    en: "Reminders",
-    ar: "التذكيرات"
+  error: {
+    en: "Error",
+    ar: "خطأ"
   },
-  taskAndReminders: {
-    en: "Tasks & Reminders",
-    ar: "المهام والتذكيرات"
-  },
-  events: {
-    en: "Events",
-    ar: "الفعاليات"
-  },
-  calendar: {
-    en: "Calendar",
-    ar: "التقويم"
-  },
-  voiceSummary: {
-    en: "Voice Summary",
-    ar: "ملخص صوتي"
-  },
-  voiceSummaryDetail: {
-    en: "Voice Summary Detail",
-    ar: "تفاصيل الملخص الصوتي"
-  },
-  assistant: {
-    en: "Assistant",
-    ar: "المساعد"
-  },
-  messages: {
-    en: "Messages",
-    ar: "الرسائل"
-  },
-  contacts: {
-    en: "Contacts",
-    ar: "جهات الاتصال"
-  },
-  settings: {
-    en: "Settings",
-    ar: "الإعدادات"
-  },
-  today: {
-    en: "Today",
-    ar: "اليوم"
-  },
-  tomorrow: {
-    en: "Tomorrow",
-    ar: "غدا"
-  },
-  yesterday: {
-    en: "Yesterday",
-    ar: "أمس"
-  },
-  upcoming: {
-    en: "Upcoming",
-    ar: "قادم"
-  },
-  completed: {
-    en: "Completed",
-    ar: "مكتمل"
-  },
-  addNew: {
-    en: "Add New",
-    ar: "إضافة جديد"
-  },
-  addTask: {
-    en: "Add Task",
-    ar: "إضافة مهمة"
-  },
-  addReminder: {
-    en: "Add Reminder",
-    ar: "إضافة تذكير"
-  },
-  name: {
-    en: "Name",
-    ar: "الاسم"
-  },
-  date: {
-    en: "Date",
-    ar: "التاريخ"
-  },
-  time: {
-    en: "Time",
-    ar: "الوقت"
-  },
-  description: {
-    en: "Description",
-    ar: "الوصف"
-  },
-  priority: {
-    en: "Priority",
-    ar: "الأولوية"
-  },
-  high: {
-    en: "High",
-    ar: "عالي"
-  },
-  medium: {
-    en: "Medium",
-    ar: "متوسط"
-  },
-  low: {
-    en: "Low",
-    ar: "منخفض"
-  },
-  status: {
-    en: "Status",
-    ar: "الحالة"
-  },
-  pending: {
-    en: "Pending",
-    ar: "قيد الانتظار"
-  },
-  inProgress: {
-    en: "In Progress",
-    ar: "قيد التنفيذ"
+  success: {
+    en: "Success",
+    ar: "نجاح"
   },
   save: {
     en: "Save",
@@ -150,21 +49,9 @@ const translations: TranslationMap = {
     en: "Edit",
     ar: "تعديل"
   },
-  view: {
-    en: "View",
-    ar: "عرض"
-  },
-  back: {
-    en: "Back",
-    ar: "رجوع"
-  },
-  next: {
-    en: "Next",
-    ar: "التالي"
-  },
-  previous: {
-    en: "Previous",
-    ar: "السابق"
+  create: {
+    en: "Create",
+    ar: "إنشاء"
   },
   submit: {
     en: "Submit",
@@ -174,33 +61,77 @@ const translations: TranslationMap = {
     en: "Search",
     ar: "بحث"
   },
-  filter: {
-    en: "Filter",
-    ar: "تصفية"
+  
+  // Navigation
+  home: {
+    en: "Home",
+    ar: "الرئيسية"
   },
-  sort: {
-    en: "Sort",
-    ar: "ترتيب"
+  chat: {
+    en: "Chat",
+    ar: "محادثة"
   },
-  ascending: {
-    en: "Ascending",
-    ar: "تصاعدي"
+  tasks: {
+    en: "Tasks",
+    ar: "المهام"
   },
-  descending: {
-    en: "Descending",
-    ar: "تنازلي"
+  calendar: {
+    en: "Calendar",
+    ar: "التقويم"
   },
-  light: {
-    en: "Light",
-    ar: "فاتح"
+  settings: {
+    en: "Settings",
+    ar: "الإعدادات"
   },
-  dark: {
-    en: "Dark",
-    ar: "داكن"
+  profile: {
+    en: "Profile",
+    ar: "الملف الشخصي"
   },
-  system: {
-    en: "System",
-    ar: "النظام"
+  messages: {
+    en: "Messages",
+    ar: "الرسائل"
+  },
+  
+  // Settings
+  appearance: {
+    en: "Appearance",
+    ar: "المظهر"
+  },
+  language: {
+    en: "Language",
+    ar: "اللغة"
+  },
+  theme: {
+    en: "Theme",
+    ar: "السمة"
+  },
+  notifications: {
+    en: "Notifications",
+    ar: "الإشعارات"
+  },
+  privacy: {
+    en: "Privacy",
+    ar: "الخصوصية"
+  },
+  account: {
+    en: "Account",
+    ar: "الحساب"
+  },
+  logout: {
+    en: "Logout",
+    ar: "تسجيل الخروج"
+  },
+  lightMode: {
+    en: "Light Mode",
+    ar: "الوضع الفاتح"
+  },
+  darkMode: {
+    en: "Dark Mode",
+    ar: "الوضع الداكن"
+  },
+  systemDefault: {
+    en: "System Default",
+    ar: "إعدادات النظام"
   },
   english: {
     en: "English",
@@ -210,18 +141,380 @@ const translations: TranslationMap = {
     en: "Arabic",
     ar: "العربية"
   },
-  theme: {
-    en: "Theme",
-    ar: "المظهر"
+  appearanceSettings: {
+    en: "Customize how the app looks",
+    ar: "تخصيص مظهر التطبيق"
   },
-  language: {
-    en: "Language",
-    ar: "اللغة"
+  
+  // Chat
+  typeMessage: {
+    en: "Type a message...",
+    ar: "اكتب رسالة..."
   },
-  logout: {
-    en: "Logout",
-    ar: "تسجيل الخروج"
+  sendMessage: {
+    en: "Send",
+    ar: "إرسال"
   },
+  newChat: {
+    en: "New Chat",
+    ar: "محادثة جديدة"
+  },
+  clearChat: {
+    en: "Clear Chat",
+    ar: "مسح المحادثة"
+  },
+  thinking: {
+    en: "Thinking...",
+    ar: "يفكر..."
+  },
+  
+  // Tasks
+  newTask: {
+    en: "New Task",
+    ar: "مهمة جديدة"
+  },
+  taskTitle: {
+    en: "Task Title",
+    ar: "عنوان المهمة"
+  },
+  taskDescription: {
+    en: "Description",
+    ar: "الوصف"
+  },
+  dueDate: {
+    en: "Due Date",
+    ar: "تاريخ الاستحقاق"
+  },
+  priority: {
+    en: "Priority",
+    ar: "الأولوية"
+  },
+  status: {
+    en: "Status",
+    ar: "الحالة"
+  },
+  high: {
+    en: "High",
+    ar: "عالية"
+  },
+  medium: {
+    en: "Medium",
+    ar: "متوسطة"
+  },
+  low: {
+    en: "Low",
+    ar: "منخفضة"
+  },
+  completed: {
+    en: "Completed",
+    ar: "مكتملة"
+  },
+  inProgress: {
+    en: "In Progress",
+    ar: "قيد التنفيذ"
+  },
+  notStarted: {
+    en: "Not Started",
+    ar: "لم تبدأ"
+  },
+  
+  // Calendar
+  today: {
+    en: "Today",
+    ar: "اليوم"
+  },
+  month: {
+    en: "Month",
+    ar: "الشهر"
+  },
+  week: {
+    en: "Week",
+    ar: "الأسبوع"
+  },
+  day: {
+    en: "Day",
+    ar: "اليوم"
+  },
+  newEvent: {
+    en: "New Event",
+    ar: "حدث جديد"
+  },
+  eventTitle: {
+    en: "Event Title",
+    ar: "عنوان الحدث"
+  },
+  startTime: {
+    en: "Start Time",
+    ar: "وقت البدء"
+  },
+  endTime: {
+    en: "End Time",
+    ar: "وقت الانتهاء"
+  },
+  location: {
+    en: "Location",
+    ar: "الموقع"
+  },
+  
+  // Contacts
+  contactRequestSettings: {
+    en: "Contact Requests",
+    ar: "طلبات الاتصال"
+  },
+  manageBlockedUsers: {
+    en: "Blocked Users",
+    ar: "المستخدمون المحظورون"
+  },
+  searchContacts: {
+    en: "Search for users by name, username, or email",
+    ar: "البحث عن المستخدمين بالاسم أو اسم المستخدم أو البريد الإلكتروني"
+  },
+  searchResults: {
+    en: "Search Results",
+    ar: "نتائج البحث"
+  },
+  sendRequest: {
+    en: "Send Request",
+    ar: "إرسال طلب"
+  },
+  noUsersFound: {
+    en: "No users found",
+    ar: "لم يتم العثور على مستخدمين"
+  },
+  messageStarted: {
+    en: "Message Started",
+    ar: "بدأت المحادثة"
+  },
+  chattingWithUser: {
+    en: "Chatting with",
+    ar: "محادثة مع"
+  },
+  addedToFavorites: {
+    en: "Added to Favorites",
+    ar: "تمت الإضافة إلى المفضلة"
+  },
+  removedFromFavorites: {
+    en: "Removed from Favorites",
+    ar: "تمت الإزالة من المفضلة"
+  },
+  errorCreatingConversation: {
+    en: "Failed to create conversation",
+    ar: "فشل في إنشاء المحادثة"
+  },
+  unblock: {
+    en: "Unblock",
+    ar: "إلغاء الحظر"
+  },
+  
+  // Contact sections
+  contacts: {
+    en: "Contacts",
+    ar: "جهات الاتصال"
+  },
+  requests: {
+    en: "Requests",
+    ar: "الطلبات"
+  },
+  blocked: {
+    en: "Blocked",
+    ar: "المحظورين"
+  },
+  
+  // Empty states
+  noContacts: {
+    en: "No contacts yet",
+    ar: "لا توجد جهات اتصال بعد"
+  },
+  searchToAddContacts: {
+    en: "Search for people to add as contacts",
+    ar: "ابحث عن أشخاص لإضافتهم كجهات اتصال"
+  },
+  noContactRequests: {
+    en: "No contact requests",
+    ar: "لا توجد طلبات اتصال"
+  },
+  waitingForRequests: {
+    en: "When someone sends you a request, it will appear here",
+    ar: "عندما يرسل لك شخص ما طلباً، سيظهر هنا"
+  },
+  noBlockedUsers: {
+    en: "No blocked users",
+    ar: "لا يوجد مستخدمين محظورين"
+  },
+  noBlockedUsersDescription: {
+    en: "You haven't blocked any users yet",
+    ar: "لم تقم بحظر أي مستخدمين حتى الآن"
+  },
+  
+  // Contact settings
+  contactsSettings: {
+    en: "Contact Settings",
+    ar: "إعدادات جهات الاتصال"
+  },
+  contactsSettingsDescription: {
+    en: "Manage how others connect with you",
+    ar: "إدارة كيفية اتصال الآخرين بك"
+  },
+  autoApproveRequests: {
+    en: "Auto-approve contact requests",
+    ar: "الموافقة التلقائية على طلبات الاتصال"
+  },
+  autoApproveExplanation: {
+    en: "When enabled, all contact requests will be automatically approved",
+    ar: "عند التفعيل، ستتم الموافقة تلقائياً على جميع طلبات الاتصال"
+  },
+  contactSettingsUpdated: {
+    en: "Contact settings updated successfully",
+    ar: "تم تحديث إعدادات جهات الاتصال بنجاح"
+  },
+  
+  // Success messages
+  settingsUpdated: {
+    en: "Settings Updated",
+    ar: "تم تحديث الإعدادات"
+  },
+  requestSent: {
+    en: "Request Sent",
+    ar: "تم إرسال الطلب"
+  },
+  contactRequestSent: {
+    en: "Contact request sent successfully",
+    ar: "تم إرسال طلب الاتصال بنجاح"
+  },
+  requestAccepted: {
+    en: "Request Accepted",
+    ar: "تم قبول الطلب"
+  },
+  contactAddedDescription: {
+    en: "Contact added to your contacts list",
+    ar: "تمت إضافة جهة الاتصال إلى قائمة جهات الاتصال الخاصة بك"
+  },
+  requestRejected: {
+    en: "Request Rejected",
+    ar: "تم رفض الطلب"
+  },
+  contactRejectedDescription: {
+    en: "Contact request has been rejected",
+    ar: "تم رفض طلب الاتصال"
+  },
+  contactBlocked: {
+    en: "Contact Blocked",
+    ar: "تم حظر جهة الاتصال"
+  },
+  userBlockedDescription: {
+    en: "User has been added to your blocked list",
+    ar: "تمت إضافة المستخدم إلى قائمة المحظورين"
+  },
+  blockedUserDescription: {
+    en: "User can no longer contact you",
+    ar: "لم يعد بإمكان المستخدم الاتصال بك"
+  },
+  contactUnblocked: {
+    en: "Contact Unblocked",
+    ar: "تم إلغاء حظر جهة الاتصال"
+  },
+  userUnblockedDescription: {
+    en: "User has been removed from your blocked list",
+    ar: "تمت إزالة المستخدم من قائمة المحظورين"
+  },
+  
+  // Error messages
+  errorSendingRequest: {
+    en: "Failed to send contact request",
+    ar: "فشل في إرسال طلب الاتصال"
+  },
+  errorAcceptingRequest: {
+    en: "Failed to accept contact request",
+    ar: "فشل في قبول طلب الاتصال"
+  },
+  errorRejectingRequest: {
+    en: "Failed to reject contact request",
+    ar: "فشل في رفض طلب الاتصال"
+  },
+  errorBlockingUser: {
+    en: "Failed to block user",
+    ar: "فشل في حظر المستخدم"
+  },
+  errorBlockingContact: {
+    en: "Failed to block contact",
+    ar: "فشل في حظر جهة الاتصال"
+  },
+  errorUnblockingContact: {
+    en: "Failed to unblock contact",
+    ar: "فشل في إلغاء حظر جهة الاتصال"
+  },
+  errorLoadingContacts: {
+    en: "Error loading contacts",
+    ar: "خطأ في تحميل جهات الاتصال"
+  },
+  errorLoadingRequests: {
+    en: "Error loading contact requests",
+    ar: "خطأ في تحميل طلبات الاتصال"
+  },
+  errorLoadingBlockedUsers: {
+    en: "Error loading blocked users",
+    ar: "خطأ في تحميل المستخدمين المحظورين"
+  },
+  errorUpdatingSettings: {
+    en: "Failed to update settings",
+    ar: "فشل في تحديث الإعدادات"
+  },
+  
+  // Messages
+  noMessages: {
+    en: "No messages yet",
+    ar: "لا توجد رسائل بعد"
+  },
+  startConversation: {
+    en: "Start a conversation",
+    ar: "بدء محادثة"
+  },
+  newMessage: {
+    en: "New Message",
+    ar: "رسالة جديدة"
+  },
+  selectContact: {
+    en: "Select a contact",
+    ar: "اختر جهة اتصال"
+  },
+  
+  // Voice notes
+  recordVoiceNote: {
+    en: "Record Voice Note",
+    ar: "تسجيل ملاحظة صوتية"
+  },
+  stopRecording: {
+    en: "Stop Recording",
+    ar: "إيقاف التسجيل"
+  },
+  playVoiceNote: {
+    en: "Play Voice Note",
+    ar: "تشغيل الملاحظة الصوتية"
+  },
+  pauseVoiceNote: {
+    en: "Pause Voice Note",
+    ar: "إيقاف الملاحظة الصوتية مؤقتًا"
+  },
+  
+  // Image generation
+  generateImage: {
+    en: "Generate Image",
+    ar: "إنشاء صورة"
+  },
+  imagePrompt: {
+    en: "Describe the image you want to generate",
+    ar: "صف الصورة التي تريد إنشاءها"
+  },
+  generatingImage: {
+    en: "Generating image...",
+    ar: "جاري إنشاء الصورة..."
+  },
+  downloadImage: {
+    en: "Download Image",
+    ar: "تنزيل الصورة"
+  },
+  
+  // Auth
   login: {
     en: "Login",
     ar: "تسجيل الدخول"
@@ -238,929 +531,38 @@ const translations: TranslationMap = {
     en: "Password",
     ar: "كلمة المرور"
   },
-  confirmPassword: {
-    en: "Confirm Password",
-    ar: "تأكيد كلمة المرور"
-  },
   forgotPassword: {
-    en: "Forgot Password",
-    ar: "نسيت كلمة المرور"
+    en: "Forgot Password?",
+    ar: "نسيت كلمة المرور؟"
   },
   resetPassword: {
     en: "Reset Password",
     ar: "إعادة تعيين كلمة المرور"
   },
-  user: {
-    en: "User",
-    ar: "مستخدم"
-  },
-  summary: {
-    en: "Summary",
-    ar: "ملخص"
-  },
-  transcript: {
-    en: "Transcript",
-    ar: "نص منسوخ"
-  },
-  recording: {
-    en: "Recording",
-    ar: "تسجيل"
-  },
-  play: {
-    en: "Play",
-    ar: "تشغيل"
-  },
-  pause: {
-    en: "Pause",
-    ar: "إيقاف مؤقت"
-  },
-  download: {
-    en: "Download",
-    ar: "تنزيل"
-  },
-  upload: {
-    en: "Upload",
-    ar: "رفع"
-  },
-  share: {
-    en: "Share",
-    ar: "مشاركة"
-  },
-  create: {
-    en: "Create",
-    ar: "إنشاء"
-  },
-  update: {
-    en: "Update",
-    ar: "تحديث"
-  },
-  messaging: {
-    en: "Messaging",
-    ar: "المراسلة"
-  },
-  searchContacts: {
-    en: "Search Contacts",
-    ar: "البحث في جهات الاتصال"
-  },
-  selectConversation: {
-    en: "Select a conversation",
-    ar: "اختر محادثة"
-  },
-  createFirstEvent: {
-    en: "Create your first event",
-    ar: "قم بإنشاء أول فعالية لك"
-  },
-  decline: {
-    en: "Decline",
-    ar: "رفض"
-  },
-  accept: {
-    en: "Accept",
-    ar: "قبول"
-  },
-  noLocation: {
-    en: "No Location",
-    ar: "لا يوجد موقع"
-  },
-  attendee: {
-    en: "Attendee",
-    ar: "حاضر"
-  },
-  attendees: {
-    en: "Attendees",
-    ar: "الحاضرين"
-  },
-  readyToCreateTask: {
-    en: "Ready to create your first task?",
-    ar: "هل أنت مستعد لإنشاء مهمتك الأولى؟"
-  },
-  noTasksYet: {
-    en: "No tasks yet",
-    ar: "لا توجد مهام بعد"
-  },
-  nothingScheduled: {
-    en: "Nothing scheduled",
-    ar: "لا يوجد شيء مجدول"
-  },
-  noEventsYet: {
-    en: "No events yet",
-    ar: "لا توجد فعاليات بعد"
-  },
-  noRemindersYet: {
-    en: "No reminders yet",
-    ar: "لا توجد تذكيرات بعد"
-  },
-  writer: {
-    en: "Writer",
-    ar: "كاتب"
-  },
-  creative: {
-    en: "Creative",
-    ar: "إبداعي"
-  },
-  general: {
-    en: "General",
-    ar: "عام"
-  },
-  startVoiceInput: {
-    en: "Start Voice Input",
-    ar: "بدء الإدخال الصوتي"
-  },
-  ai: {
-    en: "AI",
-    ar: "الذكاء الاصطناعي"
-  },
-  account: {
-    en: "Account",
-    ar: "الحساب"
-  },
-  switchLanguage: {
-    en: "Switch Language",
-    ar: "تغيير اللغة"
-  },
-  commonQuestions: {
-    en: "Common Questions",
-    ar: "أسئلة شائعة"
-  },
-  whatCanYouDo: {
-    en: "What can you do?",
-    ar: "ماذا يمكنك أن تفعل؟"
-  },
-  howToCreateTask: {
-    en: "How do I create a task?",
-    ar: "كيف أنشئ مهمة؟"
-  },
-  explainWAKTIFeatures: {
-    en: "Explain WAKTI features",
-    ar: "اشرح ميزات WAKTI"
-  },
-  tonePresets: {
-    en: "Tone Presets",
-    ar: "إعدادات النبرة"
-  },
-  professional: {
-    en: "Professional",
-    ar: "احترافي"
-  },
-  casual: {
-    en: "Casual",
-    ar: "غير رسمي"
-  },
-  friendly: {
-    en: "Friendly",
-    ar: "ودي"
-  },
-  academic: {
-    en: "Academic",
-    ar: "أكاديمي"
-  },
-  lengthOptions: {
-    en: "Length Options",
-    ar: "خيارات الطول"
-  },
-  short: {
-    en: "Short",
-    ar: "قصير"
-  },
-  long: {
-    en: "Long",
-    ar: "طويل"
-  },
-  grammarCheck: {
-    en: "Grammar Check",
-    ar: "فحص القواعد"
-  },
-  imageTools: {
-    en: "Image Tools",
-    ar: "أدوات الصور"
-  },
-  textToImage: {
-    en: "Text to Image",
-    ar: "نص إلى صورة"
-  },
-  imageToImage: {
-    en: "Image to Image",
-    ar: "صورة إلى صورة"
-  },
-  removeBg: {
-    en: "Remove Background",
-    ar: "إزالة الخلفية"
-  },
-  enhanceImage: {
-    en: "Enhance Image",
-    ar: "تحسين الصورة"
-  },
-  chartTypes: {
-    en: "Chart Types",
-    ar: "أنواع المخططات"
-  },
-  barChart: {
-    en: "Bar Chart",
-    ar: "مخطط شريطي"
-  },
-  lineChart: {
-    en: "Line Chart",
-    ar: "مخطط خطي"
-  },
-  pieChart: {
-    en: "Pie Chart",
-    ar: "مخطط دائري"
-  },
-  shortcuts: {
-    en: "Shortcuts",
-    ar: "اختصارات"
-  },
-  createTask: {
-    en: "Create Task",
-    ar: "إنشاء مهمة"
-  },
-  createReminder: {
-    en: "Create Reminder",
-    ar: "إنشاء تذكير"
-  },
-  createEvent: {
-    en: "Create Event",
-    ar: "إنشاء فعالية"
-  },
-  viewCalendar: {
-    en: "View Calendar",
-    ar: "عرض التقويم"
-  },
-  instructions: {
-    en: "Instructions",
-    ar: "تعليمات"
-  },
-  knowledge: {
-    en: "Knowledge",
-    ar: "معرفة"
-  },
-  month: {
-    en: "Month",
-    ar: "شهر"
-  },
-  week: {
-    en: "Week",
-    ar: "أسبوع"
-  },
-  year: {
-    en: "Year",
-    ar: "سنة"
-  },
-  monthView: {
-    en: "Month View",
-    ar: "عرض الشهر"
-  },
-  weekView: {
-    en: "Week View",
-    ar: "عرض الأسبوع"
-  },
-  yearView: {
-    en: "Year View",
-    ar: "عرض السنة"
-  },
-  noEvents: {
-    en: "No events",
-    ar: "لا توجد فعاليات"
-  },
-  notesLabel: {
-    en: "Notes",
-    ar: "ملاحظات"
-  },
-  titleRequired: {
-    en: "Title is required",
-    ar: "العنوان مطلوب"
-  },
-  dateRequired: {
-    en: "Date is required",
-    ar: "التاريخ مطلوب"
-  },
-  editNote: {
-    en: "Edit Note",
-    ar: "تعديل الملاحظة"
-  },
-  createNote: {
-    en: "Create Note",
-    ar: "إنشاء ملاحظة"
-  },
-  title: {
-    en: "Title",
-    ar: "العنوان"
-  },
-  titlePlaceholder: {
-    en: "Enter title",
-    ar: "أدخل العنوان"
-  },
-  descriptionPlaceholder: {
-    en: "Enter description",
-    ar: "أدخل الوصف"
-  },
-  requestAccepted: {
-    en: "Request Accepted",
-    ar: "تم قبول الطلب"
-  },
-  contactRejectedDescription: {
-    en: "has been removed from your blocked list",
-    ar: "تمت إزالته من قائمة المحظورين"
-  },
-  noContactRequests: {
-    en: "No contact requests",
-    ar: "لا توجد طلبات اتصال"
-  },
-  messageStarted: {
-    en: "Message Started",
-    ar: "بدأت المحادثة"
-  },
-  chattingWithUser: {
-    en: "You are now chatting with",
-    ar: "أنت الآن تتحدث مع"
-  },
-  removedFromFavorites: {
-    en: "Removed from favorites",
-    ar: "تمت إزالته من المفضلة"
-  },
-  addedToFavorites: {
-    en: "Added to favorites",
-    ar: "تمت إضافته إلى المفضلة"
-  },
-  contactBlocked: {
-    en: "Contact Blocked",
-    ar: "تم حظر جهة الاتصال"
-  },
-  userBlockedDescription: {
-    en: "has been blocked and will not be able to contact you",
-    ar: "تم حظره ولن يتمكن من الاتصال بك"
-  },
-  contactAddedDescription: {
-    en: "has been added to your contacts",
-    ar: "تمت إضافته إلى جهات الاتصال الخاصة بك"
-  },
-  requestRejected: {
-    en: "Request Rejected",
-    ar: "تم رفض الطلب"
-  },
-  blockedUserDescription: {
-    en: "has been blocked",
-    ar: "تم حظره"
-  },
-  sendMessage: {
-    en: "Send Message",
-    ar: "إرسال رسالة"
-  },
-  dailyQuote: {
-    en: "Daily Quote",
-    ar: "اقتباس يومي"
-  },
-  error: {
-    en: "Error",
-    ar: "خطأ"
-  },
-  pleaseCompleteAllRequiredFields: {
-    en: "Please complete all required fields",
-    ar: "يرجى إكمال جميع الحقول المطلوبة"
-  },
-  success: {
-    en: "Success",
-    ar: "نجاح"
-  },
-  eventCreatedSuccessfully: {
-    en: "Event created successfully",
-    ar: "تم إنشاء الفعالية بنجاح"
-  },
-  errorCreatingEvent: {
-    en: "Error creating event",
-    ar: "خطأ في إنشاء الفعالية"
-  },
-  eventTitle: {
-    en: "Event Title",
-    ar: "عنوان الفعالية"
-  },
-  enterEventTitle: {
-    en: "Enter event title",
-    ar: "أدخل عنوان الفعالية"
-  },
-  descriptionField: {
-    en: "Description",
-    ar: "الوصف"
-  },
-  enterEventDescription: {
-    en: "Enter event description",
-    ar: "أدخل وصف الفعالية"
-  },
-  location: {
-    en: "Location",
-    ar: "الموقع"
-  },
-  enterLocation: {
-    en: "Enter location",
-    ar: "أدخل الموقع"
-  },
-  selectDate: {
-    en: "Select Date",
-    ar: "حدد التاريخ"
-  },
-  creating: {
-    en: "Creating...",
-    ar: "جاري الإنشاء..."
-  },
-  generalSettings: {
-    en: "General Settings",
-    ar: "الإعدادات العامة"
-  },
-  writerSettings: {
-    en: "Writer Settings",
-    ar: "إعدادات الكاتب"
-  },
-  creativeSettings: {
-    en: "Creative Settings",
-    ar: "الإعدادات الإبداعية"
-  },
-  assistantSettings: {
-    en: "Assistant Settings",
-    ar: "إعدادات المساعد"
-  },
-  contactRequestSettings: {
-    en: "Contact Requests",
-    ar: "طلبات الاتصال"
-  },
-  manageBlockedUsers: {
-    en: "Blocked Users",
-    ar: "المستخدمون المحظورون"
-  },
-  unblockContact: {
-    en: "Unblock Contact",
-    ar: "إلغاء حظر جهة الاتصال"
-  },
-  noConversations: {
-    en: "No conversations yet",
-    ar: "لا توجد محادثات بعد"
-  },
-  imageTooLarge: {
-    en: "Image is too large",
-    ar: "الصورة كبيرة جدًا"
-  },
-  typeMessage: {
-    en: "Type a message",
-    ar: "اكتب رسالة"
-  },
-  stopRecording: {
-    en: "Stop Recording",
-    ar: "إيقاف التسجيل"
-  },
-  newMessage: {
-    en: "New Message",
-    ar: "رسالة جديدة"
-  },
-  noContactsFound: {
-    en: "No contacts found",
-    ar: "لم يتم العثور على جهات اتصال"
-  },
-  reminderTitle: {
-    en: "Reminder Title",
-    ar: "عنوان التذكير"
-  },
-  dueDate: {
-    en: "Due Date",
-    ar: "تاريخ الاستحقاق"
-  },
-  dueTime: {
-    en: "Due Time",
-    ar: "وقت الاستحقاق"
-  },
-  recurring: {
-    en: "Recurring",
-    ar: "متكرر"
-  },
-  recurrencePattern: {
-    en: "Recurrence Pattern",
-    ar: "نمط التكرار"
-  },
-  daily: {
-    en: "Daily",
-    ar: "يومي"
-  },
-  weekly: {
-    en: "Weekly",
-    ar: "أسبوعي"
-  },
-  monthly: {
-    en: "Monthly",
-    ar: "شهري"
-  },
-  yearly: {
-    en: "Yearly",
-    ar: "سنوي"
-  },
-  shareWith: {
-    en: "Share With",
-    ar: "مشاركة مع"
-  },
-  selectContact: {
-    en: "Select Contact",
-    ar: "اختر جهة اتصال"
-  },
-  taskTitle: {
-    en: "Task Title",
-    ar: "عنوان المهمة"
-  },
-  urgent: {
-    en: "Urgent",
-    ar: "عاجل"
-  },
-  highPriority: {
-    en: "High Priority",
-    ar: "أولوية عالية"
-  },
-  mediumPriority: {
-    en: "Medium Priority",
-    ar: "أولوية متوسطة"
-  },
-  lowPriority: {
-    en: "Low Priority",
-    ar: "أولوية منخفضة"
-  },
-  subtaskGroupTitle: {
-    en: "Subtasks",
-    ar: "المهام الفرعية"
-  },
-  subtasks: {
-    en: "Subtasks",
-    ar: "المهام الفرعية"
-  },
-  addSubtask: {
-    en: "Add Subtask",
-    ar: "إضافة مهمة فرعية"
-  },
-  dailyRecurrence: {
-    en: "Daily",
-    ar: "يومي"
-  },
-  weeklyRecurrence: {
-    en: "Weekly",
-    ar: "أسبوعي"
-  },
-  monthlyRecurrence: {
-    en: "Monthly",
-    ar: "شهري"
-  },
-  yearlyRecurrence: {
-    en: "Yearly",
-    ar: "سنوي"
-  },
-  sharedTask: {
-    en: "Shared Task",
-    ar: "مهمة مشتركة"
-  },
-  searchTasks: {
-    en: "Search tasks",
-    ar: "بحث في المهام"
-  },
-  searchReminders: {
-    en: "Search reminders",
-    ar: "بحث في التذكيرات"
-  },
-  allTasks: {
-    en: "All Tasks",
-    ar: "جميع المهام"
-  },
-  pendingTasks: {
-    en: "Pending Tasks",
-    ar: "المهام قيد الانتظار"
-  },
-  completedTasks: {
-    en: "Completed Tasks",
-    ar: "المهام المكتملة"
-  },
-  overdueItems: {
-    en: "Overdue Items",
-    ar: "العناصر المتأخرة"
-  },
-  noTasks: {
-    en: "No tasks",
-    ar: "لا توجد مهام"
-  },
-  noReminders: {
-    en: "No reminders",
-    ar: "لا توجد تذكيرات"
-  },
-  createYourFirst: {
-    en: "Create your first",
-    ar: "أنشئ أول"
-  },
-  taskCreatedSuccessfully: {
-    en: "Task created successfully",
-    ar: "تم إنشاء المهمة بنجاح"
-  },
-  taskUpdatedSuccessfully: {
-    en: "Task updated successfully",
-    ar: "تم تحديث المهمة بنجاح"
-  },
-  taskDeletedSuccessfully: {
-    en: "Task deleted successfully",
-    ar: "تم حذف المهمة بنجاح"
-  },
-  reminderCreatedSuccessfully: {
-    en: "Reminder created successfully",
-    ar: "تم إنشاء التذكير بنجاح"
-  },
-  reminderUpdatedSuccessfully: {
-    en: "Reminder updated successfully",
-    ar: "تم تحديث التذكير بنجاح"
-  },
-  reminderDeletedSuccessfully: {
-    en: "Reminder deleted successfully",
-    ar: "تم حذف التذكير بنجاح"
-  },
-  taskSharedSuccessfully: {
-    en: "Task shared successfully",
-    ar: "تم مشاركة المهمة بنجاح"
-  },
-  username: {
-    en: "Username",
-    ar: "اسم المستخدم"
-  },
-  tasks_view_all: {
-    en: "View all tasks",
-    ar: "عرض كل المهام"
-  },
-  event: {
-    en: "Event",
-    ar: "فعالية"
-  },
-  task: {
-    en: "Task",
-    ar: "مهمة"
-  },
-  calendar_open: {
-    en: "Open Calendar",
-    ar: "فتح التقويم"
-  },
-  events_today: {
-    en: "Today's Events",
-    ar: "فعاليات اليوم"
-  },
-  events_view_all: {
-    en: "View all events",
-    ar: "عرض كل الفعاليات"
-  },
-  reminders_view_all: {
-    en: "View all reminders",
-    ar: "عرض كل التذكيرات"
-  },
-  freeTrialDays: {
-    en: "Free Trial Days",
-    ar: "أيام التجربة المجانية"
-  },
-  eventDetail: {
-    en: "Event Detail",
-    ar: "تفاصيل الفعالية"
-  },
-  lightMode: {
-    en: "Light Mode",
-    ar: "الوضع الفاتح"
-  },
-  darkMode: {
-    en: "Dark Mode",
-    ar: "الوضع الداكن"
-  },
-  notificationPreferences: {
-    en: "Notification Preferences",
-    ar: "تفضيلات الإشعارات"
-  },
-  widgetVisibility: {
-    en: "Widget Visibility",
-    ar: "ظهور الأدوات"
-  },
-  privacyControls: {
-    en: "Privacy Controls",
-    ar: "إعدادات الخصوصية"
-  },
-  deleteAccount: {
-    en: "Delete Account",
-    ar: "حذف الحساب"
-  },
-  aiSectionTitle: {
-    en: "WAKTI AI Capabilities",
-    ar: "إمكانيات الذكاء الاصطناعي في WAKTI"
-  },
-  aiFeature1Title: {
-    en: "Smart Task Generation",
-    ar: "إنشاء المهام الذكية"
-  },
-  aiFeature1Desc: {
-    en: "Generate optimized tasks with priorities and deadlines",
-    ar: "توليد مهام محسنة مع أولويات ومواعيد نهائية"
-  },
-  aiFeature2Title: {
-    en: "Content Summarization",
-    ar: "تلخيص المحتوى"
-  },
-  aiFeature2Desc: {
-    en: "Create concise summaries from voice or text inputs",
-    ar: "إنشاء ملخصات موجزة من المدخلات الصوتية أو النصية"
-  },
-  aiFeature3Title: {
-    en: "Creative Content",
-    ar: "المحتوى الإبداعي"
-  },
-  aiFeature3Desc: {
-    en: "Write professional content in multiple tones and styles",
-    ar: "كتابة محتوى احترافي بنبرات وأساليب متعددة"
-  },
-  aiFeature4Title: {
-    en: "Learning Assistant",
-    ar: "مساعد التعلم"
-  },
-  aiFeature4Desc: {
-    en: "Get guidance, tutoring, and knowledge on demand",
-    ar: "الحصول على التوجيه والدروس والمعرفة عند الطلب"
-  },
   
-  // Error messages
-  errorOccurred: {
-    en: "An error occurred",
-    ar: "حدث خطأ"
+  // Misc
+  welcomeBack: {
+    en: "Welcome back!",
+    ar: "مرحبًا بعودتك!"
   },
-  errorProcessingRequest: {
-    en: "Sorry, there was an error processing your request",
-    ar: "عذرًا، حدث خطأ أثناء معالجة طلبك"
+  getStarted: {
+    en: "Get Started",
+    ar: "البدء"
   },
-  
-  // Image generation
-  generatingImage: {
-    en: "Generating image...",
-    ar: "جاري إنشاء الصورة..."
+  learnMore: {
+    en: "Learn More",
+    ar: "معرفة المزيد"
   },
-  imageGenerated: {
-    en: "Image generated",
-    ar: "تم إنشاء الصورة"
+  comingSoon: {
+    en: "Coming Soon",
+    ar: "قريبًا"
   },
-  generatedImage: {
-    en: "Generated image",
-    ar: "الصورة المُنشأة"
+  beta: {
+    en: "Beta",
+    ar: "تجريبي"
   },
-  errorGeneratingImage: {
-    en: "Sorry, there was an error generating the image",
-    ar: "عذرًا، حدث خطأ أثناء إنشاء الصورة"
-  },
-  
-  contactUnblocked: {
-    en: "Contact Unblocked",
-    ar: "تم إلغاء حظر جهة الاتصال"
-  },
-  userUnblockedDescription: {
-    en: "has been removed from your blocked list",
-    ar: "تمت إزالته من قائمة المحظورين"
-  },
-  errorUnblockingContact: {
-    en: "Error unblocking contact",
-    ar: "خطأ في إلغاء حظر جهة الاتصال"
-  },
-  errorLoadingBlockedUsers: {
-    en: "Error loading blocked users",
-    ar: "خطأ في تحميل المستخدمين المحظورين"
-  },
-  noBlockedUsers: {
-    en: "No blocked users",
-    ar: "لا يوجد مستخدمون محظورون"
-  },
-  unblock: {
-    en: "Unblock",
-    ar: "إلغاء الحظر"
-  },
-  errorCreatingConversation: {
-    en: "Error creating conversation",
-    ar: "خطأ في إنشاء المحادثة"
-  },
-  errorBlockingContact: {
-    en: "Error blocking contact",
-    ar: "خطأ في حظر جهة الاتصال"
-  },
-  errorLoadingContacts: {
-    en: "Error loading contacts",
-    ar: "خطأ في تحميل جهات الاتصال"
-  },
-  noContacts: {
-    en: "No contacts",
-    ar: "لا توجد جهات اتصال"
-  },
-  searchToAddContacts: {
-    en: "Search to add contacts",
-    ar: "البحث لإضافة جهات اتصال"
-  },
-  errorAcceptingRequest: {
-    en: "Error accepting request",
-    ar: "خطأ في قبول الطلب"
-  },
-  errorRejectingRequest: {
-    en: "Error rejecting request",
-    ar: "خطأ في رفض الطلب"
-  },
-  errorBlockingUser: {
-    en: "Error blocking user",
-    ar: "خطأ في حظر المست��دم"
-  },
-  errorLoadingRequests: {
-    en: "Error loading requests",
-    ar: "خطأ في تحميل الطلبات"
-  },
-  requestSent: {
-    en: "Request Sent",
-    ar: "تم إرسال الطلب"
-  },
-  contactRequestSent: {
-    en: "Contact request sent",
-    ar: "تم إرسال طلب الاتصال"
-  },
-  errorSendingRequest: {
-    en: "Error sending request",
-    ar: "خطأ في إرسال الطلب"
-  },
-  searchResults: {
-    en: "Search Results",
-    ar: "نتائج البحث"
-  },
-  sendRequest: {
-    en: "Send Request",
-    ar: "إرسال طلب"
-  },
-  noUsersFound: {
-    en: "No users found",
-    ar: "لم يتم العثور على مستخدمين"
-  },
-  errorSendingMessage: {
-    en: "Error sending message",
-    ar: "خطأ في إرسال الرسالة"
-  },
-  loadingMessages: {
-    en: "Loading messages",
-    ar: "تحميل الرسائل"
-  },
-  startConversation: {
-    en: "Start a conversation",
-    ar: "بدء محادثة"
-  },
-  errorLoadingConversations: {
-    en: "Error loading conversations",
-    ar: "خطأ في تحميل المحادثات"
-  },
-  noConversationsFound: {
-    en: "No conversations found",
-    ar: "لم يتم العثور على محادثات"
-  },
-  noMessages: {
-    en: "No messages",
-    ar: "لا توجد رسائل"
-  },
-  uploading: {
-    en: "Uploading",
-    ar: "جاري الرفع"
-  },
-  creatingConversation: {
-    en: "Creating conversation",
-    ar: "إنشاء محادثة"
-  },
-  searchMessages: {
-    en: "Search Messages",
-    ar: "البحث في الرسائل"
-  },
-  
-  // New friendly messaging strings
-  welcomeToMessages: {
-    en: "Welcome to your messages",
-    ar: "مرحبًا بك في رسائلك"
-  },
-  tapNewMessageToStart: {
-    en: "Tap the new message button to start chatting",
-    ar: "انقر على زر الرسالة الجديدة لبدء الدردشة"
-  },
-  sayHelloPrompt: {
-    en: "Say hello to start the conversation! Your message will appear here.",
-    ar: "قل مرحبا لبدء المحادثة! ستظهر رسالتك هنا."
-  },
-  addContactsPrompt: {
-    en: "You need to add contacts before you can start messaging",
-    ar: "تحتاج إلى إضافة جهات اتصال قبل أن تتمكن من بدء المراسلة"
-  },
-  goToContactsPage: {
-    en: "Visit the contacts page to add people",
-    ar: "قم بزيارة صفحة جهات الاتصال لإضافة أشخاص"
-  },
-  
-  // New message terms
-  messagesSent: {
-    en: "Messages sent",
-    ar: "تم إرسال الرسائل"
-  },
-  messagesDelivered: {
-    en: "Messages delivered",
-    ar: "تم توصيل الرسائل"
-  },
-  policiesUpdated: {
-    en: "Security policies updated",
-    ar: "تم تحديث سياسات الأمان"
+  version: {
+    en: "Version",
+    ar: "الإصدار"
   }
-};
-
-export const t = (key: TranslationKey, language: Language): string => {
-  return translations[key]?.[language] || key;
 };
