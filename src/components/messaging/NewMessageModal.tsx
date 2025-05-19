@@ -19,6 +19,20 @@ interface NewMessageModalProps {
   onSelectContact: (contactId: string) => void;
 }
 
+type UserProfile = {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  [key: string]: any;
+};
+
+type ContactType = {
+  id: string;
+  contact_id: string;
+  profile?: UserProfile;
+  [key: string]: any;
+};
+
 export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessageModalProps) {
   const { language } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,10 +54,10 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   }, [isOpen]);
 
   // Filter contacts based on search query
-  const filteredContacts = contacts?.filter(contact => {
-    const profile = contact.profile || {};
-    const displayName = ((profile as any).display_name as string) || ((profile as any).username as string) || "";
-    const username = ((profile as any).username as string) || "";
+  const filteredContacts = contacts?.filter((contact: ContactType) => {
+    const profile = contact.profile || {} as UserProfile;
+    const displayName = profile.display_name || profile.username || "";
+    const username = profile.username || "";
     
     return !searchQuery || 
       displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -108,11 +122,12 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
               {!filteredContacts || filteredContacts.length === 0 ? (
                 <div className="text-center py-4 text-muted-foreground">
                   <p>{t("noContactsFound", language)}</p>
+                  <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
                 </div>
               ) : (
-                filteredContacts.map(contact => {
-                  const profile = contact.profile || {};
-                  const displayName = ((profile as any).display_name as string) || ((profile as any).username as string) || "Unknown User";
+                filteredContacts.map((contact: ContactType) => {
+                  const profile = contact.profile || {} as UserProfile;
+                  const displayName = profile.display_name || profile.username || "Unknown User";
                   
                   return (
                     <Button
@@ -123,7 +138,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       disabled={isCreatingConversation}
                     >
                       <Avatar className="h-8 w-8 mr-2">
-                        <AvatarImage src={((profile as any).avatar_url as string) || ""} alt={displayName} />
+                        <AvatarImage src={profile.avatar_url || ""} alt={displayName} />
                         <AvatarFallback>
                           {getInitials(displayName)}
                         </AvatarFallback>

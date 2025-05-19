@@ -11,6 +11,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getBlockedContacts, unblockContact } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 
+type UserProfile = {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  [key: string]: any;
+};
+
+type BlockedUserType = {
+  id: string;
+  contact_id: string;
+  profiles?: UserProfile;
+  [key: string]: any;
+};
+
 export function BlockedUsers() {
   const { toast } = useToast();
   const { language } = useTheme();
@@ -47,6 +61,7 @@ export function BlockedUsers() {
   };
 
   const getInitials = (name: string) => {
+    if (!name) return "??";
     return name.substring(0, 2).toUpperCase();
   };
 
@@ -71,13 +86,14 @@ export function BlockedUsers() {
     <div className="space-y-3">
       {!blockedUsers || blockedUsers.length === 0 ? (
         <Card className="p-6 text-center text-muted-foreground">
-          {t("noBlockedUsers", language)}
+          <p>{t("noBlockedUsers", language)}</p>
+          <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
         </Card>
       ) : (
-        blockedUsers.map(user => {
-          const userProfile = user.profiles || {};
-          const displayName = ((userProfile as any).display_name as string) || ((userProfile as any).username as string) || "Unknown User";
-          const username = ((userProfile as any).username as string) || "user";
+        blockedUsers.map((user: BlockedUserType) => {
+          const userProfile = user.profiles || {} as UserProfile;
+          const displayName = userProfile.display_name || userProfile.username || "Unknown User";
+          const username = userProfile.username || "user";
           
           return (
             <Card key={user.id} className="overflow-hidden border-destructive/30">
@@ -85,7 +101,7 @@ export function BlockedUsers() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={((userProfile as any).avatar_url as string) || ""} />
+                      <AvatarImage src={userProfile.avatar_url || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
                     <div>

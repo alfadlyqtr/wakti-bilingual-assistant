@@ -19,16 +19,38 @@ interface ConversationsListProps {
   searchQuery?: string;
 }
 
+type UserProfile = {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  [key: string]: any;
+};
+
+type Participant = {
+  user_id: string;
+  profile?: UserProfile;
+  [key: string]: any;
+};
+
+type ConversationType = {
+  id: string;
+  last_message_text?: string;
+  last_message_at: string;
+  unread_count?: number;
+  participants?: Participant[];
+  [key: string]: any;
+};
+
 export function ConversationsList({ onSelectConversation, activeConversationId, searchQuery = "" }: ConversationsListProps) {
   const { language, theme } = useTheme();
-  const [filteredConversations, setFilteredConversations] = useState<any[]>([]);
+  const [filteredConversations, setFilteredConversations] = useState<ConversationType[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   
   // Get current user id
   useEffect(() => {
     async function getUserId() {
       const { data } = await supabase.auth.getSession();
-      setCurrentUserId(data.session?.user.id || null);
+      setCurrentUserId(data?.session?.user.id || null);
     }
     getUserId();
   }, []);
@@ -51,7 +73,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
       return;
     }
     
-    const filtered = conversations.filter(conversation => {
+    const filtered = conversations.filter((conversation: ConversationType) => {
       // Check last message text
       if (conversation.last_message_text && 
           conversation.last_message_text.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -108,7 +130,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
   };
 
   // Get other participant details for display
-  const getConversationDisplayInfo = (conversation: any) => {
+  const getConversationDisplayInfo = (conversation: ConversationType) => {
     if (!conversation) {
       return { name: "Unknown", avatar: "" };
     }
@@ -121,7 +143,7 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
 
     // Get other participants (exclude current user)
     const otherParticipants = participants.filter(
-      (p: any) => p.user_id !== currentUserId
+      (p: Participant) => p.user_id !== currentUserId
     );
     
     if (otherParticipants.length === 0) {
@@ -129,11 +151,11 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
     }
     
     const otherUser = otherParticipants[0];
-    const profile = otherUser.profile || {};
+    const profile = otherUser.profile || {} as UserProfile;
     
     return {
-      name: (profile.display_name as string) || (profile.username as string) || "Unknown",
-      avatar: (profile.avatar_url as string) || "",
+      name: profile.display_name || profile.username || "Unknown",
+      avatar: profile.avatar_url || "",
     };
   };
 
@@ -161,9 +183,10 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
           {filteredConversations.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
               <p>{searchQuery ? t("noConversationsFound", language) : t("noConversations", language)}</p>
+              <p className="text-sm mt-2">{t("startConversation", language)}</p>
             </div>
           ) : (
-            filteredConversations.map((conversation) => {
+            filteredConversations.map((conversation: ConversationType) => {
               const { name, avatar } = getConversationDisplayInfo(conversation);
               const isVoiceMessage = conversation.last_message_text?.includes('🎤');
               const isImageMessage = conversation.last_message_text?.includes('📷');

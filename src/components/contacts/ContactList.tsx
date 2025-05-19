@@ -13,6 +13,20 @@ import { getContacts, blockContact } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
 
+type UserProfile = {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+  [key: string]: any;
+};
+
+type ContactType = {
+  id: string;
+  contact_id: string;
+  profile?: UserProfile;
+  [key: string]: any;
+};
+
 export function ContactList() {
   const { toast } = useToast();
   const { language } = useTheme();
@@ -90,6 +104,7 @@ export function ContactList() {
   };
 
   const getInitials = (name: string) => {
+    if (!name) return "??";
     return name.substring(0, 2).toUpperCase();
   };
 
@@ -118,10 +133,10 @@ export function ContactList() {
           <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
         </Card>
       ) : (
-        contacts.map(contact => {
-          const contactProfile = contact.profile || {};
-          const displayName = ((contactProfile as any).display_name as string) || ((contactProfile as any).username as string) || "Unknown User";
-          const username = ((contactProfile as any).username as string) || "user";
+        contacts.map((contact: ContactType) => {
+          const contactProfile = contact.profile || {} as UserProfile;
+          const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
+          const username = contactProfile.username || "user";
           
           return (
             <Card key={contact.id} className="overflow-hidden">
@@ -129,7 +144,7 @@ export function ContactList() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={((contactProfile as any).avatar_url as string) || ""} />
+                      <AvatarImage src={contactProfile.avatar_url || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
                     <div>
