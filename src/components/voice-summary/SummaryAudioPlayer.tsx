@@ -36,6 +36,8 @@ export default function SummaryAudioPlayer({
   const [audioLanguage, setAudioLanguage] = useState<"en" | "ar">(language === "ar" ? "ar" : "en");
   const [progress, setProgress] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -60,6 +62,16 @@ export default function SummaryAudioPlayer({
         setIsPlaying(true);
         startProgressTimer();
       };
+      audio.onerror = () => {
+        console.error("Audio playback error");
+        toast.error(
+          language === "ar" 
+            ? "حدث خطأ أثناء تشغيل الصوت" 
+            : "Error playing audio"
+        );
+        setIsPlaying(false);
+        stopProgressTimer();
+      };
       audioRef.current = audio;
     }
     
@@ -73,7 +85,7 @@ export default function SummaryAudioPlayer({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [audioUrl]);
+  }, [audioUrl, language]);
 
   // Update audio progress
   const startProgressTimer = () => {
@@ -128,12 +140,13 @@ export default function SummaryAudioPlayer({
         }
       );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to generate audio");
-      }
-
       const result = await response.json();
+      
+      if (!response.ok || !result.audioUrl) {
+        const errorMessage = result.error || "Failed to generate audio";
+        console.error("TTS generation failed:", errorMessage, result);
+        throw new Error(errorMessage);
+      }
       
       // Create audio element with the new URL
       if (audioRef.current) {
@@ -152,8 +165,27 @@ export default function SummaryAudioPlayer({
           ? "تم إنشاء الصوت بنجاح"
           : "Audio generated successfully"
       );
+      
+      setRetryCount(0); // Reset retry count on success
     } catch (error) {
       console.error("Error generating audio:", error);
+      
+      // Implement retry logic
+      if (retryCount < maxRetries) {
+        setRetryCount(prevCount => prevCount + 1);
+        toast.warning(
+          language === "ar"
+            ? `إعادة المحاولة ${retryCount + 1}/${maxRetries}...`
+            : `Retrying ${retryCount + 1}/${maxRetries}...`
+        );
+        
+        // Wait briefly before retrying
+        setTimeout(() => {
+          handleGenerateAudio();
+        }, 2000);
+        return;
+      }
+      
       toast.error(
         language === "ar"
           ? `فشل في إنشاء الصوت: ${error.message}`

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
@@ -50,7 +49,7 @@ serve(async (req) => {
       );
     }
 
-    const { recordingId, voiceGender = "male", language = "en" } = await req.json();
+    const { recordingId, voiceGender = "male", language = "en", text } = await req.json();
     console.log(`Processing TTS for recording: ${recordingId}`);
 
     if (!recordingId) {
@@ -65,14 +64,13 @@ serve(async (req) => {
     const { error: updateStartError } = await supabase
       .from("voice_summaries")
       .update({
-        is_processing_tts: true,
-        updated_at: new Date().toISOString()
+        is_processing_tts: true
       })
       .eq("id", recordingId);
       
     if (updateStartError) {
       console.error("Failed to update TTS processing start status:", updateStartError);
-      // Continue anyway
+      // Continue anyway - don't return, just log the error
     }
 
     // Get the recording details
@@ -90,8 +88,11 @@ serve(async (req) => {
       );
     }
 
+    // Use explicitly provided text or fall back to the summary from DB
+    const summaryText = text || recording.summary;
+    
     // Check if summary is available
-    if (!recording.summary) {
+    if (!summaryText) {
       console.error("Summary not available for:", recordingId);
       
       // Update status to indicate TTS failed
@@ -99,8 +100,7 @@ serve(async (req) => {
         .from("voice_summaries")
         .update({
           is_processing_tts: false,
-          tts_error: "Summary not available for TTS generation",
-          updated_at: new Date().toISOString()
+          tts_error: "Summary not available for TTS generation"
         })
         .eq("id", recordingId);
       
@@ -137,7 +137,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "tts-1",
-        input: recording.summary,
+        input: summaryText,
         voice: voice,
         response_format: "mp3"
       })
@@ -152,8 +152,7 @@ serve(async (req) => {
         .from("voice_summaries")
         .update({
           is_processing_tts: false,
-          tts_error: JSON.stringify(errorData),
-          updated_at: new Date().toISOString()
+          tts_error: JSON.stringify(errorData)
         })
         .eq("id", recordingId);
       
@@ -185,8 +184,7 @@ serve(async (req) => {
         .from("voice_summaries")
         .update({
           is_processing_tts: false,
-          tts_error: `Failed to upload TTS audio: ${uploadError.message}`,
-          updated_at: new Date().toISOString()
+          tts_error: `Failed to upload TTS audio: ${uploadError.message}`
         })
         .eq("id", recordingId);
       
@@ -213,17 +211,14 @@ serve(async (req) => {
         voice_gender: voiceGender,
         is_processing_tts: false,
         tts_completed_at: new Date().toISOString(),
-        is_ready: true,  // Mark the recording as fully ready
-        updated_at: new Date().toISOString()
+        is_ready: true  // Mark the recording as fully ready
       })
       .eq("id", recordingId);
 
     if (updateError) {
       console.error("Failed to update recording with TTS URL:", updateError);
-      return new Response(
-        JSON.stringify({ error: "Failed to update recording", details: updateError }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Continue anyway and return the URL to the client so they can still use it
+      // even if the database update failed
     }
 
     console.log("TTS generation process completed successfully");
