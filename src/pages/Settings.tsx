@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
@@ -34,17 +34,14 @@ export default function Settings() {
     mutationFn: (autoApprove: boolean) => updateAutoApproveContacts(autoApprove),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-      toast({
-        title: t("settingsUpdated", language),
+      toast.success(t("settingsUpdated", language), {
         description: t("contactSettingsUpdated", language)
       });
     },
     onError: (error) => {
       console.error("Error updating contact settings:", error);
-      toast({
-        title: t("error", language),
-        description: t("errorUpdatingSettings", language),
-        variant: "destructive"
+      toast.error(t("error", language), {
+        description: t("errorUpdatingSettings", language)
       });
     }
   });
@@ -63,10 +60,7 @@ export default function Settings() {
       setCustomQuoteDialogOpen(true);
     }
     
-    toast({
-      title: language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated",
-      variant: "success"
-    });
+    toast.success(language === 'ar' ? "تم تحديث فئة الاقتباس" : "Quote category updated");
   };
   
   const handleQuoteFrequencyChange = (frequency: string) => {
@@ -74,10 +68,7 @@ export default function Settings() {
     setQuotePreferences(newPreferences);
     saveQuotePreferences(newPreferences);
     
-    toast({
-      title: language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated",
-      variant: "success"
-    });
+    toast.success(language === 'ar' ? "تم تحديث تردد الاقتباس" : "Quote frequency updated");
   };
   
   // Update the handleSaveAllSettings function to use the new confirm syntax
@@ -98,10 +89,8 @@ export default function Settings() {
         localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
         localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
         
-        toast({
-          title: language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved",
-          description: <Check className="h-4 w-4" />, // Use description to show the icon
-          variant: "success"
+        toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+          description: <Check className="h-4 w-4" />
         });
       }
     });

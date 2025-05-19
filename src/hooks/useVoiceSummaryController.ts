@@ -1,3 +1,4 @@
+
 // Import toast from sonner directly
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
@@ -107,11 +108,11 @@ export default function useVoiceSummaryController() {
         return;
       }
       
-      // Get recording status
-      const { status, error: statusError } = await getRecordingStatus(recording.id);
+      // Get recording status using the lib/utils function which returns proper type
+      const statusResponse = await getRecordingStatus(recording.id);
       
-      if (statusError) {
-        console.error("Error getting recording status:", statusError);
+      if (statusResponse && statusResponse.error) {
+        console.error("Error getting recording status:", statusResponse.error);
         setError(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         toast.error(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         setIsLoading(false);

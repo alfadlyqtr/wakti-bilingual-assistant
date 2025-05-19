@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Mic, Square, Loader2 } from "lucide-react";
-import { useVoiceSummaryController } from "@/hooks/useVoiceSummaryController";
+import useVoiceSummaryController from "@/hooks/useVoiceSummaryController";
 import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
 

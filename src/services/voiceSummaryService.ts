@@ -1,5 +1,105 @@
-
 import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Create a new voice recording entry
+ * @returns Promise with recording data
+ */
+export async function createRecording() {
+  try {
+    const { data: user } = await supabase.auth.getUser();
+    if (!user.user) {
+      return { error: "Not authenticated" };
+    }
+
+    const { data, error } = await supabase
+      .from('voice_summaries')
+      .insert({
+        user_id: user.user.id,
+        is_processing_transcript: true
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error("Error creating recording:", error);
+      return { error };
+    }
+
+    return { recording: data, error: null };
+  } catch (error) {
+    console.error("Exception in createRecording:", error);
+    return { error };
+  }
+}
+
+/**
+ * Upload audio blob to storage
+ * @param audioBlob Audio blob to upload
+ * @param recordingId Recording ID to link to
+ * @returns Promise with path and error
+ */
+export async function uploadAudio(audioBlob: Blob, recordingId: string) {
+  try {
+    const filePath = `audio/${recordingId}.webm`;
+    
+    const { data, error } = await supabase.storage
+      .from('voice-recordings')
+      .upload(filePath, audioBlob, {
+        contentType: 'audio/webm',
+        upsert: true
+      });
+
+    if (error) {
+      console.error("Error uploading audio:", error);
+      return { error, path: null };
+    }
+
+    return { path: filePath, error: null };
+  } catch (error) {
+    console.error("Exception in uploadAudio:", error);
+    return { error, path: null };
+  }
+}
+
+/**
+ * Create a summary by calling the edge function
+ * @param recordingId Recording ID
+ * @returns Promise with summary data
+ */
+export async function createSummary(recordingId: string) {
+  try {
+    // Call the generate-summary edge function
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      return { error: "No auth session" };
+    }
+
+    const generateResponse = await fetch(
+      "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-summary",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.session.access_token}`
+        },
+        body: JSON.stringify({
+          recordingId
+        }),
+      }
+    );
+
+    if (!generateResponse.ok) {
+      const errorData = await generateResponse.json();
+      return { error: errorData.error || "Summary generation failed" };
+    }
+
+    const data = await generateResponse.json();
+    return { data, error: null };
+  } catch (error) {
+    console.error("Exception in createSummary:", error);
+    return { error };
+  }
+}
 
 /**
  * Delete recordings that have been stuck in processing for too long
