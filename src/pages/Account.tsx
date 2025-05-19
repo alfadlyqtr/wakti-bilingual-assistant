@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,26 +99,7 @@ export default function Account() {
     }
   }, [user]);
   
-  // Account Form Handlers
-  const handleUpdateProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsUpdatingProfile(true);
-    
-    try {
-      const { user: updatedUser, error } = await updateProfile({
-        user_metadata: { full_name: name }
-      });
-      if (error) {
-        toast(t("errorUpdatingName", language));
-      } else {
-        toast.success(t("profileUpdated", language));
-      }
-    } catch (error) {
-      toast(t("errorUpdatingProfile", language));
-    } finally {
-      setIsUpdatingProfile(false);
-    }
-  };
+  // Account Form Handlers - Removed handleUpdateProfile since we're making name read-only
   
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -337,29 +317,17 @@ export default function Account() {
                   </p>
                 </div>
                 
-                {/* Name */}
-                <form onSubmit={handleUpdateProfile}>
-                  <div className="grid gap-2">
-                    <Label htmlFor="name">{t("name", language)}</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      disabled={loadingUserData || isUpdatingProfile}
-                    />
-                  </div>
-                  <div className="mt-4">
-                    <Button 
-                      disabled={isUpdatingProfile || loadingUserData} 
-                      type="submit"
-                    >
-                      {isUpdatingProfile
-                        ? t("updating", language)
-                        : t("updateName", language)}
-                    </Button>
-                  </div>
-                </form>
+                {/* Name - Now read-only */}
+                <div className="grid gap-2">
+                  <Label htmlFor="name">{t("name", language)}</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    readOnly
+                    className="bg-muted cursor-not-allowed"
+                  />
+                </div>
 
                 {/* Email */}
                 <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
