@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Loader2, RefreshCw, AlertCircle, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { getRecordingStatus } from "@/lib/utils";
 import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady, regenerateSummary } from "@/services/voiceSummaryService";
 
@@ -44,7 +44,10 @@ export default function VoiceSummaryPage() {
       if (error) {
         console.error('Error fetching recordings:', error);
         if (!silent) {
-          toast.error(language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings');
+          toast({
+            title: language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings',
+            variant: "destructive"
+          });
         }
         return;
       }
@@ -58,7 +61,10 @@ export default function VoiceSummaryPage() {
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
-        toast.error(language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings');
+        toast({
+          title: language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings',
+          variant: "destructive"
+        });
       }
     } finally {
       setIsLoading(false);
@@ -81,16 +87,22 @@ export default function VoiceSummaryPage() {
         
       if (!success) {
         console.error('Error deleting stuck recordings:', error);
-        toast.error(language === 'ar' ? 'فشل في حذف التسجيلات الع��لقة' : 'Failed to delete stuck recordings');
+        toast({
+          title: language === 'ar' ? 'فشل في حذف التسجيلات الع��لقة' : 'Failed to delete stuck recordings',
+          variant: "destructive"
+        });
         return;
       }
       
       // Refresh the recordings
       await fetchRecordings(true);
       
-      toast(language === 'ar' 
-        ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
-        : `Removed ${stuckIds.length} stuck recordings`);
+      toast({
+        title: language === 'ar' 
+          ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
+          : `Removed ${stuckIds.length} stuck recordings`,
+        variant: "default"
+      });
     } catch (err) {
       console.error('Error in cleanupStuckRecordings:', err);
     } finally {
@@ -113,16 +125,22 @@ export default function VoiceSummaryPage() {
         
       if (!success) {
         console.error('Error recovering recordings:', error);
-        toast.error(language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings');
+        toast({
+          title: language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings',
+          variant: "destructive"
+        });
         return;
       }
       
       // Refresh the recordings
       await fetchRecordings(true);
       
-      toast(language === 'ar' 
-        ? `تم استعادة ${count} تسجيلات` 
-        : `Recovered ${count} recordings`);
+      toast({
+        title: language === 'ar' 
+          ? `تم استعادة ${count} تسجيلات` 
+          : `Recovered ${count} recordings`,
+        variant: "default"
+      });
     } catch (err) {
       console.error('Error in recoverStuckRecordings:', err);
     } finally {
@@ -154,19 +172,28 @@ export default function VoiceSummaryPage() {
       await fetchRecordings(true);
       
       if (successCount > 0) {
-        toast(language === 'ar' 
-          ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
-          : `Regenerated ${successCount} summary/summaries`);
+        toast({
+          title: language === 'ar' 
+            ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
+            : `Regenerated ${successCount} summary/summaries`,
+          variant: "default"
+        });
       } else {
-        toast.error(language === 'ar'
-          ? 'فشل في إعادة إنشاء الملخصات'
-          : 'Failed to regenerate summaries');
+        toast({
+          title: language === 'ar'
+            ? 'فشل في إعادة إنشاء الملخصات'
+            : 'Failed to regenerate summaries',
+          variant: "destructive"
+        });
       }
     } catch (err) {
       console.error('Error in handleRegenerateSummaries:', err);
-      toast.error(language === 'ar'
-        ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
-        : 'Error regenerating summaries');
+      toast({
+        title: language === 'ar'
+          ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
+          : 'Error regenerating summaries',
+        variant: "destructive"
+      });
     } finally {
       setIsRegenerating(false);
     }
@@ -210,7 +237,10 @@ export default function VoiceSummaryPage() {
   
   const handleManualRefresh = () => {
     fetchRecordings();
-    toast(language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...');
+    toast({
+      title: language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...',
+      variant: "default"
+    });
   };
 
   const handleRecordingSelected = (recordingId: string) => {

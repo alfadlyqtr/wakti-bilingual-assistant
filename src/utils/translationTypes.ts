@@ -305,9 +305,4 @@ export type TranslationKey =
   | "errorUpdatingSettings" // Added
   | "requests" // Added
   | "blocked" // Added
-  | "waitingForRequests" // Added
-  // Settings status messages
-  | "widgetEnabled" // Added to fix error
-  | "widgetDisabled" // Added to fix error
-  | "notificationSettingsUpdated" // Added to fix error
-  | "privacySettingsUpdated"; // Added to fix error
+  | "waitingForRequests"; // Added

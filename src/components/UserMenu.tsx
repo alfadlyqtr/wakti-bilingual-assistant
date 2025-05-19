@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,7 +17,7 @@ export function UserMenu() {
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user, signOut } = useAuth();
-  const { toast, confirm } = useToast();
+  const { toast } = useToast();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -34,10 +35,16 @@ export function UserMenu() {
   const handleLogout = async () => {
     try {
       await signOut();
-      toast.success(language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح');
+      toast({
+        title: language === 'en' ? 'You have been logged out successfully' : 'لقد تم تسجيل خروجك بنجاح',
+        variant: "success"
+      });
     } catch (error) {
       console.error('Error logging out:', error);
-      toast.error(language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج');
+      toast({
+        title: language === 'en' ? 'Failed to log out' : 'فشل تسجيل الخروج',
+        variant: "destructive"
+      });
     }
     closeMenu();
   };

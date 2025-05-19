@@ -1,12 +1,10 @@
 
 import { useState, useEffect } from "react";
-import { Moon, SunMedium, Save } from "lucide-react";
+import { Moon, SunMedium } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { AIMode } from "./types"; 
 import ImageGallery from "./ImageGallery";
-import { useSettings } from "@/hooks/useSettings";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface RightPanelProps {
   userId: string | undefined;
@@ -14,9 +12,8 @@ interface RightPanelProps {
 }
 
 export function RightPanel({ userId, activeMode }: RightPanelProps) {
-  const { theme, setTheme, language } = useTheme();
+  const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { settings } = useSettings();
 
   // Ensure component is mounted to avoid hydration issues
   useEffect(() => {
@@ -59,38 +56,7 @@ export function RightPanel({ userId, activeMode }: RightPanelProps) {
         </div>
       )}
       
-      {activeMode === "assistant" && (
-        <div className="flex-1 flex flex-col">
-          <h3 className="text-sm font-medium mb-3">Your App Settings</h3>
-          <Card className="mb-3">
-            <CardContent className="p-3">
-              <div className="text-sm">
-                <h4 className="font-medium mb-2">{language === 'ar' ? 'ظهور الأدوات' : 'Widget Visibility'}</h4>
-                <ul className="space-y-1 list-disc pl-4">
-                  <li>{language === 'ar' ? 'المهام:' : 'Tasks:'} {settings.widgets.tasksWidget ? '✅' : '❌'}</li>
-                  <li>{language === 'ar' ? 'التقويم:' : 'Calendar:'} {settings.widgets.calendarWidget ? '✅' : '❌'}</li>
-                  <li>{language === 'ar' ? 'التذكيرات:' : 'Reminders:'} {settings.widgets.remindersWidget ? '✅' : '❌'}</li>
-                  <li>{language === 'ar' ? 'الاقتباس:' : 'Quote:'} {settings.widgets.quoteWidget ? '✅' : '❌'}</li>
-                </ul>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-3">
-              <div className="text-sm">
-                <h4 className="font-medium mb-2">
-                  {language === 'ar' ? 'إعدادات الاقتباس' : 'Quote Settings'}
-                </h4>
-                <p>{language === 'ar' ? 'الفئة:' : 'Category:'} {settings.quotes.category}</p>
-                <p>{language === 'ar' ? 'التكرار:' : 'Frequency:'} {settings.quotes.frequency}</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-      
-      {activeMode !== "creative" && activeMode !== "assistant" && (
+      {activeMode !== "creative" && (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center text-muted-foreground">
             <p>No additional information to show for this mode.</p>

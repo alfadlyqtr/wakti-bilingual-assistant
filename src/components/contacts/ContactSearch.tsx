@@ -15,7 +15,7 @@ import { LoadingSpinner } from "@/components/ui/loading";
 
 export function ContactSearch() {
   const { language } = useTheme();
-  const { toast, confirm } = useToast();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();

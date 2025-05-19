@@ -18,49 +18,6 @@ export async function getCurrentUser() {
   return data?.user;
 }
 
-// Load user settings from Supabase and store in localStorage
-export async function loadUserSettings() {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return null;
-    
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', user.id)
-      .single();
-    
-    if (error) throw error;
-    
-    if (profile?.settings) {
-      // Store settings in localStorage
-      if (profile.settings.widgets) {
-        localStorage.setItem('widgetVisibility', JSON.stringify(profile.settings.widgets));
-      }
-      
-      if (profile.settings.notifications) {
-        localStorage.setItem('notificationSettings', JSON.stringify(profile.settings.notifications));
-      }
-      
-      if (profile.settings.privacy) {
-        localStorage.setItem('privacySettings', JSON.stringify(profile.settings.privacy));
-      }
-      
-      if (profile.settings.quotes) {
-        localStorage.setItem('quotePreferences', JSON.stringify(profile.settings.quotes));
-      }
-      
-      // Dispatch storage event to notify components
-      window.dispatchEvent(new Event('storage'));
-    }
-    
-    return profile?.settings;
-  } catch (error) {
-    console.error("Error loading user settings:", error);
-    return null;
-  }
-}
-
 // Update profile function
 export async function updateProfile(data: { user_metadata: { 
   display_name?: string; 

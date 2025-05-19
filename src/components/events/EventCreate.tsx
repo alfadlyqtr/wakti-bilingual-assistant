@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -28,7 +29,8 @@ const EventCreate: React.FC = () => {
     e.preventDefault();
     
     if (!title || !date || !time) {
-      toast.error(t("error", language), {
+      toast.error({
+        title: t("error", language),
         description: t("pleaseCompleteAllRequiredFields", language),
       });
       return;
@@ -60,7 +62,8 @@ const EventCreate: React.FC = () => {
       
       if (error) throw error;
       
-      toast.success(t("success", language), {
+      toast.success({
+        title: t("success", language),
         description: t("eventCreatedSuccessfully", language)
       });
       
@@ -71,7 +74,8 @@ const EventCreate: React.FC = () => {
       }
     } catch (error) {
       console.error('Error creating event:', error);
-      toast.error(t("error", language), {
+      toast.error({
+        title: t("error", language),
         description: t("errorCreatingEvent", language),
       });
     } finally {

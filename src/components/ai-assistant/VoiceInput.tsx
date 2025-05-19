@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/services/chatService";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -60,7 +60,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        toast.error(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input');
+        toast({
+          title: language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input',
+          variant: "destructive"
+        });
         setIsProcessingRequest(false);
         return;
       }
@@ -113,7 +116,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             console.error('Error uploading recording:', uploadError);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
-            toast.error(language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording');
+            toast({
+              title: language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording',
+              variant: "destructive"
+            });
             return;
           }
           
@@ -129,24 +135,36 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             
             if (text) {
               console.log('Transcription successful:', text);
-              toast.success(language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully');
+              toast({
+                title: language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully',
+                variant: "success"
+              });
               onTranscription(text);
             } else {
-              toast.error(language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error');
+              toast({
+                title: language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error',
+                variant: "destructive"
+              });
             }
           } catch (error) {
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             console.error('Error during transcription:', error);
-            toast.error(language === 'ar' 
-              ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
-              : 'An error occurred while processing the voice recording');
+            toast({
+              title: language === 'ar' 
+                ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
+                : 'An error occurred while processing the voice recording',
+              variant: "destructive"
+            });
           }
         } catch (storageErr) {
           setIsTranscribing(false);
           setIsProcessingRequest(false);
           console.error('Error storing recording:', storageErr);
-          toast.error(language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording');
+          toast({
+            title: language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording',
+            variant: "destructive"
+          });
         }
 
         // Clean up stream tracks
@@ -160,7 +178,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       };
 
       // Show info toast about recording starting
-      toast(language === 'ar' ? 'بدأ التسجيل... تحدث الآن' : 'Recording started... speak now');
+      toast({
+        title: language === 'ar' ? 'بدأ التسجيل... تحدث الآن' : 'Recording started... speak now',
+        variant: "default"
+      });
 
       // Start recording
       recorder.start(1000); // Collect data in 1-second chunks
@@ -174,7 +195,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (prev >= MAX_RECORDING_TIME - 1) {
             if (recorder.state === 'recording') {
               recorder.stop();
-              toast(language === 'ar' ? 'انتهى وقت التسجيل' : 'Recording time limit reached');
+              toast({
+                title: language === 'ar' ? 'انتهى وقت التسجيل' : 'Recording time limit reached',
+                variant: "default"
+              });
             }
             clearInterval(interval);
             return MAX_RECORDING_TIME;
@@ -187,16 +211,22 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setIsProcessingRequest(false);
-      toast.error(language === 'ar' 
-        ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
-        : 'Please allow microphone access to use voice input feature');
+      toast({
+        title: language === 'ar' 
+          ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
+          : 'Please allow microphone access to use voice input feature',
+        variant: "destructive"
+      });
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
-      toast(language === 'ar' ? 'جارِ معالجة التسجيل' : 'Processing recording');
+      toast({
+        title: language === 'ar' ? 'جارِ معالجة التسجيل' : 'Processing recording',
+        variant: "default"
+      });
     }
   };
 

@@ -361,7 +361,7 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   },
   autoApproveExplanation: {
     en: "When enabled, all contact requests will be automatically approved",
-    ar: "عند التفعيل، ستتم الموافقة تلقا��ياً على جميع طلبات الاتصال"
+    ar: "عند التفعيل، ستتم الموافقة تلقائياً على جميع طلبات الاتصال"
   },
   contactSettingsUpdated: {
     en: "Contact settings updated successfully",
@@ -564,23 +564,5 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   version: {
     en: "Version",
     ar: "الإصدار"
-  },
-  
-  // Settings status messages
-  widgetEnabled: {
-    en: "Widget Enabled",
-    ar: "تم تفعيل الأداة"
-  },
-  widgetDisabled: {
-    en: "Widget Disabled",
-    ar: "تم تعطيل الأداة"
-  },
-  notificationSettingsUpdated: {
-    en: "Notification settings updated",
-    ar: "تم تحديث إعدادات الإشعارات"
-  },
-  privacySettingsUpdated: {
-    en: "Privacy settings updated",
-    ar: "تم تحديث إعدادات الخصوصية"
   }
 };

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX, UserSearch } from "lucide-react";
@@ -28,6 +28,7 @@ type ContactType = {
 };
 
 export function ContactList() {
+  const { toast } = useToast();
   const { language } = useTheme();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -47,10 +48,11 @@ export function ContactList() {
     },
     onError: (error) => {
       console.error("Error creating conversation:", error);
-      toast.error(
-        t("error", language), 
-        { description: t("errorCreatingConversation", language) }
-      );
+      toast({
+        title: t("error", language),
+        description: t("errorCreatingConversation", language),
+        variant: "destructive"
+      });
     }
   });
 
@@ -58,29 +60,30 @@ export function ContactList() {
   const blockContactMutation = useMutation({
     mutationFn: (contactId: string) => blockContact(contactId),
     onSuccess: () => {
-      toast.success(
-        t("contactBlocked", language), 
-        { description: t("userBlockedDescription", language) }
-      );
+      toast({
+        title: t("contactBlocked", language),
+        description: t("userBlockedDescription", language)
+      });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },
     onError: (error) => {
       console.error("Error blocking contact:", error);
-      toast.error(
-        t("error", language), 
-        { description: t("errorBlockingContact", language) }
-      );
+      toast({
+        title: t("error", language),
+        description: t("errorBlockingContact", language),
+        variant: "destructive"
+      });
     }
   });
 
   const handleMessage = (contactId: string, name: string) => {
     createConversationMutation.mutate(contactId);
     
-    toast(
-      t("messageStarted", language),
-      { description: t("chattingWithUser", language) + " " + name }
-    );
+    toast({
+      title: t("messageStarted", language),
+      description: t("chattingWithUser", language) + " " + name
+    });
   };
 
   const handleToggleFavorite = (id: string, name: string) => {
@@ -90,9 +93,10 @@ export function ContactList() {
       [id]: !isFavorite
     });
     
-    toast(
-      isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language)
-    );
+    toast({
+      title: isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language),
+      description: ""
+    });
   };
 
   const handleBlock = (contactId: string) => {

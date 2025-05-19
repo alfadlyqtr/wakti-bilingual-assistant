@@ -12,8 +12,7 @@ import {
 } from '@/utils/quoteService';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
-import { toast } from "sonner";
-import { useSettings } from '@/hooks/useSettings';
+import { showToast } from '@/components/ui/use-toast';
 
 interface QuoteWidgetProps {
   className?: string;
@@ -23,7 +22,6 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   const { language } = useTheme();
   const [quote, setQuote] = useState<QuoteObject | string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const { settings } = useSettings();
   
   const fetchQuote = (forceRefresh = false) => {
     try {
@@ -33,7 +31,9 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
       setQuote(quoteData);
       
       if (forceRefresh) {
-        toast(language === 'ar' ? "تم تحديث الاقتباس" : "Quote refreshed");
+        showToast({
+          title: language === 'ar' ? "تم تحديث الاقتباس" : "Quote refreshed"
+        });
       }
     } catch (error) {
       console.error("Error fetching quote:", error);
@@ -51,19 +51,7 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   useEffect(() => {
     // Get the quote on component mount and when language changes
     fetchQuote();
-  }, [language]); 
-
-  useEffect(() => {
-    // Re-fetch quote when settings change
-    if (settings?.quotes) {
-      fetchQuote(true);
-    }
-  }, [settings?.quotes]);
-  
-  // Don't render if not visible
-  if (!settings?.widgets?.quoteWidget) {
-    return null;
-  }
+  }, [language]); // Re-fetch quote when language changes
   
   // If no quote is available yet
   if (!quote) {

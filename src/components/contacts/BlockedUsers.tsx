@@ -4,7 +4,7 @@ import { UserPlus, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -26,6 +26,7 @@ type BlockedUserType = {
 };
 
 export function BlockedUsers() {
+  const { toast } = useToast();
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
@@ -39,18 +40,19 @@ export function BlockedUsers() {
   const unblockContactMutation = useMutation({
     mutationFn: (contactId: string) => unblockContact(contactId),
     onSuccess: () => {
-      toast.success(
-        t("contactUnblocked", language),
-        { description: t("userUnblockedDescription", language) }
-      );
+      toast({
+        title: t("contactUnblocked", language),
+        description: t("userUnblockedDescription", language)
+      });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },
     onError: (error) => {
       console.error("Error unblocking contact:", error);
-      toast.error(
-        t("error", language),
-        { description: t("errorUnblockingContact", language) }
-      );
+      toast({
+        title: t("error", language),
+        description: t("errorUnblockingContact", language),
+        variant: "destructive"
+      });
     }
   });
 

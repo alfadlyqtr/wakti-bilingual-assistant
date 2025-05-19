@@ -352,7 +352,6 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
-          settings: Json | null
           updated_at: string | null
           username: string | null
         }
@@ -363,7 +362,6 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id: string
-          settings?: Json | null
           updated_at?: string | null
           username?: string | null
         }
@@ -374,7 +372,6 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
-          settings?: Json | null
           updated_at?: string | null
           username?: string | null
         }
