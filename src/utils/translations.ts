@@ -1122,6 +1122,28 @@ const translations: TranslationMap = {
   searchMessages: {
     en: "Search Messages",
     ar: "البحث في الرسائل"
+  },
+  
+  // New friendly messaging strings
+  welcomeToMessages: {
+    en: "Welcome to your messages",
+    ar: "مرحبًا بك في رسائلك"
+  },
+  tapNewMessageToStart: {
+    en: "Tap the new message button to start chatting",
+    ar: "انقر على زر الرسالة الجديدة لبدء الدردشة"
+  },
+  sayHelloPrompt: {
+    en: "Say hello to start the conversation! Your message will appear here.",
+    ar: "قل مرحبا لبدء المحادثة! ستظهر رسالتك هنا."
+  },
+  addContactsPrompt: {
+    en: "You need to add contacts before you can start messaging",
+    ar: "تحتاج إلى إضافة جهات اتصال قبل أن تتمكن من بدء المراسلة"
+  },
+  goToContactsPage: {
+    en: "Visit the contacts page to add people",
+    ar: "قم بزيارة صفحة جهات الاتصال لإضافة أشخاص"
   }
 };
 

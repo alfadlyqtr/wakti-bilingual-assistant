@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, X } from "lucide-react";
+import { Search, User, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getContacts } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
@@ -120,9 +120,11 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
           ) : (
             <div className="space-y-1">
               {!filteredContacts || filteredContacts.length === 0 ? (
-                <div className="text-center py-4 text-muted-foreground">
-                  <p>{t("noContactsFound", language)}</p>
-                  <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
+                <div className="text-center py-4 px-4 flex flex-col items-center">
+                  <User className="h-16 w-16 opacity-20 mb-4" />
+                  <p className="text-lg font-medium text-muted-foreground mb-2">{t("noContactsFound", language)}</p>
+                  <p className="text-sm mt-1">{t("addContactsPrompt", language)}</p>
+                  <p className="text-sm mt-1">{t("goToContactsPage", language)}</p>
                 </div>
               ) : (
                 filteredContacts.map((contact: ContactType) => {

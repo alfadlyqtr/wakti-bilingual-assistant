@@ -279,5 +279,10 @@ export type TranslationKey =
   | "noMessages"
   | "uploading"
   | "creatingConversation"
-  | "searchMessages";
-
+  | "searchMessages"
+  // New friendly messaging strings
+  | "welcomeToMessages"
+  | "tapNewMessageToStart"
+  | "sayHelloPrompt"
+  | "addContactsPrompt"
+  | "goToContactsPage";

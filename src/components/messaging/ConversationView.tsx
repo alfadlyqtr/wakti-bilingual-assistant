@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/ui/loading";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { MessageSquare } from "lucide-react";
 
 interface ConversationViewProps {
   conversationId: string;
@@ -186,8 +187,10 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
           ))}
 
           {(!messages || messages.length === 0) && (
-            <div className="flex justify-center items-center h-32">
-              <p className="text-muted-foreground">{t("startConversation", language)}</p>
+            <div className="flex flex-col justify-center items-center h-64 px-4 text-center">
+              <MessageSquare className="h-16 w-16 opacity-20 mb-4" />
+              <p className="text-lg font-medium text-muted-foreground mb-2">{t("startConversation", language)}</p>
+              <p className="text-sm text-muted-foreground">{t("sayHelloPrompt", language)}</p>
             </div>
           )}
         </div>

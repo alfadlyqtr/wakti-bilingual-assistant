@@ -4,7 +4,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, MessageSquare } from "lucide-react";
 import { getConversations, searchConversations } from "@/services/messageService";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -181,9 +181,13 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
       <ScrollArea className="flex-1 w-full">
         <div className="w-full divide-y divide-border">
           {filteredConversations.length === 0 ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <p>{searchQuery ? t("noConversationsFound", language) : t("noConversations", language)}</p>
-              <p className="text-sm mt-2">{t("startConversation", language)}</p>
+            <div className="text-center py-10 px-4 text-muted-foreground">
+              <div className="flex justify-center mb-4">
+                <MessageSquare className="h-16 w-16 opacity-20" />
+              </div>
+              <p className="text-lg font-medium mb-2">{searchQuery ? t("noConversationsFound", language) : t("noConversations", language)}</p>
+              <p className="text-sm mt-2">{t("welcomeToMessages", language)}</p>
+              <p className="text-sm mt-1">{t("tapNewMessageToStart", language)}</p>
             </div>
           ) : (
             filteredConversations.map((conversation: ConversationType) => {
