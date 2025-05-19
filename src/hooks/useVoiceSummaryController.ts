@@ -13,6 +13,12 @@ import * as voiceSummaryService from "@/services/voiceSummaryService";
 type RecordingState = "idle" | "recording" | "processing" | "stopped" | "error";
 type ProcessingStep = "uploading" | "transcribing" | "summarizing" | "generating_tts" | "finalizing";
 
+// Define a type for the recording status
+type RecordingStatus = {
+  status: "pending" | "processing" | "complete" | "transcribing";
+  errorMessage?: string;
+};
+
 export default function useVoiceSummaryController() {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [processingStep, setProcessingStep] = useState<ProcessingStep | null>(null);
@@ -52,7 +58,7 @@ export default function useVoiceSummaryController() {
       } catch (err: any) {
         console.error("Error initializing media recorder:", err);
         setErrorMessage(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
-        toast.error(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
+        toast(language === 'ar' ? 'فشل في بدء التسجيل الصوتي' : 'Failed to start audio recording');
       }
     };
 
@@ -92,7 +98,7 @@ export default function useVoiceSummaryController() {
     } catch (err: any) {
       console.error("Error starting recording:", err);
       setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
+      toast(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
     }
   };
 
@@ -116,7 +122,7 @@ export default function useVoiceSummaryController() {
       if (createError) {
         console.error("Error creating recording:", createError);
         setErrorMessage(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
-        toast.error(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
+        toast(language === 'ar' ? 'فشل في حفظ التسجيل' : 'Failed to save recording');
         setRecordingState("error");
         setIsLoading(false);
         return;
@@ -131,19 +137,19 @@ export default function useVoiceSummaryController() {
       if (uploadError) {
         console.error("Error uploading audio:", uploadError);
         setErrorMessage(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
-        toast.error(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
+        toast(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
         setRecordingState("error");
         setIsLoading(false);
         return;
       }
       
-      // Get recording status using the lib/utils function which returns proper type
-      const statusResponse = await getRecordingStatus(recording.id);
+      // Get recording status using the lib/utils function
+      const statusResponse = await getRecordingStatus(recording.id) as RecordingStatus;
       
-      if (statusResponse && statusResponse.error) {
-        console.error("Error getting recording status:", statusResponse.error);
+      if (statusResponse && statusResponse.errorMessage) {
+        console.error("Error getting recording status:", statusResponse.errorMessage);
         setErrorMessage(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
-        toast.error(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
+        toast(language === 'ar' ? 'فشل في الحصول على حالة التسجيل' : 'Failed to get recording status');
         setRecordingState("error");
         setIsLoading(false);
         return;
@@ -155,7 +161,7 @@ export default function useVoiceSummaryController() {
     } catch (err: any) {
       console.error("Error during recording process:", err);
       setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
+      toast(language === 'ar' ? 'حدث خطأ أثناء حفظ التسجيل' : 'An error occurred while saving the recording');
       setRecordingState("error");
     } finally {
       setIsLoading(false);
@@ -182,7 +188,7 @@ export default function useVoiceSummaryController() {
       if (summaryError) {
         console.error("Error generating summary:", summaryError);
         setErrorMessage(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
-        toast.error(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
+        toast(language === 'ar' ? 'فشل في إنشاء الملخص' : 'Failed to generate summary');
         setIsLoading(false);
         return;
       }
@@ -192,7 +198,7 @@ export default function useVoiceSummaryController() {
     } catch (err: any) {
       console.error("Error generating summary:", err);
       setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
+      toast(language === 'ar' ? 'حدث خطأ أثناء إنشاء الملخص' : 'An error occurred while generating the summary');
     } finally {
       setIsLoading(false);
     }

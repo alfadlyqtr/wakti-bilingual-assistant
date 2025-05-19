@@ -45,12 +45,12 @@ export default function Account() {
       const data = { user_metadata: { full_name: name } };
       const { error } = await updateProfile(data);
       if (error) {
-        toast.error(language === 'ar' ? "فشل تحديث الاسم" : "Failed to update name");
+        toast(language === 'ar' ? "فشل تحديث الاسم" : "Failed to update name");
       } else {
         toast.success(language === 'ar' ? "تم تحديث الملف الشخصي" : "Profile updated successfully");
       }
     } catch (error) {
-      toast.error(language === 'ar' ? "فشل تحديث الملف الشخصي" : "Failed to update profile");
+      toast(language === 'ar' ? "فشل تحديث الملف الشخصي" : "Failed to update profile");
     } finally {
       setIsUpdatingProfile(false);
     }
@@ -63,12 +63,12 @@ export default function Account() {
     try {
       const error = await updateEmail(email);
       if (error) {
-        toast.error(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
+        toast(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
       } else {
         toast.success(language === 'ar' ? "تم تحديث البريد الإلكتروني" : "Email updated successfully");
       }
     } catch (error) {
-      toast.error(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
+      toast(language === 'ar' ? "فشل تحديث البريد الإلكتروني" : "Failed to update email");
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -78,7 +78,7 @@ export default function Account() {
     e.preventDefault();
     
     if (password !== confirmPassword) {
-      toast.error(language === 'ar' ? "كلمات السر غير متطابقة" : "Passwords do not match");
+      toast(language === 'ar' ? "كلمات السر غير متطابقة" : "Passwords do not match");
       return;
     }
     
@@ -87,14 +87,14 @@ export default function Account() {
     try {
       const error = await updatePassword(password);
       if (error) {
-        toast.error(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
+        toast(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
       } else {
         toast.success(language === 'ar' ? "تم تحديث كلمة المرور" : "Password updated successfully");
         setPassword("");
         setConfirmPassword("");
       }
     } catch (error) {
-      toast.error(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
+      toast(language === 'ar' ? "فشل تحديث كلمة المرور" : "Failed to update password");
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -105,7 +105,7 @@ export default function Account() {
       await signOut();
       navigate("/login");
     } catch (error) {
-      toast.error(language === 'ar' ? "فشل تسجيل الخروج" : "Failed to sign out");
+      toast(language === 'ar' ? "فشل تسجيل الخروج" : "Failed to sign out");
     }
   };
   

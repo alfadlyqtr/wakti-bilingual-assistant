@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -209,7 +208,7 @@ export default function RecordingDialog({
         
         {/* Action buttons */}
         <div className="flex justify-end gap-2 mt-4">
-          {!isProcessing && state.recordingState !== "completed" && (
+          {!isProcessing && state.recordingState !== "error" && (
             <Button variant="outline" onClick={handleDialogClose}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
