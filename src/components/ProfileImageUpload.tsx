@@ -54,9 +54,9 @@ export const ProfileImageUpload = () => {
       
       const avatarUrl = data.publicUrl;
       
-      // Update user metadata
+      // Update user metadata with the correct structure expected by Supabase Auth
       const { user: updatedUser, error } = await updateProfile({
-        data: { 
+        user_metadata: { 
           avatar_url: avatarUrl 
         }
       });
