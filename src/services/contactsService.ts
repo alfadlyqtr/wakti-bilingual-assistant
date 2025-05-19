@@ -46,14 +46,17 @@ export async function getContacts() {
       contact_id,
       status,
       created_at,
-      profiles!contacts_contact_id_fkey (
+      profiles(
         display_name,
         username,
         avatar_url
       )
     `)
     .or(`user_id.eq.${userId},contact_id.eq.${userId}`)
-    .eq("status", "approved");
+    .eq("status", "approved")
+    .filter('contact_id', 'in', (qb) => {
+      qb.select('id').from('profiles');
+    });
 
   if (error) {
     console.error("Error fetching contacts:", error);
@@ -93,14 +96,17 @@ export async function getContactRequests() {
       contact_id,
       status,
       created_at,
-      profiles!contacts_user_id_fkey (
+      profiles(
         display_name,
         username,
         avatar_url
       )
     `)
     .eq("contact_id", userId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .filter('user_id', 'in', (qb) => {
+      qb.select('id').from('profiles');
+    });
 
   if (error) {
     console.error("Error fetching contact requests:", error);
@@ -128,14 +134,17 @@ export async function getBlockedContacts() {
       contact_id,
       status,
       created_at,
-      profiles!contacts_contact_id_fkey (
+      profiles(
         display_name,
         username,
         avatar_url
       )
     `)
     .eq("user_id", userId)
-    .eq("status", "blocked");
+    .eq("status", "blocked")
+    .filter('contact_id', 'in', (qb) => {
+      qb.select('id').from('profiles');
+    });
 
   if (error) {
     console.error("Error fetching blocked contacts:", error);
