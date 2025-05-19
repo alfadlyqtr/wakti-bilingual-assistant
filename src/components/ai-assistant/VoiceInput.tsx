@@ -2,9 +2,14 @@
 import React, { useState, useEffect } from "react";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useToastHelper } from "@/hooks/use-toast-helper";
+import { toast } from "@/hooks/use-toast";
 import { transcribeAudio } from "@/services/chatService";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getBestSupportedMimeType,
+  getFileExtension,
+  formatRecordingTime
+} from "@/utils/audioUtils";
 
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
@@ -26,7 +31,6 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(null);
   const [isProcessingRequest, setIsProcessingRequest] = useState(false);
   const MAX_RECORDING_TIME = 120; // 2 minutes maximum (120 seconds)
-  const { showError, showInfo, showSuccess } = useToastHelper();
 
   // Cleanup effect
   useEffect(() => {
@@ -43,30 +47,6 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     };
   }, [timerInterval, mediaRecorder]);
 
-  // Helper function to get supported MIME types
-  const getSupportedMimeType = (): string => {
-    const types = [
-      'audio/mp3',
-      'audio/mpeg',
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/ogg;codecs=opus',
-      'audio/ogg',
-      'audio/wav'
-    ];
-    
-    for (const type of types) {
-      if (MediaRecorder.isTypeSupported(type)) {
-        console.log(`Browser supports recording in ${type} format`);
-        return type;
-      }
-    }
-    
-    // Fallback to a common format that most browsers support
-    console.log('No preferred MIME types supported, falling back to audio/webm');
-    return 'audio/webm';
-  };
-
   const startRecording = async () => {
     // Prevent multiple clicks
     if (isProcessingRequest) {
@@ -80,7 +60,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        showError(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input');
+        toast({
+          title: language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input',
+          variant: "destructive"
+        });
         setIsProcessingRequest(false);
         return;
       }
@@ -93,8 +76,8 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         } 
       });
       
-      // Use the supported MIME type
-      const mimeType = getSupportedMimeType();
+      // Use the supported MIME type from our utility function
+      const mimeType = getBestSupportedMimeType();
       console.log(`Using MIME type for recording: ${mimeType}`);
       
       const recorder = new MediaRecorder(stream, { mimeType });
@@ -109,15 +92,8 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       recorder.onstop = async () => {
         setIsTranscribing(true);
         
-        // Get the file extension from the MIME type
-        let fileExt = 'webm'; // Default
-        if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
-          fileExt = 'mp3';
-        } else if (mimeType.includes('ogg')) {
-          fileExt = 'ogg';
-        } else if (mimeType.includes('wav')) {
-          fileExt = 'wav';
-        }
+        // Get the file extension from the MIME type using our utility function
+        const fileExt = getFileExtension(mimeType);
         
         const audioBlob = new Blob(audioChunks, { type: mimeType });
         console.log(`Recording complete: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
@@ -137,7 +113,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             console.error('Error uploading recording:', uploadError);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
-            showError(language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording');
+            toast({
+              title: language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording',
+              variant: "destructive"
+            });
             return;
           }
           
@@ -152,24 +131,36 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             
             if (text) {
               console.log('Transcription successful:', text);
-              showSuccess(language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully');
+              toast({
+                title: language === 'ar' ? 'تم التعرف على الصوت' : 'Voice transcribed successfully',
+                variant: "success"
+              });
               onTranscription(text);
             } else {
-              showError(language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error');
+              toast({
+                title: language === 'ar' ? 'خطأ في النسخ' : 'Transcription Error',
+                variant: "destructive"
+              });
             }
           } catch (error) {
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             console.error('Error during transcription:', error);
-            showError(language === 'ar' 
-              ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
-              : 'An error occurred while processing the voice recording');
+            toast({
+              title: language === 'ar' 
+                ? 'حدث خطأ أثناء معالجة التسجيل الصوتي'
+                : 'An error occurred while processing the voice recording',
+              variant: "destructive"
+            });
           }
         } catch (storageErr) {
           setIsTranscribing(false);
           setIsProcessingRequest(false);
           console.error('Error storing recording:', storageErr);
-          showError(language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording');
+          toast({
+            title: language === 'ar' ? 'فشل في تخزين التسجيل' : 'Failed to store recording',
+            variant: "destructive"
+          });
         }
 
         // Clean up stream tracks
@@ -183,9 +174,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
       };
 
       // Show info toast about recording starting
-      showInfo(language === 'ar' 
-        ? 'بدأ التسجيل... تحدث الآن'
-        : 'Recording started... speak now');
+      toast({
+        title: language === 'ar' ? 'بدأ التسجيل... تحدث الآن' : 'Recording started... speak now',
+        variant: "default"
+      });
 
       // Start recording
       recorder.start(1000); // Collect data in 1-second chunks
@@ -199,9 +191,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           if (prev >= MAX_RECORDING_TIME - 1) {
             if (recorder.state === 'recording') {
               recorder.stop();
-              showInfo(language === 'ar'
-                ? 'انتهى وقت التسجيل'
-                : 'Recording time limit reached');
+              toast({
+                title: language === 'ar' ? 'انتهى وقت التسجيل' : 'Recording time limit reached',
+                variant: "default"
+              });
             }
             clearInterval(interval);
             return MAX_RECORDING_TIME;
@@ -214,23 +207,23 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     } catch (error) {
       console.error('Error accessing microphone:', error);
       setIsProcessingRequest(false);
-      showError(language === 'ar' 
-        ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
-        : 'Please allow microphone access to use voice input feature');
+      toast({
+        title: language === 'ar' 
+          ? 'يرجى السماح بالوصول إلى الميكروفون للاستفادة من ميزة الإدخال الصوتي'
+          : 'Please allow microphone access to use voice input feature',
+        variant: "destructive"
+      });
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
-      showInfo(language === 'ar' ? 'جارِ معالجة التسجيل' : 'Processing recording');
+      toast({
+        title: language === 'ar' ? 'جارِ معالجة التسجيل' : 'Processing recording',
+        variant: "default"
+      });
     }
-  };
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
   };
 
   return (
@@ -257,7 +250,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
 
       {isRecording && (
         <div className="absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 text-xs font-mono bg-background border rounded px-2 py-1 shadow-md z-10">
-          {formatTime(recordingTime)} / {formatTime(MAX_RECORDING_TIME)}
+          {formatRecordingTime(recordingTime)} / {formatRecordingTime(MAX_RECORDING_TIME)}
         </div>
       )}
     </div>

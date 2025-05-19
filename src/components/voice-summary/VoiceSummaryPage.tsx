@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+import { toast } from "@/hooks/use-toast";
 import { getRecordingStatus } from "@/lib/utils";
 
 export default function VoiceSummaryPage() {
@@ -62,9 +62,10 @@ export default function VoiceSummaryPage() {
       if (error) {
         console.error('Error fetching recordings:', error);
         if (!silent) {
-          toast.error(language === 'ar' 
-            ? 'فشل في تحميل التسجيلات' 
-            : 'Failed to load recordings');
+          toast({
+            title: language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings',
+            variant: "destructive"
+          });
         }
         return;
       }
@@ -77,9 +78,10 @@ export default function VoiceSummaryPage() {
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
-        toast.error(language === 'ar' 
-          ? 'حدث خطأ أثناء تحميل التسجيلات' 
-          : 'An error occurred while loading recordings');
+        toast({
+          title: language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings',
+          variant: "destructive"
+        });
       }
     } finally {
       setIsLoading(false);
@@ -87,7 +89,7 @@ export default function VoiceSummaryPage() {
     }
   };
 
-  const handleRecordingCreated = async (newRecording) => {
+  const handleRecordingCreated = async (recordingId: string) => {
     // Instead of immediately adding the recording, refresh the list
     // This ensures we get the full DB record with all fields
     await fetchRecordings();
@@ -100,7 +102,10 @@ export default function VoiceSummaryPage() {
   
   const handleManualRefresh = () => {
     fetchRecordings();
-    toast.info(language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...');
+    toast({
+      title: language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...',
+      variant: "default"
+    });
   };
 
   return (

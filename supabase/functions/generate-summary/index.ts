@@ -91,7 +91,7 @@ serve(async (req) => {
     const summaryResponse = await deepseekResponse.json();
     const summary = summaryResponse.choices[0].message.content;
 
-    // Update the recording with the summary - fixed by removing updated_at field
+    // Update the recording with the summary - FIXED: removed updated_at field reference
     const { error: updateError } = await supabase
       .from("voice_summaries")
       .update({
