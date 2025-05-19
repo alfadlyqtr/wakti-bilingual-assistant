@@ -55,8 +55,10 @@ export const ProfileImageUpload = () => {
       const avatarUrl = data.publicUrl;
       
       // Update user metadata
-      const { error } = await updateProfile({
-        data: { avatar_url: avatarUrl }
+      const { user: updatedUser, error } = await updateProfile({
+        data: { 
+          avatar_url: avatarUrl 
+        }
       });
       
       if (error) {
