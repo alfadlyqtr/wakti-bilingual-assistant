@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -65,9 +64,8 @@ export default function Settings() {
     },
     onError: (error) => {
       console.error("Error updating contact settings:", error);
-      toast(t("error", language), {
-        description: t("errorUpdatingSettings", language),
-        variant: "destructive"
+      toast.error(t("errorUpdatingSettings", language), {
+        description: t("errorUpdatingSettings", language)
       });
     }
   });
@@ -146,8 +144,8 @@ export default function Settings() {
         });
         
         if (success) {
-          toast(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
-            description: <Check className="h-4 w-4" />,
+          toast.success(language === 'ar' ? "تم حفظ جميع الإعدادات" : "All settings saved", {
+            icon: <Check className="h-4 w-4" />,
           });
         }
       }

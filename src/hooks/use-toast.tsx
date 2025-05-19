@@ -16,330 +16,8 @@ import { createContext, useContext } from "react";
 // Export the ToastActionElement type so it can be re-exported
 export type ToastActionElement = React.ReactElement<typeof ToastAction>;
 
-const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 5000; // 5 seconds timeout
-const DEFAULT_TOAST_DURATION = 3000; // Default 3 seconds auto-dismiss
-
-type ToasterToast = ToastProps & {
-  id: string;
-  // Enforce string type for title and description to match Radix UI requirements
-  title?: string;
-  description?: string;
-  action?: ToastActionElement;
-  duration?: number;
-};
-
-const actionTypes = {
-  ADD_TOAST: "ADD_TOAST",
-  UPDATE_TOAST: "UPDATE_TOAST",
-  DISMISS_TOAST: "DISMISS_TOAST",
-  REMOVE_TOAST: "REMOVE_TOAST",
-} as const;
-
-let count = 0;
-
-function genId() {
-  count = (count + 1) % Number.MAX_VALUE;
-  return count.toString();
-}
-
-/**
- * Safely converts any ReactNode content to a string to satisfy Radix UI's
- * strict string type requirements for toast content.
- */
-function renderToastContent(content: React.ReactNode): string {
-  if (content === null || content === undefined) return "";
-  if (typeof content === "string") return content;
-  if (typeof content === "number" || typeof content === "boolean") return content.toString();
-  // For React elements or objects, return empty string to satisfy typing
-  return "";
-}
-
-type ActionType = typeof actionTypes;
-
-type Action =
-  | {
-      type: ActionType["ADD_TOAST"];
-      toast: ToasterToast;
-    }
-  | {
-      type: ActionType["UPDATE_TOAST"];
-      toast: Partial<ToasterToast>;
-      id: string;
-    }
-  | {
-      type: ActionType["DISMISS_TOAST"];
-      toastId: string;
-    }
-  | {
-      type: ActionType["REMOVE_TOAST"];
-      toastId: string;
-    };
-
-interface State {
-  toasts: ToasterToast[];
-}
-
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
-
-const addToRemoveQueue = (toastId: string) => {
-  if (toastTimeouts.has(toastId)) {
-    return;
-  }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
-    dispatch({
-      type: actionTypes.REMOVE_TOAST,
-      toastId,
-    });
-  }, TOAST_REMOVE_DELAY);
-
-  toastTimeouts.set(toastId, timeout);
-};
-
-// New function to automatically dismiss toast after specified duration
-const addToDismissQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
-  if (duration === Infinity) return;
-
-  // Create dismiss timeout
-  const timeout = setTimeout(() => {
-    dispatch({
-      type: actionTypes.DISMISS_TOAST,
-      toastId,
-    });
-  }, duration);
-
-  return timeout;
-};
-
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case actionTypes.ADD_TOAST:
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      };
-
-    case actionTypes.UPDATE_TOAST:
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === action.id ? { ...t, ...action.toast } : t
-        ),
-      };
-
-    case actionTypes.DISMISS_TOAST: {
-      const { toastId } = action;
-
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === "all"
-            ? {
-                ...t,
-                open: false,
-              }
-            : t
-        ),
-      };
-    }
-    case actionTypes.REMOVE_TOAST:
-      if (action.toastId === "all") {
-        return {
-          ...state,
-          toasts: [],
-        };
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      };
-    default:
-      return state;
-  }
-};
-
-const listeners: Array<(state: State) => void> = [];
-
-let memoryState: State = { toasts: [] };
-
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
-  });
-}
-
-export interface ToastContextValue {
-  toast: (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }) => void;
-  dismiss: (toastId?: string) => void;
-  confirm: (options: ConfirmOptions) => Promise<boolean>;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-function useToastInternal(): ToastContextValue {
-  const [state, setState] = React.useState<State>(memoryState);
-
-  React.useEffect(() => {
-    listeners.push(setState);
-    return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    };
-  }, []);
-
-  return {
-    toast: ({ title, description, action, variant, duration = DEFAULT_TOAST_DURATION }) => {
-      const id = genId();
-
-      const update = (props: ToasterToast) =>
-        dispatch({
-          type: actionTypes.UPDATE_TOAST,
-          id,
-          toast: { ...props },
-        });
-
-      const dismiss = () =>
-        dispatch({ type: actionTypes.DISMISS_TOAST, toastId: id });
-
-      // Convert ReactNode to string before dispatching to state
-      const stringTitle = title ? renderToastContent(title) : undefined;
-      const stringDescription = description ? renderToastContent(description) : undefined;
-
-      // Set up auto dismiss
-      const timeoutId = addToDismissQueue(id, duration);
-
-      dispatch({
-        type: actionTypes.ADD_TOAST,
-        toast: {
-          id,
-          title: stringTitle,
-          description: stringDescription,
-          action,
-          variant,
-          duration,
-          open: true,
-          onOpenChange: (open) => {
-            if (!open) dismiss();
-          },
-        },
-      });
-
-      return {
-        id,
-        dismiss,
-        update,
-      };
-    },
-    dismiss: (toastId) =>
-      dispatch({
-        type: actionTypes.DISMISS_TOAST,
-        toastId: toastId || "all",
-      }),
-    confirm: (options: ConfirmOptions) => confirmDialog(options),
-  };
-}
-
-export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const { toast, dismiss, confirm } = useToastInternal();
-  
-  // Set up event listener for external toast events
-  React.useEffect(() => {
-    const handleToastEvent = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail) {
-        toast(customEvent.detail);
-      }
-    };
-    
-    document.addEventListener("lovable:toast", handleToastEvent);
-    return () => {
-      document.removeEventListener("lovable:toast", handleToastEvent);
-    };
-  }, [toast]);
-  
-  return (
-    <ToastContext.Provider value={{ toast, dismiss, confirm }}>
-      {children}
-      <ToasterInternal />
-    </ToastContext.Provider>
-  );
-}
-
-export function useToast() {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
-  }
-  return context;
-}
-
-export function Toaster() {
-  return <ToasterInternal />;
-}
-
-function ToasterInternal() {
-  const [state] = React.useState<State>(memoryState);
-
-  return (
-    <ToastUiProvider>
-      <ToastViewport />
-      {state.toasts.map(function ({
-        id,
-        title,
-        description,
-        action,
-        ...props
-      }) {
-        return (
-          <Toast key={id} {...props}>
-            <div className="grid gap-1">
-              {title && (
-                <ToastTitle>
-                  {title}
-                </ToastTitle>
-              )}
-              {description && (
-                <ToastDescription>
-                  {description}
-                </ToastDescription>
-              )}
-            </div>
-            {action}
-            <ToastClose />
-          </Toast>
-        );
-      })}
-    </ToastUiProvider>
-  );
-}
-
-// Helper functions for using toast
-export const showToast = (props: {
-  title?: React.ReactNode;
-  description?: React.ReactNode;
-  action?: ToastActionElement;
-  variant?: "default" | "destructive" | "success";
-  duration?: number;
-}): void => {
-  // We'll dispatch an event that will be caught by the toast provider
-  const event = new CustomEvent("lovable:toast", { detail: props });
-  document.dispatchEvent(event);
-};
+// Re-export the toast from sonner directly
+export { toast } from "sonner";
 
 // Confirmation dialog types
 export interface ConfirmOptions {
@@ -350,6 +28,11 @@ export interface ConfirmOptions {
   onConfirm?: () => void;
   onCancel?: () => void;
 }
+
+// Expose the Toaster component from Sonner
+export { Toaster } from "@/components/ui/sonner";
+
+const ToastContext = createContext<{ confirm: (options: ConfirmOptions) => Promise<boolean> } | null>(null);
 
 // Confirmation dialog implementation
 export function confirmDialog(options: ConfirmOptions): Promise<boolean> {
@@ -430,74 +113,42 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
   return confirmDialog(options);
 }
 
-// Fix for the toast object to make it callable and have methods
-interface ToastFunction {
-  (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }): void;
-  success: (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    duration?: number;
-  }) => void;
-  error: (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    duration?: number;
-  }) => void;
-  default: (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    duration?: number;
-  }) => void;
-  show: (props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }) => void;
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  // Create a context value with the confirm function
+  const contextValue = React.useMemo(() => ({
+    confirm: confirmDialog,
+  }), []);
+  
+  return (
+    <ToastContext.Provider value={contextValue}>
+      {children}
+    </ToastContext.Provider>
+  );
 }
 
-// Create a callable function with methods
-const createToastFunction = (): ToastFunction => {
-  // Base function
-  const toastFn = ((props: {
-    title?: React.ReactNode;
-    description?: React.ReactNode;
-    action?: ToastActionElement;
-    variant?: "default" | "destructive" | "success";
-    duration?: number;
-  }) => {
-    showToast(props);
-  }) as ToastFunction;
-  
-  // Add methods
-  toastFn.success = (props) => {
-    showToast({ ...props, variant: "success" });
-  };
-  
-  toastFn.error = (props) => {
-    showToast({ ...props, variant: "destructive" });
-  };
-  
-  toastFn.default = (props) => {
-    showToast({ ...props, variant: "default" });
-  };
-  
-  toastFn.show = (props) => {
-    showToast(props);
-  };
-  
-  return toastFn;
-};
+export function useToast() {
+  const context = useContext(ToastContext);
+  if (!context) {
+    throw new Error("useToast must be used within a ToastProvider");
+  }
+  return context;
+}
 
-// Export the callable toast function
-export const toast = createToastFunction();
+// Create a showToast utility for backwards compatibility
+export const showToast = (props: {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  action?: ToastActionElement;
+  variant?: "default" | "destructive" | "success";
+  duration?: number;
+}): void => {
+  const { variant, ...restProps } = props;
+  
+  if (variant === "destructive") {
+    toast.error(props.title as string, restProps);
+  } else if (variant === "success") {
+    toast.success(props.title as string, restProps);
+  } else {
+    toast(props.title as string, restProps);
+  }
+};
