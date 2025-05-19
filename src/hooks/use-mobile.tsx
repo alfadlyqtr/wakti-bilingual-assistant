@@ -18,3 +18,30 @@ export function useIsMobile() {
 
   return { isMobile }
 }
+
+// Add the useMediaQuery hook that is being imported in VoiceSummaryDetailDialog
+export function useMediaQuery(query: string) {
+  const [matches, setMatches] = React.useState<boolean>(false)
+  
+  React.useEffect(() => {
+    const mediaQuery = window.matchMedia(query)
+    
+    // Set initial value
+    setMatches(mediaQuery.matches)
+    
+    // Define a callback function to handle changes
+    const handler = (event: MediaQueryListEvent) => {
+      setMatches(event.matches)
+    }
+    
+    // Add the event listener
+    mediaQuery.addEventListener("change", handler)
+    
+    // Remove the event listener on cleanup
+    return () => {
+      mediaQuery.removeEventListener("change", handler)
+    }
+  }, [query])
+  
+  return matches
+}
