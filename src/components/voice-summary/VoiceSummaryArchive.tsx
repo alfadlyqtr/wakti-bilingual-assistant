@@ -26,9 +26,15 @@ interface VoiceSummaryArchiveProps {
   recordings: any[];
   onRecordingDeleted?: (recordingId: string) => void;
   isRefreshing?: boolean;
+  onRecordingSelected?: (recordingId: string) => void;
 }
 
-export default function VoiceSummaryArchive({ recordings, onRecordingDeleted, isRefreshing = false }: VoiceSummaryArchiveProps) {
+export default function VoiceSummaryArchive({ 
+  recordings, 
+  onRecordingDeleted, 
+  isRefreshing = false,
+  onRecordingSelected
+}: VoiceSummaryArchiveProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -313,6 +319,12 @@ ${recording.summary || ''}
       });
   };
 
+  const handleRecordingClick = (recordingId: string) => {
+    if (onRecordingSelected) {
+      onRecordingSelected(recordingId);
+    }
+  };
+
   // Safely check if recordings array is valid before rendering
   if (!Array.isArray(recordings)) {
     console.error("Expected recordings to be an array but got:", recordings);
@@ -349,9 +361,7 @@ ${recording.summary || ''}
               className={`hover:border-primary/50 transition-colors cursor-pointer ${
                 daysRemaining <= 2 ? 'border-amber-200' : ''} ${
                 status !== 'complete' ? 'border-dashed' : ''}`}
-              onClick={() => {
-                navigate(`/voice-summary/${recording.id}`);
-              }}
+              onClick={() => handleRecordingClick(recording.id)}
             >
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">

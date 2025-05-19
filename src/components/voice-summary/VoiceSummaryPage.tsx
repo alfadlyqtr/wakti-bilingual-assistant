@@ -1,8 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import VoiceSummaryArchive from "./VoiceSummaryArchive";
 import RecordingDialog from "./RecordingDialog";
+import VoiceSummaryDetailDialog from "./VoiceSummaryDetailDialog";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, RefreshCw, AlertCircle, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +23,8 @@ export default function VoiceSummaryPage() {
   const [recoverableRecordings, setRecoverableRecordings] = useState<any[]>([]);
   const [isRecovering, setIsRecovering] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
+  const [showDetailDialog, setShowDetailDialog] = useState(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -224,6 +228,12 @@ export default function VoiceSummaryPage() {
     setInProgressRecordings(inProgressRecordings.filter(recording => recording.id !== recordingId));
     setStuckRecordings(stuckRecordings.filter(recording => recording.id !== recordingId));
     setRecoverableRecordings(recoverableRecordings.filter(recording => recording.id !== recordingId));
+    
+    // Close the detail dialog if the deleted recording was selected
+    if (selectedRecordingId === recordingId) {
+      setSelectedRecordingId(null);
+      setShowDetailDialog(false);
+    }
   };
   
   const handleManualRefresh = () => {
@@ -232,6 +242,11 @@ export default function VoiceSummaryPage() {
       title: language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...',
       variant: "default"
     });
+  };
+
+  const handleRecordingSelected = (recordingId: string) => {
+    setSelectedRecordingId(recordingId);
+    setShowDetailDialog(true);
   };
 
   return (
@@ -377,6 +392,7 @@ export default function VoiceSummaryPage() {
             recordings={recordings}
             onRecordingDeleted={handleRecordingDeleted}
             isRefreshing={isRefreshing}
+            onRecordingSelected={handleRecordingSelected}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-40 text-center">
@@ -397,6 +413,13 @@ export default function VoiceSummaryPage() {
           isOpen={showRecordingDialog} 
           onClose={() => setShowRecordingDialog(false)} 
           onRecordingCreated={handleRecordingCreated}
+        />
+
+        {/* Voice Summary Detail Dialog */}
+        <VoiceSummaryDetailDialog
+          recordingId={selectedRecordingId}
+          isOpen={showDetailDialog}
+          onClose={() => setShowDetailDialog(false)}
         />
       </div>
     </div>
