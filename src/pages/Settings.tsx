@@ -115,7 +115,7 @@ export default function Settings() {
   }, []); // Only run once on component mount
   
   return (
-    <div className="container py-6 pb-24 space-y-6">
+    <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
       <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
       
       <Card>

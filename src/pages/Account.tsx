@@ -440,7 +440,7 @@ export default function Account() {
   });
 
   return (
-    <div className="p-4 pb-20">
+    <div className="flex-1 overflow-y-auto p-4 pb-20">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid grid-cols-2 mb-8">
           <TabsTrigger value="profile">
