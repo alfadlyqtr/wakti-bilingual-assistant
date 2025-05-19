@@ -76,8 +76,8 @@ export function BlockedUsers() {
       ) : (
         blockedUsers.map(user => {
           const userProfile = user.profiles || {};
-          const displayName = userProfile.display_name || userProfile.username || "Unknown User";
-          const username = userProfile.username || "user";
+          const displayName = (userProfile.display_name as string) || (userProfile.username as string) || "Unknown User";
+          const username = (userProfile.username as string) || "user";
           
           return (
             <Card key={user.id} className="overflow-hidden border-destructive/30">
@@ -85,7 +85,7 @@ export function BlockedUsers() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Avatar>
-                      <AvatarImage src={userProfile.avatar_url || ""} />
+                      <AvatarImage src={(userProfile.avatar_url as string) || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
                     <div>

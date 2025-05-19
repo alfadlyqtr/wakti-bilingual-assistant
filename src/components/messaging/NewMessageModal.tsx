@@ -42,8 +42,8 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   // Filter contacts based on search query
   const filteredContacts = contacts?.filter(contact => {
     const profile = contact.profile || {};
-    const displayName = profile.display_name || profile.username || "";
-    const username = profile.username || "";
+    const displayName = (profile.display_name as string) || (profile.username as string) || "";
+    const username = (profile.username as string) || "";
     
     return !searchQuery || 
       displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -112,7 +112,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
               ) : (
                 filteredContacts.map(contact => {
                   const profile = contact.profile || {};
-                  const displayName = profile.display_name || profile.username || "Unknown User";
+                  const displayName = (profile.display_name as string) || (profile.username as string) || "Unknown User";
                   
                   return (
                     <Button
@@ -123,7 +123,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       disabled={isCreatingConversation}
                     >
                       <Avatar className="h-8 w-8 mr-2">
-                        <AvatarImage src={profile.avatar_url || ""} alt={displayName} />
+                        <AvatarImage src={(profile.avatar_url as string) || ""} alt={displayName} />
                         <AvatarFallback>
                           {getInitials(displayName)}
                         </AvatarFallback>

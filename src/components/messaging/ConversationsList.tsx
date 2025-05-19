@@ -11,6 +11,7 @@ import { Card } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ConversationsListProps {
   onSelectConversation: (id: string) => void;
@@ -48,12 +49,14 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
       }
       
       // Check participant names
-      for (const participant of conversation.participants || []) {
-        if (participant.profile) {
-          const { display_name, username } = participant.profile;
-          if ((display_name && display_name.toLowerCase().includes(searchQuery.toLowerCase())) || 
-              (username && username.toLowerCase().includes(searchQuery.toLowerCase()))) {
-            return true;
+      if (conversation.participants) {
+        for (const participant of conversation.participants || []) {
+          if (participant.profile) {
+            const { display_name, username } = participant.profile;
+            if ((display_name && display_name.toLowerCase().includes(searchQuery.toLowerCase())) || 
+                (username && username.toLowerCase().includes(searchQuery.toLowerCase()))) {
+              return true;
+            }
           }
         }
       }
@@ -101,8 +104,8 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
     }
 
     // Get other participants (exclude current user)
-    const { data: session } = supabase.auth.getSession();
-    const currentUserId = session?.user?.id;
+    const { data: sessionData } = supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
     const otherParticipants = conversation.participants.filter(
       (p: any) => p.user_id !== currentUserId
     );

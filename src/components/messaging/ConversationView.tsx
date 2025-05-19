@@ -22,6 +22,16 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  
+  // Get current user ID
+  useEffect(() => {
+    async function getUserId() {
+      const { data } = await supabase.auth.getSession();
+      setCurrentUserId(data.session?.user.id || null);
+    }
+    getUserId();
+  }, []);
   
   // Get conversation details
   const { data: conversation, isLoading: isLoadingConversation } = useQuery({
@@ -90,10 +100,6 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
   const handleSendMessage = (messageData: any) => {
     sendMessageMutation.mutate(messageData);
   };
-
-  // Get current user ID
-  const { data: session } = supabase.auth.getSession();
-  const currentUserId = session?.user?.id;
 
   // Group messages by date
   const groupedByDate = (messages || []).reduce((acc: any, message) => {

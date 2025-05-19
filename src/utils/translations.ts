@@ -1001,6 +1001,127 @@ const translations: TranslationMap = {
   errorGeneratingImage: {
     en: "Sorry, there was an error generating the image",
     ar: "عذرًا، حدث خطأ أثناء إنشاء الصورة"
+  },
+  
+  contactUnblocked: {
+    en: "Contact Unblocked",
+    ar: "تم إلغاء حظر جهة الاتصال"
+  },
+  userUnblockedDescription: {
+    en: "has been removed from your blocked list",
+    ar: "تمت إزالته من قائمة المحظورين"
+  },
+  errorUnblockingContact: {
+    en: "Error unblocking contact",
+    ar: "خطأ في إلغاء حظر جهة الاتصال"
+  },
+  errorLoadingBlockedUsers: {
+    en: "Error loading blocked users",
+    ar: "خطأ في تحميل المستخدمين المحظورين"
+  },
+  noBlockedUsers: {
+    en: "No blocked users",
+    ar: "لا يوجد مستخدمون محظورون"
+  },
+  unblock: {
+    en: "Unblock",
+    ar: "إلغاء الحظر"
+  },
+  errorCreatingConversation: {
+    en: "Error creating conversation",
+    ar: "خطأ في إنشاء المحادثة"
+  },
+  errorBlockingContact: {
+    en: "Error blocking contact",
+    ar: "خطأ في حظر جهة الاتصال"
+  },
+  errorLoadingContacts: {
+    en: "Error loading contacts",
+    ar: "خطأ في تحميل جهات الاتصال"
+  },
+  noContacts: {
+    en: "No contacts",
+    ar: "لا توجد جهات اتصال"
+  },
+  searchToAddContacts: {
+    en: "Search to add contacts",
+    ar: "البحث لإضافة جهات اتصال"
+  },
+  errorAcceptingRequest: {
+    en: "Error accepting request",
+    ar: "خطأ في قبول الطلب"
+  },
+  errorRejectingRequest: {
+    en: "Error rejecting request",
+    ar: "خطأ في رفض الطلب"
+  },
+  errorBlockingUser: {
+    en: "Error blocking user",
+    ar: "خطأ في حظر المست��دم"
+  },
+  errorLoadingRequests: {
+    en: "Error loading requests",
+    ar: "خطأ في تحميل الطلبات"
+  },
+  requestSent: {
+    en: "Request Sent",
+    ar: "تم إرسال الطلب"
+  },
+  contactRequestSent: {
+    en: "Contact request sent",
+    ar: "تم إرسال طلب الاتصال"
+  },
+  errorSendingRequest: {
+    en: "Error sending request",
+    ar: "خطأ في إرسال الطلب"
+  },
+  searchResults: {
+    en: "Search Results",
+    ar: "نتائج البحث"
+  },
+  sendRequest: {
+    en: "Send Request",
+    ar: "إرسال طلب"
+  },
+  noUsersFound: {
+    en: "No users found",
+    ar: "لم يتم العثور على مستخدمين"
+  },
+  errorSendingMessage: {
+    en: "Error sending message",
+    ar: "خطأ في إرسال الرسالة"
+  },
+  loadingMessages: {
+    en: "Loading messages",
+    ar: "تحميل الرسائل"
+  },
+  startConversation: {
+    en: "Start a conversation",
+    ar: "بدء محادثة"
+  },
+  errorLoadingConversations: {
+    en: "Error loading conversations",
+    ar: "خطأ في تحميل المحادثات"
+  },
+  noConversationsFound: {
+    en: "No conversations found",
+    ar: "لم يتم العثور على محادثات"
+  },
+  noMessages: {
+    en: "No messages",
+    ar: "لا توجد رسائل"
+  },
+  uploading: {
+    en: "Uploading",
+    ar: "جاري الرفع"
+  },
+  creatingConversation: {
+    en: "Creating conversation",
+    ar: "إنشاء محادثة"
+  },
+  searchMessages: {
+    en: "Search Messages",
+    ar: "البحث في الرسائل"
   }
 };
 
