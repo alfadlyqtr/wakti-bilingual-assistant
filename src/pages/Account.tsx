@@ -435,7 +435,7 @@ export default function Account() {
                     <SelectContent>
                       {categories.map((category) => (
                         <SelectItem key={category} value={category}>
-                          {t(category, language)}
+                          {t(category as TranslationKey, language)}
                         </SelectItem>
                       ))}
                     </SelectContent>

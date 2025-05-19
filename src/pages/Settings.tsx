@@ -5,7 +5,6 @@ import { t } from "@/utils/translations";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Toggle } from "@/components/ui/toggle";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -17,6 +16,7 @@ import { quotes } from "@/utils/dailyQuotes";
 import { Check, Save, Settings as SettingsIcon } from "lucide-react";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -189,7 +189,7 @@ export default function Settings() {
               <SelectContent>
                 {categories.map((category) => (
                   <SelectItem key={category} value={category}>
-                    {t(category, language)}
+                    {t(category as TranslationKey, language)}
                   </SelectItem>
                 ))}
               </SelectContent>
