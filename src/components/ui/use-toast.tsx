@@ -3,8 +3,9 @@
 export { 
   useToast, 
   toast, 
-  showToast, 
+  showToast,
   confirm,
-  ToastProvider 
+  ToastProvider,
+  Toaster
 } from "@/hooks/use-toast";
-export type { ConfirmOptions } from "@/hooks/use-toast";
+export type { ConfirmOptions, ToastActionElement } from "@/hooks/use-toast";

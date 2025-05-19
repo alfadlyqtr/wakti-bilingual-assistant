@@ -1,6 +1,3 @@
 
-import { Toaster as ToastComponent } from "@/hooks/use-toast";
-
-export function Toaster() {
-  return <ToastComponent />;
-}
+// Export the Toaster component from the use-toast hook
+export { Toaster } from "@/hooks/use-toast";

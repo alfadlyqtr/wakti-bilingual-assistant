@@ -172,4 +172,5 @@ export const AIAssistant: React.FC = () => {
   );
 };
 
+// Default export for dynamic import
 export default AIAssistant;
