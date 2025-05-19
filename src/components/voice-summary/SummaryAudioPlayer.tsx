@@ -290,36 +290,36 @@ export default function SummaryAudioPlayer({
           </Badge>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Select
-            value={voiceGender}
-            onValueChange={(value) => setVoiceGender(value as "male" | "female")}
-            disabled={isGenerating || isPlaying}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder={language === "ar" ? "الصوت" : "Voice"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="male">{language === "ar" ? "ذكر" : "Male"}</SelectItem>
-              <SelectItem value="female">{language === "ar" ? "أنثى" : "Female"}</SelectItem>
-            </SelectContent>
-          </Select>
+        {!audioUrl && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Select
+              value={voiceGender}
+              onValueChange={(value) => setVoiceGender(value as "male" | "female")}
+              disabled={isGenerating || isPlaying}
+            >
+              <SelectTrigger className="w-[110px]">
+                <SelectValue placeholder={language === "ar" ? "الصوت" : "Voice"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">{language === "ar" ? "ذكر" : "Male"}</SelectItem>
+                <SelectItem value="female">{language === "ar" ? "أنثى" : "Female"}</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select
-            value={audioLanguage}
-            onValueChange={(value) => setAudioLanguage(value as "en" | "ar")}
-            disabled={isGenerating || isPlaying}
-          >
-            <SelectTrigger className="w-[110px]">
-              <SelectValue placeholder={language === "ar" ? "اللغة" : "Language"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="ar">العربية</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select
+              value={audioLanguage}
+              onValueChange={(value) => setAudioLanguage(value as "en" | "ar")}
+              disabled={isGenerating || isPlaying}
+            >
+              <SelectTrigger className="w-[110px]">
+                <SelectValue placeholder={language === "ar" ? "اللغة" : "Language"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="ar">العربية</SelectItem>
+              </SelectContent>
+            </Select>
 
-          {!audioUrl && (
             <Button
               onClick={handleGenerateAudio}
               disabled={isGenerating || !summaryText}
@@ -339,8 +339,8 @@ export default function SummaryAudioPlayer({
                 </>
               )}
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {audioUrl && (

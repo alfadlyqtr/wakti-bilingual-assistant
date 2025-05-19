@@ -208,7 +208,7 @@ serve(async (req) => {
       .update({
         summary_audio_url: publicUrl.publicUrl,
         summary_language: language,
-        voice_gender: voiceGender,
+        summary_voice: voice,
         is_processing_tts: false,
         tts_completed_at: new Date().toISOString(),
         is_ready: true  // Mark the recording as fully ready
