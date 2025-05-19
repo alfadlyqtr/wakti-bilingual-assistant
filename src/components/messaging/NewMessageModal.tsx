@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,40 +8,10 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, X } from "lucide-react";
-
-// Mock contacts data - would be replaced with API calls
-const mockContacts = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    avatarUrl: "",
-  },
-  {
-    id: "2",
-    name: "Mohammed Al-Farsi",
-    avatarUrl: "",
-  },
-  {
-    id: "3",
-    name: "Elena Rodriguez",
-    avatarUrl: "",
-  },
-  {
-    id: "4",
-    name: "Ahmad Khalid",
-    avatarUrl: "",
-  },
-  {
-    id: "5",
-    name: "Michael Chen",
-    avatarUrl: "",
-  },
-  {
-    id: "6",
-    name: "Fatima Al-Zahra",
-    avatarUrl: "",
-  },
-];
+import { useQuery } from "@tanstack/react-query";
+import { getContacts } from "@/services/contactsService";
+import { createConversation } from "@/services/messageService";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 interface NewMessageModalProps {
   isOpen: boolean;
@@ -52,12 +22,54 @@ interface NewMessageModalProps {
 export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessageModalProps) {
   const { language } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
-  const [contacts, setContacts] = useState(mockContacts);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  
+  // Get contacts list
+  const { data: contacts, isLoading } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: getContacts,
+    enabled: isOpen,
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("");
+      setSelectedContactId(null);
+    }
+  }, [isOpen]);
 
   // Filter contacts based on search query
-  const filteredContacts = contacts.filter(contact => 
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredContacts = contacts?.filter(contact => {
+    const profile = contact.profile || {};
+    const displayName = profile.display_name || profile.username || "";
+    const username = profile.username || "";
+    
+    return !searchQuery || 
+      displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      username.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  const handleSelectContact = async (contactId: string) => {
+    setSelectedContactId(contactId);
+    setIsCreatingConversation(true);
+    
+    try {
+      // Create or get conversation with this contact
+      const conversationId = await createConversation(contactId);
+      onSelectContact(conversationId);
+      onClose();
+    } catch (error) {
+      console.error("Error creating conversation:", error);
+    } finally {
+      setIsCreatingConversation(false);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return "??";
+    return name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -87,31 +99,50 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
         </div>
         
         <ScrollArea className="h-[300px]">
-          <div className="space-y-1">
-            {filteredContacts.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                <p>{t("noContactsFound", language)}</p>
-              </div>
-            ) : (
-              filteredContacts.map(contact => (
-                <Button
-                  key={contact.id}
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => onSelectContact(contact.id)}
-                >
-                  <Avatar className="h-8 w-8 mr-2">
-                    <AvatarImage src={contact.avatarUrl} alt={contact.name} />
-                    <AvatarFallback>
-                      {contact.name.split(" ").map(n => n[0]).join("")}
-                    </AvatarFallback>
-                  </Avatar>
-                  {contact.name}
-                </Button>
-              ))
-            )}
-          </div>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-full">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {!filteredContacts || filteredContacts.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p>{t("noContactsFound", language)}</p>
+                </div>
+              ) : (
+                filteredContacts.map(contact => {
+                  const profile = contact.profile || {};
+                  const displayName = profile.display_name || profile.username || "Unknown User";
+                  
+                  return (
+                    <Button
+                      key={contact.contact_id}
+                      variant="ghost"
+                      className="w-full justify-start"
+                      onClick={() => handleSelectContact(contact.contact_id)}
+                      disabled={isCreatingConversation}
+                    >
+                      <Avatar className="h-8 w-8 mr-2">
+                        <AvatarImage src={profile.avatar_url || ""} alt={displayName} />
+                        <AvatarFallback>
+                          {getInitials(displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      {displayName}
+                    </Button>
+                  );
+                })
+              )}
+            </div>
+          )}
         </ScrollArea>
+        
+        {isCreatingConversation && (
+          <div className="flex justify-center items-center pt-2">
+            <LoadingSpinner size="sm" />
+            <span className="ml-2 text-sm text-muted-foreground">{t("creatingConversation", language)}</span>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -2,117 +2,119 @@
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Button } from "@/components/ui/button";
-import { Play, Pause, ChevronDown, ChevronUp } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Play, Pause, Download } from "lucide-react";
+import { Card } from "@/components/ui/card";
 
 interface MessageBubbleProps {
-  message: any;
+  message: {
+    id: string;
+    sender_id: string;
+    message_type: 'text' | 'image' | 'voice';
+    content?: string;
+    media_url?: string;
+    media_type?: string;
+    media_duration?: number;
+    created_at: string;
+    sender?: {
+      display_name: string;
+      username: string;
+    };
+  };
   isSelf: boolean;
   contactName: string;
 }
 
 export function MessageBubble({ message, isSelf, contactName }: MessageBubbleProps) {
-  const { language } = useTheme();
+  const { theme } = useTheme();
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
-  const [isImageExpanded, setIsImageExpanded] = useState(false);
-
-  // Calculate time remaining until expiry
-  const now = new Date();
-  const timeRemaining = message.expiresAt.getTime() - now.getTime();
-  const hoursRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60 * 60)));
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   
-  // Calculate opacity based on time remaining (fade out as it gets closer to expiry)
-  const opacity = Math.min(1, Math.max(0.5, timeRemaining / (1000 * 60 * 60 * 24)));
+  // Format message timestamp
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      let hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      const ampm = hours >= 12 ? "pm" : "am";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // Handle midnight (0 hours)
+      return `${hours}:${minutes} ${ampm}`;
+    } catch (error) {
+      return "";
+    }
+  };
 
-  // Message bubble styling based on sender
+  // Determine message styles based on sender
   const bubbleStyle = isSelf
-    ? "bg-[#007AFF] text-white rounded-2xl rounded-tr-sm mr-2 self-end"
-    : "bg-[#333333] text-white rounded-2xl rounded-tl-sm ml-2 self-start";
+    ? "bg-blue-500 text-white ml-auto rounded-2xl rounded-br-none"
+    : "bg-muted text-foreground mr-auto rounded-2xl rounded-bl-none";
 
-  return (
-    <div 
-      className={cn(
-        "max-w-[75%] mb-1",
-        isSelf ? "self-end" : "self-start"
-      )}
-      style={{ opacity }}
-    >
-      {/* Message Content */}
-      <div className={bubbleStyle}>
-        {message.type === "text" && (
-          <p className="p-3 whitespace-pre-wrap break-words text-base">
-            {message.text}
-          </p>
-        )}
+  // Handle audio playback (mock implementation)
+  const toggleAudioPlayback = () => {
+    setIsPlaying(!isPlaying);
+    setTimeout(() => {
+      setIsPlaying(false);
+    }, 3000);
+  };
 
-        {message.type === "voice" && (
-          <div className="p-2 w-64 space-y-1">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 rounded-full p-0 text-white hover:bg-black/20"
-                onClick={() => setIsPlaying(!isPlaying)}
-              >
-                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              </Button>
-              
-              <div className="flex-1">
-                {/* Audio waveform visualization */}
-                <div className="h-6 bg-black/20 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-white/30 rounded-full" 
-                    style={{ width: isPlaying ? "70%" : "0", transition: "width 0.1s linear" }}
-                  />
-                </div>
-              </div>
-              
-              <span className="text-xs">{message.duration}s</span>
-            </div>
-            
-            {/* Transcript button and content */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs flex items-center gap-1 text-white/80 hover:text-white hover:bg-black/20"
-              onClick={() => setShowTranscript(!showTranscript)}
-            >
-              {t("transcript", language)}
-              {showTranscript ? (
-                <ChevronUp className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
-            </Button>
-            
-            {showTranscript && (
-              <div className="text-xs p-2 bg-black/20 rounded-md">
-                {message.transcript}
-              </div>
-            )}
-          </div>
-        )}
-
-        {message.type === "image" && (
-          <div 
-            className={cn(
-              "relative cursor-pointer overflow-hidden",
-              isImageExpanded ? "max-w-xs" : "w-64 h-48"
-            )}
-            onClick={() => setIsImageExpanded(!isImageExpanded)}
-          >
+  // Render different message types
+  const renderMessageContent = () => {
+    switch (message.message_type) {
+      case 'image':
+        return (
+          <div className="relative">
+            {!isImageLoaded && <div className="h-40 w-40 bg-muted animate-pulse rounded"></div>}
             <img 
-              src={message.imageUrl || "/placeholder.svg"} 
-              alt="Shared image" 
-              className={cn(
-                "object-cover rounded-md transition-all",
-                isImageExpanded ? "w-full" : "w-full h-full"
-              )}
+              src={message.media_url} 
+              alt="Image message" 
+              className={`max-h-60 max-w-60 rounded-lg object-contain ${!isImageLoaded ? 'hidden' : ''}`}
+              onLoad={() => setIsImageLoaded(true)}
             />
           </div>
-        )}
+        );
+      case 'voice':
+        return (
+          <div className="flex items-center gap-2 py-1">
+            <button 
+              onClick={toggleAudioPlayback}
+              className="h-8 w-8 rounded-full bg-foreground/10 flex items-center justify-center"
+            >
+              {isPlaying ? <Pause size={16} /> : <Play size={16} />}
+            </button>
+            <div className="flex-1">
+              <div className="h-2 bg-foreground/20 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full bg-foreground/40 ${isPlaying ? 'animate-progress' : ''}`}
+                  style={{ width: isPlaying ? '100%' : '0%' }}
+                ></div>
+              </div>
+              <div className="flex justify-between text-xs mt-1">
+                <span>{isPlaying ? '0:08' : '0:00'}</span>
+                <span>{message.media_duration ? `0:${message.media_duration}` : '0:15'}</span>
+              </div>
+            </div>
+            <button className="text-foreground/60">
+              <Download size={16} />
+            </button>
+          </div>
+        );
+      default:
+        return <p className="break-words">{message.content}</p>;
+    }
+  };
+
+  return (
+    <div className={`flex flex-col max-w-[80%] ${isSelf ? 'ml-auto' : 'mr-auto'}`}>
+      {!isSelf && message.sender && (
+        <span className="text-xs text-muted-foreground ml-2 mb-1">
+          {message.sender.display_name || message.sender.username || contactName}
+        </span>
+      )}
+      <div className={`px-4 py-2 ${bubbleStyle}`}>
+        {renderMessageContent()}
+      </div>
+      <div className={`text-xs text-muted-foreground mt-1 ${isSelf ? 'text-right mr-2' : 'ml-2'}`}>
+        {formatTime(message.created_at)}
       </div>
     </div>
   );

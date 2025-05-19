@@ -5,6 +5,8 @@ import { t } from "@/utils/translations";
 import { Plus, Send, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
+import { v4 as uuidv4 } from "uuid";
 
 // Maximum character limit for text messages
 const MAX_CHARS = 300;
@@ -14,15 +16,17 @@ const MAX_RECORDING_TIME = 30;
 
 interface MessageInputBarProps {
   onSendMessage: (message: any) => void;
+  isSubmitting?: boolean;
 }
 
-export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
+export function MessageInputBar({ onSendMessage, isSubmitting = false }: MessageInputBarProps) {
   const { language } = useTheme();
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordingInterval, setRecordingInterval] = useState<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Character count display
   const charCount = text.length;
@@ -65,10 +69,8 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
     if (recordingTime > 0) {
       // Mock voice message - in a real app, we would process the actual recording
       onSendMessage({
-        type: "voice",
-        audioUrl: "/path-to-audio.mp3",
-        duration: recordingTime,
-        transcript: "This is a mock transcript of the voice message.",
+        message_type: "voice",
+        content: `Voice message (${recordingTime}s)`,
       });
     }
     
@@ -76,7 +78,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
   };
 
   // Handle image selection
-  const handleImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
@@ -85,19 +87,40 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
       alert(t("imageTooLarge", language));
       return;
     }
-    
-    // In a real app, we would upload and process the image
-    console.log(`Image selected: ${file.name}`);
-    
-    // Mock image message - in a real app, we would upload the image and get a URL
-    onSendMessage({
-      type: "image",
-      imageUrl: "/placeholder.svg", // Placeholder image URL
-    });
-    
-    // Reset the file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+
+    try {
+      setIsUploading(true);
+      // Upload the image to Supabase Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${uuidv4()}.${fileExt}`;
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('message_media')
+        .upload(`images/${fileName}`, file);
+
+      if (uploadError) {
+        console.error("Error uploading image:", uploadError);
+        throw uploadError;
+      }
+
+      const { data: urlData } = await supabase.storage
+        .from('message_media')
+        .getPublicUrl(`images/${fileName}`);
+
+      // Send the image message
+      onSendMessage({
+        message_type: "image",
+        media_url: urlData.publicUrl,
+        media_type: file.type,
+        content: "📷 Image"
+      });
+    } catch (error) {
+      console.error("Error processing image:", error);
+    } finally {
+      setIsUploading(false);
+      // Reset the file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
@@ -105,8 +128,8 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
   const sendTextMessage = () => {
     if (text.trim() && !isOverLimit) {
       onSendMessage({
-        type: "text",
-        text: text.trim(),
+        message_type: "text",
+        content: text.trim(),
       });
       setText("");
     }
@@ -120,6 +143,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
           size="icon"
           className="h-10 w-10 rounded-full text-muted-foreground hover:bg-transparent p-0 ml-1"
           onClick={() => fileInputRef.current?.click()}
+          disabled={isSubmitting || isUploading || isRecording}
         >
           <Plus className="h-5 w-5" />
         </Button>
@@ -129,7 +153,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
           onChange={(e) => setText(e.target.value)}
           placeholder={t("typeMessage", language)}
           className="flex-1 bg-transparent border-0 focus-visible:ring-0 placeholder-muted-foreground text-foreground h-10 py-0 px-2"
-          disabled={isRecording}
+          disabled={isRecording || isSubmitting || isUploading}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -144,7 +168,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
             size="icon"
             className="h-10 w-10 rounded-full text-blue-500 hover:bg-transparent p-0 mr-1"
             onClick={sendTextMessage}
-            disabled={isOverLimit}
+            disabled={isOverLimit || isSubmitting || isUploading}
           >
             <Send className="h-5 w-5" />
           </Button>
@@ -155,7 +179,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               size="icon"
               className="h-10 w-10 rounded-full text-muted-foreground hover:bg-transparent p-0"
               onClick={startRecording}
-              disabled={isRecording}
+              disabled={isRecording || isSubmitting || isUploading}
             >
               <Mic className="h-5 w-5" />
             </Button>
@@ -166,6 +190,7 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               accept="image/*"
               className="hidden"
               onChange={handleImageSelected}
+              disabled={isSubmitting || isUploading}
             />
           </div>
         )}
@@ -185,6 +210,15 @@ export function MessageInputBar({ onSendMessage }: MessageInputBarProps) {
               <span className="sr-only">{t("stopRecording", language)}</span>
               ■
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Uploading indicator */}
+      {isUploading && (
+        <div className="mt-2 flex items-center justify-center">
+          <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
+            <span className="animate-pulse">{t("uploading", language)}...</span>
           </div>
         </div>
       )}

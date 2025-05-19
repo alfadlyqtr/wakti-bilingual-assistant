@@ -5,42 +5,12 @@ import { t } from "@/utils/translations";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { MessageBubble } from "./MessageBubble";
 import { MessageInputBar } from "./MessageInputBar";
-
-// Mock data for messages - would be replaced with API calls
-const mockMessages = [
-  {
-    id: "1",
-    senderId: "contact456", // other contact
-    text: "Dear QNB First Plus Member, Purchase premium furniture at That's Living, Doha Festival City and earn 3x points with QNB First Life Rewards credit cards. Enjoy this offer at That's Living Design District showrooms, featuring Ralph Lauren, Baker McGuire, Caracole, Eclipse, Theodore Alexander, Bernhardt, and more.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-    type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 19), // expires in 19 hours
-  },
-  {
-    id: "2",
-    senderId: "contact456", // other contact
-    text: "Valid until 24 June. Find the full list of participating brands on QNB website. Terms and conditions apply. For more information, please call your dedicated Relationship Manager",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5), // 5 hours ago
-    type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 19), // expires in 19 hours
-  },
-  {
-    id: "3",
-    senderId: "contact456", // other contact
-    text: "Dear Customer, your login to QNB Mobile Banking was successful on 12/05/2025 22:57:28",
-    timestamp: new Date(), // now
-    type: "text",
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // expires in 24 hours
-  }
-];
-
-// Mock contact details - would be replaced with API calls
-const mockContactDetails = {
-  id: "contact456",
-  name: "QNB",
-  avatarUrl: "",
-  blocked: false,
-};
+import { getMessages, getConversationById, sendMessage } from "@/services/messageService";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { LoadingSpinner } from "@/components/ui/loading";
+import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ConversationViewProps {
   conversationId: string;
@@ -49,41 +19,85 @@ interface ConversationViewProps {
 
 export function ConversationView({ conversationId, onBack }: ConversationViewProps) {
   const { language } = useTheme();
-  const [messages, setMessages] = useState(mockMessages);
-  const [contact, setContact] = useState({...mockContactDetails, name: conversationId});
+  const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const currentUserId = "user123"; // This would come from auth context in a real app
+  const queryClient = useQueryClient();
+  
+  // Get conversation details
+  const { data: conversation, isLoading: isLoadingConversation } = useQuery({
+    queryKey: ['conversation', conversationId],
+    queryFn: () => getConversationById(conversationId),
+  });
+  
+  // Get messages for this conversation
+  const { data: messages, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['messages', conversationId],
+    queryFn: () => getMessages(conversationId),
+    refetchInterval: 5000, // Refetch every 5 seconds
+  });
+
+  // Send message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: (message: any) => sendMessage(conversationId, message),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: (error) => {
+      console.error("Error sending message:", error);
+      toast({
+        title: t("error", language),
+        description: t("errorSendingMessage", language),
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Setup realtime subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('public:messages')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `conversation_id=eq.${conversationId}`
+        },
+        () => {
+          // Refetch messages when new message is inserted
+          queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        }
+      )
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, queryClient]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
-    if (scrollAreaRef.current) {
+    if (scrollAreaRef.current && messages) {
       const scrollContainer = scrollAreaRef.current;
       scrollContainer.scrollTop = scrollContainer.scrollHeight;
     }
   }, [messages]);
 
-  // Fetch conversation details - would be replaced with an API call
-  useEffect(() => {
-    // In a real app, fetch messages for this conversation ID
-    console.log(`Fetching messages for conversation: ${conversationId}`);
-  }, [conversationId]);
-
   // Send a new message
-  const handleSendMessage = (message: any) => {
-    const newMessage = {
-      id: Date.now().toString(),
-      senderId: currentUserId,
-      ...message,
-      timestamp: new Date(),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24), // 24 hours
-    };
-    
-    setMessages((prev) => [...prev, newMessage]);
+  const handleSendMessage = (messageData: any) => {
+    sendMessageMutation.mutate(messageData);
   };
 
+  // Get current user ID
+  const { data: session } = supabase.auth.getSession();
+  const currentUserId = session?.user?.id;
+
   // Group messages by date
-  const groupedByDate = messages.reduce((acc: any, message) => {
-    const date = new Date(message.timestamp);
+  const groupedByDate = (messages || []).reduce((acc: any, message) => {
+    const date = new Date(message.created_at);
     const dateStr = date.toDateString();
     
     if (!acc[dateStr]) {
@@ -110,14 +124,30 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     });
   };
 
-  // Format time for message timestamp in iOS Messages style
-  const formatMessageTime = (date: Date) => {
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, "0");
-    const ampm = hours >= 12 ? "pm" : "am";
-    hours = hours % 12;
-    hours = hours ? hours : 12; // Handle midnight (0 hours)
-    return `${hours}:${minutes} ${ampm}`;
+  if (isLoadingConversation || isLoadingMessages) {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <LoadingSpinner size="lg" />
+        <p className="mt-4 text-muted-foreground">{t("loadingMessages", language)}</p>
+      </div>
+    );
+  }
+
+  // Check if user is blocked
+  const isBlocked = false; // We need to implement this with the contacts API
+
+  // Get other participant display info
+  const getOtherParticipantName = () => {
+    if (!conversation || !conversation.participants) return "";
+    
+    const otherParticipants = conversation.participants.filter(
+      (p: any) => p.user_id !== currentUserId
+    );
+    
+    if (otherParticipants.length === 0) return "";
+    
+    const profile = otherParticipants[0].profile || {};
+    return profile.display_name || profile.username || "";
   };
 
   return (
@@ -141,19 +171,25 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
                   <MessageBubble 
                     key={message.id}
                     message={message}
-                    isSelf={message.senderId === currentUserId}
-                    contactName={contact.name}
+                    isSelf={message.sender_id === currentUserId}
+                    contactName={getOtherParticipantName()}
                   />
                 ))}
               </div>
             </div>
           ))}
+
+          {(!messages || messages.length === 0) && (
+            <div className="flex justify-center items-center h-32">
+              <p className="text-muted-foreground">{t("startConversation", language)}</p>
+            </div>
+          )}
         </div>
       </ScrollArea>
       
       {/* Input Area - Now positioned at bottom with absolute positioning */}
       <div className="w-full bottom-0 left-0 right-0 bg-background z-10">
-        {contact.blocked ? (
+        {isBlocked ? (
           <div className="p-4 text-center border-t border-border bg-muted">
             <p className="text-sm text-muted-foreground mb-2">
               {t("contactBlocked", language)}
@@ -163,7 +199,10 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
             </button>
           </div>
         ) : (
-          <MessageInputBar onSendMessage={handleSendMessage} />
+          <MessageInputBar 
+            onSendMessage={handleSendMessage} 
+            isSubmitting={sendMessageMutation.isPending}
+          />
         )}
       </div>
     </div>

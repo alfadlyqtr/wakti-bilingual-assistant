@@ -5,50 +5,12 @@ import { t } from "@/utils/translations";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronRight } from "lucide-react";
-
-// Mock conversation data - would be replaced with API calls
-const mockConversations = [
-  {
-    id: "QNB",
-    contactName: "QNB",
-    lastMessage: "Dear Customer, your login to QNB Mobile Banking was successful on 12/05/2025 2...",
-    timestamp: new Date(Date.now() - 1000 * 60 * 5), // 5 minutes ago
-    avatarUrl: "",
-    unread: 0,
-    isVoiceMessage: false,
-    isImageMessage: false,
-  },
-  {
-    id: "Apple",
-    contactName: "Apple",
-    lastMessage: "Your Apple Account Code is: 675554. Don't share it with anyone.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-    avatarUrl: "",
-    unread: 0,
-    isVoiceMessage: false,
-    isImageMessage: false,
-  },
-  {
-    id: "AlKhor Sch",
-    contactName: "AlKhor Sch",
-    lastMessage: "روضه ومدرسه الخور الابتدائية للبنات... أطيب تحية",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24), // 1 day ago
-    avatarUrl: "",
-    unread: 0,
-    isVoiceMessage: false,
-    isImageMessage: false,
-  },
-  {
-    id: "Doha Fair",
-    contactName: "Doha Fair",
-    lastMessage: "غدا الثلاثاء اليوم الاخير",
-    timestamp: new Date(Date.now() - 1000 * 60 * 30), // 30 minutes ago
-    avatarUrl: "",
-    unread: 2,
-    isVoiceMessage: false,
-    isImageMessage: false,
-  }
-];
+import { getConversations, searchConversations } from "@/services/messageService";
+import { useQuery } from "@tanstack/react-query";
+import { Card } from "@/components/ui/card";
+import { LoadingSpinner } from "@/components/ui/loading";
+import { formatDistanceToNow } from "date-fns";
+import { ar, enUS } from "date-fns/locale";
 
 interface ConversationsListProps {
   onSelectConversation: (id: string) => void;
@@ -58,46 +20,122 @@ interface ConversationsListProps {
 
 export function ConversationsList({ onSelectConversation, activeConversationId, searchQuery = "" }: ConversationsListProps) {
   const { language, theme } = useTheme();
-  const [conversations, setConversations] = useState(mockConversations);
-  const [filteredConversations, setFilteredConversations] = useState(mockConversations);
+  const [filteredConversations, setFilteredConversations] = useState<any[]>([]);
   
+  const { data: conversations, isLoading, isError, error } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: getConversations,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  });
+
   // Filter conversations based on search query
   useEffect(() => {
+    if (!conversations) {
+      setFilteredConversations([]);
+      return;
+    }
+    
     if (!searchQuery.trim()) {
       setFilteredConversations(conversations);
       return;
     }
     
-    const filtered = conversations.filter(conversation => 
-      conversation.contactName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      conversation.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filtered = conversations.filter(conversation => {
+      // Check last message text
+      if (conversation.last_message_text && 
+          conversation.last_message_text.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return true;
+      }
+      
+      // Check participant names
+      for (const participant of conversation.participants || []) {
+        if (participant.profile) {
+          const { display_name, username } = participant.profile;
+          if ((display_name && display_name.toLowerCase().includes(searchQuery.toLowerCase())) || 
+              (username && username.toLowerCase().includes(searchQuery.toLowerCase()))) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
     
     setFilteredConversations(filtered);
   }, [searchQuery, conversations]);
 
   // Format time in a more iOS Messages style
-  const formatTime = (date: Date) => {
-    const now = new Date();
-    const isToday = date.getDate() === now.getDate() && 
-                   date.getMonth() === now.getMonth() && 
-                   date.getFullYear() === now.getFullYear();
-    
-    if (isToday) {
-      // For today, show time like "10:57 pm"
-      let hours = date.getHours();
-      const minutes = date.getMinutes().toString().padStart(2, "0");
-      const ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12;
-      hours = hours ? hours : 12; // Handle midnight (0 hours)
-      return `${hours}:${minutes} ${ampm}`;
-    } else {
-      // For past dates, show day name
-      return date.toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", { 
-        weekday: "short"
-      });
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const isToday = date.getDate() === now.getDate() && 
+                     date.getMonth() === now.getMonth() && 
+                     date.getFullYear() === now.getFullYear();
+      
+      if (isToday) {
+        // For today, show time like "10:57 pm"
+        let hours = date.getHours();
+        const minutes = date.getMinutes().toString().padStart(2, "0");
+        const ampm = hours >= 12 ? "pm" : "am";
+        hours = hours % 12;
+        hours = hours ? hours : 12; // Handle midnight (0 hours)
+        return `${hours}:${minutes} ${ampm}`;
+      } else {
+        // For past dates, show day name
+        return formatDistanceToNow(date, { 
+          addSuffix: false,
+          locale: language === "ar" ? ar : enUS 
+        });
+      }
+    } catch (error) {
+      console.error("Error formatting date:", error);
+      return "";
     }
   };
+
+  // Get other participant details for display
+  const getConversationDisplayInfo = (conversation: any) => {
+    if (!conversation || !conversation.participants) {
+      return { name: "Unknown", avatar: "" };
+    }
+
+    // Get other participants (exclude current user)
+    const { data: session } = supabase.auth.getSession();
+    const currentUserId = session?.user?.id;
+    const otherParticipants = conversation.participants.filter(
+      (p: any) => p.user_id !== currentUserId
+    );
+    
+    if (otherParticipants.length === 0) {
+      return { name: "Unknown", avatar: "" };
+    }
+    
+    const otherUser = otherParticipants[0];
+    const profile = otherUser.profile || {};
+    
+    return {
+      name: profile.display_name || profile.username || "Unknown",
+      avatar: profile.avatar_url || "",
+    };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-40">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-muted-foreground">{t("errorLoadingConversations", language)}</p>
+        <p className="text-sm text-red-500">{(error as Error)?.message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col">
@@ -105,51 +143,58 @@ export function ConversationsList({ onSelectConversation, activeConversationId, 
         <div className="w-full divide-y divide-border">
           {filteredConversations.length === 0 ? (
             <div className="text-center py-10 text-muted-foreground">
-              <p>{t("noConversations", language)}</p>
+              <p>{searchQuery ? t("noConversationsFound", language) : t("noConversations", language)}</p>
             </div>
           ) : (
-            filteredConversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30 w-full"
-                onClick={() => onSelectConversation(conversation.id)}
-              >
-                <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">
-                  <AvatarFallback className="bg-muted text-foreground">
-                    {conversation.contactName[0]}
-                  </AvatarFallback>
-                </Avatar>
-                
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline w-full">
-                    <h3 className="font-medium text-foreground truncate">{conversation.contactName}</h3>
-                    <div className="flex items-center flex-shrink-0 ml-2">
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatTime(conversation.timestamp)}
-                      </span>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
+            filteredConversations.map((conversation) => {
+              const { name, avatar } = getConversationDisplayInfo(conversation);
+              const isVoiceMessage = conversation.last_message_text?.includes('🎤');
+              const isImageMessage = conversation.last_message_text?.includes('📷');
+              
+              return (
+                <div
+                  key={conversation.id}
+                  className="flex items-center py-3 px-4 cursor-pointer hover:bg-muted/30 w-full"
+                  onClick={() => onSelectConversation(conversation.id)}
+                >
+                  <Avatar className="h-12 w-12 bg-muted mr-3 flex-shrink-0">
+                    <AvatarImage src={avatar} alt={name} />
+                    <AvatarFallback className="bg-muted text-foreground">
+                      {name[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline w-full">
+                      <h3 className="font-medium text-foreground truncate">{name}</h3>
+                      <div className="flex items-center flex-shrink-0 ml-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatTime(conversation.last_message_at)}
+                        </span>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center w-full pr-6">
+                      {isVoiceMessage && (
+                        <span className="mr-1">🎤</span>
+                      )}
+                      {isImageMessage && (
+                        <span className="mr-1">📷</span>
+                      )}
+                      <p className="text-sm text-muted-foreground truncate flex-1">
+                        {conversation.last_message_text || t("noMessages", language)}
+                      </p>
+                      {(conversation.unread_count > 0) && (
+                        <span className="ml-2 bg-blue-500 text-white text-xs rounded-full h-5 min-w-5 flex items-center justify-center px-1 flex-shrink-0">
+                          {conversation.unread_count}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  
-                  <div className="flex items-center w-full pr-6">
-                    {conversation.isVoiceMessage && (
-                      <span className="mr-1">🎤</span>
-                    )}
-                    {conversation.isImageMessage && (
-                      <span className="mr-1">📷</span>
-                    )}
-                    <p className="text-sm text-muted-foreground truncate flex-1">
-                      {conversation.lastMessage}
-                    </p>
-                    {conversation.unread > 0 && (
-                      <span className="ml-2 bg-blue-500 text-white text-xs rounded-full h-5 min-w-5 flex items-center justify-center px-1 flex-shrink-0">
-                        {conversation.unread}
-                      </span>
-                    )}
-                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </ScrollArea>

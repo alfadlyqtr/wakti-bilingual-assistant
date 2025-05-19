@@ -8,33 +8,76 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
-// Mock data for demonstration
-const initialContacts = [
-  { id: 1, username: "ahmed_ibrahim", name: "Ahmed Ibrahim", avatar: "", favorite: true },
-  { id: 2, username: "sara_khalid", name: "Sara Khalid", avatar: "", favorite: false },
-  { id: 3, username: "mohammed_ali", name: "Mohammed Ali", avatar: "", favorite: false },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getContacts, blockContact } from "@/services/contactsService";
+import { createConversation } from "@/services/messageService";
+import { LoadingSpinner } from "@/components/ui/loading";
 
 export function ContactList() {
   const { toast } = useToast();
   const { language } = useTheme();
   const navigate = useNavigate();
-  const [contacts, setContacts] = useState(initialContacts);
+  const queryClient = useQueryClient();
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
 
-  const handleMessage = (id: number, name: string) => {
-    // In a real app, this would navigate to a chat with this contact
-    navigate(`/messages/${id}`);
+  // Fetch contacts
+  const { data: contacts, isLoading, isError, error } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: getContacts,
+  });
+
+  // Create conversation mutation
+  const createConversationMutation = useMutation({
+    mutationFn: (contactId: string) => createConversation(contactId),
+    onSuccess: (conversationId) => {
+      navigate(`/messages?conversation=${conversationId}`);
+    },
+    onError: (error) => {
+      console.error("Error creating conversation:", error);
+      toast({
+        title: t("error", language),
+        description: t("errorCreatingConversation", language),
+        variant: "destructive"
+      });
+    }
+  });
+
+  // Block contact mutation
+  const blockContactMutation = useMutation({
+    mutationFn: (contactId: string) => blockContact(contactId),
+    onSuccess: () => {
+      toast({
+        title: t("contactBlocked", language),
+        description: t("userBlockedDescription", language)
+      });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+    },
+    onError: (error) => {
+      console.error("Error blocking contact:", error);
+      toast({
+        title: t("error", language),
+        description: t("errorBlockingContact", language),
+        variant: "destructive"
+      });
+    }
+  });
+
+  const handleMessage = (contactId: string, name: string) => {
+    createConversationMutation.mutate(contactId);
+    
     toast({
       title: t("messageStarted", language),
       description: t("chattingWithUser", language) + " " + name
     });
   };
 
-  const handleToggleFavorite = (id: number, isFavorite: boolean) => {
-    setContacts(contacts.map(contact => 
-      contact.id === id ? {...contact, favorite: !isFavorite} : contact
-    ));
+  const handleToggleFavorite = (id: string, name: string) => {
+    const isFavorite = !!favorites[id];
+    setFavorites({
+      ...favorites,
+      [id]: !isFavorite
+    });
     
     toast({
       title: isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language),
@@ -42,62 +85,89 @@ export function ContactList() {
     });
   };
 
-  const handleBlock = (id: number, name: string) => {
-    setContacts(contacts.filter(contact => contact.id !== id));
-    
-    toast({
-      title: t("contactBlocked", language),
-      description: t("userBlockedDescription", language)
-    });
+  const handleBlock = (contactId: string) => {
+    blockContactMutation.mutate(contactId);
   };
 
   const getInitials = (name: string) => {
     return name.substring(0, 2).toUpperCase();
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-10">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Card className="p-6 text-center text-muted-foreground">
+        <p>{t("errorLoadingContacts", language)}</p>
+        <p className="text-sm mt-2">{(error as Error)?.message}</p>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      {contacts.map(contact => (
-        <Card key={contact.id} className="overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={contact.avatar} />
-                  <AvatarFallback>{getInitials(contact.name)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{contact.name}</p>
-                  <p className="text-sm text-muted-foreground">@{contact.username}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button 
-                  size="icon" 
-                  variant="ghost"
-                  onClick={() => handleToggleFavorite(contact.id, contact.favorite)}
-                >
-                  <Star className={`h-4 w-4 ${contact.favorite ? 'text-yellow-500' : 'text-muted-foreground'}`} />
-                </Button>
-                <Button 
-                  size="icon" 
-                  variant="ghost"
-                  onClick={() => handleMessage(contact.id, contact.name)}
-                >
-                  <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                </Button>
-                <Button 
-                  size="icon" 
-                  variant="ghost"
-                  onClick={() => handleBlock(contact.id, contact.name)}
-                >
-                  <UserX className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </div>
-            </div>
-          </CardContent>
+      {!contacts || contacts.length === 0 ? (
+        <Card className="p-6 text-center text-muted-foreground">
+          <p>{t("noContacts", language)}</p>
+          <p className="text-sm mt-2">{t("searchToAddContacts", language)}</p>
         </Card>
-      ))}
+      ) : (
+        contacts.map(contact => {
+          const contactProfile = contact.profile || {};
+          const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
+          const username = contactProfile.username || "user";
+          
+          return (
+            <Card key={contact.id} className="overflow-hidden">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar>
+                      <AvatarImage src={contactProfile.avatar_url || ""} />
+                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{displayName}</p>
+                      <p className="text-sm text-muted-foreground">@{username}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      size="icon" 
+                      variant="ghost"
+                      onClick={() => handleToggleFavorite(contact.id, displayName)}
+                    >
+                      <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500' : 'text-muted-foreground'}`} />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost"
+                      onClick={() => handleMessage(contact.contact_id, displayName)}
+                      disabled={createConversationMutation.isPending}
+                    >
+                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <Button 
+                      size="icon" 
+                      variant="ghost"
+                      onClick={() => handleBlock(contact.contact_id)}
+                      disabled={blockContactMutation.isPending}
+                    >
+                      <UserX className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })
+      )}
     </div>
   );
 }
