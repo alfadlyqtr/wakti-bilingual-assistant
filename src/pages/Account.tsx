@@ -13,7 +13,7 @@ import { ProfileImageUpload } from "@/components/ProfileImageUpload";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Save, Check } from "lucide-react";
+import { Save, Check, AlertTriangle } from "lucide-react";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { useToast } from "@/hooks/use-toast";
 import { quotes } from "@/utils/dailyQuotes";
@@ -21,6 +21,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
+import { deleteUserAccount } from "@/utils/auth";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
@@ -39,6 +48,12 @@ export default function Account() {
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [loadingUserData, setLoadingUserData] = useState(true);
+  
+  // Delete account states
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
   
   // Settings tab states
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
@@ -206,6 +221,68 @@ export default function Account() {
     });
   };
   
+  // Delete Account handlers
+  const openDeleteDialog = () => {
+    setConfirmationEmail("");
+    setIsDeleteDialogOpen(true);
+  };
+  
+  const closeDeleteDialog = () => {
+    setIsDeleteDialogOpen(false);
+  };
+  
+  const handleConfirmEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setConfirmationEmail(e.target.value);
+  };
+  
+  const isEmailMatch = () => {
+    return confirmationEmail === user?.email;
+  };
+  
+  const openDeleteConfirmDialog = () => {
+    if (isEmailMatch()) {
+      setDeleteConfirmDialogOpen(true);
+    } else {
+      toast.error(t("error", language), {
+        description: "Email does not match your account email."
+      });
+    }
+  };
+  
+  const handleDeleteAccount = async () => {
+    if (!isEmailMatch()) {
+      toast.error(t("error", language), {
+        description: "Email does not match your account email."
+      });
+      return;
+    }
+    
+    setIsDeleting(true);
+    
+    try {
+      const { error } = await deleteUserAccount();
+      
+      if (error) {
+        toast.error(t("error", language), {
+          description: error.message || "Failed to delete account"
+        });
+      } else {
+        toast.success("Account deleted successfully");
+        // Signout will be automatic since the account is deleted
+        navigate("/login");
+      }
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      toast.error(t("error", language), {
+        description: "An unexpected error occurred"
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmDialogOpen(false);
+      setIsDeleteDialogOpen(false);
+    }
+  };
+  
   return (
     <PageContainer showHeader={false}>
       <div className="container mx-auto px-4 py-6">
@@ -340,12 +417,34 @@ export default function Account() {
               <CardHeader>
                 <CardTitle>{t("accountOptions", language)}</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <Button 
                   variant="destructive" 
                   onClick={handleSignout}
                 >
                   {t("logout", language)}
+                </Button>
+              </CardContent>
+            </Card>
+            
+            {/* Delete Account Section */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  {t("deleteAccount", language)}
+                </CardTitle>
+                <CardDescription>
+                  {t("deleteAccountDescription", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="destructive" 
+                  onClick={openDeleteDialog}
+                  className="w-full sm:w-auto"
+                >
+                  {t("deleteMyAccount", language)}
                 </Button>
               </CardContent>
             </Card>
@@ -531,21 +630,6 @@ export default function Account() {
               </CardContent>
             </Card>
 
-            {/* Delete Account */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>{t("deleteAccount", language)}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-4">
-                  {t("deleteAccountDescription", language)}
-                </p>
-                <Button variant="destructive">
-                  {t("deleteMyAccount", language)}
-                </Button>
-              </CardContent>
-            </Card>
-
             {/* Save All Settings Button */}
             <Button 
               className="w-full mt-6 flex items-center gap-2" 
@@ -557,6 +641,82 @@ export default function Account() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      {/* Delete Account Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              {t("deleteAccount", language)}
+            </DialogTitle>
+            <DialogDescription>
+              {t("deleteAccountDescription", language)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm font-medium">
+              To confirm deletion, please type your email address:
+            </p>
+            <Input
+              value={confirmationEmail}
+              onChange={handleConfirmEmailChange}
+              placeholder={user?.email || "Your email address"}
+              className="w-full"
+            />
+            
+            <p className="text-xs text-muted-foreground">
+              This action cannot be undone. All your data, including profile information, tasks, events, and messages will be permanently deleted.
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDeleteDialog}>
+              {t("cancel", language)}
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={openDeleteConfirmDialog}
+              disabled={!isEmailMatch() || isDeleting}
+            >
+              {t("deleteMyAccount", language)}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Final Confirmation Dialog */}
+      <Dialog open={deleteConfirmDialogOpen} onOpenChange={setDeleteConfirmDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Final Confirmation
+            </DialogTitle>
+            <DialogDescription>
+              Are you absolutely sure you want to delete your account? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteConfirmDialogOpen(false)}
+              disabled={isDeleting}
+            >
+              {t("cancel", language)}
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteAccount}
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Yes, Delete My Account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }
