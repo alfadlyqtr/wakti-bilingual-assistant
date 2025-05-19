@@ -96,7 +96,6 @@ serve(async (req) => {
       .from("voice_summaries")
       .update({
         summary: summary
-        // Removed updated_at as it doesn't exist in the schema
       })
       .eq("id", recordingId);
 
@@ -109,18 +108,35 @@ serve(async (req) => {
 
     // Automatically generate TTS for the summary
     try {
-      fetch(`${SUPABASE_URL}/functions/v1/generate-tts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-        },
-        body: JSON.stringify({
-          recordingId,
-          voiceGender: "male", // Default
-          language: "en" // Default
-        })
-      });
+      // Use Deno's EdgeRuntime.waitUntil to run this in the background without blocking
+      // the response
+      const generateTTS = async () => {
+        try {
+          const ttsResponse = await fetch(`${SUPABASE_URL}/functions/v1/generate-tts`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+            },
+            body: JSON.stringify({
+              recordingId,
+              voiceGender: "male", // Default
+              language: "en" // Default
+            })
+          });
+          
+          if (!ttsResponse.ok) {
+            console.error("TTS generation failed:", await ttsResponse.text());
+          } else {
+            console.log("TTS generation completed successfully");
+          }
+        } catch (ttsError) {
+          console.error("Error in TTS generation:", ttsError);
+        }
+      };
+      
+      // Run TTS generation in the background
+      EdgeRuntime.waitUntil(generateTTS());
       console.log("Initiated background TTS generation");
     } catch (ttsError) {
       console.error("Error initiating TTS generation:", ttsError);

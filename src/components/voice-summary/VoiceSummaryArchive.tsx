@@ -20,13 +20,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { isValidDate, getRecordingStatus } from "@/lib/utils";
 
 interface VoiceSummaryArchiveProps {
   recordings: any[];
   onRecordingDeleted?: (recordingId: string) => void;
+  isRefreshing?: boolean;
 }
 
-export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: VoiceSummaryArchiveProps) {
+export default function VoiceSummaryArchive({ recordings, onRecordingDeleted, isRefreshing = false }: VoiceSummaryArchiveProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -38,23 +41,49 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
   const locale = language === 'ar' ? arSA : enUS;
 
   const getStatusIcon = (recording: any) => {
-    if (recording.summary) {
-      return <CheckCircle className="h-4 w-4 text-green-500" />;
+    const status = getRecordingStatus(recording);
+    
+    switch (status) {
+      case 'complete':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'processing':
+        return <FileText className="h-4 w-4 text-blue-500" />;
+      case 'transcribing':
+      case 'pending':
+      default:
+        return <Clock className="h-4 w-4 text-amber-500" />;
     }
-    if (recording.transcript) {
-      return <FileText className="h-4 w-4 text-blue-500" />;
-    }
-    return <Clock className="h-4 w-4 text-amber-500" />;
   };
 
   const getStatusText = (recording: any) => {
-    if (recording.summary) {
-      return language === 'ar' ? 'مكتمل' : 'Completed';
+    const status = getRecordingStatus(recording);
+    
+    switch (status) {
+      case 'complete':
+        return language === 'ar' ? 'مكتمل' : 'Completed';
+      case 'processing':
+        return language === 'ar' ? 'تم النسخ' : 'Transcribed';
+      case 'transcribing':
+        return language === 'ar' ? 'قيد النسخ' : 'Transcribing';
+      case 'pending':
+      default:
+        return language === 'ar' ? 'قيد المعالجة' : 'Processing';
     }
-    if (recording.transcript) {
-      return language === 'ar' ? 'تم النسخ' : 'Transcribed';
+  };
+
+  const getStatusVariant = (recording: any): "default" | "secondary" | "outline" => {
+    const status = getRecordingStatus(recording);
+    
+    switch (status) {
+      case 'complete':
+        return "default";
+      case 'processing':
+        return "secondary";
+      case 'transcribing':
+      case 'pending':
+      default:
+        return "outline";
     }
-    return language === 'ar' ? 'قيد المعالجة' : 'Processing';
   };
 
   const calculateDaysRemaining = (expiresAt: string | null | undefined): number => {
@@ -82,13 +111,11 @@ export default function VoiceSummaryArchive({ recordings, onRecordingDeleted }: 
     if (!dateString) return "";
     
     try {
-      const date = new Date(dateString);
-      
-      // Check if the date is valid
-      if (isNaN(date.getTime())) {
+      if (!isValidDate(dateString)) {
         return language === 'ar' ? 'تاريخ غير صالح' : 'Invalid date';
       }
       
+      const date = new Date(dateString);
       return formatDistanceToNow(date, { 
         addSuffix: true, 
         locale 
@@ -281,20 +308,41 @@ ${recording.summary || ''}
     );
   }
 
+  // Render the list of recordings with proper loading states
   return (
     <>
       <div className="space-y-3">
+        {isRefreshing && (
+          <div className="border border-border/30 bg-muted/30 rounded-md p-2 mb-2">
+            <p className="text-xs text-muted-foreground text-center animate-pulse">
+              {language === 'ar' ? 'جارِ تحديث التسجيلات...' : 'Refreshing recordings...'}
+            </p>
+          </div>
+        )}
+        
         {recordings.map((recording) => {
           if (!recording) return null; // Skip if recording is null/undefined
           
           const daysRemaining = calculateDaysRemaining(recording.expires_at);
+          const status = getRecordingStatus(recording);
           
           return (
             <Card 
               key={recording.id}
               className={`hover:border-primary/50 transition-colors cursor-pointer ${
-                daysRemaining <= 2 ? 'border-amber-200' : ''}`}
-              onClick={() => navigate(`/voice-summary/${recording.id}`)}
+                daysRemaining <= 2 ? 'border-amber-200' : ''} ${
+                status !== 'complete' ? 'border-dashed' : ''}`}
+              onClick={() => {
+                if (status === 'complete' || status === 'processing') {
+                  navigate(`/voice-summary/${recording.id}`);
+                } else {
+                  toast.info(
+                    language === 'ar'
+                      ? 'هذا التسجيل قيد المعالجة. يرجى الانتظار.'
+                      : 'This recording is still processing. Please wait.'
+                  );
+                }
+              }}
             >
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
@@ -305,10 +353,17 @@ ${recording.summary || ''}
                     <div className="max-w-[180px] sm:max-w-xs">
                       <h3 className="font-medium text-base line-clamp-1">
                         {recording.title || (language === 'ar' ? 'تسجيل بدون عنوان' : 'Untitled Recording')}
+                        {status !== 'complete' && (
+                          <span className="ml-2 inline-flex">
+                            <Clock className="h-3 w-3 animate-pulse text-amber-500" />
+                          </span>
+                        )}
                       </h3>
                       <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1">
-                        {recording.created_at && (
+                        {isValidDate(recording.created_at) ? (
                           <span>{safeFormatDistanceToNow(recording.created_at)}</span>
+                        ) : (
+                          <span>{language === 'ar' ? 'للتو' : 'Just now'}</span>
                         )}
                         
                         {daysRemaining > 0 && (
@@ -377,7 +432,7 @@ ${recording.summary || ''}
                     )}
                     
                     <Badge 
-                      variant={recording.summary ? "default" : (recording.transcript ? "secondary" : "outline")}
+                      variant={getStatusVariant(recording)}
                       className="ml-1 flex items-center gap-1 h-6"
                     >
                       {getStatusIcon(recording)}
@@ -386,7 +441,7 @@ ${recording.summary || ''}
                   </div>
                 </div>
                 
-                {recording.transcript && (
+                {recording.transcript ? (
                   <div className="mt-2 border-t pt-2 border-border/50">
                     <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
                       <FileText className="h-3 w-3" />
@@ -394,7 +449,12 @@ ${recording.summary || ''}
                     </div>
                     <p className="text-sm line-clamp-2">{recording.transcript}</p>
                   </div>
-                )}
+                ) : status !== 'complete' && status !== 'pending' ? (
+                  <div className="mt-2 border-t pt-2 border-border/50">
+                    <Skeleton className="h-4 w-3/4 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           );

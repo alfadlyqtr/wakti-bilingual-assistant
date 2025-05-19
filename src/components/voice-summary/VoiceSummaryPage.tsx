@@ -2,55 +2,105 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
 import VoiceSummaryArchive from "./VoiceSummaryArchive";
 import RecordingDialog from "./RecordingDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Loader2 } from "lucide-react";
+import { Plus, Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import { getRecordingStatus } from "@/lib/utils";
 
 export default function VoiceSummaryPage() {
   const [showRecordingDialog, setShowRecordingDialog] = useState(false);
   const [recordings, setRecordings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // Poll for updates to recording statuses
   useEffect(() => {
     if (!user) return;
     
-    async function fetchRecordings() {
-      try {
-        const { data, error } = await supabase
-          .from('voice_summaries')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (error) {
-          console.error('Error fetching recordings:', error);
-          return;
-        }
-        
-        setRecordings(data || []);
-      } catch (err) {
-        console.error('Error in fetchRecordings:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    
+    // Initial fetch
     fetchRecordings();
-  }, [user]);
+    
+    // Set up polling for recordings in progress
+    const hasIncompleteRecordings = () => {
+      return recordings.some(recording => {
+        const status = getRecordingStatus(recording);
+        return status === 'processing' || status === 'transcribing';
+      });
+    };
+    
+    // Check for updates more frequently if there are pending recordings
+    let pollingInterval = hasIncompleteRecordings() ? 5000 : 20000;
+    const intervalId = setInterval(() => {
+      if (hasIncompleteRecordings()) {
+        fetchRecordings(true); // Silent refresh
+      }
+    }, pollingInterval);
+    
+    return () => clearInterval(intervalId);
+  }, [user, recordings]);
+  
+  const fetchRecordings = async (silent = false) => {
+    try {
+      if (!silent) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+      
+      const { data, error } = await supabase
+        .from('voice_summaries')
+        .select('*')
+        .order('created_at', { ascending: false });
+          
+      if (error) {
+        console.error('Error fetching recordings:', error);
+        if (!silent) {
+          toast.error(language === 'ar' 
+            ? 'فشل في تحميل التسجيلات' 
+            : 'Failed to load recordings');
+        }
+        return;
+      }
+      
+      // Validate each recording before setting state
+      const validRecordings = Array.isArray(data) ? data.filter(rec => rec && rec.id) : [];
+      console.log(`Fetched ${validRecordings.length} recordings`);
+      
+      setRecordings(validRecordings);
+    } catch (err) {
+      console.error('Error in fetchRecordings:', err);
+      if (!silent) {
+        toast.error(language === 'ar' 
+          ? 'حدث خطأ أثناء تحميل التسجيلات' 
+          : 'An error occurred while loading recordings');
+      }
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  };
 
-  const handleRecordingCreated = (newRecording) => {
-    setRecordings([newRecording, ...recordings]);
+  const handleRecordingCreated = async (newRecording) => {
+    // Instead of immediately adding the recording, refresh the list
+    // This ensures we get the full DB record with all fields
+    await fetchRecordings();
     setShowRecordingDialog(false);
   };
   
   const handleRecordingDeleted = (recordingId: string) => {
     setRecordings(recordings.filter(recording => recording.id !== recordingId));
+  };
+  
+  const handleManualRefresh = () => {
+    fetchRecordings();
+    toast.info(language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...');
   };
 
   return (
@@ -60,13 +110,25 @@ export default function VoiceSummaryPage() {
           <h2 className="text-xl font-semibold">
             {language === 'ar' ? 'التسجيلات الأخيرة' : 'Recent Recordings'}
           </h2>
-          <Button 
-            onClick={() => setShowRecordingDialog(true)} 
-            className="flex items-center gap-1"
-          >
-            <Plus size={18} />
-            <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              size="icon"
+              onClick={handleManualRefresh}
+              disabled={isLoading || isRefreshing}
+              title={language === 'ar' ? 'تحديث' : 'Refresh'}
+              className="h-9 w-9"
+            >
+              <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
+            </Button>
+            <Button 
+              onClick={() => setShowRecordingDialog(true)} 
+              className="flex items-center gap-1"
+            >
+              <Plus size={18} />
+              <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (
@@ -76,7 +138,8 @@ export default function VoiceSummaryPage() {
         ) : recordings.length > 0 ? (
           <VoiceSummaryArchive 
             recordings={recordings}
-            onRecordingDeleted={handleRecordingDeleted} 
+            onRecordingDeleted={handleRecordingDeleted}
+            isRefreshing={isRefreshing}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-40 text-center">
