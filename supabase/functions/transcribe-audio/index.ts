@@ -10,6 +10,12 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 // List of audio formats supported by OpenAI Whisper API
 const SUPPORTED_FORMATS = ['mp3', 'mp4', 'mpeg', 'mpga', 'wav', 'webm'];
 
+// Function to validate UUID format using regex
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
@@ -41,6 +47,7 @@ serve(async (req) => {
     // Get request body - can be either FormData with audio file OR JSON with recordingId
     let audioFile;
     let recordingId;
+    let filePath;
     let fileFormat = 'mp3'; // Default to mp3
     
     const contentType = req.headers.get("content-type") || "";
@@ -94,6 +101,7 @@ serve(async (req) => {
       try {
         const data = await req.json();
         recordingId = data.recordingId;
+        filePath = data.filePath; // Get separate file path for storage retrieval
         
         if (!recordingId) {
           console.error("Missing recordingId in request");
@@ -106,12 +114,24 @@ serve(async (req) => {
           );
         }
         
+        // Validate UUID format
+        if (!isValidUUID(recordingId)) {
+          console.error(`Invalid UUID format for recordingId: ${recordingId}`);
+          return new Response(
+            JSON.stringify({ error: `Invalid UUID format for recordingId: ${recordingId}` }),
+            { 
+              status: 400, 
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            }
+          );
+        }
+        
         console.log(`Fetching recording with ID: ${recordingId}`);
         
         // Check if the voice_summary record exists
         const { data: summaryData, error: summaryError } = await supabase
           .from("voice_summaries")
-          .select("id, title, transcript")
+          .select("id, title, transcript, user_id")
           .eq("id", recordingId)
           .single();
           
@@ -164,14 +184,14 @@ serve(async (req) => {
         // But always default to MP3 as that's our standard format now
         fileFormat = 'mp3';
         
-        // Construct the storage path
-        const filePath = `voice_recordings/${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`;
+        // Construct the storage path - use provided filePath if available, or construct from user_id and recordingId
+        const storagePath = filePath || `voice_recordings/${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`;
         
         // Download audio file from storage
-        console.log(`Attempting to download file from storage: ${filePath}`);
+        console.log(`Attempting to download file from storage: ${storagePath}`);
         const { data: fileData, error: downloadError } = await supabase.storage
           .from("voice_recordings")
-          .download(filePath);
+          .download(storagePath);
         
         if (downloadError) {
           console.error("Error downloading recording:", downloadError);

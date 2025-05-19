@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,7 +102,7 @@ export function useVoiceSummaryController(): VoiceSummaryController {
       default: return 0;
     }
   }, []);
-
+  
   // Update state with proper progress calculation
   const updateState = useCallback((updates: Partial<VoiceSummaryState>) => {
     setState(prev => {
@@ -611,6 +610,7 @@ export function useVoiceSummaryController(): VoiceSummaryController {
         variant: "default"
       });
       
+      // FIX: Send only the UUID as recordingId, not the full file path
       const transcribeResponse = await fetch(
         "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
         {
@@ -620,8 +620,8 @@ export function useVoiceSummaryController(): VoiceSummaryController {
             Authorization: `Bearer ${session.session.access_token}`
           },
           body: JSON.stringify({
-            recordingId: fileName,
-            summaryId: recordingId
+            recordingId: recordingId, // FIX: Send the UUID instead of the file path
+            filePath: fileName // Send the file path separately for file retrieval
           }),
         }
       );

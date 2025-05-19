@@ -100,8 +100,11 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         
         // Store the recording in Supabase Storage
         try {
+          // Generate a UUID for the recording
+          const recordingId = crypto.randomUUID(); 
+          
           // Create a unique file name based on timestamp with correct extension
-          const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+          const fileName = `${user.id}/${recordingId}.${fileExt}`;
           console.log(`Uploading to storage with filename: ${fileName}`);
           
           // Upload to Supabase
@@ -123,9 +126,10 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           console.log('Recording saved to Supabase:', fileName);
           
           try {
-            // Pass recordingId (full path)
-            console.log('Sending for transcription with path:', fileName);
-            const text = await transcribeAudio(fileName);
+            // FIX: Pass recordingId (UUID) instead of full path
+            console.log('Sending for transcription with UUID:', recordingId);
+            // Update the transcribeAudio function to use the UUID parameter and file path
+            const text = await transcribeAudio(recordingId, fileName);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             
