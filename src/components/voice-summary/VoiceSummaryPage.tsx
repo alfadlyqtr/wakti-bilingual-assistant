@@ -259,6 +259,13 @@ export default function VoiceSummaryPage() {
     });
   }, [showDetailDialog, selectedRecordingId]);
 
+  // Log dialog rendering information outside of JSX
+  const dialogRenderingInfo = { 
+    recordingId: selectedRecordingId, 
+    isOpen: showDetailDialog 
+  };
+  console.log('Rendering VoiceSummaryDetailDialog with:', dialogRenderingInfo);
+
   return (
     <div className="flex flex-col h-full w-full">
       <div className="flex-1 overflow-y-auto p-4">
@@ -426,10 +433,6 @@ export default function VoiceSummaryPage() {
         />
 
         {/* Voice Summary Detail Dialog */}
-        {console.log('Rendering VoiceSummaryDetailDialog with:', { 
-          recordingId: selectedRecordingId, 
-          isOpen: showDetailDialog 
-        })}
         <VoiceSummaryDetailDialog
           recordingId={selectedRecordingId}
           isOpen={showDetailDialog}
