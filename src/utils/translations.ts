@@ -88,7 +88,7 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
     ar: "الملف الشخصي"
   },
   messages: {
-    en: "الرسائل",
+    en: "Messages",
     ar: "الرسائل"
   },
   

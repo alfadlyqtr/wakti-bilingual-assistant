@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -21,6 +20,7 @@ import { quotes } from "@/utils/dailyQuotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
+import { TranslationKey } from "@/utils/translationTypes";
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
