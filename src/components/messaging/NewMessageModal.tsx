@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getContacts } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { useToast } from "@/hooks/use-toast";
 
 interface NewMessageModalProps {
   isOpen: boolean;
@@ -35,12 +36,13 @@ type ContactType = {
 
 export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessageModalProps) {
   const { language } = useTheme();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   
   // Get contacts list
-  const { data: contacts, isLoading } = useQuery({
+  const { data: contacts, isLoading, error } = useQuery({
     queryKey: ['contacts'],
     queryFn: getContacts,
     enabled: isOpen,
@@ -52,6 +54,17 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
       setSelectedContactId(null);
     }
   }, [isOpen]);
+
+  // Show error toast if contacts fail to load
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: t("error", language),
+        description: t("errorLoadingContacts", language),
+        variant: "destructive"
+      });
+    }
+  }, [error, toast, language]);
 
   // Filter contacts based on search query
   const filteredContacts = contacts?.filter((contact: ContactType) => {
@@ -75,6 +88,11 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
       onClose();
     } catch (error) {
       console.error("Error creating conversation:", error);
+      toast({
+        title: t("error", language),
+        description: t("errorCreatingConversation", language),
+        variant: "destructive"
+      });
     } finally {
       setIsCreatingConversation(false);
     }
@@ -137,7 +155,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       variant="ghost"
                       className="w-full justify-start"
                       onClick={() => handleSelectContact(contact.contact_id)}
-                      disabled={isCreatingConversation}
+                      disabled={isCreatingConversation || selectedContactId === contact.contact_id}
                     >
                       <Avatar className="h-8 w-8 mr-2">
                         <AvatarImage src={profile.avatar_url || ""} alt={displayName} />
@@ -145,7 +163,10 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                           {getInitials(displayName)}
                         </AvatarFallback>
                       </Avatar>
-                      {displayName}
+                      <span className="truncate">{displayName}</span>
+                      {isCreatingConversation && selectedContactId === contact.contact_id && (
+                        <LoadingSpinner size="sm" className="ml-2" />
+                      )}
                     </Button>
                   );
                 })

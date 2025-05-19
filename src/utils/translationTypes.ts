@@ -285,4 +285,8 @@ export type TranslationKey =
   | "tapNewMessageToStart"
   | "sayHelloPrompt"
   | "addContactsPrompt"
-  | "goToContactsPage";
+  | "goToContactsPage"
+  // Notification messages
+  | "messagesSent"
+  | "messagesDelivered"
+  | "policiesUpdated";
