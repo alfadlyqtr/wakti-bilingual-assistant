@@ -650,6 +650,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_update_storage_bucket: {
+        Args: {
+          p_bucket_id: string
+          p_public?: boolean
+          p_file_size_limit?: number
+          p_allowed_mime_types?: string[]
+        }
+        Returns: Json
+      }
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined

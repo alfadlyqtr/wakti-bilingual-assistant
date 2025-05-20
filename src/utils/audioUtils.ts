@@ -1,4 +1,3 @@
-
 /**
  * Audio utility functions for handling recording formats, file paths, and processing
  */
@@ -71,6 +70,39 @@ export const generateRecordingPath = (userId: string, recordingId: string): stri
   // The path structure must be exactly: ${userId}/${recordingId}/recording.webm
   // This allows RLS to correctly enforce access based on auth.uid()
   return `${userId}/${recordingId}/recording.webm`;
+};
+
+/**
+ * Validates if a recording path follows the required structure
+ * This helps catch path format issues before uploading
+ */
+export const validateRecordingPath = (path: string): { valid: boolean; reason?: string } => {
+  // Path should match format: userId/recordingId/recording.webm
+  const pathParts = path.split('/');
+  
+  if (pathParts.length !== 3) {
+    return { 
+      valid: false, 
+      reason: `Path has ${pathParts.length} parts but should have exactly 3 parts (userId/recordingId/filename)` 
+    };
+  }
+  
+  // First part should be the userId
+  if (!pathParts[0] || pathParts[0].length < 10) {
+    return { valid: false, reason: 'First path segment should be a valid userId' };
+  }
+  
+  // Second part should be a UUID-like recordingId
+  if (!pathParts[1] || pathParts[1].length < 10) {
+    return { valid: false, reason: 'Second path segment should be a valid recordingId' };
+  }
+  
+  // Third part should be the filename
+  if (!pathParts[2] || !pathParts[2].endsWith('.webm')) {
+    return { valid: false, reason: 'Third path segment should be a filename ending with .webm' };
+  }
+  
+  return { valid: true };
 };
 
 /**

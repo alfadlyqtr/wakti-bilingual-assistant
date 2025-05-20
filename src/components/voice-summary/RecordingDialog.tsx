@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -269,6 +268,21 @@ export default function RecordingDialog({
       console.log(`[RecordingDialog] Uploading audio for recording ${recording.id}...`);
       console.log(`[RecordingDialog] User ID for upload: ${userId}`);
       console.log(`[RecordingDialog] Recording ID for upload: ${recording.id}`);
+      
+      // Generate the expected file path before uploading
+      const expectedPath = generateRecordingPath(userId, recording.id);
+      console.log(`[RecordingDialog] Expected file path: ${expectedPath}`);
+      
+      // Validate the path before proceeding
+      const pathValidation = validateRecordingPath(expectedPath);
+      if (!pathValidation.valid) {
+        console.error("[RecordingDialog] Path validation failed:", pathValidation.reason);
+        toast.error(language === 'ar' 
+          ? `خطأ في مسار الملف: ${pathValidation.reason}` 
+          : `File path error: ${pathValidation.reason}`);
+        setIsProcessing(false);
+        return;
+      }
       
       const uploadResult = await uploadAudio(fixedBlob, recording.id, userId);
       const { path, error: uploadError, publicUrl, detailedError } = uploadResult;

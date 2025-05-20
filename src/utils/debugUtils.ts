@@ -40,25 +40,34 @@ export async function createVoiceRecordingsBucket() {
     
     if (existingBucket) {
       console.log("voice_recordings bucket already exists (id:", existingBucket.id, ")");
-      console.log("Checking bucket configuration...");
       
-      // Bucket exists but might have incorrect settings or conflicting policies
-      // We'll update its configuration to ensure it's correct
+      // For existing buckets, let's verify the configuration is correct
       try {
-        // Set proper configuration - this will overwrite any existing incorrect settings
-        const { data, error } = await supabase.rpc('update_storage_bucket_configuration', {
-          bucket_id: 'voice_recordings',
-          public_flag: false,
-          file_size_limit: 10485760, // 10MB in bytes
-          allowed_mime_types: ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg']
-        });
+        // Call the edge function to ensure correct bucket configuration
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-storage-bucket`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({
+              bucketId: 'voice_recordings',
+              isPublic: false,
+              fileSizeLimit: 10485760, // 10MB
+              allowedMimeTypes: ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg']
+            })
+          }
+        );
         
-        if (error) {
-          console.error("Error updating bucket configuration:", error);
-          return { success: true, warning: "Bucket exists but configuration update failed: " + error.message };
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("Error updating bucket configuration via edge function:", errorData);
+          return { success: true, warning: "Bucket exists but configuration update may have issues" };
         }
         
-        console.log("Bucket configuration updated successfully");
+        console.log("Bucket configuration updated successfully via edge function");
         return { success: true };
       } catch (configErr) {
         console.error("Exception updating bucket configuration:", configErr);
@@ -67,6 +76,7 @@ export async function createVoiceRecordingsBucket() {
     }
     
     console.log("Creating voice_recordings bucket...");
+    // Create a new bucket with correct settings
     const { data, error } = await supabase.storage
       .createBucket('voice_recordings', { 
         public: false,
@@ -97,13 +107,30 @@ export async function checkStoragePermissions(bucketId: string) {
       .from(bucketId)
       .list();
     
-    // Test if we can upload a file to the bucket (dummy test)
+    // Get session for proper userId
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      return {
+        bucketId,
+        canList: !listError,
+        listError: listError?.message,
+        canUpload: false,
+        uploadError: "No authenticated user session"
+      };
+    }
+    
+    // Test if we can upload a file to the bucket with the correct path format
     const testBlob = new Blob(['test'], { type: 'audio/webm' });
-    const testPath = `__permission_check_${Date.now()}.webm`;
+    const testRecordingId = crypto.randomUUID();
+    const testPath = `${userId}/${testRecordingId}/recording.webm`;
+    
+    console.log(`Testing upload permission with path: ${testPath}`);
     
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from(bucketId)
-      .upload(testPath, testBlob);
+      .upload(testPath, testBlob, { upsert: false });
     
     // Try to delete the test file if it was uploaded successfully
     if (uploadData?.path) {
@@ -117,7 +144,8 @@ export async function checkStoragePermissions(bucketId: string) {
       canList: !listError,
       listError: listError?.message,
       canUpload: !!uploadData?.path,
-      uploadError: uploadError?.message
+      uploadError: uploadError?.message,
+      testPath
     };
   } catch (err) {
     console.error(`Exception checking permissions on bucket ${bucketId}:`, err);

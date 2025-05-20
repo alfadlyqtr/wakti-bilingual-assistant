@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,8 @@ import {
   getBestSupportedMimeType,
   getFileExtension,
   formatRecordingTime,
-  generateRecordingPath
+  generateRecordingPath,
+  validateRecordingPath
 } from "@/utils/audioUtils";
 import { createVoiceRecordingsBucket } from "@/utils/debugUtils";
 
@@ -117,13 +117,27 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         try {
           // Generate a UUID for the recording
           const recordingId = crypto.randomUUID(); 
-          
+        
           // CRITICAL: Generate the correct file path using our utility function
           // This must follow the pattern: ${userId}/${recordingId}/recording.webm
           const filePath = generateRecordingPath(user.id, recordingId);
           
           console.log(`Uploading to storage with filePath: ${filePath}`);
           console.log(`User ID: ${user.id}, Recording ID: ${recordingId}`);
+          
+          // Validate the path before uploading
+          const pathValidation = validateRecordingPath(filePath);
+          if (!pathValidation.valid) {
+            console.error(`Invalid file path generated: ${filePath}`, pathValidation.reason);
+            setIsTranscribing(false);
+            setIsProcessingRequest(false);
+            toast({
+              title: language === 'ar' ? 'خطأ في مسار الملف' : 'File path error',
+              description: pathValidation.reason,
+              variant: "destructive"
+            });
+            return;
+          }
           
           // Upload to Supabase
           const { data: uploadData, error: uploadError } = await supabase.storage
