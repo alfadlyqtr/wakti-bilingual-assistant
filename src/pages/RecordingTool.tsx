@@ -9,7 +9,7 @@ const RecordingTool = () => {
   const { language } = useTheme();
   
   return (
-    <PageContainer title={t("voice_summary", language)} showBackButton>
+    <PageContainer title={t("recording_tool", language)} showBackButton>
       <RecordingToolComponent />
     </PageContainer>
   );

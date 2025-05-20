@@ -10,13 +10,13 @@ import { useRecordingStore } from "./hooks/useRecordingStore";
 import { useTranscription } from "./hooks/useTranscription";
 import { useSummaryHandlers } from "./hooks/useSummaryHandlers";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, ArrowLeft } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
 export const RecordingTool: React.FC = () => {
   const [summaryId, setSummaryId] = useState<string | undefined>();
-  const { uploadRecording } = useRecordingHandlers();
+  const { uploadRecording, mimeType } = useRecordingHandlers();
   const { transcribeRecording } = useTranscription();
   const { generateSummary, pollSummaryStatus } = useSummaryHandlers();
   const { language } = useTheme();
@@ -38,10 +38,12 @@ export const RecordingTool: React.FC = () => {
         const audioUrl = await uploadRecording();
         
         if (audioUrl) {
+          console.log("Audio uploaded successfully, starting transcription with mime type:", mimeType);
           // Start transcription
-          const newSummaryId = await transcribeRecording(audioUrl);
+          const newSummaryId = await transcribeRecording(audioUrl, mimeType);
           
           if (newSummaryId) {
+            console.log("Transcription started, summary ID:", newSummaryId);
             setSummaryId(newSummaryId);
           }
         }
@@ -49,7 +51,7 @@ export const RecordingTool: React.FC = () => {
     };
     
     processAudio();
-  }, [status, audioBlob, uploadRecording, transcribeRecording]);
+  }, [status, audioBlob, uploadRecording, transcribeRecording, mimeType]);
   
   // Poll for summary status if we're in summarizing state and have a summaryId
   useEffect(() => {
@@ -66,6 +68,7 @@ export const RecordingTool: React.FC = () => {
   }, [status, summaryId, pollSummaryStatus]);
 
   const handleTranscriptionComplete = async (id: string) => {
+    console.log("Transcription complete, summary ID:", id);
     setSummaryId(id);
     
     // If we have a transcript but no summary yet, start generating summary
@@ -75,6 +78,7 @@ export const RecordingTool: React.FC = () => {
   };
 
   const handleReset = () => {
+    console.log("Resetting recording tool");
     reset();
     setSummaryId(undefined);
   };
@@ -92,22 +96,21 @@ export const RecordingTool: React.FC = () => {
         );
       
       case 'stopped':
-        return (
-          <div className="flex justify-center items-center my-12">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <p>{t("uploading_recording", language)}</p>
-            </div>
-          </div>
-        );
-      
       case 'uploading':
         return (
-          <div className="flex justify-center items-center my-12">
+          <div className="flex flex-col items-center justify-center my-12 gap-4">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="h-8 w-8 animate-spin" />
               <p>{t("uploading_recording", language)}</p>
             </div>
+            <Button
+              variant="outline"
+              onClick={handleReset}
+              className="flex gap-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t("go_back", language)}
+            </Button>
           </div>
         );
       
@@ -120,6 +123,16 @@ export const RecordingTool: React.FC = () => {
               onTranscriptionComplete={handleTranscriptionComplete}
             />
             {status === 'summarizing' && <SummaryPanel />}
+            <div className="flex justify-center mt-8">
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                className="flex gap-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                {t("new_recording", language)}
+              </Button>
+            </div>
           </>
         );
       

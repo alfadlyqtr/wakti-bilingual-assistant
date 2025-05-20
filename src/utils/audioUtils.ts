@@ -55,11 +55,11 @@ export const getFileExtension = (mimeType: string): string => {
 
 /**
  * Generates the standardized file path for audio recordings
- * Following the exact pattern that worked yesterday:
- * userId/recordingId/recording.extension
+ * Use the correct file extension based on the mime type
  */
-export const generateRecordingPath = (userId: string, recordingId: string): string => {
-  return `${userId}/${recordingId}/recording.mp3`;
+export const generateRecordingPath = (userId: string, recordingId: string, mimeType?: string): string => {
+  const extension = mimeType ? getFileExtension(mimeType) : 'webm';
+  return `${userId}/${recordingId}/recording.${extension}`;
 };
 
 /**
