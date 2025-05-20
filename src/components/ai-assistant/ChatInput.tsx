@@ -3,7 +3,6 @@ import React, { useRef } from "react";
 import { Menu, Send, Loader2, Settings } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { VoiceInput } from "./VoiceInput";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { TranslationKey } from "@/utils/translationTypes";
@@ -12,7 +11,6 @@ interface ChatInputProps {
   inputValue: string;
   setInputValue: React.Dispatch<React.SetStateAction<string>>;
   handleSendMessage: () => void;
-  handleVoiceTranscription: (text: string) => void;
   isSending: boolean;
   isTyping: boolean;
   user: any;
@@ -26,7 +24,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   inputValue,
   setInputValue,
   handleSendMessage,
-  handleVoiceTranscription,
   isSending,
   isTyping,
   user,
@@ -60,7 +57,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <Menu className="h-5 w-5" />
         </Button>
 
-        {/* Input Box with Voice Button */}
+        {/* Input Box */}
         <div className="flex-1">
           <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-full border border-zinc-300 dark:border-zinc-700">
             <Input
@@ -73,12 +70,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               disabled={isSending || !user}
             />
             <div className="flex items-center px-1">
-              <VoiceInput
-                onTranscription={handleVoiceTranscription}
-                language={language}
-                theme={theme}
-                disabled={isSending || isTyping || !user}
-              />
               <Button
                 onClick={handleSendMessage}
                 disabled={!inputValue.trim() || isSending || !user}
@@ -114,4 +105,4 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </div>
     </div>
   );
-};
+}

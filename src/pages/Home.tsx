@@ -9,7 +9,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck, Bot } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { AppHeader } from "@/components/AppHeader";
+import { MobileHeader } from "@/components/MobileHeader";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -112,7 +112,7 @@ export default function Home() {
 
   return (
     <div className="mobile-container">
-      <AppHeader showUserMenu={false} title="WAKTI" />
+      <MobileHeader title="WAKTI" showUserMenu={false} />
       
       <div className="flex-1 overflow-y-auto pb-16">
         {/* Hero Section */}

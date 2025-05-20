@@ -1,3 +1,4 @@
+
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -17,16 +18,14 @@ import { cn } from "@/lib/utils";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
   
   const handleLogout = async () => {
-    await logout();
+    await signOut();
     navigate('/login');
   };
   
-  // Remove any voice summary references from menu items or dropdown options
-  // Example pattern - adjust as needed for your actual component structure:
   const menuItems = [
     { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
     { title: language === 'ar' ? 'الرسائل' : 'Messages', href: '/messages' },
@@ -50,7 +49,7 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.photoURL || ""} />
+                  <AvatarImage src={user?.user_metadata?.avatar_url || ""} />
                   <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                 </Avatar>
               </Button>
