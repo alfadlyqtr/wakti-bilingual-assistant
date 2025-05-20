@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath } from "@/utils/audioUtils";
 
@@ -56,9 +57,33 @@ export async function createRecording(type = "note", title?: string) {
  */
 export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: string) {
   try {
-    // Use correct bucket name and path structure
-    const filePath = generateRecordingPath(userId, recordingId);
+    // Verify blob is valid
+    if (!audioBlob || audioBlob.size === 0) {
+      console.error("Invalid audio blob provided:", audioBlob);
+      return { error: "Invalid audio blob", path: null, publicUrl: null };
+    }
     
+    // Log blob details for debugging
+    console.log(`Uploading audio: size=${audioBlob.size} bytes, type=${audioBlob.type}`);
+    
+    // Use correct bucket name and path structure
+    const filePath = `${userId}/${recordingId}/recording.webm`;
+    console.log(`Uploading to path: ${filePath} in bucket: voice_recordings`);
+    
+    // First check if bucket exists
+    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
+    if (bucketsError) {
+      console.error("Error listing buckets:", bucketsError);
+      return { error: bucketsError, path: null, publicUrl: null };
+    }
+    
+    const bucketExists = buckets.some(b => b.name === 'voice_recordings');
+    if (!bucketExists) {
+      console.error("voice_recordings bucket does not exist");
+      return { error: "Storage bucket does not exist", path: null, publicUrl: null };
+    }
+    
+    // Upload the file
     const { data, error } = await supabase.storage
       .from('voice_recordings')
       .upload(filePath, audioBlob, {
@@ -70,11 +95,15 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       console.error("Error uploading audio:", error);
       return { error, path: null, publicUrl: null };
     }
+    
+    console.log("Audio successfully uploaded:", data);
 
     // Get public URL after successful upload
     const { data: { publicUrl } } = supabase.storage
       .from('voice_recordings')
       .getPublicUrl(filePath);
+    
+    console.log("Generated public URL:", publicUrl);
     
     // Update the record with the correct audio URL and set processing flag to true
     const { error: updateError } = await supabase

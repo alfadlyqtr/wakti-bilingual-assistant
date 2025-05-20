@@ -1,369 +1,327 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { useTheme } from "@/providers/ThemeProvider";
-import { Mic, Square, Loader2, Pause, Play } from "lucide-react";
-import useVoiceSummaryController from "@/hooks/useVoiceSummaryController";
-import { useNavigate } from "react-router-dom";
-import { Progress } from "@/components/ui/progress";
+import { Mic, MicOff, Loader2, X } from "lucide-react";
+import { createRecording, uploadAudio, transcribeAudio } from "@/services/voiceSummaryService";
+import { getBestSupportedMimeType, formatRecordingTime } from "@/utils/audioUtils";
+import { toast } from "sonner";
 
 interface RecordingDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onRecordingCreated: (recordingId: string) => void;
+  onRecordingCreated?: (recordingId: string) => void;
 }
-
-// Maximum recording duration in seconds (2 hours = 7200 seconds)
-const MAX_RECORDING_DURATION = 7200;
 
 export default function RecordingDialog({ 
   isOpen, 
-  onClose, 
-  onRecordingCreated 
+  onClose,
+  onRecordingCreated
 }: RecordingDialogProps) {
   const { language } = useTheme();
-  const navigate = useNavigate();
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
+  const [recordingComplete, setRecordingComplete] = useState(false);
   
-  // Recording type state
-  const [recordingType, setRecordingType] = useState("note");
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   
-  const controller = useVoiceSummaryController();
-  const { 
-    startRecording, 
-    stopRecording,
-    pauseRecording,
-    cancelRecording, 
-    resetRecording,
-    state 
-  } = controller;
-  
-  const [isClosing, setIsClosing] = useState(false);
-  
-  // When recording completes successfully and is fully ready, notify parent and close dialog
+  // Clean up on component unmount
   useEffect(() => {
-    const handleRecordingCompleted = async () => {
-      if (state.isFullyReady && state.recordingId) {
-        console.log("[RecordingDialog] Recording is fully ready:", state.recordingId);
-        
-        // Notify parent about the completed recording
-        onRecordingCreated(state.recordingId);
-        
-        // Reset internal state
-        resetRecording();
-        
-        // Allow the dialog to close
-        setIsClosing(false);
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
     };
-    
-    handleRecordingCompleted();
-  }, [state.isFullyReady, state.recordingId, onRecordingCreated, resetRecording]);
+  }, []);
   
-  // Reset state when dialog opens/closes
+  // Reset state when dialog opens or closes
   useEffect(() => {
     if (!isOpen) {
-      resetRecording();
-      setIsClosing(false);
+      setIsRecording(false);
+      setIsProcessing(false);
+      setRecordingDuration(0);
+      setAudioChunks([]);
+      setRecordingComplete(false);
+      
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+        mediaRecorderRef.current = null;
+      }
     }
-  }, [isOpen, resetRecording]);
+  }, [isOpen]);
   
-  // Handle dialog close
-  const handleDialogClose = () => {
-    if (state.recordingState === "recording" || state.recordingState === "paused") {
-      cancelRecording();
-      onClose();
-      return;
+  // Start recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        } 
+      });
+      
+      // Get the best supported MIME type
+      const mimeType = getBestSupportedMimeType();
+      console.log(`Using MIME type: ${mimeType}`);
+      
+      // Create new recorder
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+      
+      // Clear existing audio chunks
+      setAudioChunks([]);
+      
+      // Set up event handlers
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          setAudioChunks((prev) => [...prev, e.data]);
+        }
+      };
+      
+      recorder.onstop = () => {
+        setIsRecording(false);
+        setRecordingComplete(true);
+        
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      recorder.onerror = (event) => {
+        console.error("MediaRecorder error:", event);
+        toast(language === 'ar' ? 'خطأ في التسجيل' : 'Recording error');
+      };
+      
+      // Start recording
+      recorder.start(1000);
+      setIsRecording(true);
+      
+      // Start timer
+      setRecordingDuration(0);
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      toast(language === 'ar' ? 'فشل في بدء التسجيل' : 'Failed to start recording');
+    }
+  };
+  
+  // Stop recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+  };
+  
+  // Cancel recording
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
     
-    // If we're processing, don't close immediately
-    if (state.recordingState === "processing") {
-      console.log("[RecordingDialog] Waiting for processing to complete before closing");
-      setIsClosing(true);
-      return;
-    }
-    
-    // Otherwise reset and close
-    resetRecording();
+    setAudioChunks([]);
+    setRecordingComplete(false);
     onClose();
   };
   
-  // Handle start recording with type
-  const handleStartRecording = () => {
-    startRecording(recordingType);
-  };
-  
-  // Handle continue recording (resume after pause)
-  const handleContinueRecording = () => {
-    startRecording(recordingType);
-  };
-  
-  // Format time as MM:SS or HH:MM:SS for longer durations
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return hours > 0 ? `${hours}:${mins}:${secs}` : `${mins}:${secs}`;
-  };
-  
-  // Get the current status text
-  const getStatusText = () => {
-    switch (state.recordingState) {
-      case "recording":
-        return language === 'ar' ? 'جارِ التسجيل...' : 'Recording...';
-      case "paused":
-        return language === 'ar' ? 'تم إيقاف التسجيل مؤقتًا' : 'Recording Paused';
-      case "processing":
-        switch (state.processingStep) {
-          case "uploading":
-            return language === 'ar' ? 'جارِ تحميل الملف...' : 'Uploading audio...';
-          case "transcribing":
-            return language === 'ar' ? 'جارِ التعرف على الصوت...' : 'Transcribing audio...';
-          case "summarizing":
-            return language === 'ar' ? 'جارِ إنشاء الملخص...' : 'Generating summary...';
-          case "generating_tts":
-            return language === 'ar' ? 'جارِ إنشاء الصوت...' : 'Generating audio...';
-          case "finalizing":
-            return language === 'ar' ? 'جارٍ الإنهاء...' : 'Finalizing...';
-          default:
-            return language === 'ar' ? 'جارِ المعالجة...' : 'Processing...';
-        }
-      case "error":
-        return state.errorMessage || (language === 'ar' ? 'حدث خطأ' : 'An error occurred');
-      default:
-        return language === 'ar' ? 'جاهز للتسجيل' : 'Ready to record';
-    }
-  };
-  
-  // Check if we are in any kind of processing state
-  const isProcessing = state.recordingState === "processing";
-  
-  // Calculate the total recording time (current segment + all previous segments)
-  const totalTime = state.totalRecordingTime + state.recordingTime;
-  
-  // Get display time for recording segments
-  const getRecordingTimeDisplay = () => {
-    if (state.recordingState === "paused") {
-      return (
-        <div className="text-sm text-muted-foreground">
-          {language === 'ar' 
-            ? `الجزء ${state.currentPart}: ${formatTime(state.totalRecordingTime)} (الإجمالي)`
-            : `Part ${state.currentPart}: ${formatTime(state.totalRecordingTime)} (Total)`}
-        </div>
-      );
+  // Process the recorded audio
+  const processRecording = async () => {
+    if (audioChunks.length === 0) {
+      toast(language === 'ar' ? 'لا يوجد تسجيل صوتي' : 'No audio recording');
+      return;
     }
     
-    if (state.currentPart > 1) {
-      return (
-        <div className="text-xl font-mono">
-          {formatTime(state.recordingTime)}
-          <span className="text-sm text-muted-foreground ml-2">
-            {language === 'ar' 
-              ? `(الإجمالي: ${formatTime(totalTime)})`
-              : `(Total: ${formatTime(totalTime)})`}
-          </span>
-        </div>
-      );
-    }
+    setIsProcessing(true);
     
-    return (
-      <div className="text-xl font-mono">
-        {formatTime(state.recordingTime)} / {formatTime(MAX_RECORDING_DURATION)}
-      </div>
-    );
+    try {
+      // Create recording entry in database
+      console.log("Creating recording entry...");
+      const { recording, error: createError, userId } = await createRecording();
+      
+      if (createError || !recording) {
+        console.error("Error creating recording entry:", createError);
+        toast(language === 'ar' ? 'فشل في إنشاء تسجيل' : 'Failed to create recording');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Combine audio chunks into a single blob
+      console.log(`Combining ${audioChunks.length} audio chunks...`);
+      const mimeType = getBestSupportedMimeType();
+      const audioBlob = new Blob(audioChunks, { type: mimeType });
+      console.log(`Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      
+      if (audioBlob.size === 0) {
+        console.error("Empty audio blob created");
+        toast(language === 'ar' ? 'ملف التسجيل فارغ' : 'Recording file is empty');
+        setIsProcessing(false);
+        return;
+      }
+      
+      // Upload audio to storage
+      console.log(`Uploading audio for recording ${recording.id}...`);
+      const { path, error: uploadError, publicUrl } = await uploadAudio(audioBlob, recording.id, userId);
+      
+      if (uploadError || !path) {
+        console.error("Error uploading audio:", uploadError);
+        toast(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
+        setIsProcessing(false);
+        return;
+      }
+      
+      console.log("Audio upload successful. Path:", path);
+      console.log("Public URL:", publicUrl);
+      
+      // Transcribe audio
+      console.log("Starting transcription...");
+      const { error: transcribeError } = await transcribeAudio(recording.id);
+      
+      if (transcribeError) {
+        console.warn("Transcription started with warning:", transcribeError);
+        // Continue anyway - transcription happens asynchronously
+      }
+      
+      // Notify parent component of successful recording
+      if (onRecordingCreated) {
+        onRecordingCreated(recording.id);
+      }
+      
+      toast.success(language === 'ar' ? 'تم إنشاء التسجيل بنجاح' : 'Recording created successfully');
+      
+      // Close the dialog
+      onClose();
+    } catch (error) {
+      console.error("Error processing recording:", error);
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء معالجة التسجيل' : 'Error processing recording');
+    } finally {
+      setIsProcessing(false);
+    }
   };
-  
-  // Compute the percentage of maximum recording time used
-  const recordingTimePercentage = (totalTime / MAX_RECORDING_DURATION) * 100;
-  
-  // Conditional dir attribute for RTL support
-  const rtlProps = language === 'ar' ? { dir: 'rtl' } : {};
   
   return (
-    <Dialog 
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open && !isClosing) {
-          handleDialogClose();
-        }
-      }}
-    >
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle {...rtlProps}>
+          <DialogTitle>
             {language === 'ar' ? 'تسجيل صوتي جديد' : 'New Voice Recording'}
           </DialogTitle>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={cancelRecording}
+            disabled={isProcessing}
+            className="absolute right-4 top-4"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center py-6" {...rtlProps}>
-          {/* Recording Type Selector - Only show before recording starts */}
-          {(state.recordingState === "idle") && (
-            <div className="w-full mb-6">
-              <Label htmlFor="recording-type" className="mb-2 block">
-                {language === 'ar' ? 'نوع التسجيل' : 'Recording Type'}
-              </Label>
-              <Select 
-                value={recordingType} 
-                onValueChange={setRecordingType}
-              >
-                <SelectTrigger id="recording-type" className="w-full">
-                  <SelectValue placeholder={language === 'ar' ? 'اختر نوع التسجيل' : 'Select recording type'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="note">{language === 'ar' ? 'ملاحظة' : 'Note'}</SelectItem>
-                  <SelectItem value="summary">{language === 'ar' ? 'ملخص' : 'Summary'}</SelectItem>
-                  <SelectItem value="lecture">{language === 'ar' ? 'محاضرة' : 'Lecture'}</SelectItem>
-                  <SelectItem value="meeting">{language === 'ar' ? 'اجتماع' : 'Meeting'}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {/* Status display */}
-          <div className="text-center mb-6">
-            <p className="text-lg font-medium">
-              {getStatusText()}
-            </p>
-            
-            {/* Multi-part recording indicator */}
-            {state.currentPart > 1 && (state.recordingState === "recording" || state.recordingState === "paused") && (
-              <div className="text-sm text-muted-foreground mb-2">
-                {language === 'ar' 
-                  ? `الجزء ${state.currentPart} من التسجيل`
-                  : `Recording Part ${state.currentPart}`}
-              </div>
-            )}
-            
-            {/* Show timer during recording or when paused */}
-            {(state.recordingState === "recording" || state.recordingState === "paused") && (
-              <>
-                {getRecordingTimeDisplay()}
-                
-                {/* Recording progress bar */}
-                <div className="w-full mt-2">
-                  <Progress value={recordingTimePercentage} className="h-2" />
+        <div className="flex flex-col items-center justify-center py-6 space-y-8">
+          {!recordingComplete ? (
+            <>
+              <div className="relative flex items-center justify-center">
+                <div 
+                  className={`w-24 h-24 rounded-full flex items-center justify-center transition-colors ${
+                    isRecording 
+                      ? 'bg-red-100 dark:bg-red-900/30 animate-pulse' 
+                      : 'bg-primary-50 dark:bg-primary-900/10'
+                  }`}
+                >
+                  <Button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    disabled={isProcessing}
+                    size="icon"
+                    variant={isRecording ? "destructive" : "default"}
+                    className="w-16 h-16 rounded-full"
+                  >
+                    {isRecording ? (
+                      <MicOff className="h-8 w-8" />
+                    ) : (
+                      <Mic className="h-8 w-8" />
+                    )}
+                  </Button>
                 </div>
-              </>
-            )}
-            
-            {/* Show progress during processing */}
-            {state.recordingState === "processing" && (
-              <div className="w-full mt-4">
-                <Progress value={state.progress} className="h-2" />
-                <p className="text-sm text-muted-foreground mt-1">
-                  {state.progress}%
+                
+                {isRecording && (
+                  <div className="absolute -bottom-8 text-sm font-mono">
+                    {formatRecordingTime(recordingDuration)}
+                  </div>
+                )}
+              </div>
+              
+              <div className="text-center space-y-2">
+                <h3 className="font-medium">
+                  {isRecording 
+                    ? (language === 'ar' ? 'جارٍ التسجيل...' : 'Recording...') 
+                    : (language === 'ar' ? 'اضغط للبدء' : 'Press to start')}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {isRecording 
+                    ? (language === 'ar' ? 'اضغط مرة أخرى للتوقف' : 'Press again to stop') 
+                    : (language === 'ar' ? 'سيتم تحويل الصوت إلى نص وملخص' : 'Audio will be converted to text & summary')}
                 </p>
               </div>
-            )}
-            
-            {/* Show error message */}
-            {state.recordingState === "error" && state.errorMessage && (
-              <p className="text-sm text-destructive mt-2">
-                {state.errorMessage}
-              </p>
-            )}
-          </div>
-          
-          {/* Recording buttons */}
-          <div className="flex items-center justify-center gap-4">
-            {/* Initial start recording button */}
-            {state.recordingState === "idle" && (
-              <Button
-                onClick={handleStartRecording}
-                size="lg"
-                className="h-16 w-16 rounded-full"
-              >
-                <Mic className="h-8 w-8" />
-              </Button>
-            )}
-            
-            {/* Recording controls - when recording */}
-            {state.recordingState === "recording" && (
-              <div className="flex gap-4">
-                {/* Pause button */}
-                <Button
-                  onClick={() => pauseRecording()}
-                  variant="outline"
-                  size="lg"
-                  className="h-12 w-12 rounded-full"
+            </>
+          ) : (
+            <>
+              <div>
+                <h3 className="font-medium text-center">
+                  {language === 'ar' ? 'التسجيل جاهز' : 'Recording Ready'}
+                </h3>
+                <p className="text-sm text-muted-foreground text-center mt-1">
+                  {language === 'ar' 
+                    ? `مدة: ${formatRecordingTime(recordingDuration)}` 
+                    : `Duration: ${formatRecordingTime(recordingDuration)}`}
+                </p>
+              </div>
+              
+              <div className="flex space-x-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setAudioChunks([]);
+                    setRecordingComplete(false);
+                  }}
+                  disabled={isProcessing}
                 >
-                  <Pause className="h-6 w-6" />
+                  {language === 'ar' ? 'إعادة التسجيل' : 'Re-record'}
                 </Button>
-                
-                {/* Stop button */}
-                <Button
-                  onClick={() => stopRecording()}
-                  variant="destructive"
-                  size="lg"
-                  className="h-16 w-16 rounded-full animate-pulse"
+                <Button 
+                  onClick={processRecording}
+                  disabled={isProcessing}
                 >
-                  <Square className="h-8 w-8" />
+                  {isProcessing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {language === 'ar' ? 'جارٍ المعالجة...' : 'Processing...'}
+                    </>
+                  ) : (
+                    language === 'ar' ? 'استخدام التسجيل' : 'Use Recording'
+                  )}
                 </Button>
               </div>
-            )}
-            
-            {/* Recording controls - when paused */}
-            {state.recordingState === "paused" && (
-              <div className="flex gap-4">
-                {/* Resume button */}
-                <Button
-                  onClick={handleContinueRecording}
-                  variant="outline"
-                  size="lg"
-                  className="h-12 w-12 rounded-full"
-                >
-                  <Play className="h-6 w-6" />
-                </Button>
-                
-                {/* Stop button */}
-                <Button
-                  onClick={() => stopRecording()}
-                  variant="destructive"
-                  size="lg"
-                  className="h-16 w-16 rounded-full"
-                >
-                  <Square className="h-8 w-8" />
-                </Button>
-              </div>
-            )}
-            
-            {/* Processing indicator */}
-            {isProcessing && (
-              <div className="h-16 w-16 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            )}
-            
-            {/* Error state retry button */}
-            {state.recordingState === "error" && (
-              <Button
-                onClick={() => resetRecording()}
-                variant="outline"
-              >
-                {language === 'ar' ? 'إعادة المحاولة' : 'Try Again'}
-              </Button>
-            )}
-          </div>
-        </div>
-        
-        {/* Action buttons */}
-        <div className="flex justify-end gap-2 mt-4" {...rtlProps}>
-          {/* Cancel button - only show when not processing */}
-          {!isProcessing && state.recordingState !== "error" && (
-            <Button variant="outline" onClick={handleDialogClose}>
-              {language === 'ar' ? 'إلغاء' : 'Cancel'}
-            </Button>
-          )}
-          
-          {/* Loading indicator when processing */}
-          {isProcessing && (
-            <Button variant="outline" disabled={isClosing}>
-              {isClosing 
-                ? (language === 'ar' ? 'جارٍ الإغلاق...' : 'Closing...') 
-                : (language === 'ar' ? 'انتظر من فضلك...' : 'Please wait...')}
-            </Button>
+            </>
           )}
         </div>
       </DialogContent>
