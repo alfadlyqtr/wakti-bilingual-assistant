@@ -5,9 +5,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Loader2, X } from "lucide-react";
 import { createRecording, uploadAudio, transcribeAudio } from "@/services/voiceSummaryService";
-import { getBestSupportedMimeType, formatRecordingTime } from "@/utils/audioUtils";
+import { getBestSupportedMimeType, formatRecordingTime, ensureCorrectMimeType } from "@/utils/audioUtils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { createVoiceRecordingsBucket } from "@/utils/debugUtils";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -27,9 +28,23 @@ export default function RecordingDialog({
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [recordingComplete, setRecordingComplete] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string>("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [bucketReady, setBucketReady] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Initialize bucket check
+  useEffect(() => {
+    if (isOpen) {
+      // Check and create bucket if needed
+      const initBucket = async () => {
+        const { success } = await createVoiceRecordingsBucket();
+        setBucketReady(success);
+      };
+      initBucket();
+    }
+  }, [isOpen]);
   
   // Clean up on component unmount
   useEffect(() => {
@@ -54,6 +69,7 @@ export default function RecordingDialog({
       setAudioChunks([]);
       setRecordingComplete(false);
       setUploadStatus("");
+      setUploadProgress(0);
       
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -162,7 +178,7 @@ export default function RecordingDialog({
     onClose();
   };
   
-  // Process the recorded audio
+  // Process the recorded audio with progress simulation
   const processRecording = async () => {
     if (audioChunks.length === 0) {
       toast(language === 'ar' ? 'لا يوجد تسجيل صوتي' : 'No audio recording');
@@ -171,6 +187,7 @@ export default function RecordingDialog({
     
     setIsProcessing(true);
     setUploadStatus("Creating recording entry...");
+    setUploadProgress(10);
     
     try {
       // Check auth before proceeding
@@ -185,6 +202,7 @@ export default function RecordingDialog({
       // Create recording entry in database
       console.log("[RecordingDialog] Creating recording entry...");
       const { recording, error: createError, userId } = await createRecording();
+      setUploadProgress(20);
       
       if (createError || !recording) {
         console.error("[RecordingDialog] Error creating recording entry:", createError);
@@ -195,6 +213,7 @@ export default function RecordingDialog({
       
       // Combine audio chunks into a single blob
       setUploadStatus("Preparing audio data...");
+      setUploadProgress(30);
       console.log(`[RecordingDialog] Combining ${audioChunks.length} audio chunks...`);
       
       // Log each chunk's type before combining
@@ -226,11 +245,16 @@ export default function RecordingDialog({
         return;
       }
       
+      // Ensure correct MIME type
+      const fixedBlob = ensureCorrectMimeType(audioBlob, mimeType);
+      
       // Upload audio to storage
       setUploadStatus("Uploading audio recording...");
+      setUploadProgress(50);
       console.log(`[RecordingDialog] Uploading audio for recording ${recording.id}...`);
-      const uploadResult = await uploadAudio(audioBlob, recording.id, userId);
+      const uploadResult = await uploadAudio(fixedBlob, recording.id, userId);
       const { path, error: uploadError, publicUrl, detailedError } = uploadResult;
+      setUploadProgress(70);
       
       if (uploadError || !path) {
         console.error("[RecordingDialog] Error uploading audio:", uploadError);
@@ -253,6 +277,7 @@ export default function RecordingDialog({
       
       // Transcribe audio
       setUploadStatus("Starting transcription...");
+      setUploadProgress(90);
       console.log("[RecordingDialog] Starting transcription...");
       const { error: transcribeError } = await transcribeAudio(recording.id);
       
@@ -260,6 +285,8 @@ export default function RecordingDialog({
         console.warn("[RecordingDialog] Transcription started with warning:", transcribeError);
         // Continue anyway - transcription happens asynchronously
       }
+      
+      setUploadProgress(100);
       
       // Notify parent component of successful recording
       if (onRecordingCreated) {
@@ -278,6 +305,7 @@ export default function RecordingDialog({
     } finally {
       setIsProcessing(false);
       setUploadStatus("");
+      setUploadProgress(0);
     }
   };
   
@@ -300,6 +328,14 @@ export default function RecordingDialog({
         </DialogHeader>
         
         <div className="flex flex-col items-center justify-center py-6 space-y-8">
+          {!bucketReady && (
+            <div className="text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-3 rounded-md text-sm text-center">
+              {language === 'ar' 
+                ? 'جاري التحقق من سلامة التخزين...' 
+                : 'Checking storage configuration...'}
+            </div>
+          )}
+          
           {!recordingComplete ? (
             <>
               <div className="relative flex items-center justify-center">
@@ -312,7 +348,7 @@ export default function RecordingDialog({
                 >
                   <Button
                     onClick={isRecording ? stopRecording : startRecording}
-                    disabled={isProcessing}
+                    disabled={isProcessing || !bucketReady}
                     size="icon"
                     variant={isRecording ? "destructive" : "default"}
                     className="w-16 h-16 rounded-full"
@@ -383,6 +419,17 @@ export default function RecordingDialog({
                   )}
                 </Button>
               </div>
+              
+              {isProcessing && uploadProgress > 0 && (
+                <div className="w-full">
+                  <div className="h-2 bg-gray-200 rounded-full w-full mt-2">
+                    <div 
+                      className="h-full bg-primary rounded-full transition-all duration-500" 
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

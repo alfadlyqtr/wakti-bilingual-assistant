@@ -8,6 +8,12 @@
  * Prioritizes webm format for Whisper compatibility
  */
 export const getBestSupportedMimeType = (): string => {
+  // First check if MediaRecorder exists in this environment
+  if (typeof MediaRecorder === 'undefined') {
+    console.warn('MediaRecorder not available in this environment, defaulting to audio/webm');
+    return 'audio/webm';
+  }
+  
   const preferredTypes = [
     'audio/webm;codecs=opus',
     'audio/webm',
@@ -116,4 +122,45 @@ export const combineAudioBlobs = async (blobs: Blob[], mimeType: string): Promis
   });
   
   return new Blob([result], { type: mimeType });
+};
+
+/**
+ * Ensures audio blob has correct MIME type
+ * This helps fix issues where MIME types get lost or changed
+ */
+export const ensureCorrectMimeType = (blob: Blob, preferredType: string = 'audio/webm'): Blob => {
+  // If the blob already has the correct MIME type, return it
+  if (blob.type === preferredType) {
+    return blob;
+  }
+  
+  console.log(`Correcting MIME type from ${blob.type || 'empty'} to ${preferredType}`);
+  // Create a new blob with the correct MIME type
+  return new Blob([blob], { type: preferredType });
+};
+
+/**
+ * Validates that a blob appears to be a valid audio file
+ */
+export const validateAudioBlob = (blob: Blob): { valid: boolean; reason?: string } => {
+  if (!blob) {
+    return { valid: false, reason: "Blob is null or undefined" };
+  }
+  
+  if (blob.size === 0) {
+    return { valid: false, reason: "Blob is empty (0 bytes)" };
+  }
+  
+  // Check if the MIME type is at least some kind of audio or application type
+  if (!blob.type.includes('audio/') && 
+      !blob.type.includes('application/') && 
+      blob.type !== 'text/plain' && // Allow text/plain as some browsers misidentify the type
+      blob.type !== '') { // Allow empty type as we'll correct it
+    return { 
+      valid: false, 
+      reason: `Invalid MIME type: ${blob.type}` 
+    };
+  }
+  
+  return { valid: true };
 };
