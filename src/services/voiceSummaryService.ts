@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath } from "@/utils/audioUtils";
 import { toast } from "sonner";
@@ -192,8 +193,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
         errorDetails: uploadError ? {
           message: uploadError.message,
           name: uploadError.name,
-          code: uploadError.code,
-          statusCode: uploadError.status,
+          // Remove accessing properties that don't exist on StorageError
           details: typeof uploadError === 'object' ? JSON.stringify(uploadError) : 'none'
         } : 'none'
       });

@@ -106,7 +106,7 @@ export default function RecordingDialog({
       // Set up event handlers
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
-          console.log(`[RecordingDialog] Received audio chunk: ${e.data.size} bytes`);
+          console.log(`[RecordingDialog] Received audio chunk: ${e.data.size} bytes, type: ${e.data.type}`);
           setAudioChunks((prev) => [...prev, e.data]);
         }
       };
@@ -196,7 +196,15 @@ export default function RecordingDialog({
       // Combine audio chunks into a single blob
       setUploadStatus("Preparing audio data...");
       console.log(`[RecordingDialog] Combining ${audioChunks.length} audio chunks...`);
+      
+      // Log each chunk's type before combining
+      audioChunks.forEach((chunk, index) => {
+        console.log(`[RecordingDialog] Chunk ${index} type: ${chunk.type}, size: ${chunk.size} bytes`);
+      });
+      
       const mimeType = getBestSupportedMimeType();
+      
+      // Create a new blob with explicit MIME type
       const audioBlob = new Blob(audioChunks, { type: mimeType });
       
       // Detailed logging about the blob
@@ -205,7 +213,7 @@ export default function RecordingDialog({
         constructor: audioBlob.constructor.name,
         size: audioBlob.size,
         type: audioBlob.type,
-        mimeType: mimeType,
+        setMimeType: mimeType,
         isWebmMime: mimeType.includes('webm'),
         chunksLength: audioChunks.length,
         chunksTypes: audioChunks.map(chunk => chunk.type).filter((v, i, a) => a.indexOf(v) === i)
