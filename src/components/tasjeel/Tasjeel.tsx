@@ -238,14 +238,18 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Transcribe audio function
+  // Transcribe audio function with enhanced logging
   const transcribeAudio = async (audioUrl: string) => {
     try {
       setIsTranscribing(true);
       
-      console.log('Sending for transcription:', audioUrl);
+      console.log('Tasjeel: Starting transcription process');
+      console.log('Tasjeel: Audio URL for transcription:', audioUrl);
       
-      const { transcript: result } = await callEdgeFunctionWithRetry<{ transcript: string }>(
+      console.log('Tasjeel: Calling transcribe-audio edge function');
+      const startTime = Date.now();
+      
+      const response = await callEdgeFunctionWithRetry<{ transcript: string }>(
         "transcribe-audio",
         { 
           body: { audioUrl },
@@ -253,11 +257,20 @@ const Tasjeel: React.FC = () => {
         }
       );
       
-      console.log('Transcription result received');
-      setTranscript(result);
+      const duration = Date.now() - startTime;
+      console.log(`Tasjeel: Transcription completed in ${duration}ms`);
+      console.log('Tasjeel: Transcription result received:', response);
+      
+      setTranscript(response.transcript);
       setRecordingStatus("idle");
     } catch (error) {
-      console.error("Error transcribing audio:", error);
+      console.error("Tasjeel: Error transcribing audio:", error);
+      console.error("Tasjeel: Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
       toast(error.message || "An error occurred while transcribing the audio");
       setRecordingStatus("idle");
     } finally {

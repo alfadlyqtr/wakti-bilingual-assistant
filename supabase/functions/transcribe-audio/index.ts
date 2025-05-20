@@ -6,7 +6,15 @@ import { corsHeaders } from '../_shared/cors.ts';
 console.log('Edge Function: transcribe-audio initializing');
 
 serve(async (req) => {
-  console.log('Received request:', req.method, req.url);
+  // Log every single request with details
+  const url = new URL(req.url);
+  console.log(`[${new Date().toISOString()}] Request received:`, {
+    method: req.method,
+    url: req.url,
+    path: url.pathname,
+    origin: req.headers.get('origin'),
+    contentType: req.headers.get('content-type')
+  });
   
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -23,42 +31,58 @@ serve(async (req) => {
     console.log('Environment check:', {
       hasSupabaseUrl: !!supabaseUrl,
       hasSupabaseServiceKey: !!supabaseServiceKey,
-      hasOpenAIKey: !!openaiApiKey
+      hasOpenAIKey: !!openaiApiKey,
+      supabaseUrlStart: supabaseUrl ? supabaseUrl.substring(0, 10) + '...' : null
     });
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase credentials');
+      const error = 'Missing Supabase credentials';
+      console.error(error);
       return new Response(
         JSON.stringify({ 
           error: 'Server configuration error', 
-          details: 'Missing Supabase credentials' 
+          details: error
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     if (!openaiApiKey) {
-      console.error('Missing OpenAI API key');
+      const error = 'Missing OpenAI API key';
+      console.error(error);
       return new Response(
         JSON.stringify({ 
           error: 'Server configuration error', 
-          details: 'Missing OpenAI API key' 
+          details: error
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    // Log request size and content type
+    const contentLength = req.headers.get('content-length');
+    console.log('Request content details:', {
+      contentLength: contentLength,
+      contentType: req.headers.get('content-type')
+    });
+
     // Parse request body
     let requestBody;
     try {
       requestBody = await req.json();
-      console.log('Request body parsed successfully');
+      console.log('Request body parsed successfully:', {
+        hasAudioUrl: !!requestBody.audioUrl,
+        audioUrlType: typeof requestBody.audioUrl,
+        audioUrlLength: requestBody.audioUrl ? requestBody.audioUrl.length : 0,
+        audioUrlPreview: requestBody.audioUrl ? `${requestBody.audioUrl.substring(0, 20)}...` : null
+      });
     } catch (error) {
       console.error('Failed to parse request JSON:', error);
       return new Response(
         JSON.stringify({ 
           error: 'Invalid request format', 
-          details: 'Could not parse JSON body' 
+          details: 'Could not parse JSON body',
+          parseError: error.message
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -75,7 +99,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing audio URL:', audioUrl);
+    console.log('Processing audio URL:', audioUrl.substring(0, 30) + '...');
 
     // Create a Supabase client with the service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -113,6 +137,25 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Check if the bucket exists
+    console.log('Checking if bucket exists: tasjeel_recordings');
+    const { data: bucketData, error: bucketError } = await supabase
+      .storage
+      .getBucket('tasjeel_recordings');
+    
+    if (bucketError) {
+      console.error('Error checking bucket:', bucketError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Failed to access storage bucket', 
+          details: bucketError
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Bucket exists:', bucketData);
 
     // Get the audio file from storage
     console.log('Downloading from bucket "tasjeel_recordings", path:', filePath);
@@ -160,6 +203,8 @@ serve(async (req) => {
       },
       body: formData,
     });
+
+    console.log('OpenAI response received, status:', openaiResponse.status);
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();

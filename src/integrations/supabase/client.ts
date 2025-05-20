@@ -23,7 +23,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Helper function to wrap Supabase functions with retry logic
+// Helper function to wrap Supabase functions with retry logic and detailed error logging
 export const callEdgeFunctionWithRetry = async <T>(
   functionName: string,
   options: { 
@@ -36,24 +36,55 @@ export const callEdgeFunctionWithRetry = async <T>(
   const { body, headers = {}, maxRetries = 3, retryDelay = 1000 } = options;
   let lastError: Error | null = null;
   
+  console.log(`Calling edge function "${functionName}" with options:`, {
+    hasBody: !!body,
+    bodyType: body ? typeof body : null,
+    bodyKeys: body ? Object.keys(body) : null,
+    headers,
+    maxRetries,
+    retryDelay
+  });
+  
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
+      console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
+      
+      const startTime = Date.now();
       const { data, error } = await supabase.functions.invoke(functionName, {
         body: body,
         headers: headers
       });
+      const duration = Date.now() - startTime;
+      
+      console.log(`Edge function "${functionName}" response time: ${duration}ms`);
       
       if (error) {
-        console.error(`Edge function error (attempt ${attempt + 1}/${maxRetries}):`, error);
+        console.error(`Edge function "${functionName}" error (attempt ${attempt + 1}/${maxRetries}):`, error);
+        console.error(`Error details:`, {
+          message: error.message,
+          name: error.name,
+          code: (error as any).code,
+          status: (error as any).status
+        });
         lastError = error;
         // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
         continue;
       }
       
+      console.log(`Edge function "${functionName}" succeeded:`, {
+        hasData: !!data,
+        dataType: data ? typeof data : null
+      });
+      
       return data as T;
-    } catch (error) {
-      console.error(`Network error calling edge function (attempt ${attempt + 1}/${maxRetries}):`, error);
+    } catch (error: any) {
+      console.error(`Network error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, error);
+      console.error(`Error details:`, {
+        message: error.message,
+        name: error.name,
+        stack: error.stack?.split('\n').slice(0, 3).join('\n')
+      });
       lastError = error as Error;
       
       // Wait before retrying
@@ -61,7 +92,9 @@ export const callEdgeFunctionWithRetry = async <T>(
     }
   }
   
-  throw lastError || new Error(`Failed to call edge function ${functionName} after ${maxRetries} attempts`);
+  const errorMessage = `Failed to call edge function ${functionName} after ${maxRetries} attempts`;
+  console.error(errorMessage, lastError);
+  throw lastError || new Error(errorMessage);
 };
 
 // Helper function for database operations with retry
