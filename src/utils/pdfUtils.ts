@@ -14,8 +14,7 @@ declare module 'jspdf' {
 interface PDFGenerationOptions {
   title: string;
   content: {
-    transcript?: string | null;
-    summary?: string | null;
+    text?: string | null;
   };
   metadata: {
     createdAt: string;
@@ -28,7 +27,7 @@ interface PDFGenerationOptions {
   language: 'en' | 'ar';
 }
 
-export const generateSummaryPDF = (options: PDFGenerationOptions): Blob => {
+export const generatePDF = (options: PDFGenerationOptions): Blob => {
   const { title, content, metadata, language } = options;
   const isRtl = language === 'ar';
   const locale = language === 'ar' ? arSA : enUS;
@@ -65,7 +64,7 @@ export const generateSummaryPDF = (options: PDFGenerationOptions): Blob => {
   doc.setTextColor(0, 0, 0);
   doc.text(title, isRtl ? 190 : 20, 30, { align: isRtl ? 'right' : 'left' });
   
-  // Date and recording info
+  // Date and info
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
@@ -103,49 +102,24 @@ export const generateSummaryPDF = (options: PDFGenerationOptions): Blob => {
   
   startY += 10;
   
-  // Transcript section
-  if (content.transcript) {
+  // Main content section
+  if (content.text) {
     doc.setFillColor(240, 240, 240);
     doc.rect(15, startY - 6, 180, 8, 'F');
     
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(isRtl ? 'النص' : 'Transcript', isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
+    doc.text(isRtl ? 'النص' : 'Content', isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
     
     startY += 10;
     
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     
-    const splitTranscript = doc.splitTextToSize(content.transcript, 170);
-    doc.text(splitTranscript, isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
-    startY += splitTranscript.length * 5 + 10;
-  }
-  
-  // Check if we need a new page for summary
-  if (startY > 250 && content.summary) {
-    doc.addPage();
-    startY = 20;
-  }
-  
-  // Summary section
-  if (content.summary) {
-    doc.setFillColor(240, 240, 240);
-    doc.rect(15, startY - 6, 180, 8, 'F');
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(isRtl ? 'الملخص' : 'Summary', isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
-    
-    startY += 10;
-    
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    
-    const splitSummary = doc.splitTextToSize(content.summary, 170);
-    doc.text(splitSummary, isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
+    const splitText = doc.splitTextToSize(content.text, 170);
+    doc.text(splitText, isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
+    startY += splitText.length * 5 + 10;
   }
   
   // Footer

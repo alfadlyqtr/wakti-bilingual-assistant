@@ -8,8 +8,7 @@ export type TranslationKey =
   | "taskAndReminders"
   | "events"
   | "calendar"
-  | "voiceSummary"
-  | "voiceSummaryDetail"
+  // Removed "voiceSummary" and "voiceSummaryDetail" keys
   | "assistant"
   | "messages"
   | "contacts"
@@ -65,9 +64,7 @@ export type TranslationKey =
   | "user"
   | "summary"
   | "transcript"
-  | "recording"
-  | "play"
-  | "pause"
+  // Removed "recording" related keys
   | "download"
   | "upload"
   | "share"
@@ -90,7 +87,7 @@ export type TranslationKey =
   | "writer"
   | "creative"
   | "general"
-  | "startVoiceInput"
+  // Removed "startVoiceInput"
   | "ai"
   | "account"
   | "switchLanguage"
@@ -175,7 +172,7 @@ export type TranslationKey =
   | "noConversations"
   | "imageTooLarge"
   | "typeMessage"
-  | "stopRecording"
+  // Removed "stopRecording"
   | "newMessage"
   | "noContactsFound"
   | "reminderTitle"
@@ -365,4 +362,3 @@ export type TranslationKey =
   | "currentPassword"
   | "newPassword"
   | "currentPasswordRequired";
-

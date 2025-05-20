@@ -361,7 +361,7 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   },
   autoApproveExplanation: {
     en: "When enabled, all contact requests will be automatically approved",
-    ar: "عند التفعيل، ستتم الموا��قة تلقائياً على جميع طلبات الاتصال"
+    ar: "عند التفعيل، ستتم المواقة تلقائياً على جميع طلبات الاتصال"
   },
   contactSettingsUpdated: {
     en: "Contact settings updated successfully",
@@ -476,24 +476,6 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   selectContact: {
     en: "Select a contact",
     ar: "اختر جهة اتصال"
-  },
-  
-  // Voice notes
-  recordVoiceNote: {
-    en: "Record Voice Note",
-    ar: "تسجيل ملاحظة صوتية"
-  },
-  stopRecording: {
-    en: "Stop Recording",
-    ar: "إيقاف التسجيل"
-  },
-  playVoiceNote: {
-    en: "Play Voice Note",
-    ar: "تشغيل الملاحظة الصوتية"
-  },
-  pauseVoiceNote: {
-    en: "Pause Voice Note",
-    ar: "إيقاف الملاحظة الصوتية مؤقتًا"
   },
   
   // Image generation

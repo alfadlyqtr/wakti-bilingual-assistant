@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -8,14 +7,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "
 
 // Define bucket configurations
 const bucketConfigurations = [
-  {
-    id: "voice_recordings",
-    name: "Voice Recordings Storage",
-    public: false,
-    fileSizeLimit: 10485760, // 10MB
-    allowedMimeTypes: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/webm"],
-    lifecycleDays: 10
-  },
   {
     id: "images",
     name: "User Images Storage",

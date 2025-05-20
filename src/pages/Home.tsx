@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,10 +37,8 @@ export default function Home() {
       feature1Desc: "Create, prioritize, and share tasks with AI sorting",
       feature2Title: "Event Planning",
       feature2Desc: "Schedule events with RSVP and map integration",
-      feature3Title: "Voice Summaries",
-      feature3Desc: "Create audio summaries with AI transcription",
-      feature4Title: "Bilingual Support",
-      feature4Desc: "Full Arabic and English language support",
+      feature3Title: "Bilingual Support",
+      feature3Desc: "Full Arabic and English language support",
       aiSectionTitle: "WAKTI AI Capabilities",
       aiFeature1Title: "Smart Task Generation",
       aiFeature1Desc: "Generate optimized tasks with priorities and deadlines",
@@ -66,10 +63,8 @@ export default function Home() {
       feature1Desc: "إنشاء وترتيب ومشاركة المهام مع فرز متقدم",
       feature2Title: "تخطيط الفعاليات",
       feature2Desc: "جدولة الفعاليات مع تأكيد الحضور والخرائط",
-      feature3Title: "ملخصات صوتية",
-      feature3Desc: "إنشاء ملخصات صوتية مع النسخ بالذكاء الاصطناعي",
-      feature4Title: "دعم ثنائي اللغة",
-      feature4Desc: "دعم كامل للغتين العربية والإنجليزية",
+      feature3Title: "دعم ثنائي اللغة",
+      feature3Desc: "دعم كامل للغتين العربية والإنجليزية",
       aiSectionTitle: "إمكانيات الذكاء الاصطناعي في WAKTI",
       aiFeature1Title: "إنشاء المهام الذكية",
       aiFeature1Desc: "توليد مهام محسنة مع أولويات ومواعيد نهائية",

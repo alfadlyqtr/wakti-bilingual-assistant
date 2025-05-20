@@ -1,4 +1,3 @@
-
 import {
   LayoutDashboard,
   ListChecks,
@@ -16,7 +15,6 @@ import {
   AlertTriangle,
   Mail,
   Bell,
-  FileText,
   LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
@@ -49,8 +47,7 @@ const navItems: NavItemProps[] = [
   { icon: Calendar, label: "events", path: "/events" },
   { icon: MessageSquare, label: "messages", path: "/messages" },
   { icon: Users, label: "contacts", path: "/contacts" },
-  { icon: FileText, label: "voiceSummary", path: "/voice-summary" },
-  // { icon: Settings, label: "settings", path: "/settings" },
+  // Removed voice summary navigation item
 ];
 
 const bottomNavItems: NavItemProps[] = [

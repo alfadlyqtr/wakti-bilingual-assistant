@@ -22,9 +22,7 @@ declare module '@/utils/translations' {
     // Event text interface
   }
   
-  export interface VoiceSummaryText {
-    // Voice summary text interface
-  }
+  // Removed VoiceSummaryText interface
   
   export interface SettingsText {
     // Settings text interface
