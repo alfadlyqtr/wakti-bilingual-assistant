@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -19,7 +18,11 @@ export async function createRecording(type = "note", title?: string) {
     
     // Set file path and URL
     const audioPath = `audio/${recordingId}.webm`;
-    const audioUrl = `${supabase.storageUrl}/object/public/voice-recordings/${audioPath}`;
+    
+    // Use getPublicUrl method instead of directly accessing storageUrl
+    const { data: { publicUrl: audioUrl } } = supabase.storage
+      .from('voice-recordings')
+      .getPublicUrl(audioPath);
     
     // Set expiration date (10 days from now)
     const expiresAt = new Date();
