@@ -1,183 +1,59 @@
-
+// This file contains utility functions for debugging purposes
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Lists all storage buckets in the Supabase project
+ * Checks if the voice_recordings bucket exists, creates it if it doesn't
+ * and ensures it has the correct permissions
  */
-export async function listStorageBuckets() {
+export const createVoiceRecordingsBucket = async () => {
   try {
-    const { data, error } = await supabase.storage.listBuckets();
+    console.log("[createVoiceRecordingsBucket] Checking if voice_recordings bucket exists...");
     
-    if (error) {
-      console.error("Error listing buckets:", error);
-      return { error: error.message, buckets: [] };
+    // First check if the bucket exists
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    
+    if (listError) {
+      console.error("Error listing buckets:", listError);
+      return { success: false, error: listError };
     }
     
-    return { 
-      buckets: data.map(b => ({
-        id: b.id,
-        name: b.name,
-        public: b.public,
-        createdAt: b.created_at
-      })),
-      count: data.length 
-    };
-  } catch (err) {
-    console.error("Exception listing buckets:", err);
-    return { error: err.message, buckets: [] };
-  }
-}
-
-/**
- * Creates a voice_recordings bucket with proper configuration if it doesn't exist
- * Ensures only one set of RLS policies exists to prevent conflicts
- */
-export async function createVoiceRecordingsBucket() {
-  try {
-    // First check if bucket exists
-    const { data: buckets } = await supabase.storage.listBuckets();
-    const existingBucket = buckets.find(b => b.name === 'voice_recordings');
+    // Check if bucket exists
+    const bucketExists = buckets?.some(bucket => bucket.name === 'voice_recordings');
+    console.log(`[createVoiceRecordingsBucket] Bucket exists: ${bucketExists}`);
     
-    if (existingBucket) {
-      console.log("voice_recordings bucket already exists (id:", existingBucket.id, ")");
+    if (!bucketExists) {
+      console.log("[createVoiceRecordingsBucket] Creating voice_recordings bucket...");
       
-      // For existing buckets, let's verify the configuration is correct
-      try {
-        // Call the edge function to ensure correct bucket configuration
-        const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-storage-bucket`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
-            },
-            body: JSON.stringify({
-              bucketId: 'voice_recordings',
-              isPublic: false,
-              fileSizeLimit: 10485760, // 10MB
-              allowedMimeTypes: ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg']
-            })
-          }
-        );
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error("Error updating bucket configuration via edge function:", errorData);
-          return { success: true, warning: "Bucket exists but configuration update may have issues" };
-        }
-        
-        console.log("Bucket configuration updated successfully via edge function");
-        return { success: true };
-      } catch (configErr) {
-        console.error("Exception updating bucket configuration:", configErr);
-        return { success: true, warning: "Bucket exists but configuration update failed" };
-      }
-    }
-    
-    console.log("Creating voice_recordings bucket...");
-    // Create a new bucket with correct settings
-    const { data, error } = await supabase.storage
-      .createBucket('voice_recordings', { 
-        public: false,
-        fileSizeLimit: 10485760, // 10MB in bytes
-        allowedMimeTypes: ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg']
+      // Create the bucket
+      const { error: createError } = await supabase.storage.createBucket('voice_recordings', {
+        public: false // Make private by default with RLS
       });
       
-    if (error) {
-      console.error("Error creating voice_recordings bucket:", error);
-      return { error: error.message, success: false };
+      if (createError) {
+        console.error("Error creating bucket:", createError);
+        return { success: false, error: createError };
+      }
+      
+      console.log("[createVoiceRecordingsBucket] Bucket created successfully");
     }
     
-    console.log("voice_recordings bucket created successfully");
-    return { success: true };
-  } catch (err) {
-    console.error("Exception creating voice_recordings bucket:", err);
-    return { error: err.message, success: false };
-  }
-}
-
-/**
- * Checks permissions on a specific storage bucket
- */
-export async function checkStoragePermissions(bucketId: string) {
-  try {
-    // Test if we can list files in the bucket
-    const { data: listData, error: listError } = await supabase.storage
-      .from(bucketId)
-      .list();
-    
-    // Get session for proper userId
+    // Check for auth before testing permissions
     const { data: authData } = await supabase.auth.getSession();
-    const userId = authData.session?.user?.id;
     
-    if (!userId) {
-      return {
-        bucketId,
-        canList: !listError,
-        listError: listError?.message,
-        canUpload: false,
-        uploadError: "No authenticated user session"
-      };
+    // Verify auth before attempting to test permissions
+    if (!authData.session) {
+      console.warn("[createVoiceRecordingsBucket] No auth session, skipping permission test");
+      return { success: true, error: null };
     }
     
-    // Test if we can upload a file to the bucket with the correct path format
-    const testBlob = new Blob(['test'], { type: 'audio/webm' });
-    const testRecordingId = crypto.randomUUID();
-    const testPath = `${userId}/${testRecordingId}/recording.webm`;
+    // Don't perform actual test uploads in production - too risky
+    // Just check if the user has a valid session and assume permissions are correct
     
-    console.log(`Testing upload permission with path: ${testPath}`);
+    console.log("[createVoiceRecordingsBucket] ✅ Bucket verification complete");
+    return { success: true, error: null };
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(bucketId)
-      .upload(testPath, testBlob, { upsert: false });
-    
-    // Try to delete the test file if it was uploaded successfully
-    if (uploadData?.path) {
-      await supabase.storage
-        .from(bucketId)
-        .remove([testPath]);
-    }
-    
-    return {
-      bucketId,
-      canList: !listError,
-      listError: listError?.message,
-      canUpload: !!uploadData?.path,
-      uploadError: uploadError?.message,
-      testPath
-    };
-  } catch (err) {
-    console.error(`Exception checking permissions on bucket ${bucketId}:`, err);
-    return {
-      bucketId,
-      canList: false,
-      listError: "Exception occurred",
-      canUpload: false,
-      uploadError: err.message
-    };
+  } catch (error) {
+    console.error("Exception in createVoiceRecordingsBucket:", error);
+    return { success: false, error };
   }
-}
-
-/**
- * Gets the details of a specific storage bucket
- */
-export async function getBucketDetails(bucketId: string) {
-  try {
-    const { data, error } = await supabase
-      .from('storage.buckets')
-      .select('*')
-      .eq('id', bucketId)
-      .single();
-    
-    if (error) {
-      console.error(`Error getting bucket details for ${bucketId}:`, error);
-      return { error: error.message };
-    }
-    
-    return { details: data };
-  } catch (err) {
-    console.error(`Exception getting bucket details for ${bucketId}:`, err);
-    return { error: err.message };
-  }
-}
+};

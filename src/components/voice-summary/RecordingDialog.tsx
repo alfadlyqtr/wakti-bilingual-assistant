@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -205,16 +204,18 @@ export default function RecordingDialog({
     setUploadProgress(10);
     
     try {
-      // Check auth before proceeding
+      // 🚨 CRITICAL: Verify auth before proceeding
       const { data: authData } = await supabase.auth.getSession();
-      console.log("[RecordingDialog] Auth status before processing:", { 
+      console.log("[RecordingDialog] 🔍 Auth verification before processing:", { 
         hasSession: !!authData.session, 
         userId: authData.session?.user?.id || 'none',
         expired: authData.session ? 
-          (new Date().getTime() / 1000 > (authData.session.expires_at || 0)) : 'n/a'
+          (new Date().getTime() / 1000 > (authData.session.expires_at || 0)) : 'n/a',
+        expireTime: authData.session?.expires_at || 'none'
       });
       
       if (!authData.session || !authData.session.user) {
+        console.error("[RecordingDialog] 🚨 AUTH FAILED: No valid session or user");
         toast.error(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام هذه الميزة' : 'You need to be logged in to use this feature');
         setIsProcessing(false);
         return;
@@ -272,18 +273,24 @@ export default function RecordingDialog({
       // Upload audio to storage
       setUploadStatus(language === 'ar' ? 'جارٍ تحميل التسجيل الصوتي...' : "Uploading audio recording...");
       setUploadProgress(50);
-      console.log(`[RecordingDialog] Uploading audio for recording ${recording.id}...`);
-      console.log(`[RecordingDialog] User ID for upload: ${userId}`);
-      console.log(`[RecordingDialog] Recording ID for upload: ${recording.id}`);
+      console.log(`[RecordingDialog] 🚨 CRITICAL - Upload preparation:`, {
+        recordingId: recording.id,
+        userId: userId,
+        userIdType: typeof userId,
+        userIdLength: userId?.length || 0,
+        sessionUserId: authData.session.user.id,
+        match: userId === authData.session.user.id ? "✅ MATCH" : "❌ MISMATCH"
+      });
       
       // Generate the expected file path before uploading
       const expectedPath = generateRecordingPath(userId, recording.id);
-      console.log(`[RecordingDialog] Expected file path: ${expectedPath}`);
+      console.log(`[RecordingDialog] 📁 Expected file path: ${expectedPath}`);
+      console.log(`[RecordingDialog] 📁 Full bucket path: voice_recordings/${expectedPath}`);
       
       // Validate the path before proceeding
       const pathValidation = validateRecordingPath(expectedPath);
       if (!pathValidation.valid) {
-        console.error("[RecordingDialog] Path validation failed:", pathValidation.reason);
+        console.error("[RecordingDialog] 🚨 PATH VALIDATION FAILED:", pathValidation.reason);
         toast.error(language === 'ar' 
           ? `خطأ في مسار الملف: ${pathValidation.reason}` 
           : `File path error: ${pathValidation.reason}`);
@@ -296,7 +303,7 @@ export default function RecordingDialog({
       setUploadProgress(70);
       
       if (uploadError || !path) {
-        console.error("[RecordingDialog] Error uploading audio:", uploadError);
+        console.error("[RecordingDialog] 🚨 UPLOAD ERROR:", uploadError);
         
         // Show more detailed error message
         const errorMessage = detailedError || 
@@ -311,7 +318,7 @@ export default function RecordingDialog({
         return;
       }
       
-      console.log("[RecordingDialog] Audio upload successful. Path:", path);
+      console.log("[RecordingDialog] ✅ Audio upload successful. Path:", path);
       console.log("[RecordingDialog] Public URL:", publicUrl);
       
       // Transcribe audio

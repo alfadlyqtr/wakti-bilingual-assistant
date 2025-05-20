@@ -71,10 +71,21 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
         return;
       }
       
-      // Get current user - needed for saving the recording
+      // 🚨 CRITICAL: Verify authentication before proceeding
       const { data: { user } } = await supabase.auth.getUser();
+      const { data: session } = await supabase.auth.getSession();
+      
+      console.log("[VoiceInput] 🔍 Auth verification before recording:", { 
+        hasUser: !!user,
+        userId: user?.id || 'none',
+        hasSession: !!session.session,
+        sessionUserId: session.session?.user?.id || 'none',
+        match: user && session.session ? 
+          (user.id === session.session.user.id ? "✅ MATCH" : "❌ MISMATCH") : "N/A"
+      });
       
       if (!user) {
+        console.error("[VoiceInput] 🚨 AUTH FAILED: No authenticated user");
         toast({
           title: language === 'ar' ? 'يجب تسجيل الدخول لاستخدام الإدخال الصوتي' : 'Login required for voice input',
           variant: "destructive"
@@ -122,13 +133,28 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           // This must follow the pattern: ${userId}/${recordingId}/recording.webm
           const filePath = generateRecordingPath(user.id, recordingId);
           
-          console.log(`Uploading to storage with filePath: ${filePath}`);
-          console.log(`User ID: ${user.id}, Recording ID: ${recordingId}`);
+          console.log(`[VoiceInput] 📁 UPLOAD PATH INFO:`, {
+            bucket: 'voice_recordings',
+            fullPath: `voice_recordings/${filePath}`,
+            userId: user.id, 
+            recordingId: recordingId,
+            generatedPath: filePath,
+            expectedFormat: `${user.id}/${recordingId}/recording.webm`
+          });
+          
+          // 🚨 CRITICAL: Verify user ID again before upload
+          const { data: currentAuthData } = await supabase.auth.getSession();
+          console.log("[VoiceInput] 🔍 Auth check immediately before upload:", {
+            hasSession: !!currentAuthData.session,
+            sessionUserId: currentAuthData.session?.user?.id || 'none',
+            userIdFromEarlier: user.id,
+            match: currentAuthData.session?.user?.id === user.id ? "✅ MATCH" : "❌ MISMATCH"
+          });
           
           // Validate the path before uploading
           const pathValidation = validateRecordingPath(filePath);
           if (!pathValidation.valid) {
-            console.error(`Invalid file path generated: ${filePath}`, pathValidation.reason);
+            console.error(`[VoiceInput] 🚨 PATH VALIDATION FAILED: ${filePath}`, pathValidation.reason);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             toast({
@@ -148,18 +174,18 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             });
             
           if (uploadError) {
-            console.error('Error uploading recording:', uploadError);
+            console.error('[VoiceInput] 🚨 UPLOAD ERROR:', uploadError);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             toast({
               title: language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording',
-              description: uploadError.message,
+              description: uploadError.message || JSON.stringify(uploadError),
               variant: "destructive"
             });
             return;
           }
           
-          console.log('Recording saved to Supabase:', filePath);
+          console.log('[VoiceInput] ✅ Recording saved to Supabase:', filePath);
           
           try {
             // Pass recordingId (UUID) for transcription

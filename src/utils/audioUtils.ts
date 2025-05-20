@@ -61,45 +61,74 @@ export const getFileExtension = (mimeType: string): string => {
 };
 
 /**
- * Generates the standardized file path for audio recordings
- * CRITICAL: This must follow the pattern ${userId}/${recordingId}/recording.webm
- * This is required for RLS policies to work correctly
+ * Generates a standardized recording path for storage
+ * @param userId - The user ID
+ * @param recordingId - The recording ID
+ * @returns A properly formatted path for storage
  */
 export const generateRecordingPath = (userId: string, recordingId: string): string => {
-  // IMPORTANT: This path is critical and must not be modified without updating RLS policies
-  // The path structure must be exactly: ${userId}/${recordingId}/recording.webm
-  // This allows RLS to correctly enforce access based on auth.uid()
-  return `${userId}/${recordingId}/recording.webm`;
+  // CRITICAL: Validate inputs to prevent path issues
+  if (!userId || typeof userId !== 'string') {
+    console.error("Invalid userId provided to generateRecordingPath:", userId);
+    throw new Error("Invalid user ID");
+  }
+  
+  if (!recordingId || typeof recordingId !== 'string') {
+    console.error("Invalid recordingId provided to generateRecordingPath:", recordingId);
+    throw new Error("Invalid recording ID");
+  }
+  
+  // Standard format: userId/recordingId/recording.webm
+  const path = `${userId}/${recordingId}/recording.webm`;
+  
+  // Log the generated path for debugging
+  console.log(`[generateRecordingPath] Generated path: ${path}`);
+  
+  return path;
 };
 
 /**
- * Validates if a recording path follows the required structure
- * This helps catch path format issues before uploading
+ * Validates that a recording path follows the required format
+ * @param path - The path to validate
+ * @returns Object indicating if path is valid and reason if not
  */
 export const validateRecordingPath = (path: string): { valid: boolean; reason?: string } => {
-  // Path should match format: userId/recordingId/recording.webm
-  const pathParts = path.split('/');
+  if (!path) {
+    return { valid: false, reason: "Path is empty" };
+  }
   
-  if (pathParts.length !== 3) {
+  // Path should match: userId/recordingId/recording.webm
+  const pathPattern = /^[^\/]+\/[^\/]+\/recording\.webm$/;
+  
+  if (!pathPattern.test(path)) {
     return { 
       valid: false, 
-      reason: `Path has ${pathParts.length} parts but should have exactly 3 parts (userId/recordingId/filename)` 
+      reason: `Path does not match required format: userId/recordingId/recording.webm. Got: ${path}`
     };
   }
   
-  // First part should be the userId
-  if (!pathParts[0] || pathParts[0].length < 10) {
-    return { valid: false, reason: 'First path segment should be a valid userId' };
+  const parts = path.split('/');
+  
+  if (parts.length !== 3) {
+    return { 
+      valid: false, 
+      reason: `Path should have exactly 3 parts separated by '/'. Got: ${parts.length} parts`
+    };
   }
   
-  // Second part should be a UUID-like recordingId
-  if (!pathParts[1] || pathParts[1].length < 10) {
-    return { valid: false, reason: 'Second path segment should be a valid recordingId' };
+  if (!parts[0] || parts[0].trim() === '') {
+    return { valid: false, reason: "First path segment (userId) cannot be empty" };
   }
   
-  // Third part should be the filename
-  if (!pathParts[2] || !pathParts[2].endsWith('.webm')) {
-    return { valid: false, reason: 'Third path segment should be a filename ending with .webm' };
+  if (!parts[1] || parts[1].trim() === '') {
+    return { valid: false, reason: "Second path segment (recordingId) cannot be empty" };
+  }
+  
+  if (parts[2] !== 'recording.webm') {
+    return { 
+      valid: false, 
+      reason: `Third path segment must be 'recording.webm'. Got: ${parts[2]}`
+    };
   }
   
   return { valid: true };
@@ -163,17 +192,21 @@ export const combineAudioBlobs = async (blobs: Blob[], mimeType: string): Promis
 
 /**
  * Ensures audio blob has correct MIME type
- * This helps fix issues where MIME types get lost or changed
+ * @param blob - The blob to fix
+ * @param desiredMimeType - The desired MIME type
+ * @returns A new blob with the correct MIME type
  */
-export const ensureCorrectMimeType = (blob: Blob, preferredType: string = 'audio/webm'): Blob => {
-  // If the blob already has the correct MIME type, return it
-  if (blob.type === preferredType) {
+export const ensureCorrectMimeType = (blob: Blob, desiredMimeType: string): Blob => {
+  // If the blob already has the correct MIME type, return it as is
+  if (blob.type === desiredMimeType) {
     return blob;
   }
   
-  console.log(`Correcting MIME type from ${blob.type || 'empty'} to ${preferredType}`);
+  // Log the MIME type change for debugging
+  console.log(`[ensureCorrectMimeType] Changing MIME type from '${blob.type}' to '${desiredMimeType}'`);
+  
   // Create a new blob with the correct MIME type
-  return new Blob([blob], { type: preferredType });
+  return new Blob([blob], { type: desiredMimeType });
 };
 
 /**

@@ -56,25 +56,44 @@ export const createRecording = async (recordingType: string = "note") => {
  */
 export const uploadAudio = async (blob: Blob, recordingId: string, userId: string) => {
   try {
-    // Safety check for userId - this is critical for the path to work with RLS
-    if (!userId) {
-      console.error("Missing userId in uploadAudio, cannot proceed");
+    // 🚨 CRITICAL: Verify userId exists - this is critical for the path!
+    if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      console.error("🚨 UPLOAD FAILED: Missing or invalid userId", {userId, type: typeof userId});
       return { 
-        error: "Missing user ID", 
+        error: "Missing or invalid user ID", 
         path: null, 
         publicUrl: null,
-        detailedError: "User ID is required for storing recordings securely" 
+        detailedError: "User ID is required and must be a valid string" 
       };
     }
     
-    // Safety check for recordingId
-    if (!recordingId) {
-      console.error("Missing recordingId in uploadAudio, cannot proceed");
+    // 🚨 CRITICAL: Verify recordingId exists
+    if (!recordingId || typeof recordingId !== 'string' || recordingId.trim() === '') {
+      console.error("🚨 UPLOAD FAILED: Missing or invalid recordingId", {recordingId, type: typeof recordingId});
       return { 
-        error: "Missing recording ID", 
+        error: "Missing or invalid recording ID", 
         path: null, 
         publicUrl: null,
-        detailedError: "Recording ID is required for proper file organization" 
+        detailedError: "Recording ID is required and must be a valid string" 
+      };
+    }
+    
+    // Double-check auth just to be super safe
+    const { data: authData } = await supabase.auth.getSession();
+    console.log("🔍 Auth check before upload:", {
+      hasSession: !!authData.session,
+      sessionUserId: authData.session?.user?.id || 'none',
+      passedUserId: userId,
+      match: authData.session?.user?.id === userId ? "✅ MATCH" : "❌ MISMATCH"
+    });
+    
+    if (!authData.session) {
+      console.error("🚨 UPLOAD FAILED: No authenticated session during upload!");
+      return { 
+        error: "Authentication required for upload", 
+        path: null, 
+        publicUrl: null,
+        detailedError: "No active session found" 
       };
     }
     
@@ -82,13 +101,25 @@ export const uploadAudio = async (blob: Blob, recordingId: string, userId: strin
     const fixedBlob = ensureCorrectMimeType(blob, 'audio/webm');
     
     // Generate the correct path using our utility function
-    // CRITICAL: Path must be in format: userId/recordingId/recording.webm
+    // 🚨 CRITICAL: Path must be in format: userId/recordingId/recording.webm
     const filePath = generateRecordingPath(userId, recordingId);
+    
+    // DETAILED PATH LOGGING
+    console.log("📁 UPLOAD PATH INFO:", {
+      bucket: 'voice_recordings',
+      fullPath: `voice_recordings/${filePath}`,
+      userId,
+      recordingId,
+      generatedPath: filePath,
+      expectedFormat: `${userId}/${recordingId}/recording.webm`,
+      blobSize: fixedBlob.size,
+      blobType: fixedBlob.type
+    });
     
     // Validate the path before proceeding
     const pathValidation = validateRecordingPath(filePath);
     if (!pathValidation.valid) {
-      console.error(`Invalid file path generated: ${filePath}`, pathValidation.reason);
+      console.error(`🚨 UPLOAD FAILED: Invalid file path generated: ${filePath}`, pathValidation.reason);
       return { 
         error: "Invalid file path", 
         path: null, 
@@ -123,7 +154,7 @@ export const uploadAudio = async (blob: Blob, recordingId: string, userId: strin
       };
     }
     
-    console.log("Audio uploaded successfully:", uploadData);
+    console.log("✅ Audio uploaded successfully:", uploadData);
     
     // Get the public URL (if needed)
     const { data: publicUrlData } = supabase.storage
