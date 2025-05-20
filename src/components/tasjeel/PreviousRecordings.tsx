@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, getTasjeelRecords, deleteTasjeelRecord, TasjeelRecord } from "@/integrations/supabase/client";
+import { supabase, getTasjeelRecords, deleteTasjeelRecord } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
@@ -28,6 +28,7 @@ import {
   ListMusic,
   Volume2
 } from "lucide-react";
+import { TasjeelRecord } from "./types";
 
 // Translations for PreviousRecordings component
 const translations = {
