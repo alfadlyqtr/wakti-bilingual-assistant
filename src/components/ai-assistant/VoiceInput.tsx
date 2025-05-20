@@ -126,7 +126,7 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           console.log('Recording saved to Supabase:', fileName);
           
           try {
-            // FIX: Pass recordingId (UUID) instead of full path
+            // Pass recordingId (UUID) for transcription
             console.log('Sending for transcription with UUID:', recordingId);
             // Update the transcribeAudio function to use the UUID parameter and file path
             const text = await transcribeAudio(recordingId, fileName);

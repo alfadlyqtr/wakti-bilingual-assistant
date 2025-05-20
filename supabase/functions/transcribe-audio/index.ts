@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -14,6 +13,12 @@ const SUPPORTED_FORMATS = ['mp3', 'mp4', 'mpeg', 'mpga', 'wav', 'webm'];
 function isValidUUID(uuid: string): boolean {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(uuid);
+}
+
+// Function to validate file formats
+function validateFileFormat(format: string | undefined): boolean {
+  if (!format) return false;
+  return SUPPORTED_FORMATS.includes(format.toLowerCase());
 }
 
 serve(async (req) => {
@@ -447,9 +452,3 @@ serve(async (req) => {
     );
   }
 });
-
-// Helper function to validate file formats
-function validateFileFormat(format: string | undefined): boolean {
-  if (!format) return false;
-  return SUPPORTED_FORMATS.includes(format.toLowerCase());
-}

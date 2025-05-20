@@ -67,6 +67,8 @@ export default function VoiceSummaryPage() {
   const fetchRecordings = async () => {
     try {
       setIsLoading(true);
+      
+      // Ensure user is authenticated before fetching
       const { data: authData } = await supabase.auth.getSession();
       
       if (!authData.session) {
