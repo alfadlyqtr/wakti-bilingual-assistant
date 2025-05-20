@@ -3,21 +3,24 @@ project_id = "hxauxozopvpzpdygoqwf"
 
 [api]
 enabled = true
-port = 54321
-schemas = ["public", "storage", "graphql_public"]
+port = 8000
 
-[functions]
-[functions.insert-ai-chat]
-verify_jwt = true
-[functions.get-recent-chat-history]
-verify_jwt = true
-[functions.process-ai-intent]
-verify_jwt = true
-[functions.generate-image]
-verify_jwt = true
-[functions.transcribe-audio]
+[db]
+port = 5432
+
+[studio]
+enabled = true
+port = 8001
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+
+[realtime]
+enabled = true
+
+[edge_functions]
+[edge_functions.transcribe-audio]
 verify_jwt = false
-[functions.summarize-text]
-verify_jwt = true
-[functions.generate-speech]
-verify_jwt = true

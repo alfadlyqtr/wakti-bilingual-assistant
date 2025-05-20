@@ -23,11 +23,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Define types for edge function payloads
+interface TranscribeAudioPayload {
+  audioUrl: string;
+  [key: string]: any;  // Allow other properties
+}
+
+interface EdgeFunctionPayload {
+  [key: string]: any;
+}
+
 // Helper function to wrap Supabase functions with retry logic and detailed error logging
 export const callEdgeFunctionWithRetry = async <T>(
   functionName: string,
   options: { 
-    body?: object;
+    body?: EdgeFunctionPayload;
     headers?: Record<string, string>;
     maxRetries?: number;
     retryDelay?: number;
@@ -47,9 +57,11 @@ export const callEdgeFunctionWithRetry = async <T>(
   
   // Explicitly log the request payload if it's related to audio transcription
   if (functionName === 'transcribe-audio' && body) {
+    // Type assertion to tell TypeScript that body has audioUrl when functionName is 'transcribe-audio'
+    const audioBody = body as TranscribeAudioPayload;
     console.log(`transcribe-audio request payload:`, {
-      audioUrlStart: body?.audioUrl ? `${body.audioUrl.substring(0, 30)}...` : 'undefined',
-      audioUrlLength: body?.audioUrl ? body.audioUrl.length : 0
+      audioUrlStart: audioBody.audioUrl ? `${audioBody.audioUrl.substring(0, 30)}...` : 'undefined',
+      audioUrlLength: audioBody.audioUrl ? audioBody.audioUrl.length : 0
     });
   }
   
