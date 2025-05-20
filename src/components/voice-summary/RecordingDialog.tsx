@@ -1,10 +1,17 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Mic, MicOff, Loader2, X } from "lucide-react";
 import { createRecording, uploadAudio, transcribeAudio } from "@/services/voiceSummaryService";
-import { getBestSupportedMimeType, formatRecordingTime, ensureCorrectMimeType } from "@/utils/audioUtils";
+import { 
+  getBestSupportedMimeType, 
+  formatRecordingTime, 
+  ensureCorrectMimeType, 
+  generateRecordingPath, 
+  validateRecordingPath 
+} from "@/utils/audioUtils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { createVoiceRecordingsBucket } from "@/utils/debugUtils";

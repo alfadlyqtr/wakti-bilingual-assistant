@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -259,7 +258,7 @@ const VoiceSummaryDetail = () => {
         // For failed transcription, we need to restart the process
         toast.info(language === 'ar' ? 'جارٍ إعادة محاولة التحويل...' : 'Retrying transcription...');
         
-        const { text, error } = await voiceSummaryService.transcribeAudio(id);
+        const { transcription, error, text } = await voiceSummaryService.transcribeAudio(id);
         
         if (error) {
           console.error("Error retrying transcription:", error);

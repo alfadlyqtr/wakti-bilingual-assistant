@@ -1,4 +1,3 @@
-
 // Import toast from sonner directly
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
@@ -321,7 +320,7 @@ export default function useVoiceSummaryController() {
       
       // Start the transcription process
       setProcessingStep("transcribing");
-      const { text: transcriptionText, error: transcriptionError } = await voiceSummaryService.transcribeAudio(recording.id);
+      const { transcription, error: transcriptionError, text } = await voiceSummaryService.transcribeAudio(recording.id);
       
       if (transcriptionError) {
         console.error("Error transcribing audio:", transcriptionError);
@@ -333,8 +332,8 @@ export default function useVoiceSummaryController() {
       }
       
       // Format transcription with part labels if we have multiple segments
-      setTranscript(transcriptionText);
-      setEditedTranscript(transcriptionText);
+      setTranscript(text);
+      setEditedTranscript(text);
       
       // Start the summary generation process
       setProcessingStep("summarizing");

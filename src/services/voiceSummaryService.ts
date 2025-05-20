@@ -1,3 +1,4 @@
+
 // First, import necessary utilities and ensure we're using the path generation functions
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath, validateRecordingPath, ensureCorrectMimeType } from "@/utils/audioUtils";
@@ -5,7 +6,7 @@ import { generateRecordingPath, validateRecordingPath, ensureCorrectMimeType } f
 /**
  * Creates a new voice summary recording entry in the database
  */
-export const createRecording = async () => {
+export const createRecording = async (recordingType: string = "note") => {
   try {
     // Verify we have an authenticated session
     const { data: authData } = await supabase.auth.getSession();
@@ -27,7 +28,7 @@ export const createRecording = async () => {
       .insert({
         user_id: userId,
         title: defaultTitle,
-        type: 'recording',
+        type: recordingType,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         is_processing_transcript: true // Mark as processing immediately
       })
@@ -40,7 +41,7 @@ export const createRecording = async () => {
     }
     
     return { recording: data, error: null, userId };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Exception in createRecording:", error);
     return { error: error.message, recording: null, userId: null };
   }
@@ -132,7 +133,7 @@ export const uploadAudio = async (blob: Blob, recordingId: string, userId: strin
     const publicUrl = publicUrlData?.publicUrl || null;
     
     return { path: uploadData.path, error: null, publicUrl };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Exception in uploadAudio:", error);
     return { 
       error: error, 
@@ -161,9 +162,208 @@ export const transcribeAudio = async (recordingId: string) => {
     }
     
     console.log("Transcription started successfully:", data);
-    return { transcription: data, error: null };
-  } catch (error) {
+    return { transcription: data, error: null, text: data?.text };
+  } catch (error: any) {
     console.error("Exception in transcribeAudio:", error);
     return { error: error.message, transcription: null };
+  }
+};
+
+/**
+ * Updates the transcript for a voice summary
+ * @param recordingId - UUID of the recording
+ * @param transcript - Updated transcript text
+ */
+export const updateTranscript = async (recordingId: string, transcript: string) => {
+  try {
+    const { error } = await supabase
+      .from('voice_summaries')
+      .update({ 
+        transcript: transcript,
+        transcript_updated_at: new Date().toISOString(),
+        is_transcript_edited: true
+      })
+      .eq('id', recordingId);
+      
+    if (error) {
+      console.error("Error updating transcript:", error);
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error("Exception in updateTranscript:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Regenerates the summary for a recording after transcript update
+ * @param recordingId - UUID of the recording to regenerate summary for
+ */
+export const regenerateSummary = async (recordingId: string) => {
+  try {
+    // Mark as processing
+    const { error: updateError } = await supabase
+      .from('voice_summaries')
+      .update({ 
+        is_processing_summary: true,
+        summary_updated_at: new Date().toISOString()
+      })
+      .eq('id', recordingId);
+      
+    if (updateError) {
+      console.error("Error setting summary processing state:", updateError);
+      return { success: false, error: updateError.message };
+    }
+    
+    // Call the edge function to generate summary
+    const { data, error } = await supabase.functions.invoke('generate-summary', {
+      body: { recordingId }
+    });
+    
+    if (error) {
+      console.error("Error calling generate-summary function:", error);
+      return { success: false, error: error.message };
+    }
+    
+    return { success: true, error: null };
+  } catch (error: any) {
+    console.error("Exception in regenerateSummary:", error);
+    return { success: false, error: error.message };
+  }
+};
+
+/**
+ * Creates a summary for a voice recording
+ * @param recordingId - UUID of the recording to summarize
+ */
+export const createSummary = async (recordingId: string) => {
+  try {
+    // Call the edge function to generate summary
+    const { data, error } = await supabase.functions.invoke('generate-summary', {
+      body: { recordingId }
+    });
+    
+    if (error) {
+      console.error("Error generating summary:", error);
+      return { data: null, error: error.message };
+    }
+    
+    return { data, error: null };
+  } catch (error: any) {
+    console.error("Exception in createSummary:", error);
+    return { data: null, error: error.message };
+  }
+};
+
+/**
+ * Generates Text-to-Speech for a summary
+ * @param recordingId - UUID of the recording
+ * @param voiceGender - 'male' or 'female' voice
+ * @param language - 'en' or 'ar' language
+ */
+export const generateTTS = async (
+  recordingId: string, 
+  voiceGender: "male" | "female" = "male", 
+  language: "en" | "ar" = "en"
+) => {
+  try {
+    // Get the summary text first
+    const { data } = await supabase
+      .from('voice_summaries')
+      .select('summary')
+      .eq('id', recordingId)
+      .single();
+      
+    if (!data || !data.summary) {
+      return { success: false, error: "No summary found", audioUrl: null };
+    }
+    
+    // Call the TTS edge function
+    const response = await supabase.functions.invoke('generate-tts', {
+      body: { 
+        text: data.summary,
+        voice: voiceGender === 'male' ? 'echo' : 'alloy',
+        language
+      }
+    });
+    
+    if (response.error) {
+      console.error("Error generating TTS:", response.error);
+      return { success: false, error: response.error.message, audioUrl: null };
+    }
+    
+    // Save the audio URL to the database
+    const { error: updateError } = await supabase
+      .from('voice_summaries')
+      .update({ 
+        summary_audio_url: response.data.audioUrl,
+        summary_audio_updated_at: new Date().toISOString()
+      })
+      .eq('id', recordingId);
+      
+    if (updateError) {
+      console.error("Error saving audio URL:", updateError);
+    }
+    
+    return { 
+      success: true, 
+      error: null, 
+      audioUrl: response.data.audioUrl 
+    };
+  } catch (error: any) {
+    console.error("Exception in generateTTS:", error);
+    return { success: false, error: error.message, audioUrl: null };
+  }
+};
+
+/**
+ * Exports a summary as PDF
+ * @param recordingId - UUID of the recording to export
+ */
+export const exportSummaryAsPDF = async (recordingId: string) => {
+  try {
+    // Get the recording data
+    const { data, error } = await supabase
+      .from('voice_summaries')
+      .select('*')
+      .eq('id', recordingId)
+      .single();
+      
+    if (error || !data) {
+      console.error("Error fetching recording for PDF export:", error);
+      return { pdfBlob: null, error: error?.message || "Recording not found" };
+    }
+    
+    // Call the edge function to generate PDF
+    const response = await supabase.functions.invoke('generate-pdf', {
+      body: { 
+        recordingId,
+        title: data.title,
+        transcript: data.transcript,
+        summary: data.summary,
+        createdAt: data.created_at
+      }
+    });
+    
+    if (response.error) {
+      console.error("Error generating PDF:", response.error);
+      return { pdfBlob: null, error: response.error.message };
+    }
+    
+    // Convert base64 to Blob
+    const base64Data = response.data.pdfBase64;
+    const binaryData = atob(base64Data);
+    const bytes = new Uint8Array(binaryData.length);
+    for (let i = 0; i < binaryData.length; i++) {
+      bytes[i] = binaryData.charCodeAt(i);
+    }
+    const pdfBlob = new Blob([bytes], { type: 'application/pdf' });
+    
+    return { pdfBlob, error: null };
+  } catch (error: any) {
+    console.error("Exception in exportSummaryAsPDF:", error);
+    return { pdfBlob: null, error: error.message };
   }
 };
