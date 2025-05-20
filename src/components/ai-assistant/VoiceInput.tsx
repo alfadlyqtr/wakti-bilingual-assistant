@@ -8,8 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   getBestSupportedMimeType,
   getFileExtension,
-  formatRecordingTime
+  formatRecordingTime,
+  generateRecordingPath
 } from "@/utils/audioUtils";
+import { createVoiceRecordingsBucket } from "@/utils/debugUtils";
 
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
@@ -56,6 +58,19 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
     setIsProcessingRequest(true);
     
     try {
+      // First, ensure the voice_recordings bucket exists with proper configuration
+      const { success: bucketSuccess, error: bucketError } = await createVoiceRecordingsBucket();
+      
+      if (!bucketSuccess) {
+        console.error("Error creating/checking voice_recordings bucket:", bucketError);
+        toast({
+          title: language === 'ar' ? 'خطأ في تهيئة التخزين' : 'Storage initialization error',
+          variant: "destructive"
+        });
+        setIsProcessingRequest(false);
+        return;
+      }
+      
       // Get current user - needed for saving the recording
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -103,14 +118,20 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
           // Generate a UUID for the recording
           const recordingId = crypto.randomUUID(); 
           
-          // Create a unique file name based on timestamp with correct extension
-          const fileName = `${user.id}/${recordingId}.${fileExt}`;
-          console.log(`Uploading to storage with filename: ${fileName}`);
+          // CRITICAL: Generate the correct file path using our utility function
+          // This must follow the pattern: ${userId}/${recordingId}/recording.webm
+          const filePath = generateRecordingPath(user.id, recordingId);
+          
+          console.log(`Uploading to storage with filePath: ${filePath}`);
+          console.log(`User ID: ${user.id}, Recording ID: ${recordingId}`);
           
           // Upload to Supabase
           const { data: uploadData, error: uploadError } = await supabase.storage
             .from('voice_recordings')
-            .upload(fileName, audioBlob);
+            .upload(filePath, audioBlob, {
+              contentType: mimeType,
+              upsert: false
+            });
             
           if (uploadError) {
             console.error('Error uploading recording:', uploadError);
@@ -118,18 +139,19 @@ export const VoiceInput: React.FC<VoiceInputProps> = ({
             setIsProcessingRequest(false);
             toast({
               title: language === 'ar' ? 'فشل في تحميل التسجيل' : 'Failed to upload recording',
+              description: uploadError.message,
               variant: "destructive"
             });
             return;
           }
           
-          console.log('Recording saved to Supabase:', fileName);
+          console.log('Recording saved to Supabase:', filePath);
           
           try {
             // Pass recordingId (UUID) for transcription
             console.log('Sending for transcription with UUID:', recordingId);
             // Update the transcribeAudio function to use the UUID parameter and file path
-            const text = await transcribeAudio(recordingId, fileName);
+            const text = await transcribeAudio(recordingId, filePath);
             setIsTranscribing(false);
             setIsProcessingRequest(false);
             

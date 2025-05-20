@@ -39,12 +39,21 @@ export default function RecordingDialog({
     if (isOpen) {
       // Check and create bucket if needed
       const initBucket = async () => {
-        const { success } = await createVoiceRecordingsBucket();
+        console.log("[RecordingDialog] Initializing storage bucket...");
+        const { success, error } = await createVoiceRecordingsBucket();
+        console.log("[RecordingDialog] Bucket initialization result:", { success, error });
         setBucketReady(success);
+        
+        if (!success) {
+          console.error("[RecordingDialog] Failed to initialize bucket:", error);
+          toast.error(language === 'ar' 
+            ? 'فشل في تهيئة التخزين. يرجى المحاولة مرة أخرى.' 
+            : 'Failed to initialize storage. Please try again.');
+        }
       };
       initBucket();
     }
-  }, [isOpen]);
+  }, [isOpen, language]);
   
   // Clean up on component unmount
   useEffect(() => {
@@ -88,16 +97,16 @@ export default function RecordingDialog({
   const startRecording = async () => {
     try {
       // Check auth status before recording
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) {
+      const { data: authData } = await supabase.auth.getSession();
+      if (!authData.session) {
         console.error("[RecordingDialog] No active session found");
         toast(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام هذه الميزة' : 'You need to be logged in to use this feature');
         return;
       }
       
       console.log("[RecordingDialog] Starting recording with auth:", { 
-        userId: session.session.user.id,
-        isExpired: new Date().getTime() / 1000 > (session.session.expires_at || 0)
+        userId: authData.session.user.id,
+        isExpired: new Date().getTime() / 1000 > (authData.session.expires_at || 0)
       });
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -186,7 +195,7 @@ export default function RecordingDialog({
     }
     
     setIsProcessing(true);
-    setUploadStatus("Creating recording entry...");
+    setUploadStatus(language === 'ar' ? 'إنشاء تسجيل...' : "Creating recording entry...");
     setUploadProgress(10);
     
     try {
@@ -199,6 +208,12 @@ export default function RecordingDialog({
           (new Date().getTime() / 1000 > (authData.session.expires_at || 0)) : 'n/a'
       });
       
+      if (!authData.session || !authData.session.user) {
+        toast.error(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام هذه الميزة' : 'You need to be logged in to use this feature');
+        setIsProcessing(false);
+        return;
+      }
+      
       // Create recording entry in database
       console.log("[RecordingDialog] Creating recording entry...");
       const { recording, error: createError, userId } = await createRecording();
@@ -206,13 +221,13 @@ export default function RecordingDialog({
       
       if (createError || !recording) {
         console.error("[RecordingDialog] Error creating recording entry:", createError);
-        toast(language === 'ar' ? 'فشل في إنشاء تسجيل' : 'Failed to create recording');
+        toast.error(language === 'ar' ? 'فشل في إنشاء تسجيل' : 'Failed to create recording');
         setIsProcessing(false);
         return;
       }
       
       // Combine audio chunks into a single blob
-      setUploadStatus("Preparing audio data...");
+      setUploadStatus(language === 'ar' ? 'تحضير بيانات الصوت...' : "Preparing audio data...");
       setUploadProgress(30);
       console.log(`[RecordingDialog] Combining ${audioChunks.length} audio chunks...`);
       
@@ -240,7 +255,7 @@ export default function RecordingDialog({
       
       if (audioBlob.size === 0) {
         console.error("[RecordingDialog] Empty audio blob created");
-        toast(language === 'ar' ? 'ملف التسجيل فارغ' : 'Recording file is empty');
+        toast.error(language === 'ar' ? 'ملف التسجيل فارغ' : 'Recording file is empty');
         setIsProcessing(false);
         return;
       }
@@ -249,9 +264,12 @@ export default function RecordingDialog({
       const fixedBlob = ensureCorrectMimeType(audioBlob, mimeType);
       
       // Upload audio to storage
-      setUploadStatus("Uploading audio recording...");
+      setUploadStatus(language === 'ar' ? 'جارٍ تحميل التسجيل الصوتي...' : "Uploading audio recording...");
       setUploadProgress(50);
       console.log(`[RecordingDialog] Uploading audio for recording ${recording.id}...`);
+      console.log(`[RecordingDialog] User ID for upload: ${userId}`);
+      console.log(`[RecordingDialog] Recording ID for upload: ${recording.id}`);
+      
       const uploadResult = await uploadAudio(fixedBlob, recording.id, userId);
       const { path, error: uploadError, publicUrl, detailedError } = uploadResult;
       setUploadProgress(70);
@@ -276,7 +294,7 @@ export default function RecordingDialog({
       console.log("[RecordingDialog] Public URL:", publicUrl);
       
       // Transcribe audio
-      setUploadStatus("Starting transcription...");
+      setUploadStatus(language === 'ar' ? 'بدء النسخ...' : "Starting transcription...");
       setUploadProgress(90);
       console.log("[RecordingDialog] Starting transcription...");
       const { error: transcribeError } = await transcribeAudio(recording.id);

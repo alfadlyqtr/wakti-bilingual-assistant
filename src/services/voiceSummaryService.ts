@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath, ensureCorrectMimeType, validateAudioBlob } from "@/utils/audioUtils";
 import { createVoiceRecordingsBucket } from "@/utils/debugUtils";
@@ -35,6 +34,7 @@ export async function createRecording(type = "note", title?: string) {
     const recordingId = crypto.randomUUID();
     
     // Set correct file path structure for storage
+    // CRITICAL: This is the only allowed path structure for RLS to work properly
     const audioPath = generateRecordingPath(authData.session.user.id, recordingId);
     console.log("[VoiceSummary] Generated recording path:", audioPath);
     
@@ -68,6 +68,9 @@ export async function createRecording(type = "note", title?: string) {
 
 /**
  * Upload audio blob to storage
+ * CRITICAL: This function must use the correct path structure:
+ * ${userId}/${recordingId}/recording.webm
+ * 
  * @param audioBlob Audio blob to upload
  * @param recordingId Recording ID to link to
  * @param userId User ID for path construction
@@ -77,10 +80,12 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
   try {
     console.log("[VoiceSummary] Starting upload diagnostics");
     
-    // Ensure bucket exists first
+    // Ensure bucket exists with proper configuration
     const { success: bucketCreated, error: bucketError } = await createVoiceRecordingsBucket();
     if (!bucketCreated) {
       console.error("[VoiceSummary] Failed to create voice_recordings bucket:", bucketError);
+      toast.error("Error creating storage bucket. Please try again.");
+      return { error: bucketError, path: null, publicUrl: null, detailedError: "Bucket creation failed: " + bucketError };
     } else {
       console.log("[VoiceSummary] Voice recordings bucket is ready");
     }
@@ -90,7 +95,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       typeofBlob: typeof audioBlob,
       constructor: audioBlob.constructor.name,
       size: audioBlob.size,
-      type: audioBlob.type,
+      type: audioBlob.type || "No MIME type specified",
       lastModified: new Date().toISOString()
     });
     
@@ -98,6 +103,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     const validation = validateAudioBlob(audioBlob);
     if (!validation.valid) {
       console.error(`[VoiceSummary] ${validation.reason}`);
+      toast.error(`Invalid audio data: ${validation.reason}`);
       return { 
         error: validation.reason, 
         path: null, 
@@ -106,7 +112,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       };
     }
     
-    // Ensure correct MIME type
+    // Ensure correct MIME type - critical for bucket policy validation
     const correctedBlob = ensureCorrectMimeType(audioBlob, 'audio/webm');
     
     // Check authentication status
@@ -120,11 +126,13 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     
     if (authError) {
       console.error("[VoiceSummary] Authentication error before upload:", authError);
+      toast.error("Authentication error. Please try logging in again.");
       return { error: "Authentication error: " + authError.message, path: null, publicUrl: null };
     }
     
     if (!authData.session || !authData.session.user) {
       console.error("[VoiceSummary] No active session found before upload");
+      toast.error("You must be logged in to upload recordings.");
       return { error: "Not authenticated", path: null, publicUrl: null };
     }
     
@@ -134,50 +142,20 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
         providedUserId: userId, 
         authenticatedUserId: authData.session.user.id 
       });
+      toast.error("User authentication mismatch. Please try logging in again.");
       return { error: "User ID mismatch", path: null, publicUrl: null };
     }
     
-    // Use correct file path structure
-    const filePath = `${userId}/${recordingId}/recording.webm`;
-    console.log(`[VoiceSummary] Upload destination:`, { 
+    // CRITICAL: Use the proper file path structure required by RLS
+    // Must follow pattern: ${userId}/${recordingId}/recording.webm
+    const filePath = generateRecordingPath(userId, recordingId);
+    console.log(`[VoiceSummary] FINAL UPLOAD PATH:`, { 
       bucket: 'voice_recordings',
       filePath: filePath,
-      fullPath: `voice_recordings/${filePath}`
+      fullPath: `voice_recordings/${filePath}`,
+      userId,
+      recordingId
     });
-    
-    // Log access token info (without exposing the actual token)
-    console.log("[VoiceSummary] Access token info:", {
-      exists: !!authData.session.access_token,
-      length: authData.session.access_token?.length || 0,
-      expiresAt: authData.session.expires_at ? new Date(authData.session.expires_at * 1000).toISOString() : 'unknown'
-    });
-    
-    // First check if bucket exists
-    console.log("[VoiceSummary] Checking storage buckets...");
-    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-    if (bucketsError) {
-      console.error("[VoiceSummary] Error listing buckets:", bucketsError);
-      return { error: "Storage error: " + bucketsError.message, path: null, publicUrl: null };
-    }
-    
-    console.log("[VoiceSummary] Available buckets:", buckets.map(b => ({ name: b.name, id: b.id, public: b.public })));
-    const bucketExists = buckets.some(b => b.name === 'voice_recordings');
-    if (!bucketExists) {
-      console.error("[VoiceSummary] voice_recordings bucket does not exist");
-      
-      // Try to create the bucket
-      const { success: createdBucket, error: createError } = await createVoiceRecordingsBucket();
-      if (!createdBucket) {
-        return { 
-          error: "Storage bucket 'voice_recordings' does not exist and could not be created", 
-          path: null, 
-          publicUrl: null,
-          detailedError: createError
-        };
-      }
-      
-      console.log("[VoiceSummary] Created voice_recordings bucket successfully");
-    }
     
     // Upload with retry mechanism
     let uploadResult;
@@ -186,7 +164,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     
     while (retries < maxRetries) {
       try {
-        console.log(`[VoiceSummary] Upload attempt ${retries + 1}/${maxRetries}`);
+        console.log(`[VoiceSummary] Upload attempt ${retries + 1}/${maxRetries} to path: ${filePath}`);
         
         // Clear any previous result
         uploadResult = null;
@@ -220,15 +198,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
         
         // If error, try again with a slightly different approach based on error type
         if (uploadError.message?.includes('permission denied')) {
-          console.log("[VoiceSummary] Permission error, trying with different contentType setting");
-          retries++;
-          await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
-          continue;
-        }
-        
-        if (uploadError.message?.includes('not found')) {
-          console.log("[VoiceSummary] Bucket not found error, attempting to create bucket again");
-          await createVoiceRecordingsBucket();
+          console.log("[VoiceSummary] Permission error, retrying after delay");
           retries++;
           await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retrying
           continue;
@@ -250,14 +220,22 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     const { data: uploadData, error: uploadError } = uploadResult || { data: null, error: new Error("Upload failed after retries") };
     
     if (uploadError) {
-      console.error("[VoiceSummary] Error uploading audio after all retries:", uploadError);
+      console.error("[VoiceSummary] ERROR UPLOADING AUDIO AFTER ALL RETRIES:", uploadError);
+      
+      // Format a detailed error message for debugging
       let detailedError = `Upload failed: ${uploadError.message || 'Unknown error'}`;
       
       if (uploadError.message?.includes('permission denied')) {
-        detailedError += " - This appears to be a permissions issue. Check RLS policies.";
+        detailedError = `Permission denied error: Your user account (${userId}) doesn't have permission to upload to ${filePath}. This is likely due to RLS policy issues.`;
+        toast.error("Permission denied. Your user account doesn't have proper access.");
       } else if (uploadError.message?.includes('not found')) {
-        detailedError += " - Bucket may not exist or path is incorrect.";
+        detailedError = `Bucket or path not found: ${filePath}. Bucket may not exist or path is incorrect.`;
+        toast.error("Storage bucket not found. Please contact support.");
+      } else {
+        toast.error(`Upload error: ${uploadError.message || 'Unknown error'}`);
       }
+      
+      console.error("[VoiceSummary] DETAILED ERROR:", detailedError);
       
       return { error: uploadError, path: null, publicUrl: null, detailedError };
     }
@@ -285,6 +263,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     
     if (updateError) {
       console.error("[VoiceSummary] Error updating record with audio URL:", updateError);
+      toast.error("Upload successful but failed to update database record.");
       return { error: updateError, path: filePath, publicUrl: urlData.publicUrl, detailedError: "Upload succeeded but failed to update database" };
     }
     
@@ -292,6 +271,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     return { path: filePath, error: null, publicUrl: urlData.publicUrl };
   } catch (error) {
     console.error("[VoiceSummary] Uncaught exception in uploadAudio:", error);
+    toast.error("Unexpected error during upload.");
     return { error, path: null, publicUrl: null, detailedError: "Uncaught exception: " + (error instanceof Error ? error.message : String(error)) };
   }
 }

@@ -63,8 +63,13 @@ export const getFileExtension = (mimeType: string): string => {
 
 /**
  * Generates the standardized file path for audio recordings
+ * CRITICAL: This must follow the pattern ${userId}/${recordingId}/recording.webm
+ * This is required for RLS policies to work correctly
  */
 export const generateRecordingPath = (userId: string, recordingId: string): string => {
+  // IMPORTANT: This path is critical and must not be modified without updating RLS policies
+  // The path structure must be exactly: ${userId}/${recordingId}/recording.webm
+  // This allows RLS to correctly enforce access based on auth.uid()
   return `${userId}/${recordingId}/recording.webm`;
 };
 
@@ -151,14 +156,17 @@ export const validateAudioBlob = (blob: Blob): { valid: boolean; reason?: string
     return { valid: false, reason: "Blob is empty (0 bytes)" };
   }
   
-  // Check if the MIME type is at least some kind of audio or application type
-  if (!blob.type.includes('audio/') && 
-      !blob.type.includes('application/') && 
-      blob.type !== 'text/plain' && // Allow text/plain as some browsers misidentify the type
-      blob.type !== '') { // Allow empty type as we'll correct it
+  // Check if the MIME type is at least some kind of audio type
+  // Note: We only allow specific audio MIME types that match our bucket configuration
+  const validAudioTypes = ['audio/webm', 'audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg'];
+  const hasValidType = validAudioTypes.includes(blob.type) || 
+                        blob.type === '' || // Empty type will be corrected by ensureCorrectMimeType
+                        blob.type === 'application/octet-stream'; // Some browsers use this generic type
+  
+  if (!hasValidType) {
     return { 
       valid: false, 
-      reason: `Invalid MIME type: ${blob.type}` 
+      reason: `Invalid MIME type: ${blob.type}. Must be one of: ${validAudioTypes.join(', ')}` 
     };
   }
   
