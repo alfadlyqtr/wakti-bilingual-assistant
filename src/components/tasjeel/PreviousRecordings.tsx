@@ -134,13 +134,13 @@ const RecordingDialog: React.FC<{
     if (!record) return;
     
     try {
+      // Fix: Pass content as a string instead of an array of objects
       await generatePDF({
         title: record.title || "Tasjeel Recording",
-        content: { 
-          text: [
-            { label: "Transcription", content: record.transcription || "No transcription available" },
-            { label: "Summary", content: record.summary || "No summary available" }
-          ]
+        content: {
+          text: record.transcription && record.summary 
+            ? `Transcription:\n${record.transcription}\n\nSummary:\n${record.summary}`
+            : record.transcription || record.summary || "No content available"
         },
         metadata: {
           createdAt: record.created_at,
