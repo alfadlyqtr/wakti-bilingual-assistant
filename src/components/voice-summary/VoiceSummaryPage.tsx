@@ -14,6 +14,8 @@ export default function VoiceSummaryPage() {
   const { language } = useTheme();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { user } = useAuth();
+  const [recordings, setRecordings] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Log environment state on component mount
   useEffect(() => {
@@ -48,17 +50,58 @@ export default function VoiceSummaryPage() {
               description: permissionsCheck.uploadError || "Unknown permission error"
             });
         }
+        
+        // Fetch recordings
+        fetchRecordings();
       } catch (error) {
         console.error("[VoiceSummaryPage] Environment check error:", error);
+        setIsLoading(false);
       }
     };
     
     checkEnvironment();
   }, [language]);
   
+  const fetchRecordings = async () => {
+    try {
+      setIsLoading(true);
+      const { data: authData } = await supabase.auth.getSession();
+      
+      if (!authData.session) {
+        console.log("[VoiceSummaryPage] No authenticated session, cannot fetch recordings");
+        setIsLoading(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('voice_summaries')
+        .select('*')
+        .eq('user_id', authData.session.user.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) {
+        console.error("[VoiceSummaryPage] Error fetching recordings:", error);
+        toast.error(language === 'ar' ? 'فشل في جلب التسجيلات' : 'Failed to fetch recordings');
+      } else {
+        console.log("[VoiceSummaryPage] Fetched recordings:", data);
+        setRecordings(data || []);
+      }
+    } catch (error) {
+      console.error("[VoiceSummaryPage] Exception in fetchRecordings:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   const handleRecordingCreated = (recordingId: string) => {
     console.log("[VoiceSummaryPage] New recording created:", recordingId);
     toast.success(language === 'ar' ? 'تم إنشاء تسجيل جديد' : 'New recording created');
+    fetchRecordings();
+  };
+  
+  const handleRecordingDeleted = (id: string) => {
+    console.log("[VoiceSummaryPage] Recording deleted:", id);
+    setRecordings(prev => prev.filter(recording => recording.id !== id));
   };
   
   return (
@@ -100,7 +143,11 @@ export default function VoiceSummaryPage() {
         />
       )}
       
-      <VoiceSummaryArchive />
+      <VoiceSummaryArchive 
+        recordings={recordings} 
+        onRecordingDeleted={handleRecordingDeleted} 
+        isRefreshing={isLoading}
+      />
       
       <div className="bg-muted/50 rounded-lg p-4 border border-muted flex gap-3">
         <div className="text-amber-500 mt-1">

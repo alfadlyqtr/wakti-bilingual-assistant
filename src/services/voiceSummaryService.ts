@@ -172,19 +172,14 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       hasError: !!uploadError,
       errorDetails: uploadError ? {
         message: uploadError.message,
-        code: uploadError.code,
         name: uploadError.name,
-        status: uploadError.status || 'unknown',
-        details: uploadError.details || 'none'
+        details: typeof uploadError === 'object' ? JSON.stringify(uploadError) : 'none'
       } : 'none'
     });
     
     if (uploadError) {
       console.error("[VoiceSummary] Error uploading audio:", uploadError);
       let detailedError = `Upload failed: ${uploadError.message}`;
-      if (uploadError.status) {
-        detailedError += ` (Status ${uploadError.status})`;
-      }
       return { error: uploadError, path: null, publicUrl: null, detailedError };
     }
     
