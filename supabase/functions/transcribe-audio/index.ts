@@ -1,21 +1,71 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+console.log('Edge Function: transcribe-audio initializing');
 
 serve(async (req) => {
+  console.log('Received request:', req.method, req.url);
+  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('Handling OPTIONS request');
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Validate environment variables first
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+
+    console.log('Environment check:', {
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseServiceKey: !!supabaseServiceKey,
+      hasOpenAIKey: !!openaiApiKey
+    });
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing Supabase credentials');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Server configuration error', 
+          details: 'Missing Supabase credentials' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!openaiApiKey) {
+      console.error('Missing OpenAI API key');
+      return new Response(
+        JSON.stringify({ 
+          error: 'Server configuration error', 
+          details: 'Missing OpenAI API key' 
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse request body
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body parsed successfully');
+    } catch (error) {
+      console.error('Failed to parse request JSON:', error);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid request format', 
+          details: 'Could not parse JSON body' 
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Get the audio file URL from the request body
-    const { audioUrl } = await req.json();
+    const { audioUrl } = requestBody;
 
     if (!audioUrl) {
       console.error('Missing audioUrl in request');
@@ -28,40 +78,44 @@ serve(async (req) => {
     console.log('Processing audio URL:', audioUrl);
 
     // Create a Supabase client with the service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Missing Supabase credentials');
-      return new Response(
-        JSON.stringify({ error: 'Server configuration error' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    console.log('Supabase client created');
 
     // Extract the path from the storage URL
     let filePath = '';
     try {
       // Format: https://[project-ref].supabase.co/storage/v1/object/public/tasjeel_recordings/[user-id]/[filename].webm
       const storageUrl = new URL(audioUrl);
+      console.log('Storage URL parsed:', storageUrl.toString());
+      console.log('Storage pathname:', storageUrl.pathname);
+      
       const pathParts = storageUrl.pathname.split('/');
+      console.log('Path parts:', pathParts);
+      
+      // Find the index of "public" and get everything after it
+      const publicIndex = pathParts.indexOf('public');
+      
+      if (publicIndex === -1) {
+        throw new Error('Invalid storage URL format - missing "public" path segment');
+      }
       
       // Filter out empty strings and get the path after "public/"
-      filePath = pathParts.filter(Boolean).slice(pathParts.indexOf('public') + 1).join('/');
-      
+      filePath = pathParts.filter(Boolean).slice(publicIndex + 1).join('/');
       console.log('Extracted file path:', filePath);
     } catch (error) {
       console.error('Error parsing audio URL:', error);
       return new Response(
-        JSON.stringify({ error: 'Invalid audio URL format' }),
+        JSON.stringify({ 
+          error: 'Invalid audio URL format', 
+          details: error.message,
+          audioUrl: audioUrl
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Get the audio file from storage
-    console.log('Downloading from bucket:', filePath);
+    console.log('Downloading from bucket "tasjeel_recordings", path:', filePath);
     const { data: audioData, error: audioError } = await supabase.storage
       .from('tasjeel_recordings')
       .download(filePath);
@@ -69,7 +123,11 @@ serve(async (req) => {
     if (audioError) {
       console.error('Error downloading audio:', audioError);
       return new Response(
-        JSON.stringify({ error: 'Failed to access audio file', details: audioError }),
+        JSON.stringify({ 
+          error: 'Failed to access audio file', 
+          details: audioError,
+          path: filePath
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -77,7 +135,10 @@ serve(async (req) => {
     if (!audioData) {
       console.error('No audio data found');
       return new Response(
-        JSON.stringify({ error: 'No audio data found' }),
+        JSON.stringify({ 
+          error: 'No audio data found',
+          path: filePath 
+        }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -89,16 +150,7 @@ serve(async (req) => {
     formData.append('file', new Blob([audioData]), 'audio.webm');
     formData.append('model', 'whisper-1');
 
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      console.error('Missing OpenAI API key');
-      return new Response(
-        JSON.stringify({ error: 'Server configuration error: Missing API key' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('Sending to OpenAI Whisper API');
+    console.log('FormData created, sending to OpenAI Whisper API');
     
     // Send the audio to OpenAI Whisper API
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -111,10 +163,13 @@ serve(async (req) => {
 
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
-      console.error('OpenAI API error:', errorText);
+      console.error('OpenAI API error:', openaiResponse.status, errorText);
       return new Response(
-        JSON.stringify({ error: 'Transcription failed', details: errorText }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          error: 'Transcription failed', 
+          details: `Status: ${openaiResponse.status}, Message: ${errorText}`
+        }),
+        { status: openaiResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -126,9 +181,13 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Transcription error:', error);
+    console.error('Unhandled error in transcription function:', error);
     return new Response(
-      JSON.stringify({ error: 'Transcription failed', details: error.message }),
+      JSON.stringify({ 
+        error: 'Transcription failed', 
+        details: error.message,
+        stack: error.stack
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
