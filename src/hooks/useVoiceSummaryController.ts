@@ -118,7 +118,7 @@ export default function useVoiceSummaryController() {
       
       // Create a new recording entry in the database
       // Using the current recordingType state value from RecordingDialog
-      const { recording, error: createError } = await voiceSummaryService.createRecording();
+      const { recording, error: createError, userId } = await voiceSummaryService.createRecording();
       
       if (createError) {
         console.error("Error creating recording:", createError);
@@ -132,8 +132,8 @@ export default function useVoiceSummaryController() {
       setRecordingId(recording.id);
       setProcessingStep("transcribing");
       
-      // Upload the audio blob to storage
-      const { path, error: uploadError } = await voiceSummaryService.uploadAudio(audioBlob, recording.id);
+      // Upload the audio blob to storage with the userId for path construction
+      const { path, error: uploadError, publicUrl } = await voiceSummaryService.uploadAudio(audioBlob, recording.id, userId);
       
       if (uploadError) {
         console.error("Error uploading audio:", uploadError);
@@ -143,6 +143,9 @@ export default function useVoiceSummaryController() {
         setIsLoading(false);
         return;
       }
+      
+      console.log("Audio uploaded successfully to:", path);
+      console.log("Public URL:", publicUrl);
       
       // Get recording status using the lib/utils function
       const statusResponse = await getRecordingStatus(recording.id);

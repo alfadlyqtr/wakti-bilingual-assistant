@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,9 @@ interface RecordingDialogProps {
   onClose: () => void;
   onRecordingCreated: (recordingId: string) => void;
 }
+
+// Maximum recording duration in seconds (2 hours = 7200 seconds)
+const MAX_RECORDING_DURATION = 7200;
 
 export default function RecordingDialog({ 
   isOpen, 
@@ -92,11 +94,12 @@ export default function RecordingDialog({
     startRecording(recordingType);
   };
   
-  // Format time as MM:SS
+  // Format time as MM:SS or HH:MM:SS for longer durations
   const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
     const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
+    return hours > 0 ? `${hours}:${mins}:${secs}` : `${mins}:${secs}`;
   };
   
   // Get the current status text
@@ -178,7 +181,7 @@ export default function RecordingDialog({
             {/* Show timer during recording */}
             {state.recordingState === "recording" && (
               <div className="text-xl font-mono mt-2">
-                {formatTime(state.recordingTime)} / {formatTime(120)}
+                {formatTime(state.recordingTime)} / {formatTime(MAX_RECORDING_DURATION)}
               </div>
             )}
             

@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -16,18 +17,10 @@ export async function createRecording(type = "note", title?: string) {
     // Generate a UUID for the recording
     const recordingId = crypto.randomUUID();
     
-    // Set file path and URL
-    const audioPath = `audio/${recordingId}.webm`;
+    // Set correct file path structure for storage
+    const audioPath = `${user.user.id}/${recordingId}/recording.webm`;
     
-    // Use getPublicUrl method instead of directly accessing storageUrl
-    const { data: { publicUrl: audioUrl } } = supabase.storage
-      .from('voice-recordings')
-      .getPublicUrl(audioPath);
-    
-    // Set expiration date (10 days from now)
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 10);
-
+    // Create record first, we'll update the URL after successful upload
     const { data, error } = await supabase
       .from('voice_summaries')
       .insert({
@@ -35,8 +28,8 @@ export async function createRecording(type = "note", title?: string) {
         user_id: user.user.id,
         title: title || "Untitled Recording",
         type: type,
-        expires_at: expiresAt.toISOString(),
-        audio_url: audioUrl,
+        expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+        audio_url: "", // Will be updated after upload
         is_processing_transcript: true
       })
       .select('id')
@@ -47,7 +40,7 @@ export async function createRecording(type = "note", title?: string) {
       return { error };
     }
 
-    return { recording: data, error: null };
+    return { recording: data, error: null, userId: user.user.id };
   } catch (error) {
     console.error("Exception in createRecording:", error);
     return { error };
@@ -58,14 +51,16 @@ export async function createRecording(type = "note", title?: string) {
  * Upload audio blob to storage
  * @param audioBlob Audio blob to upload
  * @param recordingId Recording ID to link to
+ * @param userId User ID for path construction
  * @returns Promise with path and error
  */
-export async function uploadAudio(audioBlob: Blob, recordingId: string) {
+export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: string) {
   try {
-    const filePath = `audio/${recordingId}.webm`;
+    // Use correct bucket name with underscore and proper path structure
+    const filePath = `${userId}/${recordingId}/recording.webm`;
     
     const { data, error } = await supabase.storage
-      .from('voice-recordings')
+      .from('voice_recordings')
       .upload(filePath, audioBlob, {
         contentType: 'audio/webm',
         upsert: true
@@ -76,7 +71,25 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string) {
       return { error, path: null };
     }
 
-    return { path: filePath, error: null };
+    // Only get public URL after successful upload
+    const { data: { publicUrl } } = supabase.storage
+      .from('voice_recordings')
+      .getPublicUrl(filePath);
+    
+    // Update the record with the correct audio URL
+    const { error: updateError } = await supabase
+      .from('voice_summaries')
+      .update({
+        audio_url: publicUrl
+      })
+      .eq('id', recordingId);
+    
+    if (updateError) {
+      console.error("Error updating record with audio URL:", updateError);
+      return { error: updateError, path: null };
+    }
+
+    return { path: filePath, error: null, publicUrl };
   } catch (error) {
     console.error("Exception in uploadAudio:", error);
     return { error, path: null };
