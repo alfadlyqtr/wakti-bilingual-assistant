@@ -1,24 +1,18 @@
-// Update MobileNav.tsx to remove voice summary links
-// Only updating the file if it exists and contains voice summary references
-// If this file doesn't exist or doesn't contain voice summary references, this will have no effect
+
+// MobileNav.tsx with dashboard icon removed
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Home, Calendar, CheckSquare, Bell, CalendarClock, Sparkles } from "lucide-react";
+import { Calendar, CheckSquare, Bell, CalendarClock, Sparkles } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - removing voice summary
+  // Navigation items - removed dashboard/home icon
   const navItems = [
-    {
-      name: language === 'ar' ? 'الرئيسية' : 'Dashboard',
-      path: '/dashboard',
-      icon: 'home',
-    },
     {
       name: language === 'ar' ? 'المهام' : 'Tasks',
       path: '/tasks',
@@ -47,7 +41,6 @@ export function MobileNav() {
   ];
   
   const iconMap: { [key: string]: React.ComponentType<any> } = {
-    home: Home,
     calendar: Calendar,
     'check-square': CheckSquare,
     bell: Bell,
@@ -59,7 +52,7 @@ export function MobileNav() {
     <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
       <ul className="flex justify-around items-center h-16">
         {navItems.map((item) => {
-          const IconComponent = iconMap[item.icon] || Home;
+          const IconComponent = iconMap[item.icon] || CheckSquare;
           const isActive = pathname === item.path;
           
           return (
