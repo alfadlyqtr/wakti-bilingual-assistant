@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo3D } from "@/components/Logo3D";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage } = useTheme();
@@ -37,7 +38,8 @@ export function AppHeader() {
     <div className="bg-background border-b sticky top-0 z-50">
       <div className="container flex h-16 items-center justify-between py-4">
         <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
-          Wakti.AI
+          <Logo3D size="sm" />
+          <span className="hidden sm:inline-block">Wakti.AI</span>
         </Link>
         <div className="flex items-center space-x-4">
           <Button variant="outline" size="icon" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
