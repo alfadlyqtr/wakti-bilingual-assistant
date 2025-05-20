@@ -1,4 +1,3 @@
-
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -55,13 +54,20 @@ export const callEdgeFunctionWithRetry = async <T>(
     retryDelay
   });
   
-  // Explicitly log the request payload if it's related to audio transcription
+  // Log specific details for different functions
   if (functionName === 'transcribe-audio' && body) {
-    // Type assertion to tell TypeScript that body has audioUrl when functionName is 'transcribe-audio'
+    // Type assertion for the audio body
     const audioBody = body as TranscribeAudioPayload;
     console.log(`transcribe-audio request payload:`, {
       audioUrlStart: audioBody.audioUrl ? `${audioBody.audioUrl.substring(0, 30)}...` : 'undefined',
       audioUrlLength: audioBody.audioUrl ? audioBody.audioUrl.length : 0
+    });
+  } else if (functionName === 'summarize-text' && body) {
+    // Log summarize-text specific details
+    console.log(`summarize-text request payload:`, {
+      hasTranscript: !!body.transcript,
+      transcriptLength: body.transcript ? body.transcript.length : 0,
+      language: body.language
     });
   }
   
@@ -69,81 +75,47 @@ export const callEdgeFunctionWithRetry = async <T>(
     try {
       console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
       
-      // Direct fetch approach for transcribe-audio to bypass potential issues
-      if (functionName === 'transcribe-audio') {
-        const fullUrl = `${supabaseUrl}/functions/v1/${functionName}`;
-        
-        console.log(`Using direct fetch for transcribe-audio to: ${fullUrl}`);
-        
-        const fetchOptions: RequestInit = {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`,
-            ...headers
-          },
-          body: JSON.stringify(body)
-        };
-        
-        console.log('Fetch options:', {
-          method: fetchOptions.method,
-          hasBody: !!fetchOptions.body,
-          headersKeys: Object.keys(fetchOptions.headers || {})
-        });
-        
-        const startTime = Date.now();
-        const response = await fetch(fullUrl, fetchOptions);
-        const duration = Date.now() - startTime;
-        
-        console.log(`Direct fetch to "${functionName}" response:`, {
-          status: response.status,
-          ok: response.ok,
-          statusText: response.statusText,
-          time: `${duration}ms`
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Error response from "${functionName}":`, errorText);
-          throw new Error(`HTTP error ${response.status}: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        return data as T;
-      }
+      let fullUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+      console.log(`Using direct fetch to: ${fullUrl}`);
       
-      // Standard Supabase function invocation for other functions
-      const startTime = Date.now();
-      const { data, error } = await supabase.functions.invoke(functionName, {
-        body: body,
-        headers: headers
+      const fetchOptions: RequestInit = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`,
+          ...headers
+        },
+        body: JSON.stringify(body)
+      };
+      
+      console.log('Fetch options:', {
+        method: fetchOptions.method,
+        hasBody: !!fetchOptions.body,
+        headersKeys: Object.keys(fetchOptions.headers || {})
       });
+      
+      const startTime = Date.now();
+      const response = await fetch(fullUrl, fetchOptions);
       const duration = Date.now() - startTime;
       
-      console.log(`Edge function "${functionName}" response time: ${duration}ms`);
-      
-      if (error) {
-        console.error(`Edge function "${functionName}" error (attempt ${attempt + 1}/${maxRetries}):`, error);
-        console.error(`Error details:`, {
-          message: error.message,
-          name: error.name,
-          code: (error as any).code,
-          status: (error as any).status
-        });
-        lastError = error;
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, retryDelay * (attempt + 1)));
-        continue;
-      }
-      
-      console.log(`Edge function "${functionName}" succeeded:`, {
-        hasData: !!data,
-        dataType: data ? typeof data : null
+      console.log(`Direct fetch to "${functionName}" response:`, {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+        time: `${duration}ms`
       });
       
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error response from "${functionName}":`, errorText);
+        throw new Error(`HTTP error ${response.status}: ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Edge function "${functionName}" response data:`, data);
       return data as T;
     } catch (error: any) {
-      console.error(`Network error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, error);
+      console.error(`Error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, error);
       console.error(`Error details:`, {
         message: error.message,
         name: error.name,

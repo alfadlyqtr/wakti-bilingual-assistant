@@ -13,9 +13,13 @@ serve(async (req) => {
   }
 
   try {
+    console.log('summarize-text function called');
+    
     const { transcript, language } = await req.json();
+    console.log('Request payload:', { hasTranscript: !!transcript, language, transcriptLength: transcript?.length });
 
     if (!transcript) {
+      console.error('Error: Missing transcript');
       return new Response(
         JSON.stringify({ error: 'Transcript is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -42,6 +46,17 @@ serve(async (req) => {
 
     // Call DeepSeek API for summarization
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
+    
+    if (!deepseekApiKey) {
+      console.error('Error: DEEPSEEK_API_KEY is not set');
+      return new Response(
+        JSON.stringify({ error: 'DeepSeek API key is not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    console.log('Calling DeepSeek API...');
+    
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -75,6 +90,8 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+    console.log('DeepSeek API response received successfully');
+    
     const summary = data.choices[0].message.content;
 
     return new Response(
@@ -84,7 +101,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Summarization error:', error);
     return new Response(
-      JSON.stringify({ error: 'Summarization failed', details: error.message }),
+      JSON.stringify({ error: 'Summarization failed', details: error.message, stack: error.stack }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

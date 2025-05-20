@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -301,7 +300,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Summarize text function
+  // Summarize text function with improved error handling
   const summarizeText = async () => {
     try {
       if (!transcript.trim()) {
@@ -310,15 +309,25 @@ const Tasjeel: React.FC = () => {
       
       setIsSummarizing(true);
       
-      const { summary: result } = await callEdgeFunctionWithRetry<{ summary: string }>(
+      console.log('Starting text summarization');
+      console.log('Transcript length:', transcript.length);
+      console.log('Current language:', language);
+      
+      const response = await callEdgeFunctionWithRetry<{ summary: string } | { error: string, details?: string }>(
         "summarize-text",
         { body: { transcript, language } }
       );
       
-      setSummary(result);
+      console.log('Summarize response:', response);
+      
+      if ('error' in response) {
+        throw new Error(`Summarization failed: ${response.error}${response.details ? ` - ${response.details}` : ''}`);
+      }
+      
+      setSummary(response.summary);
     } catch (error) {
       console.error("Error summarizing text:", error);
-      toast(error.message || "An error occurred while summarizing the text");
+      toast(t.error + ": " + (error.message || "An error occurred while summarizing the text"));
     } finally {
       setIsSummarizing(false);
     }
