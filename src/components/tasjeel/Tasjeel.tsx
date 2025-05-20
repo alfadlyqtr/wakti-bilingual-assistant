@@ -7,7 +7,6 @@ import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageContainer } from "@/components/PageContainer";
 import { Separator } from "@/components/ui/separator";
 import { generatePDF } from "@/utils/pdfUtils";
@@ -22,8 +21,6 @@ import {
   PlayCircle, 
   PauseCircle, 
   FileText, 
-  Male, 
-  Female,
   RefreshCw,
   ClipboardCopy,
   Volume2
@@ -185,7 +182,6 @@ const Tasjeel: React.FC = () => {
     } catch (error) {
       console.error("Error accessing microphone:", error);
       toast({
-        title: t.error,
         description: t.noMicrophoneAccess,
         variant: "destructive",
       });
@@ -242,7 +238,6 @@ const Tasjeel: React.FC = () => {
     } catch (error) {
       console.error("Error processing recording:", error);
       toast({
-        title: t.error,
         description: error.message || "An error occurred while processing the recording",
         variant: "destructive",
       });
@@ -265,7 +260,6 @@ const Tasjeel: React.FC = () => {
     } catch (error) {
       console.error("Error transcribing audio:", error);
       toast({
-        title: t.error,
         description: error.message || "An error occurred while transcribing the audio",
         variant: "destructive",
       });
@@ -292,7 +286,6 @@ const Tasjeel: React.FC = () => {
     } catch (error) {
       console.error("Error summarizing text:", error);
       toast({
-        title: t.error,
         description: error.message || "An error occurred while summarizing the text",
         variant: "destructive",
       });
@@ -317,13 +310,12 @@ const Tasjeel: React.FC = () => {
       
       setAudioBase64(audio);
       toast({
-        title: t.audioGenerationComplete,
+        description: t.audioGenerationComplete,
         variant: "default",
       });
     } catch (error) {
       console.error("Error generating audio:", error);
       toast({
-        title: t.error,
         description: error.message || "An error occurred while generating the audio",
         variant: "destructive",
       });
@@ -336,7 +328,7 @@ const Tasjeel: React.FC = () => {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({
-      title: t.copiedToClipboard,
+      description: t.copiedToClipboard,
       duration: 2000,
     });
   };
@@ -364,7 +356,7 @@ const Tasjeel: React.FC = () => {
   const downloadAudio = () => {
     if (audioBase64) {
       toast({
-        title: t.preparingDownload,
+        description: t.preparingDownload,
         duration: 2000,
       });
       
@@ -375,7 +367,7 @@ const Tasjeel: React.FC = () => {
       link.click();
       
       toast({
-        title: t.downloadComplete,
+        description: t.downloadComplete,
         duration: 2000,
       });
     }
@@ -386,20 +378,22 @@ const Tasjeel: React.FC = () => {
     try {
       await generatePDF({
         title: t.summaryLabel,
-        content: summary,
-        filename: `tasjeel-summary-${new Date().toISOString().slice(0, 10)}`,
-        logo: <Logo3D size="sm" />,
-        additionalFooterText: "Powered by WAKTI",
+        content: { text: summary },
+        metadata: {
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          type: "Tasjeel Summary"
+        },
+        language: language as 'en' | 'ar'
       });
       
       toast({
-        title: t.pdfExported,
+        description: t.pdfExported,
         duration: 2000,
       });
     } catch (error) {
       console.error("Error exporting to PDF:", error);
       toast({
-        title: t.error,
         description: error.message || "An error occurred while exporting to PDF",
         variant: "destructive",
       });
@@ -535,7 +529,6 @@ const Tasjeel: React.FC = () => {
                       className="flex-1"
                       onClick={() => setSelectedVoice("male")}
                     >
-                      <Male className="mr-2 h-4 w-4" />
                       {t.male}
                     </Button>
                     <Button
@@ -543,7 +536,6 @@ const Tasjeel: React.FC = () => {
                       className="flex-1"
                       onClick={() => setSelectedVoice("female")}
                     >
-                      <Female className="mr-2 h-4 w-4" />
                       {t.female}
                     </Button>
                   </div>
