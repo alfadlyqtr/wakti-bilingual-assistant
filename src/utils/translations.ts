@@ -1,3 +1,4 @@
+
 import { Language, TranslationKey } from "./translationTypes";
 
 export const translations: Record<Language, Record<TranslationKey, string>> = {
@@ -172,7 +173,67 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     new_recording: "New Recording",
     pause: "Pause",
     play_summary: "Play Summary",
-    go_back: "Go Back"
+    go_back: "Go Back",
+    
+    // Added missing keys
+    // MobileNav
+    ai: "AI",
+    
+    // ThemeLanguageToggle
+    lightMode: "Light Mode",
+    darkMode: "Dark Mode",
+    arabic: "العربية",
+    english: "English",
+    
+    // ProfileImageUpload
+    profileImageUpdated: "Profile image updated",
+    error: "Error",
+    profileImage: "Profile Image",
+    uploading: "Uploading...",
+    changeImage: "Change Image",
+    
+    // UserMenu
+    user: "User",
+    
+    // Calendar components
+    noEvents: "No events",
+    notesLabel: "Notes",
+    titleRequired: "Title is required",
+    dateRequired: "Date is required",
+    editNote: "Edit Note",
+    createNote: "Create Note",
+    title: "Title",
+    titlePlaceholder: "Enter a title",
+    date: "Date",
+    description: "Description",
+    descriptionPlaceholder: "Enter a description",
+    monthView: "Month View",
+    month: "Month",
+    weekView: "Week View",
+    week: "Week",
+    yearView: "Year View",
+    year: "Year",
+    create: "Create",
+    
+    // Contacts components
+    contactUnblocked: "Contact unblocked",
+    errorUnblockingContact: "Error unblocking contact",
+    errorLoadingBlockedUsers: "Error loading blocked users",
+    noBlockedUsers: "No blocked users",
+    noBlockedUsersDescription: "You haven't blocked any users",
+    errorCreatingConversation: "Error creating conversation",
+    contactBlocked: "Contact blocked",
+    errorBlockingContact: "Error blocking contact",
+    messageStarted: "Message started",
+    removedFromFavorites: "Removed from favorites",
+    addedToFavorites: "Added to favorites",
+    errorLoadingContacts: "Error loading contacts",
+    noContacts: "No contacts",
+    searchToAddContacts: "Search to add contacts",
+    requestAccepted: "Request accepted",
+    errorAcceptingRequest: "Error accepting request",
+    requestRejected: "Request rejected",
+    errorRejectingRequest: "Error rejecting request"
   },
   ar: {
     app_name: "Flowy",
@@ -345,6 +406,66 @@ export const translations: Record<Language, Record<TranslationKey, string>> = {
     new_recording: "تسجيل جديد",
     pause: "إيقاف مؤقت",
     play_summary: "تشغيل الملخص",
-    go_back: "العودة"
+    go_back: "العودة",
+    
+    // Added missing keys
+    // MobileNav
+    ai: "الذكاء الاصطناعي",
+    
+    // ThemeLanguageToggle
+    lightMode: "الوضع الفاتح",
+    darkMode: "الوضع الداكن",
+    arabic: "العربية",
+    english: "English",
+    
+    // ProfileImageUpload
+    profileImageUpdated: "تم تحديث صورة الملف الشخصي",
+    error: "خطأ",
+    profileImage: "صورة الملف الشخصي",
+    uploading: "جاري التحميل...",
+    changeImage: "تغيير الصورة",
+    
+    // UserMenu
+    user: "مستخدم",
+    
+    // Calendar components
+    noEvents: "لا توجد أحداث",
+    notesLabel: "ملاحظات",
+    titleRequired: "العنوان مطلوب",
+    dateRequired: "التاريخ مطلوب",
+    editNote: "تعديل ملاحظة",
+    createNote: "إنشاء ملاحظة",
+    title: "العنوان",
+    titlePlaceholder: "أدخل عنوانًا",
+    date: "التاريخ",
+    description: "الوصف",
+    descriptionPlaceholder: "أدخل وصفًا",
+    monthView: "عرض الشهر",
+    month: "شهر",
+    weekView: "عرض الأسبوع",
+    week: "أسبوع",
+    yearView: "عرض السنة",
+    year: "سنة",
+    create: "إنشاء",
+    
+    // Contacts components
+    contactUnblocked: "تم إلغاء حظر جهة الاتصال",
+    errorUnblockingContact: "خطأ في إلغاء حظر جهة الاتصال",
+    errorLoadingBlockedUsers: "خطأ في تحميل المستخدمين المحظورين",
+    noBlockedUsers: "لا يوجد مستخدمين محظورين",
+    noBlockedUsersDescription: "لم تقم بحظر أي مستخدمين",
+    errorCreatingConversation: "خطأ في إنشاء المحادثة",
+    contactBlocked: "تم حظر جهة الاتصال",
+    errorBlockingContact: "خطأ في حظر جهة الاتصال",
+    messageStarted: "تم بدء الرسالة",
+    removedFromFavorites: "تمت الإزالة من المفضلة",
+    addedToFavorites: "تمت الإضافة إلى المفضلة",
+    errorLoadingContacts: "خطأ في تحميل جهات الاتصال",
+    noContacts: "لا توجد جهات اتصال",
+    searchToAddContacts: "ابحث لإضافة جهات اتصال",
+    requestAccepted: "تم قبول الطلب",
+    errorAcceptingRequest: "خطأ في قبول الطلب",
+    requestRejected: "تم رفض الطلب",
+    errorRejectingRequest: "خطأ في رفض الطلب"
   }
 };

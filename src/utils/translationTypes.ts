@@ -1,3 +1,4 @@
+
 export type Language = "en" | "ar";
 
 export type TranslationKey =
@@ -171,4 +172,58 @@ export type TranslationKey =
   | "new_recording"
   | "pause"
   | "play_summary"
-  | "go_back";
+  | "go_back"
+  // MobileNav
+  | "ai"
+  // ThemeLanguageToggle
+  | "lightMode"
+  | "darkMode"
+  | "arabic" 
+  | "english"
+  // ProfileImageUpload
+  | "profileImageUpdated"
+  | "error"
+  | "profileImage"
+  | "uploading"
+  | "changeImage"
+  // UserMenu
+  | "user"
+  // Calendar components
+  | "noEvents"
+  | "notesLabel"
+  | "titleRequired"
+  | "dateRequired"
+  | "editNote"
+  | "createNote"
+  | "title"
+  | "titlePlaceholder"
+  | "date"
+  | "description"
+  | "descriptionPlaceholder"
+  | "monthView"
+  | "month"
+  | "weekView"
+  | "week"
+  | "yearView"
+  | "year"
+  | "create"
+  // Contacts components
+  | "contactUnblocked"
+  | "errorUnblockingContact"
+  | "errorLoadingBlockedUsers"
+  | "noBlockedUsers"
+  | "noBlockedUsersDescription"
+  | "errorCreatingConversation"
+  | "contactBlocked"
+  | "errorBlockingContact"
+  | "messageStarted"
+  | "removedFromFavorites"
+  | "addedToFavorites"
+  | "errorLoadingContacts"
+  | "noContacts"
+  | "searchToAddContacts"
+  | "requestAccepted"
+  | "errorAcceptingRequest"
+  | "requestRejected"
+  | "errorRejectingRequest";
+
