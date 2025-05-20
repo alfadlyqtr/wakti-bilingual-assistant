@@ -1,416 +1,122 @@
 
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import VoiceSummaryArchive from "./VoiceSummaryArchive";
-import RecordingDialog from "./RecordingDialog";
-import VoiceSummaryDetailDialog from "./VoiceSummaryDetailDialog";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, Loader2, RefreshCw, AlertCircle, Wrench } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { Mic, Info } from "lucide-react";
+import RecordingDialog from "./RecordingDialog";
 import { toast } from "sonner";
-import { getRecordingStatus } from "@/lib/utils";
-import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady, regenerateSummary } from "@/services/voiceSummaryService";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { checkStoragePermissions, listStorageBuckets } from "@/utils/debugUtils";
 
 export default function VoiceSummaryPage() {
-  const [showRecordingDialog, setShowRecordingDialog] = useState(false);
-  const [recordings, setRecordings] = useState<any[]>([]);
-  const [inProgressRecordings, setInProgressRecordings] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [stuckRecordings, setStuckRecordings] = useState<any[]>([]);
-  const [recoverableRecordings, setRecoverableRecordings] = useState<any[]>([]);
-  const [isRecovering, setIsRecovering] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
   const { language } = useTheme();
-  const navigate = useNavigate();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { user } = useAuth();
-
-  // Fetch recordings - separating ready, in-progress, stuck, and recoverable recordings
-  const fetchRecordings = async (silent = false) => {
-    try {
-      if (!silent) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
+  
+  // Log environment state on component mount
+  useEffect(() => {
+    const checkEnvironment = async () => {
+      console.log("[VoiceSummaryPage] Environment check");
       
-      console.log("[VoiceSummaryPage] Fetching recordings");
-      
-      const { ready, processing, stuck, recoverable, error } = await getAllRecordings(true);
+      try {
+        // Check auth state
+        const { data: authData } = await supabase.auth.getSession();
+        console.log("[VoiceSummaryPage] Auth state:", { 
+          hasSession: !!authData.session,
+          hasUser: !!authData.session?.user,
+          userId: authData.session?.user?.id || 'none'
+        });
+        
+        // Check storage buckets
+        const bucketsInfo = await listStorageBuckets();
+        console.log("[VoiceSummaryPage] Storage buckets info:", bucketsInfo);
+        
+        // Check voice_recordings bucket permissions
+        const permissionsCheck = await checkStoragePermissions('voice_recordings');
+        console.log("[VoiceSummaryPage] voice_recordings bucket permissions:", permissionsCheck);
+        
+        // If we found permission issues, show a toast
+        if (!permissionsCheck.canUpload) {
+          console.warn("[VoiceSummaryPage] Upload permission check failed:", 
+            permissionsCheck.uploadError || "Unknown permission error");
           
-      if (error) {
-        console.error('Error fetching recordings:', error);
-        if (!silent) {
-          toast(language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings');
+          toast.warning(language === 'ar' 
+            ? 'تم اكتشاف مشكلة في الإذن لتحميل الملفات' 
+            : 'Upload permission issue detected', {
+              description: permissionsCheck.uploadError || "Unknown permission error"
+            });
         }
-        return;
+      } catch (error) {
+        console.error("[VoiceSummaryPage] Environment check error:", error);
       }
-      
-      console.log(`[VoiceSummaryPage] Ready: ${ready.length}, Processing: ${processing.length}, Stuck: ${stuck.length}, Recoverable: ${recoverable.length}`);
-      
-      setRecordings(ready);
-      setInProgressRecordings(processing);
-      setStuckRecordings(stuck);
-      setRecoverableRecordings(recoverable);
-    } catch (err) {
-      console.error('Error in fetchRecordings:', err);
-      if (!silent) {
-        toast(language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings');
-      }
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
+    };
+    
+    checkEnvironment();
+  }, [language]);
+  
+  const handleRecordingCreated = (recordingId: string) => {
+    console.log("[VoiceSummaryPage] New recording created:", recordingId);
+    toast.success(language === 'ar' ? 'تم إنشاء تسجيل جديد' : 'New recording created');
   };
   
-  // Helper function to clean up stuck recordings
-  const cleanupStuckRecordings = async () => {
-    if (stuckRecordings.length === 0) return;
-    
-    try {
-      setIsRefreshing(true);
-      
-      // Get IDs of stuck recordings
-      const stuckIds = stuckRecordings.map(recording => recording.id);
-      
-      // Delete stuck recordings
-      const { success, error } = await deleteStuckRecordings(stuckIds);
-        
-      if (!success) {
-        console.error('Error deleting stuck recordings:', error);
-        toast.error(language === 'ar' ? 'فشل في حذف التسجيلات العالقة' : 'Failed to delete stuck recordings');
-        return;
-      }
-      
-      // Refresh the recordings
-      await fetchRecordings(true);
-      
-      toast.success(language === 'ar' 
-        ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
-        : `Removed ${stuckIds.length} stuck recordings`);
-    } catch (err) {
-      console.error('Error in cleanupStuckRecordings:', err);
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-  
-  // Helper function to recover stalled recordings that have transcripts but aren't marked ready
-  const recoverStuckRecordings = async () => {
-    if (recoverableRecordings.length === 0) return;
-    
-    try {
-      setIsRecovering(true);
-      
-      // Get IDs of recoverable recordings
-      const recoverableIds = recoverableRecordings.map(recording => recording.id);
-      
-      // Mark recordings as ready
-      const { success, count, error } = await markRecordingsAsReady(recoverableIds);
-        
-      if (!success) {
-        console.error('Error recovering recordings:', error);
-        toast.error(language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings');
-        return;
-      }
-      
-      // Refresh the recordings
-      await fetchRecordings(true);
-      
-      toast.success(language === 'ar' 
-        ? `تم استعادة ${count} تسجيلات` 
-        : `Recovered ${count} recordings`);
-    } catch (err) {
-      console.error('Error in recoverStuckRecordings:', err);
-    } finally {
-      setIsRecovering(false);
-    }
-  };
-  
-  // Helper function to regenerate summaries for recordings with transcripts but failed summaries
-  const handleRegenerateSummaries = async () => {
-    if (recoverableRecordings.length === 0) return;
-    
-    try {
-      setIsRegenerating(true);
-      let successCount = 0;
-      
-      // Process each recoverable recording
-      for (const recording of recoverableRecordings) {
-        // Attempt to regenerate the summary
-        const { success, error } = await regenerateSummary(recording.id);
-        
-        if (success) {
-          successCount++;
-        } else {
-          console.error(`Failed to regenerate summary for recording ${recording.id}:`, error);
-        }
-      }
-      
-      // Refresh the recordings
-      await fetchRecordings(true);
-      
-      if (successCount > 0) {
-        toast.success(language === 'ar' 
-          ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
-          : `Regenerated ${successCount} summary/summaries`);
-      } else {
-        toast.error(language === 'ar'
-          ? 'فشل في إعادة إنشاء الملخصات'
-          : 'Failed to regenerate summaries');
-      }
-    } catch (err) {
-      console.error('Error in handleRegenerateSummaries:', err);
-      toast.error(language === 'ar'
-        ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
-        : 'Error regenerating summaries');
-    } finally {
-      setIsRegenerating(false);
-    }
-  };
-
-  // Poll for updates to recording statuses
-  useEffect(() => {
-    if (!user) return;
-    
-    // Initial fetch
-    fetchRecordings();
-    
-    // Set up polling for recordings in progress
-    const intervalId = setInterval(() => {
-      if (inProgressRecordings.length > 0) {
-        fetchRecordings(true); // Silent refresh
-      }
-    }, 5000);
-    
-    return () => clearInterval(intervalId);
-  }, [user, inProgressRecordings.length]);
-  
-  const handleRecordingCreated = async (recordingId: string) => {
-    // Refresh the list to include the new recording
-    await fetchRecordings();
-    setShowRecordingDialog(false);
-    
-    // Show the detail dialog for the new recording
-    setSelectedRecordingId(recordingId);
-    setShowDetailDialog(true);
-  };
-  
-  const handleRecordingDeleted = (recordingId: string) => {
-    setRecordings(recordings.filter(recording => recording.id !== recordingId));
-    setInProgressRecordings(inProgressRecordings.filter(recording => recording.id !== recordingId));
-    setStuckRecordings(stuckRecordings.filter(recording => recording.id !== recordingId));
-    setRecoverableRecordings(recoverableRecordings.filter(recording => recording.id !== recordingId));
-    
-    // Close the detail dialog if the deleted recording was selected
-    if (selectedRecordingId === recordingId) {
-      setSelectedRecordingId(null);
-      setShowDetailDialog(false);
-    }
-  };
-  
-  const handleManualRefresh = () => {
-    fetchRecordings();
-    toast(language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...');
-  };
-
-  const handleRecordingSelected = (recordingId: string) => {
-    console.log('Recording selected in VoiceSummaryPage:', recordingId);
-    setSelectedRecordingId(recordingId);
-    setShowDetailDialog(true);
-  };
-
-  // Add debugging for dialog state changes
-  useEffect(() => {
-    console.log('Current dialog state:', { 
-      showDetailDialog, 
-      selectedRecordingId,
-      isDialogOpen: showDetailDialog && selectedRecordingId !== null
-    });
-  }, [showDetailDialog, selectedRecordingId]);
-
   return (
-    <ScrollArea className="flex flex-col h-full w-full">
-      <div className="flex-1 p-4">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-            {language === 'ar' ? 'التسجيلات الأخيرة' : 'Recent Recordings'}
-          </h2>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline"
-              size="icon"
-              onClick={handleManualRefresh}
-              disabled={isLoading || isRefreshing}
-              title={language === 'ar' ? 'تحديث' : 'Refresh'}
-              className="h-9 w-9"
-            >
-              <RefreshCw size={18} className={isRefreshing ? "animate-spin" : ""} />
-            </Button>
-            <Button 
-              onClick={() => setShowRecordingDialog(true)} 
-              className="flex items-center gap-1"
-            >
-              <Plus size={18} />
-              <span>{language === 'ar' ? 'تسجيل جديد' : 'New Recording'}</span>
-            </Button>
-          </div>
+    <div className="container max-w-5xl mx-auto py-6 space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {language === 'ar' ? 'التسجيلات الصوتية' : 'Voice Summaries'}
+          </h1>
+          <p className="text-muted-foreground">
+            {language === 'ar' 
+              ? 'سجّل ملاحظات صوتية واحصل على ملخصات آلية' 
+              : 'Record voice notes and get automatic summaries'}
+          </p>
         </div>
-
-        {/* Show recoverable recordings with recovery option */}
-        {recoverableRecordings.length > 0 && (
-          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-            <h3 className="text-sm font-medium text-amber-500 flex items-center gap-1 mb-2">
-              <Wrench className="h-4 w-4" />
-              {language === 'ar' ? 'تسجيلات قابلة للاستعادة' : 'Recoverable Recordings'}
-            </h3>
-            <div className="border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-900/30 rounded-md p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Wrench className="h-4 w-4 text-amber-500" />
-                  <span className="text-sm">
-                    {language === 'ar' 
-                      ? `${recoverableRecordings.length} تسجيل(ات) يمكن استعادتها`
-                      : `${recoverableRecordings.length} recording(s) can be recovered`}
-                  </span>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={recoverStuckRecordings}
-                    disabled={isRecovering || isRegenerating}
-                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
-                  >
-                    {isRecovering ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        {language === 'ar' ? 'جارٍ الاستعادة...' : 'Recovering...'}
-                      </>
-                    ) : (
-                      language === 'ar' ? 'استعادة التسجيلات' : 'Mark as Ready'
-                    )}
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRegenerateSummaries}
-                    disabled={isRecovering || isRegenerating}
-                    className="bg-amber-100 hover:bg-amber-200 dark:bg-amber-900/20 dark:hover:bg-amber-800/30 border-amber-300 dark:border-amber-700"
-                  >
-                    {isRegenerating ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                        {language === 'ar' ? 'جارٍ إعادة الإنشاء...' : 'Regenerating...'}
-                      </>
-                    ) : (
-                      language === 'ar' ? 'إعادة إنشاء الملخصات' : 'Regenerate Summaries'
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Show stuck recordings with warning */}
-        {stuckRecordings.length > 0 && (
-          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-            <h3 className="text-sm font-medium text-destructive flex items-center gap-1 mb-2">
-              <AlertCircle className="h-4 w-4" />
-              {language === 'ar' ? 'تسجيلات عالقة' : 'Stuck Recordings'}
-            </h3>
-            <div className="border border-destructive/30 bg-destructive/10 rounded-md p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  <span className="text-sm">
-                    {language === 'ar' 
-                      ? `${stuckRecordings.length} تسجيل(ات) عالقة في المعالجة`
-                      : `${stuckRecordings.length} recording(s) stuck in processing`}
-                  </span>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={cleanupStuckRecordings}
-                  disabled={isRefreshing}
-                >
-                  {language === 'ar' ? 'حذف التسجيلات العالقة' : 'Remove Stuck Recordings'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Show processing recordings with progress indicator */}
-        {inProgressRecordings.length > 0 && (
-          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-            <h3 className="text-sm font-medium text-muted-foreground mb-2">
-              {language === 'ar' ? 'قيد المعالجة' : 'Processing'}
-            </h3>
-            <div className="border border-border/30 bg-muted/30 rounded-md p-3">
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <span className="text-sm">
-                  {language === 'ar' 
-                    ? `جارٍ معالجة ${inProgressRecordings.length} تسجيل(ات)...`
-                    : `Processing ${inProgressRecordings.length} recording(s)...`}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="flex justify-center items-center h-40">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : recordings.length > 0 ? (
-          <VoiceSummaryArchive 
-            recordings={recordings}
-            onRecordingDeleted={handleRecordingDeleted}
-            isRefreshing={isRefreshing}
-            onRecordingSelected={handleRecordingSelected}
-          />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-40 text-center">
-            <div className="text-muted-foreground mb-2">
-              {language === 'ar' ? 'لا توجد تسجيلات بعد' : 'No recordings yet'}
-            </div>
-            <Button 
-              variant="outline"
-              onClick={() => setShowRecordingDialog(true)}
-            >
-              {language === 'ar' ? 'إنشاء أول تسجيل' : 'Create your first recording'}
-            </Button>
-          </div>
-        )}
         
-        {/* Recording Dialog */}
+        <Button 
+          onClick={() => {
+            if (!user) {
+              toast.error(language === 'ar' 
+                ? 'يجب تسجيل الدخول لاستخدام هذه الميزة' 
+                : 'You must be logged in to use this feature');
+              return;
+            }
+            setIsDialogOpen(true);
+          }}
+          className="flex items-center gap-2"
+        >
+          <Mic className="h-4 w-4" />
+          {language === 'ar' ? 'تسجيل جديد' : 'New Recording'}
+        </Button>
+      </div>
+      
+      {isDialogOpen && (
         <RecordingDialog 
-          isOpen={showRecordingDialog} 
-          onClose={() => setShowRecordingDialog(false)} 
+          isOpen={isDialogOpen} 
+          onClose={() => setIsDialogOpen(false)}
           onRecordingCreated={handleRecordingCreated}
         />
-
-        {/* Voice Summary Detail Dialog */}
-        <VoiceSummaryDetailDialog
-          recordingId={selectedRecordingId}
-          isOpen={showDetailDialog}
-          onClose={() => {
-            console.log('Closing dialog');
-            setShowDetailDialog(false);
-            setSelectedRecordingId(null);
-          }}
-        />
+      )}
+      
+      <VoiceSummaryArchive />
+      
+      <div className="bg-muted/50 rounded-lg p-4 border border-muted flex gap-3">
+        <div className="text-amber-500 mt-1">
+          <Info className="h-5 w-5" />
+        </div>
+        <div className="text-sm">
+          <p className="font-medium">
+            {language === 'ar' ? 'حول التسجيلات الصوتية' : 'About Voice Summaries'}
+          </p>
+          <p className="text-muted-foreground mt-1">
+            {language === 'ar'
+              ? 'تستخدم التسجيلات الصوتية تقنية التعرف على الكلام لتحويل صوتك إلى نص، ثم تُحلل النص باستخدام الذكاء الاصطناعي لإنشاء ملخص مفيد.'
+              : 'Voice summaries use speech recognition technology to convert your voice to text, then analyze the text using AI to create a useful summary.'}
+          </p>
+        </div>
       </div>
-    </ScrollArea>
+    </div>
   );
 }

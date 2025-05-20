@@ -1,6 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath } from "@/utils/audioUtils";
+import { toast } from "sonner";
 
 /**
  * Create a new voice recording entry
@@ -10,23 +10,38 @@ import { generateRecordingPath } from "@/utils/audioUtils";
  */
 export async function createRecording(type = "note", title?: string) {
   try {
-    const { data: user } = await supabase.auth.getUser();
-    if (!user.user) {
+    console.log("[VoiceSummary] Creating new recording:", { type, title });
+    
+    // Check authentication status
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    if (authError) {
+      console.error("[VoiceSummary] Auth error while creating recording:", authError);
+      return { error: "Authentication error: " + authError.message };
+    }
+    
+    if (!authData.session || !authData.session.user) {
+      console.error("[VoiceSummary] No authenticated user found");
       return { error: "Not authenticated" };
     }
+    
+    console.log("[VoiceSummary] User authenticated:", { 
+      userId: authData.session.user.id,
+      authProvider: authData.session.user.app_metadata?.provider || 'unknown'
+    });
 
     // Generate a UUID for the recording
     const recordingId = crypto.randomUUID();
     
     // Set correct file path structure for storage
-    const audioPath = generateRecordingPath(user.user.id, recordingId);
+    const audioPath = generateRecordingPath(authData.session.user.id, recordingId);
+    console.log("[VoiceSummary] Generated recording path:", audioPath);
     
     // Create record first, we'll update the URL after successful upload
     const { data, error } = await supabase
       .from('voice_summaries')
       .insert({
         id: recordingId,
-        user_id: user.user.id,
+        user_id: authData.session.user.id,
         title: title || "Untitled Recording",
         type: type,
         expires_at: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
@@ -37,13 +52,14 @@ export async function createRecording(type = "note", title?: string) {
       .single();
 
     if (error) {
-      console.error("Error creating recording:", error);
+      console.error("[VoiceSummary] Error creating recording in database:", error);
       return { error };
     }
 
-    return { recording: data, error: null, userId: user.user.id };
+    console.log("[VoiceSummary] Recording created successfully:", data);
+    return { recording: data, error: null, userId: authData.session.user.id };
   } catch (error) {
-    console.error("Exception in createRecording:", error);
+    console.error("[VoiceSummary] Exception in createRecording:", error);
     return { error };
   }
 }
@@ -57,73 +73,152 @@ export async function createRecording(type = "note", title?: string) {
  */
 export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: string) {
   try {
+    console.log("[VoiceSummary] Starting upload diagnostics");
+    
+    // Check authentication status
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    console.log("[VoiceSummary] Auth status:", { 
+      hasSession: !!authData.session, 
+      hasUser: !!authData.session?.user,
+      authError: authError || 'none'
+    });
+    
+    if (authError) {
+      console.error("[VoiceSummary] Authentication error before upload:", authError);
+      return { error: "Authentication error: " + authError.message, path: null, publicUrl: null };
+    }
+    
+    if (!authData.session || !authData.session.user) {
+      console.error("[VoiceSummary] No active session found before upload");
+      return { error: "Not authenticated", path: null, publicUrl: null };
+    }
+    
+    // Verify user ID matches the authenticated user
+    if (userId !== authData.session.user.id) {
+      console.error("[VoiceSummary] User ID mismatch:", { 
+        providedUserId: userId, 
+        authenticatedUserId: authData.session.user.id 
+      });
+      return { error: "User ID mismatch", path: null, publicUrl: null };
+    }
+    
     // Verify blob is valid
-    if (!audioBlob || audioBlob.size === 0) {
-      console.error("Invalid audio blob provided:", audioBlob);
-      return { error: "Invalid audio blob", path: null, publicUrl: null };
+    if (!audioBlob) {
+      console.error("[VoiceSummary] Upload failed: No audio blob provided");
+      return { error: "No audio blob provided", path: null, publicUrl: null };
+    }
+    
+    if (audioBlob.size === 0) {
+      console.error("[VoiceSummary] Upload failed: Audio blob is empty (0 bytes)");
+      return { error: "Audio blob is empty (0 bytes)", path: null, publicUrl: null };
     }
     
     // Log blob details for debugging
-    console.log(`Uploading audio: size=${audioBlob.size} bytes, type=${audioBlob.type}`);
+    console.log(`[VoiceSummary] Audio blob details:`, {
+      size: audioBlob.size + " bytes", 
+      type: audioBlob.type,
+      lastModified: new Date().toISOString()
+    });
     
     // Use correct bucket name and path structure
     const filePath = `${userId}/${recordingId}/recording.webm`;
-    console.log(`Uploading to path: ${filePath} in bucket: voice_recordings`);
+    console.log(`[VoiceSummary] Upload destination:`, { 
+      bucket: 'voice_recordings',
+      filePath: filePath,
+      fullPath: `voice_recordings/${filePath}`
+    });
+    
+    // Log access token info (without exposing the actual token)
+    console.log("[VoiceSummary] Access token info:", {
+      exists: !!authData.session.access_token,
+      length: authData.session.access_token?.length || 0,
+      expiresAt: authData.session.expires_at ? new Date(authData.session.expires_at * 1000).toISOString() : 'unknown'
+    });
     
     // First check if bucket exists
+    console.log("[VoiceSummary] Checking storage buckets...");
     const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
     if (bucketsError) {
-      console.error("Error listing buckets:", bucketsError);
-      return { error: bucketsError, path: null, publicUrl: null };
+      console.error("[VoiceSummary] Error listing buckets:", bucketsError);
+      return { error: "Storage error: " + bucketsError.message, path: null, publicUrl: null };
     }
     
+    console.log("[VoiceSummary] Available buckets:", buckets.map(b => b.name));
     const bucketExists = buckets.some(b => b.name === 'voice_recordings');
     if (!bucketExists) {
-      console.error("voice_recordings bucket does not exist");
-      return { error: "Storage bucket does not exist", path: null, publicUrl: null };
+      console.error("[VoiceSummary] voice_recordings bucket does not exist");
+      return { error: "Storage bucket 'voice_recordings' does not exist", path: null, publicUrl: null };
     }
     
-    // Upload the file
-    const { data, error } = await supabase.storage
+    // Log RLS policies for the bucket
+    console.log("[VoiceSummary] Found voice_recordings bucket, proceeding with upload");
+    
+    // Upload the file with detailed error handling
+    console.log("[VoiceSummary] Starting upload to Supabase Storage...");
+    const uploadResult = await supabase.storage
       .from('voice_recordings')
       .upload(filePath, audioBlob, {
         contentType: 'audio/webm',
-        upsert: true
+        upsert: true,
+        duplex: 'half'
       });
-
-    if (error) {
-      console.error("Error uploading audio:", error);
-      return { error, path: null, publicUrl: null };
+    
+    const { data: uploadData, error: uploadError } = uploadResult;
+    
+    // Log detailed response
+    console.log("[VoiceSummary] Upload response:", { 
+      success: !!uploadData && !uploadError,
+      data: uploadData,
+      hasError: !!uploadError,
+      errorDetails: uploadError ? {
+        message: uploadError.message,
+        code: uploadError.code,
+        name: uploadError.name,
+        status: uploadError.status || 'unknown',
+        details: uploadError.details || 'none'
+      } : 'none'
+    });
+    
+    if (uploadError) {
+      console.error("[VoiceSummary] Error uploading audio:", uploadError);
+      let detailedError = `Upload failed: ${uploadError.message}`;
+      if (uploadError.status) {
+        detailedError += ` (Status ${uploadError.status})`;
+      }
+      return { error: uploadError, path: null, publicUrl: null, detailedError };
     }
     
-    console.log("Audio successfully uploaded:", data);
+    console.log("[VoiceSummary] Audio successfully uploaded:", uploadData);
 
     // Get public URL after successful upload
-    const { data: { publicUrl } } = supabase.storage
+    console.log("[VoiceSummary] Generating public URL...");
+    const { data: urlData } = supabase.storage
       .from('voice_recordings')
       .getPublicUrl(filePath);
     
-    console.log("Generated public URL:", publicUrl);
+    console.log("[VoiceSummary] Generated public URL:", urlData.publicUrl);
     
     // Update the record with the correct audio URL and set processing flag to true
+    console.log("[VoiceSummary] Updating recording with URL in database...");
     const { error: updateError } = await supabase
       .from('voice_summaries')
       .update({
-        audio_url: publicUrl,
+        audio_url: urlData.publicUrl,
         is_processing_transcript: true,
         updated_at: new Date().toISOString()
       })
       .eq('id', recordingId);
     
     if (updateError) {
-      console.error("Error updating record with audio URL:", updateError);
-      return { error: updateError, path: null, publicUrl: null };
+      console.error("[VoiceSummary] Error updating record with audio URL:", updateError);
+      return { error: updateError, path: filePath, publicUrl: urlData.publicUrl, detailedError: "Upload succeeded but failed to update database" };
     }
 
-    return { path: filePath, error: null, publicUrl };
+    console.log("[VoiceSummary] Recording updated successfully with URL");
+    return { path: filePath, error: null, publicUrl: urlData.publicUrl };
   } catch (error) {
-    console.error("Exception in uploadAudio:", error);
-    return { error, path: null, publicUrl: null };
+    console.error("[VoiceSummary] Uncaught exception in uploadAudio:", error);
+    return { error, path: null, publicUrl: null, detailedError: "Uncaught exception: " + (error as Error).message };
   }
 }
 

@@ -7,6 +7,7 @@ import { Mic, MicOff, Loader2, X } from "lucide-react";
 import { createRecording, uploadAudio, transcribeAudio } from "@/services/voiceSummaryService";
 import { getBestSupportedMimeType, formatRecordingTime } from "@/utils/audioUtils";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -25,6 +26,7 @@ export default function RecordingDialog({
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const [recordingComplete, setRecordingComplete] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>("");
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,6 +53,7 @@ export default function RecordingDialog({
       setRecordingDuration(0);
       setAudioChunks([]);
       setRecordingComplete(false);
+      setUploadStatus("");
       
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -68,6 +71,19 @@ export default function RecordingDialog({
   // Start recording
   const startRecording = async () => {
     try {
+      // Check auth status before recording
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        console.error("[RecordingDialog] No active session found");
+        toast(language === 'ar' ? 'يجب تسجيل الدخول لاستخدام هذه الميزة' : 'You need to be logged in to use this feature');
+        return;
+      }
+      
+      console.log("[RecordingDialog] Starting recording with auth:", { 
+        userId: session.session.user.id,
+        isExpired: new Date().getTime() / 1000 > (session.session.expires_at || 0)
+      });
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -78,7 +94,7 @@ export default function RecordingDialog({
       
       // Get the best supported MIME type
       const mimeType = getBestSupportedMimeType();
-      console.log(`Using MIME type: ${mimeType}`);
+      console.log(`[RecordingDialog] Using MIME type: ${mimeType}`);
       
       // Create new recorder
       const recorder = new MediaRecorder(stream, { mimeType });
@@ -90,6 +106,7 @@ export default function RecordingDialog({
       // Set up event handlers
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
+          console.log(`[RecordingDialog] Received audio chunk: ${e.data.size} bytes`);
           setAudioChunks((prev) => [...prev, e.data]);
         }
       };
@@ -107,7 +124,7 @@ export default function RecordingDialog({
       };
       
       recorder.onerror = (event) => {
-        console.error("MediaRecorder error:", event);
+        console.error("[RecordingDialog] MediaRecorder error:", event);
         toast(language === 'ar' ? 'خطأ في التسجيل' : 'Recording error');
       };
       
@@ -122,7 +139,7 @@ export default function RecordingDialog({
       }, 1000);
       
     } catch (error) {
-      console.error("Error starting recording:", error);
+      console.error("[RecordingDialog] Error starting recording:", error);
       toast(language === 'ar' ? 'فشل في بدء التسجيل' : 'Failed to start recording');
     }
   };
@@ -153,52 +170,75 @@ export default function RecordingDialog({
     }
     
     setIsProcessing(true);
+    setUploadStatus("Creating recording entry...");
     
     try {
+      // Check auth before proceeding
+      const { data: authData } = await supabase.auth.getSession();
+      console.log("[RecordingDialog] Auth status before processing:", { 
+        hasSession: !!authData.session, 
+        userId: authData.session?.user?.id || 'none',
+        expired: authData.session ? 
+          (new Date().getTime() / 1000 > (authData.session.expires_at || 0)) : 'n/a'
+      });
+      
       // Create recording entry in database
-      console.log("Creating recording entry...");
+      console.log("[RecordingDialog] Creating recording entry...");
       const { recording, error: createError, userId } = await createRecording();
       
       if (createError || !recording) {
-        console.error("Error creating recording entry:", createError);
+        console.error("[RecordingDialog] Error creating recording entry:", createError);
         toast(language === 'ar' ? 'فشل في إنشاء تسجيل' : 'Failed to create recording');
         setIsProcessing(false);
         return;
       }
       
       // Combine audio chunks into a single blob
-      console.log(`Combining ${audioChunks.length} audio chunks...`);
+      setUploadStatus("Preparing audio data...");
+      console.log(`[RecordingDialog] Combining ${audioChunks.length} audio chunks...`);
       const mimeType = getBestSupportedMimeType();
       const audioBlob = new Blob(audioChunks, { type: mimeType });
-      console.log(`Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      console.log(`[RecordingDialog] Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       
       if (audioBlob.size === 0) {
-        console.error("Empty audio blob created");
+        console.error("[RecordingDialog] Empty audio blob created");
         toast(language === 'ar' ? 'ملف التسجيل فارغ' : 'Recording file is empty');
         setIsProcessing(false);
         return;
       }
       
       // Upload audio to storage
-      console.log(`Uploading audio for recording ${recording.id}...`);
-      const { path, error: uploadError, publicUrl } = await uploadAudio(audioBlob, recording.id, userId);
+      setUploadStatus("Uploading audio recording...");
+      console.log(`[RecordingDialog] Uploading audio for recording ${recording.id}...`);
+      const uploadResult = await uploadAudio(audioBlob, recording.id, userId);
+      const { path, error: uploadError, publicUrl, detailedError } = uploadResult;
       
       if (uploadError || !path) {
-        console.error("Error uploading audio:", uploadError);
-        toast(language === 'ar' ? 'فشل في تحميل التسجيل الصوتي' : 'Failed to upload audio recording');
+        console.error("[RecordingDialog] Error uploading audio:", uploadError);
+        
+        // Show more detailed error message
+        const errorMessage = detailedError || 
+          (uploadError instanceof Error ? uploadError.message : 'Unknown upload error');
+        
+        console.error("[RecordingDialog] Detailed upload error:", errorMessage);
+        
+        toast.error(language === 'ar' 
+          ? `فشل في تحميل التسجيل الصوتي: ${errorMessage}` 
+          : `Failed to upload audio: ${errorMessage}`);
         setIsProcessing(false);
         return;
       }
       
-      console.log("Audio upload successful. Path:", path);
-      console.log("Public URL:", publicUrl);
+      console.log("[RecordingDialog] Audio upload successful. Path:", path);
+      console.log("[RecordingDialog] Public URL:", publicUrl);
       
       // Transcribe audio
-      console.log("Starting transcription...");
+      setUploadStatus("Starting transcription...");
+      console.log("[RecordingDialog] Starting transcription...");
       const { error: transcribeError } = await transcribeAudio(recording.id);
       
       if (transcribeError) {
-        console.warn("Transcription started with warning:", transcribeError);
+        console.warn("[RecordingDialog] Transcription started with warning:", transcribeError);
         // Continue anyway - transcription happens asynchronously
       }
       
@@ -212,10 +252,13 @@ export default function RecordingDialog({
       // Close the dialog
       onClose();
     } catch (error) {
-      console.error("Error processing recording:", error);
-      toast.error(language === 'ar' ? 'حدث خطأ أثناء معالجة التسجيل' : 'Error processing recording');
+      console.error("[RecordingDialog] Error processing recording:", error);
+      toast.error(language === 'ar' 
+        ? `حدث خطأ أثناء معالجة التسجيل: ${(error as Error).message}` 
+        : `Error processing recording: ${(error as Error).message}`);
     } finally {
       setIsProcessing(false);
+      setUploadStatus("");
     }
   };
   
@@ -314,7 +357,7 @@ export default function RecordingDialog({
                   {isProcessing ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {language === 'ar' ? 'جارٍ المعالجة...' : 'Processing...'}
+                      {uploadStatus || (language === 'ar' ? 'جارٍ المعالجة...' : 'Processing...')}
                     </>
                   ) : (
                     language === 'ar' ? 'استخدام التسجيل' : 'Use Recording'
