@@ -64,7 +64,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="mobile-container">
       {!isAuthPage && <AppHeader />}
-      {children}
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {children}
+      </div>
       <MobileNav />
       <Toaster />
     </div>

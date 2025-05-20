@@ -26,7 +26,7 @@ export function PageContainer({
   const { language } = useTheme();
   
   return (
-    <div className="mobile-container">
+    <div className="flex flex-col flex-1 h-full w-full">
       {showHeader && (
         <AppHeader 
           title={title ? t(title as any, language) : "WAKTI"}

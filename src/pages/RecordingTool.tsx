@@ -9,8 +9,10 @@ const RecordingTool = () => {
   const { language } = useTheme();
   
   return (
-    <PageContainer title={t("voice_summary", language)} showBackButton>
-      <RecordingToolComponent />
+    <PageContainer title="voice_summary" showBackButton>
+      <div className="flex flex-col flex-1 w-full h-full">
+        <RecordingToolComponent />
+      </div>
     </PageContainer>
   );
 };

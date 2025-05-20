@@ -132,7 +132,7 @@ export const RecordingTool: React.FC = () => {
             />
             <SummaryPanel />
             <SummaryExporter summaryId={summaryId} />
-            <div className="flex justify-center mt-8">
+            <div className="flex justify-center mt-8 mb-16">
               <Button
                 variant="outline"
                 onClick={handleReset}
@@ -164,8 +164,10 @@ export const RecordingTool: React.FC = () => {
   };
 
   return (
-    <div className="container max-w-2xl mx-auto px-4 py-6">
-      {renderContent()}
+    <div className="w-full h-full px-4 py-6 overflow-y-auto">
+      <div className="max-w-2xl mx-auto">
+        {renderContent()}
+      </div>
     </div>
   );
 };
