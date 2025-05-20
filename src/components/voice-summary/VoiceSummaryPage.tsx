@@ -82,22 +82,16 @@ export default function VoiceSummaryPage() {
         
       if (!success) {
         console.error('Error deleting stuck recordings:', error);
-        toast({
-          title: language === 'ar' ? 'فشل في حذف التسجيلات الع��لقة' : 'Failed to delete stuck recordings',
-          variant: "destructive"
-        });
+        toast.error(language === 'ar' ? 'فشل في حذف التسجيلات العالقة' : 'Failed to delete stuck recordings');
         return;
       }
       
       // Refresh the recordings
       await fetchRecordings(true);
       
-      toast({
-        title: language === 'ar' 
-          ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
-          : `Removed ${stuckIds.length} stuck recordings`,
-        variant: "default"
-      });
+      toast.success(language === 'ar' 
+        ? `تم حذف ${stuckIds.length} تسجيلات عالقة` 
+        : `Removed ${stuckIds.length} stuck recordings`);
     } catch (err) {
       console.error('Error in cleanupStuckRecordings:', err);
     } finally {
@@ -120,22 +114,16 @@ export default function VoiceSummaryPage() {
         
       if (!success) {
         console.error('Error recovering recordings:', error);
-        toast({
-          title: language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings',
-          variant: "destructive"
-        });
+        toast.error(language === 'ar' ? 'فشل في استعادة التسجيلات' : 'Failed to recover recordings');
         return;
       }
       
       // Refresh the recordings
       await fetchRecordings(true);
       
-      toast({
-        title: language === 'ar' 
-          ? `تم استعادة ${count} تسجيلات` 
-          : `Recovered ${count} recordings`,
-        variant: "default"
-      });
+      toast.success(language === 'ar' 
+        ? `تم استعادة ${count} تسجيلات` 
+        : `Recovered ${count} recordings`);
     } catch (err) {
       console.error('Error in recoverStuckRecordings:', err);
     } finally {
@@ -167,28 +155,19 @@ export default function VoiceSummaryPage() {
       await fetchRecordings(true);
       
       if (successCount > 0) {
-        toast({
-          title: language === 'ar' 
-            ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
-            : `Regenerated ${successCount} summary/summaries`,
-          variant: "default"
-        });
+        toast.success(language === 'ar' 
+          ? `تم إعادة إنشاء ${successCount} ملخص(ات)` 
+          : `Regenerated ${successCount} summary/summaries`);
       } else {
-        toast({
-          title: language === 'ar'
-            ? 'فشل في إعادة إنشاء الملخصات'
-            : 'Failed to regenerate summaries',
-          variant: "destructive"
-        });
+        toast.error(language === 'ar'
+          ? 'فشل في إعادة إنشاء الملخصات'
+          : 'Failed to regenerate summaries');
       }
     } catch (err) {
       console.error('Error in handleRegenerateSummaries:', err);
-      toast({
-        title: language === 'ar'
-          ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
-          : 'Error regenerating summaries',
-        variant: "destructive"
-      });
+      toast.error(language === 'ar'
+        ? 'حدث خطأ أثناء إعادة إنشاء الملخصات'
+        : 'Error regenerating summaries');
     } finally {
       setIsRegenerating(false);
     }

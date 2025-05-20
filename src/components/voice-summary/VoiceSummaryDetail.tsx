@@ -9,8 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { 
-  Edit, Save, Copy, FilePdf, AlertCircle, 
-  Clock, Calendar, Mic, FileText, Loader2 
+  Edit, Save, Copy, FileText, AlertCircle, 
+  Clock, Calendar, Mic, Loader2 
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -215,11 +215,11 @@ const VoiceSummaryDetail = () => {
   const getStatusBadge = () => {
     switch (recordingStatus) {
       case 'complete':
-        return <Badge variant="success">{language === 'ar' ? 'مكتمل' : 'Complete'}</Badge>;
+        return <Badge className="bg-green-500 hover:bg-green-600">{language === 'ar' ? 'مكتمل' : 'Complete'}</Badge>;
       case 'processing':
-        return <Badge variant="warning">{language === 'ar' ? 'قيد المعالجة' : 'Processing'}</Badge>;
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600">{language === 'ar' ? 'قيد المعالجة' : 'Processing'}</Badge>;
       case 'transcribing':
-        return <Badge variant="warning">{language === 'ar' ? 'قيد التحويل' : 'Transcribing'}</Badge>;
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600">{language === 'ar' ? 'قيد التحويل' : 'Transcribing'}</Badge>;
       case 'pending':
       default:
         return <Badge variant="outline">{language === 'ar' ? 'قيد الانتظار' : 'Pending'}</Badge>;
@@ -508,7 +508,7 @@ const VoiceSummaryDetail = () => {
                       onClick={handleExportPDF}
                       disabled={isProcessing}
                     >
-                      <FilePdf className="h-4 w-4 mr-1" />
+                      <FileText className="h-4 w-4 mr-1" />
                       <span>{language === 'ar' ? 'PDF' : 'PDF'}</span>
                     </Button>
                   </>
