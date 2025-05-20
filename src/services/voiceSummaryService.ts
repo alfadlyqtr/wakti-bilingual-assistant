@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath } from "@/utils/audioUtils";
 import { toast } from "sonner";
@@ -120,7 +121,7 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       lastModified: new Date().toISOString()
     });
     
-    // Use correct bucket name and path structure
+    // Use correct file path structure
     const filePath = `${userId}/${recordingId}/recording.webm`;
     console.log(`[VoiceSummary] Upload destination:`, { 
       bucket: 'voice_recordings',

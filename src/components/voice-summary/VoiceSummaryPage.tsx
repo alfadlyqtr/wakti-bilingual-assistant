@@ -44,11 +44,13 @@ export default function VoiceSummaryPage() {
           console.warn("[VoiceSummaryPage] Upload permission check failed:", 
             permissionsCheck.uploadError || "Unknown permission error");
           
-          toast.warning(language === 'ar' 
-            ? 'تم اكتشاف مشكلة في الإذن لتحميل الملفات' 
-            : 'Upload permission issue detected', {
-              description: permissionsCheck.uploadError || "Unknown permission error"
-            });
+          if (authData.session) {
+            toast.warning(language === 'ar' 
+              ? 'تم اكتشاف مشكلة في الإذن لتحميل الملفات' 
+              : 'Upload permission issue detected', {
+                description: permissionsCheck.uploadError || "Unknown permission error"
+              });
+          }
         }
         
         // Fetch recordings
@@ -60,7 +62,7 @@ export default function VoiceSummaryPage() {
     };
     
     checkEnvironment();
-  }, [language]);
+  }, [language, user?.id]);
   
   const fetchRecordings = async () => {
     try {
