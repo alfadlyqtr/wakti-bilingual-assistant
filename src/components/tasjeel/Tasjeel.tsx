@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -207,25 +208,47 @@ const Tasjeel: React.FC = () => {
   const handleRecordingStopped = async () => {
     try {
       const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-      const file = new File([audioBlob], `recording-${uuidv4()}.webm`, { type: "audio/webm" });
+      const uniqueId = uuidv4();
+      const fileName = `recording-${uniqueId}.webm`;
       
-      // Upload to Supabase storage
+      // Use a path that doesn't rely on user authentication
+      const filePath = `recordings/${fileName}`;
+      
+      console.log("Uploading recording to storage:", {
+        bucket: "tasjeel_recordings",
+        path: filePath,
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+      
+      // Upload to Supabase storage with explicit error handling
       const { data, error } = await supabase
         .storage
         .from("tasjeel_recordings")
-        .upload(`${user?.id}/${file.name}`, file);
+        .upload(filePath, audioBlob, {
+          contentType: "audio/webm",
+          cacheControl: "3600"
+        });
         
       if (error) {
-        throw error;
+        console.error("Error uploading to storage:", error);
+        
+        // Show a user-friendly error message
+        toast(error.message || "Failed to upload recording. Please try again.");
+        setRecordingStatus("idle");
+        return;
       }
       
-      // Get the public URL
+      console.log("Storage upload successful:", data);
+      
+      // Get the public URL - works because bucket is set to public
       const { data: publicUrlData } = supabase
         .storage
         .from("tasjeel_recordings")
-        .getPublicUrl(`${user?.id}/${file.name}`);
+        .getPublicUrl(filePath);
       
       const audioUrl = publicUrlData.publicUrl;
+      console.log("Generated public URL:", audioUrl);
       setAudioUrl(audioUrl);
       
       // Transcribe the audio

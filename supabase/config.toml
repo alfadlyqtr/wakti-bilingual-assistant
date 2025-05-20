@@ -24,3 +24,4 @@ enabled = true
 [edge_functions]
 [edge_functions.transcribe-audio]
 verify_jwt = false
+
