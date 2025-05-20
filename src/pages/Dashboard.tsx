@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -15,7 +16,6 @@ import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
 import { GripVertical, CalendarIcon, CheckCircle, BellRing, Calendar as CalendarIconFull } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 type WidgetType = {
   id: string;
@@ -374,82 +374,80 @@ export default function Dashboard() {
   };
 
   return (
-    <ScrollArea className="flex-1 h-[calc(100vh-4rem)]">
-      <div className="p-4 pb-28">
-        {/* Trial Timer */}
-        {trialDaysLeft > 0 && (
-          <Card className="mb-4 bg-primary/5 border-primary/20">
-            <CardContent className="p-3">
-              <div className="flex justify-between items-center">
-                <div>
-                  <p className="text-sm font-medium">
-                    {t("freeTrialDays", language)}:
-                  </p>
-                  <p className="text-xl font-bold">{trialDaysLeft} {language === 'ar' ? "أيام متبقية" : "days left"}</p>
-                </div>
-                <Button size="sm">{language === 'ar' ? "ترقية" : "Upgrade"}</Button>
+    <div className="flex-1 overflow-y-auto p-4 pb-28">
+      {/* Trial Timer */}
+      {trialDaysLeft > 0 && (
+        <Card className="mb-4 bg-primary/5 border-primary/20">
+          <CardContent className="p-3">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium">
+                  {t("freeTrialDays", language)}:
+                </p>
+                <p className="text-xl font-bold">{trialDaysLeft} {language === 'ar' ? "أيام متبقية" : "days left"}</p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+              <Button size="sm">{language === 'ar' ? "ترقية" : "Upgrade"}</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-        {/* Dashboard Widgets */}
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="widgets">
-            {(provided) => (
-              <div 
-                className="space-y-4"
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-              >
-                {isDragging && (
-                  <div className="bg-primary/10 rounded-md p-2 mb-4 flex items-center justify-between">
-                    <div className="text-sm">{language === 'ar' ? "وضع سحب الأدوات" : "Widget dragging mode"}</div>
-                    <Button size="sm" variant="outline" onClick={exitDragMode}>
-                      {language === 'ar' ? "تم" : "Done"}
-                    </Button>
-                  </div>
-                )}
-                
-                {widgets
-                  .filter(widget => widget.visible)
-                  .map((widget, index) => (
-                    <Draggable 
-                      key={widget.id} 
-                      draggableId={widget.id} 
-                      index={index}
-                      isDragDisabled={!isDragging}
-                    >
-                      {(provided, snapshot) => (
-                        <Card 
-                          className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''} 
-                                     ${isDragging ? 'select-none' : ''}`}
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          {...provided.dragHandleProps}
-                        >
-                          {/* New dedicated drag handle that appears in the corner when in drag mode */}
-                          {isDragging && (
-                            <div 
-                              className="absolute top-0 right-0 bg-primary/10 p-1 rounded-bl-md rounded-tr-md z-20"
-                            >
-                              <GripVertical className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                          )}
-                          
-                          <CardContent className="p-0">
-                            {widget.component}
-                          </CardContent>
-                        </Card>
-                      )}
-                    </Draggable>
-                  ))}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
-      </div>
-    </ScrollArea>
+      {/* Dashboard Widgets */}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="widgets">
+          {(provided) => (
+            <div 
+              className="space-y-4"
+              {...provided.droppableProps}
+              ref={provided.innerRef}
+            >
+              {isDragging && (
+                <div className="bg-primary/10 rounded-md p-2 mb-4 flex items-center justify-between">
+                  <div className="text-sm">{language === 'ar' ? "وضع سحب الأدوات" : "Widget dragging mode"}</div>
+                  <Button size="sm" variant="outline" onClick={exitDragMode}>
+                    {language === 'ar' ? "تم" : "Done"}
+                  </Button>
+                </div>
+              )}
+              
+              {widgets
+                .filter(widget => widget.visible)
+                .map((widget, index) => (
+                  <Draggable 
+                    key={widget.id} 
+                    draggableId={widget.id} 
+                    index={index}
+                    isDragDisabled={!isDragging}
+                  >
+                    {(provided, snapshot) => (
+                      <Card 
+                        className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''} 
+                                   ${isDragging ? 'select-none' : ''}`}
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        {/* New dedicated drag handle that appears in the corner when in drag mode */}
+                        {isDragging && (
+                          <div 
+                            className="absolute top-0 right-0 bg-primary/10 p-1 rounded-bl-md rounded-tr-md z-20"
+                          >
+                            <GripVertical className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        
+                        <CardContent className="p-0">
+                          {widget.component}
+                        </CardContent>
+                      </Card>
+                    )}
+                  </Draggable>
+                ))}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
+    </div>
   );
 }

@@ -10,6 +10,8 @@ import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
 import Reminders from "@/pages/Reminders";
 import Events from "@/pages/Events";
+import VoiceSummary from "@/pages/VoiceSummary";
+import VoiceSummaryDetail from "@/pages/VoiceSummaryDetail";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -26,7 +28,6 @@ import Home from "@/pages/Home";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
-import RecordingTool from "@/pages/RecordingTool";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -64,9 +65,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="mobile-container">
       {!isAuthPage && <AppHeader />}
-      <div className="flex flex-col flex-1 overflow-hidden">
-        {children}
-      </div>
+      {children}
       <MobileNav />
       <Toaster />
     </div>
@@ -123,7 +122,8 @@ function App() {
                   <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
                   <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                  <Route path="/recording" element={<AppLayout><RecordingTool /></AppLayout>} />
+                  <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
+                  <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
                   <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />

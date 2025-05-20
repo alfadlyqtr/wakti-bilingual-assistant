@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -16,7 +17,6 @@ import { Check, Save, Settings as SettingsIcon } from "lucide-react";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TranslationKey } from "@/utils/translationTypes";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
@@ -105,235 +105,231 @@ export default function Settings() {
   }, []); // Only run once on component mount
   
   return (
-    <ScrollArea className="flex-1 h-[calc(100vh-4rem)]">
-      <div className="py-6 pb-24 px-4">
-        <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
-        
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("appearance", language)}</CardTitle>
-              <CardDescription>{t("appearanceSettings", language)}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Language & Theme Settings */}
-              <div className="flex justify-between items-center">
-                <span>{t("language", language)}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleLanguage}
-                  className="h-9 px-3 rounded-full text-sm"
-                >
-                  {language === "en" ? t("arabic", language) : t("english", language)}
-                </Button>
-              </div>
-              
-              {/* Theme Toggle */}
-              <div className="flex justify-between items-center">
-                <span>{t("theme", language)}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleTheme}
-                  className="h-9 px-3 rounded-full text-sm"
-                >
-                  {theme === "dark"
-                    ? t("lightMode", language)
-                    : t("darkMode", language)}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
+      <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("appearance", language)}</CardTitle>
+          <CardDescription>{t("appearanceSettings", language)}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Language & Theme Settings */}
+          <div className="flex justify-between items-center">
+            <span>{t("language", language)}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleLanguage}
+              className="h-9 px-3 rounded-full text-sm"
+            >
+              {language === "en" ? t("arabic", language) : t("english", language)}
+            </Button>
+          </div>
+          
+          {/* Theme Toggle */}
+          <div className="flex justify-between items-center">
+            <span>{t("theme", language)}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTheme}
+              className="h-9 px-3 rounded-full text-sm"
+            >
+              {theme === "dark"
+                ? t("lightMode", language)
+                : t("darkMode", language)}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("contactsSettings", language)}</CardTitle>
-              <CardDescription>{t("contactsSettingsDescription", language)}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label htmlFor="auto-approve" className="mb-1 block font-medium">
-                    {t("autoApproveRequests", language)}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {t("autoApproveExplanation", language)}
-                  </p>
-                </div>
-                <Switch 
-                  id="auto-approve" 
-                  checked={userProfile?.auto_approve_contacts} 
-                  onCheckedChange={handleAutoApproveToggle}
-                  disabled={isLoadingProfile || autoApproveMutation.isPending}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quote Settings */}
-          <Card className="mb-4">
-            <CardHeader className="pb-2">
-              <h2 className="text-lg font-medium">{t("dailyQuoteSettings", language)}</h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium">
-                  {t("quoteCategory", language)}
-                </label>
-                <Select 
-                  value={quotePreferences.category} 
-                  onValueChange={handleQuoteCategoryChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {t(category as TranslationKey, language)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <label className="text-sm font-medium">
-                  {t("quoteChangeFrequency", language)}
-                </label>
-                <Select 
-                  value={quotePreferences.frequency}
-                  onValueChange={handleQuoteFrequencyChange}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2xday">
-                      {t("twiceDaily", language)}
-                    </SelectItem>
-                    <SelectItem value="4xday">
-                      {t("fourTimesDaily", language)}
-                    </SelectItem>
-                    <SelectItem value="6xday">
-                      {t("sixTimesDaily", language)}
-                    </SelectItem>
-                    <SelectItem value="appStart">
-                      {t("everyAppStart", language)}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              {/* Button to manage custom quotes */}
-              {quotePreferences.category === 'custom' && (
-                <Button 
-                  variant="outline" 
-                  className="w-full mt-4" 
-                  onClick={() => setCustomQuoteDialogOpen(true)}
-                >
-                  {t("manageCustomQuotes", language)}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Notification Preferences */}
-          <Card className="mb-4">
-            <CardHeader className="pb-2">
-              <h2 className="text-lg font-medium">{t("notificationPreferences", language)}</h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span>{t("pushNotifications", language)}</span>
-                <Switch defaultChecked id="push-notifications" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{t("emailNotifications", language)}</span>
-                <Switch id="email-notifications" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Widget Visibility */}
-          <Card className="mb-4">
-            <CardHeader className="pb-2">
-              <h2 className="text-lg font-medium">{t("widgetVisibility", language)}</h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span>{t("tasksWidget", language)}</span>
-                <Switch defaultChecked id="tasks-widget" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{t("calendarWidget", language)}</span>
-                <Switch defaultChecked id="calendar-widget" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{t("remindersWidget", language)}</span>
-                <Switch defaultChecked id="reminders-widget" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{t("dailyQuoteWidget", language)}</span>
-                <Switch defaultChecked id="quote-widget" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Privacy Controls */}
-          <Card className="mb-4">
-            <CardHeader className="pb-2">
-              <h2 className="text-lg font-medium">{t("privacyControls", language)}</h2>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span>{t("profileVisibility", language)}</span>
-                <Switch defaultChecked id="profile-visibility" />
-              </div>
-              <div className="flex justify-between items-center">
-                <span>{t("activityStatus", language)}</span>
-                <Switch defaultChecked id="activity-status" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Delete Account */}
-          <Card className="mb-4">
-            <CardHeader className="pb-2">
-              <h2 className="text-lg font-medium">{t("deleteAccount", language)}</h2>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                {t("deleteAccountDescription", language)}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("contactsSettings", language)}</CardTitle>
+          <CardDescription>{t("contactsSettingsDescription", language)}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="auto-approve" className="mb-1 block font-medium">
+                {t("autoApproveRequests", language)}
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                {t("autoApproveExplanation", language)}
               </p>
-              <Button variant="destructive">
-                {t("deleteMyAccount", language)}
-              </Button>
-            </CardContent>
-          </Card>
+            </div>
+            <Switch 
+              id="auto-approve" 
+              checked={userProfile?.auto_approve_contacts} 
+              onCheckedChange={handleAutoApproveToggle}
+              disabled={isLoadingProfile || autoApproveMutation.isPending}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
-          {/* Save All Settings Button */}
-          <Button 
-            className="w-full mt-6 flex items-center gap-2" 
-            onClick={handleSaveAllSettings}
-          >
-            <Save className="h-4 w-4" />
-            {t("saveAllSettings", language)}
+      {/* Quote Settings */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <h2 className="text-lg font-medium">{t("dailyQuoteSettings", language)}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-2">
+            <label className="text-sm font-medium">
+              {t("quoteCategory", language)}
+            </label>
+            <Select 
+              value={quotePreferences.category} 
+              onValueChange={handleQuoteCategoryChange}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {t(category as TranslationKey, language)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-sm font-medium">
+              {t("quoteChangeFrequency", language)}
+            </label>
+            <Select 
+              value={quotePreferences.frequency}
+              onValueChange={handleQuoteFrequencyChange}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="2xday">
+                  {t("twiceDaily", language)}
+                </SelectItem>
+                <SelectItem value="4xday">
+                  {t("fourTimesDaily", language)}
+                </SelectItem>
+                <SelectItem value="6xday">
+                  {t("sixTimesDaily", language)}
+                </SelectItem>
+                <SelectItem value="appStart">
+                  {t("everyAppStart", language)}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Button to manage custom quotes */}
+          {quotePreferences.category === 'custom' && (
+            <Button 
+              variant="outline" 
+              className="w-full mt-4" 
+              onClick={() => setCustomQuoteDialogOpen(true)}
+            >
+              {t("manageCustomQuotes", language)}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Notification Preferences */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <h2 className="text-lg font-medium">{t("notificationPreferences", language)}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center">
+            <span>{t("pushNotifications", language)}</span>
+            <Switch defaultChecked id="push-notifications" />
+          </div>
+          <div className="flex justify-between items-center">
+            <span>{t("emailNotifications", language)}</span>
+            <Switch id="email-notifications" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Widget Visibility */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <h2 className="text-lg font-medium">{t("widgetVisibility", language)}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center">
+            <span>{t("tasksWidget", language)}</span>
+            <Switch defaultChecked id="tasks-widget" />
+          </div>
+          <div className="flex justify-between items-center">
+            <span>{t("calendarWidget", language)}</span>
+            <Switch defaultChecked id="calendar-widget" />
+          </div>
+          <div className="flex justify-between items-center">
+            <span>{t("remindersWidget", language)}</span>
+            <Switch defaultChecked id="reminders-widget" />
+          </div>
+          <div className="flex justify-between items-center">
+            <span>{t("dailyQuoteWidget", language)}</span>
+            <Switch defaultChecked id="quote-widget" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Privacy Controls */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <h2 className="text-lg font-medium">{t("privacyControls", language)}</h2>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex justify-between items-center">
+            <span>{t("profileVisibility", language)}</span>
+            <Switch defaultChecked id="profile-visibility" />
+          </div>
+          <div className="flex justify-between items-center">
+            <span>{t("activityStatus", language)}</span>
+            <Switch defaultChecked id="activity-status" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Delete Account */}
+      <Card className="mb-4">
+        <CardHeader className="pb-2">
+          <h2 className="text-lg font-medium">{t("deleteAccount", language)}</h2>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t("deleteAccountDescription", language)}
+          </p>
+          <Button variant="destructive">
+            {t("deleteMyAccount", language)}
           </Button>
-        </div>
-        
-        {/* Custom Quote Manager Dialog */}
-        <CustomQuoteManager 
-          open={customQuoteDialogOpen} 
-          onOpenChange={setCustomQuoteDialogOpen}
-          onUpdate={() => {
-            // Refresh any state if needed after quotes are updated
-            const updatedPrefs = getQuotePreferences();
-            setQuotePreferences(updatedPrefs);
-          }}
-        />
-      </div>
-    </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Save All Settings Button */}
+      <Button 
+        className="w-full mt-6 flex items-center gap-2" 
+        onClick={handleSaveAllSettings}
+      >
+        <Save className="h-4 w-4" />
+        {t("saveAllSettings", language)}
+      </Button>
+      
+      {/* Custom Quote Manager Dialog */}
+      <CustomQuoteManager 
+        open={customQuoteDialogOpen} 
+        onOpenChange={setCustomQuoteDialogOpen}
+        onUpdate={() => {
+          // Refresh any state if needed after quotes are updated
+          const updatedPrefs = getQuotePreferences();
+          setQuotePreferences(updatedPrefs);
+        }}
+      />
+    </div>
   );
 }
