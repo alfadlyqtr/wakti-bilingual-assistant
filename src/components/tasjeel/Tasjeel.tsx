@@ -1,14 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord } from "@/integrations/supabase/client";
+import { supabase, callEdgeFunctionWithRetry } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageContainer } from "@/components/PageContainer";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generatePDF } from "@/utils/pdfUtils";
 import { Logo3D } from "@/components/Logo3D";
 import {
@@ -23,12 +22,10 @@ import {
   FileText, 
   RefreshCw,
   ClipboardCopy,
-  Volume2,
-  History
+  Volume2
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
-import PreviousRecordings from "./PreviousRecordings";
 
 // Translations
 const translations = {
@@ -64,8 +61,6 @@ const translations = {
     downloadComplete: "Download complete",
     pdfExported: "PDF exported successfully",
     audioGenerationComplete: "Audio generated",
-    previousRecordings: "Previous Recordings",
-    newRecording: "New Recording",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -99,8 +94,6 @@ const translations = {
     downloadComplete: "اكتمل التحميل",
     pdfExported: "تم تصدير PDF بنجاح",
     audioGenerationComplete: "تم إنشاء الصوت",
-    previousRecordings: "التسجيلات السابقة",
-    newRecording: "تسجيل جديد",
   }
 };
 
@@ -121,8 +114,6 @@ const Tasjeel: React.FC = () => {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<"male" | "female">("male");
-  const [activeTab, setActiveTab] = useState<"record" | "history">("record");
-  const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   
@@ -265,27 +256,8 @@ const Tasjeel: React.FC = () => {
       console.log("Generated public URL:", audioUrl);
       setAudioUrl(audioUrl);
       
-      // Create a new record ID and save initial data
-      const recordId = uuidv4();
-      setCurrentRecordId(recordId);
-      
-      try {
-        // Save initial record
-        await saveTasjeelRecord({
-          original_recording_path: audioUrl,
-          duration: recordingTime,
-          title: new Date().toLocaleString(),
-          transcription: null,
-          summary: null,
-          summary_audio_path: null
-        });
-      } catch (dbError) {
-        console.error("Error saving initial record:", dbError);
-        // Continue with transcription even if DB save fails
-      }
-      
       // Transcribe the audio
-      await transcribeAudio(audioUrl, recordId);
+      await transcribeAudio(audioUrl);
       
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -295,7 +267,7 @@ const Tasjeel: React.FC = () => {
   };
   
   // Transcribe audio function with enhanced logging
-  const transcribeAudio = async (audioUrl: string, recordId?: string) => {
+  const transcribeAudio = async (audioUrl: string) => {
     try {
       setIsTranscribing(true);
       
@@ -318,19 +290,6 @@ const Tasjeel: React.FC = () => {
       console.log('Tasjeel: Transcription result received:', response);
       
       setTranscript(response.transcript);
-      
-      // Update record with transcription if we have a record ID
-      if (recordId) {
-        try {
-          await supabase
-            .from('tasjeel_records')
-            .update({ transcription: response.transcript })
-            .eq('id', recordId);
-        } catch (dbError) {
-          console.error("Error updating record with transcription:", dbError);
-        }
-      }
-      
       setRecordingStatus("idle");
     } catch (error) {
       console.error("Tasjeel: Error transcribing audio:", error);
@@ -372,18 +331,6 @@ const Tasjeel: React.FC = () => {
       }
       
       setSummary(response.summary);
-      
-      // Update record with summary if we have a record ID
-      if (currentRecordId) {
-        try {
-          await supabase
-            .from('tasjeel_records')
-            .update({ summary: response.summary })
-            .eq('id', currentRecordId);
-        } catch (dbError) {
-          console.error("Error updating record with summary:", dbError);
-        }
-      }
     } catch (error) {
       console.error("Error summarizing text:", error);
       toast(t.error + ": " + (error.message || "An error occurred while summarizing the text"));
@@ -392,7 +339,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Generate audio function - Updated to save to storage
+  // Generate audio function - Updated to handle raw MP3 audio
   const generateAudio = async () => {
     try {
       if (!summary.trim()) {
@@ -401,23 +348,9 @@ const Tasjeel: React.FC = () => {
       
       setIsGeneratingAudio(true);
       
-      // We'll now get the audio file directly as a blob and save it to storage if we have a record ID
+      // We'll now get the audio file directly as a blob
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
-      
-      // Create the request body - only add recordId if it exists
-      const requestBody: { 
-        summary: string; 
-        voice: "male" | "female";
-        recordId?: string;
-      } = { 
-        summary, 
-        voice: selectedVoice
-      };
-      
-      if (currentRecordId) {
-        requestBody.recordId = currentRecordId;
-      }
       
       const response = await fetch(`${supabaseUrl}/functions/v1/generate-speech`, {
         method: 'POST',
@@ -425,7 +358,7 @@ const Tasjeel: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${supabaseAnonKey}`
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({ summary, voice: selectedVoice })
       });
       
       if (!response.ok) {
@@ -433,29 +366,9 @@ const Tasjeel: React.FC = () => {
         throw new Error(errorData.error || 'Failed to generate audio');
       }
       
-      // Check content type to handle JSON or binary response
-      const contentType = response.headers.get('Content-Type');
-      
-      if (contentType && contentType.includes('application/json')) {
-        // This is a JSON response with URL
-        const jsonData = await response.json();
-        if (jsonData.audioUrl) {
-          // Create audio element for playback using the URL
-          const audio = new Audio(jsonData.audioUrl);
-          audioPlayerRef.current = audio;
-        } else {
-          throw new Error('No audio URL returned');
-        }
-      } else {
-        // Get the audio as a blob directly
-        const audioData = await response.blob();
-        setAudioBlob(audioData);
-        
-        // Create an object URL for playback
-        const audioObjectUrl = URL.createObjectURL(audioData);
-        const audio = new Audio(audioObjectUrl);
-        audioPlayerRef.current = audio;
-      }
+      // Get the audio as a blob directly
+      const audioData = await response.blob();
+      setAudioBlob(audioData);
       
       toast(t.audioGenerationComplete);
     } catch (error) {
@@ -540,233 +453,214 @@ const Tasjeel: React.FC = () => {
   return (
     <PageContainer title={t.pageTitle} showBackButton={true}>
       <div className="container py-4 space-y-6">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "history")}>
-          <TabsList className="grid grid-cols-2 w-full mb-6">
-            <TabsTrigger value="record" className="flex items-center gap-2">
-              <Mic className="h-4 w-4" />
-              {t.newRecording}
-            </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              {t.previousRecordings}
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="record" className="space-y-6">
-            {/* Recording section */}
-            <Card>
-              <CardContent className="pt-6">
-                <h2 className="text-lg font-semibold mb-4">{t.recordLabel}</h2>
-                
-                {recordingStatus === "recording" ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-center gap-4">
-                      <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center animate-pulse">
-                        <Mic className="h-8 w-8 text-white" />
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xl font-bold">{formatTime(recordingTime)}</div>
-                      <div className="text-sm text-muted-foreground">{t.recording}</div>
-                    </div>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full" 
-                      onClick={stopRecording}
+        {/* Recording section */}
+        <Card>
+          <CardContent className="pt-6">
+            <h2 className="text-lg font-semibold mb-4">{t.recordLabel}</h2>
+            
+            {recordingStatus === "recording" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-red-500 flex items-center justify-center animate-pulse">
+                    <Mic className="h-8 w-8 text-white" />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-bold">{formatTime(recordingTime)}</div>
+                  <div className="text-sm text-muted-foreground">{t.recording}</div>
+                </div>
+                <Button 
+                  variant="destructive" 
+                  className="w-full" 
+                  onClick={stopRecording}
+                >
+                  <StopCircle className="mr-2" />
+                  {t.stopRecording}
+                </Button>
+              </div>
+            ) : recordingStatus === "processing" ? (
+              <div className="flex flex-col items-center justify-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin" />
+                <p className="mt-4">{isTranscribing ? t.transcribingAudio : t.processingRecording}</p>
+              </div>
+            ) : (
+              <Button 
+                className="w-full" 
+                onClick={startRecording}
+              >
+                <Mic className="mr-2" />
+                {t.startRecording}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+        
+        {/* Transcription section */}
+        {transcript && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">{t.transcriptionLabel}</h2>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => copyToClipboard(transcript)}
+                  >
+                    <ClipboardCopy className="h-4 w-4 mr-1" />
+                    {t.copy}
+                  </Button>
+                </div>
+              </div>
+              
+              <Textarea 
+                value={transcript} 
+                onChange={(e) => setTranscript(e.target.value)}
+                className="min-h-[200px] mb-4"
+                placeholder={t.editTranscription}
+              />
+              
+              <Button
+                className="w-full"
+                onClick={summarizeText}
+                disabled={isSummarizing || !transcript.trim()}
+              >
+                {isSummarizing ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    {t.summarizingText}
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4" />
+                    {t.summarize}
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Summary section */}
+        {summary && (
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">{t.summaryLabel}</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyToClipboard(summary)}
+                >
+                  <ClipboardCopy className="h-4 w-4 mr-1" />
+                  {t.copy}
+                </Button>
+              </div>
+              
+              <Textarea 
+                value={summary} 
+                onChange={(e) => setSummary(e.target.value)}
+                className="min-h-[200px] mb-4"
+              />
+              
+              <div className="space-y-4">
+                <div className="flex flex-col space-y-2">
+                  <label className="font-medium">{t.selectVoice}</label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={selectedVoice === "male" ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => setSelectedVoice("male")}
                     >
-                      <StopCircle className="mr-2" />
-                      {t.stopRecording}
+                      {t.male}
+                    </Button>
+                    <Button
+                      variant={selectedVoice === "female" ? "default" : "outline"}
+                      className="flex-1"
+                      onClick={() => setSelectedVoice("female")}
+                    >
+                      {t.female}
                     </Button>
                   </div>
-                ) : recordingStatus === "processing" ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <RefreshCw className="h-8 w-8 animate-spin" />
-                    <p className="mt-4">{isTranscribing ? t.transcribingAudio : t.processingRecording}</p>
-                  </div>
-                ) : (
-                  <Button 
-                    className="w-full" 
-                    onClick={startRecording}
+                </div>
+                
+                <Button
+                  className="w-full"
+                  onClick={generateAudio}
+                  disabled={isGeneratingAudio || !summary.trim()}
+                >
+                  {isGeneratingAudio ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      {t.generatingAudio}
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="mr-2 h-4 w-4" />
+                      {t.generateAudio}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Audio player section - updated to use audioBlob instead of audioBase64 */}
+        {audioBlob && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-lg font-semibold mb-4">{t.audioPlayer}</h2>
+              
+              <div className="flex flex-col space-y-4">
+                <div className="flex justify-center gap-4">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={togglePlayPause}
                   >
-                    <Mic className="mr-2" />
-                    {t.startRecording}
+                    <PlayCircle className="h-6 w-6" />
+                    <span className="sr-only">{t.playAudio}</span>
                   </Button>
-                )}
-              </CardContent>
-            </Card>
-            
-            {/* Transcription section */}
-            {transcript && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">{t.transcriptionLabel}</h2>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => copyToClipboard(transcript)}
-                      >
-                        <ClipboardCopy className="h-4 w-4 mr-1" />
-                        {t.copy}
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <Textarea 
-                    value={transcript} 
-                    onChange={(e) => setTranscript(e.target.value)}
-                    className="min-h-[200px] mb-4"
-                    placeholder={t.editTranscription}
-                  />
                   
                   <Button
-                    className="w-full"
-                    onClick={summarizeText}
-                    disabled={isSummarizing || !transcript.trim()}
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (audioPlayerRef.current) {
+                        audioPlayerRef.current.pause();
+                      }
+                    }}
                   >
-                    {isSummarizing ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        {t.summarizingText}
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="mr-2 h-4 w-4" />
-                        {t.summarize}
-                      </>
-                    )}
+                    <PauseCircle className="h-6 w-6" />
+                    <span className="sr-only">{t.pauseAudio}</span>
                   </Button>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Summary section */}
-            {summary && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold">{t.summaryLabel}</h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(summary)}
-                    >
-                      <ClipboardCopy className="h-4 w-4 mr-1" />
-                      {t.copy}
-                    </Button>
-                  </div>
                   
-                  <Textarea 
-                    value={summary} 
-                    onChange={(e) => setSummary(e.target.value)}
-                    className="min-h-[200px] mb-4"
-                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={restartAudio}
+                  >
+                    <RefreshCw className="h-6 w-6" />
+                    <span className="sr-only">{t.restartAudio}</span>
+                  </Button>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Button onClick={downloadAudio}>
+                    <Download className="mr-2 h-4 w-4" />
+                    {t.downloadAudio}
+                  </Button>
                   
-                  <div className="space-y-4">
-                    <div className="flex flex-col space-y-2">
-                      <label className="font-medium">{t.selectVoice}</label>
-                      <div className="flex gap-2">
-                        <Button
-                          variant={selectedVoice === "male" ? "default" : "outline"}
-                          className="flex-1"
-                          onClick={() => setSelectedVoice("male")}
-                        >
-                          {t.male}
-                        </Button>
-                        <Button
-                          variant={selectedVoice === "female" ? "default" : "outline"}
-                          className="flex-1"
-                          onClick={() => setSelectedVoice("female")}
-                        >
-                          {t.female}
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    <Button
-                      className="w-full"
-                      onClick={generateAudio}
-                      disabled={isGeneratingAudio || !summary.trim()}
-                    >
-                      {isGeneratingAudio ? (
-                        <>
-                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                          {t.generatingAudio}
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="mr-2 h-4 w-4" />
-                          {t.generateAudio}
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Audio player section */}
-            {audioBlob && (
-              <Card>
-                <CardContent className="pt-6">
-                  <h2 className="text-lg font-semibold mb-4">{t.audioPlayer}</h2>
-                  
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex justify-center gap-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={togglePlayPause}
-                      >
-                        <PlayCircle className="h-6 w-6" />
-                        <span className="sr-only">{t.playAudio}</span>
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          if (audioPlayerRef.current) {
-                            audioPlayerRef.current.pause();
-                          }
-                        }}
-                      >
-                        <PauseCircle className="h-6 w-6" />
-                        <span className="sr-only">{t.pauseAudio}</span>
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={restartAudio}
-                      >
-                        <RefreshCw className="h-6 w-6" />
-                        <span className="sr-only">{t.restartAudio}</span>
-                      </Button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Button onClick={downloadAudio}>
-                        <Download className="mr-2 h-4 w-4" />
-                        {t.downloadAudio}
-                      </Button>
-                      
-                      <Button onClick={exportToPDF} variant="secondary">
-                        <FileText className="mr-2 h-4 w-4" />
-                        {t.exportToPDF}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="history">
-            <PreviousRecordings />
-          </TabsContent>
-        </Tabs>
+                  <Button onClick={exportToPDF} variant="secondary">
+                    <FileText className="mr-2 h-4 w-4" />
+                    {t.exportToPDF}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </PageContainer>
   );

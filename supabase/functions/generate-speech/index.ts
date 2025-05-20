@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { summary, voice, recordId } = await req.json();
+    const { summary, voice } = await req.json();
 
     if (!summary) {
       return new Response(
@@ -25,7 +25,7 @@ serve(async (req) => {
     // Map voice selection to actual OpenAI voice options
     const voiceOption = voice === 'male' ? 'onyx' : 'nova';
 
-    console.log(`Generating speech for text length: ${summary.length}, voice: ${voiceOption}, recordId: ${recordId || 'none'}`);
+    console.log(`Generating speech for text length: ${summary.length}, voice: ${voiceOption}`);
 
     // Call OpenAI TTS API
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
@@ -50,80 +50,10 @@ serve(async (req) => {
       );
     }
 
-    // Get audio data as arrayBuffer
+    // Get audio data and return it directly as audio/mpeg
     const audioBuffer = await response.arrayBuffer();
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/mpeg' });
     
-    // If recordId is provided, store the audio file permanently
-    if (recordId) {
-      try {
-        // Import Supabase client for Edge Function
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.7.1');
-        
-        const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
-        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string;
-        const supabase = createClient(supabaseUrl, supabaseAnonKey);
-        
-        // Generate a unique filename for the summary audio
-        const fileName = `summary-${recordId}-${Date.now()}.mp3`;
-        const filePath = `summary_audio/${fileName}`;
-        
-        // Upload the audio to storage
-        const { data: uploadData, error: uploadError } = await supabase
-          .storage
-          .from('tasjeel_recordings')
-          .upload(filePath, audioBlob, {
-            contentType: 'audio/mpeg',
-            cacheControl: '3600'
-          });
-        
-        if (uploadError) {
-          console.error('Error uploading summary audio:', uploadError);
-          // Continue execution to return the audio to the client even if storage fails
-        } else {
-          console.log('Summary audio uploaded successfully:', filePath);
-          
-          // Get the public URL
-          const { data: publicUrlData } = supabase
-            .storage
-            .from('tasjeel_recordings')
-            .getPublicUrl(filePath);
-          
-          const audioUrl = publicUrlData.publicUrl;
-          
-          // Update the record with the summary audio path
-          const { error: updateError } = await supabase
-            .from('tasjeel_records')
-            .update({ summary_audio_path: audioUrl })
-            .eq('id', recordId);
-          
-          if (updateError) {
-            console.error('Error updating record with summary audio path:', updateError);
-          } else {
-            console.log('Record updated with summary audio path');
-            
-            // Return success with the audio URL
-            return new Response(
-              JSON.stringify({ 
-                success: true, 
-                audioUrl: audioUrl 
-              }),
-              { 
-                headers: { 
-                  ...corsHeaders, 
-                  'Content-Type': 'application/json'
-                } 
-              }
-            );
-          }
-        }
-      } catch (storageError) {
-        console.error('Error in storage operations:', storageError);
-        // Continue execution to return the audio to the client even if storage fails
-      }
-    }
-    
-    // Return the audio directly with appropriate headers if storage failed or recordId wasn't provided
+    // Return the audio directly with appropriate headers
     return new Response(audioBuffer, { 
       headers: { 
         ...corsHeaders, 

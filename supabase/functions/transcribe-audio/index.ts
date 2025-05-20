@@ -190,15 +190,10 @@ serve(async (req) => {
 
     // Convert the audio data to a form that can be sent to OpenAI
     const formData = new FormData();
-    
-    // Create a proper Blob with explicit MIME type and filename
-    const audioBlob = new Blob([audioData], { type: 'audio/webm' });
-    
-    // Add file with explicit filename including extension, necessary for OpenAI to recognize the format
-    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('file', new Blob([audioData]), 'audio.webm');
     formData.append('model', 'whisper-1');
 
-    console.log('FormData created with proper MIME type and filename, sending to OpenAI Whisper API');
+    console.log('FormData created, sending to OpenAI Whisper API');
     
     // Send the audio to OpenAI Whisper API
     const openaiResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {

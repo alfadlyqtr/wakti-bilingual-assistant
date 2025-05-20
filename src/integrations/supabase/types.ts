@@ -507,45 +507,6 @@ export type Database = {
           },
         ]
       }
-      tasjeel_records: {
-        Row: {
-          created_at: string | null
-          duration: number | null
-          id: string
-          original_recording_path: string
-          summary: string | null
-          summary_audio_path: string | null
-          title: string | null
-          transcription: string | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          created_at?: string | null
-          duration?: number | null
-          id?: string
-          original_recording_path: string
-          summary?: string | null
-          summary_audio_path?: string | null
-          title?: string | null
-          transcription?: string | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string | null
-          duration?: number | null
-          id?: string
-          original_recording_path?: string
-          summary?: string | null
-          summary_audio_path?: string | null
-          title?: string | null
-          transcription?: string | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
       tasks: {
         Row: {
           created_at: string | null
@@ -608,10 +569,6 @@ export type Database = {
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined
-      }
-      format_timestamp: {
-        Args: { ts: string }
-        Returns: string
       }
       gtrgm_compress: {
         Args: { "": unknown }
