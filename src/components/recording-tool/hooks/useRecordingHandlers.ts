@@ -12,7 +12,6 @@ export const useRecordingHandlers = () => {
   
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [mimeType, setMimeType] = useState<string>('');
   
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
@@ -68,10 +67,9 @@ export const useRecordingHandlers = () => {
       audioChunks.current = [];
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const detectedMimeType = getBestSupportedMimeType();
-      setMimeType(detectedMimeType);
+      const mimeType = getBestSupportedMimeType();
       
-      mediaRecorder.current = new MediaRecorder(stream, { mimeType: detectedMimeType });
+      mediaRecorder.current = new MediaRecorder(stream, { mimeType });
       
       mediaRecorder.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -80,8 +78,8 @@ export const useRecordingHandlers = () => {
       };
       
       mediaRecorder.current.onstop = async () => {
-        // Create audio blob from chunks with the correct mime type
-        const audioBlob = new Blob(audioChunks.current, { type: detectedMimeType });
+        // Create audio blob from chunks
+        const audioBlob = new Blob(audioChunks.current, { type: 'audio/mp3' });
         setAudioBlob(audioBlob);
         
         // Create object URL for playback
@@ -167,12 +165,11 @@ export const useRecordingHandlers = () => {
     try {
       setStatus('uploading');
       
-      // Create a blob with the correct mime type
-      const audioBlob = new Blob(audioChunks.current, { type: mimeType });
+      // Create a single MP3 blob from all chunks
+      const audioBlob = new Blob(audioChunks.current, { type: 'audio/mp3' });
       
-      // Generate the path for storage with correct extension
-      const filePath = generateRecordingPath(user.id, recordingId, mimeType);
-      console.log(`Uploading recording to path: ${filePath} with mime type: ${mimeType}`);
+      // Generate the path for storage
+      const filePath = generateRecordingPath(user.id, recordingId);
       
       // Upload to Supabase Storage
       const { data, error } = await supabase.storage
@@ -208,7 +205,7 @@ export const useRecordingHandlers = () => {
       setStatus('error');
       return null;
     }
-  }, [user, recordingId, mimeType, setStatus, setError, toast]);
+  }, [user, recordingId, setStatus, setError, toast]);
   
   const formattedDuration = formatRecordingTime(recordingDuration);
   
@@ -220,7 +217,6 @@ export const useRecordingHandlers = () => {
     pauseRecording,
     resumeRecording,
     stopRecording,
-    uploadRecording,
-    mimeType
+    uploadRecording
   };
 };

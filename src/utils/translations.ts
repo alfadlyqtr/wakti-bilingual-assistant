@@ -1,625 +1,894 @@
+// Import the translation type
+import { TranslationKey } from './translationTypes';
+import { SupportedLanguage } from './translationTypes';
 
-import { Language, TranslationKey } from "./translationTypes";
+// Default language
+export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
 
-export const translations: Record<Language, Record<TranslationKey, string>> = {
-  en: {
-    app_name: "Flowy",
-    settings: "Settings",
-    welcome: "Welcome",
-    home: "Home",
-    dashboard: "Dashboard",
-    login: "Login",
-    signup: "Sign Up",
-    email: "Email",
-    password: "Password",
-    password_confirmation: "Password Confirmation",
-    forgot_password: "Forgot Password?",
-    reset_password: "Reset Password",
-    password_reset_link_sent: "Password reset link sent",
-    check_email_for_password_reset: "Check your email for a password reset link",
-    password_reset_success: "Password reset successful",
-    password_reset_error: "Password reset error",
-    logout: "Logout",
-    profile: "Profile",
-    account: "Account",
-    theme_dark: "Dark",
-    theme_light: "Light",
-    language_english: "English",
-    language_arabic: "Arabic",
-    language: "Language",
-    theme: "Theme",
-    appearance: "Appearance",
-    privacy: "Privacy",
-    billing_subscription: "Billing & Subscription",
-    delete_account: "Delete Account",
-    tasks: "Tasks",
-    reminders: "Reminders",
-    completed: "Completed",
-    task_title: "Task Title",
-    task_description: "Task Description",
-    due_date: "Due Date",
-    priority: "Priority",
-    priority_low: "Low",
-    priority_medium: "Medium",
-    priority_high: "High",
-    priority_urgent: "Urgent",
-    status: "Status",
-    status_pending: "Pending",
-    status_in_progress: "In Progress",
-    status_completed: "Completed",
-    status_cancelled: "Cancelled",
-    task_recurrence: "Task Recurrence",
-    recurrence_none: "None",
-    recurrence_daily: "Daily",
-    recurrence_weekly: "Weekly",
-    recurrence_monthly: "Monthly",
-    recurrence_custom: "Custom",
-    subtasks: "Subtasks",
-    add_task: "Add Task",
-    update_task: "Update Task",
-    delete_task: "Delete Task",
-    cancel: "Cancel",
-    save: "Save",
-    add: "Add",
-    edit: "Edit",
-    delete: "Delete",
-    share_task: "Share Task",
-    share_with: "Share With",
-    add_subtask: "Add Subtask",
-    title_required: "Title is required",
-    due_date_required: "Due date is required",
-    reminder_title: "Reminder Title",
-    add_reminder: "Add Reminder",
-    update_reminder: "Update Reminder",
-    delete_reminder: "Delete Reminder",
-    reminder_recurrence: "Reminder Recurrence",
-    today: "Today",
-    tomorrow: "Tomorrow",
-    next_week: "Next Week",
-    choose_date: "Choose Date",
-    AI: "AI",
-    ai_assistant: "AI Assistant",
-    chat_with_ai: "Chat with AI",
-    chatting_with_ai: "Chatting with AI...",
-    chat_placeholder: "Type your message...",
-    calendar: "Calendar",
-    events: "Events",
-    create_event: "Create Event",
-    event_title: "Event Title",
-    event_description: "Event Description",
-    event_location: "Event Location",
-    event_start_time: "Event Start Time",
-    event_end_time: "Event End Time",
-    event_all_day: "All Day",
-    event_type: "Event Type",
-    event_type_meeting: "Meeting",
-    event_type_appointment: "Appointment",
-    event_type_reminder: "Reminder",
-    event_type_other: "Other",
-    rsvp: "RSVP",
-    going: "Going",
-    not_going: "Not Going",
-    maybe: "Maybe",
-    send_invitation: "Send Invitation",
-    share_event: "Share Event",
-    update_event: "Update Event",
-    delete_event: "Delete Event",
-    event_created: "Event Created",
-    event_updated: "Event Updated",
-    event_deleted: "Event Deleted",
-    select_date: "Select Date",
-    confirm: "Confirm",
-    messages: "Messages",
-    contacts: "Contacts",
-    send_message: "Send Message",
-    new_message: "New Message",
-    reply: "Reply",
-    select_contact: "Select Contact",
-    create_group: "Create Group",
-    group_name: "Group Name",
-    add_members: "Add Members",
-    search_contacts: "Search Contacts",
-    blocked_users: "Blocked Users",
-    unblock: "Unblock",
-    block_user: "Block User",
-    contact_requests: "Contact Requests",
-    accept: "Accept",
-    decline: "Decline",
-    send_contact_request: "Send Contact Request",
-    general: "General",
-    notifications: "Notifications",
-    push_notifications: "Push Notifications",
-    email_notifications: "Email Notifications",
-    account_settings: "Account Settings",
-    profile_settings: "Profile Settings",
-    change_password: "Change Password",
-    current_password: "Current Password",
-    new_password: "New Password",
-    password_updated: "Password Updated",
-    password_update_error: "Password Update Error",
-    voice_summary: "Voice Summary",
-    recording_tool: "Recording Tool",
-    generate_summary: "Generate Summary",
-    transcribing: "Transcribing...",
-    transcribing_message: "Processing your recording into text...",
-    transcription: "Transcription",
-    generating_summary: "Generating Summary...",
-    summarizing_message: "Creating a concise summary of your recording...",
-    summary: "Summary",
-    copy_transcript: "Copy Transcript",
-    copy_summary: "Copy Summary",
-    export_pdf: "Export PDF",
-    download_recording: "Download Recording",
-    download_summary_audio: "Download Audio Summary",
-    copied_to_clipboard: "Copied to Clipboard",
-    copied_successfully: "Content copied successfully",
-    copy_failed: "Failed to copy content",
-    export_successful: "Export Successful",
-    pdf_downloaded_successfully: "PDF downloaded successfully",
-    export_failed: "Export Failed",
-    untitled_recording: "Untitled Recording",
-    recording_type: "Recording Type",
-    select_recording_type: "Select recording type",
-    meeting: "Meeting",
-    note: "Note",
-    idea: "Idea",
-    start_recording: "Start Recording",
-    stop: "Stop",
-    resume: "Resume",
-    transcribe_recording: "Transcribe Recording",
-    uploading_recording: "Uploading recording...",
-    unknown_error: "An unknown error occurred",
-    try_again: "Try Again",
-    new_recording: "New Recording",
-    pause: "Pause",
-    play_summary: "Play Summary",
-    go_back: "Go Back",
-    
-    // MobileNav
-    ai: "AI",
-    
-    // ThemeLanguageToggle
-    lightMode: "Light Mode",
-    darkMode: "Dark Mode",
-    arabic: "العربية",
-    english: "English",
-    
-    // ProfileImageUpload
-    profileImageUpdated: "Profile image updated",
-    error: "Error",
-    profileImage: "Profile Image",
-    uploading: "Uploading...",
-    changeImage: "Change Image",
-    
-    // UserMenu
-    user: "User",
-    
-    // Calendar components
-    noEvents: "No events",
-    notesLabel: "Notes",
-    titleRequired: "Title is required",
-    dateRequired: "Date is required",
-    editNote: "Edit Note",
-    createNote: "Create Note",
-    title: "Title",
-    titlePlaceholder: "Enter a title",
-    date: "Date",
-    description: "Description",
-    descriptionPlaceholder: "Enter a description",
-    monthView: "Month View",
-    month: "Month",
-    weekView: "Week View",
-    week: "Week",
-    yearView: "Year View",
-    year: "Year",
-    create: "Create",
-    
-    // Contacts components
-    contactUnblocked: "Contact unblocked",
-    errorUnblockingContact: "Error unblocking contact",
-    errorLoadingBlockedUsers: "Error loading blocked users",
-    noBlockedUsers: "No blocked users",
-    noBlockedUsersDescription: "You haven't blocked any users",
-    errorCreatingConversation: "Error creating conversation",
-    contactBlocked: "Contact blocked",
-    errorBlockingContact: "Error blocking contact",
-    messageStarted: "Message started",
-    removedFromFavorites: "Removed from favorites",
-    addedToFavorites: "Added to favorites",
-    errorLoadingContacts: "Error loading contacts",
-    noContacts: "No contacts",
-    searchToAddContacts: "Search to add contacts",
-    requestAccepted: "Request accepted",
-    errorAcceptingRequest: "Error accepting request",
-    requestRejected: "Request rejected",
-    errorRejectingRequest: "Error rejecting request",
-    errorBlockingUser: "Error blocking user",
-    errorLoadingRequests: "Error loading requests",
-    noContactRequests: "No contact requests",
-    waitingForRequests: "Waiting for requests",
-    requestSent: "Request sent",
-    errorSendingRequest: "Error sending request",
-    searchResults: "Search results",
-    sendRequest: "Send request",
-    noUsersFound: "No users found",
-    
-    // Dashboard components
-    dailyQuote: "Daily Quote",
-    
-    // Events components
-    pleaseCompleteAllRequiredFields: "Please complete all required fields",
-    success: "Success",
-    eventCreatedSuccessfully: "Event created successfully",
-    errorCreatingEvent: "Error creating event",
-    eventTitle: "Event title",
-    enterEventTitle: "Enter event title",
-    descriptionField: "Description",
-    enterEventDescription: "Enter event description",
-    location: "Location",
-    enterLocation: "Enter location",
-    time: "Time",
-    creating: "Creating...",
-    createFirstEvent: "Create your first event",
-    noLocation: "No location",
-    attendee: "Attendee",
-    attendees: "Attendees",
-    
-    // Messaging components
-    errorSendingMessage: "Error sending message",
-    loadingMessages: "Loading messages...",
-    startConversation: "Start Conversation",
-    sayHelloPrompt: "Say hello to start the conversation",
-    unblockContact: "Unblock Contact",
-    errorLoadingConversations: "Error loading conversations",
-    noConversationsFound: "No conversations found",
-    noConversations: "No conversations",
-    welcomeToMessages: "Welcome to Messages",
-    tapNewMessageToStart: "Tap new message to start a conversation",
-    noMessages: "No messages",
-    imageTooLarge: "Image too large",
-    typeMessage: "Type a message...",
-    stopRecording: "Stop recording",
-    noContactsFound: "No contacts found",
-    addContactsPrompt: "Add some contacts to start messaging",
-    goToContactsPage: "Go to contacts page",
-    creatingConversation: "Creating conversation...",
-    
-    // Task components
-    reminderTitle: "Reminder Title",
-    reminderDescription: "Reminder Description",
-    reminderDate: "Reminder Date",
-    reminderTime: "Reminder Time",
-    saveReminder: "Save Reminder",
-    deleteReminder: "Delete Reminder",
-    createReminder: "Create Reminder",
-    updateReminder: "Update Reminder",
-    createTask: "Create Task",
-    updateTask: "Update Task",
-    taskTitle: "Task Title",
-    taskDescription: "Task Description",
-    taskDueDate: "Due Date",
-    taskPriority: "Priority",
-    taskStatus: "Status",
-    shareTask: "Share Task",
-    deleteTask: "Delete Task",
-    lowPriority: "Low Priority",
-    mediumPriority: "Medium Priority",
-    highPriority: "High Priority",
-    urgentPriority: "Urgent Priority",
-    pending: "Pending",
-    inProgress: "In Progress",
-    cancelled: "Cancelled",
-    shareWith: "Share With",
-    addSubtask: "Add Subtask"
-  },
-  ar: {
-    app_name: "Flowy",
-    settings: "إعدادات",
-    welcome: "مرحباً",
-    home: "الرئيسية",
-    dashboard: "لوحة التحكم",
-    login: "تسجيل الدخول",
-    signup: "اشتراك",
-    email: "البريد الإلكتروني",
-    password: "كلمة المرور",
-    password_confirmation: "تأكيد كلمة المرور",
-    forgot_password: "هل نسيت كلمة المرور؟",
-    reset_password: "إعادة تعيين كلمة المرور",
-    password_reset_link_sent: "تم إرسال رابط إعادة تعيين كلمة المرور",
-    check_email_for_password_reset: "تحقق من بريدك الإلكتروني للحصول على رابط إعادة تعيين كلمة المرور",
-    password_reset_success: "تمت إعادة تعيين كلمة المرور بنجاح",
-    password_reset_error: "خطأ في إعادة تعيين كلمة المرور",
-    logout: "تسجيل الخروج",
-    profile: "الملف الشخصي",
-    account: "الحساب",
-    theme_dark: "داكن",
-    theme_light: "فاتح",
-    language_english: "الإنجليزية",
-    language_arabic: "العربية",
-    language: "اللغة",
-    theme: "السمة",
-    appearance: "المظهر",
-    privacy: "الخصوصية",
-    billing_subscription: "الفوترة والاشتراك",
-    delete_account: "حذف الحساب",
-    tasks: "مهام",
-    reminders: "تذكيرات",
-    completed: "مكتملة",
-    task_title: "عنوان المهمة",
-    task_description: "وصف المهمة",
-    due_date: "تاريخ الاستحقاق",
-    priority: "الأولوية",
-    priority_low: "منخفضة",
-    priority_medium: "متوسطة",
-    priority_high: "عالية",
-    priority_urgent: "عاجلة",
-    status: "الحالة",
-    status_pending: "قيد الانتظار",
-    status_in_progress: "قيد التقدم",
-    status_completed: "مكتملة",
-    status_cancelled: "ملغاة",
-    task_recurrence: "تكرار المهمة",
-    recurrence_none: "لا يوجد",
-    recurrence_daily: "يوميًا",
-    recurrence_weekly: "أسبوعيًا",
-    recurrence_monthly: "شهريًا",
-    recurrence_custom: "مخصص",
-    subtasks: "مهام فرعية",
-    add_task: "إضافة مهمة",
-    update_task: "تحديث مهمة",
-    delete_task: "حذف مهمة",
-    cancel: "إلغاء",
-    save: "حفظ",
-    add: "إضافة",
-    edit: "تعديل",
-    delete: "حذف",
-    share_task: "مشاركة المهمة",
-    share_with: "شارك مع",
-    add_subtask: "إضافة مهمة فرعية",
-    title_required: "العنوان مطلوب",
-    due_date_required: "تاريخ الاستحقاق مطلوب",
-    reminder_title: "عنوان التذكير",
-    add_reminder: "إضافة تذكير",
-    update_reminder: "تحديث تذكير",
-    delete_reminder: "حذف تذكير",
-    reminder_recurrence: "تكرار التذكير",
-    today: "اليوم",
-    tomorrow: "غدًا",
-    next_week: "الأسبوع القادم",
-    choose_date: "اختر تاريخ",
-    AI: "الذكاء الاصطناعي",
-    ai_assistant: "مساعد الذكاء الاصطناعي",
-    chat_with_ai: "الدردشة مع الذكاء الاصطناعي",
-    chatting_with_ai: "الدردشة مع الذكاء الاصطناعي...",
-    chat_placeholder: "اكتب رسالتك...",
-    calendar: "التقويم",
-    events: "الأحداث",
-    create_event: "إنشاء حدث",
-    event_title: "عنوان الحدث",
-    event_description: "وصف الحدث",
-    event_location: "موقع الحدث",
-    event_start_time: "وقت بدء الحدث",
-    event_end_time: "وقت انتهاء الحدث",
-    event_all_day: "طوال اليوم",
-    event_type: "نوع الحدث",
-    event_type_meeting: "اجتماع",
-    event_type_appointment: "موعد",
-    event_type_reminder: "تذكير",
-    event_type_other: "آخر",
-    rsvp: "RSVP",
-    going: "ذاهب",
-    not_going: "غير ذاهب",
-    maybe: "ربما",
-    send_invitation: "إرسال دعوة",
-    share_event: "مشاركة الحدث",
-    update_event: "تحديث الحدث",
-    delete_event: "حذف الحدث",
-    event_created: "تم إنشاء الحدث",
-    event_updated: "تم تحديث الحدث",
-    event_deleted: "تم حذف الحدث",
-    select_date: "اختر تاريخ",
-    confirm: "تأكيد",
-    messages: "رسائل",
-    contacts: "جهات الاتصال",
-    send_message: "إرسال رسالة",
-    new_message: "رسالة جديدة",
-    reply: "رد",
-    select_contact: "اختر جهة اتصال",
-    create_group: "إنشاء مجموعة",
-    group_name: "اسم المجموعة",
-    add_members: "إضافة أعضاء",
-    search_contacts: "البحث عن جهات الاتصال",
-    blocked_users: "المستخدمون المحظورون",
-    unblock: "إلغاء الحظر",
-    block_user: "حظر المستخدم",
-    contact_requests: "طلبات الاتصال",
-    accept: "قبول",
-    decline: "رفض",
-    send_contact_request: "إرسال طلب اتصال",
-    general: "عام",
-    notifications: "إشعارات",
-    push_notifications: "إشعارات الدفع",
-    email_notifications: "إشعارات البريد الإلكتروني",
-    account_settings: "إعدادات الحساب",
-    profile_settings: "إعدادات الملف الشخصي",
-    change_password: "تغيير كلمة المرور",
-    current_password: "كلمة المرور الحالية",
-    new_password: "كلمة المرور الجديدة",
-    password_updated: "تم تحديث كلمة المرور",
-    password_update_error: "خطأ في تحديث كلمة المرور",
-    voice_summary: "ملخص صوتي",
-    recording_tool: "أداة التسجيل",
-    generate_summary: "إنشاء ملخص",
-    transcribing: "جاري النسخ...",
-    transcribing_message: "جاري تحويل التسجيل إلى نص...",
-    transcription: "نص التسجيل",
-    generating_summary: "جاري إنشاء الملخص...",
-    summarizing_message: "إنشاء ملخص موجز للتسجيل الخاص بك...",
-    summary: "ملخص",
-    copy_transcript: "نسخ النص",
-    copy_summary: "نسخ الملخص",
-    export_pdf: "تصدير PDF",
-    download_recording: "تحميل التسجيل",
-    download_summary_audio: "تحميل ملخص صوتي",
-    copied_to_clipboard: "تم النسخ إلى الحافظة",
-    copied_successfully: "تم نسخ المحتوى بنجاح",
-    copy_failed: "فشل نسخ المحتوى",
-    export_successful: "تم التصدير بنجاح",
-    pdf_downloaded_successfully: "تم تحميل ملف PDF بنجاح",
-    export_failed: "فشل التصدير",
-    untitled_recording: "تسجيل بدون عنوان",
-    recording_type: "نوع التسجيل",
-    select_recording_type: "اختر نوع التسجيل",
-    meeting: "اجتماع",
-    note: "ملاحظة",
-    idea: "فكرة",
-    start_recording: "بدء التسجيل",
-    stop: "إيقاف",
-    resume: "استئناف",
-    transcribe_recording: "نسخ التسجيل",
-    uploading_recording: "جاري تحميل التسجيل...",
-    unknown_error: "حدث خطأ غير معروف",
-    try_again: "حاول مرة أخرى",
-    new_recording: "تسجيل جديد",
-    pause: "إيقاف مؤقت",
-    play_summary: "تشغيل الملخص",
-    go_back: "العودة",
-    
-    // MobileNav
-    ai: "الذكاء الاصطناعي",
-    
-    // ThemeLanguageToggle
-    lightMode: "الوضع الفاتح",
-    darkMode: "الوضع الداكن",
-    arabic: "العربية",
-    english: "English",
-    
-    // ProfileImageUpload
-    profileImageUpdated: "تم تحديث صورة الملف الشخصي",
-    error: "خطأ",
-    profileImage: "صورة الملف الشخصي",
-    uploading: "جاري التحميل...",
-    changeImage: "تغيير الصورة",
-    
-    // UserMenu
-    user: "مستخدم",
-    
-    // Calendar components
-    noEvents: "لا توجد أحداث",
-    notesLabel: "ملاحظات",
-    titleRequired: "العنوان مطلوب",
-    dateRequired: "التاريخ مطلوب",
-    editNote: "تعديل ملاحظة",
-    createNote: "إنشاء ملاحظة",
-    title: "العنوان",
-    titlePlaceholder: "أدخل عنوانًا",
-    date: "التاريخ",
-    description: "الوصف",
-    descriptionPlaceholder: "أدخل وصفًا",
-    monthView: "عرض الشهر",
-    month: "شهر",
-    weekView: "عرض الأسبوع",
-    week: "أسبوع",
-    yearView: "عرض السنة",
-    year: "سنة",
-    create: "إنشاء",
-    
-    // Contacts components
-    contactUnblocked: "تم إلغاء حظر جهة الاتصال",
-    errorUnblockingContact: "خطأ في إلغاء حظر جهة الاتصال",
-    errorLoadingBlockedUsers: "خطأ في تحميل المستخدمين المحظورين",
-    noBlockedUsers: "لا يوجد مستخدمين محظورين",
-    noBlockedUsersDescription: "لم تقم بحظر أي مستخدمين",
-    errorCreatingConversation: "خطأ في إنشاء المحادثة",
-    contactBlocked: "تم حظر جهة الاتصال",
-    errorBlockingContact: "خطأ في حظر جهة الاتصال",
-    messageStarted: "تم بدء الرسالة",
-    removedFromFavorites: "تمت الإزالة من المفضلة",
-    addedToFavorites: "تمت الإضافة إلى المفضلة",
-    errorLoadingContacts: "خطأ في تحميل جهات الاتصال",
-    noContacts: "لا توجد جهات اتصال",
-    searchToAddContacts: "ابحث لإضافة جهات اتصال",
-    requestAccepted: "تم قبول الطلب",
-    errorAcceptingRequest: "خطأ في قبول الطلب",
-    requestRejected: "تم رفض الطلب",
-    errorRejectingRequest: "خطأ في رفض الطلب",
-    errorBlockingUser: "خطأ في حظر المستخدم",
-    errorLoadingRequests: "خطأ في تحميل الطلبات",
-    noContactRequests: "لا توجد طلبات اتصال",
-    waitingForRequests: "في انتظار الطلبات",
-    requestSent: "تم إرسال الطلب",
-    errorSendingRequest: "خطأ في إرسال الطلب",
-    searchResults: "نتائج البحث",
-    sendRequest: "إرسال طلب",
-    noUsersFound: "لم يتم العثور على مستخدمين",
-    
-    // Dashboard components
-    dailyQuote: "اقتباس اليوم",
-    
-    // Events components
-    pleaseCompleteAllRequiredFields: "يرجى إكمال جميع الحقول المطلوبة",
-    success: "نجاح",
-    eventCreatedSuccessfully: "تم إنشاء الحدث بنجاح",
-    errorCreatingEvent: "خطأ في إنشاء الحدث",
-    eventTitle: "عنوان الحدث",
-    enterEventTitle: "أدخل عنوان الحدث",
-    descriptionField: "الوصف",
-    enterEventDescription: "أدخل وصف الحدث",
-    location: "الموقع",
-    enterLocation: "أدخل الموقع",
-    time: "الوقت",
-    creating: "جاري الإنشاء...",
-    createFirstEvent: "أنشئ أول حدث لك",
-    noLocation: "لا يوجد موقع",
-    attendee: "حاضر",
-    attendees: "الحاضرون",
-    
-    // Messaging components
-    errorSendingMessage: "خطأ في إرسال الرسالة",
-    loadingMessages: "جاري تحميل الرسائل...",
-    startConversation: "بدء محادثة",
-    sayHelloPrompt: "قل مرحباً لبدء المحادثة",
-    unblockContact: "إلغاء حظر جهة الاتصال",
-    errorLoadingConversations: "خطأ في تحميل المحادثات",
-    noConversationsFound: "لم يتم العثور على محادثات",
-    noConversations: "لا توجد محادثات",
-    welcomeToMessages: "مرحباً بك في الرسائل",
-    tapNewMessageToStart: "اضغط على رسالة جديدة لبدء محادثة",
-    noMessages: "لا توجد رسائل",
-    imageTooLarge: "الصورة كبيرة جدًا",
-    typeMessage: "اكتب رسالة...",
-    stopRecording: "إيقاف التسجيل",
-    noContactsFound: "لم يتم العثور على جهات اتصال",
-    addContactsPrompt: "أضف بعض جهات الاتصال لبدء المراسلة",
-    goToContactsPage: "اذهب إلى صفحة جهات الاتصال",
-    creatingConversation: "جاري إنشاء المحادثة...",
-    
-    // Task components
-    reminderTitle: "عنوان التذكير",
-    reminderDescription: "وصف التذكير",
-    reminderDate: "تاريخ التذكير",
-    reminderTime: "وقت التذكير",
-    saveReminder: "حفظ التذكير",
-    deleteReminder: "حذف التذكير",
-    createReminder: "إنشاء تذكير",
-    updateReminder: "تحديث التذكير",
-    createTask: "إنشاء مهمة",
-    updateTask: "تحديث المهمة",
-    taskTitle: "عنوان المهمة",
-    taskDescription: "وصف المهمة",
-    taskDueDate: "تاريخ الاستحقاق",
-    taskPriority: "الأولوية",
-    taskStatus: "الحالة",
-    shareTask: "مشاركة المهمة",
-    deleteTask: "حذف المهمة",
-    lowPriority: "أولوية منخفضة",
-    mediumPriority: "أولوية متوسطة",
-    highPriority: "أولوية عالية",
-    urgentPriority: "أولوية عاجلة",
-    pending: "قيد الانتظار",
-    inProgress: "قيد التقدم",
-    cancelled: "ملغاة",
-    shareWith: "مشاركة مع",
-    addSubtask: "إضافة مهمة فرعية"
+// Translation function
+export function t(key: TranslationKey, language: string = DEFAULT_LANGUAGE): string {
+  const lang = language as SupportedLanguage;
+  if (!translations[key]) {
+    console.warn(`Translation key not found: ${key}`);
+    return key;
   }
+  return translations[key][lang] || translations[key][DEFAULT_LANGUAGE];
+}
+
+export const translations: Record<string, Record<SupportedLanguage, string>> = {
+  // App-wide
+  appName: {
+    en: "Companion",
+    ar: "رفيق"
+  },
+  loading: {
+    en: "Loading...",
+    ar: "جاري التحميل..."
+  },
+  error: {
+    en: "Error",
+    ar: "خطأ"
+  },
+  success: {
+    en: "Success",
+    ar: "نجاح"
+  },
+  save: {
+    en: "Save",
+    ar: "حفظ"
+  },
+  cancel: {
+    en: "Cancel",
+    ar: "إلغاء"
+  },
+  delete: {
+    en: "Delete",
+    ar: "حذف"
+  },
+  edit: {
+    en: "Edit",
+    ar: "تعديل"
+  },
+  create: {
+    en: "Create",
+    ar: "إنشاء"
+  },
+  submit: {
+    en: "Submit",
+    ar: "إرسال"
+  },
+  search: {
+    en: "Search",
+    ar: "بحث"
+  },
+  
+  // Navigation
+  home: {
+    en: "Home",
+    ar: "الرئيسية"
+  },
+  chat: {
+    en: "Chat",
+    ar: "محادثة"
+  },
+  tasks: {
+    en: "Tasks",
+    ar: "المهام"
+  },
+  calendar: {
+    en: "Calendar",
+    ar: "التقويم"
+  },
+  settings: {
+    en: "Settings",
+    ar: "الإعدادات"
+  },
+  profile: {
+    en: "Profile",
+    ar: "الملف الشخصي"
+  },
+  messages: {
+    en: "Messages",
+    ar: "الرسائل"
+  },
+  
+  // Settings translations 
+  appearance: {
+    en: "Appearance",
+    ar: "المظهر"
+  },
+  language: {
+    en: "Language",
+    ar: "اللغة"
+  },
+  theme: {
+    en: "Theme",
+    ar: "السمة"
+  },
+  notifications: {
+    en: "Notifications",
+    ar: "الإشعارات"
+  },
+  privacy: {
+    en: "Privacy",
+    ar: "الخصوصية"
+  },
+  account: {
+    en: "Account",
+    ar: "الحساب"
+  },
+  logout: {
+    en: "Logout",
+    ar: "تسجيل الخروج"
+  },
+  lightMode: {
+    en: "Light Mode",
+    ar: "الوضع الفاتح"
+  },
+  darkMode: {
+    en: "Dark Mode",
+    ar: "الوضع الداكن"
+  },
+  systemDefault: {
+    en: "System Default",
+    ar: "إعدادات النظام"
+  },
+  english: {
+    en: "English",
+    ar: "الإنجليزية"
+  },
+  arabic: {
+    en: "Arabic",
+    ar: "العربية"
+  },
+  appearanceSettings: {
+    en: "Customize how the app looks",
+    ar: "تخصيص مظهر التطبيق"
+  },
+  
+  // Chat
+  typeMessage: {
+    en: "Type a message...",
+    ar: "اكتب رسالة..."
+  },
+  sendMessage: {
+    en: "Send",
+    ar: "إرسال"
+  },
+  newChat: {
+    en: "New Chat",
+    ar: "محادثة جديدة"
+  },
+  clearChat: {
+    en: "Clear Chat",
+    ar: "مسح المحادثة"
+  },
+  thinking: {
+    en: "Thinking...",
+    ar: "يفكر..."
+  },
+  
+  // Tasks
+  newTask: {
+    en: "New Task",
+    ar: "مهمة جديدة"
+  },
+  taskTitle: {
+    en: "Task Title",
+    ar: "عنوان المهمة"
+  },
+  taskDescription: {
+    en: "Description",
+    ar: "الوصف"
+  },
+  dueDate: {
+    en: "Due Date",
+    ar: "تاريخ الاستحقاق"
+  },
+  priority: {
+    en: "Priority",
+    ar: "الأولوية"
+  },
+  status: {
+    en: "Status",
+    ar: "الحالة"
+  },
+  high: {
+    en: "High",
+    ar: "عالية"
+  },
+  medium: {
+    en: "Medium",
+    ar: "متوسطة"
+  },
+  low: {
+    en: "Low",
+    ar: "منخفضة"
+  },
+  completed: {
+    en: "Completed",
+    ar: "مكتملة"
+  },
+  inProgress: {
+    en: "In Progress",
+    ar: "قيد التنفيذ"
+  },
+  notStarted: {
+    en: "Not Started",
+    ar: "لم تبدأ"
+  },
+  
+  // Calendar
+  today: {
+    en: "Today",
+    ar: "اليوم"
+  },
+  month: {
+    en: "Month",
+    ar: "الشهر"
+  },
+  week: {
+    en: "Week",
+    ar: "الأسبوع"
+  },
+  day: {
+    en: "Day",
+    ar: "اليوم"
+  },
+  newEvent: {
+    en: "New Event",
+    ar: "حدث جديد"
+  },
+  eventTitle: {
+    en: "Event Title",
+    ar: "عنوان الحدث"
+  },
+  startTime: {
+    en: "Start Time",
+    ar: "وقت البدء"
+  },
+  endTime: {
+    en: "End Time",
+    ar: "وقت الانتهاء"
+  },
+  location: {
+    en: "Location",
+    ar: "الموقع"
+  },
+  
+  // Contacts
+  contactRequestSettings: {
+    en: "Contact Requests",
+    ar: "طلبات الاتصال"
+  },
+  manageBlockedUsers: {
+    en: "Blocked Users",
+    ar: "المستخدمون المحظورون"
+  },
+  searchContacts: {
+    en: "Search for users by name, username, or email",
+    ar: "البحث عن المستخدمين بالاسم أو اسم المستخدم أو البريد الإلكتروني"
+  },
+  searchResults: {
+    en: "Search Results",
+    ar: "نتائج البحث"
+  },
+  sendRequest: {
+    en: "Send Request",
+    ar: "إرسال طلب"
+  },
+  noUsersFound: {
+    en: "No users found",
+    ar: "لم يتم العثور على مستخدمين"
+  },
+  messageStarted: {
+    en: "Message Started",
+    ar: "بدأت المحادثة"
+  },
+  chattingWithUser: {
+    en: "Chatting with",
+    ar: "محادثة مع"
+  },
+  addedToFavorites: {
+    en: "Added to Favorites",
+    ar: "تمت الإضافة إلى المفضلة"
+  },
+  removedFromFavorites: {
+    en: "Removed from Favorites",
+    ar: "تمت الإزالة من المفضلة"
+  },
+  errorCreatingConversation: {
+    en: "Failed to create conversation",
+    ar: "فشل في إنشاء المحادثة"
+  },
+  unblock: {
+    en: "Unblock",
+    ar: "إلغاء الحظر"
+  },
+  
+  // Contact sections
+  contacts: {
+    en: "Contacts",
+    ar: "جهات الاتصال"
+  },
+  requests: {
+    en: "Requests",
+    ar: "الطلبات"
+  },
+  blocked: {
+    en: "Blocked",
+    ar: "المحظورين"
+  },
+  
+  // Empty states
+  noContacts: {
+    en: "No contacts yet",
+    ar: "لا توجد جهات اتصال بعد"
+  },
+  searchToAddContacts: {
+    en: "Search for people to add as contacts",
+    ar: "ابحث عن أشخاص لإضافتهم كجهات اتصال"
+  },
+  noContactRequests: {
+    en: "No contact requests",
+    ar: "لا توجد طلبات اتصال"
+  },
+  waitingForRequests: {
+    en: "When someone sends you a request, it will appear here",
+    ar: "عندما يرسل لك شخص ما طلباً، سيظهر هنا"
+  },
+  noBlockedUsers: {
+    en: "No blocked users",
+    ar: "لا يوجد مستخدمين محظورين"
+  },
+  noBlockedUsersDescription: {
+    en: "You haven't blocked any users yet",
+    ar: "لم تقم بحظر أي مستخدمين حتى الآن"
+  },
+  
+  // Contact settings
+  contactsSettings: {
+    en: "Contact Settings",
+    ar: "إعدادات جهات الاتصال"
+  },
+  contactsSettingsDescription: {
+    en: "Manage how others connect with you",
+    ar: "إدارة كيفية اتصال الآخرين بك"
+  },
+  autoApproveRequests: {
+    en: "Auto-approve contact requests",
+    ar: "الموافقة التلقائية على طلبات الاتصال"
+  },
+  autoApproveExplanation: {
+    en: "When enabled, all contact requests will be automatically approved",
+    ar: "عند التفعيل، ستتم الموا��قة تلقائياً على جميع طلبات الاتصال"
+  },
+  contactSettingsUpdated: {
+    en: "Contact settings updated successfully",
+    ar: "تم تحديث إعدادات جهات الاتصال بنجاح"
+  },
+  
+  // Success messages
+  settingsUpdated: {
+    en: "Settings Updated",
+    ar: "تم تحديث الإعدادات"
+  },
+  requestSent: {
+    en: "Request Sent",
+    ar: "تم إرسال الطلب"
+  },
+  contactRequestSent: {
+    en: "Contact request sent successfully",
+    ar: "تم إرسال طلب الاتصال بنجاح"
+  },
+  requestAccepted: {
+    en: "Request Accepted",
+    ar: "تم قبول الطلب"
+  },
+  contactAddedDescription: {
+    en: "Contact added to your contacts list",
+    ar: "تمت إضافة جهة الاتصال إلى قائمة جهات الاتصال الخاصة بك"
+  },
+  requestRejected: {
+    en: "Request Rejected",
+    ar: "تم رفض الطلب"
+  },
+  contactRejectedDescription: {
+    en: "Contact request has been rejected",
+    ar: "تم رفض طلب الاتصال"
+  },
+  contactBlocked: {
+    en: "Contact Blocked",
+    ar: "تم حظر جهة الاتصال"
+  },
+  userBlockedDescription: {
+    en: "User has been added to your blocked list",
+    ar: "تمت إضافة المستخدم إلى قائمة المحظورين"
+  },
+  blockedUserDescription: {
+    en: "User can no longer contact you",
+    ar: "لم يعد بإمكان المستخدم الاتصال بك"
+  },
+  contactUnblocked: {
+    en: "Contact Unblocked",
+    ar: "تم إلغاء حظر جهة الاتصال"
+  },
+  userUnblockedDescription: {
+    en: "User has been removed from your blocked list",
+    ar: "تمت إزالة المستخدم من قائمة المحظورين"
+  },
+  
+  // Error messages
+  errorSendingRequest: {
+    en: "Failed to send contact request",
+    ar: "فشل في إرسال طلب الاتصال"
+  },
+  errorAcceptingRequest: {
+    en: "Failed to accept contact request",
+    ar: "فشل في قبول طلب الاتصال"
+  },
+  errorRejectingRequest: {
+    en: "Failed to reject contact request",
+    ar: "فشل في رفض طلب الاتصال"
+  },
+  errorBlockingUser: {
+    en: "Failed to block user",
+    ar: "فشل في حظر المستخدم"
+  },
+  errorBlockingContact: {
+    en: "Failed to block contact",
+    ar: "فشل في حظر جهة الاتصال"
+  },
+  errorUnblockingContact: {
+    en: "Failed to unblock contact",
+    ar: "فشل في إلغاء حظر جهة الاتصال"
+  },
+  errorLoadingContacts: {
+    en: "Error loading contacts",
+    ar: "خطأ في تحميل جهات الاتصال"
+  },
+  errorLoadingRequests: {
+    en: "Error loading contact requests",
+    ar: "خطأ في تحميل طلبات الاتصال"
+  },
+  errorLoadingBlockedUsers: {
+    en: "Error loading blocked users",
+    ar: "خطأ في تحميل المستخدمين المحظورين"
+  },
+  errorUpdatingSettings: {
+    en: "Failed to update settings",
+    ar: "فشل في تحديث الإعدادات"
+  },
+  
+  // Messages
+  noMessages: {
+    en: "No messages yet",
+    ar: "لا توجد رسائل بعد"
+  },
+  startConversation: {
+    en: "Start a conversation",
+    ar: "بدء محادثة"
+  },
+  newMessage: {
+    en: "New Message",
+    ar: "رسالة جديدة"
+  },
+  selectContact: {
+    en: "Select a contact",
+    ar: "اختر جهة اتصال"
+  },
+  
+  // Voice notes
+  recordVoiceNote: {
+    en: "Record Voice Note",
+    ar: "تسجيل ملاحظة صوتية"
+  },
+  stopRecording: {
+    en: "Stop Recording",
+    ar: "إيقاف التسجيل"
+  },
+  playVoiceNote: {
+    en: "Play Voice Note",
+    ar: "تشغيل الملاحظة الصوتية"
+  },
+  pauseVoiceNote: {
+    en: "Pause Voice Note",
+    ar: "إيقاف الملاحظة الصوتية مؤقتًا"
+  },
+  
+  // Image generation
+  generateImage: {
+    en: "Generate Image",
+    ar: "إنشاء صورة"
+  },
+  imagePrompt: {
+    en: "Describe the image you want to generate",
+    ar: "صف الصورة التي تريد إنشاءها"
+  },
+  generatingImage: {
+    en: "Generating image...",
+    ar: "جاري إنشاء الصورة..."
+  },
+  downloadImage: {
+    en: "Download Image",
+    ar: "تنزيل الصورة"
+  },
+  
+  // Auth
+  login: {
+    en: "Login",
+    ar: "تسجيل الدخول"
+  },
+  signup: {
+    en: "Sign Up",
+    ar: "إنشاء حساب"
+  },
+  email: {
+    en: "Email",
+    ar: "البريد الإلكتروني"
+  },
+  password: {
+    en: "Password",
+    ar: "كلمة المرور"
+  },
+  forgotPassword: {
+    en: "Forgot Password?",
+    ar: "نسيت كلمة المرور؟"
+  },
+  resetPassword: {
+    en: "Reset Password",
+    ar: "إعادة تعيين كلمة المرور"
+  },
+  
+  // Misc
+  welcomeBack: {
+    en: "Welcome back!",
+    ar: "مرحبًا بعودتك!"
+  },
+  getStarted: {
+    en: "Get Started",
+    ar: "البدء"
+  },
+  learnMore: {
+    en: "Learn More",
+    ar: "معرفة المزيد"
+  },
+  comingSoon: {
+    en: "Coming Soon",
+    ar: "قريبًا"
+  },
+  beta: {
+    en: "Beta",
+    ar: "تجريبي"
+  },
+  version: {
+    en: "Version",
+    ar: "الإصدار"
+  },
+  
+  // Additional translations for account and settings
+  profileManagement: {
+    en: "Manage your profile information.",
+    ar: "إدارة معلومات الملف الشخصي الخاص بك."
+  },
+  usernameHelpText: {
+    en: "Your account username. Cannot be changed.",
+    ar: "اسم المستخدم للحساب الخاص بك. لا يمكن تغييره."
+  },
+  updating: {
+    en: "Updating...",
+    ar: "جاري التحديث..."
+  },
+  updateName: {
+    en: "Update Name",
+    ar: "تحديث الاسم"
+  },
+  updateEmail: {
+    en: "Update Email",
+    ar: "تحديث البريد الإلكتروني"
+  },
+  updatePassword: {
+    en: "Update Password",
+    ar: "تحديث كلمة المرور"
+  },
+  passwordsDoNotMatch: {
+    en: "Passwords do not match",
+    ar: "كلمات السر غير متطابقة"
+  },
+  profileUpdated: {
+    en: "Profile updated successfully",
+    ar: "تم تحديث الملف الشخصي بنجاح"
+  },
+  emailUpdated: {
+    en: "Email updated successfully",
+    ar: "تم تحديث البريد الإلكتروني بنجاح"
+  },
+  passwordUpdated: {
+    en: "Password updated successfully",
+    ar: "تم تحديث كلمة المرور بنجاح"
+  },
+  errorUpdatingName: {
+    en: "Failed to update name",
+    ar: "فشل تحديث الاسم"
+  },
+  errorUpdatingProfile: {
+    en: "Failed to update profile",
+    ar: "فشل تحديث الملف الشخصي"
+  },
+  errorUpdatingEmail: {
+    en: "Failed to update email",
+    ar: "فشل تحديث البريد الإلكتروني"
+  },
+  errorUpdatingPassword: {
+    en: "Failed to update password",
+    ar: "فشل تحديث كلمة المرور"
+  },
+  errorSigningOut: {
+    en: "Failed to sign out",
+    ar: "فشل تسجيل الخروج"
+  },
+  accountOptions: {
+    en: "Account Options",
+    ar: "خيارات الحساب"
+  },
+  profileImage: {
+    en: "Profile image",
+    ar: "صورة الملف الشخصي"
+  },
+  changeImage: {
+    en: "Change Image",
+    ar: "تغيير الصورة"
+  },
+  profileImageUpdated: {
+    en: "Profile image updated successfully",
+    ar: "تم تحديث صورة الملف الشخصي بنجاح"
+  },
+  dailyQuoteSettings: {
+    en: "Daily Quote Settings",
+    ar: "إعدادات الاقتباس اليومي"
+  },
+  quoteCategory: {
+    en: "Quote Category",
+    ar: "فئة الاقتباس"
+  },
+  quoteChangeFrequency: {
+    en: "Quote Change Frequency",
+    ar: "تكرار تغيير الاقتباس"
+  },
+  manageCustomQuotes: {
+    en: "Manage Custom Quotes",
+    ar: "إدارة الاقتباسات المخصصة"
+  },
+  twiceDaily: {
+    en: "2 times a day",
+    ar: "مرتان في اليوم"
+  },
+  fourTimesDaily: {
+    en: "4 times a day",
+    ar: "4 مرات في اليوم"
+  },
+  sixTimesDaily: {
+    en: "6 times a day",
+    ar: "6 مرات في اليوم"
+  },
+  everyAppStart: {
+    en: "Every app start",
+    ar: "مع كل بدء تشغيل للتطبيق"
+  },
+  saveAllSettingsQuestion: {
+    en: "Save all settings?",
+    ar: "حفظ جميع الإعدادات؟"
+  },
+  saveAllSettingsConfirmation: {
+    en: "Are you sure you want to save all changes?",
+    ar: "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟"
+  },
+  allSettingsSaved: {
+    en: "All settings saved",
+    ar: "تم حفظ جميع الإعدادات"
+  },
+  saveAllSettings: {
+    en: "Save All Settings",
+    ar: "حفظ جميع الإعدادات"
+  },
+  pushNotifications: {
+    en: "Push Notifications",
+    ar: "إشعارات الدفع"
+  },
+  emailNotifications: {
+    en: "Email Notifications",
+    ar: "إشعارات البريد الإلكتروني"
+  },
+  tasksWidget: {
+    en: "Tasks Widget",
+    ar: "أداة المهام المصغرة"
+  },
+  calendarWidget: {
+    en: "Calendar Widget",
+    ar: "أداة التقويم المصغرة"
+  },
+  remindersWidget: {
+    en: "Reminders Widget",
+    ar: "أداة التذكيرات المصغرة"
+  },
+  dailyQuoteWidget: {
+    en: "Daily Quote Widget",
+    ar: "أداة الاقتباس اليومي المصغرة"
+  },
+  profileVisibility: {
+    en: "Profile Visibility",
+    ar: "رؤية الملف الشخصي"
+  },
+  activityStatus: {
+    en: "Activity Status",
+    ar: "حالة النشاط"
+  },
+  deleteMyAccount: {
+    en: "Delete My Account",
+    ar: "حذف حسابي"
+  },
+  deleteAccountDescription: {
+    en: "Permanently delete your account and all associated data. This action cannot be undone.",
+    ar: "حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء."
+  },
+  quotePreferencesUpdated: {
+    en: "Quote preferences updated",
+    ar: "تم تحديث تفضيلات الاقتباس"
+  },
+  
+  // Add new translation keys for password fields
+  currentPassword: {
+    en: "Current Password",
+    ar: "كلمة المرور الحالية"
+  },
+  newPassword: {
+    en: "New Password",
+    ar: "كلمة المرور الجديدة"
+  },
+  currentPasswordRequired: {
+    en: "Current password is required",
+    ar: "كلمة المرور الحالية مطلوبة"
+  },
+  
+  // Add Recording Tool Translations
+  voice_summary: {
+    en: "Voice Summary",
+    ar: "ملخص صوتي"
+  },
+  recording_type: {
+    en: "Recording Type",
+    ar: "نوع التسجيل"
+  },
+  untitled_recording: {
+    en: "Untitled Recording",
+    ar: "تسجيل بدون عنوان"
+  },
+  select_recording_type: {
+    en: "Select a recording type",
+    ar: "اختر نوع التسجيل"
+  },
+  meeting: {
+    en: "Meeting",
+    ar: "اجتماع"
+  },
+  note: {
+    en: "Note",
+    ar: "ملاحظة"
+  },
+  idea: {
+    en: "Idea",
+    ar: "فكرة"
+  },
+  summary: {
+    en: "Summary",
+    ar: "ملخص"
+  },
+  start_recording: {
+    en: "Start Recording",
+    ar: "بدء التسجيل"
+  },
+  stop: {
+    en: "Stop",
+    ar: "توقف"
+  },
+  pause: {
+    en: "Pause",
+    ar: "إيقاف مؤقت"
+  },
+  resume: {
+    en: "Resume",
+    ar: "استئناف"
+  },
+  transcribe_recording: {
+    en: "Transcribe Recording",
+    ar: "نسخ التسجيل"
+  },
+  uploading_recording: {
+    en: "Uploading recording...",
+    ar: "جاري تحميل التسجيل..."
+  },
+  new_recording: {
+    en: "New Recording",
+    ar: "تسجيل جديد"
+  },
+  unknown_error: {
+    en: "An unknown error occurred",
+    ar: "حدث خطأ غير معروف"
+  },
+  try_again: {
+    en: "Try Again",
+    ar: "حاول مرة أخرى"
+  },
+  generate_summary: {
+    en: "Generate Summary",
+    ar: "إنشاء ملخص"
+  },
+  copied_to_clipboard: {
+    en: "Copied to Clipboard",
+    ar: "تم النسخ إلى الحافظة"
+  },
+  copied_successfully: {
+    en: "copied successfully",
+    ar: "تم النسخ بنجاح"
+  },
+  copy_failed: {
+    en: "Copy Failed",
+    ar: "فشل النسخ"
+  },
+  export_successful: {
+    en: "Export Successful",
+    ar: "تم التصدير بنجاح"
+  },
+  pdf_downloaded_successfully: {
+    en: "PDF downloaded successfully",
+    ar: "تم تنزيل ملف PDF بنجاح"
+  },
+  export_failed: {
+    en: "Export Failed",
+    ar: "فشل التصدير"
+  },
+  copy_transcript: {
+    en: "Copy Transcript",
+    ar: "نسخ النص"
+  },
+  copy_summary: {
+    en: "Copy Summary",
+    ar: "نسخ الملخص"
+  },
+  export_pdf: {
+    en: "Export PDF",
+    ar: "تصدير PDF"
+  },
+  download_recording: {
+    en: "Download Recording",
+    ar: "تنزيل التسجيل"
+  },
+  download_summary_audio: {
+    en: "Download Summary Audio",
+    ar: "تنزيل ملخص صوتي"
+  },
+  generating_summary: {
+    en: "Generating Summary",
+    ar: "جاري إنشاء الملخص"
+  },
+  summarizing_message: {
+    en: "Your summary is being created. This may take a moment...",
+    ar: "يتم إنشاء الملخص الخاص بك. قد يستغرق ذلك بعض الوقت..."
+  },
+  play_summary: {
+    en: "Play Summary",
+    ar: "تشغيل الملخص"
+  },
+  transcribing: {
+    en: "Transcribing",
+    ar: "جاري النسخ"
+  },
+  transcribing_message: {
+    en: "Converting your audio to text. This may take a moment...",
+    ar: "يتم تحويل المقطع الصوتي إلى نص. قد يستغرق ذلك بعض الوقت..."
+  },
+  transcription: {
+    en: "Transcription",
+    ar: "النص المكتوب"
+  },
 };
