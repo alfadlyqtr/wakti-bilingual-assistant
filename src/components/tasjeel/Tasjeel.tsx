@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -183,7 +182,6 @@ const Tasjeel: React.FC = () => {
       console.error("Error accessing microphone:", error);
       toast({
         description: t.noMicrophoneAccess,
-        variant: "destructive",
       });
     }
   };
@@ -239,7 +237,6 @@ const Tasjeel: React.FC = () => {
       console.error("Error processing recording:", error);
       toast({
         description: error.message || "An error occurred while processing the recording",
-        variant: "destructive",
       });
       setRecordingStatus("idle");
     }
@@ -261,7 +258,6 @@ const Tasjeel: React.FC = () => {
       console.error("Error transcribing audio:", error);
       toast({
         description: error.message || "An error occurred while transcribing the audio",
-        variant: "destructive",
       });
     } finally {
       setIsTranscribing(false);
@@ -287,7 +283,6 @@ const Tasjeel: React.FC = () => {
       console.error("Error summarizing text:", error);
       toast({
         description: error.message || "An error occurred while summarizing the text",
-        variant: "destructive",
       });
     } finally {
       setIsSummarizing(false);
@@ -311,13 +306,11 @@ const Tasjeel: React.FC = () => {
       setAudioBase64(audio);
       toast({
         description: t.audioGenerationComplete,
-        variant: "default",
       });
     } catch (error) {
       console.error("Error generating audio:", error);
       toast({
         description: error.message || "An error occurred while generating the audio",
-        variant: "destructive",
       });
     } finally {
       setIsGeneratingAudio(false);
@@ -395,7 +388,6 @@ const Tasjeel: React.FC = () => {
       console.error("Error exporting to PDF:", error);
       toast({
         description: error.message || "An error occurred while exporting to PDF",
-        variant: "destructive",
       });
     }
   };
