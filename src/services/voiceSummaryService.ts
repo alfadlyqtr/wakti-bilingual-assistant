@@ -1,20 +1,39 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Create a new voice recording entry
+ * @param type Type of recording (note, summary, lecture, meeting)
+ * @param title Optional title for the recording (defaults to "Untitled")
  * @returns Promise with recording data
  */
-export async function createRecording() {
+export async function createRecording(type = "note", title?: string) {
   try {
     const { data: user } = await supabase.auth.getUser();
     if (!user.user) {
       return { error: "Not authenticated" };
     }
 
+    // Generate a UUID for the recording
+    const recordingId = crypto.randomUUID();
+    
+    // Set file path and URL
+    const audioPath = `audio/${recordingId}.webm`;
+    const audioUrl = `${supabase.storageUrl}/object/public/voice-recordings/${audioPath}`;
+    
+    // Set expiration date (10 days from now)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 10);
+
     const { data, error } = await supabase
       .from('voice_summaries')
       .insert({
+        id: recordingId,
         user_id: user.user.id,
+        title: title || "Untitled Recording",
+        type: type,
+        expires_at: expiresAt.toISOString(),
+        audio_url: audioUrl,
         is_processing_transcript: true
       })
       .select('id')

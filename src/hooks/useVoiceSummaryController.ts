@@ -87,7 +87,7 @@ export default function useVoiceSummaryController() {
   };
 
   // Start recording function
-  const startRecording = async () => {
+  const startRecording = async (recordingType: string = "note") => {
     if (!mediaRecorder || recordingState === "recording") return;
 
     try {
@@ -117,6 +117,7 @@ export default function useVoiceSummaryController() {
       const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
       
       // Create a new recording entry in the database
+      // Using the current recordingType state value from RecordingDialog
       const { recording, error: createError } = await voiceSummaryService.createRecording();
       
       if (createError) {

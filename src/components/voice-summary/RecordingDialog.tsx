@@ -1,6 +1,9 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Mic, Square, Loader2 } from "lucide-react";
 import useVoiceSummaryController from "@/hooks/useVoiceSummaryController";
@@ -20,6 +23,9 @@ export default function RecordingDialog({
 }: RecordingDialogProps) {
   const { language } = useTheme();
   const navigate = useNavigate();
+  
+  // Recording type state
+  const [recordingType, setRecordingType] = useState("note");
   
   const controller = useVoiceSummaryController();
   const { 
@@ -81,6 +87,11 @@ export default function RecordingDialog({
     onClose();
   };
   
+  // Handle start recording with type
+  const handleStartRecording = () => {
+    startRecording(recordingType);
+  };
+  
   // Format time as MM:SS
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
@@ -135,6 +146,29 @@ export default function RecordingDialog({
         </DialogHeader>
         
         <div className="flex flex-col items-center justify-center py-6">
+          {/* Recording Type Selector - Only show before recording starts */}
+          {state.recordingState === "idle" && (
+            <div className="w-full mb-6">
+              <Label htmlFor="recording-type" className="mb-2 block">
+                {language === 'ar' ? 'نوع التسجيل' : 'Recording Type'}
+              </Label>
+              <Select 
+                value={recordingType} 
+                onValueChange={setRecordingType}
+              >
+                <SelectTrigger id="recording-type" className="w-full">
+                  <SelectValue placeholder={language === 'ar' ? 'اختر نوع التسجيل' : 'Select recording type'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="note">{language === 'ar' ? 'ملاحظة' : 'Note'}</SelectItem>
+                  <SelectItem value="summary">{language === 'ar' ? 'ملخص' : 'Summary'}</SelectItem>
+                  <SelectItem value="lecture">{language === 'ar' ? 'محاضرة' : 'Lecture'}</SelectItem>
+                  <SelectItem value="meeting">{language === 'ar' ? 'اجتماع' : 'Meeting'}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
           {/* Status display */}
           <div className="text-center mb-6">
             <p className="text-lg font-medium">
@@ -170,7 +204,7 @@ export default function RecordingDialog({
           <div className="flex items-center justify-center gap-4">
             {state.recordingState === "idle" && (
               <Button
-                onClick={() => startRecording()}
+                onClick={handleStartRecording}
                 size="lg"
                 className="h-16 w-16 rounded-full"
               >
