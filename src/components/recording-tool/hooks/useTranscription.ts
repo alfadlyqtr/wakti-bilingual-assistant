@@ -1,5 +1,5 @@
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useRecordingStore } from "./useRecordingStore";
@@ -20,6 +20,33 @@ export const useTranscription = () => {
     setTitle,
     setError 
   } = useRecordingStore();
+
+  // Poll for transcription status
+  const pollTranscriptionStatus = useCallback(async (summaryId: string) => {
+    if (!user || !summaryId) return;
+    
+    try {
+      // Check if the transcription is complete
+      const { data, error } = await supabase
+        .from('voice_summaries')
+        .select('transcript, is_processing_transcript')
+        .eq('id', summaryId)
+        .single();
+      
+      if (error) throw error;
+      
+      // If transcription is complete and we have the transcript
+      if (!data.is_processing_transcript && data.transcript) {
+        setTranscription(data.transcript);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error polling transcription status:", error);
+      return false;
+    }
+  }, [user, setTranscription]);
 
   const transcribeRecording = useCallback(async (audioUrl: string) => {
     if (!user || !user.id) {
@@ -82,29 +109,31 @@ export const useTranscription = () => {
         throw new Error(result.error);
       }
       
-      // Update with transcription result
-      setTranscription(result.transcript);
-      
-      // If the title is still the default, try to generate a better one
-      if (title === "Untitled" && result.transcript) {
-        // Extract first 5-8 words from transcript as title
-        const words = result.transcript.split(/\s+/);
-        const titleWords = words.slice(0, Math.min(8, words.length));
-        const extractedTitle = titleWords.join(' ');
+      // Check if we have a transcript immediately, otherwise we'll poll for it
+      if (result.transcript) {
+        setTranscription(result.transcript);
         
-        setTitle(extractedTitle);
+        // If the title is still the default, try to generate a better one
+        if (title === "Untitled" && result.transcript) {
+          // Extract first 5-8 words from transcript as title
+          const words = result.transcript.split(/\s+/);
+          const titleWords = words.slice(0, Math.min(8, words.length));
+          const extractedTitle = titleWords.join(' ');
+          
+          setTitle(extractedTitle);
+          
+          // Update the title in the database
+          await supabase
+            .from('voice_summaries')
+            .update({ title: extractedTitle })
+            .eq('id', summaryRecord.id);
+        }
         
-        // Update the title in the database
-        await supabase
-          .from('voice_summaries')
-          .update({ title: extractedTitle })
-          .eq('id', summaryRecord.id);
+        toast({
+          title: "Transcription Complete",
+          description: "Your recording has been transcribed successfully",
+        });
       }
-      
-      toast({
-        title: "Transcription Complete",
-        description: "Your recording has been transcribed successfully",
-      });
       
       return summaryRecord.id;
     } catch (error) {
@@ -154,6 +183,7 @@ export const useTranscription = () => {
 
   return {
     transcribeRecording,
-    updateTranscription
+    updateTranscription,
+    pollTranscriptionStatus
   };
 };

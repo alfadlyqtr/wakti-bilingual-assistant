@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { IntakeForm } from "./IntakeForm";
 import { RecordingControls } from "./RecordingControls";
 import { TranscriptionPanel } from "./TranscriptionPanel";
@@ -18,7 +18,7 @@ export const RecordingTool: React.FC = () => {
   const [summaryId, setSummaryId] = useState<string | undefined>();
   const { uploadRecording } = useRecordingHandlers();
   const { transcribeRecording } = useTranscription();
-  const { generateSummary } = useSummaryHandlers();
+  const { generateSummary, pollSummaryStatus } = useSummaryHandlers();
   const { language } = useTheme();
   
   const { 
@@ -30,29 +30,48 @@ export const RecordingTool: React.FC = () => {
     reset
   } = useRecordingStore();
   
-  const handleUploadAndTranscribe = async () => {
-    if (!audioBlob) return;
-    
-    // Upload the recording
-    const audioUrl = await uploadRecording();
-    
-    if (audioUrl) {
-      // Transcribe the recording
-      const newSummaryId = await transcribeRecording(audioUrl);
-      
-      if (newSummaryId) {
-        setSummaryId(newSummaryId);
+  // Handle automatic upload and transcription when audio is ready
+  useEffect(() => {
+    const processAudio = async () => {
+      if (status === 'stopped' && audioBlob) {
+        // Start the upload process
+        const audioUrl = await uploadRecording();
+        
+        if (audioUrl) {
+          // Start transcription
+          const newSummaryId = await transcribeRecording(audioUrl);
+          
+          if (newSummaryId) {
+            setSummaryId(newSummaryId);
+          }
+        }
       }
+    };
+    
+    processAudio();
+  }, [status, audioBlob, uploadRecording, transcribeRecording]);
+  
+  // Poll for summary status if we're in summarizing state and have a summaryId
+  useEffect(() => {
+    if (status === 'summarizing' && summaryId) {
+      const pollInterval = setInterval(async () => {
+        const isComplete = await pollSummaryStatus(summaryId);
+        if (isComplete) {
+          clearInterval(pollInterval);
+        }
+      }, 3000); // Poll every 3 seconds
+      
+      return () => clearInterval(pollInterval);
     }
-  };
+  }, [status, summaryId, pollSummaryStatus]);
 
-  const handleCreateSummary = async () => {
-    if (!summaryId || !transcription) return;
-    await generateSummary(summaryId);
-  };
-
-  const handleTranscriptionComplete = (id: string) => {
+  const handleTranscriptionComplete = async (id: string) => {
     setSummaryId(id);
+    
+    // If we have a transcript but no summary yet, start generating summary
+    if (transcription && !summary && status !== 'summarizing') {
+      await generateSummary(id);
+    }
   };
 
   const handleReset = () => {
@@ -74,16 +93,12 @@ export const RecordingTool: React.FC = () => {
       
       case 'stopped':
         return (
-          <>
-            <div className="flex justify-center my-6">
-              <Button
-                onClick={handleUploadAndTranscribe}
-                className="flex gap-2 px-8 py-6 h-auto"
-              >
-                {t("transcribe_recording", language)}
-              </Button>
+          <div className="flex justify-center items-center my-12">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="h-8 w-8 animate-spin" />
+              <p>{t("uploading_recording", language)}</p>
             </div>
-          </>
+          </div>
         );
       
       case 'uploading':
@@ -104,7 +119,7 @@ export const RecordingTool: React.FC = () => {
               summaryId={summaryId}
               onTranscriptionComplete={handleTranscriptionComplete}
             />
-            {status === 'transcribing' ? null : <SummaryPanel />}
+            {status === 'summarizing' && <SummaryPanel />}
           </>
         );
       
@@ -148,27 +163,9 @@ export const RecordingTool: React.FC = () => {
     }
   };
 
-  // Additional buttons based on state
-  const renderActionButtons = () => {
-    if (status === 'transcribing' && transcription) {
-      return (
-        <div className="flex justify-center my-6">
-          <Button
-            onClick={handleCreateSummary}
-            className="flex gap-2"
-          >
-            {t("generate_summary", language)}
-          </Button>
-        </div>
-      );
-    }
-    return null;
-  };
-
   return (
     <div className="container max-w-2xl mx-auto px-4 py-6">
       {renderContent()}
-      {renderActionButtons()}
     </div>
   );
 };

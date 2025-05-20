@@ -1,5 +1,5 @@
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useRecordingStore } from "./useRecordingStore";
@@ -20,6 +20,37 @@ export const useSummaryHandlers = () => {
     setSummaryAudioUrl,
     setError 
   } = useRecordingStore();
+
+  // Poll for summary status
+  const pollSummaryStatus = useCallback(async (summaryId: string) => {
+    if (!user || !summaryId) return false;
+    
+    try {
+      // Check if the summary is complete
+      const { data, error } = await supabase
+        .from('voice_summaries')
+        .select('summary, is_processing_summary, summary_audio_url')
+        .eq('id', summaryId)
+        .single();
+      
+      if (error) throw error;
+      
+      // If summary is complete and we have the summary text
+      if (!data.is_processing_summary && data.summary) {
+        setSummary(data.summary);
+        if (data.summary_audio_url) {
+          setSummaryAudioUrl(data.summary_audio_url);
+        }
+        setStatus('complete');
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error("Error polling summary status:", error);
+      return false;
+    }
+  }, [user, setSummary, setSummaryAudioUrl, setStatus]);
 
   const generateSummary = useCallback(async (summaryId: string) => {
     if (!user || !user.id) {
@@ -187,6 +218,7 @@ export const useSummaryHandlers = () => {
 
   return {
     generateSummary,
-    generateTTS
+    generateTTS,
+    pollSummaryStatus
   };
 };

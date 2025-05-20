@@ -21,7 +21,7 @@ export const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({
   const { transcription, status } = useRecordingStore();
   const [editableTranscript, setEditableTranscript] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-  const { updateTranscription } = useTranscription();
+  const { updateTranscription, pollTranscriptionStatus } = useTranscription();
   const { language } = useTheme();
   
   useEffect(() => {
@@ -29,6 +29,21 @@ export const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({
       setEditableTranscript(transcription);
     }
   }, [transcription, isEditing]);
+  
+  // Poll for transcription if we're in transcribing state and have a summaryId
+  useEffect(() => {
+    if (status === 'transcribing' && summaryId) {
+      const pollInterval = setInterval(async () => {
+        const isComplete = await pollTranscriptionStatus(summaryId);
+        if (isComplete) {
+          clearInterval(pollInterval);
+          onTranscriptionComplete(summaryId);
+        }
+      }, 3000); // Poll every 3 seconds
+      
+      return () => clearInterval(pollInterval);
+    }
+  }, [status, summaryId, pollTranscriptionStatus, onTranscriptionComplete]);
 
   const handleSave = async () => {
     if (!summaryId) return;
