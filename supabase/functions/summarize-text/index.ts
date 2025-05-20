@@ -15,8 +15,13 @@ serve(async (req) => {
   try {
     console.log('summarize-text function called');
     
-    const { transcript, language } = await req.json();
-    console.log('Request payload:', { hasTranscript: !!transcript, language, transcriptLength: transcript?.length });
+    const { transcript, language, recordId } = await req.json();
+    console.log('Request payload:', { 
+      hasTranscript: !!transcript, 
+      language, 
+      transcriptLength: transcript?.length,
+      hasRecordId: !!recordId
+    });
 
     if (!transcript) {
       console.error('Error: Missing transcript');
@@ -93,6 +98,32 @@ serve(async (req) => {
     console.log('DeepSeek API response received successfully');
     
     const summary = data.choices[0].message.content;
+
+    // If recordId is provided, update the record with summary
+    if (recordId) {
+      try {
+        // Import Supabase client for Edge Function
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.7.1');
+        
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
+        const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string;
+        const supabase = createClient(supabaseUrl, supabaseAnonKey);
+        
+        const { error: updateError } = await supabase
+          .from('tasjeel_records')
+          .update({ summary })
+          .eq('id', recordId);
+        
+        if (updateError) {
+          console.error('Error updating record with summary:', updateError);
+        } else {
+          console.log('Record updated with summary');
+        }
+      } catch (storageError) {
+        console.error('Error updating record:', storageError);
+        // Continue execution to return the summary to the client even if storage fails
+      }
+    }
 
     return new Response(
       JSON.stringify({ summary }),
