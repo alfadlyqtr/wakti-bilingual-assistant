@@ -15,3 +15,9 @@ verify_jwt = true
 verify_jwt = true
 [functions.generate-image]
 verify_jwt = true
+[functions.transcribe-audio]
+verify_jwt = true
+[functions.summarize-text]
+verify_jwt = true
+[functions.generate-speech]
+verify_jwt = true

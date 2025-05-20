@@ -1,17 +1,16 @@
 
-// MobileNav.tsx with dashboard icon removed
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CheckSquare, Bell, CalendarClock, Sparkles } from "lucide-react";
+import { Calendar, CheckSquare, Bell, CalendarClock, Sparkles, Mic } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - removed dashboard/home icon
+  // Navigation items - added Tasjeel
   const navItems = [
     {
       name: language === 'ar' ? 'المهام' : 'Tasks',
@@ -37,6 +36,11 @@ export function MobileNav() {
       name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
       path: '/wakti-ai',
       icon: 'sparkles',
+    },
+    {
+      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
+      path: '/tasjeel',
+      icon: 'mic',
     }
   ];
   
@@ -46,6 +50,7 @@ export function MobileNav() {
     bell: Bell,
     'calendar-clock': CalendarClock,
     sparkles: Sparkles,
+    mic: Mic,
   };
   
   return (

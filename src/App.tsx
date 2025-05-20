@@ -26,6 +26,7 @@ import Home from "@/pages/Home";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+import Tasjeel from "@/components/tasjeel/Tasjeel";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -110,6 +111,13 @@ function App() {
                 <Route path="/wakti-ai" element={
                   <AppLayout>
                     <WaktiAIPage />
+                  </AppLayout>
+                } />
+                
+                {/* Tasjeel route */}
+                <Route path="/tasjeel" element={
+                  <AppLayout>
+                    <Tasjeel />
                   </AppLayout>
                 } />
 
