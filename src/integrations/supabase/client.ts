@@ -1,4 +1,3 @@
-
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -22,6 +21,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
   }
 });
+
+// Define types for Tasjeel records
+export interface TasjeelRecord {
+  id: string;
+  user_id: string;
+  title: string | null;
+  original_recording_path: string;
+  transcription: string | null;
+  summary: string | null;
+  summary_audio_path: string | null;
+  duration: number | null;
+  created_at: string;
+  updated_at: string;
+}
 
 // Define types for edge function payloads
 interface TranscribeAudioPayload {
@@ -216,4 +229,78 @@ export const withRetry = async <T>(
   }
   
   throw lastError || new Error(`Failed to execute database operation after ${maxRetries} attempts`);
+};
+
+// Helper functions for Tasjeel records
+
+// Save a new Tasjeel recording record to the database
+export const saveTasjeelRecord = async (
+  recordData: Omit<TasjeelRecord, 'id' | 'user_id' | 'created_at' | 'updated_at'>
+): Promise<TasjeelRecord> => {
+  try {
+    const { data, error } = await supabase
+      .from('tasjeel_records')
+      .insert(recordData)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error saving Tasjeel record:', error);
+    throw error;
+  }
+};
+
+// Update an existing Tasjeel record 
+export const updateTasjeelRecord = async (
+  id: string,
+  updates: Partial<Omit<TasjeelRecord, 'id' | 'user_id' | 'created_at'>>
+): Promise<TasjeelRecord> => {
+  try {
+    const { data, error } = await supabase
+      .from('tasjeel_records')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating Tasjeel record:', error);
+    throw error;
+  }
+};
+
+// Get all Tasjeel records for the current user
+export const getTasjeelRecords = async (limit = 20, page = 0): Promise<TasjeelRecord[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('tasjeel_records')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(page * limit, (page + 1) * limit - 1);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching Tasjeel records:', error);
+    throw error;
+  }
+};
+
+// Delete a Tasjeel record
+export const deleteTasjeelRecord = async (id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('tasjeel_records')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting Tasjeel record:', error);
+    throw error;
+  }
 };
