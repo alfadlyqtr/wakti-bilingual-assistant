@@ -45,10 +45,62 @@ export const callEdgeFunctionWithRetry = async <T>(
     retryDelay
   });
   
+  // Explicitly log the request payload if it's related to audio transcription
+  if (functionName === 'transcribe-audio' && body) {
+    console.log(`transcribe-audio request payload:`, {
+      audioUrlStart: body?.audioUrl ? `${body.audioUrl.substring(0, 30)}...` : 'undefined',
+      audioUrlLength: body?.audioUrl ? body.audioUrl.length : 0
+    });
+  }
+  
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       console.log(`Edge function "${functionName}" attempt ${attempt + 1}/${maxRetries}`);
       
+      // Direct fetch approach for transcribe-audio to bypass potential issues
+      if (functionName === 'transcribe-audio') {
+        const fullUrl = `${supabaseUrl}/functions/v1/${functionName}`;
+        
+        console.log(`Using direct fetch for transcribe-audio to: ${fullUrl}`);
+        
+        const fetchOptions: RequestInit = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseAnonKey}`,
+            ...headers
+          },
+          body: JSON.stringify(body)
+        };
+        
+        console.log('Fetch options:', {
+          method: fetchOptions.method,
+          hasBody: !!fetchOptions.body,
+          headersKeys: Object.keys(fetchOptions.headers || {})
+        });
+        
+        const startTime = Date.now();
+        const response = await fetch(fullUrl, fetchOptions);
+        const duration = Date.now() - startTime;
+        
+        console.log(`Direct fetch to "${functionName}" response:`, {
+          status: response.status,
+          ok: response.ok,
+          statusText: response.statusText,
+          time: `${duration}ms`
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Error response from "${functionName}":`, errorText);
+          throw new Error(`HTTP error ${response.status}: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return data as T;
+      }
+      
+      // Standard Supabase function invocation for other functions
       const startTime = Date.now();
       const { data, error } = await supabase.functions.invoke(functionName, {
         body: body,
