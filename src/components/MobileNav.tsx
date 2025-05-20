@@ -77,7 +77,7 @@ export const MobileNav = () => {
     {
       icon: <Mic className="h-5 w-5" />,
       label: t("summary", language),
-      path: "/voice-summary",
+      path: "/recording",
     },
     {
       icon: <CalendarHeart className="h-5 w-5" />,

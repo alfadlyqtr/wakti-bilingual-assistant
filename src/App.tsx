@@ -26,6 +26,7 @@ import Home from "@/pages/Home";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
+import RecordingTool from "@/pages/RecordingTool";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -120,6 +121,7 @@ function App() {
                   <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
                   <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
+                  <Route path="/recording" element={<AppLayout><RecordingTool /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
                   <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
