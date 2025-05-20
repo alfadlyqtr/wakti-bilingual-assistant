@@ -70,7 +70,7 @@ export default function RecordingDialog({
         resetRecording();
       }
     }
-  }, [isOpen, resetRecording, isClosing]);
+  }, [isOpen, isClosing]);  // Remove resetRecording from dependency array to prevent infinite loop
   
   // Handle dialog close
   const handleDialogClose = () => {

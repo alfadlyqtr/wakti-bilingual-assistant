@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -182,16 +181,22 @@ serve(async (req) => {
         fileFormat = summaryData.file_format || "webm";
         console.log(`Using file format from database: ${fileFormat}`);
         
-        // Try to construct all possible file paths that might exist
+        // Try to construct all possible file paths that might exist - this is the key fix area
+        // Ensure we're checking the exact paths used yesterday
         const possiblePaths = [];
         
-        // Primary file path constructed based on file_format from the database
+        // Primary path construction: userId/recordingId/recording.extension
         const primaryPath = `${summaryData.user_id || 'anonymous'}/${recordingId}/recording.${fileFormat}`;
         possiblePaths.push(primaryPath);
         
-        // Add fallback paths for backward compatibility
-        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.webm`); // webm fallback
-        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`);  // mp3 fallback
+        // Add fallback paths for backward compatibility - including both formats that worked yesterday
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.webm`); 
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`);
+        
+        // Also check older format: userId/recordingId.extension (without /recording)
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}.${fileFormat}`);
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}.webm`);
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}.mp3`);
         
         // If a custom path was provided in the request, try that first
         if (filePath) {

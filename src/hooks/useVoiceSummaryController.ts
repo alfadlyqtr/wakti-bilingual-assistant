@@ -1,4 +1,3 @@
-
 // Import toast from sonner directly
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
