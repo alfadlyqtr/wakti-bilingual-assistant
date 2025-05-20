@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -438,7 +439,7 @@ export default function Account() {
             </Card>
           </TabsContent>
           
-          {/* Settings Tab - Integrated from Settings.tsx */}
+          {/* Settings Tab */}
           <TabsContent value="settings" className="space-y-6">
             {/* Appearance Settings */}
             <Card>
