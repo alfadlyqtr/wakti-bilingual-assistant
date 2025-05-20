@@ -1,113 +1,72 @@
-
 import React from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { ChevronLeft, Menu, LogIn } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { UserMenu } from "@/components/UserMenu";
-import { Logo3D } from "@/components/Logo3D";
+import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 
-interface AppHeaderProps {
-  showBackButton?: boolean;
-  showUserMenu?: boolean;
-  onBackClick?: () => void;
-  title?: string;
-  children?: React.ReactNode;
-}
-
-export function AppHeader({
-  showBackButton = false,
-  showUserMenu = true,
-  onBackClick,
-  title,
-  children
-}: AppHeaderProps) {
+export function AppHeader() {
+  const { theme, setTheme, language, setLanguage } = useTheme();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
-  const handleBackClick = () => {
-    if (onBackClick) {
-      onBackClick();
-    } else {
-      navigate(-1);
-    }
-  };
-
-  const handleLogoClick = () => {
-    navigate('/dashboard');
-  };
-
-  // Dynamically determine the title based on the current route
-  const getRouteTitle = () => {
-    if (title) return title;
-    
-    const path = location.pathname;
-    
-    if (path.includes("/wakti-ai")) return "WAKTI AI";
-    if (path.includes("/dashboard")) return "Dashboard";
-    if (path.includes("/calendar")) return "Calendar";
-    if (path.includes("/tasks")) return "Tasks";
-    if (path.includes("/reminders")) return "Reminders";
-    if (path.includes("/voice-summary")) return "Voice Summary";
-    if (path.includes("/events")) return "Events";
-    if (path.includes("/settings")) return "Settings";
-    if (path.includes("/messages")) return "Messages";
-    if (path.includes("/contacts")) return "Contacts";
-    
-    return "WAKTI";
-  };
-
-  const isHomePage = location.pathname === '/home' || location.pathname === '/';
   
-  const handleLoginClick = () => {
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
-
+  
+  // Remove any voice summary references from menu items or dropdown options
+  // Example pattern - adjust as needed for your actual component structure:
+  const menuItems = [
+    { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
+    { title: language === 'ar' ? 'الرسائل' : 'Messages', href: '/messages' },
+    { title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', href: '/contacts' },
+    { title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', onClick: handleLogout }
+  ];
+  
   return (
-    <header className={cn(
-      "sticky top-0 z-30 flex items-center justify-between p-4 border-b",
-      isDark 
-        ? "bg-dark-bg/90 backdrop-blur-xl border-dark-secondary/30" 
-        : "bg-light-bg/90 backdrop-blur-xl border-light-secondary/40"
-    )}>
-      <div className="flex items-center">
-        {showBackButton && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleBackClick}
-            className="mr-2"
-          >
-            <ChevronLeft className="h-5 w-5" />
+    <div className="bg-background border-b sticky top-0 z-50">
+      <div className="container flex h-16 items-center justify-between py-4">
+        <Link to="/dashboard" className="flex items-center gap-2 font-semibold">
+          Wakti.AI
+        </Link>
+        <div className="flex items-center space-x-4">
+          <Button variant="outline" size="icon" onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
           </Button>
-        )}
-        <div className="flex items-center cursor-pointer" onClick={handleLogoClick}>
-          <Logo3D size="sm" className="mr-2" />
-          <h1 className="text-lg font-semibold">{getRouteTitle()}</h1>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={user?.photoURL || ""} />
+                  <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {menuItems.map((item, index) => (
+                <DropdownMenuItem key={index} onClick={item.onClick} className={cn(item.onClick ? "cursor-pointer" : "")} asChild={item.href ? true : false}>
+                  {item.href ? <Link to={item.href}>{item.title}</Link> : item.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
-      
-      <div className="flex items-center gap-2">
-        <ThemeLanguageToggle />
-        
-        {isHomePage && (
-          <Button 
-            variant="outline" 
-            size="sm"
-            className="ml-2 flex items-center gap-1"
-            onClick={handleLoginClick}
-          >
-            <LogIn className="h-4 w-4" /> 
-            Login
-          </Button>
-        )}
-        
-        {children ? children : showUserMenu && <UserMenu />}
-      </div>
-    </header>
+    </div>
   );
 }

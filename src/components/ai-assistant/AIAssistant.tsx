@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { LeftDrawer } from "./LeftDrawer";
@@ -14,7 +13,7 @@ import { useChatActions } from "./hooks/useChatActions";
 import { useActionConfirmations } from "./hooks/useActionConfirmations";
 import { modeController } from "@/utils/modeController";
 
-export const AIAssistant: React.FC = () => {
+export function AIAssistant() {
   const [isLeftDrawerOpen, setIsLeftDrawerOpen] = useState(false);
   const [isRightDrawerOpen, setIsRightDrawerOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -81,17 +80,6 @@ export const AIAssistant: React.FC = () => {
     };
   }, []);
 
-  // Handle voice transcription
-  const handleVoiceTranscription = (text: string) => {
-    if (text && text.trim()) {
-      setInputValue(text);
-      // Process the voice transcription automatically
-      setTimeout(() => {
-        processUserMessage(text);
-      }, 300);
-    }
-  };
-
   // Handle send message
   const handleSendMessage = async () => {
     if (!inputValue.trim() || !user) return;
@@ -150,7 +138,6 @@ export const AIAssistant: React.FC = () => {
           inputValue={inputValue}
           setInputValue={setInputValue}
           handleSendMessage={handleSendMessage}
-          handleVoiceTranscription={handleVoiceTranscription}
           isSending={isSending}
           isTyping={isTyping}
           user={user}

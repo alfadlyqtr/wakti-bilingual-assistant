@@ -13,9 +13,5 @@ verify_jwt = true
 verify_jwt = true
 [functions.process-ai-intent]
 verify_jwt = true
-[functions.transcribe-audio]
-verify_jwt = true
 [functions.generate-image]
 verify_jwt = true
-[functions.generate-summary]
-verify_jwt = false

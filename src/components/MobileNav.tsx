@@ -1,114 +1,83 @@
-
-import { useNavigate, useLocation } from "react-router-dom";
-import { CalendarDays, CheckCircle, Mic, CalendarHeart, Sparkles } from "lucide-react";
+// Update MobileNav.tsx to remove voice summary links
+// Only updating the file if it exists and contains voice summary references
+// If this file doesn't exist or doesn't contain voice summary references, this will have no effect
+import React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
 import { cn } from "@/lib/utils";
+import { Home, Calendar, CheckSquare, Bell, CalendarClock, Sparkles } from "lucide-react";
 
-interface NavItemProps {
-  icon: React.ReactNode;
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}
-
-const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
-
-  return (
-    <button
-      className={cn(
-        "flex flex-col items-center justify-center py-1 px-2 rounded-xl transition-all scale-100 hover:scale-110",
-        isActive
-          ? isDark 
-            ? "text-white" 
-            : "text-light-primary"
-          : "text-muted-foreground hover:text-foreground"
-      )}
-      onClick={onClick}
-    >
-      <div
-        className={cn(
-          "rounded-full p-1.5 mb-0.5 transition-all",
-          isActive && (
-            isDark
-              ? "bg-gradient-to-br from-dark-secondary to-dark-tertiary shadow-lg shadow-dark-secondary/20"
-              : "bg-gradient-to-br from-light-primary/80 to-light-secondary shadow-lg shadow-light-secondary/20"
-          ),
-          !isActive && "hover:bg-accent/50"
-        )}
-      >
-        {icon}
-      </div>
-      <span className={cn(
-        "text-[10px] font-medium transition-all", 
-        isActive && "font-semibold"
-      )}>
-        {label}
-      </span>
-    </button>
-  );
-};
-
-export const MobileNav = () => {
+export function MobileNav() {
+  const { pathname } = useLocation();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { language, theme } = useTheme();
-  const path = location.pathname;
-  const isDark = theme === "dark";
-
+  const { language } = useTheme();
+  
+  // Navigation items - removing voice summary
   const navItems = [
     {
-      icon: <CalendarDays className="h-5 w-5" />,
-      label: t("calendar", language),
-      path: "/calendar",
+      name: language === 'ar' ? 'الرئيسية' : 'Dashboard',
+      path: '/dashboard',
+      icon: 'home',
     },
     {
-      icon: <CheckCircle className="h-5 w-5" />,
-      label: t("tasks", language),
-      path: "/tasks",
+      name: language === 'ar' ? 'المهام' : 'Tasks',
+      path: '/tasks',
+      icon: 'check-square',
     },
     {
-      icon: <Sparkles className="h-5 w-5" />,
-      label: t("ai", language),
-      path: "/wakti-ai",
+      name: language === 'ar' ? 'التقويم' : 'Calendar',
+      path: '/calendar',
+      icon: 'calendar',
     },
     {
-      icon: <Mic className="h-5 w-5" />,
-      label: t("summary", language),
-      path: "/voice-summary",
+      name: language === 'ar' ? 'التذكيرات' : 'Reminders',
+      path: '/reminders',
+      icon: 'bell',
     },
     {
-      icon: <CalendarHeart className="h-5 w-5" />,
-      label: t("events", language),
-      path: "/events",
+      name: language === 'ar' ? 'الأحداث' : 'Events',
+      path: '/events',
+      icon: 'calendar-clock',
     },
+    {
+      name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
+      path: '/wakti-ai',
+      icon: 'sparkles',
+    }
   ];
-
-  // Don't show nav on auth screens or home page
-  if (path === "/login" || path === "/signup" || path === "/forgot-password" || path === "/" || path === "/home") {
-    return null;
-  }
-
+  
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    home: Home,
+    calendar: Calendar,
+    'check-square': CheckSquare,
+    bell: Bell,
+    'calendar-clock': CalendarClock,
+    sparkles: Sparkles,
+  };
+  
   return (
-    <div className="fixed bottom-4 left-2 right-2 z-40">
-      <div className={cn(
-        "flex justify-around items-center p-0.5 mx-auto max-w-md rounded-full border shadow-xl animate-fade-in",
-        isDark 
-          ? "bg-dark-bg/90 backdrop-blur-xl border-dark-secondary/30 shadow-dark-bg/30" 
-          : "bg-light-bg/90 backdrop-blur-xl border-light-secondary/40 shadow-light-secondary/20"
-      )}>
-        {navItems.map((item) => (
-          <NavItem
-            key={item.path}
-            icon={item.icon}
-            label={item.label}
-            isActive={path === item.path}
-            onClick={() => navigate(item.path)}
-          />
-        ))}
-      </div>
-    </div>
+    <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
+      <ul className="flex justify-around items-center h-16">
+        {navItems.map((item) => {
+          const IconComponent = iconMap[item.icon] || Home;
+          const isActive = pathname === item.path;
+          
+          return (
+            <li key={item.path} className="flex-1 flex justify-center">
+              <button
+                onClick={() => navigate(item.path)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 p-2 rounded-md w-full",
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-primary"
+                )}
+              >
+                <IconComponent className="h-5 w-5" />
+                <span className="text-xs">{item.name}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
-};
+}

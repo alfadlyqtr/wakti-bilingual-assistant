@@ -10,8 +10,6 @@ import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
 import Reminders from "@/pages/Reminders";
 import Events from "@/pages/Events";
-import VoiceSummary from "@/pages/VoiceSummary";
-import VoiceSummaryDetail from "@/pages/VoiceSummaryDetail";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -122,8 +120,6 @@ function App() {
                   <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
                   <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                  <Route path="/voice-summary" element={<AppLayout><VoiceSummary /></AppLayout>} />
-                  <Route path="/voice-summary/:id" element={<AppLayout><VoiceSummaryDetail /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
                   <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
