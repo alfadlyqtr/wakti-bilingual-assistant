@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Mic, Square, Loader2 } from "lucide-react";
 import useVoiceSummaryController from "@/hooks/useVoiceSummaryController";
 import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
+import { formatRecordingTime } from "@/utils/audioUtils";
 
 interface RecordingDialogProps {
   isOpen: boolean;
@@ -94,14 +96,6 @@ export default function RecordingDialog({
     startRecording(recordingType);
   };
   
-  // Format time as MM:SS or HH:MM:SS for longer durations
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return hours > 0 ? `${hours}:${mins}:${secs}` : `${mins}:${secs}`;
-  };
-  
   // Get the current status text
   const getStatusText = () => {
     switch (state.recordingState) {
@@ -181,16 +175,16 @@ export default function RecordingDialog({
             {/* Show timer during recording */}
             {state.recordingState === "recording" && (
               <div className="text-xl font-mono mt-2">
-                {formatTime(state.recordingTime)} / {formatTime(MAX_RECORDING_DURATION)}
+                {formatRecordingTime(state.recordingTime)} / {formatRecordingTime(MAX_RECORDING_DURATION)}
               </div>
             )}
             
             {/* Show progress during processing */}
             {state.recordingState === "processing" && (
               <div className="w-full mt-4">
-                <Progress value={state.progress} className="h-2" />
+                <Progress value={state.progress || 10} className="h-2" />
                 <p className="text-sm text-muted-foreground mt-1">
-                  {state.progress}%
+                  {state.progress || ''}
                 </p>
               </div>
             )}
@@ -241,6 +235,25 @@ export default function RecordingDialog({
               </Button>
             )}
           </div>
+          
+          {/* Visual feedback while recording */}
+          {state.recordingState === "recording" && (
+            <div className="mt-6 flex justify-center items-center w-full">
+              <div className="flex space-x-1">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div 
+                    key={i}
+                    className="w-1.5 bg-primary rounded-full"
+                    style={{
+                      height: `${10 + Math.random() * 30}px`,
+                      animationDuration: `${0.6 + Math.random() * 0.7}s`,
+                      animationDelay: `${Math.random() * 0.5}s`
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Action buttons */}

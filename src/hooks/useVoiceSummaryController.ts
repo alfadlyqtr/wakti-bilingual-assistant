@@ -1,13 +1,14 @@
 
 // Import toast from sonner directly
 import { toast } from "sonner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRecordingStatus } from "@/lib/utils";
 import * as voiceSummaryService from "@/services/voiceSummaryService";
+import { getBestSupportedMimeType, formatRecordingTime } from "@/utils/audioUtils";
 
 // Define types for the hook
 type RecordingState = "idle" | "recording" | "processing" | "stopped" | "error";
@@ -34,6 +35,10 @@ export default function useVoiceSummaryController() {
   const { language } = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const timerRef = useRef<number | null>(null);
+  
+  // Maximum recording duration in seconds (2 hours = 7200 seconds)
+  const MAX_RECORDING_DURATION = 7200;
 
   // Initialize media recorder
   useEffect(() => {
@@ -42,7 +47,9 @@ export default function useVoiceSummaryController() {
     const initializeRecorder = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
+        // Use the best supported MIME type from audioUtils
+        const mimeType = getBestSupportedMimeType();
+        const recorder = new MediaRecorder(stream, { mimeType });
 
         recorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
@@ -65,6 +72,15 @@ export default function useVoiceSummaryController() {
     initializeRecorder();
   }, [user, language]);
 
+  // Stop timer when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
   // Reset recording state
   const resetRecording = () => {
     setRecordingState("idle");
@@ -76,6 +92,12 @@ export default function useVoiceSummaryController() {
     setRecordingTime(0);
     setProgress(0);
     setIsFullyReady(false);
+    
+    // Clear timer if running
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
   // Cancel current recording
@@ -83,6 +105,13 @@ export default function useVoiceSummaryController() {
     if (mediaRecorder && recordingState === "recording") {
       mediaRecorder.stop();
     }
+    
+    // Clear recording timer
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
     resetRecording();
   };
 
@@ -93,8 +122,26 @@ export default function useVoiceSummaryController() {
     try {
       setAudioChunks([]);
       setRecordingState("recording");
+      setRecordingTime(0);
       mediaRecorder.start();
       console.log("Recording started");
+      
+      // Start the timer
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime(prevTime => {
+          // Stop recording if we reach maximum duration
+          if (prevTime >= MAX_RECORDING_DURATION - 1) {
+            if (timerRef.current) {
+              window.clearInterval(timerRef.current);
+            }
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+              mediaRecorder.stop();
+            }
+            return MAX_RECORDING_DURATION;
+          }
+          return prevTime + 1;
+        });
+      }, 1000);
     } catch (err: any) {
       console.error("Error starting recording:", err);
       setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء بدء التسجيل' : 'An error occurred while starting the recording');
@@ -108,13 +155,19 @@ export default function useVoiceSummaryController() {
 
     setIsLoading(true);
     try {
+      // Clear timer
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      
       mediaRecorder.stop();
       console.log("Recording stopped");
       setRecordingState("processing");
       setProcessingStep("uploading");
       
       // Convert audio chunks to audio blob
-      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+      const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
       
       // Create a new recording entry in the database
       // Using the current recordingType state value from RecordingDialog

@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -130,12 +131,23 @@ serve(async (req) => {
         // Check if the voice_summary record exists
         const { data: summaryData, error: summaryError } = await supabase
           .from("voice_summaries")
-          .select("id, title, transcript, user_id")
+          .select("id, title, transcript, user_id, file_format")
           .eq("id", recordingId)
           .single();
           
         if (summaryError) {
           console.error("Error checking summary record:", summaryError);
+          
+          // Update the record to indicate transcript processing failed
+          await supabase
+            .from("voice_summaries")
+            .update({ 
+              is_processing_transcript: false,
+              transcript_error: `Summary record error: ${summaryError.message}`,
+              transcript_completed_at: new Date().toISOString()
+            })
+            .eq("id", recordingId);
+            
           return new Response(
             JSON.stringify({ error: `Summary record error: ${summaryError.message}` }),
             { 
@@ -147,6 +159,7 @@ serve(async (req) => {
         
         if (!summaryData) {
           console.error("Summary record not found");
+          
           return new Response(
             JSON.stringify({ error: "Summary record not found" }),
             { 
@@ -165,48 +178,65 @@ serve(async (req) => {
           );
         }
         
-        // Update to set is_processing_transcript to true
-        const { error: updateError } = await supabase
-          .from("voice_summaries")
-          .update({ 
-            is_processing_transcript: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", recordingId);
+        // Extract file format from the database if available, otherwise default to webm (for backward compatibility)
+        fileFormat = summaryData.file_format || "webm";
+        console.log(`Using file format from database: ${fileFormat}`);
         
-        if (updateError) {
-          console.error("Error updating processing status:", updateError);
-          // Continue anyway as this is not critical
+        // Try to construct all possible file paths that might exist
+        const possiblePaths = [];
+        
+        // Primary file path constructed based on file_format from the database
+        const primaryPath = `${summaryData.user_id || 'anonymous'}/${recordingId}/recording.${fileFormat}`;
+        possiblePaths.push(primaryPath);
+        
+        // Add fallback paths for backward compatibility
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.webm`); // webm fallback
+        possiblePaths.push(`${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`);  // mp3 fallback
+        
+        // If a custom path was provided in the request, try that first
+        if (filePath) {
+          possiblePaths.unshift(filePath);
         }
         
-        // Extract file format from recordingId
-        // But always default to MP3 as that's our standard format now
-        fileFormat = 'mp3';
+        console.log("Attempting to find recording in the following paths:", possiblePaths);
         
-        // Construct the storage path - use provided filePath if available, or construct from user_id and recordingId
-        const storagePath = filePath || `voice_recordings/${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`;
+        // Try each path in order until we find the file
+        let fileData = null;
+        let actualPath = null;
         
-        // Download audio file from storage
-        console.log(`Attempting to download file from storage: ${storagePath}`);
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from("voice_recordings")
-          .download(storagePath);
+        for (const path of possiblePaths) {
+          console.log(`Checking for file at: ${path}`);
+          
+          const { data: downloadData, error: downloadError } = await supabase.storage
+            .from("voice_recordings")
+            .download(path);
+            
+          if (!downloadError && downloadData) {
+            console.log(`Found audio file at: ${path}`);
+            fileData = downloadData;
+            actualPath = path;
+            // Extract the format from the actual path found
+            fileFormat = path.split('.').pop()?.toLowerCase() || fileFormat;
+            break;
+          }
+        }
         
-        if (downloadError) {
-          console.error("Error downloading recording:", downloadError);
+        if (!fileData || !actualPath) {
+          const errorMessage = "Audio file not found in any of the expected locations";
+          console.error(errorMessage);
           
           // Update the voice_summaries record to indicate there was an error
           await supabase
             .from("voice_summaries")
             .update({ 
-              transcript_error: "Error: Could not retrieve audio file",
+              transcript_error: errorMessage,
               is_processing_transcript: false,
               transcript_completed_at: new Date().toISOString()
             })
             .eq("id", recordingId);
           
           return new Response(
-            JSON.stringify({ error: `Failed to download recording: ${downloadError.message}` }),
+            JSON.stringify({ error: errorMessage }),
             { 
               status: 404, 
               headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -214,33 +244,33 @@ serve(async (req) => {
           );
         }
         
-        if (!fileData) {
-          console.error("File data is null after successful download");
-          await supabase
-            .from("voice_summaries")
-            .update({ 
-              transcript_error: "Error: File not found or empty",
-              is_processing_transcript: false,
-              transcript_completed_at: new Date().toISOString()
-            })
-            .eq("id", recordingId);
-            
-          return new Response(
-            JSON.stringify({ error: "File not found or empty" }),
-            { 
-              status: 404, 
-              headers: { ...corsHeaders, "Content-Type": "application/json" }
-            }
-          );
+        // Set content type based on the file format
+        let contentType = 'audio/webm';
+        if (fileFormat === 'mp3' || fileFormat === 'mpeg') {
+          contentType = 'audio/mpeg';
+        } else if (fileFormat === 'wav') {
+          contentType = 'audio/wav';
+        } else if (fileFormat === 'ogg') {
+          contentType = 'audio/ogg';
         }
         
-        // Set content type to MP3 for standardization
-        const contentType = 'audio/mpeg';
-        
-        audioFile = new File([fileData], `audio.mp3`, { type: contentType });
+        audioFile = new File([fileData], `audio.${fileFormat}`, { type: contentType });
         console.log(`Successfully retrieved audio file: ${audioFile.size} bytes, format: ${fileFormat}, type: ${contentType}`);
       } catch (jsonError) {
         console.error("Error processing JSON data:", jsonError);
+        
+        // Update the record to indicate transcript processing failed
+        if (recordingId) {
+          await supabase
+            .from("voice_summaries")
+            .update({ 
+              is_processing_transcript: false,
+              transcript_error: `Failed to process request data: ${jsonError.message}`,
+              transcript_completed_at: new Date().toISOString()
+            })
+            .eq("id", recordingId);
+        }
+        
         return new Response(
           JSON.stringify({ error: `Failed to process request data: ${jsonError.message}` }),
           { 
@@ -253,6 +283,19 @@ serve(async (req) => {
     
     if (!audioFile) {
       console.error("No audio file was obtained from the request");
+      
+      // Update the record to indicate transcript processing failed
+      if (recordingId) {
+        await supabase
+          .from("voice_summaries")
+          .update({ 
+            is_processing_transcript: false,
+            transcript_error: "No audio file was provided or retrieved",
+            transcript_completed_at: new Date().toISOString()
+          })
+          .eq("id", recordingId);
+      }
+      
       return new Response(
         JSON.stringify({ error: "No audio file was provided or retrieved" }),
         { 

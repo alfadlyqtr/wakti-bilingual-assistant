@@ -2,129 +2,88 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+ 
 @layer base {
   :root {
-    /* Light theme */
-    --background: 180 4% 99%; /* #fcfefd */
-    --foreground: 243 84% 14%; /* #060541 */
-    --card: 180 4% 99%;
-    --card-foreground: 243 84% 14%;
-    --popover: 180 4% 99%;
-    --popover-foreground: 243 84% 14%;
-    --primary: 243 84% 14%;
-    --primary-foreground: 180 4% 99%;
-    --secondary: 36 67% 81%; /* #e9ceb0 */
-    --secondary-foreground: 243 84% 14%;
-    --muted: 36 20% 92%;
-    --muted-foreground: 243 10% 40%;
-    --accent: 36 67% 81%;
-    --accent-foreground: 243 84% 14%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 91%;
-    --input: 214 32% 91%;
-    --ring: 243 84% 14%;
-    --radius: 0.75rem;
-  }
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
 
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+ 
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+ 
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+ 
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+ 
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+ 
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+ 
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+ 
+    --radius: 0.5rem;
+  }
+ 
   .dark {
-    /* Dark theme */
-    --background: 222 20% 6%; /* #0c0f14 */
-    --foreground: 0 0% 95%;
-    --card: 222 20% 6%;
-    --card-foreground: 0 0% 95%;
-    --popover: 222 20% 6%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 0 0% 95%;
-    --primary-foreground: 222 20% 6%;
-    --secondary: 240 1% 38%; /* #606062 */
-    --secondary-foreground: 0 0% 95%;
-    --muted: 240 3% 30%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 1% 52%; /* #858384 */
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 0 0% 95%;
-    --border: 240 3% 30%;
-    --input: 240 3% 25%;
-    --ring: 240 4% 65%;
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+ 
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
   }
 }
-
-/* Mobile-specific styles */
+ 
 @layer base {
   * {
     @apply border-border;
   }
-  
-  html, body {
-    @apply h-full overflow-hidden antialiased;
-  }
-  
   body {
-    @apply bg-background text-foreground flex flex-col min-h-full;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground;
   }
+}
 
-  #root {
-    @apply flex flex-col h-full w-full max-w-md mx-auto min-h-screen;
-  }
+/* Voice recording animation */
+.RecordingDialog div > div.flex > div {
+  animation: pulse 1.2s infinite ease-in-out;
+}
 
-  /* App container */
-  .app-container {
-    @apply flex flex-col max-w-md w-full mx-auto;
-  }
-
-  /* Mobile container */
-  .mobile-container {
-    @apply max-w-md w-full mx-auto h-full flex flex-col overflow-hidden;
-  }
-
-  /* Mobile-friendly buttons */
-  .mobile-btn {
-    @apply py-3 px-6 text-base rounded-xl font-medium transition-all active:scale-95;
-  }
-
-  /* Mobile header */
-  .mobile-header {
-    @apply sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b border-border;
-  }
-
-  /* Mobile safe area (for bottom nav) */
-  .safe-area-bottom {
-    @apply pb-28;
-  }
-
-  /* Modern floating navigation */
-  .floating-nav {
-    @apply fixed bottom-5 left-0 right-0 mx-auto max-w-sm z-10;
-    @apply flex justify-around py-3 px-4 mx-4 rounded-full;
-    @apply bg-background/80 backdrop-blur-lg border border-border shadow-lg;
-  }
-
-  /* Language specific */
-  .rtl {
-    direction: rtl;
-    text-align: right;
-  }
-  
-  /* Draggable widgets */
-  .widget-draggable {
-    touch-action: none;
-    user-select: none;
-  }
-
-  /* Widget styles */
-  .calendar-widget {
-    @apply rounded-lg border border-border overflow-hidden;
-  }
-  
-  .events-widget {
-    @apply space-y-2;
-  }
-  
-  .event-item {
-    @apply flex items-center justify-between p-2 rounded-md;
-  }
+/* Recording visualizer animation */
+@keyframes pulse {
+  0% { height: 10px; }
+  50% { height: 30px; }
+  100% { height: 10px; }
 }

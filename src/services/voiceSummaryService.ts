@@ -1,5 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
+import { getFileExtension } from "@/utils/audioUtils";
 
 /**
  * Create a new voice recording entry
@@ -16,9 +17,6 @@ export async function createRecording(type = "note", title?: string) {
 
     // Generate a UUID for the recording
     const recordingId = crypto.randomUUID();
-    
-    // Set correct file path structure for storage
-    const audioPath = `${user.user.id}/${recordingId}/recording.webm`;
     
     // Create record first, we'll update the URL after successful upload
     const { data, error } = await supabase
@@ -56,18 +54,31 @@ export async function createRecording(type = "note", title?: string) {
  */
 export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: string) {
   try {
+    // Determine file extension from the blob's type
+    const fileExtension = getFileExtension(audioBlob.type);
+    
     // Use correct bucket name with underscore and proper path structure
-    const filePath = `${userId}/${recordingId}/recording.webm`;
+    const filePath = `${userId}/${recordingId}/recording.${fileExtension}`;
+    
+    console.log(`Uploading audio with type ${audioBlob.type} as ${fileExtension} to ${filePath}`);
     
     const { data, error } = await supabase.storage
       .from('voice_recordings')
       .upload(filePath, audioBlob, {
-        contentType: 'audio/webm',
+        contentType: audioBlob.type,
         upsert: true
       });
 
     if (error) {
       console.error("Error uploading audio:", error);
+      // Update the record to indicate upload failed
+      await supabase
+        .from('voice_summaries')
+        .update({
+          is_processing_transcript: false,
+          transcript_error: `Upload error: ${error.message}`
+        })
+        .eq('id', recordingId);
       return { error, path: null };
     }
 
@@ -76,11 +87,12 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       .from('voice_recordings')
       .getPublicUrl(filePath);
     
-    // Update the record with the correct audio URL
+    // Update the record with the correct audio URL and file extension info
     const { error: updateError } = await supabase
       .from('voice_summaries')
       .update({
-        audio_url: publicUrl
+        audio_url: publicUrl,
+        file_format: fileExtension
       })
       .eq('id', recordingId);
     
@@ -92,6 +104,14 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     return { path: filePath, error: null, publicUrl };
   } catch (error) {
     console.error("Exception in uploadAudio:", error);
+    // Update the record to indicate upload failed
+    await supabase
+      .from('voice_summaries')
+      .update({
+        is_processing_transcript: false,
+        transcript_error: `Upload exception: ${error}`
+      })
+      .eq('id', recordingId);
     return { error, path: null };
   }
 }
