@@ -166,12 +166,30 @@ const Tasjeel: React.FC = () => {
     };
   }, []);
   
-  // Start recording function
+  // Start recording function with explicit codec options
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      const mediaRecorder = new MediaRecorder(stream);
+      // Define codec options with explicit mime type
+      const options = {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 128000
+      };
+      
+      let mediaRecorder;
+      
+      // Create MediaRecorder with codec options if supported
+      try {
+        mediaRecorder = new MediaRecorder(stream, options);
+        console.log("Using preferred codec: audio/webm;codecs=opus");
+      } catch (e) {
+        // Fallback to browser default if preferred codec not supported
+        console.log("Preferred codec not supported, using browser default");
+        mediaRecorder = new MediaRecorder(stream);
+        console.log("Using codec: ", mediaRecorder.mimeType);
+      }
+      
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
       
@@ -221,7 +239,19 @@ const Tasjeel: React.FC = () => {
   // Handle recording stopped event
   const handleRecordingStopped = async () => {
     try {
-      const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+      console.log("Recording stopped, processing chunks...");
+      
+      // Get actual MIME type from the recorder if available
+      const actualMimeType = mediaRecorderRef.current?.mimeType || "audio/webm";
+      console.log("Recorder MIME type:", actualMimeType);
+      
+      // Create blob with explicit MIME type
+      const audioBlob = new Blob(audioChunksRef.current, { type: actualMimeType });
+      console.log("Created audio blob:", {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+      
       const uniqueId = uuidv4();
       const fileName = `recording-${uniqueId}.webm`;
       
@@ -264,6 +294,7 @@ const Tasjeel: React.FC = () => {
       const audioUrl = publicUrlData.publicUrl;
       console.log("Generated public URL:", audioUrl);
       setAudioUrl(audioUrl);
+      setAudioBlob(audioBlob);
       
       // Create a new record ID and save initial data
       const recordId = uuidv4();
