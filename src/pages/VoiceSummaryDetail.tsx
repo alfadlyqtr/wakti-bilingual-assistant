@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import VoiceSummaryDetail from "@/components/voice-summary/VoiceSummaryDetail";
 import { useTheme } from "@/providers/ThemeProvider";
+import { PageContainer } from "@/components/PageContainer";
 
 export default function VoiceSummaryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,8 +18,11 @@ export default function VoiceSummaryDetailPage() {
   }, [id, navigate]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
+    <PageContainer 
+      title={language === 'ar' ? "تفاصيل التسجيل" : "Recording Details"}
+      showBackButton={true}
+    >
       <VoiceSummaryDetail />
-    </div>
+    </PageContainer>
   );
 }

@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Get the status of a voice recording
 export function getRecordingStatus(recording: any): 'complete' | 'processing' | 'transcribing' | 'pending' {
-  // Check for the new is_ready flag first
+  // Check for the is_ready flag first
   if (recording.is_ready === true) {
     return 'complete';
   }
@@ -22,17 +22,22 @@ export function getRecordingStatus(recording: any): 'complete' | 'processing' | 
     return 'processing';
   }
   
-  // Legacy checks for backwards compatibility
-  if (!recording) return 'pending';
-  
-  if (recording.summary && recording.transcript) {
-    return 'complete';
-  }
-  
-  if (recording.transcript) {
+  // If has transcript but no summary, mark as processing
+  if (recording.transcript && !recording.summary) {
     return 'processing';
   }
   
+  // If no transcript yet, mark as transcribing
+  if (!recording.transcript) {
+    return 'transcribing';
+  }
+  
+  // If we have both transcript and summary, mark as complete
+  if (recording.transcript && recording.summary) {
+    return 'complete';
+  }
+  
+  // Default to pending
   return 'pending';
 }
 

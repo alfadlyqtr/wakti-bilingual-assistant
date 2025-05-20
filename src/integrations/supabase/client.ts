@@ -12,7 +12,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.error("Supabase URL or Anonymous key is missing. Please check your environment variables.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true
+  },
+  global: {
+    headers: {
+      'x-app-name': 'WAKTI'
+    }
+  }
+});
 
 // Helper function to wrap Supabase functions with retry logic
 export const callEdgeFunctionWithRetry = async <T>(
@@ -89,5 +98,5 @@ export const withRetry = async <T>(
     }
   }
   
-  throw lastError || new Error(`Failed database operation after ${maxRetries} attempts`);
+  throw lastError || new Error(`Failed to execute database operation after ${maxRetries} attempts`);
 };

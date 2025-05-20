@@ -5,10 +5,11 @@ import VoiceSummaryArchive from "./VoiceSummaryArchive";
 import RecordingDialog from "./RecordingDialog";
 import VoiceSummaryDetailDialog from "./VoiceSummaryDetailDialog";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Loader2, RefreshCw, AlertCircle, Wrench } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 import { getRecordingStatus } from "@/lib/utils";
 import { deleteStuckRecordings, getAllRecordings, markRecordingsAsReady, regenerateSummary } from "@/services/voiceSummaryService";
 
@@ -44,10 +45,7 @@ export default function VoiceSummaryPage() {
       if (error) {
         console.error('Error fetching recordings:', error);
         if (!silent) {
-          toast({
-            title: language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings',
-            variant: "destructive"
-          });
+          toast(language === 'ar' ? 'فشل في تحميل التسجيلات' : 'Failed to load recordings');
         }
         return;
       }
@@ -61,10 +59,7 @@ export default function VoiceSummaryPage() {
     } catch (err) {
       console.error('Error in fetchRecordings:', err);
       if (!silent) {
-        toast({
-          title: language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings',
-          variant: "destructive"
-        });
+        toast(language === 'ar' ? 'حدث خطأ أثناء تحميل التسجيلات' : 'An error occurred while loading recordings');
       }
     } finally {
       setIsLoading(false);
@@ -220,6 +215,10 @@ export default function VoiceSummaryPage() {
     // Refresh the list to include the new recording
     await fetchRecordings();
     setShowRecordingDialog(false);
+    
+    // Show the detail dialog for the new recording
+    setSelectedRecordingId(recordingId);
+    setShowDetailDialog(true);
   };
   
   const handleRecordingDeleted = (recordingId: string) => {
@@ -237,17 +236,13 @@ export default function VoiceSummaryPage() {
   
   const handleManualRefresh = () => {
     fetchRecordings();
-    toast({
-      title: language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...',
-      variant: "default"
-    });
+    toast(language === 'ar' ? 'جارِ تحديث القائمة...' : 'Refreshing list...');
   };
 
   const handleRecordingSelected = (recordingId: string) => {
     console.log('Recording selected in VoiceSummaryPage:', recordingId);
     setSelectedRecordingId(recordingId);
     setShowDetailDialog(true);
-    console.log('Dialog state set to:', true);
   };
 
   // Add debugging for dialog state changes
@@ -259,18 +254,11 @@ export default function VoiceSummaryPage() {
     });
   }, [showDetailDialog, selectedRecordingId]);
 
-  // Log dialog rendering information outside of JSX
-  const dialogRenderingInfo = { 
-    recordingId: selectedRecordingId, 
-    isOpen: showDetailDialog 
-  };
-  console.log('Rendering VoiceSummaryDetailDialog with:', dialogRenderingInfo);
-
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex-1 overflow-y-auto p-4">
+    <ScrollArea className="flex flex-col h-full w-full">
+      <div className="flex-1 p-4">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold">
+          <h2 className="text-xl font-semibold" dir={language === 'ar' ? 'rtl' : 'ltr'}>
             {language === 'ar' ? 'التسجيلات الأخيرة' : 'Recent Recordings'}
           </h2>
           <div className="flex gap-2">
@@ -296,7 +284,7 @@ export default function VoiceSummaryPage() {
 
         {/* Show recoverable recordings with recovery option */}
         {recoverableRecordings.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
             <h3 className="text-sm font-medium text-amber-500 flex items-center gap-1 mb-2">
               <Wrench className="h-4 w-4" />
               {language === 'ar' ? 'تسجيلات قابلة للاستعادة' : 'Recoverable Recordings'}
@@ -353,7 +341,7 @@ export default function VoiceSummaryPage() {
 
         {/* Show stuck recordings with warning */}
         {stuckRecordings.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
             <h3 className="text-sm font-medium text-destructive flex items-center gap-1 mb-2">
               <AlertCircle className="h-4 w-4" />
               {language === 'ar' ? 'تسجيلات عالقة' : 'Stuck Recordings'}
@@ -383,7 +371,7 @@ export default function VoiceSummaryPage() {
 
         {/* Show processing recordings with progress indicator */}
         {inProgressRecordings.length > 0 && (
-          <div className="mb-6">
+          <div className="mb-6" dir={language === 'ar' ? 'rtl' : 'ltr'}>
             <h3 className="text-sm font-medium text-muted-foreground mb-2">
               {language === 'ar' ? 'قيد المعالجة' : 'Processing'}
             </h3>
@@ -439,9 +427,10 @@ export default function VoiceSummaryPage() {
           onClose={() => {
             console.log('Closing dialog');
             setShowDetailDialog(false);
+            setSelectedRecordingId(null);
           }}
         />
       </div>
-    </div>
+    </ScrollArea>
   );
 }

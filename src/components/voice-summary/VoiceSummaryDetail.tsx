@@ -1,665 +1,576 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Download, Copy, Volume, Pause, Clock, FileText } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDistanceToNow } from "date-fns";
-import { arSA, enUS } from "date-fns/locale";
-import { formatRecordingTime } from "@/utils/audioUtils";
-import { Highlight } from "./HighlightedTimestamps";
-import SummaryAudioPlayer from "./SummaryAudioPlayer";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { 
+  Edit, Save, Copy, FilePdf, AlertCircle, 
+  Clock, Calendar, Mic, FileText, Loader2 
+} from "lucide-react";
 import { toast } from "sonner";
-import { generateSummaryPDF } from "@/utils/pdfUtils";
+import { Badge } from "@/components/ui/badge";
+import { getRecordingStatus } from "@/lib/utils";
+import { formatRecordingTime } from "@/utils/audioUtils";
+import SummaryAudioPlayer from "./SummaryAudioPlayer";
+import * as voiceSummaryService from "@/services/voiceSummaryService";
+import { isValidDate } from "@/lib/utils";
 
-interface VoiceSummaryData {
-  id: string;
-  title: string;
-  transcript: string | null;
-  summary: string | null;
-  audio_url: string;
-  summary_audio_url: string | null;
-  created_at: string;
-  expires_at: string;
-  type: string;
-  host?: string;
-  attendees?: string;
-  location?: string;
-  highlighted_timestamps?: Highlight[] | null;
-  is_ready?: boolean;
-}
-
-export default function VoiceSummaryDetail() {
+const VoiceSummaryDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { theme, language } = useTheme();
-  const { showSuccess, showError } = useToastHelper();
+  const { language, theme } = useTheme();
   
-  const [summary, setSummary] = useState<VoiceSummaryData | null>(null);
+  const [recording, setRecording] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isGeneratingTranscript, setIsGeneratingTranscript] = useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [isExportingPDF, setIsExportingPDF] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-
-  const locale = language === 'ar' ? arSA : enUS;
-
-  // New state for polling incomplete records
-  const [isPolling, setIsPolling] = useState(false);
-  const [pollingAttempts, setPollingAttempts] = useState(0);
-  const MAX_POLLING_ATTEMPTS = 30; // 30 attempts at 2-second intervals = 1 minute
-
-  // Fetch summary data
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [recordingStatus, setRecordingStatus] = useState<'pending' | 'transcribing' | 'processing' | 'complete'>('pending');
+  const [isEditingTranscript, setIsEditingTranscript] = useState(false);
+  const [editedTranscript, setEditedTranscript] = useState<string>("");
+  
   useEffect(() => {
-    const fetchSummary = async () => {
-      setIsLoading(true);
+    if (!id) {
+      navigate('/voice-summary');
+      return;
+    }
+
+    const fetchRecording = async () => {
       try {
+        setIsLoading(true);
+        
         const { data, error } = await supabase
           .from('voice_summaries')
           .select('*')
           .eq('id', id)
           .single();
           
-        if (error) throw error;
-
-        console.log("[VoiceSummaryDetail] Fetched summary data:", data);
-        
-        // Check if the record is fully ready
-        const isReady = data.is_ready === true || (
-          data.transcript && 
-          data.summary && 
-          data.summary_audio_url
-        );
-
-        setSummary(data);
-        
-        // If not ready, start polling
-        if (!isReady && pollingAttempts < MAX_POLLING_ATTEMPTS) {
-          setIsPolling(true);
-        } else {
-          setIsPolling(false);
+        if (error) {
+          console.error("Error fetching recording:", error);
+          setErrorMessage(error.message);
+          return;
         }
-      } catch (error) {
-        console.error('[VoiceSummaryDetail] Error fetching summary:', error);
-        showError(language === 'ar' ? 'فشل في تحميل الملخص' : 'Failed to load summary');
-        setIsPolling(false);
+        
+        if (!data) {
+          setErrorMessage(language === 'ar' ? 'التسجيل غير موجود' : 'Recording not found');
+          return;
+        }
+        
+        setRecording(data);
+        setEditedTranscript(data.transcript || "");
+        
+        // Determine recording status
+        const status = getRecordingStatus(data);
+        setRecordingStatus(status);
+        
+        // Set up polling for processing recordings
+        if (status === 'pending' || status === 'processing' || status === 'transcribing') {
+          const intervalId = setInterval(fetchLatestStatus, 5000);
+          return () => clearInterval(intervalId);
+        }
+      } catch (err) {
+        console.error("Error in fetchRecording:", err);
+        setErrorMessage(language === 'ar' ? 'حدث خطأ أثناء جلب التسجيل' : 'An error occurred while fetching the recording');
       } finally {
         setIsLoading(false);
       }
     };
     
-    if (id) {
-      fetchSummary();
-    }
+    fetchRecording();
+  }, [id, navigate, language]);
+  
+  const fetchLatestStatus = async () => {
+    if (!id) return;
     
-    // Set up polling for incomplete records
-    let pollingInterval: NodeJS.Timeout | null = null;
-    
-    if (isPolling && id && pollingAttempts < MAX_POLLING_ATTEMPTS) {
-      pollingInterval = setInterval(() => {
-        fetchSummary();
-        setPollingAttempts(prev => prev + 1);
-      }, 2000);
-    }
-    
-    return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
-    };
-  }, [id, showError, language, isPolling, pollingAttempts]);
-  
-  // Reset polling attempts when id changes
-  useEffect(() => {
-    setPollingAttempts(0);
-    setIsPolling(false);
-  }, [id]);
-  
-  // Handle audio playback
-  useEffect(() => {
-    return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.remove();
-      }
-    };
-  }, [audioElement]);
-  
-  const handleBackClick = () => {
-    navigate('/voice-summary');
-  };
-  
-  const handleCopyText = (text: string) => {
-    navigator.clipboard.writeText(text)
-      .then(() => toast.success(language === 'ar' ? 'تم النسخ إلى الحافظة' : 'Copied to clipboard'))
-      .catch(() => toast.error(language === 'ar' ? 'فشل في النسخ' : 'Failed to copy'));
-  };
-  
-  const generateTranscript = async () => {
-    if (!summary) return;
-    
-    setIsGeneratingTranscript(true);
     try {
-      // Get auth session for API call
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        throw new Error('No auth session');
-      }
-      
-      // Construct standardized file path for the storage
-      const userId = summary.host || 'unknown';
-      const filePath = `voice_recordings/${userId}/${summary.id}/recording.mp3`;
-      console.log('Generating transcript for recording path:', filePath);
-      
-      // Call the transcribe-audio edge function
-      const response = await fetch(
-        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/transcribe-audio",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${data.session.access_token}`
-          },
-          body: JSON.stringify({
-            recordingId: filePath,
-            summaryId: summary.id
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Transcription failed');
-      }
-      
-      // Refresh the summary data to get the updated transcript
-      const { data: updatedSummary, error: summaryError } = await supabase
+      const { data, error } = await supabase
         .from('voice_summaries')
         .select('*')
         .eq('id', id)
         .single();
         
-      if (summaryError) throw summaryError;
+      if (error || !data) {
+        console.error("Error fetching latest status:", error);
+        return;
+      }
       
-      setSummary(updatedSummary);
-      toast.success(language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Transcript generated successfully');
-    } catch (error) {
-      console.error('Error generating transcript:', error);
-      toast.error(language === 'ar' 
-        ? 'فشل في إنشاء النص'
-        : 'Failed to generate transcript');
-    } finally {
-      setIsGeneratingTranscript(false);
+      setRecording(data);
+      
+      // Update status
+      const status = getRecordingStatus(data);
+      setRecordingStatus(status);
+      
+      // If completed, stop polling
+      if (status === 'complete') {
+        toast.success(language === 'ar' ? 'اكتمل التسجيل' : 'Recording completed');
+      }
+    } catch (err) {
+      console.error("Error fetching latest status:", err);
     }
   };
   
-  const generateSummary = async () => {
-    if (!summary || !summary.transcript) return;
+  const handleTranscriptEdit = () => {
+    setIsEditingTranscript(true);
+  };
+  
+  const handleSaveTranscript = async () => {
+    if (!id) return;
     
-    setIsGeneratingSummary(true);
     try {
-      // Get auth session for API call
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        throw new Error('No auth session');
+      setIsProcessing(true);
+      
+      const { success, error } = await voiceSummaryService.updateTranscript(id, editedTranscript);
+      
+      if (!success) {
+        console.error("Error updating transcript:", error);
+        toast.error(language === 'ar' ? 'فشل في حفظ النص' : 'Failed to save transcript');
+        return;
       }
       
-      // Call the summarize endpoint
-      const response = await fetch(
-        "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-summary",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${data.session.access_token}`
-          },
-          body: JSON.stringify({
-            recordingId: summary.id
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Summary generation failed');
-      }
+      // Update local state with edited transcript
+      setRecording({ ...recording, transcript: editedTranscript });
+      setIsEditingTranscript(false);
+      toast.success(language === 'ar' ? 'تم حفظ النص بنجاح' : 'Transcript saved successfully');
       
-      // Refresh the summary data
-      const { data: updatedSummary, error: summaryError } = await supabase
-        .from('voice_summaries')
-        .select('*')
-        .eq('id', id)
-        .single();
+      // Request summary regeneration after transcript edit
+      const { success: regenSuccess, error: regenError } = await voiceSummaryService.regenerateSummary(id);
+      
+      if (regenSuccess) {
+        toast.info(language === 'ar' ? 'جارٍ إعادة إنشاء الملخص...' : 'Regenerating summary...');
         
-      if (summaryError) throw summaryError;
+        // Start polling for summary updates
+        const intervalId = setInterval(async () => {
+          await fetchLatestStatus();
+          // Check if summary is ready
+          if (recording && recording.summary) {
+            clearInterval(intervalId);
+          }
+        }, 5000);
+        
+        // Clean up interval after 2 minutes if summary isn't ready
+        setTimeout(() => clearInterval(intervalId), 120000);
+      } else if (regenError) {
+        console.error("Error regenerating summary:", regenError);
+      }
       
-      setSummary(updatedSummary);
-      toast.success(language === 'ar' ? 'تم إنشاء الملخص بنجاح' : 'Summary generated successfully');
-    } catch (error) {
-      console.error('Error generating summary:', error);
-      toast.error(language === 'ar' 
-        ? 'فشل في إنشاء الملخص'
-        : 'Failed to generate summary');
+    } catch (err) {
+      console.error("Error saving transcript:", err);
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء حفظ النص' : 'An error occurred while saving the transcript');
     } finally {
-      setIsGeneratingSummary(false);
+      setIsProcessing(false);
     }
   };
   
-  const handlePlay = (audioUrl: string) => {
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.remove();
-    }
-    
-    const audio = new Audio(audioUrl);
-    audio.onended = () => setIsPlaying(false);
-    audio.onpause = () => setIsPlaying(false);
-    audio.onerror = () => {
-      toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
-      setIsPlaying(false);
-    };
-    
-    audio.play()
-      .then(() => setIsPlaying(true))
-      .catch(error => {
-        console.error('Error playing audio:', error);
-        toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
-      });
-      
-    setAudioElement(audio);
+  const handleCancelEdit = () => {
+    setEditedTranscript(recording?.transcript || "");
+    setIsEditingTranscript(false);
   };
   
-  const handlePause = () => {
-    if (audioElement) {
-      audioElement.pause();
+  const handleCopyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(language === 'ar' ? 'تم نسخ النص إلى الحافظة' : 'Copied to clipboard');
+    } catch (err) {
+      console.error("Error copying to clipboard:", err);
+      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
     }
-    setIsPlaying(false);
   };
-
+  
   const handleExportPDF = async () => {
-    if (!summary) return;
+    if (!id) return;
     
     try {
-      setIsExportingPDF(true);
+      setIsProcessing(true);
       
-      // Generate PDF using our utility
-      const pdfBlob = generateSummaryPDF({
-        title: summary.title,
-        content: {
-          transcript: summary.transcript,
-          summary: summary.summary
-        },
-        metadata: {
-          createdAt: summary.created_at,
-          expiresAt: summary.expires_at,
-          type: summary.type,
-          host: summary.host,
-          attendees: summary.attendees,
-          location: summary.location
-        },
-        language: language === 'ar' ? 'ar' : 'en'
-      });
+      const { pdfBlob, error } = await voiceSummaryService.exportSummaryAsPDF(id);
       
-      // Create a download link for the PDF
+      if (error || !pdfBlob) {
+        console.error("Error exporting PDF:", error);
+        toast.error(language === 'ar' ? 'فشل في تصدير الملخص كملف PDF' : 'Failed to export summary as PDF');
+        return;
+      }
+      
+      // Create a download link
       const url = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${summary.title.replace(/\s+/g, '-')}-summary.pdf`;
+      link.download = `wakti-summary-${id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      toast.success(
-        language === 'ar'
-          ? 'تم تصدير ملف PDF بنجاح'
-          : 'PDF exported successfully'
-      );
-    } catch (error) {
-      console.error('Error exporting PDF:', error);
-      toast.error(
-        language === 'ar'
-          ? 'فشل في تصدير ملف PDF'
-          : 'Failed to export PDF'
-      );
+      toast.success(language === 'ar' ? 'تم تصدير الملخص بنجاح' : 'Summary exported successfully');
+    } catch (err) {
+      console.error("Error exporting PDF:", err);
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء تصدير الملخص' : 'An error occurred while exporting the summary');
     } finally {
-      setIsExportingPDF(false);
+      setIsProcessing(false);
     }
   };
   
-  const calculateDaysRemaining = (expiresAt: string): number => {
-    const expiryDate = new Date(expiresAt);
-    const now = new Date();
-    const diffTime = expiryDate.getTime() - now.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const getStatusBadge = () => {
+    switch (recordingStatus) {
+      case 'complete':
+        return <Badge variant="success">{language === 'ar' ? 'مكتمل' : 'Complete'}</Badge>;
+      case 'processing':
+        return <Badge variant="warning">{language === 'ar' ? 'قيد المعالجة' : 'Processing'}</Badge>;
+      case 'transcribing':
+        return <Badge variant="warning">{language === 'ar' ? 'قيد التحويل' : 'Transcribing'}</Badge>;
+      case 'pending':
+      default:
+        return <Badge variant="outline">{language === 'ar' ? 'قيد الانتظار' : 'Pending'}</Badge>;
+    }
   };
   
-  const handleAudioGenerated = (url: string) => {
-    if (summary) {
-      setSummary({
-        ...summary,
-        summary_audio_url: url
-      });
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString || !isValidDate(dateString)) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+  
+  // Determine if we're in error state 
+  const hasTranscriptError = recording?.transcript_error;
+  const hasSummaryError = recording?.summary_error;
+  const hasError = hasTranscriptError || hasSummaryError;
+
+  // Check if we have missing data
+  const isTranscriptMissing = recordingStatus === 'complete' && !recording?.transcript;
+  const isSummaryMissing = recordingStatus === 'complete' && !recording?.summary;
+  
+  // Set direction based on language
+  const rtlProps = language === 'ar' ? { dir: 'rtl' } : {};
+  
+  // Handle retry for failed transcript or summary
+  const handleRetry = async () => {
+    if (!id) return;
+    
+    try {
+      setIsProcessing(true);
+      
+      if (hasTranscriptError) {
+        // For failed transcription, we need to restart the process
+        toast.info(language === 'ar' ? 'جارٍ إعادة محاولة التحويل...' : 'Retrying transcription...');
+        
+        const { text, error } = await voiceSummaryService.transcribeAudio(id);
+        
+        if (error) {
+          console.error("Error retrying transcription:", error);
+          toast.error(language === 'ar' ? 'فشل في إعادة محاولة التحويل' : 'Failed to retry transcription');
+          return;
+        }
+        
+        // Start polling for updates
+        const intervalId = setInterval(fetchLatestStatus, 5000);
+        
+        // Clean up interval after 2 minutes if still processing
+        setTimeout(() => clearInterval(intervalId), 120000);
+      }
+      
+      if (hasSummaryError || isSummaryMissing) {
+        // For failed summary, use the regeneration function
+        toast.info(language === 'ar' ? 'جارٍ إعادة إنشاء الملخص...' : 'Regenerating summary...');
+        
+        const { success, error } = await voiceSummaryService.regenerateSummary(id);
+        
+        if (!success) {
+          console.error("Error regenerating summary:", error);
+          toast.error(language === 'ar' ? 'فشل في إعادة إنشاء الملخص' : 'Failed to regenerate summary');
+          return;
+        }
+        
+        // Start polling for updates
+        const intervalId = setInterval(fetchLatestStatus, 5000);
+        
+        // Clean up interval after 2 minutes if still processing
+        setTimeout(() => clearInterval(intervalId), 120000);
+      }
+    } catch (err) {
+      console.error("Error retrying:", err);
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء إعادة المحاولة' : 'An error occurred while retrying');
+    } finally {
+      setIsProcessing(false);
     }
   };
   
   if (isLoading) {
     return (
-      <div className="p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleBackClick}>
-            <ArrowLeft />
-          </Button>
-          <Skeleton className="h-6 w-1/3" />
-        </div>
-        
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-1/2" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-5/6" />
-          </CardContent>
-        </Card>
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
   
-  if (isPolling) {
+  if (errorMessage || !recording) {
     return (
-      <div className="p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleBackClick}>
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-xl font-semibold">
-            {summary?.title || (language === 'ar' ? 'جاري التحميل...' : 'Loading...')}
-          </h1>
-        </div>
-        
-        <div className="flex flex-col items-center justify-center py-10">
-          <div className="animate-spin mb-4">
-            <Clock className="h-8 w-8 text-primary" />
-          </div>
-          <p className="text-center mb-2">
-            {language === 'ar'
-              ? 'جاري معالجة التسجيل، يرجى الانتظار...'
-              : 'Processing recording, please wait...'}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {language === 'ar'
-              ? 'قد يستغرق هذا بضع دقائق'
-              : 'This may take a few minutes'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-  
-  if (!summary) {
-    return (
-      <div className="p-4">
-        <Button variant="ghost" size="icon" onClick={handleBackClick}>
-          <ArrowLeft />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
+        <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+        <h2 className="text-xl font-semibold mb-2">{language === 'ar' ? 'حدث خطأ' : 'An Error Occurred'}</h2>
+        <p className="text-muted-foreground mb-6">{errorMessage}</p>
+        <Button onClick={() => navigate('/voice-summary')}>
+          {language === 'ar' ? 'العودة إلى التسجيلات' : 'Back to Recordings'}
         </Button>
-        <p className="text-center mt-8">
-          {language === 'ar' ? 'الملخص غير موجود' : 'Summary not found'}
-        </p>
       </div>
     );
   }
-
-  const daysRemaining = calculateDaysRemaining(summary.expires_at);
   
   return (
-    <div className="p-4 space-y-4 pb-20">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={handleBackClick}>
-            <ArrowLeft />
-          </Button>
-          <h1 className="text-xl font-semibold truncate">{summary.title}</h1>
+    <ScrollArea className="h-full w-full">
+      <div className="container max-w-3xl mx-auto p-4">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6" {...rtlProps}>
+          <div>
+            <h1 className="text-2xl font-bold">{recording.title}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              {getStatusBadge()}
+              <span className="text-sm text-muted-foreground">
+                {formatDate(recording.created_at)}
+              </span>
+            </div>
+          </div>
         </div>
         
-        <div className="text-sm text-muted-foreground">
-          {daysRemaining > 0 ? (
-            <span>
-              {language === 'ar' 
-                ? `${daysRemaining} أيام متبقية`
-                : `${daysRemaining} days remaining`}
-            </span>
-          ) : (
-            <span className="text-destructive">
-              {language === 'ar' ? 'انتهت الصلاحية' : 'Expired'}
-            </span>
-          )}
-        </div>
-      </div>
-      
-      {/* Audio controls */}
-      <div className="flex items-center gap-2 my-4">
-        {isPlaying ? (
-          <Button 
-            variant="outline"
-            onClick={handlePause}
-            className="gap-1"
-          >
-            <Pause className="h-4 w-4" />
-            {language === 'ar' ? 'إيقاف' : 'Pause'}
-          </Button>
-        ) : (
-          <Button 
-            variant="outline"
-            onClick={() => handlePlay(summary.audio_url)}
-            className="gap-1"
-          >
-            <Volume className="h-4 w-4" />
-            {language === 'ar' ? 'استماع للتسجيل' : 'Play Recording'}
-          </Button>
+        {/* Error notification */}
+        {hasError && (
+          <Card className="mb-6 border-destructive">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3" {...rtlProps}>
+                <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-medium text-destructive">{language === 'ar' ? 'خطأ في المعالجة' : 'Processing Error'}</h3>
+                  <p className="text-sm mt-1 text-muted-foreground">
+                    {hasTranscriptError 
+                      ? (language === 'ar' ? 'فشل في تحويل الصوت إلى نص: ' : 'Failed to transcribe audio: ') + recording.transcript_error
+                      : hasSummaryError 
+                        ? (language === 'ar' ? 'فشل في إنشاء الملخص: ' : 'Failed to generate summary: ') + recording.summary_error
+                        : language === 'ar' ? 'حدث خطأ أثناء المعالجة' : 'An error occurred during processing'
+                    }
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="mt-2" 
+                    onClick={handleRetry}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                        {language === 'ar' ? 'جارٍ إعادة المحاولة...' : 'Retrying...'}
+                      </>
+                    ) : (
+                      language === 'ar' ? 'إعادة المحاولة' : 'Retry'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
         
-        <Button
-          variant="outline"
-          onClick={handleExportPDF}
-          disabled={isExportingPDF || !summary.transcript}
-          className="gap-1"
-        >
-          <FileText className="h-4 w-4" />
-          {isExportingPDF 
-            ? (language === 'ar' ? 'جارٍ التصدير...' : 'Exporting...')
-            : (language === 'ar' ? 'تصدير PDF' : 'Export PDF')}
-        </Button>
-      </div>
-      
-      {/* Highlighted timestamps section */}
-      {summary.highlighted_timestamps && summary.highlighted_timestamps.length > 0 && (
-        <Card className="mb-4">
+        {/* Transcript section */}
+        <Card className="mb-6">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg">
-              {language === 'ar' ? 'لحظات مهمة' : 'Key Moments'}
-            </CardTitle>
+            <div className="flex justify-between items-center" {...rtlProps}>
+              <CardTitle className="text-lg">
+                {language === 'ar' ? 'النص المكتوب' : 'Transcript'}
+              </CardTitle>
+              <div className="flex gap-2">
+                {recording.transcript && !isEditingTranscript && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyToClipboard(recording.transcript)}
+                    >
+                      <Copy className="h-4 w-4 mr-1" />
+                      <span>{language === 'ar' ? 'نسخ' : 'Copy'}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleTranscriptEdit}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      <span>{language === 'ar' ? 'تعديل' : 'Edit'}</span>
+                    </Button>
+                  </>
+                )}
+                {isEditingTranscript && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEdit}
+                      disabled={isProcessing}
+                    >
+                      {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleSaveTranscript}
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-1" />
+                          <span>{language === 'ar' ? 'حفظ' : 'Save'}</span>
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {summary.highlighted_timestamps.map((highlight, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-1 bg-primary/10 py-1 px-2 rounded-full"
-                  role="button"
-                  onClick={() => {
-                    if (audioElement) {
-                      audioElement.currentTime = highlight.timestamp;
-                      audioElement.play()
-                        .then(() => setIsPlaying(true))
-                        .catch(console.error);
-                    } else if (summary.audio_url) {
-                      const audio = new Audio(summary.audio_url);
-                      audio.currentTime = highlight.timestamp;
-                      audio.onended = () => setIsPlaying(false);
-                      audio.onpause = () => setIsPlaying(false);
-                      audio.play()
-                        .then(() => {
-                          setIsPlaying(true);
-                          setAudioElement(audio);
-                        })
-                        .catch(console.error);
-                    }
-                  }}
-                >
-                  <Clock className="h-3 w-3" />
-                  <span>{formatRecordingTime(highlight.timestamp)}</span>
-                </div>
-              ))}
-            </div>
+            {recordingStatus === 'transcribing' || recordingStatus === 'pending' ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+                <p className="text-muted-foreground">
+                  {language === 'ar' ? 'جارٍ تحويل الصوت إلى نص...' : 'Transcribing audio...'}
+                </p>
+              </div>
+            ) : isTranscriptMissing || !recording.transcript ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center">
+                <FileText className="h-8 w-8 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">
+                  {language === 'ar' ? 'لا يوجد نص متاح' : 'No transcript available'}
+                </p>
+                {recordingStatus === 'complete' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={handleRetry}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      language === 'ar' ? 'إعادة المحاولة' : 'Retry Transcription'
+                    )}
+                  </Button>
+                )}
+              </div>
+            ) : isEditingTranscript ? (
+              <Textarea
+                value={editedTranscript}
+                onChange={(e) => setEditedTranscript(e.target.value)}
+                className={`min-h-[200px] w-full p-3 text-base ${language === 'ar' ? 'text-right' : ''}`}
+                placeholder={language === 'ar' ? 'أدخل النص المعدل هنا...' : 'Enter edited transcript here...'}
+                dir={language === 'ar' ? 'rtl' : 'ltr'}
+              />
+            ) : (
+              <div 
+                className="prose max-w-none dark:prose-invert"
+                dir={language === 'ar' ? 'rtl' : 'ltr'}
+              >
+                <p className="whitespace-pre-wrap text-pretty">
+                  {recording.transcript}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
-      
-      {/* Transcript section */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex justify-between items-center">
-            <span>{language === 'ar' ? 'النص' : 'Transcript'}</span>
-            {summary.transcript && (
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => handleCopyText(summary.transcript || '')}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {summary.transcript ? (
-            <div className="whitespace-pre-wrap text-sm">
-              {summary.transcript}
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-muted-foreground mb-3">
-                {language === 'ar' ? 'لم يتم إنشاء نص بعد' : 'No transcript generated yet'}
-              </p>
-              <Button 
-                onClick={generateTranscript} 
-                disabled={isGeneratingTranscript}
-              >
-                {isGeneratingTranscript ? 
-                  (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : 
-                  (language === 'ar' ? 'إنشاء النص' : 'Generate Transcript')}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      
-      {/* Summary section */}
-      {summary.transcript && (
-        <Card className="mb-4">
+        
+        {/* Summary Section */}
+        <Card className="mb-6">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex justify-between items-center">
-              <span>{language === 'ar' ? 'الملخص' : 'Summary'}</span>
-              {summary.summary && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  onClick={() => handleCopyText(summary.summary || '')}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              )}
-            </CardTitle>
+            <div className="flex justify-between items-center" {...rtlProps}>
+              <CardTitle className="text-lg">
+                {language === 'ar' ? 'الملخص' : 'Summary'}
+              </CardTitle>
+              <div className="flex gap-2">
+                {recording.summary && (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleCopyToClipboard(recording.summary)}
+                    >
+                      <Copy className="h-4 w-4 mr-1" />
+                      <span>{language === 'ar' ? 'نسخ' : 'Copy'}</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleExportPDF}
+                      disabled={isProcessing}
+                    >
+                      <FilePdf className="h-4 w-4 mr-1" />
+                      <span>{language === 'ar' ? 'PDF' : 'PDF'}</span>
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {summary.summary ? (
-              <div>
-                <div className="whitespace-pre-wrap text-sm mb-4">
-                  {summary.summary}
-                </div>
-                
-                {/* Audio Player for Summary */}
-                <div className="mt-4 pt-4 border-t">
-                  <SummaryAudioPlayer 
-                    recordingId={summary.id}
-                    summaryText={summary.summary}
-                    existingAudioUrl={summary.summary_audio_url}
-                    onAudioGenerated={handleAudioGenerated}
-                  />
-                </div>
+            {recordingStatus === 'processing' || recordingStatus === 'pending' || recordingStatus === 'transcribing' ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-3" />
+                <p className="text-muted-foreground">
+                  {language === 'ar' ? 'جارٍ إنشاء الملخص...' : 'Generating summary...'}
+                </p>
+              </div>
+            ) : isSummaryMissing || !recording.summary ? (
+              <div className="flex flex-col items-center justify-center p-6 text-center">
+                <FileText className="h-8 w-8 text-muted-foreground mb-3" />
+                <p className="text-muted-foreground">
+                  {language === 'ar' ? 'لا يوجد ملخص متاح' : 'No summary available'}
+                </p>
+                {recordingStatus === 'complete' && recording.transcript && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={handleRetry}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      language === 'ar' ? 'إنشاء الملخص' : 'Generate Summary'
+                    )}
+                  </Button>
+                )}
               </div>
             ) : (
-              <div className="text-center py-4">
-                <p className="text-muted-foreground mb-3">
-                  {language === 'ar' ? 'لم يتم إنشاء ملخص بعد' : 'No summary generated yet'}
+              <div className="prose max-w-none dark:prose-invert">
+                <p className="whitespace-pre-wrap text-pretty" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+                  {recording.summary}
                 </p>
-                <Button 
-                  onClick={generateSummary} 
-                  disabled={isGeneratingSummary}
-                >
-                  {isGeneratingSummary ? 
-                    (language === 'ar' ? 'جارٍ الإنشاء...' : 'Generating...') : 
-                    (language === 'ar' ? 'إنشاء ملخص' : 'Generate Summary')}
-                </Button>
               </div>
             )}
           </CardContent>
         </Card>
-      )}
-      
-      {/* Details section */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">
-            {language === 'ar' ? 'التفاصيل' : 'Details'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="font-medium">{language === 'ar' ? 'النوع' : 'Type'}</dt>
-              <dd>{summary.type}</dd>
-            </div>
-            
-            {summary.host && (
-              <div className="flex justify-between">
-                <dt className="font-medium">{language === 'ar' ? 'المضيف' : 'Host'}</dt>
-                <dd>{summary.host}</dd>
-              </div>
-            )}
-            
-            {summary.attendees && (
-              <div className="flex justify-between">
-                <dt className="font-medium">{language === 'ar' ? 'الحضور' : 'Attendees'}</dt>
-                <dd>{summary.attendees}</dd>
-              </div>
-            )}
-            
-            {summary.location && (
-              <div className="flex justify-between">
-                <dt className="font-medium">{language === 'ar' ? 'المكان' : 'Location'}</dt>
-                <dd>{summary.location}</dd>
-              </div>
-            )}
-            
-            <div className="flex justify-between">
-              <dt className="font-medium">{language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}</dt>
-              <dd>{formatDistanceToNow(new Date(summary.created_at), { addSuffix: true, locale })}</dd>
-            </div>
-            
-            <div className="flex justify-between">
-              <dt className="font-medium">{language === 'ar' ? 'تاريخ انتهاء الصلاحية' : 'Expires'}</dt>
-              <dd>{formatDistanceToNow(new Date(summary.expires_at), { addSuffix: true, locale })}</dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
-    </div>
+        
+        {/* Audio Player */}
+        {recording.summary && (
+          <Card className="mb-6">
+            <CardContent className="p-4">
+              <SummaryAudioPlayer
+                recordingId={id}
+                summaryText={recording.summary}
+                existingAudioUrl={recording.summary_audio_url}
+              />
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </ScrollArea>
   );
-}
+};
+
+export default VoiceSummaryDetail;

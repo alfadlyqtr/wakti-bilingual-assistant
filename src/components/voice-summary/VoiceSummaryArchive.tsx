@@ -1,529 +1,278 @@
 
-import { useNavigate } from "react-router-dom";
+import React, { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
-import { formatDistanceToNow } from "date-fns";
-import { arSA, enUS } from "date-fns/locale";
-import { Card, CardContent } from "@/components/ui/card";
-import { Mic, FileText, CheckCircle, Clock, DownloadCloud, Trash2, FileText as FileIcon, Volume } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
-import { useState } from "react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { Calendar, Clock, FileText, MoreVertical, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { getRecordingStatus } from "@/lib/utils";
+import { isValidDate } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isValidDate, getRecordingStatus } from "@/lib/utils";
 
 interface VoiceSummaryArchiveProps {
   recordings: any[];
-  onRecordingDeleted?: (recordingId: string) => void;
+  onRecordingDeleted?: (id: string) => void;
   isRefreshing?: boolean;
-  onRecordingSelected?: (recordingId: string) => void;
+  onRecordingSelected?: (id: string) => void;
 }
 
 export default function VoiceSummaryArchive({ 
-  recordings, 
-  onRecordingDeleted, 
+  recordings,
+  onRecordingDeleted,
   isRefreshing = false,
   onRecordingSelected
 }: VoiceSummaryArchiveProps) {
-  const navigate = useNavigate();
-  const { language } = useTheme();
-  const [isDeleting, setIsDeleting] = useState(false);
+  const { language, theme } = useTheme();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recordingToDelete, setRecordingToDelete] = useState<string | null>(null);
-  const [isPlaying, setIsPlaying] = useState<string | null>(null);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-
-  const locale = language === 'ar' ? arSA : enUS;
-
-  // Verify recordings are fully ready before rendering
-  const readyRecordings = recordings.filter(recording => {
-    // First check the is_ready flag (new approach)
-    if (recording.is_ready === true) {
-      return true;
-    }
-    
-    // Fall back to checking full fields for backwards compatibility
-    const isComplete = Boolean(
-      recording && 
-      recording.id &&
-      recording.title &&
-      recording.audio_url
-    );
-    
-    return isComplete;
-  });
-
-  const getStatusIcon = (recording: any) => {
-    const status = getRecordingStatus(recording);
-    
-    switch (status) {
-      case 'complete':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'processing':
-        return <FileText className="h-4 w-4 text-blue-500" />;
-      case 'transcribing':
-      case 'pending':
-      default:
-        return <Clock className="h-4 w-4 text-amber-500" />;
-    }
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString || !isValidDate(dateString)) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
   };
-
-  const getStatusText = (recording: any) => {
-    const status = getRecordingStatus(recording);
-    
-    switch (status) {
-      case 'complete':
-        return language === 'ar' ? 'مكتمل' : 'Completed';
-      case 'processing':
-        return language === 'ar' ? 'تم النسخ' : 'Transcribed';
-      case 'transcribing':
-        return language === 'ar' ? 'قيد النسخ' : 'Transcribing';
-      case 'pending':
-      default:
-        return language === 'ar' ? 'قيد المعالجة' : 'Processing';
-    }
+  
+  const handleDeleteClick = (id: string) => {
+    setRecordingToDelete(id);
+    setDeleteDialogOpen(true);
   };
-
-  const getStatusVariant = (recording: any): "default" | "secondary" | "outline" => {
-    const status = getRecordingStatus(recording);
-    
-    switch (status) {
-      case 'complete':
-        return "default";
-      case 'processing':
-        return "secondary";
-      case 'transcribing':
-      case 'pending':
-      default:
-        return "outline";
-    }
-  };
-
-  const calculateDaysRemaining = (expiresAt: string | null | undefined): number => {
-    if (!expiresAt) return 0;
-    
-    try {
-      const expiryDate = new Date(expiresAt);
-      
-      // Check if the date is valid
-      if (isNaN(expiryDate.getTime())) {
-        return 0;
-      }
-      
-      const now = new Date();
-      const diffTime = expiryDate.getTime() - now.getTime();
-      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    } catch (error) {
-      console.error("Error calculating days remaining:", error);
-      return 0;
-    }
-  };
-
-  // Helper function to safely format date
-  const safeFormatDistanceToNow = (dateString: string | null | undefined) => {
-    if (!dateString) return "";
-    
-    try {
-      if (!isValidDate(dateString)) {
-        return language === 'ar' ? 'تاريخ غير صالح' : 'Invalid date';
-      }
-      
-      const date = new Date(dateString);
-      return formatDistanceToNow(date, { 
-        addSuffix: true, 
-        locale 
-      });
-    } catch (error) {
-      console.error("Error formatting date:", error, dateString);
-      return language === 'ar' ? 'تاريخ غير صالح' : 'Invalid date';
-    }
-  };
-
-  const handleDownload = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error('Download failed:', error);
-      toast.error(language === 'ar' ? 'فشل في تنزيل الملف' : 'Download failed');
-    }
-  };
-
-  const handleExportPDF = async (e: React.MouseEvent, recording: any) => {
-    e.stopPropagation();
-    
-    if (!recording.transcript) {
-      toast.error(language === 'ar' ? 'لا يوجد نص للتصدير' : 'No transcript to export');
-      return;
-    }
-    
-    try {
-      // Create a simple formatted text for PDF export
-      const content = `
-${recording.title || 'Untitled Recording'}
-${recording.created_at ? new Date(recording.created_at).toLocaleDateString() : 'Unknown date'}
-
-${language === 'ar' ? 'النص:' : 'Transcript:'}
-${recording.transcript}
-
-${recording.summary ? (language === 'ar' ? 'الملخص:' : 'Summary:') : ''}
-${recording.summary || ''}
-      `;
-      
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${recording.title || 'recording'}-export.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast.success(language === 'ar' ? 'تم تصدير المحتوى بنجاح' : 'Content exported successfully');
-    } catch (error) {
-      console.error('Export failed:', error);
-      toast.error(language === 'ar' ? 'فشل في تصدير المحتوى' : 'Export failed');
-    }
-  };
-
-  const handleDelete = async () => {
+  
+  const handleDeleteConfirm = async () => {
     if (!recordingToDelete) return;
     
-    setIsDeleting(true);
     try {
-      const recording = recordings.find(r => r.id === recordingToDelete);
+      setIsDeleting(true);
       
-      if (!recording) {
-        throw new Error("Recording not found");
+      // Get the recording to get user_id for path construction
+      const { data: recording, error: fetchError } = await supabase
+        .from('voice_summaries')
+        .select('user_id')
+        .eq('id', recordingToDelete)
+        .single();
+        
+      if (fetchError) {
+        console.error("Error fetching recording for deletion:", fetchError);
+        toast.error(language === 'ar' ? 'فشل في جلب التسجيل' : 'Failed to fetch recording');
+        return;
       }
-      
-      // Get user ID from the recording or current user
-      const userId = recording.user_id || recording.host;
-      
-      if (!userId) {
-        throw new Error("User ID not found in recording");
-      }
-      
-      // Construct the storage paths to delete
-      const recordingPath = `voice_recordings/${userId}/${recordingToDelete}/recording.mp3`;
-      const summaryPath = `voice_recordings/${userId}/${recordingToDelete}/summary.mp3`;
-      
-      // Delete recording from database
-      const { error } = await supabase
+        
+      // Delete the record from the database
+      const { error: deleteError } = await supabase
         .from('voice_summaries')
         .delete()
         .eq('id', recordingToDelete);
-
-      if (error) {
-        throw error;
+        
+      if (deleteError) {
+        console.error("Error deleting recording:", deleteError);
+        toast.error(language === 'ar' ? 'فشل في حذف التسجيل' : 'Failed to delete recording');
+        return;
       }
-
-      // Delete recording files from storage
-      const { error: recordingError } = await supabase.storage
-        .from('voice_recordings')
-        .remove([recordingPath]);
       
-      // Try to delete summary audio if it exists 
-      await supabase.storage
-        .from('voice_recordings')
-        .remove([summaryPath])
-        .catch(() => {
-          // Ignore error if summary file doesn't exist
-          console.log('No summary file to delete or deletion failed');
-        });
-      
-      if (recordingError) {
-        console.error('Failed to delete recording file:', recordingError);
-        // Continue even if file deletion fails as the database record is gone
+      // Delete the audio file from storage if user_id is available
+      if (recording?.user_id) {
+        const storagePath = `${recording.user_id}/${recordingToDelete}`;
+        
+        try {
+          const { data: storageFiles } = await supabase.storage
+            .from('voice_recordings')
+            .list(storagePath);
+            
+          if (storageFiles && storageFiles.length > 0) {
+            const filePaths = storageFiles.map(file => `${storagePath}/${file.name}`);
+            
+            const { error: storageError } = await supabase.storage
+              .from('voice_recordings')
+              .remove(filePaths);
+              
+            if (storageError) {
+              console.error("Error deleting audio files:", storageError);
+              // Don't fail the whole operation if file deletion fails
+              // The database record is already deleted
+            }
+          }
+        } catch (storageError) {
+          console.error("Error handling storage deletion:", storageError);
+          // Don't fail the whole operation if file deletion fails
+        }
       }
-
-      toast.success(language === 'ar' ? 'تم حذف التسجيل بنجاح' : 'Recording deleted successfully');
       
-      // Notify parent component to update list
+      // Notify parent about deletion
       if (onRecordingDeleted) {
         onRecordingDeleted(recordingToDelete);
       }
       
+      toast.success(language === 'ar' ? 'تم حذف التسجيل بنجاح' : 'Recording deleted successfully');
     } catch (error) {
-      console.error('Delete failed:', error);
-      toast.error(language === 'ar' ? 'فشل في حذف التسجيل' : 'Failed to delete recording');
+      console.error("Error in handleDeleteConfirm:", error);
+      toast.error(language === 'ar' ? 'حدث خطأ أثناء حذف التسجيل' : 'An error occurred while deleting the recording');
     } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
       setRecordingToDelete(null);
     }
   };
-
-  const openDeleteDialog = (e: React.MouseEvent, recordingId: string) => {
-    e.stopPropagation();
-    setRecordingToDelete(recordingId);
-    setDeleteDialogOpen(true);
+  
+  const handleRecordingClick = (id: string) => {
+    if (onRecordingSelected) {
+      onRecordingSelected(id);
+    }
   };
-
-  const handlePlayAudio = (e: React.MouseEvent, url: string | null | undefined, recordingId: string) => {
-    e.stopPropagation();
+  
+  // Determine card styles based on recording status and theme
+  const getCardStyles = (recording: any) => {
+    const status = getRecordingStatus(recording);
     
-    if (!url) {
-      toast.error(language === 'ar' ? 'عنوان URL للتسجيل غير متوفر' : 'Recording URL not available');
-      return;
+    // Basic hover styles
+    let hoverStyles = "hover:border-primary/50 cursor-pointer";
+    
+    // Status-specific styles
+    switch (status) {
+      case 'processing':
+      case 'transcribing':
+        return `border-amber-200 dark:border-amber-900/30 bg-amber-50/30 dark:bg-amber-900/5 ${hoverStyles}`;
+      case 'complete':
+        return `border-border ${hoverStyles}`;
+      default:
+        return `border-border/50 ${hoverStyles}`;
     }
-    
-    // Stop any currently playing audio
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.remove();
-      setAudioElement(null);
-    }
-    
-    if (isPlaying === recordingId) {
-      setIsPlaying(null);
-      return;
-    }
-    
-    const audio = new Audio(url);
-    audio.onended = () => setIsPlaying(null);
-    audio.onpause = () => setIsPlaying(null);
-    audio.onerror = () => {
-      toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
-      setIsPlaying(null);
+  };
+  
+  // Get the recording type badge
+  const getRecordingTypeBadge = (type: string) => {
+    // Translation map for recording types
+    const typeTranslations: { [key: string]: string } = {
+      note: language === 'ar' ? 'ملاحظة' : 'Note',
+      summary: language === 'ar' ? 'ملخص' : 'Summary',
+      lecture: language === 'ar' ? 'محاضرة' : 'Lecture',
+      meeting: language === 'ar' ? 'اجتماع' : 'Meeting'
     };
     
-    audio.play()
-      .then(() => {
-        setIsPlaying(recordingId);
-        setAudioElement(audio);
-      })
-      .catch(error => {
-        console.error('Error playing audio:', error);
-        toast.error(language === 'ar' ? 'فشل في تشغيل التسجيل' : 'Failed to play recording');
-      });
-  };
-
-  const handleRecordingClick = (recordingId: string) => {
-    console.log('Recording clicked:', recordingId);
-    if (onRecordingSelected) {
-      console.log('Calling onRecordingSelected with:', recordingId);
-      onRecordingSelected(recordingId);
-    }
-  };
-
-  // Safely check if recordings array is valid before rendering
-  if (!Array.isArray(recordings)) {
-    console.error("Expected recordings to be an array but got:", recordings);
     return (
-      <div className="text-center py-10">
-        <p className="text-lg text-muted-foreground mb-2">
-          {language === 'ar' ? 'خطأ في تحميل التسجيلات' : 'Error loading recordings'}
-        </p>
-      </div>
+      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+        {typeTranslations[type] || type}
+      </span>
     );
-  }
-
-  // Render the list of recordings with proper loading states
+  };
+  
   return (
-    <>
-      <div className="space-y-3">
-        {isRefreshing && (
-          <div className="border border-border/30 bg-muted/30 rounded-md p-2 mb-2">
-            <p className="text-xs text-muted-foreground text-center animate-pulse">
-              {language === 'ar' ? 'جارِ تحديث التسجيلات...' : 'Refreshing recordings...'}
-            </p>
-          </div>
-        )}
-        
-        {readyRecordings.map((recording) => {
-          if (!recording) return null; // Skip if recording is null/undefined
-          
-          const daysRemaining = calculateDaysRemaining(recording.expires_at);
-          const status = getRecordingStatus(recording);
-          
-          return (
-            <Card 
-              key={recording.id}
-              className={`hover:border-primary/50 transition-colors cursor-pointer ${
-                daysRemaining <= 2 ? 'border-amber-200' : ''} ${
-                status !== 'complete' ? 'border-dashed' : ''}`}
-              onClick={() => handleRecordingClick(recording.id)}
-            >
-              <CardContent className="p-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-primary/10 p-2 rounded-full">
-                      <Mic className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="max-w-[180px] sm:max-w-xs">
-                      <h3 className="font-medium text-base line-clamp-1">
-                        {recording.title || (language === 'ar' ? 'تسجيل بدون عنوان' : 'Untitled Recording')}
-                        {status !== 'complete' && (
-                          <span className="ml-2 inline-flex">
-                            <Clock className="h-3 w-3 animate-pulse text-amber-500" />
-                          </span>
-                        )}
-                      </h3>
-                      <div className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-1">
-                        {isValidDate(recording.created_at) ? (
-                          <span>{safeFormatDistanceToNow(recording.created_at)}</span>
-                        ) : (
-                          <span>{language === 'ar' ? 'للتو' : 'Just now'}</span>
-                        )}
-                        
-                        {daysRemaining > 0 && (
-                          <span className="text-xs px-1.5 py-0.5 bg-muted rounded-sm">
-                            {language === 'ar' 
-                              ? `${daysRemaining} أيام متبقية` 
-                              : `${daysRemaining} days left`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      onClick={(e) => openDeleteDialog(e, recording.id)}
-                      title={language === 'ar' ? 'حذف' : 'Delete'}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={(e) => handleExportPDF(e, recording)}
-                      title={language === 'ar' ? 'تصدير نص' : 'Export Text'}
-                      disabled={!recording.transcript}
-                    >
-                      <FileIcon className="h-4 w-4" />
-                    </Button>
-                    
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={(e) => handlePlayAudio(e, recording.audio_url, recording.id)}
-                      title={isPlaying === recording.id 
-                        ? (language === 'ar' ? 'إيقاف' : 'Pause') 
-                        : (language === 'ar' ? 'تشغيل' : 'Play')}
-                      disabled={!recording.audio_url}
-                    >
-                      {isPlaying === recording.id ? (
-                        <Clock className="h-4 w-4 animate-pulse text-primary" />
-                      ) : (
-                        <Volume className="h-4 w-4" />
-                      )}
-                    </Button>
-                    
-                    {recording.audio_url && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(recording.audio_url, `recording-${recording.id}.mp3`);
-                        }}
-                        title={language === 'ar' ? 'تنزيل' : 'Download'}
-                      >
-                        <DownloadCloud className="h-4 w-4" />
-                      </Button>
-                    )}
-                    
-                    <Badge 
-                      variant={getStatusVariant(recording)}
-                      className="ml-1 flex items-center gap-1 h-6"
-                    >
-                      {getStatusIcon(recording)}
-                      <span>{getStatusText(recording)}</span>
-                    </Badge>
-                  </div>
-                </div>
-                
-                {recording.transcript ? (
-                  <div className="mt-2 border-t pt-2 border-border/50">
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-                      <FileText className="h-3 w-3" />
-                      <span>{language === 'ar' ? 'النص' : 'Transcript'}</span>
-                    </div>
-                    <p className="text-sm line-clamp-2">{recording.transcript}</p>
-                  </div>
-                ) : status !== 'complete' && status !== 'pending' ? (
-                  <div className="mt-2 border-t pt-2 border-border/50">
-                    <Skeleton className="h-4 w-3/4 mb-2" />
-                    <Skeleton className="h-3 w-full" />
-                  </div>
-                ) : null}
+    <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {isRefreshing && recordings.length === 0 ? (
+          // Show skeletons while refreshing empty list
+          Array.from({ length: 4 }).map((_, i) => (
+            <Card key={`skeleton-${i}`} className="overflow-hidden">
+              <CardHeader className="p-4 pb-2">
+                <Skeleton className="h-5 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <Skeleton className="h-8 w-full mt-2" />
               </CardContent>
             </Card>
-          );
-        })}
-
-        {readyRecordings.length === 0 && (
-          <div className="text-center py-10">
-            <p className="text-lg text-muted-foreground mb-2">
-              {language === 'ar' ? 'لا توجد تسجيلات' : 'No recordings found'}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {language === 'ar' 
-                ? 'انقر على زر "تسجيل جديد" لإضافة تسجيل جديد' 
-                : 'Click the "New Recording" button to add a new recording'}
-            </p>
-          </div>
+          ))
+        ) : (
+          // Show actual recordings
+          recordings.map((recording) => (
+            <Card 
+              key={recording.id} 
+              className={`overflow-hidden transition-all ${getCardStyles(recording)}`}
+              onClick={() => handleRecordingClick(recording.id)}
+            >
+              <CardHeader className="p-4 pb-2">
+                <div className="flex justify-between items-start" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+                  <div className="space-y-1">
+                    <h3 className="font-medium text-base line-clamp-1" title={recording.title}>
+                      {recording.title}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      {recording.type && getRecordingTypeBadge(recording.type)}
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(recording.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                        <span className="sr-only">Menu</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align={language === 'ar' ? 'start' : 'end'}>
+                      <DropdownMenuLabel>{language === 'ar' ? 'خيارات' : 'Options'}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteClick(recording.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'حذف' : 'Delete'}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 pt-0">
+                <div 
+                  className={`flex items-center gap-1 text-xs text-muted-foreground mt-2 ${language === 'ar' ? 'justify-end' : ''}`}
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                >
+                  <FileText className="h-3 w-3" />
+                  {recording.transcript ? (
+                    <span className="line-clamp-1">{recording.transcript}</span>
+                  ) : (
+                    <span>{language === 'ar' ? 'جارٍ التحويل...' : 'Transcribing...'}</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))
         )}
       </div>
-
+      
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {language === 'ar' ? 'هل أنت متأكد أنك تريد الحذف؟' : 'Are you sure you want to delete?'}
+              {language === 'ar' ? 'هل أنت متأكد من حذف هذا التسجيل؟' : 'Are you sure you want to delete this recording?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {language === 'ar' 
-                ? 'سيتم حذف هذا التسجيل بشكل نهائي. لا يمكن التراجع عن هذا الإجراء.' 
-                : 'This recording will be permanently deleted. This action cannot be undone.'}
+                ? 'سيتم حذف هذا التسجيل نهائيًا وكذلك الملخص والنص المكتوب المرتبط به.' 
+                : 'This recording will be permanently deleted, along with its summary and transcript.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDelete} 
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeleteConfirm();
+              }}
               disabled={isDeleting}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isDeleting 
-                ? (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') 
-                : (language === 'ar' ? 'حذف' : 'Delete')}
+              {isDeleting
+                ? language === 'ar' ? 'جارٍ الحذف...' : 'Deleting...'
+                : language === 'ar' ? 'حذف' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }

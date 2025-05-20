@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.32.0";
@@ -47,7 +48,7 @@ serve(async (req) => {
     let audioFile;
     let recordingId;
     let filePath;
-    let fileFormat = 'mp3'; // Default to mp3
+    let fileFormat = 'webm'; // Default to webm
     
     const contentType = req.headers.get("content-type") || "";
     
@@ -68,7 +69,7 @@ serve(async (req) => {
           );
         }
         
-        fileFormat = audioFile.name.split('.').pop()?.toLowerCase() || 'mp3';
+        fileFormat = audioFile.name.split('.').pop()?.toLowerCase() || 'webm';
         console.log(`Received direct audio upload: ${audioFile.size} bytes, type: ${audioFile.type}, format: ${fileFormat}`);
         
         // Validate file format
@@ -179,12 +180,11 @@ serve(async (req) => {
           // Continue anyway as this is not critical
         }
         
-        // Extract file format from recordingId
-        // But always default to MP3 as that's our standard format now
-        fileFormat = 'mp3';
+        // Default to webm as that's our standard format now
+        fileFormat = 'webm';
         
         // Construct the storage path - use provided filePath if available, or construct from user_id and recordingId
-        const storagePath = filePath || `voice_recordings/${summaryData.user_id || 'anonymous'}/${recordingId}/recording.mp3`;
+        const storagePath = filePath || `${summaryData.user_id || 'anonymous'}/${recordingId}/recording.webm`;
         
         // Download audio file from storage
         console.log(`Attempting to download file from storage: ${storagePath}`);
@@ -234,10 +234,10 @@ serve(async (req) => {
           );
         }
         
-        // Set content type to MP3 for standardization
-        const contentType = 'audio/mpeg';
+        // Set content type to webm for standardization
+        const contentType = 'audio/webm';
         
-        audioFile = new File([fileData], `audio.mp3`, { type: contentType });
+        audioFile = new File([fileData], `audio.webm`, { type: contentType });
         console.log(`Successfully retrieved audio file: ${audioFile.size} bytes, format: ${fileFormat}, type: ${contentType}`);
       } catch (jsonError) {
         console.error("Error processing JSON data:", jsonError);
@@ -262,7 +262,7 @@ serve(async (req) => {
       );
     }
     
-    // Maximum allowed audio duration (2 minutes = ~40MB approximate for high quality audio)
+    // Maximum allowed audio duration (2 hours = ~40MB approximate for high quality audio)
     const MAX_AUDIO_SIZE = 40 * 1024 * 1024; 
     
     if (audioFile.size > MAX_AUDIO_SIZE) {
@@ -272,7 +272,7 @@ serve(async (req) => {
         await supabase
           .from("voice_summaries")
           .update({ 
-            transcript_error: "Audio file exceeds maximum allowed duration (2 minutes)",
+            transcript_error: "Audio file exceeds maximum allowed size",
             is_processing_transcript: false,
             transcript_completed_at: new Date().toISOString()
           })
@@ -280,7 +280,7 @@ serve(async (req) => {
       }
       
       return new Response(
-        JSON.stringify({ error: "Audio file exceeds maximum allowed duration (2 minutes)" }),
+        JSON.stringify({ error: "Audio file exceeds maximum allowed size" }),
         { 
           status: 400, 
           headers: { ...corsHeaders, "Content-Type": "application/json" }

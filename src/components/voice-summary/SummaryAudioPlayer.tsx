@@ -281,8 +281,11 @@ export default function SummaryAudioPlayer({
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
+  // Set direction based on language
+  const rtlProps = language === 'ar' ? { dir: 'rtl' } : {};
+  
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" {...rtlProps}>
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="font-medium">
@@ -356,7 +359,7 @@ export default function SummaryAudioPlayer({
           
           <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
             <div 
-              className="h-full bg-primary rounded-full" 
+              className="h-full bg-primary rounded-full transition-all" 
               style={{ width: `${duration ? (progress / duration) * 100 : 0}%` }}
             ></div>
           </div>

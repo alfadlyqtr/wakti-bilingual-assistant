@@ -5,28 +5,28 @@
 
 /**
  * Determines the best supported MIME type for audio recording
- * Prioritizes MP3 format
+ * Prioritizes webm format for Whisper compatibility
  */
 export const getBestSupportedMimeType = (): string => {
   const preferredTypes = [
-    'audio/mp3',
-    'audio/mpeg',
     'audio/webm;codecs=opus',
     'audio/webm',
     'audio/ogg;codecs=opus',
     'audio/ogg',
-    'audio/wav'
+    'audio/wav',
+    'audio/mp3',
+    'audio/mpeg'
   ];
   
-  // First try to find MP3/MPEG format support as it's our standardized format
-  for (const type of ['audio/mp3', 'audio/mpeg']) {
+  // Try to find webm format support as it's our standardized format
+  for (const type of ['audio/webm;codecs=opus', 'audio/webm']) {
     if (MediaRecorder.isTypeSupported(type)) {
       console.log(`Using preferred format: ${type}`);
       return type;
     }
   }
   
-  // Fall back to other formats if MP3 isn't supported
+  // Fall back to other formats if webm isn't supported
   for (const type of preferredTypes) {
     if (MediaRecorder.isTypeSupported(type)) {
       console.log(`Browser supports recording in ${type} format`);
@@ -43,28 +43,77 @@ export const getBestSupportedMimeType = (): string => {
  * Gets the file extension from a MIME type
  */
 export const getFileExtension = (mimeType: string): string => {
-  if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
-    return 'mp3';
+  if (mimeType.includes('webm')) {
+    return 'webm';
   } else if (mimeType.includes('ogg')) {
     return 'ogg';
   } else if (mimeType.includes('wav')) {
     return 'wav';
+  } else if (mimeType.includes('mp3') || mimeType.includes('mpeg')) {
+    return 'mp3';
   }
-  return 'webm'; // Default
+  return 'webm'; // Default to webm
 };
 
 /**
  * Generates the standardized file path for audio recordings
  */
 export const generateRecordingPath = (userId: string, recordingId: string): string => {
-  return `voice_recordings/${userId}/${recordingId}/recording.mp3`;
+  return `${userId}/${recordingId}/recording.webm`;
 };
 
 /**
  * Formats recording time in MM:SS format
  */
 export const formatRecordingTime = (seconds: number): string => {
-  const mins = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
+  
+  if (hours > 0) {
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+  
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
+/**
+ * Converts blob to base64
+ */
+export const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+/**
+ * Combines multiple audio blobs into a single blob
+ */
+export const combineAudioBlobs = async (blobs: Blob[], mimeType: string): Promise<Blob> => {
+  if (blobs.length === 1) return blobs[0];
+  
+  const audioBuffers = await Promise.all(blobs.map(async blob => {
+    const arrayBuffer = await blob.arrayBuffer();
+    return arrayBuffer;
+  }));
+  
+  // Calculate total length
+  const totalLength = audioBuffers.reduce((acc, buffer) => acc + buffer.byteLength, 0);
+  const result = new Uint8Array(totalLength);
+  
+  // Copy all arrays into the result
+  let offset = 0;
+  audioBuffers.forEach(buffer => {
+    result.set(new Uint8Array(buffer), offset);
+    offset += buffer.byteLength;
+  });
+  
+  return new Blob([result], { type: mimeType });
 };

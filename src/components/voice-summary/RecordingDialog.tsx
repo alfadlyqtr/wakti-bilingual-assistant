@@ -1,10 +1,11 @@
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useTheme } from "@/providers/ThemeProvider";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Square, Loader2, Pause, Play } from "lucide-react";
 import useVoiceSummaryController from "@/hooks/useVoiceSummaryController";
 import { useNavigate } from "react-router-dom";
 import { Progress } from "@/components/ui/progress";
@@ -32,10 +33,10 @@ export default function RecordingDialog({
   const controller = useVoiceSummaryController();
   const { 
     startRecording, 
-    stopRecording, 
+    stopRecording,
+    pauseRecording,
     cancelRecording, 
     resetRecording,
-    waitForCompletion,
     state 
   } = controller;
   
@@ -71,7 +72,7 @@ export default function RecordingDialog({
   
   // Handle dialog close
   const handleDialogClose = () => {
-    if (state.recordingState === "recording") {
+    if (state.recordingState === "recording" || state.recordingState === "paused") {
       cancelRecording();
       onClose();
       return;
@@ -94,6 +95,11 @@ export default function RecordingDialog({
     startRecording(recordingType);
   };
   
+  // Handle continue recording (resume after pause)
+  const handleContinueRecording = () => {
+    startRecording(recordingType);
+  };
+  
   // Format time as MM:SS or HH:MM:SS for longer durations
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
@@ -107,6 +113,8 @@ export default function RecordingDialog({
     switch (state.recordingState) {
       case "recording":
         return language === 'ar' ? 'جارِ التسجيل...' : 'Recording...';
+      case "paused":
+        return language === 'ar' ? 'تم إيقاف التسجيل مؤقتًا' : 'Recording Paused';
       case "processing":
         switch (state.processingStep) {
           case "uploading":
@@ -132,6 +140,47 @@ export default function RecordingDialog({
   // Check if we are in any kind of processing state
   const isProcessing = state.recordingState === "processing";
   
+  // Calculate the total recording time (current segment + all previous segments)
+  const totalTime = state.totalRecordingTime + state.recordingTime;
+  
+  // Get display time for recording segments
+  const getRecordingTimeDisplay = () => {
+    if (state.recordingState === "paused") {
+      return (
+        <div className="text-sm text-muted-foreground">
+          {language === 'ar' 
+            ? `الجزء ${state.currentPart}: ${formatTime(state.totalRecordingTime)} (الإجمالي)`
+            : `Part ${state.currentPart}: ${formatTime(state.totalRecordingTime)} (Total)`}
+        </div>
+      );
+    }
+    
+    if (state.currentPart > 1) {
+      return (
+        <div className="text-xl font-mono">
+          {formatTime(state.recordingTime)}
+          <span className="text-sm text-muted-foreground ml-2">
+            {language === 'ar' 
+              ? `(الإجمالي: ${formatTime(totalTime)})`
+              : `(Total: ${formatTime(totalTime)})`}
+          </span>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="text-xl font-mono">
+        {formatTime(state.recordingTime)} / {formatTime(MAX_RECORDING_DURATION)}
+      </div>
+    );
+  };
+  
+  // Compute the percentage of maximum recording time used
+  const recordingTimePercentage = (totalTime / MAX_RECORDING_DURATION) * 100;
+  
+  // Conditional dir attribute for RTL support
+  const rtlProps = language === 'ar' ? { dir: 'rtl' } : {};
+  
   return (
     <Dialog 
       open={isOpen}
@@ -143,14 +192,14 @@ export default function RecordingDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
+          <DialogTitle {...rtlProps}>
             {language === 'ar' ? 'تسجيل صوتي جديد' : 'New Voice Recording'}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="flex flex-col items-center justify-center py-6">
+        <div className="flex flex-col items-center justify-center py-6" {...rtlProps}>
           {/* Recording Type Selector - Only show before recording starts */}
-          {state.recordingState === "idle" && (
+          {(state.recordingState === "idle") && (
             <div className="w-full mb-6">
               <Label htmlFor="recording-type" className="mb-2 block">
                 {language === 'ar' ? 'نوع التسجيل' : 'Recording Type'}
@@ -178,11 +227,25 @@ export default function RecordingDialog({
               {getStatusText()}
             </p>
             
-            {/* Show timer during recording */}
-            {state.recordingState === "recording" && (
-              <div className="text-xl font-mono mt-2">
-                {formatTime(state.recordingTime)} / {formatTime(MAX_RECORDING_DURATION)}
+            {/* Multi-part recording indicator */}
+            {state.currentPart > 1 && (state.recordingState === "recording" || state.recordingState === "paused") && (
+              <div className="text-sm text-muted-foreground mb-2">
+                {language === 'ar' 
+                  ? `الجزء ${state.currentPart} من التسجيل`
+                  : `Recording Part ${state.currentPart}`}
               </div>
+            )}
+            
+            {/* Show timer during recording or when paused */}
+            {(state.recordingState === "recording" || state.recordingState === "paused") && (
+              <>
+                {getRecordingTimeDisplay()}
+                
+                {/* Recording progress bar */}
+                <div className="w-full mt-2">
+                  <Progress value={recordingTimePercentage} className="h-2" />
+                </div>
+              </>
             )}
             
             {/* Show progress during processing */}
@@ -203,8 +266,9 @@ export default function RecordingDialog({
             )}
           </div>
           
-          {/* Recording button */}
+          {/* Recording buttons */}
           <div className="flex items-center justify-center gap-4">
+            {/* Initial start recording button */}
             {state.recordingState === "idle" && (
               <Button
                 onClick={handleStartRecording}
@@ -215,23 +279,64 @@ export default function RecordingDialog({
               </Button>
             )}
             
+            {/* Recording controls - when recording */}
             {state.recordingState === "recording" && (
-              <Button
-                onClick={() => stopRecording()}
-                variant="destructive"
-                size="lg"
-                className="h-16 w-16 rounded-full animate-pulse"
-              >
-                <Square className="h-8 w-8" />
-              </Button>
+              <div className="flex gap-4">
+                {/* Pause button */}
+                <Button
+                  onClick={() => pauseRecording()}
+                  variant="outline"
+                  size="lg"
+                  className="h-12 w-12 rounded-full"
+                >
+                  <Pause className="h-6 w-6" />
+                </Button>
+                
+                {/* Stop button */}
+                <Button
+                  onClick={() => stopRecording()}
+                  variant="destructive"
+                  size="lg"
+                  className="h-16 w-16 rounded-full animate-pulse"
+                >
+                  <Square className="h-8 w-8" />
+                </Button>
+              </div>
             )}
             
+            {/* Recording controls - when paused */}
+            {state.recordingState === "paused" && (
+              <div className="flex gap-4">
+                {/* Resume button */}
+                <Button
+                  onClick={handleContinueRecording}
+                  variant="outline"
+                  size="lg"
+                  className="h-12 w-12 rounded-full"
+                >
+                  <Play className="h-6 w-6" />
+                </Button>
+                
+                {/* Stop button */}
+                <Button
+                  onClick={() => stopRecording()}
+                  variant="destructive"
+                  size="lg"
+                  className="h-16 w-16 rounded-full"
+                >
+                  <Square className="h-8 w-8" />
+                </Button>
+              </div>
+            )}
+            
+            {/* Processing indicator */}
             {isProcessing && (
               <div className="h-16 w-16 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             )}
             
+            {/* Error state retry button */}
             {state.recordingState === "error" && (
               <Button
                 onClick={() => resetRecording()}
@@ -244,13 +349,15 @@ export default function RecordingDialog({
         </div>
         
         {/* Action buttons */}
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex justify-end gap-2 mt-4" {...rtlProps}>
+          {/* Cancel button - only show when not processing */}
           {!isProcessing && state.recordingState !== "error" && (
             <Button variant="outline" onClick={handleDialogClose}>
               {language === 'ar' ? 'إلغاء' : 'Cancel'}
             </Button>
           )}
           
+          {/* Loading indicator when processing */}
           {isProcessing && (
             <Button variant="outline" disabled={isClosing}>
               {isClosing 
