@@ -146,12 +146,12 @@ export const checkStoragePermissions = async (bucketName: string) => {
       .list(`${userId}/test`);
       
     // Check UPLOAD permissions (but don't actually upload in production to avoid unnecessary files)
-    // Just check if we can get the URL for an upload
+    // Using createSignedUploadUrl which is the correct method instead of getUploadUrl
     let uploadError = null;
     try {
       await supabase.storage
         .from(bucketName)
-        .getUploadUrl(`${userId}/test/permission_test.txt`);
+        .createSignedUploadUrl(`${userId}/test/permission_test.txt`);
     } catch (error) {
       uploadError = error;
     }
