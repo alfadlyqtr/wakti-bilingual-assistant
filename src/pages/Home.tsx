@@ -7,7 +7,7 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, CircleCheck, Bot } from "lucide-react";
+import { Check, ArrowRight, CircleCheck, Bot, LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 
@@ -112,7 +112,20 @@ export default function Home() {
 
   return (
     <div className="mobile-container">
-      <MobileHeader title="WAKTI" showUserMenu={false} />
+      <MobileHeader title="WAKTI" showUserMenu={false}>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-1"
+            onClick={() => navigate('/login')}
+          >
+            {t.loginBtn}
+            <LogIn className="h-4 w-4" />
+          </Button>
+          <ThemeLanguageToggle />
+        </div>
+      </MobileHeader>
       
       <div className="flex-1 overflow-y-auto pb-16">
         {/* Hero Section */}
