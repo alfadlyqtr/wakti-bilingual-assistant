@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { getRecordingStatus } from "@/lib/utils";
 import * as voiceSummaryService from "@/services/voiceSummaryService";
-import { getBestSupportedMimeType, formatRecordingTime } from "@/utils/audioUtils";
+import { getBestSupportedMimeType, formatRecordingTime, getFileExtension } from "@/utils/audioUtils";
 
 // Define types for the hook
 type RecordingState = "idle" | "recording" | "processing" | "stopped" | "error";
@@ -49,6 +49,8 @@ export default function useVoiceSummaryController() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         // Use the best supported MIME type from audioUtils
         const mimeType = getBestSupportedMimeType();
+        console.log("Using MIME type for recording:", mimeType);
+        
         const recorder = new MediaRecorder(stream, { mimeType });
 
         recorder.ondataavailable = (event) => {
@@ -58,6 +60,7 @@ export default function useVoiceSummaryController() {
         };
 
         recorder.onstop = () => {
+          console.log("MediaRecorder stopped");
           setRecordingState("stopped");
         };
 
@@ -77,12 +80,19 @@ export default function useVoiceSummaryController() {
     return () => {
       if (timerRef.current) {
         window.clearInterval(timerRef.current);
+        timerRef.current = null;
       }
     };
   }, []);
 
   // Reset recording state
   const resetRecording = () => {
+    // Clear timer if running
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
     setRecordingState("idle");
     setProcessingStep(null);
     setAudioChunks([]);
@@ -92,18 +102,18 @@ export default function useVoiceSummaryController() {
     setRecordingTime(0);
     setProgress(0);
     setIsFullyReady(false);
-    
-    // Clear timer if running
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
   };
 
   // Cancel current recording
   const cancelRecording = () => {
     if (mediaRecorder && recordingState === "recording") {
       mediaRecorder.stop();
+      console.log("Recording cancelled");
+      
+      // Stop all tracks to release the microphone
+      if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      }
     }
     
     // Clear recording timer
@@ -123,20 +133,30 @@ export default function useVoiceSummaryController() {
       setAudioChunks([]);
       setRecordingState("recording");
       setRecordingTime(0);
-      mediaRecorder.start();
-      console.log("Recording started");
+      
+      // Start recording with 1 second chunks
+      mediaRecorder.start(1000);
+      console.log("Recording started with type:", recordingType);
       
       // Start the timer
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+      }
+      
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prevTime => {
           // Stop recording if we reach maximum duration
           if (prevTime >= MAX_RECORDING_DURATION - 1) {
-            if (timerRef.current) {
-              window.clearInterval(timerRef.current);
-            }
             if (mediaRecorder && mediaRecorder.state === "recording") {
               mediaRecorder.stop();
+              console.log("Reached maximum recording duration, stopping");
             }
+            
+            if (timerRef.current) {
+              window.clearInterval(timerRef.current);
+              timerRef.current = null;
+            }
+            
             return MAX_RECORDING_DURATION;
           }
           return prevTime + 1;
@@ -161,16 +181,24 @@ export default function useVoiceSummaryController() {
         timerRef.current = null;
       }
       
+      console.log("Stopping recording after", recordingTime, "seconds");
       mediaRecorder.stop();
-      console.log("Recording stopped");
+      
+      // Stop all tracks to release the microphone
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      
       setRecordingState("processing");
       setProcessingStep("uploading");
       
+      // We need to wait for the ondataavailable event to complete
+      // Let's add a small delay to ensure we have all chunks
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       // Convert audio chunks to audio blob
       const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+      console.log("Audio blob created:", audioBlob.size, "bytes with type", audioBlob.type);
       
       // Create a new recording entry in the database
-      // Using the current recordingType state value from RecordingDialog
       const { recording, error: createError, userId } = await voiceSummaryService.createRecording();
       
       if (createError) {

@@ -57,7 +57,7 @@ export const getFileExtension = (mimeType: string): string => {
  * Generates the standardized file path for audio recordings
  */
 export const generateRecordingPath = (userId: string, recordingId: string): string => {
-  return `voice_recordings/${userId}/${recordingId}/recording.mp3`;
+  return `${userId}/${recordingId}/recording.mp3`;
 };
 
 /**

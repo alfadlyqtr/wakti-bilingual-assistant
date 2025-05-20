@@ -18,6 +18,8 @@ export async function createRecording(type = "note", title?: string) {
     // Generate a UUID for the recording
     const recordingId = crypto.randomUUID();
     
+    console.log(`Creating new recording with ID: ${recordingId}, type: ${type}`);
+    
     // Create record first, we'll update the URL after successful upload
     const { data, error } = await supabase
       .from('voice_summaries')
@@ -57,7 +59,8 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     // Determine file extension from the blob's type
     const fileExtension = getFileExtension(audioBlob.type);
     
-    // Use correct bucket name with underscore and proper path structure
+    // Use the correct path structure that worked yesterday:
+    // userId/recordingId/recording.fileExtension
     const filePath = `${userId}/${recordingId}/recording.${fileExtension}`;
     
     console.log(`Uploading audio with type ${audioBlob.type} as ${fileExtension} to ${filePath}`);
@@ -86,6 +89,8 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
     const { data: { publicUrl } } = supabase.storage
       .from('voice_recordings')
       .getPublicUrl(filePath);
+    
+    console.log(`File uploaded successfully. Public URL: ${publicUrl}`);
     
     // Update the record with the correct audio URL and file extension info
     const { error: updateError } = await supabase

@@ -45,31 +45,32 @@ export default function RecordingDialog({
   
   // When recording completes successfully and is fully ready, notify parent and close dialog
   useEffect(() => {
-    const handleRecordingCompleted = async () => {
-      if (state.isFullyReady && state.recordingId) {
-        console.log("[RecordingDialog] Recording is fully ready:", state.recordingId);
-        
-        // Notify parent about the completed recording
-        onRecordingCreated(state.recordingId);
-        
-        // Reset internal state
-        resetRecording();
-        
-        // Allow the dialog to close
-        setIsClosing(false);
-      }
-    };
+    if (!state.isFullyReady || !state.recordingId) {
+      return;
+    }
     
-    handleRecordingCompleted();
+    console.log("[RecordingDialog] Recording is fully ready:", state.recordingId);
+    
+    // Notify parent about the completed recording
+    onRecordingCreated(state.recordingId);
+    
+    // Reset internal state
+    resetRecording();
+    
+    // Allow the dialog to close
+    setIsClosing(false);
+    
   }, [state.isFullyReady, state.recordingId, onRecordingCreated, resetRecording]);
   
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!isOpen) {
-      resetRecording();
-      setIsClosing(false);
+      // Only reset if we're not in the middle of closing
+      if (!isClosing) {
+        resetRecording();
+      }
     }
-  }, [isOpen, resetRecording]);
+  }, [isOpen, resetRecording, isClosing]);
   
   // Handle dialog close
   const handleDialogClose = () => {
