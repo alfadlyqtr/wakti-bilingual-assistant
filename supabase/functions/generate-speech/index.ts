@@ -25,6 +25,8 @@ serve(async (req) => {
     // Map voice selection to actual OpenAI voice options
     const voiceOption = voice === 'male' ? 'onyx' : 'nova';
 
+    console.log(`Generating speech for text length: ${summary.length}, voice: ${voiceOption}`);
+
     // Call OpenAI TTS API
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
@@ -48,17 +50,17 @@ serve(async (req) => {
       );
     }
 
-    // Get audio data and convert to base64
+    // Get audio data and return it directly as audio/mpeg
     const audioBuffer = await response.arrayBuffer();
-    const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
-
-    return new Response(
-      JSON.stringify({ 
-        audio: audioBase64,
-        contentType: 'audio/mpeg'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    
+    // Return the audio directly with appropriate headers
+    return new Response(audioBuffer, { 
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'audio/mpeg',
+        'Content-Disposition': 'attachment; filename="tasjeel-audio.mp3"'
+      } 
+    });
   } catch (error) {
     console.error('Text-to-speech error:', error);
     return new Response(

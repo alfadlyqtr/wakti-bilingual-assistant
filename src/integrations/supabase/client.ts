@@ -1,3 +1,4 @@
+
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -40,9 +41,17 @@ export const callEdgeFunctionWithRetry = async <T>(
     headers?: Record<string, string>;
     maxRetries?: number;
     retryDelay?: number;
+    responseType?: 'json' | 'blob' | 'arrayBuffer' | 'text'; // Add support for different response types
   } = {}
 ): Promise<T> => {
-  const { body, headers = {}, maxRetries = 3, retryDelay = 1000 } = options;
+  const { 
+    body, 
+    headers = {}, 
+    maxRetries = 3, 
+    retryDelay = 1000,
+    responseType = 'json' 
+  } = options;
+  
   let lastError: Error | null = null;
   
   console.log(`Calling edge function "${functionName}" with options:`, {
@@ -51,7 +60,8 @@ export const callEdgeFunctionWithRetry = async <T>(
     bodyKeys: body ? Object.keys(body) : null,
     headers,
     maxRetries,
-    retryDelay
+    retryDelay,
+    responseType
   });
   
   // Log specific details for different functions
@@ -68,6 +78,12 @@ export const callEdgeFunctionWithRetry = async <T>(
       hasTranscript: !!body.transcript,
       transcriptLength: body.transcript ? body.transcript.length : 0,
       language: body.language
+    });
+  } else if (functionName === 'generate-speech' && body) {
+    // Log generate-speech specific details
+    console.log(`generate-speech request payload:`, {
+      summaryLength: body.summary ? body.summary.length : 0,
+      voice: body.voice
     });
   }
   
@@ -102,17 +118,49 @@ export const callEdgeFunctionWithRetry = async <T>(
         status: response.status,
         ok: response.ok,
         statusText: response.statusText,
+        contentType: response.headers.get('Content-Type'),
         time: `${duration}ms`
       });
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Error response from "${functionName}":`, errorText);
+        let errorText;
+        try {
+          // Try to parse error as JSON first
+          errorText = await response.text();
+          console.error(`Error response from "${functionName}":`, errorText);
+        } catch (e) {
+          errorText = response.statusText;
+        }
         throw new Error(`HTTP error ${response.status}: ${errorText}`);
       }
       
-      const data = await response.json();
-      console.log(`Edge function "${functionName}" response data:`, data);
+      // Handle different response types
+      let data;
+      const contentType = response.headers.get('Content-Type');
+      
+      if (responseType === 'blob' || contentType?.includes('audio/') || contentType?.includes('video/') || contentType?.includes('application/octet-stream')) {
+        data = await response.blob();
+      } else if (responseType === 'arrayBuffer') {
+        data = await response.arrayBuffer();
+      } else if (responseType === 'text' || contentType?.includes('text/')) {
+        data = await response.text();
+      } else {
+        // Default to JSON
+        try {
+          data = await response.json();
+        } catch (e) {
+          console.warn('Response was not valid JSON, returning raw text instead');
+          data = await response.text();
+        }
+      }
+      
+      console.log(`Edge function "${functionName}" response received:`, {
+        type: typeof data,
+        isBlob: data instanceof Blob,
+        isArrayBuffer: data instanceof ArrayBuffer,
+        isString: typeof data === 'string'
+      });
+      
       return data as T;
     } catch (error: any) {
       console.error(`Error calling edge function "${functionName}" (attempt ${attempt + 1}/${maxRetries}):`, error);

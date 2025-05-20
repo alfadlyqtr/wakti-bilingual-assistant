@@ -114,7 +114,8 @@ const Tasjeel: React.FC = () => {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<"male" | "female">("male");
-  const [audioBase64, setAudioBase64] = useState<string | null>(null);
+  // Change from audioBase64 to direct audioBlob for better memory management
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -122,16 +123,21 @@ const Tasjeel: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   
-  // Effect to create audio player instance when audio is generated
+  // Effect to create audio player instance when audio blob is available
   useEffect(() => {
-    if (audioBase64) {
+    if (audioBlob) {
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
       }
       
-      const audioData = `data:audio/mp3;base64,${audioBase64}`;
-      const audio = new Audio(audioData);
+      const audioObjectUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioObjectUrl);
       audioPlayerRef.current = audio;
+      
+      // Cleanup function to revoke object URL when no longer needed
+      return () => {
+        URL.revokeObjectURL(audioObjectUrl);
+      };
     }
     
     return () => {
@@ -140,7 +146,7 @@ const Tasjeel: React.FC = () => {
         audioPlayerRef.current = null;
       }
     };
-  }, [audioBase64]);
+  }, [audioBlob]);
   
   // Clean up on unmount
   useEffect(() => {
@@ -333,7 +339,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Generate audio function
+  // Generate audio function - Updated to handle raw MP3 audio
   const generateAudio = async () => {
     try {
       if (!summary.trim()) {
@@ -342,12 +348,28 @@ const Tasjeel: React.FC = () => {
       
       setIsGeneratingAudio(true);
       
-      const { audio, contentType } = await callEdgeFunctionWithRetry<{ audio: string, contentType: string }>(
-        "generate-speech",
-        { body: { summary, voice: selectedVoice } }
-      );
+      // We'll now get the audio file directly as a blob
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
       
-      setAudioBase64(audio);
+      const response = await fetch(`${supabaseUrl}/functions/v1/generate-speech`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        body: JSON.stringify({ summary, voice: selectedVoice })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate audio');
+      }
+      
+      // Get the audio as a blob directly
+      const audioData = await response.blob();
+      setAudioBlob(audioData);
+      
       toast(t.audioGenerationComplete);
     } catch (error) {
       console.error("Error generating audio:", error);
@@ -382,16 +404,19 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Download audio file
+  // Download audio file - Updated to use Blob
   const downloadAudio = () => {
-    if (audioBase64) {
+    if (audioBlob) {
       toast(t.preparingDownload);
       
-      const audioData = `data:audio/mp3;base64,${audioBase64}`;
+      const url = URL.createObjectURL(audioBlob);
       const link = document.createElement("a");
-      link.href = audioData;
+      link.href = url;
       link.download = `tasjeel-summary-${new Date().toISOString().slice(0, 10)}.mp3`;
       link.click();
+      
+      // Clean up the URL object after the download starts
+      setTimeout(() => URL.revokeObjectURL(url), 100);
       
       toast(t.downloadComplete);
     }
@@ -581,8 +606,8 @@ const Tasjeel: React.FC = () => {
           </Card>
         )}
         
-        {/* Audio player section */}
-        {audioBase64 && (
+        {/* Audio player section - updated to use audioBlob instead of audioBase64 */}
+        {audioBlob && (
           <Card>
             <CardContent className="pt-6">
               <h2 className="text-lg font-semibold mb-4">{t.audioPlayer}</h2>
