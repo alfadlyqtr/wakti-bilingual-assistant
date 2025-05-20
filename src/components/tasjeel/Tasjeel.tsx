@@ -180,9 +180,7 @@ const Tasjeel: React.FC = () => {
       }, 1000);
     } catch (error) {
       console.error("Error accessing microphone:", error);
-      toast({
-        description: t.noMicrophoneAccess,
-      });
+      toast(t.noMicrophoneAccess);
     }
   };
   
@@ -235,9 +233,7 @@ const Tasjeel: React.FC = () => {
       
     } catch (error) {
       console.error("Error processing recording:", error);
-      toast({
-        description: error.message || "An error occurred while processing the recording",
-      });
+      toast(error.message || "An error occurred while processing the recording");
       setRecordingStatus("idle");
     }
   };
@@ -256,9 +252,7 @@ const Tasjeel: React.FC = () => {
       setRecordingStatus("idle");
     } catch (error) {
       console.error("Error transcribing audio:", error);
-      toast({
-        description: error.message || "An error occurred while transcribing the audio",
-      });
+      toast(error.message || "An error occurred while transcribing the audio");
     } finally {
       setIsTranscribing(false);
     }
@@ -281,9 +275,7 @@ const Tasjeel: React.FC = () => {
       setSummary(result);
     } catch (error) {
       console.error("Error summarizing text:", error);
-      toast({
-        description: error.message || "An error occurred while summarizing the text",
-      });
+      toast(error.message || "An error occurred while summarizing the text");
     } finally {
       setIsSummarizing(false);
     }
@@ -304,14 +296,10 @@ const Tasjeel: React.FC = () => {
       );
       
       setAudioBase64(audio);
-      toast({
-        description: t.audioGenerationComplete,
-      });
+      toast(t.audioGenerationComplete);
     } catch (error) {
       console.error("Error generating audio:", error);
-      toast({
-        description: error.message || "An error occurred while generating the audio",
-      });
+      toast(error.message || "An error occurred while generating the audio");
     } finally {
       setIsGeneratingAudio(false);
     }
@@ -320,10 +308,7 @@ const Tasjeel: React.FC = () => {
   // Copy to clipboard function
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      description: t.copiedToClipboard,
-      duration: 2000,
-    });
+    toast(t.copiedToClipboard);
   };
   
   // Play/pause audio
@@ -348,10 +333,7 @@ const Tasjeel: React.FC = () => {
   // Download audio file
   const downloadAudio = () => {
     if (audioBase64) {
-      toast({
-        description: t.preparingDownload,
-        duration: 2000,
-      });
+      toast(t.preparingDownload);
       
       const audioData = `data:audio/mp3;base64,${audioBase64}`;
       const link = document.createElement("a");
@@ -359,10 +341,7 @@ const Tasjeel: React.FC = () => {
       link.download = `tasjeel-summary-${new Date().toISOString().slice(0, 10)}.mp3`;
       link.click();
       
-      toast({
-        description: t.downloadComplete,
-        duration: 2000,
-      });
+      toast(t.downloadComplete);
     }
   };
   
@@ -380,15 +359,10 @@ const Tasjeel: React.FC = () => {
         language: language as 'en' | 'ar'
       });
       
-      toast({
-        description: t.pdfExported,
-        duration: 2000,
-      });
+      toast(t.pdfExported);
     } catch (error) {
       console.error("Error exporting to PDF:", error);
-      toast({
-        description: error.message || "An error occurred while exporting to PDF",
-      });
+      toast(error.message || "An error occurred while exporting to PDF");
     }
   };
   
