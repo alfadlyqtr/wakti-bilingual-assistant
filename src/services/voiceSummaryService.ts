@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { generateRecordingPath } from "@/utils/audioUtils";
 import { toast } from "sonner";
@@ -76,12 +75,33 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
   try {
     console.log("[VoiceSummary] Starting upload diagnostics");
     
+    // Detailed logging of blob information
+    console.log("[VoiceSummary] Blob details:", {
+      typeofBlob: typeof audioBlob,
+      constructor: audioBlob.constructor.name,
+      size: audioBlob.size,
+      type: audioBlob.type,
+      lastModified: new Date().toISOString()
+    });
+    
+    // Check if blob is valid
+    if (!audioBlob) {
+      console.error("[VoiceSummary] Upload failed: No audio blob provided");
+      return { error: "No audio blob provided", path: null, publicUrl: null };
+    }
+    
+    if (audioBlob.size === 0) {
+      console.error("[VoiceSummary] Upload failed: Audio blob is empty (0 bytes)");
+      return { error: "Audio blob is empty (0 bytes)", path: null, publicUrl: null };
+    }
+    
     // Check authentication status
     const { data: authData, error: authError } = await supabase.auth.getSession();
     console.log("[VoiceSummary] Auth status:", { 
       hasSession: !!authData.session, 
       hasUser: !!authData.session?.user,
-      authError: authError || 'none'
+      authError: authError || 'none',
+      userIdMatch: userId === authData.session?.user?.id
     });
     
     if (authError) {
@@ -102,24 +122,6 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       });
       return { error: "User ID mismatch", path: null, publicUrl: null };
     }
-    
-    // Verify blob is valid
-    if (!audioBlob) {
-      console.error("[VoiceSummary] Upload failed: No audio blob provided");
-      return { error: "No audio blob provided", path: null, publicUrl: null };
-    }
-    
-    if (audioBlob.size === 0) {
-      console.error("[VoiceSummary] Upload failed: Audio blob is empty (0 bytes)");
-      return { error: "Audio blob is empty (0 bytes)", path: null, publicUrl: null };
-    }
-    
-    // Log blob details for debugging
-    console.log(`[VoiceSummary] Audio blob details:`, {
-      size: audioBlob.size + " bytes", 
-      type: audioBlob.type,
-      lastModified: new Date().toISOString()
-    });
     
     // Use correct file path structure
     const filePath = `${userId}/${recordingId}/recording.webm`;
@@ -144,77 +146,111 @@ export async function uploadAudio(audioBlob: Blob, recordingId: string, userId: 
       return { error: "Storage error: " + bucketsError.message, path: null, publicUrl: null };
     }
     
-    console.log("[VoiceSummary] Available buckets:", buckets.map(b => b.name));
+    console.log("[VoiceSummary] Available buckets:", buckets.map(b => ({ name: b.name, id: b.id, public: b.public })));
     const bucketExists = buckets.some(b => b.name === 'voice_recordings');
     if (!bucketExists) {
       console.error("[VoiceSummary] voice_recordings bucket does not exist");
       return { error: "Storage bucket 'voice_recordings' does not exist", path: null, publicUrl: null };
     }
     
-    // Log RLS policies for the bucket
-    console.log("[VoiceSummary] Found voice_recordings bucket, proceeding with upload");
+    // Check MIME type before upload to ensure it's not text/plain
+    console.log("[VoiceSummary] Pre-upload MIME check:", {
+      mimeType: audioBlob.type,
+      isTextPlain: audioBlob.type === 'text/plain'
+    });
+    
+    // Create a new blob with explicit MIME type if needed
+    let uploadBlob = audioBlob;
+    if (!audioBlob.type || audioBlob.type === 'text/plain') {
+      console.log("[VoiceSummary] Correcting MIME type to audio/webm");
+      uploadBlob = new Blob([audioBlob], { type: 'audio/webm' });
+      console.log("[VoiceSummary] New blob created with correct MIME type:", {
+        size: uploadBlob.size,
+        type: uploadBlob.type
+      });
+    }
     
     // Upload the file with detailed error handling
     console.log("[VoiceSummary] Starting upload to Supabase Storage...");
-    const uploadResult = await supabase.storage
-      .from('voice_recordings')
-      .upload(filePath, audioBlob, {
-        contentType: 'audio/webm',
-        upsert: true,
-        duplex: 'half'
+    
+    try {
+      const uploadResult = await supabase.storage
+        .from('voice_recordings')
+        .upload(filePath, uploadBlob, {
+          contentType: 'audio/webm',
+          upsert: true,
+          duplex: 'half'
+        });
+      
+      const { data: uploadData, error: uploadError } = uploadResult;
+      
+      // Log detailed response
+      console.log("[VoiceSummary] Upload response:", { 
+        success: !!uploadData && !uploadError,
+        data: uploadData,
+        hasError: !!uploadError,
+        errorDetails: uploadError ? {
+          message: uploadError.message,
+          name: uploadError.name,
+          code: uploadError.code,
+          statusCode: uploadError.status,
+          details: typeof uploadError === 'object' ? JSON.stringify(uploadError) : 'none'
+        } : 'none'
       });
-    
-    const { data: uploadData, error: uploadError } = uploadResult;
-    
-    // Log detailed response
-    console.log("[VoiceSummary] Upload response:", { 
-      success: !!uploadData && !uploadError,
-      data: uploadData,
-      hasError: !!uploadError,
-      errorDetails: uploadError ? {
-        message: uploadError.message,
-        name: uploadError.name,
-        details: typeof uploadError === 'object' ? JSON.stringify(uploadError) : 'none'
-      } : 'none'
-    });
-    
-    if (uploadError) {
-      console.error("[VoiceSummary] Error uploading audio:", uploadError);
-      let detailedError = `Upload failed: ${uploadError.message}`;
-      return { error: uploadError, path: null, publicUrl: null, detailedError };
+      
+      if (uploadError) {
+        console.error("[VoiceSummary] Error uploading audio:", uploadError);
+        let detailedError = `Upload failed: ${uploadError.message || 'Unknown error'}`;
+        
+        if (uploadError.message?.includes('permission denied')) {
+          detailedError += " - This appears to be a permissions issue. Check RLS policies.";
+        } else if (uploadError.message?.includes('not found')) {
+          detailedError += " - Bucket may not exist or path is incorrect.";
+        }
+        
+        return { error: uploadError, path: null, publicUrl: null, detailedError };
+      }
+      
+      console.log("[VoiceSummary] Audio successfully uploaded:", uploadData);
+      
+      // Get public URL after successful upload
+      console.log("[VoiceSummary] Generating public URL...");
+      const { data: urlData } = supabase.storage
+        .from('voice_recordings')
+        .getPublicUrl(filePath);
+      
+      console.log("[VoiceSummary] Generated public URL:", urlData.publicUrl);
+      
+      // Update the record with the correct audio URL and set processing flag to true
+      console.log("[VoiceSummary] Updating recording with URL in database...");
+      const { error: updateError } = await supabase
+        .from('voice_summaries')
+        .update({
+          audio_url: urlData.publicUrl,
+          is_processing_transcript: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', recordingId);
+      
+      if (updateError) {
+        console.error("[VoiceSummary] Error updating record with audio URL:", updateError);
+        return { error: updateError, path: filePath, publicUrl: urlData.publicUrl, detailedError: "Upload succeeded but failed to update database" };
+      }
+      
+      console.log("[VoiceSummary] Recording updated successfully with URL");
+      return { path: filePath, error: null, publicUrl: urlData.publicUrl };
+    } catch (uploadException) {
+      console.error("[VoiceSummary] Exception during upload operation:", uploadException);
+      return { 
+        error: uploadException, 
+        path: null, 
+        publicUrl: null, 
+        detailedError: "Upload exception: " + (uploadException instanceof Error ? uploadException.message : String(uploadException))
+      };
     }
-    
-    console.log("[VoiceSummary] Audio successfully uploaded:", uploadData);
-
-    // Get public URL after successful upload
-    console.log("[VoiceSummary] Generating public URL...");
-    const { data: urlData } = supabase.storage
-      .from('voice_recordings')
-      .getPublicUrl(filePath);
-    
-    console.log("[VoiceSummary] Generated public URL:", urlData.publicUrl);
-    
-    // Update the record with the correct audio URL and set processing flag to true
-    console.log("[VoiceSummary] Updating recording with URL in database...");
-    const { error: updateError } = await supabase
-      .from('voice_summaries')
-      .update({
-        audio_url: urlData.publicUrl,
-        is_processing_transcript: true,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', recordingId);
-    
-    if (updateError) {
-      console.error("[VoiceSummary] Error updating record with audio URL:", updateError);
-      return { error: updateError, path: filePath, publicUrl: urlData.publicUrl, detailedError: "Upload succeeded but failed to update database" };
-    }
-
-    console.log("[VoiceSummary] Recording updated successfully with URL");
-    return { path: filePath, error: null, publicUrl: urlData.publicUrl };
   } catch (error) {
     console.error("[VoiceSummary] Uncaught exception in uploadAudio:", error);
-    return { error, path: null, publicUrl: null, detailedError: "Uncaught exception: " + (error as Error).message };
+    return { error, path: null, publicUrl: null, detailedError: "Uncaught exception: " + (error instanceof Error ? error.message : String(error)) };
   }
 }
 

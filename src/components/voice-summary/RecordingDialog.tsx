@@ -198,7 +198,18 @@ export default function RecordingDialog({
       console.log(`[RecordingDialog] Combining ${audioChunks.length} audio chunks...`);
       const mimeType = getBestSupportedMimeType();
       const audioBlob = new Blob(audioChunks, { type: mimeType });
-      console.log(`[RecordingDialog] Audio blob created: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      
+      // Detailed logging about the blob
+      console.log(`[RecordingDialog] Audio blob created:`, {
+        typeofBlob: typeof audioBlob,
+        constructor: audioBlob.constructor.name,
+        size: audioBlob.size,
+        type: audioBlob.type,
+        mimeType: mimeType,
+        isWebmMime: mimeType.includes('webm'),
+        chunksLength: audioChunks.length,
+        chunksTypes: audioChunks.map(chunk => chunk.type).filter((v, i, a) => a.indexOf(v) === i)
+      });
       
       if (audioBlob.size === 0) {
         console.error("[RecordingDialog] Empty audio blob created");
