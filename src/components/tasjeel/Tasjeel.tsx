@@ -243,16 +243,23 @@ const Tasjeel: React.FC = () => {
     try {
       setIsTranscribing(true);
       
+      console.log('Sending for transcription:', audioUrl);
+      
       const { transcript: result } = await callEdgeFunctionWithRetry<{ transcript: string }>(
         "transcribe-audio",
-        { body: { audioUrl } }
+        { 
+          body: { audioUrl },
+          headers: { 'Content-Type': 'application/json' }
+        }
       );
       
+      console.log('Transcription result received');
       setTranscript(result);
       setRecordingStatus("idle");
     } catch (error) {
       console.error("Error transcribing audio:", error);
       toast(error.message || "An error occurred while transcribing the audio");
+      setRecordingStatus("idle");
     } finally {
       setIsTranscribing(false);
     }
