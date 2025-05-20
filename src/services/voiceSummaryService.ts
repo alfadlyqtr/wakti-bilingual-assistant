@@ -110,10 +110,10 @@ export const uploadAudio = async (blob: Blob, recordingId: string, userId: strin
       
     if (uploadError) {
       console.error("Error uploading audio to Supabase:", uploadError);
-      // Try to get more detailed error info
-      const detailedError = typeof uploadError === 'object' 
-        ? JSON.stringify(uploadError) 
-        : uploadError.message || "Unknown upload error";
+      // Fix: Handle the uploadError correctly without assuming it has a message property
+      const detailedError = typeof uploadError === 'object' && uploadError !== null
+        ? (uploadError as any).message || JSON.stringify(uploadError)
+        : String(uploadError);
         
       return { 
         error: uploadError, 
