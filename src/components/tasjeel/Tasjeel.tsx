@@ -633,7 +633,8 @@ const Tasjeel: React.FC = () => {
         summary_audio_path: finalSummaryAudioPath,
         duration: recordingTime,
         title: new Date().toLocaleString(),
-        saved: true // Mark as explicitly saved
+        saved: true, // Mark as explicitly saved
+        source_type: 'recording' // Add missing source_type property
       });
 
       toast(t.recordingSaved);

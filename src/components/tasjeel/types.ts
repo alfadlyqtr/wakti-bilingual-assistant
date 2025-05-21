@@ -16,6 +16,21 @@ export interface TasjeelRecord {
   source_type: 'recording' | 'upload' | 'quick_summary';
 }
 
+export interface AudioPlayerState {
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  error: boolean;
+  errorMessage: string | null;
+}
+
+export interface AudioUploadOptions {
+  file: File;
+  onProgress?: (progress: number) => void;
+  onError?: (error: Error) => void;
+  onSuccess?: (url: string) => void;
+}
+
 export interface SummaryAudioUploadResult {
   audioUrl: string; 
 }
