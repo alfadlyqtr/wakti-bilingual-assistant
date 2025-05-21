@@ -814,7 +814,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // New function to save quick summary
+  // New function to save quick summary - Updated to add placeholder for original_recording_path
   const saveQuickSummary = async () => {
     if (!quickSummaryTitle || !quickSummaryText) {
       toast(t.error);
@@ -824,12 +824,12 @@ const Tasjeel: React.FC = () => {
     try {
       setIsSaving(true);
       
-      // Save record with quick_summary source type
+      // Save record with quick_summary source type and a placeholder for original_recording_path
       await saveTasjeelRecord({
         title: quickSummaryTitle,
         summary: quickSummaryText,
         transcription: quickTranscript,
-        original_recording_path: null, // No audio storage
+        original_recording_path: "placeholder_for_quick_summary", // Added placeholder instead of null
         duration: null,
         summary_audio_path: null,
         saved: true,
