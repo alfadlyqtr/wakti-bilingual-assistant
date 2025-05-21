@@ -24,9 +24,14 @@ export interface TasjeelTranslations {
 
 // Export options for PDF
 export interface PDFExportOptions {
-  content: string;
   title: string;
-  type: string;
+  content: string | { text: string; html?: string };
+  metadata?: {
+    createdAt: string;
+    expiresAt: string;
+    type: string;
+  };
+  language?: 'en' | 'ar';
 }
 
 // Audio file types

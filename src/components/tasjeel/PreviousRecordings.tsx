@@ -5,16 +5,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase, getTasjeelRecords, deleteTasjeelRecord } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { generatePDF } from "@/utils/pdfUtils";
 import {
@@ -25,7 +23,6 @@ import {
   Clock,
   RefreshCw,
   FileText,
-  ListMusic,
   Volume2
 } from "lucide-react";
 import { TasjeelRecord } from "./types";
@@ -37,22 +34,16 @@ const translations = {
     noRecordings: "No recordings found",
     recorded: "Recorded",
     duration: "Duration",
-    download: "Download",
     delete: "Delete",
-    playback: "Playback",
     play: "Play",
     pause: "Pause",
-    transcript: "Transcript",
     summary: "Summary",
     audio: "Audio Summary",
-    downloadOriginal: "Download Original",
-    downloadSummaryAudio: "Download Audio Summary",
+    downloadSummaryAudio: "Download Audio",
     exportToPDF: "Export to PDF",
     confirmDelete: "Are you sure you want to delete this recording?",
     recordingDetails: "Recording Details",
-    noTranscription: "No transcription available",
     noSummary: "No summary available",
-    noAudioSummary: "No audio summary available",
     loading: "Loading recordings...",
     deleteSuccess: "Recording deleted successfully",
     deleteError: "Error deleting recording",
@@ -64,22 +55,16 @@ const translations = {
     noRecordings: "لم يتم العثور على تسجيلات",
     recorded: "تم التسجيل في",
     duration: "المدة",
-    download: "تحميل",
     delete: "حذف",
-    playback: "تشغيل",
     play: "تشغيل",
     pause: "إيقاف مؤقت",
-    transcript: "النص",
     summary: "الملخص",
     audio: "الملخص الصوتي",
-    downloadOriginal: "تحميل الأصلي",
     downloadSummaryAudio: "تحميل الملخص الصوتي",
     exportToPDF: "تصدير إلى PDF",
     confirmDelete: "هل أنت متأكد أنك تريد حذف هذا التسجيل؟",
     recordingDetails: "تفاصيل التسجيل",
-    noTranscription: "لا يوجد نص متاح",
     noSummary: "لا يوجد ملخص متاح",
-    noAudioSummary: "لا يوجد ملخص صوتي متاح",
     loading: "جاري تحميل التسجيلات...",
     deleteSuccess: "تم حذف التسجيل بنجاح",
     deleteError: "خطأ في حذف التسجيل",
@@ -104,8 +89,6 @@ const RecordingDialog: React.FC<{
   t: any;
   language: string;
 }> = ({ isOpen, onClose, record, onDelete, t, language }) => {
-  // Default to summary tab instead of transcript
-  const [activeTab, setActiveTab] = useState<string>("summary");
   const [audioPlaying, setAudioPlaying] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -138,9 +121,7 @@ const RecordingDialog: React.FC<{
       // Generate PDF with focus on the summary
       const pdfBlob = await generatePDF({
         title: record.title || "Tasjeel Recording",
-        content: {
-          text: record.summary || "No summary available"
-        },
+        content: record.summary || "No summary available",
         metadata: {
           createdAt: record.created_at,
           expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
@@ -164,15 +145,6 @@ const RecordingDialog: React.FC<{
       console.error("Error exporting to PDF:", error);
       toast(error.message || "An error occurred while exporting to PDF");
     }
-  };
-
-  const handleDownloadOriginal = () => {
-    if (!record) return;
-    
-    const link = document.createElement("a");
-    link.href = record.original_recording_path;
-    link.download = `original-recording-${record.id.slice(0, 8)}.webm`;
-    link.click();
   };
 
   const handleDownloadSummaryAudio = () => {
@@ -202,63 +174,48 @@ const RecordingDialog: React.FC<{
               {t.recorded}: {format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
             </div>
             <div className="flex items-center gap-1 text-sm">
-              <ListMusic className="w-4 h-4" />
-              {t.duration}: {formatDuration(record.duration)} {t.seconds}
+              {record.duration && (
+                <>{t.duration}: {formatDuration(record.duration)} {t.seconds}</>
+              )}
             </div>
           </div>
           
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-2 mb-4">
-              <TabsTrigger value="summary">{t.summary}</TabsTrigger>
-              <TabsTrigger value="audio">{t.audio}</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="summary" className="max-h-[300px] overflow-y-auto">
-              {record.summary ? (
-                <div className="text-sm whitespace-pre-wrap">
-                  {record.summary}
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-center py-6">
-                  {t.noSummary}
-                </div>
-              )}
-            </TabsContent>
-            
-            <TabsContent value="audio">
-              {record.summary_audio_path ? (
-                <div className="flex flex-col items-center justify-center py-4">
-                  <audio 
-                    ref={audioRef} 
-                    src={record.summary_audio_path} 
-                    onPlay={() => setAudioPlaying(true)}
-                    onPause={() => setAudioPlaying(false)}
-                    onEnded={() => setAudioPlaying(false)}
-                    className="hidden"
-                  />
-                  <Button 
-                    variant="outline" 
-                    size="lg"
-                    className="h-16 w-16 rounded-full mb-4" 
-                    onClick={handlePlayPause}
-                  >
-                    {audioPlaying ? (
-                      <PauseCircle className="h-10 w-10" />
-                    ) : (
-                      <PlayCircle className="h-10 w-10" />
-                    )}
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {audioPlaying ? t.pause : t.play}
-                  </span>
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-center py-6">
-                  {t.noAudioSummary}
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          {/* Always show summary as the primary content */}
+          <div className="mb-6">
+            <h3 className="font-medium mb-2">{t.summary}</h3>
+            <div className="text-sm whitespace-pre-wrap bg-muted/30 p-4 rounded-md">
+              {record.summary || t.noSummary}
+            </div>
+          </div>
+          
+          {/* Audio player for summary audio */}
+          {record.summary_audio_path && (
+            <div className="flex flex-col items-center justify-center py-4">
+              <audio 
+                ref={audioRef} 
+                src={record.summary_audio_path} 
+                onPlay={() => setAudioPlaying(true)}
+                onPause={() => setAudioPlaying(false)}
+                onEnded={() => setAudioPlaying(false)}
+                className="hidden"
+              />
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="h-16 w-16 rounded-full mb-4" 
+                onClick={handlePlayPause}
+              >
+                {audioPlaying ? (
+                  <PauseCircle className="h-10 w-10" />
+                ) : (
+                  <PlayCircle className="h-10 w-10" />
+                )}
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {audioPlaying ? t.pause : t.play}
+              </span>
+            </div>
+          )}
         </div>
         
         <Separator />
@@ -322,8 +279,8 @@ const PreviousRecordings: React.FC = () => {
     setLoading(true);
     try {
       const records = await getTasjeelRecords();
-      // Filter to only show records with summaries
-      const recordsWithSummary = records.filter(record => record.summary && record.summary_audio_path);
+      // Now we only filter for records with summaries, not requiring both summary AND audio
+      const recordsWithSummary = records.filter(record => record.summary);
       setRecords(recordsWithSummary);
     } catch (error) {
       console.error("Error loading recordings:", error);
@@ -336,8 +293,9 @@ const PreviousRecordings: React.FC = () => {
   const handlePlayPause = (record: TasjeelRecord) => {
     if (!audioRef.current) return;
 
-    // Prefer summary_audio_path if available
-    const audioSource = record.summary_audio_path || record.original_recording_path;
+    // Use summary_audio_path only (prefer this path)
+    const audioSource = record.summary_audio_path;
+    if (!audioSource) return; // Don't attempt playback if no audio available
 
     if (playingId === record.id) {
       // Same audio, toggle play/pause
@@ -421,20 +379,22 @@ const PreviousRecordings: React.FC = () => {
                 
                 {/* Quick actions - stop propagation to avoid opening the dialog */}
                 <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePlayPause(record);
-                    }}
-                  >
-                    {playingId === record.id ? (
-                      <PauseCircle className="h-5 w-5" />
-                    ) : (
-                      <PlayCircle className="h-5 w-5" />
-                    )}
-                  </Button>
+                  {record.summary_audio_path && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePlayPause(record);
+                      }}
+                    >
+                      {playingId === record.id ? (
+                        <PauseCircle className="h-5 w-5" />
+                      ) : (
+                        <PlayCircle className="h-5 w-5" />
+                      )}
+                    </Button>
+                  )}
                   
                   {record.summary_audio_path && (
                     <Button 

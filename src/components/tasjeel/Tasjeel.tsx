@@ -533,6 +533,8 @@ const Tasjeel: React.FC = () => {
           
           // Show success message and switch to history tab
           toast(t.audioGenerationComplete);
+          
+          // Automatically switch to history tab
           setActiveTab("history");
         } else {
           throw new Error('No audio URL returned');
@@ -548,6 +550,8 @@ const Tasjeel: React.FC = () => {
         summaryAudioPlayerRef.current = audio;
         
         toast(t.audioGenerationComplete);
+        
+        // Automatically switch to history tab
         setActiveTab("history");
       }
     } catch (error) {
