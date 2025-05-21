@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord } from "@/integrations/supabase/client";
+import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord, updateTasjeelRecord } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -289,11 +289,15 @@ const Tasjeel: React.FC = () => {
       const uniqueId = uuidv4();
       const fileName = `recording-${uniqueId}.webm`;
       
-      // Use a path that doesn't rely on user authentication
-      const filePath = `recordings/${fileName}`;
+      // Use correct bucket name
+      const bucketId = "Tasjeel Voice Recordings";
+      
+      // Use a path that includes the user ID if available
+      const userPrefix = user?.id ? `${user.id}/` : '';
+      const filePath = `${userPrefix}${fileName}`;
       
       console.log("Uploading recording to storage:", {
-        bucket: "tasjeel_recordings",
+        bucket: bucketId,
         path: filePath,
         size: audioBlob.size,
         type: audioBlob.type
@@ -302,7 +306,7 @@ const Tasjeel: React.FC = () => {
       // Upload to Supabase storage with explicit error handling
       const { data, error } = await supabase
         .storage
-        .from("tasjeel_recordings")
+        .from(bucketId)
         .upload(filePath, audioBlob, {
           contentType: "audio/webm",
           cacheControl: "3600"
@@ -322,7 +326,7 @@ const Tasjeel: React.FC = () => {
       // Get the public URL - works because bucket is set to public
       const { data: publicUrlData } = supabase
         .storage
-        .from("tasjeel_recordings")
+        .from(bucketId)
         .getPublicUrl(filePath);
       
       const audioUrl = publicUrlData.publicUrl;
@@ -335,8 +339,8 @@ const Tasjeel: React.FC = () => {
       setCurrentRecordId(recordId);
       
       try {
-        // Save initial record
-        await saveTasjeelRecord({
+        // Save initial record with the user ID
+        const savedRecord = await saveTasjeelRecord({
           original_recording_path: audioUrl,
           duration: recordingTime,
           title: new Date().toLocaleString(),
@@ -344,6 +348,9 @@ const Tasjeel: React.FC = () => {
           summary: null,
           summary_audio_path: null
         });
+        
+        console.log("Saved initial record with ID:", savedRecord.id);
+        setCurrentRecordId(savedRecord.id);
       } catch (dbError) {
         console.error("Error saving initial record:", dbError);
         // Continue with transcription even if DB save fails
@@ -385,12 +392,12 @@ const Tasjeel: React.FC = () => {
       setTranscript(response.transcript);
       
       // Update record with transcription if we have a record ID
-      if (recordId) {
+      if (currentRecordId) {
         try {
-          await supabase
-            .from('tasjeel_records')
-            .update({ transcription: response.transcript })
-            .eq('id', recordId);
+          await updateTasjeelRecord(currentRecordId, { 
+            transcription: response.transcript 
+          });
+          console.log("Updated record with transcription, record ID:", currentRecordId);
         } catch (dbError) {
           console.error("Error updating record with transcription:", dbError);
         }
@@ -441,10 +448,8 @@ const Tasjeel: React.FC = () => {
       // Update record with summary if we have a record ID
       if (currentRecordId) {
         try {
-          await supabase
-            .from('tasjeel_records')
-            .update({ summary: response.summary })
-            .eq('id', currentRecordId);
+          await updateTasjeelRecord(currentRecordId, { summary: response.summary });
+          console.log("Updated record with summary, record ID:", currentRecordId);
         } catch (dbError) {
           console.error("Error updating record with summary:", dbError);
         }
@@ -505,6 +510,14 @@ const Tasjeel: React.FC = () => {
         // This is a JSON response with URL
         const jsonData = await response.json();
         if (jsonData.audioUrl) {
+          // Update the record with the audio URL
+          if (currentRecordId) {
+            await updateTasjeelRecord(currentRecordId, { 
+              summary_audio_path: jsonData.audioUrl 
+            });
+            console.log("Updated record with summary audio, record ID:", currentRecordId);
+          }
+          
           // Fetch the audio file from the URL
           const audioResponse = await fetch(jsonData.audioUrl);
           if (!audioResponse.ok) {
@@ -517,6 +530,10 @@ const Tasjeel: React.FC = () => {
           // Create audio element for playback
           const audio = new Audio(URL.createObjectURL(audioData));
           summaryAudioPlayerRef.current = audio;
+          
+          // Show success message and switch to history tab
+          toast(t.audioGenerationComplete);
+          setActiveTab("history");
         } else {
           throw new Error('No audio URL returned');
         }
@@ -529,9 +546,10 @@ const Tasjeel: React.FC = () => {
         const audioObjectUrl = URL.createObjectURL(audioData);
         const audio = new Audio(audioObjectUrl);
         summaryAudioPlayerRef.current = audio;
+        
+        toast(t.audioGenerationComplete);
+        setActiveTab("history");
       }
-      
-      toast(t.audioGenerationComplete);
     } catch (error) {
       console.error("Error generating audio:", error);
       toast(error.message || "An error occurred while generating the audio");
@@ -832,52 +850,6 @@ const Tasjeel: React.FC = () => {
                     onChange={(e) => setSummary(e.target.value)}
                     className="min-h-[200px] mb-4"
                   />
-                  
-                  {/* Summary audio player (only shown when summary audio is available) */}
-                  {summaryAudioBlob && (
-                    <div className="flex flex-col space-y-3 mb-4">
-                      <div className="flex justify-between items-center">
-                        <div className="text-sm font-medium">{t.audioPlayer}</div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => downloadAudio(true)}
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          {t.downloadSummaryAudio}
-                        </Button>
-                      </div>
-                      <div className="flex justify-center gap-4">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={toggleSummaryPlayPause}
-                        >
-                          <PlayCircle className="h-6 w-6" />
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            if (summaryAudioPlayerRef.current) {
-                              summaryAudioPlayerRef.current.pause();
-                            }
-                          }}
-                        >
-                          <PauseCircle className="h-6 w-6" />
-                        </Button>
-                        
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => restartAudio(true)}
-                        >
-                          <RefreshCw className="h-6 w-6" />
-                        </Button>
-                      </div>
-                    </div>
-                  )}
                   
                   <div className="space-y-4">
                     <div className="flex flex-col space-y-2">

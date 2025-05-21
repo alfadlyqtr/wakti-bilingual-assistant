@@ -28,3 +28,9 @@ export interface PDFExportOptions {
   title: string;
   type: string;
 }
+
+// Audio file types
+export interface AudioFile {
+  blob: Blob;
+  url: string;
+}

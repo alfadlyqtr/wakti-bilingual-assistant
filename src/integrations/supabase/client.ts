@@ -1,3 +1,4 @@
+
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
@@ -238,13 +239,34 @@ export const saveTasjeelRecord = async (
   recordData: Omit<TasjeelRecord, 'id' | 'user_id' | 'created_at' | 'updated_at'>
 ): Promise<TasjeelRecord> => {
   try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error('Error getting user:', userError);
+      throw userError;
+    }
+    
+    if (!userData.user) {
+      throw new Error('No authenticated user found');
+    }
+    
+    console.log('Creating Tasjeel record for user:', userData.user.id);
+    
     const { data, error } = await supabase
       .from('tasjeel_records')
-      .insert(recordData)
+      .insert({
+        ...recordData,
+        user_id: userData.user.id
+      })
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error saving Tasjeel record:', error);
+      throw error;
+    }
+    
+    console.log('Successfully saved Tasjeel record:', data);
     return data;
   } catch (error) {
     console.error('Error saving Tasjeel record:', error);
@@ -265,7 +287,12 @@ export const updateTasjeelRecord = async (
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error updating Tasjeel record:', error);
+      throw error;
+    }
+    
+    console.log('Successfully updated Tasjeel record:', data);
     return data;
   } catch (error) {
     console.error('Error updating Tasjeel record:', error);
@@ -276,13 +303,32 @@ export const updateTasjeelRecord = async (
 // Get all Tasjeel records for the current user
 export const getTasjeelRecords = async (limit = 20, page = 0): Promise<TasjeelRecord[]> => {
   try {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error('Error getting user:', userError);
+      throw userError;
+    }
+    
+    if (!userData.user) {
+      throw new Error('No authenticated user found');
+    }
+    
+    console.log('Fetching Tasjeel records for user:', userData.user.id);
+    
     const { data, error } = await supabase
       .from('tasjeel_records')
       .select('*')
+      .eq('user_id', userData.user.id)
       .order('created_at', { ascending: false })
       .range(page * limit, (page + 1) * limit - 1);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching Tasjeel records:', error);
+      throw error;
+    }
+    
+    console.log(`Found ${data?.length || 0} Tasjeel records`);
     return data || [];
   } catch (error) {
     console.error('Error fetching Tasjeel records:', error);

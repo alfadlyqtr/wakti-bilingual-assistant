@@ -104,7 +104,8 @@ const RecordingDialog: React.FC<{
   t: any;
   language: string;
 }> = ({ isOpen, onClose, record, onDelete, t, language }) => {
-  const [activeTab, setActiveTab] = useState<string>("transcript");
+  // Default to summary tab instead of transcript
+  const [activeTab, setActiveTab] = useState<string>("summary");
   const [audioPlaying, setAudioPlaying] = useState<boolean>(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -134,21 +135,29 @@ const RecordingDialog: React.FC<{
     if (!record) return;
     
     try {
-      // Fix: Pass content as a string instead of an array of objects
-      await generatePDF({
+      // Generate PDF with focus on the summary
+      const pdfBlob = await generatePDF({
         title: record.title || "Tasjeel Recording",
         content: {
-          text: record.transcription && record.summary 
-            ? `Transcription:\n${record.transcription}\n\nSummary:\n${record.summary}`
-            : record.transcription || record.summary || "No content available"
+          text: record.summary || "No summary available"
         },
         metadata: {
           createdAt: record.created_at,
           expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-          type: "Tasjeel Recording"
+          type: "Tasjeel Summary"
         },
         language: language as 'en' | 'ar'
       });
+      
+      // Create a download link and trigger it
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `tasjeel-summary-${new Date().toISOString().slice(0, 10)}.pdf`;
+      link.click();
+      
+      // Clean up the URL object after the download starts
+      setTimeout(() => URL.revokeObjectURL(url), 100);
       
       toast(t.pdfExported);
     } catch (error) {
@@ -199,23 +208,10 @@ const RecordingDialog: React.FC<{
           </div>
           
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid grid-cols-3 mb-4">
-              <TabsTrigger value="transcript">{t.transcript}</TabsTrigger>
+            <TabsList className="grid grid-cols-2 mb-4">
               <TabsTrigger value="summary">{t.summary}</TabsTrigger>
               <TabsTrigger value="audio">{t.audio}</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="transcript" className="max-h-[300px] overflow-y-auto">
-              {record.transcription ? (
-                <div className="text-sm whitespace-pre-wrap">
-                  {record.transcription}
-                </div>
-              ) : (
-                <div className="text-muted-foreground text-center py-6">
-                  {t.noTranscription}
-                </div>
-              )}
-            </TabsContent>
             
             <TabsContent value="summary" className="max-h-[300px] overflow-y-auto">
               {record.summary ? (
@@ -268,15 +264,7 @@ const RecordingDialog: React.FC<{
         <Separator />
         
         <div className="p-4 flex flex-wrap gap-2 justify-between">
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={handleDownloadOriginal}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              {t.downloadOriginal}
-            </Button>
-            
+          <div className="flex gap-2">            
             {record.summary_audio_path && (
               <Button 
                 variant="outline" 
@@ -334,7 +322,9 @@ const PreviousRecordings: React.FC = () => {
     setLoading(true);
     try {
       const records = await getTasjeelRecords();
-      setRecords(records);
+      // Filter to only show records with summaries
+      const recordsWithSummary = records.filter(record => record.summary && record.summary_audio_path);
+      setRecords(recordsWithSummary);
     } catch (error) {
       console.error("Error loading recordings:", error);
       toast(error.message || "Error loading recordings");
@@ -346,6 +336,9 @@ const PreviousRecordings: React.FC = () => {
   const handlePlayPause = (record: TasjeelRecord) => {
     if (!audioRef.current) return;
 
+    // Prefer summary_audio_path if available
+    const audioSource = record.summary_audio_path || record.original_recording_path;
+
     if (playingId === record.id) {
       // Same audio, toggle play/pause
       if (audioRef.current.paused) {
@@ -356,7 +349,7 @@ const PreviousRecordings: React.FC = () => {
       }
     } else {
       // Different audio, switch to it
-      audioRef.current.src = record.original_recording_path;
+      audioRef.current.src = audioSource;
       audioRef.current.play();
       setPlayingId(record.id);
     }
@@ -423,12 +416,6 @@ const PreviousRecordings: React.FC = () => {
                       <Clock className="w-3 h-3" />
                       {format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
                     </span>
-                    {record.duration && (
-                      <span className="flex items-center gap-1">
-                        <ListMusic className="w-3 h-3" />
-                        {formatDuration(record.duration)}
-                      </span>
-                    )}
                   </div>
                 </div>
                 
@@ -449,19 +436,21 @@ const PreviousRecordings: React.FC = () => {
                     )}
                   </Button>
                   
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const link = document.createElement("a");
-                      link.href = record.original_recording_path;
-                      link.download = `recording-${record.id.slice(0, 8)}.webm`;
-                      link.click();
-                    }}
-                  >
-                    <Download className="h-5 w-5" />
-                  </Button>
+                  {record.summary_audio_path && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const link = document.createElement("a");
+                        link.href = record.summary_audio_path;
+                        link.download = `summary-${record.id.slice(0, 8)}.mp3`;
+                        link.click();
+                      }}
+                    >
+                      <Download className="h-5 w-5" />
+                    </Button>
+                  )}
                   
                   <Button 
                     variant="ghost" 
@@ -478,10 +467,10 @@ const PreviousRecordings: React.FC = () => {
                 </div>
               </div>
               
-              {/* Preview of transcription/summary */}
-              {record.transcription && (
+              {/* Preview of summary */}
+              {record.summary && (
                 <div className="mt-2 text-sm line-clamp-2 text-muted-foreground">
-                  {record.transcription}
+                  {record.summary}
                 </div>
               )}
             </CardContent>
