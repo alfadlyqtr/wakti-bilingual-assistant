@@ -32,16 +32,14 @@ export function PageContainer({
     <div className="mobile-container">
       {showHeader && (
         <div className="bg-background border-b sticky top-0 z-50">
-          <div className="container flex h-16 items-center justify-between py-4">
-            {showBackButton && (
-              <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2">
-                <ChevronLeft className="h-5 w-5" />
-              </Button>
-            )}
-            
-            <div className="flex-1">
-              {title && <h1 className="text-lg font-semibold">{typeof title === 'string' ? t(title as any, language) : "WAKTI"}</h1>}
-            </div>
+          {showBackButton && (
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2">
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          )}
+          
+          <div className="flex-1">
+            {title && <h1 className="text-lg font-semibold">{typeof title === 'string' ? t(title as any, language) : "WAKTI"}</h1>}
           </div>
         </div>
       )}
