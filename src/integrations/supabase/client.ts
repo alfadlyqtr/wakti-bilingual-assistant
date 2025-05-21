@@ -1,6 +1,7 @@
+
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { TasjeelRecord } from '@/components/tasjeel/types';
+import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
 // Use environment variables if available, otherwise fall back to hardcoded values
@@ -352,4 +353,50 @@ export const deleteTasjeelRecord = async (id: string): Promise<void> => {
     console.error('Error deleting Tasjeel record:', error);
     throw error;
   }
+};
+
+// Upload audio file function
+export const uploadAudioFile = async (options: AudioUploadOptions): Promise<string> => {
+  const { file, onProgress, onError, onSuccess } = options;
+  
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const fileName = `upload-${Date.now()}-${file.name}`;
+    const filePath = `${userData.user.id}/${fileName}`;
+    
+    const { data, error } = await supabase
+      .storage
+      .from('tasjeel_recordings')
+      .upload(filePath, file, {
+        contentType: file.type,
+        cacheControl: '3600'
+      });
+      
+    if (error) throw error;
+    
+    // Get public URL
+    const { data: publicUrlData } = supabase
+      .storage
+      .from('tasjeel_recordings')
+      .getPublicUrl(filePath);
+    
+    const audioUrl = publicUrlData.publicUrl;
+    
+    if (onSuccess) onSuccess(audioUrl);
+    return audioUrl;
+    
+  } catch (error) {
+    console.error('Error uploading audio file:', error);
+    if (onError) onError(error);
+    throw error;
+  }
+};
+
+// Function to explicitly update a recording's title
+export const updateRecordingTitle = async (id: string, title: string): Promise<TasjeelRecord> => {
+  return updateTasjeelRecord(id, { title });
 };

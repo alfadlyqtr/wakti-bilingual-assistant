@@ -1,7 +1,8 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord, updateTasjeelRecord } from "@/integrations/supabase/client";
+import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord, updateTasjeelRecord, uploadAudioFile } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +26,8 @@ import {
   ClipboardCopy,
   Volume2,
   Save,
-  History
+  History,
+  Upload
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
@@ -77,6 +79,13 @@ const translations = {
     recordingSaved: "Recording saved successfully",
     recordingSaveError: "Error saving recording",
     saveRecordingDesc: "Save this recording to your library",
+    uploadAudio: "Upload Audio",
+    uploading: "Uploading...",
+    uploadedAudio: "Uploaded Audio",
+    uploadError: "Error uploading audio",
+    uploadSuccess: "Audio uploaded successfully",
+    selectAudioFile: "Select audio file",
+    or: "or"
   },
   ar: {
     pageTitle: "تسجيل",
@@ -121,6 +130,13 @@ const translations = {
     recordingSaved: "تم حفظ التسجيل بنجاح",
     recordingSaveError: "خطأ في حفظ التسجيل",
     saveRecordingDesc: "حفظ هذا التسجيل في مكتبتك",
+    uploadAudio: "رفع ملف صوتي",
+    uploading: "جاري الرفع...",
+    uploadedAudio: "تم رفع الملف الصوتي",
+    uploadError: "خطأ في رفع الملف الصوتي",
+    uploadSuccess: "تم رفع الملف الصوتي بنجاح",
+    selectAudioFile: "اختر ملف صوتي",
+    or: "أو"
   }
 };
 
@@ -133,7 +149,7 @@ const Tasjeel: React.FC = () => {
   // State variables
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording" | "processing">("idle");
+  const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording" | "processing" | "uploading">("idle");
   const [transcript, setTranscript] = useState("");
   const [summary, setSummary] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -147,6 +163,7 @@ const Tasjeel: React.FC = () => {
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [summaryAudioBlob, setSummaryAudioBlob] = useState<Blob | null>(null);
+  const [uploadingFile, setUploadingFile] = useState<boolean>(false);
   
   // Add state for storing the permanent summary audio URL from Supabase
   const [summaryAudioUrl, setSummaryAudioUrl] = useState<string | null>(null);
@@ -157,6 +174,7 @@ const Tasjeel: React.FC = () => {
   const timerRef = useRef<number | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const summaryAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Effect to create audio player instance when audio blob is available
   useEffect(() => {
@@ -361,6 +379,60 @@ const Tasjeel: React.FC = () => {
       console.error("Error processing recording:", error);
       toast(error.message || "An error occurred while processing the recording");
       setRecordingStatus("idle");
+    }
+  };
+  
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setRecordingStatus("uploading");
+    setUploadingFile(true);
+    
+    try {
+      // Upload the file
+      const fileName = `upload-${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
+      const userPrefix = user?.id ? `${user.id}/` : '';
+      const filePath = `${userPrefix}${fileName}`;
+      
+      const { data, error } = await supabase
+        .storage
+        .from("tasjeel_recordings")
+        .upload(filePath, file, {
+          contentType: file.type,
+          cacheControl: "3600"
+        });
+        
+      if (error) throw error;
+      
+      // Get public URL
+      const { data: publicUrlData } = supabase
+        .storage
+        .from("tasjeel_recordings")
+        .getPublicUrl(filePath);
+      
+      const audioUrl = publicUrlData.publicUrl;
+      setAudioUrl(audioUrl);
+      
+      // Create a blob from the file for local playback
+      const fileBlob = new Blob([file], { type: file.type });
+      setAudioBlob(fileBlob);
+      
+      // Transcribe the uploaded audio
+      await transcribeAudio(audioUrl);
+      
+      toast(t.uploadSuccess);
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      toast(t.uploadError);
+      setRecordingStatus("idle");
+    } finally {
+      setUploadingFile(false);
+      // Reset the input value to allow selecting the same file again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
   
@@ -688,19 +760,51 @@ const Tasjeel: React.FC = () => {
                       {t.stopRecording}
                     </Button>
                   </div>
-                ) : recordingStatus === "processing" ? (
+                ) : recordingStatus === "processing" || recordingStatus === "uploading" ? (
                   <div className="flex flex-col items-center justify-center py-8">
                     <RefreshCw className="h-8 w-8 animate-spin" />
-                    <p className="mt-4">{isTranscribing ? t.transcribingAudio : t.processingRecording}</p>
+                    <p className="mt-4">
+                      {recordingStatus === "uploading" 
+                        ? t.uploading 
+                        : (isTranscribing ? t.transcribingAudio : t.processingRecording)}
+                    </p>
                   </div>
                 ) : (
-                  <Button 
-                    className="w-full" 
-                    onClick={startRecording}
-                  >
-                    <Mic className="mr-2" />
-                    {t.startRecording}
-                  </Button>
+                  <div className="space-y-4">
+                    <Button 
+                      className="w-full" 
+                      onClick={startRecording}
+                    >
+                      <Mic className="mr-2" />
+                      {t.startRecording}
+                    </Button>
+                    
+                    <div className="flex items-center">
+                      <div className="flex-grow h-px bg-muted"></div>
+                      <span className="px-4 text-muted-foreground text-sm">{t.or}</span>
+                      <div className="flex-grow h-px bg-muted"></div>
+                    </div>
+                    
+                    <div>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        accept="audio/*"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                        disabled={uploadingFile}
+                      />
+                      <Button 
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingFile}
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        {t.uploadAudio}
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

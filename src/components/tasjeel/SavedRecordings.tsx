@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
 import { FileText, Download, Trash } from "lucide-react";
 import { generatePDF } from "@/utils/pdfUtils";
-import AudioControls from "./AudioControls";
+import CompactRecordingCard from "./CompactRecordingCard";
 
 // Translations
 const translations = {
@@ -41,7 +41,14 @@ const translations = {
     actions: "Actions",
     seconds: "seconds",
     audioSourceNotFound: "Audio source not found",
-    tryingToPlay: "Trying to play audio..."
+    tryingToPlay: "Trying to play audio...",
+    uploadRecording: "Upload Audio",
+    uploading: "Uploading...",
+    uploadSuccess: "Upload successful",
+    uploadError: "Upload failed",
+    editTitle: "Edit title",
+    titleUpdated: "Title updated",
+    errorUpdatingTitle: "Error updating title"
   },
   ar: {
     noRecordings: "لم يتم العثور على تسجيلات محفوظة",
@@ -70,7 +77,14 @@ const translations = {
     actions: "الإجراءات",
     seconds: "ثواني",
     audioSourceNotFound: "لم يتم العثور على مصدر الصوت",
-    tryingToPlay: "محاولة تشغيل الصوت..."
+    tryingToPlay: "محاولة تشغيل الصوت...",
+    uploadRecording: "تحميل ملف صوتي",
+    uploading: "جار التحميل...",
+    uploadSuccess: "تم التحميل بنجاح",
+    uploadError: "فشل التحميل",
+    editTitle: "تعديل العنوان",
+    titleUpdated: "تم تحديث العنوان",
+    errorUpdatingTitle: "خطأ في تحديث العنوان"
   }
 };
 
@@ -81,8 +95,7 @@ const SavedRecordings: React.FC = () => {
 
   const [recordings, setRecordings] = useState<TasjeelRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
-  const [isPlayingOriginal, setIsPlayingOriginal] = useState<boolean>(false);
+  const [uploading, setUploading] = useState<boolean>(false);
 
   // Load saved recordings
   useEffect(() => {
@@ -123,16 +136,6 @@ const SavedRecordings: React.FC = () => {
       hour: "2-digit",
       minute: "2-digit"
     });
-  };
-
-  // Handle audio playback status change
-  const handlePlaybackChange = (recordingId: string, isPlaying: boolean, isOriginal: boolean) => {
-    if (isPlaying) {
-      setPlayingRecordingId(recordingId);
-      setIsPlayingOriginal(isOriginal);
-    } else if (playingRecordingId === recordingId && isOriginal === isPlayingOriginal) {
-      setPlayingRecordingId(null);
-    }
   };
 
   // Delete recording function
@@ -196,6 +199,61 @@ const SavedRecordings: React.FC = () => {
     }
   };
 
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      // Upload file to storage
+      const fileName = `upload-${Date.now()}-${file.name}`;
+      const filePath = `${user?.id}/${fileName}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase
+        .storage
+        .from("tasjeel_recordings")
+        .upload(filePath, file, {
+          contentType: file.type,
+          cacheControl: "3600"
+        });
+        
+      if (uploadError) throw uploadError;
+      
+      // Get public URL
+      const { data: publicUrlData } = supabase
+        .storage
+        .from("tasjeel_recordings")
+        .getPublicUrl(filePath);
+      
+      const audioUrl = publicUrlData.publicUrl;
+      
+      // Create record in database
+      await supabase
+        .from("tasjeel_records")
+        .insert({
+          user_id: user?.id,
+          title: file.name,
+          original_recording_path: audioUrl,
+          saved: true,
+          duration: Math.round(file.size / 16000) // Rough estimate of duration based on file size
+        });
+      
+      toast(t.uploadSuccess);
+      
+      // Reload recordings
+      loadSavedRecordings();
+      
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      toast(t.uploadError);
+    } finally {
+      setUploading(false);
+      // Reset the input
+      e.target.value = "";
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -204,122 +262,39 @@ const SavedRecordings: React.FC = () => {
     );
   }
 
-  if (recordings.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64">
-        <p className="text-muted-foreground mb-4">{t.noRecordings}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
-      {recordings.map(recording => (
-        <Card key={recording.id} className="overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex flex-col space-y-3">
-              <div className="flex justify-between items-center">
-                <h3 className="font-medium">{recording.title || formatDate(recording.created_at)}</h3>
-                <span className="text-sm text-muted-foreground">
-                  {recording.duration ? `${recording.duration} ${t.seconds}` : ''}
-                </span>
-              </div>
-              
-              <Separator />
-              
-              {/* Audio Controls */}
-              <div className="grid grid-cols-1 gap-4">
-                {recording.original_recording_path && (
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-medium">{t.playOriginalAudio}</h4>
-                    <AudioControls 
-                      audioUrl={recording.original_recording_path}
-                      onPlaybackChange={(isPlaying) => handlePlaybackChange(recording.id, isPlaying, true)}
-                      labels={{
-                        play: t.playOriginalAudio,
-                        pause: t.pauseAudio,
-                        rewind: t.rewindAudio,
-                        stop: t.stopAudio,
-                        error: t.errorPlayingAudio
-                      }}
-                    />
-                  </div>
-                )}
-                
-                {recording.summary_audio_path && (
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-medium">{t.playSummaryAudio}</h4>
-                    <AudioControls 
-                      audioUrl={recording.summary_audio_path}
-                      onPlaybackChange={(isPlaying) => handlePlaybackChange(recording.id, isPlaying, false)}
-                      labels={{
-                        play: t.playSummaryAudio,
-                        pause: t.pauseAudio,
-                        rewind: t.rewindAudio,
-                        stop: t.stopAudio,
-                        error: t.errorPlayingAudio
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-              
-              <Separator />
-              
-              {/* Action buttons */}
-              <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:gap-2">
-                {recording.transcription && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => exportToPDF(recording.transcription, true, recording.title)}
-                  >
-                    <FileText className="mr-1 h-4 w-4" /> {t.exportTranscriptionToPDF}
-                  </Button>
-                )}
-                
-                {recording.summary && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => exportToPDF(recording.summary, false, recording.title)}
-                  >
-                    <FileText className="mr-1 h-4 w-4" /> {t.exportSummaryToPDF}
-                  </Button>
-                )}
-                
-                {recording.original_recording_path && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => downloadAudio(recording.original_recording_path, false, recording.title)}
-                  >
-                    <Download className="mr-1 h-4 w-4" /> {t.downloadOriginalAudio}
-                  </Button>
-                )}
-                
-                {recording.summary_audio_path && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => downloadAudio(recording.summary_audio_path, true, recording.title)}
-                  >
-                    <Download className="mr-1 h-4 w-4" /> {t.downloadSummaryAudio}
-                  </Button>
-                )}
-                
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => deleteRecording(recording.id)}
-                >
-                  <Trash className="mr-1 h-4 w-4" /> {t.deleteRecording}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      <div className="flex justify-end mb-4">
+        <label className="cursor-pointer">
+          <input
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            onChange={handleFileUpload}
+            disabled={uploading}
+          />
+          <Button disabled={uploading}>
+            {uploading ? t.uploading : t.uploadRecording}
+          </Button>
+        </label>
+      </div>
+      
+      {recordings.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-64">
+          <p className="text-muted-foreground mb-4">{t.noRecordings}</p>
+        </div>
+      ) : (
+        recordings.map(recording => (
+          <CompactRecordingCard
+            key={recording.id}
+            recording={recording}
+            onDelete={deleteRecording}
+            onExportToPDF={exportToPDF}
+            onDownloadAudio={downloadAudio}
+            translations={t}
+          />
+        ))
+      )}
     </div>
   );
 };

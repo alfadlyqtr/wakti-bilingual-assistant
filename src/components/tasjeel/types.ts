@@ -63,3 +63,12 @@ export interface AudioPlayerState {
   error: boolean;
   errorMessage: string | null;
 }
+
+// Upload options interface
+export interface AudioUploadOptions {
+  file: File;
+  onProgress?: (progress: number) => void;
+  onError?: (error: Error) => void;
+  onSuccess?: (url: string) => void;
+}
+
