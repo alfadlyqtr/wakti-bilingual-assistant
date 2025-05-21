@@ -289,8 +289,8 @@ const Tasjeel: React.FC = () => {
       const uniqueId = uuidv4();
       const fileName = `recording-${uniqueId}.webm`;
       
-      // Use correct bucket name
-      const bucketId = "Tasjeel Voice Recordings";
+      // Use correct bucket name with underscores instead of spaces
+      const bucketId = "tasjeel_recordings";
       
       // Use a path that includes the user ID if available
       const userPrefix = user?.id ? `${user.id}/` : '';

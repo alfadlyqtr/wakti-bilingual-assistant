@@ -138,11 +138,13 @@ serve(async (req) => {
       );
     }
 
-    // Check if the bucket exists
-    console.log('Checking if bucket exists: tasjeel_recordings');
+    // Use the consistent bucket ID "tasjeel_recordings"
+    const bucketId = "tasjeel_recordings";
+    console.log(`Checking if bucket exists: ${bucketId}`);
+    
     const { data: bucketData, error: bucketError } = await supabase
       .storage
-      .getBucket('tasjeel_recordings');
+      .getBucket(bucketId);
     
     if (bucketError) {
       console.error('Error checking bucket:', bucketError);
@@ -157,10 +159,10 @@ serve(async (req) => {
 
     console.log('Bucket exists:', bucketData);
 
-    // Get the audio file from storage
-    console.log('Downloading from bucket "tasjeel_recordings", path:', filePath);
+    // Get the audio file from storage using the consistent bucket ID
+    console.log(`Downloading from bucket "${bucketId}", path:`, filePath);
     const { data: audioData, error: audioError } = await supabase.storage
-      .from('tasjeel_recordings')
+      .from(bucketId)
       .download(filePath);
 
     if (audioError) {
