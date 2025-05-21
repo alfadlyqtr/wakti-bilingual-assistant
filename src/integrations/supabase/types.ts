@@ -513,6 +513,7 @@ export type Database = {
           duration: number | null
           id: string
           original_recording_path: string
+          saved: boolean | null
           summary: string | null
           summary_audio_path: string | null
           title: string | null
@@ -525,6 +526,7 @@ export type Database = {
           duration?: number | null
           id?: string
           original_recording_path: string
+          saved?: boolean | null
           summary?: string | null
           summary_audio_path?: string | null
           title?: string | null
@@ -537,6 +539,7 @@ export type Database = {
           duration?: number | null
           id?: string
           original_recording_path?: string
+          saved?: boolean | null
           summary?: string | null
           summary_audio_path?: string | null
           title?: string | null

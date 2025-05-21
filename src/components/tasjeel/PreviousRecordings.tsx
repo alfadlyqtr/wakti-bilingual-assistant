@@ -22,7 +22,9 @@ import {
   Clock,
   RefreshCw,
   FileText,
-  Volume2
+  Volume2,
+  Rewind,
+  StopCircle
 } from "lucide-react";
 import { TasjeelRecord } from "./types";
 
@@ -113,6 +115,25 @@ const RecordingDialog: React.FC<{
     }
   };
 
+  const handleRewind = () => {
+    if (audioRef.current) {
+      // Rewind 10 seconds
+      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+      if (!audioPlaying) {
+        audioRef.current.play();
+        setAudioPlaying(true);
+      }
+    }
+  };
+
+  const handleStop = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setAudioPlaying(false);
+    }
+  };
+
   const handleExportToPDF = async () => {
     if (!record) return;
     
@@ -187,7 +208,7 @@ const RecordingDialog: React.FC<{
             </div>
           </div>
           
-          {/* Audio player for summary audio */}
+          {/* Audio player for summary audio with enhanced controls */}
           {record.summary_audio_path && (
             <div className="flex flex-col items-center justify-center py-4">
               <audio 
@@ -198,18 +219,44 @@ const RecordingDialog: React.FC<{
                 onEnded={() => setAudioPlaying(false)}
                 className="hidden"
               />
-              <Button 
-                variant="outline" 
-                size="lg"
-                className="h-16 w-16 rounded-full mb-4" 
-                onClick={handlePlayPause}
-              >
-                {audioPlaying ? (
-                  <PauseCircle className="h-10 w-10" />
-                ) : (
-                  <PlayCircle className="h-10 w-10" />
-                )}
-              </Button>
+              
+              {/* Audio controls row */}
+              <div className="flex gap-3 justify-center mb-2">
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="h-12 w-12 rounded-full" 
+                  onClick={handleRewind}
+                  title={t.rewind || "Rewind"}
+                >
+                  <Rewind className="h-6 w-6" />
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="h-12 w-12 rounded-full" 
+                  onClick={handlePlayPause}
+                  title={audioPlaying ? t.pause : t.play}
+                >
+                  {audioPlaying ? (
+                    <PauseCircle className="h-6 w-6" />
+                  ) : (
+                    <PlayCircle className="h-6 w-6" />
+                  )}
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  className="h-12 w-12 rounded-full" 
+                  onClick={handleStop}
+                  title={t.stop || "Stop"}
+                >
+                  <StopCircle className="h-6 w-6" />
+                </Button>
+              </div>
+              
               <span className="text-sm text-muted-foreground">
                 {audioPlaying ? t.pause : t.play}
               </span>

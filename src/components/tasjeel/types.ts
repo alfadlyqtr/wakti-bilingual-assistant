@@ -40,3 +40,11 @@ export interface AudioFile {
   blob: Blob;
   url: string;
 }
+
+// Audio control actions
+export enum AudioControlAction {
+  Play = 'play',
+  Pause = 'pause',
+  Rewind = 'rewind',
+  Stop = 'stop'
+}
