@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -80,7 +79,7 @@ const translations = {
     recordingSaveError: "Error saving recording",
     saveRecordingDesc: "Save this recording to your library",
     uploadAudio: "Upload File",
-    uploadDescription: "Upload audio files for transcription and summary",
+    uploadDescription: "Upload audio/text files for transcription and summary",
     uploading: "Uploading...",
     uploadedAudio: "Uploaded Audio",
     uploadError: "Error uploading audio",
@@ -132,7 +131,7 @@ const translations = {
     recordingSaveError: "خطأ في حفظ التسجيل",
     saveRecordingDesc: "حفظ هذا التسجيل في مكتبتك",
     uploadAudio: "رفع ملف صوتي",
-    uploadDescription: "رفع ملفات صوتية للنسخ والتلخيص",
+    uploadDescription: "رفع ملفات صوتية/نصية للنسخ والتلخيص",
     uploading: "جاري الرفع...",
     uploadedAudio: "تم رفع الملف الصوتي",
     uploadError: "خطأ في رفع الملف الصوتي",
