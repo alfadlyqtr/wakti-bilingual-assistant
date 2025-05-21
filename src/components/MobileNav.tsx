@@ -3,29 +3,24 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CheckSquare, Bell, CalendarClock, Sparkles, Mic } from "lucide-react";
+import { Calendar, CheckSquare, CalendarClock, Sparkles, Mic } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - added Tasjeel
+  // Navigation items - updated to combine Tasks & Reminders
   const navItems = [
     {
-      name: language === 'ar' ? 'المهام' : 'Tasks',
-      path: '/tasks',
+      name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
+      path: '/tasks-reminders',
       icon: 'check-square',
     },
     {
       name: language === 'ar' ? 'التقويم' : 'Calendar',
       path: '/calendar',
       icon: 'calendar',
-    },
-    {
-      name: language === 'ar' ? 'التذكيرات' : 'Reminders',
-      path: '/reminders',
-      icon: 'bell',
     },
     {
       name: language === 'ar' ? 'الأحداث' : 'Events',
@@ -47,7 +42,6 @@ export function MobileNav() {
   const iconMap: { [key: string]: React.ComponentType<any> } = {
     calendar: Calendar,
     'check-square': CheckSquare,
-    bell: Bell,
     'calendar-clock': CalendarClock,
     sparkles: Sparkles,
     mic: Mic,

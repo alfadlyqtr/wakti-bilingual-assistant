@@ -9,6 +9,7 @@ import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
 import Reminders from "@/pages/Reminders";
+import TasksReminders from "@/pages/TasksReminders";
 import Events from "@/pages/Events";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
@@ -125,8 +126,14 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                   <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-                  <Route path="/tasks" element={<AppLayout><Tasks /></AppLayout>} />
-                  <Route path="/reminders" element={<AppLayout><Reminders /></AppLayout>} />
+                  
+                  {/* New combined tasks and reminders route */}
+                  <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
+                  
+                  {/* Redirect old routes to the new combined page */}
+                  <Route path="/tasks" element={<Navigate to="/tasks-reminders" replace />} />
+                  <Route path="/reminders" element={<Navigate to="/tasks-reminders" replace />} />
+                  
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
