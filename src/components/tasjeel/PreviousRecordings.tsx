@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -121,7 +120,7 @@ const RecordingDialog: React.FC<{
       // Generate PDF with focus on the summary
       const pdfBlob = await generatePDF({
         title: record.title || "Tasjeel Recording",
-        content: record.summary || "No summary available",
+        content: { text: record.summary || "No summary available" }, // Fix here: Changed string to object with text property
         metadata: {
           createdAt: record.created_at,
           expiresAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),

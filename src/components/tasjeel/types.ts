@@ -25,7 +25,7 @@ export interface TasjeelTranslations {
 // Export options for PDF
 export interface PDFExportOptions {
   title: string;
-  content: string | { text: string; html?: string };
+  content: { text: string; html?: string }; // Updated: Now expects an object with text and optional html
   metadata?: {
     createdAt: string;
     expiresAt: string;
