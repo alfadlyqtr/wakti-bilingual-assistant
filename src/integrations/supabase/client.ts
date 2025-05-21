@@ -1,6 +1,6 @@
-
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { TasjeelRecord } from '@/components/tasjeel/types';
 
 // Create a single supabase client for interacting with your database
 // Use environment variables if available, otherwise fall back to hardcoded values
@@ -22,20 +22,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
   }
 });
-
-// Define types for Tasjeel records
-export interface TasjeelRecord {
-  id: string;
-  user_id: string;
-  title: string | null;
-  original_recording_path: string;
-  transcription: string | null;
-  summary: string | null;
-  summary_audio_path: string | null;
-  duration: number | null;
-  created_at: string;
-  updated_at: string;
-}
 
 // Define types for edge function payloads
 interface TranscribeAudioPayload {
@@ -252,10 +238,16 @@ export const saveTasjeelRecord = async (
     
     console.log('Creating Tasjeel record for user:', userData.user.id);
     
+    // Make sure to include the saved field, defaulting to true
+    const finalRecordData = {
+      ...recordData,
+      saved: recordData.saved !== undefined ? recordData.saved : true
+    };
+    
     const { data, error } = await supabase
       .from('tasjeel_records')
       .insert({
-        ...recordData,
+        ...finalRecordData,
         user_id: userData.user.id
       })
       .select('*')
@@ -285,11 +277,15 @@ export const updateTasjeelRecord = async (
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select('*')
-      .single();
+      .maybeSingle(); // Changed from single() to maybeSingle() to avoid errors
 
     if (error) {
       console.error('Error updating Tasjeel record:', error);
       throw error;
+    }
+    
+    if (!data) {
+      throw new Error('Record not found or could not be updated');
     }
     
     console.log('Successfully updated Tasjeel record:', data);
@@ -301,7 +297,7 @@ export const updateTasjeelRecord = async (
 };
 
 // Get all Tasjeel records for the current user
-export const getTasjeelRecords = async (limit = 20, page = 0): Promise<TasjeelRecord[]> => {
+export const getTasjeelRecords = async (limit = 20, page = 0, savedOnly = false): Promise<TasjeelRecord[]> => {
   try {
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
@@ -316,10 +312,17 @@ export const getTasjeelRecords = async (limit = 20, page = 0): Promise<TasjeelRe
     
     console.log('Fetching Tasjeel records for user:', userData.user.id);
     
-    const { data, error } = await supabase
+    let query = supabase
       .from('tasjeel_records')
       .select('*')
-      .eq('user_id', userData.user.id)
+      .eq('user_id', userData.user.id);
+    
+    // If savedOnly is true, only return saved records
+    if (savedOnly) {
+      query = query.eq('saved', true);
+    }
+    
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .range(page * limit, (page + 1) * limit - 1);
 

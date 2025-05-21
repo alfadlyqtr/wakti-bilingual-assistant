@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -24,11 +25,12 @@ import {
   RefreshCw,
   ClipboardCopy,
   Volume2,
+  Save,
   History
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
-import PreviousRecordings from "./PreviousRecordings";
+import SavedRecordings from "./SavedRecordings";
 
 // Translations
 const translations = {
@@ -64,12 +66,17 @@ const translations = {
     downloadComplete: "Download complete",
     pdfExported: "PDF exported successfully",
     audioGenerationComplete: "Audio generated",
-    previousRecordings: "Previous Recordings",
+    savedRecordings: "Saved Recordings",
     newRecording: "New Recording",
     exportTranscriptionToPDF: "Export Transcription to PDF",
     exportSummaryToPDF: "Export Summary to PDF",
     downloadOriginalAudio: "Download Original Audio",
     downloadSummaryAudio: "Download Summary Audio",
+    saveRecording: "Save Recording",
+    savingRecording: "Saving...",
+    recordingSaved: "Recording saved successfully",
+    recordingSaveError: "Error saving recording",
+    saveRecordingDesc: "Save this recording to your library",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -103,12 +110,17 @@ const translations = {
     downloadComplete: "اكتمل التحميل",
     pdfExported: "تم تصدير PDF بنجاح",
     audioGenerationComplete: "تم إنشاء الصوت",
-    previousRecordings: "التسجيلات السابقة",
+    savedRecordings: "التسجيلات المحفوظة",
     newRecording: "تسجيل جديد",
     exportTranscriptionToPDF: "تصدير النص إلى PDF",
     exportSummaryToPDF: "تصدير الملخص إلى PDF",
     downloadOriginalAudio: "تحميل الصوت الأصلي",
     downloadSummaryAudio: "تحميل صوت الملخص",
+    saveRecording: "حفظ التسجيل",
+    savingRecording: "جاري الحفظ...",
+    recordingSaved: "تم حفظ التسجيل بنجاح",
+    recordingSaveError: "خطأ في حفظ التسجيل",
+    saveRecordingDesc: "حفظ هذا التسجيل في مكتبتك",
   }
 };
 
@@ -128,8 +140,9 @@ const Tasjeel: React.FC = () => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<"male" | "female">("male");
-  const [activeTab, setActiveTab] = useState<"record" | "history">("record");
+  const [activeTab, setActiveTab] = useState<"record" | "saved">("record");
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -334,30 +347,12 @@ const Tasjeel: React.FC = () => {
       setAudioUrl(audioUrl);
       setAudioBlob(audioBlob);
       
-      // Create a new record ID and save initial data
+      // Generate a UUID for the recording but don't save to database yet
       const recordId = uuidv4();
       setCurrentRecordId(recordId);
       
-      try {
-        // Save initial record with the user ID
-        const savedRecord = await saveTasjeelRecord({
-          original_recording_path: audioUrl,
-          duration: recordingTime,
-          title: new Date().toLocaleString(),
-          transcription: null,
-          summary: null,
-          summary_audio_path: null
-        });
-        
-        console.log("Saved initial record with ID:", savedRecord.id);
-        setCurrentRecordId(savedRecord.id);
-      } catch (dbError) {
-        console.error("Error saving initial record:", dbError);
-        // Continue with transcription even if DB save fails
-      }
-      
       // Transcribe the audio
-      await transcribeAudio(audioUrl, recordId);
+      await transcribeAudio(audioUrl);
       
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -367,7 +362,7 @@ const Tasjeel: React.FC = () => {
   };
   
   // Transcribe audio function with enhanced logging
-  const transcribeAudio = async (audioUrl: string, recordId?: string) => {
+  const transcribeAudio = async (audioUrl: string) => {
     try {
       setIsTranscribing(true);
       
@@ -390,19 +385,6 @@ const Tasjeel: React.FC = () => {
       console.log('Tasjeel: Transcription result received:', response);
       
       setTranscript(response.transcript);
-      
-      // Update record with transcription if we have a record ID
-      if (currentRecordId) {
-        try {
-          await updateTasjeelRecord(currentRecordId, { 
-            transcription: response.transcript 
-          });
-          console.log("Updated record with transcription, record ID:", currentRecordId);
-        } catch (dbError) {
-          console.error("Error updating record with transcription:", dbError);
-        }
-      }
-      
       setRecordingStatus("idle");
     } catch (error) {
       console.error("Tasjeel: Error transcribing audio:", error);
@@ -444,16 +426,6 @@ const Tasjeel: React.FC = () => {
       }
       
       setSummary(response.summary);
-      
-      // Update record with summary if we have a record ID
-      if (currentRecordId) {
-        try {
-          await updateTasjeelRecord(currentRecordId, { summary: response.summary });
-          console.log("Updated record with summary, record ID:", currentRecordId);
-        } catch (dbError) {
-          console.error("Error updating record with summary:", dbError);
-        }
-      }
     } catch (error) {
       console.error("Error summarizing text:", error);
       toast(t.error + ": " + (error.message || "An error occurred while summarizing the text"));
@@ -462,7 +434,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Generate audio function - Updated to save to storage and store the blob
+  // Generate audio function - Updated to store the blob but not save to the database yet
   const generateAudio = async () => {
     try {
       if (!summary.trim()) {
@@ -471,23 +443,15 @@ const Tasjeel: React.FC = () => {
       
       setIsGeneratingAudio(true);
       
-      // We'll now get the audio file directly as a blob and save it to storage if we have a record ID
+      // We'll now get the audio file directly as a blob
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
       
-      // Create the request body - only add recordId if it exists
-      const requestBody: { 
-        summary: string; 
-        voice: "male" | "female";
-        recordId?: string;
-      } = { 
+      // Create the request body
+      const requestBody = { 
         summary, 
         voice: selectedVoice
       };
-      
-      if (currentRecordId) {
-        requestBody.recordId = currentRecordId;
-      }
       
       const response = await fetch(`${supabaseUrl}/functions/v1/generate-speech`, {
         method: 'POST',
@@ -510,14 +474,6 @@ const Tasjeel: React.FC = () => {
         // This is a JSON response with URL
         const jsonData = await response.json();
         if (jsonData.audioUrl) {
-          // Update the record with the audio URL
-          if (currentRecordId) {
-            await updateTasjeelRecord(currentRecordId, { 
-              summary_audio_path: jsonData.audioUrl 
-            });
-            console.log("Updated record with summary audio, record ID:", currentRecordId);
-          }
-          
           // Fetch the audio file from the URL
           const audioResponse = await fetch(jsonData.audioUrl);
           if (!audioResponse.ok) {
@@ -531,11 +487,8 @@ const Tasjeel: React.FC = () => {
           const audio = new Audio(URL.createObjectURL(audioData));
           summaryAudioPlayerRef.current = audio;
           
-          // Show success message and switch to history tab
+          // Show success message
           toast(t.audioGenerationComplete);
-          
-          // Automatically switch to history tab
-          setActiveTab("history");
         } else {
           throw new Error('No audio URL returned');
         }
@@ -550,15 +503,42 @@ const Tasjeel: React.FC = () => {
         summaryAudioPlayerRef.current = audio;
         
         toast(t.audioGenerationComplete);
-        
-        // Automatically switch to history tab
-        setActiveTab("history");
       }
     } catch (error) {
       console.error("Error generating audio:", error);
       toast(error.message || "An error occurred while generating the audio");
     } finally {
       setIsGeneratingAudio(false);
+    }
+  };
+  
+  // New function to save the complete recording to the database
+  const saveRecording = async () => {
+    if (!audioUrl) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      // Save a new record with all the data we've collected
+      await saveTasjeelRecord({
+        original_recording_path: audioUrl,
+        transcription: transcript,
+        summary: summary,
+        summary_audio_path: summaryAudioPlayerRef.current ? summaryAudioPlayerRef.current.src : null,
+        duration: recordingTime,
+        title: new Date().toLocaleString(),
+        saved: true // Mark as explicitly saved
+      });
+
+      toast(t.recordingSaved);
+      setActiveTab("saved"); // Switch to saved tab automatically
+    } catch (error) {
+      console.error("Error saving recording:", error);
+      toast(t.recordingSaveError);
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -664,15 +644,15 @@ const Tasjeel: React.FC = () => {
   return (
     <PageContainer title={t.pageTitle} showBackButton={true}>
       <div className="container py-4 space-y-6">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "history")}>
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved")}>
           <TabsList className="grid grid-cols-2 w-full mb-6">
             <TabsTrigger value="record" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
               {t.newRecording}
             </TabsTrigger>
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              {t.previousRecordings}
+            <TabsTrigger value="saved" className="flex items-center gap-2">
+              <Save className="h-4 w-4" />
+              {t.savedRecordings}
             </TabsTrigger>
           </TabsList>
           
@@ -897,10 +877,44 @@ const Tasjeel: React.FC = () => {
                 </CardContent>
               </Card>
             )}
+            
+            {/* Save Record button - only show when we have audio generated */}
+            {summaryAudioBlob && (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{t.saveRecordingDesc}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {t.saveRecordingDesc}
+                      </p>
+                    </div>
+                    
+                    <Button
+                      className="w-full"
+                      onClick={saveRecording}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          {t.savingRecording}
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          {t.saveRecording}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
           
-          <TabsContent value="history">
-            <PreviousRecordings />
+          <TabsContent value="saved">
+            <SavedRecordings />
           </TabsContent>
         </Tabs>
       </div>

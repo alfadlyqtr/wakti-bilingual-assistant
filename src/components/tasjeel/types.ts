@@ -13,6 +13,7 @@ export interface TasjeelRecord {
   duration: number | null;
   created_at: string;
   updated_at: string;
+  saved: boolean; // New field to track if record has been explicitly saved
 }
 
 // Translations interface
