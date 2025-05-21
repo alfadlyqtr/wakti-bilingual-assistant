@@ -21,3 +21,10 @@ export interface TasjeelTranslations {
     [key: string]: string;
   };
 }
+
+// Export options for PDF
+export interface PDFExportOptions {
+  content: string;
+  title: string;
+  type: string;
+}

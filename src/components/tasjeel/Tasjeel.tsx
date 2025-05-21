@@ -66,6 +66,10 @@ const translations = {
     audioGenerationComplete: "Audio generated",
     previousRecordings: "Previous Recordings",
     newRecording: "New Recording",
+    exportTranscriptionToPDF: "Export Transcription to PDF",
+    exportSummaryToPDF: "Export Summary to PDF",
+    downloadOriginalAudio: "Download Original Audio",
+    downloadSummaryAudio: "Download Summary Audio",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -101,6 +105,10 @@ const translations = {
     audioGenerationComplete: "تم إنشاء الصوت",
     previousRecordings: "التسجيلات السابقة",
     newRecording: "تسجيل جديد",
+    exportTranscriptionToPDF: "تصدير النص إلى PDF",
+    exportSummaryToPDF: "تصدير الملخص إلى PDF",
+    downloadOriginalAudio: "تحميل الصوت الأصلي",
+    downloadSummaryAudio: "تحميل صوت الملخص",
   }
 };
 
@@ -125,12 +133,14 @@ const Tasjeel: React.FC = () => {
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [summaryAudioBlob, setSummaryAudioBlob] = useState<Blob | null>(null);
   
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const summaryAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
   
   // Effect to create audio player instance when audio blob is available
   useEffect(() => {
@@ -156,6 +166,30 @@ const Tasjeel: React.FC = () => {
       }
     };
   }, [audioBlob]);
+
+  // Effect for summary audio player
+  useEffect(() => {
+    if (summaryAudioBlob) {
+      if (summaryAudioPlayerRef.current) {
+        summaryAudioPlayerRef.current.pause();
+      }
+      
+      const audioObjectUrl = URL.createObjectURL(summaryAudioBlob);
+      const audio = new Audio(audioObjectUrl);
+      summaryAudioPlayerRef.current = audio;
+      
+      return () => {
+        URL.revokeObjectURL(audioObjectUrl);
+      };
+    }
+    
+    return () => {
+      if (summaryAudioPlayerRef.current) {
+        summaryAudioPlayerRef.current.pause();
+        summaryAudioPlayerRef.current = null;
+      }
+    };
+  }, [summaryAudioBlob]);
   
   // Clean up on unmount
   useEffect(() => {
@@ -423,7 +457,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Generate audio function - Updated to save to storage
+  // Generate audio function - Updated to save to storage and store the blob
   const generateAudio = async () => {
     try {
       if (!summary.trim()) {
@@ -471,21 +505,30 @@ const Tasjeel: React.FC = () => {
         // This is a JSON response with URL
         const jsonData = await response.json();
         if (jsonData.audioUrl) {
-          // Create audio element for playback using the URL
-          const audio = new Audio(jsonData.audioUrl);
-          audioPlayerRef.current = audio;
+          // Fetch the audio file from the URL
+          const audioResponse = await fetch(jsonData.audioUrl);
+          if (!audioResponse.ok) {
+            throw new Error('Failed to fetch audio file from URL');
+          }
+          
+          const audioData = await audioResponse.blob();
+          setSummaryAudioBlob(audioData);
+          
+          // Create audio element for playback
+          const audio = new Audio(URL.createObjectURL(audioData));
+          summaryAudioPlayerRef.current = audio;
         } else {
           throw new Error('No audio URL returned');
         }
       } else {
         // Get the audio as a blob directly
         const audioData = await response.blob();
-        setAudioBlob(audioData);
+        setSummaryAudioBlob(audioData);
         
         // Create an object URL for playback
         const audioObjectUrl = URL.createObjectURL(audioData);
         const audio = new Audio(audioObjectUrl);
-        audioPlayerRef.current = audio;
+        summaryAudioPlayerRef.current = audio;
       }
       
       toast(t.audioGenerationComplete);
@@ -503,7 +546,7 @@ const Tasjeel: React.FC = () => {
     toast(t.copiedToClipboard);
   };
   
-  // Play/pause audio
+  // Play/pause original audio
   const togglePlayPause = () => {
     if (audioPlayerRef.current) {
       if (audioPlayerRef.current.paused) {
@@ -514,23 +557,38 @@ const Tasjeel: React.FC = () => {
     }
   };
   
+  // Play/pause summary audio
+  const toggleSummaryPlayPause = () => {
+    if (summaryAudioPlayerRef.current) {
+      if (summaryAudioPlayerRef.current.paused) {
+        summaryAudioPlayerRef.current.play();
+      } else {
+        summaryAudioPlayerRef.current.pause();
+      }
+    }
+  };
+  
   // Restart audio playback
-  const restartAudio = () => {
-    if (audioPlayerRef.current) {
+  const restartAudio = (isSummary: boolean = false) => {
+    if (isSummary && summaryAudioPlayerRef.current) {
+      summaryAudioPlayerRef.current.currentTime = 0;
+      summaryAudioPlayerRef.current.play();
+    } else if (!isSummary && audioPlayerRef.current) {
       audioPlayerRef.current.currentTime = 0;
       audioPlayerRef.current.play();
     }
   };
   
-  // Download audio file - Updated to use Blob
-  const downloadAudio = () => {
-    if (audioBlob) {
+  // Download audio file - with option for summary audio
+  const downloadAudio = (isSummary: boolean = false) => {
+    const blob = isSummary ? summaryAudioBlob : audioBlob;
+    if (blob) {
       toast(t.preparingDownload);
       
-      const url = URL.createObjectURL(audioBlob);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `tasjeel-summary-${new Date().toISOString().slice(0, 10)}.mp3`;
+      link.download = `tasjeel-${isSummary ? 'summary' : 'original'}-${new Date().toISOString().slice(0, 10)}.mp3`;
       link.click();
       
       // Clean up the URL object after the download starts
@@ -540,19 +598,32 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Export to PDF function
-  const exportToPDF = async () => {
+  // Export to PDF function - Updated to handle both transcription and summary
+  const exportToPDF = async (isTranscription: boolean = false) => {
     try {
-      await generatePDF({
-        title: t.summaryLabel,
-        content: { text: summary },
+      const content = isTranscription ? transcript : summary;
+      if (!content) return;
+      
+      const pdfBlob = await generatePDF({
+        title: isTranscription ? t.transcriptionLabel : t.summaryLabel,
+        content: { text: content },
         metadata: {
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-          type: "Tasjeel Summary"
+          type: isTranscription ? "Tasjeel Transcription" : "Tasjeel Summary"
         },
         language: language as 'en' | 'ar'
       });
+      
+      // Create a download link for the PDF
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `tasjeel-${isTranscription ? 'transcription' : 'summary'}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      link.click();
+      
+      // Clean up the URL object after the download starts
+      setTimeout(() => URL.revokeObjectURL(url), 100);
       
       toast(t.pdfExported);
     } catch (error) {
@@ -641,6 +712,16 @@ const Tasjeel: React.FC = () => {
                         <ClipboardCopy className="h-4 w-4 mr-1" />
                         {t.copy}
                       </Button>
+                      
+                      {/* Export transcription to PDF button */}
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => exportToPDF(true)}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        PDF
+                      </Button>
                     </div>
                   </div>
                   
@@ -650,6 +731,52 @@ const Tasjeel: React.FC = () => {
                     className="min-h-[200px] mb-4"
                     placeholder={t.editTranscription}
                   />
+                  
+                  {/* Original audio player */}
+                  {audioBlob && (
+                    <div className="flex flex-col space-y-3 mb-4">
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm font-medium">{t.audioPlayer}</div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadAudio(false)}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          {t.downloadOriginalAudio}
+                        </Button>
+                      </div>
+                      <div className="flex justify-center gap-4">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={togglePlayPause}
+                        >
+                          <PlayCircle className="h-6 w-6" />
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            if (audioPlayerRef.current) {
+                              audioPlayerRef.current.pause();
+                            }
+                          }}
+                        >
+                          <PauseCircle className="h-6 w-6" />
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => restartAudio(false)}
+                        >
+                          <RefreshCw className="h-6 w-6" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   
                   <Button
                     className="w-full"
@@ -678,14 +805,26 @@ const Tasjeel: React.FC = () => {
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{t.summaryLabel}</h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyToClipboard(summary)}
-                    >
-                      <ClipboardCopy className="h-4 w-4 mr-1" />
-                      {t.copy}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => copyToClipboard(summary)}
+                      >
+                        <ClipboardCopy className="h-4 w-4 mr-1" />
+                        {t.copy}
+                      </Button>
+                      
+                      {/* Export summary to PDF button */}
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => exportToPDF(false)}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        PDF
+                      </Button>
+                    </div>
                   </div>
                   
                   <Textarea 
@@ -693,6 +832,52 @@ const Tasjeel: React.FC = () => {
                     onChange={(e) => setSummary(e.target.value)}
                     className="min-h-[200px] mb-4"
                   />
+                  
+                  {/* Summary audio player (only shown when summary audio is available) */}
+                  {summaryAudioBlob && (
+                    <div className="flex flex-col space-y-3 mb-4">
+                      <div className="flex justify-between items-center">
+                        <div className="text-sm font-medium">{t.audioPlayer}</div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadAudio(true)}
+                        >
+                          <Download className="h-4 w-4 mr-1" />
+                          {t.downloadSummaryAudio}
+                        </Button>
+                      </div>
+                      <div className="flex justify-center gap-4">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={toggleSummaryPlayPause}
+                        >
+                          <PlayCircle className="h-6 w-6" />
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            if (summaryAudioPlayerRef.current) {
+                              summaryAudioPlayerRef.current.pause();
+                            }
+                          }}
+                        >
+                          <PauseCircle className="h-6 w-6" />
+                        </Button>
+                        
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => restartAudio(true)}
+                        >
+                          <RefreshCw className="h-6 w-6" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="space-y-4">
                     <div className="flex flex-col space-y-2">
@@ -732,62 +917,6 @@ const Tasjeel: React.FC = () => {
                         </>
                       )}
                     </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Audio player section */}
-            {audioBlob && (
-              <Card>
-                <CardContent className="pt-6">
-                  <h2 className="text-lg font-semibold mb-4">{t.audioPlayer}</h2>
-                  
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex justify-center gap-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={togglePlayPause}
-                      >
-                        <PlayCircle className="h-6 w-6" />
-                        <span className="sr-only">{t.playAudio}</span>
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          if (audioPlayerRef.current) {
-                            audioPlayerRef.current.pause();
-                          }
-                        }}
-                      >
-                        <PauseCircle className="h-6 w-6" />
-                        <span className="sr-only">{t.pauseAudio}</span>
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={restartAudio}
-                      >
-                        <RefreshCw className="h-6 w-6" />
-                        <span className="sr-only">{t.restartAudio}</span>
-                      </Button>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Button onClick={downloadAudio}>
-                        <Download className="mr-2 h-4 w-4" />
-                        {t.downloadAudio}
-                      </Button>
-                      
-                      <Button onClick={exportToPDF} variant="secondary">
-                        <FileText className="mr-2 h-4 w-4" />
-                        {t.exportToPDF}
-                      </Button>
-                    </div>
                   </div>
                 </CardContent>
               </Card>
