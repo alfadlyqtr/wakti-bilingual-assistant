@@ -26,3 +26,11 @@ export interface AudioPlayerState {
   error: boolean;
   errorMessage: string | null;
 }
+
+// Add the missing AudioUploadOptions interface
+export interface AudioUploadOptions {
+  file: File;
+  onProgress?: (progress: number) => void;
+  onError?: (error: Error) => void;
+  onSuccess?: (url: string) => void;
+}
