@@ -77,54 +77,99 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const createdFormatted = format(createdDate, 'PPP', { locale });
       const expiresFormatted = format(expiresDate, 'PPP', { locale });
       
-      // Metadata
-      const metadataTexts = [
-        `${isRtl ? 'النوع: ' : 'Type: '} ${metadata.type}`,
-        `${isRtl ? 'تاريخ الإنشاء: ' : 'Created: '} ${createdFormatted}`,
-        `${isRtl ? 'تاريخ الانتهاء: ' : 'Expires: '} ${expiresFormatted}`,
+      // Metadata table
+      const metadataArray = [
+        [isRtl ? 'النوع:' : 'Type:', metadata.type],
+        [isRtl ? 'تاريخ الإنشاء:' : 'Created:', createdFormatted],
+        [isRtl ? 'تاريخ الانتهاء:' : 'Expires:', expiresFormatted]
       ];
       
       if (metadata.host) {
-        metadataTexts.push(`${isRtl ? 'المضيف: ' : 'Host: '} ${metadata.host}`);
+        metadataArray.push([isRtl ? 'المضيف:' : 'Host:', metadata.host]);
       }
       
       if (metadata.attendees) {
-        metadataTexts.push(`${isRtl ? 'الحضور: ' : 'Attendees: '} ${metadata.attendees}`);
+        metadataArray.push([isRtl ? 'الحضور:' : 'Attendees:', metadata.attendees]);
       }
       
       if (metadata.location) {
-        metadataTexts.push(`${isRtl ? 'الموقع: ' : 'Location: '} ${metadata.location}`);
+        metadataArray.push([isRtl ? 'الموقع:' : 'Location:', metadata.location]);
       }
       
-      let startY = 40;
-      metadataTexts.forEach(text => {
-        doc.text(text, isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
-        startY += 6;
+      // Add metadata as a clean table
+      doc.autoTable({
+        startY: 35,
+        head: [],
+        body: metadataArray,
+        theme: 'plain',
+        styles: {
+          fontSize: 10,
+          cellPadding: 1,
+          overflow: 'linebreak',
+          halign: isRtl ? 'right' : 'left',
+          textColor: [80, 80, 80]
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', cellWidth: 30 }
+        },
+        margin: { left: isRtl ? 20 : 20, right: isRtl ? 20 : 20 },
       });
       
-      startY += 10;
+      // Get the final y position after the metadata table
+      const finalY = (doc as any).lastAutoTable.finalY + 10;
       
-      // Main content section
+      // Main content section - Process and format the text
       if (content.text) {
+        // Add a header for the content section
         doc.setFillColor(240, 240, 240);
-        doc.rect(15, startY - 6, 180, 8, 'F');
+        doc.rect(15, finalY - 6, 180, 8, 'F');
         
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
-        doc.text(isRtl ? 'النص' : 'Content', isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
+        doc.text(isRtl ? 'النص' : 'Content', isRtl ? 190 : 20, finalY, { align: isRtl ? 'right' : 'left' });
         
-        startY += 10;
+        // Process the text to identify structure
+        const processedText = preprocessTextForPDF(content.text);
         
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        
-        const splitText = doc.splitTextToSize(content.text, 170);
-        doc.text(splitText, isRtl ? 190 : 20, startY, { align: isRtl ? 'right' : 'left' });
-        startY += splitText.length * 5 + 10;
+        // Create a content table that will automatically handle pagination
+        doc.autoTable({
+          startY: finalY + 5,
+          head: [],
+          body: [[processedText]],
+          theme: 'plain',
+          styles: {
+            fontSize: 10,
+            cellPadding: 2,
+            lineWidth: 0,
+            overflow: 'linebreak',
+            halign: isRtl ? 'right' : 'left',
+            textColor: [0, 0, 0]
+          },
+          columnStyles: {
+            0: { 
+              cellWidth: 'auto'
+            }
+          },
+          margin: { left: 20, right: 20 },
+          didParseCell: function(data) {
+            const text = data.cell.text;
+            
+            // Make headings bold
+            for (let i = 0; i < text.length; i++) {
+              if (text[i].startsWith('##')) {
+                data.cell.styles.fontStyle = 'bold';
+                text[i] = text[i].substring(2).trim();
+              } else if (text[i].startsWith('•')) {
+                // Add proper indentation for bullet points
+                text[i] = '   ' + text[i];
+              }
+            }
+          }
+        });
       }
       
-      // Footer
+      // Footer - Apply to all pages
       const pageCount = doc.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -156,3 +201,26 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
     }
   });
 };
+
+// Helper function to preprocess the text for better formatting in PDF
+function preprocessTextForPDF(text: string): string {
+  if (!text) return '';
+  
+  // Add heading markers
+  let processedText = text
+    // Add markdown-style headings for titles or headers (usually in all caps or ending with a colon)
+    .replace(/^([A-Z][A-Z\s]+)(?:\n|:)/gm, '## $1\n')
+    .replace(/^(Main Points|Action Items|Summary|Conclusion|Introduction)(?:\n|:)/gm, '## $1\n')
+    
+    // Convert potential bullet points to actual bullets
+    .replace(/^[-*]\s+(.+)$/gm, '• $1')
+    .replace(/^\d+\.\s+(.+)$/gm, '• $1')
+    
+    // Add spacing after paragraphs
+    .replace(/\n\n/g, '\n\n')
+    
+    // Handle any remaining structural elements
+    .trim();
+
+  return processedText;
+}
