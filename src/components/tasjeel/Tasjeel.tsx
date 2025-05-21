@@ -921,35 +921,6 @@ const Tasjeel: React.FC = () => {
                       <Mic className="mr-2" />
                       {t.startRecording}
                     </Button>
-                    
-                    <div className="flex items-center">
-                      <div className="flex-grow h-px bg-muted"></div>
-                      <span className="px-4 text-muted-foreground text-sm">{t.or}</span>
-                      <div className="flex-grow h-px bg-muted"></div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        accept="audio/*"
-                        className="hidden"
-                        onChange={handleFileUpload}
-                        disabled={uploadingFile}
-                      />
-                      <Button 
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploadingFile}
-                      >
-                        <Upload className="mr-2 h-4 w-4" />
-                        {t.uploadAudio}
-                      </Button>
-                      <p className="text-xs text-muted-foreground text-center px-2">
-                        {t.uploadDescription}
-                      </p>
-                    </div>
                   </div>
                 )}
               </CardContent>
