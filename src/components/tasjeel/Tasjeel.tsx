@@ -26,7 +26,8 @@ import {
   Volume2,
   Save,
   History,
-  Upload
+  Upload,
+  Zap
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
@@ -85,7 +86,15 @@ const translations = {
     uploadError: "Error uploading audio",
     uploadSuccess: "Audio uploaded successfully",
     selectAudioFile: "Select audio file",
-    or: "or"
+    or: "or",
+    quickSummary: "Quick Summary",
+    quickSummaryDesc: "Upload audio for instant summary",
+    uploadQuickAudio: "Upload MP3 (25MB max)",
+    summaryProcessing: "Processing summary...",
+    summaryReady: "Summary ready. Click Save.",
+    generateSummary: "Generate Summary",
+    userUploadedAudio: "User uploaded audio",
+    summaryDate: "Summary date"
   },
   ar: {
     pageTitle: "تسجيل",
@@ -137,7 +146,15 @@ const translations = {
     uploadError: "خطأ في رفع الملف الصوتي",
     uploadSuccess: "تم رفع الملف الصوتي بنجاح",
     selectAudioFile: "اختر ملف صوتي",
-    or: "أو"
+    or: "أو",
+    quickSummary: "ملخص سريع",
+    quickSummaryDesc: "تحميل ملف صوتي للخلاصة الفورية",
+    uploadQuickAudio: "تحميل MP3 (الحد الأقصى 25 ميغابايت)",
+    summaryProcessing: "معالجة الملخص...",
+    summaryReady: "الملخص جاهز. انقر على حفظ.",
+    generateSummary: "إنشاء ملخص",
+    userUploadedAudio: "تم تحميل الملف الصوتي من قبل المستخدم",
+    summaryDate: "تاريخ الملخص"
   }
 };
 
@@ -159,7 +176,7 @@ const Tasjeel: React.FC = () => {
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<"male" | "female">("male");
-  const [activeTab, setActiveTab] = useState<"record" | "saved">("record");
+  const [activeTab, setActiveTab] = useState<"record" | "saved" | "quick">("record");
   const [currentRecordId, setCurrentRecordId] = useState<string | null>(null);
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -169,6 +186,13 @@ const Tasjeel: React.FC = () => {
   // Add state for storing the permanent summary audio URL from Supabase
   const [summaryAudioUrl, setSummaryAudioUrl] = useState<string | null>(null);
   
+  // New state variables for quick summary flow
+  const [quickAudioFile, setQuickAudioFile] = useState<File | null>(null);
+  const [quickSummaryTitle, setQuickSummaryTitle] = useState<string>("");
+  const [quickSummaryText, setQuickSummaryText] = useState<string>("");
+  const [quickTranscript, setQuickTranscript] = useState<string>("");
+  const [quickSummaryStatus, setQuickSummaryStatus] = useState<"idle" | "uploading" | "processing" | "ready">("idle");
+  
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -176,6 +200,7 @@ const Tasjeel: React.FC = () => {
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const summaryAudioPlayerRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const quickFileInputRef = useRef<HTMLInputElement>(null);
   
   // Effect to create audio player instance when audio blob is available
   useEffect(() => {
@@ -720,14 +745,130 @@ const Tasjeel: React.FC = () => {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
   
+  // New function to handle quick summary file selection
+  const handleQuickFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type (MP3)
+    if (!file.type.includes('audio/')) {
+      toast(t.uploadError + ": " + "Please upload an audio file");
+      return;
+    }
+    
+    // Validate file size (25MB max)
+    const maxSize = 25 * 1024 * 1024; // 25MB in bytes
+    if (file.size > maxSize) {
+      toast(t.uploadError + ": " + "File size exceeds 25MB limit");
+      return;
+    }
+    
+    setQuickAudioFile(file);
+    setQuickSummaryStatus("uploading");
+    toast(t.uploadSuccess);
+  };
+  
+  // New function to process quick summary
+  const processQuickSummary = async () => {
+    if (!quickAudioFile) {
+      toast(t.uploadError);
+      return;
+    }
+    
+    try {
+      setQuickSummaryStatus("processing");
+      
+      // Create form data
+      const formData = new FormData();
+      formData.append('audio', quickAudioFile);
+      
+      // Use Supabase URL
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/quick-summary`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Processing failed');
+      }
+      
+      const result = await response.json();
+      
+      setQuickSummaryTitle(result.title);
+      setQuickSummaryText(result.summary);
+      setQuickTranscript(result.transcript);
+      setQuickSummaryStatus("ready");
+      
+    } catch (error) {
+      console.error("Error processing quick summary:", error);
+      toast(error.message || "An error occurred");
+      setQuickSummaryStatus("idle");
+    }
+  };
+  
+  // New function to save quick summary
+  const saveQuickSummary = async () => {
+    if (!quickSummaryTitle || !quickSummaryText) {
+      toast(t.error);
+      return;
+    }
+    
+    try {
+      setIsSaving(true);
+      
+      // Save record with quick_summary source type
+      await saveTasjeelRecord({
+        title: quickSummaryTitle,
+        summary: quickSummaryText,
+        transcription: quickTranscript,
+        original_recording_path: null, // No audio storage
+        duration: null,
+        summary_audio_path: null,
+        saved: true,
+        source_type: 'quick_summary'
+      });
+      
+      toast(t.recordingSaved);
+      setActiveTab("saved"); // Switch to saved tab automatically
+      
+      // Reset quick summary states
+      setQuickAudioFile(null);
+      setQuickSummaryTitle("");
+      setQuickSummaryText("");
+      setQuickTranscript("");
+      setQuickSummaryStatus("idle");
+      
+      if (quickFileInputRef.current) {
+        quickFileInputRef.current.value = "";
+      }
+      
+    } catch (error) {
+      console.error("Error saving quick summary:", error);
+      toast(t.recordingSaveError);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   return (
     <PageContainer title={t.pageTitle} showBackButton={true}>
       <div className="container py-4 space-y-6">
-        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved")}>
-          <TabsList className="grid grid-cols-2 w-full mb-6">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
+          <TabsList className="grid grid-cols-3 w-full mb-6">
             <TabsTrigger value="record" className="flex items-center gap-2">
               <Mic className="h-4 w-4" />
               {t.newRecording}
+            </TabsTrigger>
+            <TabsTrigger value="quick" className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              {t.quickSummary}
             </TabsTrigger>
             <TabsTrigger value="saved" className="flex items-center gap-2">
               <Save className="h-4 w-4" />
@@ -1025,6 +1166,96 @@ const Tasjeel: React.FC = () => {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+          
+          <TabsContent value="quick" className="space-y-6">
+            <Card>
+              <CardContent className="pt-6">
+                <h2 className="text-lg font-semibold mb-2">{t.quickSummary}</h2>
+                <p className="text-sm text-muted-foreground mb-4">{t.quickSummaryDesc}</p>
+                
+                {quickSummaryStatus === "idle" && (
+                  <div>
+                    <input
+                      type="file"
+                      ref={quickFileInputRef}
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={handleQuickFileSelect}
+                    />
+                    <Button 
+                      className="w-full"
+                      variant="outline"
+                      onClick={() => quickFileInputRef.current?.click()}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {t.uploadQuickAudio}
+                    </Button>
+                  </div>
+                )}
+                
+                {quickSummaryStatus === "uploading" && quickAudioFile && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">{quickAudioFile.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {(quickAudioFile.size / (1024 * 1024)).toFixed(2)} MB
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      className="w-full"
+                      onClick={processQuickSummary}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      {t.generateSummary}
+                    </Button>
+                  </div>
+                )}
+                
+                {quickSummaryStatus === "processing" && (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <RefreshCw className="h-8 w-8 animate-spin" />
+                    <p className="mt-4">{t.summaryProcessing}</p>
+                  </div>
+                )}
+                
+                {quickSummaryStatus === "ready" && quickSummaryTitle && (
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-medium text-lg">{quickSummaryTitle}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        {t.summaryDate}: {new Date().toLocaleDateString()} {new Date().toLocaleTimeString()}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-muted p-3 rounded-md">
+                      <p>{t.summaryReady}</p>
+                    </div>
+                    
+                    <Button 
+                      className="w-full"
+                      onClick={saveQuickSummary}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                          {t.savingRecording}
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-4 w-4" />
+                          {t.saveRecording}
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="saved">

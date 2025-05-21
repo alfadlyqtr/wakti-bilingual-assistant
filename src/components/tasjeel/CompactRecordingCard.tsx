@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
+import { Badge } from "@/components/ui/badge";
 import {
   FileText,
   Download,
@@ -15,7 +16,8 @@ import {
   ChevronUp,
   Edit,
   Save,
-  X
+  X,
+  Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import AudioControls from "./AudioControls";
@@ -88,8 +90,11 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
     }
   };
 
+  // Check if this is a quick summary card
+  const isQuickSummary = recording.source_type === 'quick_summary';
+
   return (
-    <Card className="overflow-hidden mb-4">
+    <Card className={`overflow-hidden mb-4 ${isQuickSummary ? 'border-blue-200' : ''}`}>
       <CardContent className="p-4">
         <div className="flex justify-between items-center">
           {isEditing ? (
@@ -133,6 +138,13 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
               >
                 <Edit className="h-3 w-3" />
               </Button>
+              
+              {isQuickSummary && (
+                <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 hover:bg-blue-200">
+                  <Zap className="h-3 w-3 mr-1" />
+                  User uploaded audio
+                </Badge>
+              )}
             </div>
           )}
 
@@ -159,89 +171,111 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
           <>
             <Separator className="my-3" />
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {recording.original_recording_path && (
-                <div className="space-y-1">
-                  <h4 className="text-xs font-medium">{t.playOriginalAudio}</h4>
-                  <AudioControls 
-                    audioUrl={recording.original_recording_path}
-                    onPlaybackChange={handlePlayOriginal}
-                    labels={{
-                      play: t.playOriginalAudio,
-                      pause: t.pauseAudio,
-                      rewind: t.rewindAudio,
-                      stop: t.stopAudio,
-                      error: t.errorPlayingAudio
-                    }}
-                  />
-                </div>
-              )}
-              
-              {recording.summary_audio_path && (
-                <div className="space-y-1">
-                  <h4 className="text-xs font-medium">{t.playSummaryAudio}</h4>
-                  <AudioControls 
-                    audioUrl={recording.summary_audio_path}
-                    onPlaybackChange={handlePlaySummary}
-                    labels={{
-                      play: t.playSummaryAudio,
-                      pause: t.pauseAudio,
-                      rewind: t.rewindAudio,
-                      stop: t.stopAudio,
-                      error: t.errorPlayingAudio
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            {/* Show audio controls only for regular recordings (not quick summaries) */}
+            {!isQuickSummary && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {recording.original_recording_path && (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-medium">{t.playOriginalAudio}</h4>
+                    <AudioControls 
+                      audioUrl={recording.original_recording_path}
+                      onPlaybackChange={handlePlayOriginal}
+                      labels={{
+                        play: t.playOriginalAudio,
+                        pause: t.pauseAudio,
+                        rewind: t.rewindAudio,
+                        stop: t.stopAudio,
+                        error: t.errorPlayingAudio
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {recording.summary_audio_path && (
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-medium">{t.playSummaryAudio}</h4>
+                    <AudioControls 
+                      audioUrl={recording.summary_audio_path}
+                      onPlaybackChange={handlePlaySummary}
+                      labels={{
+                        play: t.playSummaryAudio,
+                        pause: t.pauseAudio,
+                        rewind: t.rewindAudio,
+                        stop: t.stopAudio,
+                        error: t.errorPlayingAudio
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             
             <Separator className="my-3" />
             
             <div className="flex flex-wrap gap-2">
-              {recording.transcription && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="text-xs py-1 h-7"
-                  onClick={() => onExportToPDF(recording.transcription, true, recording.title)}
-                >
-                  <FileText className="mr-1 h-3 w-3" /> {t.exportTranscriptionToPDF}
-                </Button>
+              {/* For quick summaries, only show summary export option */}
+              {isQuickSummary ? (
+                <>
+                  {recording.summary && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      onClick={() => onExportToPDF(recording.summary, false, recording.title)}
+                    >
+                      <FileText className="mr-1 h-3 w-3" /> {t.exportSummaryToPDF}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  {recording.transcription && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      onClick={() => onExportToPDF(recording.transcription, true, recording.title)}
+                    >
+                      <FileText className="mr-1 h-3 w-3" /> {t.exportTranscriptionToPDF}
+                    </Button>
+                  )}
+                  
+                  {recording.summary && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      onClick={() => onExportToPDF(recording.summary, false, recording.title)}
+                    >
+                      <FileText className="mr-1 h-3 w-3" /> {t.exportSummaryToPDF}
+                    </Button>
+                  )}
+                  
+                  {recording.original_recording_path && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      onClick={() => onDownloadAudio(recording.original_recording_path, false, recording.title)}
+                    >
+                      <Download className="mr-1 h-3 w-3" /> {t.downloadOriginalAudio}
+                    </Button>
+                  )}
+                  
+                  {recording.summary_audio_path && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="text-xs py-1 h-7"
+                      onClick={() => onDownloadAudio(recording.summary_audio_path, true, recording.title)}
+                    >
+                      <Download className="mr-1 h-3 w-3" /> {t.downloadSummaryAudio}
+                    </Button>
+                  )}
+                </>
               )}
               
-              {recording.summary && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="text-xs py-1 h-7"
-                  onClick={() => onExportToPDF(recording.summary, false, recording.title)}
-                >
-                  <FileText className="mr-1 h-3 w-3" /> {t.exportSummaryToPDF}
-                </Button>
-              )}
-              
-              {recording.original_recording_path && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="text-xs py-1 h-7"
-                  onClick={() => onDownloadAudio(recording.original_recording_path, false, recording.title)}
-                >
-                  <Download className="mr-1 h-3 w-3" /> {t.downloadOriginalAudio}
-                </Button>
-              )}
-              
-              {recording.summary_audio_path && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  className="text-xs py-1 h-7"
-                  onClick={() => onDownloadAudio(recording.summary_audio_path, true, recording.title)}
-                >
-                  <Download className="mr-1 h-3 w-3" /> {t.downloadSummaryAudio}
-                </Button>
-              )}
-              
+              {/* Delete button for all types */}
               <Button 
                 variant="destructive" 
                 size="sm"
