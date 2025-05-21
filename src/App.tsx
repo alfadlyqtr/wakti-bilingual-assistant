@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -28,6 +27,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
 import Tasjeel from "@/components/tasjeel/Tasjeel";
+import { PageContainer } from "@/components/PageContainer";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -72,8 +72,21 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Special layout for Tasjeel without page title and back button
+function TasjeelLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mobile-container">
+      <AppHeader />
+      <div className="flex-1 overflow-y-auto pb-24">
+        {children}
+      </div>
+      <MobileNav />
+      <Toaster />
+    </div>
+  );
+}
+
 // Create a proper WAKTI AI page that uses the AppLayout
-// Moved the AIAssistantInner import into the component to ensure it's loaded after providers
 function WaktiAIPage() {
   // Dynamically import AIAssistant to ensure ToastProvider is mounted first
   const AIAssistantInner = React.lazy(() => import('@/components/ai-assistant/AIAssistant').then(module => ({ 
@@ -115,11 +128,11 @@ function App() {
                   </AppLayout>
                 } />
                 
-                {/* Tasjeel route */}
+                {/* Tasjeel route with special layout (no page title or back button) */}
                 <Route path="/tasjeel" element={
-                  <AppLayout>
+                  <TasjeelLayout>
                     <Tasjeel />
-                  </AppLayout>
+                  </TasjeelLayout>
                 } />
 
                 {/* Protected routes - but now without redirect */}
