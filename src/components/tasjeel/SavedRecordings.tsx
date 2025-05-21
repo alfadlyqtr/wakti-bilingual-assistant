@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
-import { FileText, PlayCircle, Download, Trash, Volume2 } from "lucide-react";
+import { FileText, Download, Trash } from "lucide-react";
 import { generatePDF } from "@/utils/pdfUtils";
+import AudioControls from "./AudioControls";
 
 // Translations
 const translations = {
@@ -18,6 +19,9 @@ const translations = {
     loadingRecordings: "Loading saved recordings...",
     playOriginalAudio: "Play Original",
     playSummaryAudio: "Play Summary",
+    pauseAudio: "Pause",
+    rewindAudio: "Rewind",
+    stopAudio: "Stop",
     viewTranscription: "View Transcription",
     viewSummary: "View Summary",
     downloadOriginalAudio: "Download Original Audio",
@@ -28,19 +32,25 @@ const translations = {
     recordingDeleted: "Recording deleted",
     errorDeletingRecording: "Error deleting recording",
     errorLoadingRecordings: "Error loading recordings",
+    errorPlayingAudio: "Error playing audio",
     recordingDate: "Date",
     duration: "Duration",
     transcription: "Transcription",
     summary: "Summary",
     audio: "Audio",
     actions: "Actions",
-    seconds: "seconds"
+    seconds: "seconds",
+    audioSourceNotFound: "Audio source not found",
+    tryingToPlay: "Trying to play audio..."
   },
   ar: {
     noRecordings: "لم يتم العثور على تسجيلات محفوظة",
     loadingRecordings: "جارٍ تحميل التسجيلات المحفوظة...",
     playOriginalAudio: "تشغيل الأصلي",
     playSummaryAudio: "تشغيل الملخص",
+    pauseAudio: "إيقاف مؤقت",
+    rewindAudio: "إرجاع",
+    stopAudio: "إيقاف",
     viewTranscription: "عرض النص",
     viewSummary: "عرض الملخص",
     downloadOriginalAudio: "تنزيل الصوت الأصلي",
@@ -51,13 +61,16 @@ const translations = {
     recordingDeleted: "تم حذف التسجيل",
     errorDeletingRecording: "خطأ في حذف التسجيل",
     errorLoadingRecordings: "خطأ في تحميل التسجيلات",
+    errorPlayingAudio: "خطأ في تشغيل الصوت",
     recordingDate: "التاريخ",
     duration: "المدة",
     transcription: "النص",
     summary: "الملخص",
     audio: "الصوت",
     actions: "الإجراءات",
-    seconds: "ثواني"
+    seconds: "ثواني",
+    audioSourceNotFound: "لم يتم العثور على مصدر الصوت",
+    tryingToPlay: "محاولة تشغيل الصوت..."
   }
 };
 
@@ -70,7 +83,6 @@ const SavedRecordings: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [playingRecordingId, setPlayingRecordingId] = useState<string | null>(null);
   const [isPlayingOriginal, setIsPlayingOriginal] = useState<boolean>(false);
-  const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<HTMLAudioElement | null>(null);
 
   // Load saved recordings
   useEffect(() => {
@@ -78,16 +90,6 @@ const SavedRecordings: React.FC = () => {
       loadSavedRecordings();
     }
   }, [user]);
-
-  // Clean up any playing audio when component unmounts
-  useEffect(() => {
-    return () => {
-      if (currentlyPlayingAudio) {
-        currentlyPlayingAudio.pause();
-        setCurrentlyPlayingAudio(null);
-      }
-    };
-  }, []);
 
   const loadSavedRecordings = async () => {
     setLoading(true);
@@ -112,14 +114,6 @@ const SavedRecordings: React.FC = () => {
     }
   };
 
-  // Format time function
-  const formatTime = (seconds: number | null): string => {
-    if (!seconds) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
-
   // Format date function
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString(language === "ar" ? "ar-SA" : undefined, {
@@ -131,29 +125,14 @@ const SavedRecordings: React.FC = () => {
     });
   };
 
-  // Play audio function
-  const playAudio = (url: string, recordingId: string, isOriginal: boolean = true) => {
-    // Stop any currently playing audio
-    if (currentlyPlayingAudio) {
-      currentlyPlayingAudio.pause();
-    }
-
-    // Create and play new audio
-    const audio = new Audio(url);
-    audio.onended = () => {
+  // Handle audio playback status change
+  const handlePlaybackChange = (recordingId: string, isPlaying: boolean, isOriginal: boolean) => {
+    if (isPlaying) {
+      setPlayingRecordingId(recordingId);
+      setIsPlayingOriginal(isOriginal);
+    } else if (playingRecordingId === recordingId && isOriginal === isPlayingOriginal) {
       setPlayingRecordingId(null);
-      setIsPlayingOriginal(false);
-      setCurrentlyPlayingAudio(null);
-    };
-    
-    audio.play().catch(err => {
-      console.error("Error playing audio:", err);
-      toast(err.message);
-    });
-    
-    setPlayingRecordingId(recordingId);
-    setIsPlayingOriginal(isOriginal);
-    setCurrentlyPlayingAudio(audio);
+    }
   };
 
   // Delete recording function
@@ -249,33 +228,39 @@ const SavedRecordings: React.FC = () => {
               <Separator />
               
               {/* Audio Controls */}
-              <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {recording.original_recording_path && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => playAudio(recording.original_recording_path, recording.id, true)}
-                    className="flex items-center"
-                  >
-                    {playingRecordingId === recording.id && isPlayingOriginal ? 
-                      <span className="flex items-center">◼ {t.playOriginalAudio}</span> : 
-                      <><PlayCircle className="mr-1 h-4 w-4" /> {t.playOriginalAudio}</>
-                    }
-                  </Button>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">{t.playOriginalAudio}</h4>
+                    <AudioControls 
+                      audioUrl={recording.original_recording_path}
+                      onPlaybackChange={(isPlaying) => handlePlaybackChange(recording.id, isPlaying, true)}
+                      labels={{
+                        play: t.playOriginalAudio,
+                        pause: t.pauseAudio,
+                        rewind: t.rewindAudio,
+                        stop: t.stopAudio,
+                        error: t.errorPlayingAudio
+                      }}
+                    />
+                  </div>
                 )}
                 
                 {recording.summary_audio_path && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => playAudio(recording.summary_audio_path, recording.id, false)}
-                    className="flex items-center"
-                  >
-                    {playingRecordingId === recording.id && !isPlayingOriginal ? 
-                      <span className="flex items-center">◼ {t.playSummaryAudio}</span> : 
-                      <><Volume2 className="mr-1 h-4 w-4" /> {t.playSummaryAudio}</>
-                    }
-                  </Button>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">{t.playSummaryAudio}</h4>
+                    <AudioControls 
+                      audioUrl={recording.summary_audio_path}
+                      onPlaybackChange={(isPlaying) => handlePlaybackChange(recording.id, isPlaying, false)}
+                      labels={{
+                        play: t.playSummaryAudio,
+                        pause: t.pauseAudio,
+                        rewind: t.rewindAudio,
+                        stop: t.stopAudio,
+                        error: t.errorPlayingAudio
+                      }}
+                    />
+                  </div>
                 )}
               </div>
               

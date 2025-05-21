@@ -54,3 +54,12 @@ export interface SummaryAudioUploadResult {
   publicUrl: string;
   storagePath: string;
 }
+
+// Enhanced AudioPlayer state
+export interface AudioPlayerState {
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  error: boolean;
+  errorMessage: string | null;
+}
