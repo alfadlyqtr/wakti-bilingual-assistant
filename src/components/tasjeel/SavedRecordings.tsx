@@ -207,8 +207,6 @@ const SavedRecordings: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Removed upload button section */}
-      
       {recordings.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64">
           <p className="text-muted-foreground mb-4">{t.noRecordings}</p>
@@ -230,4 +228,3 @@ const SavedRecordings: React.FC = () => {
 };
 
 export default SavedRecordings;
-

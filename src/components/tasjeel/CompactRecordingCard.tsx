@@ -17,7 +17,7 @@ import {
   Edit,
   Save,
   X,
-  Zap
+  Clock
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import AudioControls from "./AudioControls";
@@ -94,7 +94,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
   const isQuickSummary = recording.source_type === 'quick_summary';
 
   return (
-    <Card className={`overflow-hidden mb-4 ${isQuickSummary ? 'border-blue-200' : ''}`}>
+    <Card className={`overflow-hidden mb-4 ${isQuickSummary ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/10' : ''}`}>
       <CardContent className="p-4">
         <div className="flex justify-between items-center">
           {isEditing ? (
@@ -126,25 +126,26 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
               </Button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 flex-1">
-              <h3 className="font-medium truncate">
-                {recording.title || formatDate(recording.created_at)}
-              </h3>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setIsEditing(true)}
-                className="h-6 w-6"
-              >
-                <Edit className="h-3 w-3" />
-              </Button>
+            <div className="flex flex-col flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className={`font-medium ${isQuickSummary ? 'text-sm text-blue-700 dark:text-blue-300' : ''}`}>
+                  {recording.title || formatDate(recording.created_at)}
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setIsEditing(true)}
+                  className="h-6 w-6"
+                >
+                  <Edit className="h-3 w-3" />
+                </Button>
+              </div>
               
-              {isQuickSummary && (
-                <Badge variant="secondary" className="ml-1 bg-blue-100 text-blue-800 hover:bg-blue-200">
-                  <Zap className="h-3 w-3 mr-1" />
-                  User uploaded audio
-                </Badge>
-              )}
+              {/* Date and time display */}
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>{formatDate(recording.created_at)}</span>
+              </div>
             </div>
           )}
 
@@ -174,7 +175,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
             {/* Show audio controls only for regular recordings (not quick summaries) */}
             {!isQuickSummary && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {recording.original_recording_path && (
+                {recording.original_recording_path && recording.original_recording_path !== "placeholder_for_quick_summary" && (
                   <div className="space-y-1">
                     <h4 className="text-xs font-medium">{t.playOriginalAudio}</h4>
                     <AudioControls 
@@ -213,14 +214,15 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
             <Separator className="my-3" />
             
             <div className="flex flex-wrap gap-2">
-              {/* For quick summaries, only show summary export option */}
+              {/* Show relevant action buttons based on recording type */}
               {isQuickSummary ? (
                 <>
+                  {/* For quick summaries, only show summary export option */}
                   {recording.summary && (
                     <Button 
                       variant="outline" 
                       size="sm"
-                      className="text-xs py-1 h-7"
+                      className={`text-xs py-1 h-7 ${isQuickSummary ? 'bg-blue-100 border-blue-300 hover:bg-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/40' : ''}`}
                       onClick={() => onExportToPDF(recording.summary, false, recording.title)}
                     >
                       <FileText className="mr-1 h-3 w-3" /> {t.exportSummaryToPDF}
@@ -229,6 +231,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                 </>
               ) : (
                 <>
+                  {/* For regular recordings, show all options */}
                   {recording.transcription && (
                     <Button 
                       variant="outline" 
@@ -251,7 +254,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                     </Button>
                   )}
                   
-                  {recording.original_recording_path && (
+                  {recording.original_recording_path && recording.original_recording_path !== "placeholder_for_quick_summary" && (
                     <Button 
                       variant="outline" 
                       size="sm"
