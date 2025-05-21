@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +30,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import SavedRecordings from "./SavedRecordings";
+import { SummaryAudioUploadResult } from "./types";
 
 // Translations
 const translations = {
@@ -147,6 +147,9 @@ const Tasjeel: React.FC = () => {
   // Change from audioBase64 to direct audioBlob for better memory management
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [summaryAudioBlob, setSummaryAudioBlob] = useState<Blob | null>(null);
+  
+  // Add state for storing the permanent summary audio URL from Supabase
+  const [summaryAudioUrl, setSummaryAudioUrl] = useState<string | null>(null);
   
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -434,7 +437,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Generate audio function - Updated to store the blob but not save to the database yet
+  // Generate audio function - Updated to use Supabase storage URLs
   const generateAudio = async () => {
     try {
       if (!summary.trim()) {
@@ -443,15 +446,22 @@ const Tasjeel: React.FC = () => {
       
       setIsGeneratingAudio(true);
       
-      // We'll now get the audio file directly as a blob
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://hxauxozopvpzpdygoqwf.supabase.co";
       const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU";
       
-      // Create the request body
+      // Create the request body - include a generated recordId for storage
+      const tempRecordId = uuidv4();
       const requestBody = { 
         summary, 
-        voice: selectedVoice
+        voice: selectedVoice,
+        recordId: tempRecordId
       };
+      
+      console.log("Generating audio with request:", {
+        summaryLength: summary.length,
+        voice: selectedVoice,
+        tempRecordId
+      });
       
       const response = await fetch(`${supabaseUrl}/functions/v1/generate-speech`, {
         method: 'POST',
@@ -467,42 +477,30 @@ const Tasjeel: React.FC = () => {
         throw new Error(errorData.error || 'Failed to generate audio');
       }
       
-      // Check content type to handle JSON or binary response
-      const contentType = response.headers.get('Content-Type');
+      // Parse the response to get the storage URL
+      const jsonData = await response.json();
+      console.log("Audio generation response:", jsonData);
       
-      if (contentType && contentType.includes('application/json')) {
-        // This is a JSON response with URL
-        const jsonData = await response.json();
-        if (jsonData.audioUrl) {
-          // Fetch the audio file from the URL
-          const audioResponse = await fetch(jsonData.audioUrl);
-          if (!audioResponse.ok) {
-            throw new Error('Failed to fetch audio file from URL');
-          }
-          
-          const audioData = await audioResponse.blob();
-          setSummaryAudioBlob(audioData);
-          
-          // Create audio element for playback
-          const audio = new Audio(URL.createObjectURL(audioData));
-          summaryAudioPlayerRef.current = audio;
-          
-          // Show success message
-          toast(t.audioGenerationComplete);
-        } else {
-          throw new Error('No audio URL returned');
+      if (jsonData.audioUrl) {
+        // Store the permanent URL from Supabase
+        setSummaryAudioUrl(jsonData.audioUrl);
+        
+        // Still fetch and prepare the audio for immediate playback
+        const audioResponse = await fetch(jsonData.audioUrl);
+        if (!audioResponse.ok) {
+          throw new Error('Failed to fetch audio file from URL');
         }
-      } else {
-        // Get the audio as a blob directly
-        const audioData = await response.blob();
+        
+        const audioData = await audioResponse.blob();
         setSummaryAudioBlob(audioData);
         
-        // Create an object URL for playback
-        const audioObjectUrl = URL.createObjectURL(audioData);
-        const audio = new Audio(audioObjectUrl);
+        // Create audio element for playback using the permanent URL
+        const audio = new Audio(jsonData.audioUrl);
         summaryAudioPlayerRef.current = audio;
         
         toast(t.audioGenerationComplete);
+      } else {
+        throw new Error('No audio URL returned');
       }
     } catch (error) {
       console.error("Error generating audio:", error);
@@ -520,13 +518,21 @@ const Tasjeel: React.FC = () => {
 
     try {
       setIsSaving(true);
+      
+      // Important: Use the permanent storage URL for summary audio
+      // instead of the temporary object URL from the audio player
+      const finalSummaryAudioPath = summaryAudioUrl;
+      
+      if (!finalSummaryAudioPath) {
+        console.warn("No permanent summary audio URL available");
+      }
 
       // Save a new record with all the data we've collected
       await saveTasjeelRecord({
         original_recording_path: audioUrl,
         transcription: transcript,
         summary: summary,
-        summary_audio_path: summaryAudioPlayerRef.current ? summaryAudioPlayerRef.current.src : null,
+        summary_audio_path: finalSummaryAudioPath,
         duration: recordingTime,
         title: new Date().toLocaleString(),
         saved: true // Mark as explicitly saved
@@ -600,7 +606,7 @@ const Tasjeel: React.FC = () => {
     }
   };
   
-  // Export to PDF function - Updated to handle both transcription and summary
+  // Export to PDF function
   const exportToPDF = async (isTranscription: boolean = false) => {
     try {
       const content = isTranscription ? transcript : summary;

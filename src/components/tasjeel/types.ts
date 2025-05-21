@@ -48,3 +48,9 @@ export enum AudioControlAction {
   Rewind = 'rewind',
   Stop = 'stop'
 }
+
+// Summary audio upload result
+export interface SummaryAudioUploadResult {
+  publicUrl: string;
+  storagePath: string;
+}
