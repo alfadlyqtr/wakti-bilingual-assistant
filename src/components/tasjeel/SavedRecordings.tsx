@@ -4,7 +4,6 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { TasjeelRecord } from "./types";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
@@ -95,7 +94,6 @@ const SavedRecordings: React.FC = () => {
 
   const [recordings, setRecordings] = useState<TasjeelRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
 
   // Load saved recordings
   useEffect(() => {
@@ -199,61 +197,6 @@ const SavedRecordings: React.FC = () => {
     }
   };
 
-  // Handle file upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    try {
-      // Upload file to storage
-      const fileName = `upload-${Date.now()}-${file.name}`;
-      const filePath = `${user?.id}/${fileName}`;
-      
-      const { data: uploadData, error: uploadError } = await supabase
-        .storage
-        .from("tasjeel_recordings")
-        .upload(filePath, file, {
-          contentType: file.type,
-          cacheControl: "3600"
-        });
-        
-      if (uploadError) throw uploadError;
-      
-      // Get public URL
-      const { data: publicUrlData } = supabase
-        .storage
-        .from("tasjeel_recordings")
-        .getPublicUrl(filePath);
-      
-      const audioUrl = publicUrlData.publicUrl;
-      
-      // Create record in database
-      await supabase
-        .from("tasjeel_records")
-        .insert({
-          user_id: user?.id,
-          title: file.name,
-          original_recording_path: audioUrl,
-          saved: true,
-          duration: Math.round(file.size / 16000) // Rough estimate of duration based on file size
-        });
-      
-      toast(t.uploadSuccess);
-      
-      // Reload recordings
-      loadSavedRecordings();
-      
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      toast(t.uploadError);
-    } finally {
-      setUploading(false);
-      // Reset the input
-      e.target.value = "";
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -264,20 +207,7 @@ const SavedRecordings: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end mb-4">
-        <label className="cursor-pointer">
-          <input
-            type="file"
-            accept="audio/*"
-            className="hidden"
-            onChange={handleFileUpload}
-            disabled={uploading}
-          />
-          <Button disabled={uploading}>
-            {uploading ? t.uploading : t.uploadRecording}
-          </Button>
-        </label>
-      </div>
+      {/* Removed upload button section */}
       
       {recordings.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64">
@@ -300,3 +230,4 @@ const SavedRecordings: React.FC = () => {
 };
 
 export default SavedRecordings;
+
