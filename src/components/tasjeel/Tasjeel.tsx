@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,12 +28,19 @@ import {
   Save,
   History,
   Upload,
-  Zap
+  Zap,
+  Timer,
+  AlertCircle
 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import SavedRecordings from "./SavedRecordings";
 import { SummaryAudioUploadResult } from "./types";
+
+// Define maximum recording time (30 minutes in seconds)
+const MAX_RECORDING_TIME = 1800; // 30 minutes
+const WARNING_TIME_1 = 300; // 5 minutes left (25 minute mark)
+const WARNING_TIME_2 = 60; // 1 minute left (29 minute mark)
 
 // Translations
 const translations = {
@@ -94,7 +102,12 @@ const translations = {
     summaryReady: "Summary ready. Click Save.",
     generateSummary: "Generate Summary",
     userUploadedAudio: "User uploaded audio",
-    summaryDate: "Summary date"
+    summaryDate: "Summary date",
+    timeRemaining: "Time remaining",
+    elapsedTime: "Elapsed",
+    timeLimit: "Time limit reached. Recording stopped.",
+    warningTimeApproaching: "Recording time limit approaching",
+    finalMinuteWarning: "Final minute of recording time",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -154,7 +167,12 @@ const translations = {
     summaryReady: "الملخص جاهز. انقر على حفظ.",
     generateSummary: "إنشاء ملخص",
     userUploadedAudio: "تم تحميل الملف الصوتي من قبل المستخدم",
-    summaryDate: "تاريخ الملخص"
+    summaryDate: "تاريخ الملخص",
+    timeRemaining: "الوقت المتبقي",
+    elapsedTime: "الوقت المنقضي",
+    timeLimit: "تم الوصول إلى الحد الأقصى للتسجيل. تم إيقاف التسجيل.",
+    warningTimeApproaching: "اقتراب نهاية مدة التسجيل",
+    finalMinuteWarning: "الدقيقة الأخيرة من وقت التسجيل",
   }
 };
 
@@ -167,6 +185,7 @@ const Tasjeel: React.FC = () => {
   // State variables
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [remainingTime, setRemainingTime] = useState(MAX_RECORDING_TIME);
   const [recordingStatus, setRecordingStatus] = useState<"idle" | "recording" | "processing" | "uploading">("idle");
   const [transcript, setTranscript] = useState("");
   const [summary, setSummary] = useState("");
@@ -192,6 +211,10 @@ const Tasjeel: React.FC = () => {
   const [quickSummaryText, setQuickSummaryText] = useState<string>("");
   const [quickTranscript, setQuickTranscript] = useState<string>("");
   const [quickSummaryStatus, setQuickSummaryStatus] = useState<"idle" | "uploading" | "processing" | "ready">("idle");
+  
+  // New state for timer color indication
+  const [timerColorState, setTimerColorState] = useState<"normal" | "warning" | "critical">("normal");
+  const [showPulse, setShowPulse] = useState(false);
   
   // Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -260,6 +283,39 @@ const Tasjeel: React.FC = () => {
     };
   }, []);
   
+  // Function to update timer color based on remaining time
+  const updateTimerColor = (remaining: number) => {
+    if (remaining <= WARNING_TIME_2) {
+      // Final warning - red (1 minute or less)
+      setTimerColorState("critical");
+      if (!showPulse) {
+        setShowPulse(true);
+        // Show final minute warning
+        toast(t.finalMinuteWarning);
+      }
+    } else if (remaining <= WARNING_TIME_1) {
+      // Warning - yellow (5 minutes or less)
+      setTimerColorState("warning");
+    } else {
+      // Normal - green (more than 5 minutes)
+      setTimerColorState("normal");
+    }
+  };
+
+  // Function to get timer background color
+  const getTimerBackgroundColor = () => {
+    switch (timerColorState) {
+      case "warning":
+        return "bg-yellow-100 text-yellow-800";
+      case "critical":
+        return showPulse 
+          ? "bg-red-100 text-red-800 animate-pulse" 
+          : "bg-red-100 text-red-800";
+      default:
+        return "bg-green-100 text-green-800";
+    }
+  };
+  
   // Start recording function with explicit codec options
   const startRecording = async () => {
     try {
@@ -298,12 +354,33 @@ const Tasjeel: React.FC = () => {
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingStatus("recording");
+      setRecordingTime(0);
+      setRemainingTime(MAX_RECORDING_TIME);
+      setTimerColorState("normal");
+      setShowPulse(false);
       
-      // Start timer
+      // Start timer with time limit check
       let seconds = 0;
       timerRef.current = window.setInterval(() => {
         seconds++;
         setRecordingTime(seconds);
+        
+        const remaining = MAX_RECORDING_TIME - seconds;
+        setRemainingTime(remaining);
+        
+        // Update timer color based on remaining time
+        updateTimerColor(remaining);
+        
+        // Show warning at 5 minutes remaining
+        if (remaining === WARNING_TIME_1) {
+          toast(t.warningTimeApproaching);
+        }
+        
+        // Auto-stop recording when time limit is reached
+        if (seconds >= MAX_RECORDING_TIME) {
+          toast(t.timeLimit);
+          stopRecording();
+        }
       }, 1000);
     } catch (error) {
       console.error("Error accessing microphone:", error);
@@ -327,6 +404,7 @@ const Tasjeel: React.FC = () => {
       
       setIsRecording(false);
       setRecordingStatus("processing");
+      setShowPulse(false);
     }
   };
   
@@ -890,10 +968,26 @@ const Tasjeel: React.FC = () => {
                         <Mic className="h-8 w-8 text-white" />
                       </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-xl font-bold">{formatTime(recordingTime)}</div>
-                      <div className="text-sm text-muted-foreground">{t.recording}</div>
+                    
+                    {/* Updated timer display with both elapsed and remaining time */}
+                    <div className="flex justify-between items-center">
+                      <div className="text-center flex-1">
+                        <div className="text-sm text-muted-foreground">{t.elapsedTime}</div>
+                        <div className="text-xl font-bold">{formatTime(recordingTime)}</div>
+                      </div>
+                      
+                      <div className="mx-2 h-8 w-px bg-gray-200"></div>
+                      
+                      <div className="text-center flex-1">
+                        <div className="text-sm text-muted-foreground">{t.timeRemaining}</div>
+                        <div className={`text-xl font-bold px-3 py-1 rounded-md ${getTimerBackgroundColor()}`}>
+                          {formatTime(remainingTime)}
+                        </div>
+                      </div>
                     </div>
+                    
+                    <div className="text-sm text-center text-muted-foreground">{t.recording}</div>
+                    
                     <Button 
                       variant="destructive" 
                       className="w-full" 
@@ -921,6 +1015,16 @@ const Tasjeel: React.FC = () => {
                       <Mic className="mr-2" />
                       {t.startRecording}
                     </Button>
+                    
+                    {/* Recording limit info box */}
+                    <div className="flex items-center p-3 rounded-md bg-blue-50 text-blue-800">
+                      <Timer className="h-5 w-5 mr-2" />
+                      <span className="text-sm">
+                        {language === 'en' 
+                          ? "Maximum recording time: 30 minutes" 
+                          : "الحد الأقصى لمدة التسجيل: 30 دقيقة"}
+                      </span>
+                    </div>
                   </div>
                 )}
               </CardContent>

@@ -1,5 +1,9 @@
 
-// Type definitions for Tasjeel component
+export interface SummaryAudioUploadResult {
+  success: boolean;
+  audioUrl?: string;
+  error?: string;
+}
 
 export interface TasjeelRecord {
   id: string;
@@ -10,9 +14,8 @@ export interface TasjeelRecord {
   summary: string | null;
   summary_audio_path: string | null;
   duration: number | null;
-  created_at: string;
-  updated_at: string;
   saved: boolean;
+  created_at: string;
   source_type: 'recording' | 'upload' | 'quick_summary';
 }
 
@@ -22,23 +25,4 @@ export interface AudioPlayerState {
   duration: number;
   error: boolean;
   errorMessage: string | null;
-}
-
-export interface AudioUploadOptions {
-  file: File;
-  onProgress?: (progress: number) => void;
-  onError?: (error: Error) => void;
-  onSuccess?: (url: string) => void;
-}
-
-export interface SummaryAudioUploadResult {
-  audioUrl: string; 
-}
-
-export interface TranscriptionResult {
-  transcript: string;
-}
-
-export interface SummarizationResult {
-  summary: string;
 }
