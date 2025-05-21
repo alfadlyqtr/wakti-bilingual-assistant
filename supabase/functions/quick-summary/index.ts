@@ -72,29 +72,41 @@ serve(async (req) => {
     }
 
     const transcription = await openaiResponse.json();
-    console.log('Transcription received');
+    console.log('Transcription received, length:', transcription.text.length);
 
-    // Now use the transcription to create a summary using OpenAI
+    // Now use the transcription to create a summary using OpenAI with enhanced prompt
+    console.log('Sending enhanced summary request to OpenAI');
+    
+    const summaryRequestOptions = {
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional summarization assistant. Summarize the following text in a structured, professional manner. Provide a summary that includes:\n\nTitle (concise and descriptive)\n\nMain Points (key ideas organized clearly)\n\nAction Items (if present in the original content)\n\nMake the summary feel like a professional summary of a real meeting or lecture. Ensure it captures the essence of the discussion efficiently.'
+        },
+        {
+          role: 'user',
+          content: transcription.text
+        }
+      ],
+      max_tokens: 1000,
+      temperature: 0.3
+    };
+    
+    console.log('Summary prompt options:', {
+      model: summaryRequestOptions.model,
+      temperature: summaryRequestOptions.temperature,
+      max_tokens: summaryRequestOptions.max_tokens,
+      transcriptLength: transcription.text.length
+    });
+
     const summaryResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant that provides concise summaries. Summarize the following text in a few sentences. Also generate a short, descriptive title for this content.'
-          },
-          {
-            role: 'user',
-            content: transcription.text
-          }
-        ],
-        max_tokens: 500
-      }),
+      body: JSON.stringify(summaryRequestOptions),
     });
 
     if (!summaryResponse.ok) {
@@ -112,34 +124,39 @@ serve(async (req) => {
     const summaryResult = await summaryResponse.json();
     const summaryText = summaryResult.choices[0].message.content;
     
-    console.log('Summary generated');
+    console.log('Summary generated, length:', summaryText.length);
+    console.log('First 100 chars:', summaryText.substring(0, 100) + '...');
 
-    // Extract title from summary using a simple heuristic:
-    // Assume the first line or sentence that ends with a period is the title
+    // Extract title from summary using improved logic
     let title = "";
     let summary = summaryText;
 
-    // Look for "Title:" pattern
-    const titleMatch = summaryText.match(/Title:(.+?)(\n|$)/);
-    if (titleMatch) {
+    // Look for explicit title pattern first
+    const titleMatch = summaryText.match(/^[\s\n]*Title:[\s\n]*(.+?)[\r\n]/i);
+    if (titleMatch && titleMatch[1]) {
       title = titleMatch[1].trim();
-      summary = summaryText.replace(/Title:.+?(\n|$)/, '').trim();
+      summary = summaryText.replace(/^[\s\n]*Title:[\s\n]*(.+?)[\r\n]/i, '').trim();
+      console.log('Title extracted from explicit format:', title);
     } else {
-      // If no explicit title pattern, use the first sentence as the title
-      const firstSentenceMatch = summaryText.match(/^(.+?[.!?])\s/);
-      if (firstSentenceMatch) {
-        title = firstSentenceMatch[1].trim();
-        if (title.length > 50) {
-          title = title.substring(0, 47) + '...';
-        }
-        // No need to modify summary
+      // If no explicit title, extract first sentence if it's reasonable length
+      const firstLineMatch = summaryText.match(/^(.+?)[\.\!\?](?:\s|$)/);
+      if (firstLineMatch && firstLineMatch[1] && firstLineMatch[1].length <= 80) {
+        title = firstLineMatch[1].trim();
+        console.log('Title extracted from first sentence:', title);
+        // Don't remove the first line from summary in this case
       } else {
-        // If can't determine a title, create one
-        title = "Audio Summary - " + new Date().toLocaleDateString();
+        // Generate a fallback title
+        const date = new Date().toLocaleDateString();
+        title = "Audio Summary - " + date;
+        console.log('Using fallback title:', title);
       }
     }
 
-    console.log('Title extracted:', title);
+    // Final check for empty or overly long titles
+    if (!title || title.length > 100) {
+      title = "Audio Summary - " + new Date().toLocaleDateString();
+      console.log('Title check failed, using default:', title);
+    }
     
     return new Response(
       JSON.stringify({ 
