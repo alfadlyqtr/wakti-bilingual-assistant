@@ -361,4 +361,6 @@ export type TranslationKey =
   // Add the missing translation keys
   | "currentPassword"
   | "newPassword"
-  | "currentPasswordRequired";
+  | "currentPasswordRequired"
+  | "tasjeel"
+  | "uploadDescription";

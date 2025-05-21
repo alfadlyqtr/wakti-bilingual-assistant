@@ -1,3 +1,4 @@
+
 // Import the translation type
 import { TranslationKey } from './translationTypes';
 import { SupportedLanguage } from './translationTypes';
@@ -730,5 +731,15 @@ export const translations: Record<string, Record<SupportedLanguage, string>> = {
   currentPasswordRequired: {
     en: "Current password is required",
     ar: "كلمة المرور الحالية مطلوبة"
+  },
+  
+  // Add translations for the Tasjeel component
+  tasjeel: {
+    en: "Tasjeel",
+    ar: "تسجيل"
+  },
+  uploadDescription: {
+    en: "Upload audio files for transcription and summary",
+    ar: "رفع ملفات صوتية للنسخ والتلخيص"
   }
 };
