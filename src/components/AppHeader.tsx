@@ -40,6 +40,11 @@ export function AppHeader() {
   const getPageTitle = () => {
     const path = location.pathname;
     
+    // Don't show title for Tasjeel page
+    if (path === '/tasjeel') {
+      return '';
+    }
+    
     const routes = {
       '/dashboard': language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
       '/calendar': language === 'ar' ? 'التقويم' : 'Calendar',
@@ -52,7 +57,6 @@ export function AppHeader() {
       '/contacts': language === 'ar' ? 'جهات الاتصال' : 'Contacts',
       '/account': language === 'ar' ? 'الحساب' : 'Account',
       '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
-      '/tasjeel': language === 'ar' ? 'تسجيل' : 'Tasjeel',
       '/event/create': language === 'ar' ? 'إنشاء حدث' : 'Create Event',
     };
     
