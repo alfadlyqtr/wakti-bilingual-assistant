@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -79,7 +78,8 @@ const translations = {
     recordingSaved: "Recording saved successfully",
     recordingSaveError: "Error saving recording",
     saveRecordingDesc: "Save this recording to your library",
-    uploadAudio: "Upload Audio",
+    uploadAudio: "Upload File",
+    uploadDescription: "Upload audio files for transcription and summary",
     uploading: "Uploading...",
     uploadedAudio: "Uploaded Audio",
     uploadError: "Error uploading audio",
@@ -785,7 +785,7 @@ const Tasjeel: React.FC = () => {
                       <div className="flex-grow h-px bg-muted"></div>
                     </div>
                     
-                    <div>
+                    <div className="space-y-1">
                       <input
                         type="file"
                         ref={fileInputRef}
@@ -803,6 +803,9 @@ const Tasjeel: React.FC = () => {
                         <Upload className="mr-2 h-4 w-4" />
                         {t.uploadAudio}
                       </Button>
+                      <p className="text-xs text-muted-foreground text-center px-2">
+                        {t.uploadDescription}
+                      </p>
                     </div>
                   </div>
                 )}
