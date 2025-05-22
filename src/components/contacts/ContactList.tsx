@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,33 @@ export function ContactList() {
     staleTime: 30000, // Consider data fresh for 30 seconds
     refetchInterval: 60000, // Refetch every minute
     refetchOnWindowFocus: true, // Refetch when window regains focus
+  });
+
+  // Block contact mutation
+  const blockContactMutation = useMutation({
+    mutationFn: blockContact,
+    onSuccess: () => {
+      toast.success(t("contactBlocked", language));
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+    onError: (error) => {
+      console.error("Error blocking contact:", error);
+      toast.error(t("errorBlockingContact", language));
+    }
+  });
+
+  // Delete contact mutation
+  const deleteContactMutation = useMutation({
+    mutationFn: deleteContact,
+    onSuccess: () => {
+      toast.success(t("contactDeleted", language));
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      setDeleteDialogOpen(false);
+    },
+    onError: (error) => {
+      console.error("Error deleting contact:", error);
+      toast.error(t("errorDeletingContact", language));
+    }
   });
 
   // Handle message directly by navigating to the messages page with the contact ID
