@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,10 +45,19 @@ export function ContactList() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
 
-  // Fetch contacts
-  const { data: contacts, isLoading, isError, error } = useQuery({
+  // Fetch contacts with improved configuration
+  const { 
+    data: contacts, 
+    isLoading, 
+    isError, 
+    error,
+    refetch: refetchContacts 
+  } = useQuery({
     queryKey: ['contacts'],
     queryFn: getContacts,
+    staleTime: 30000, // Consider data fresh for 30 seconds
+    refetchInterval: 60000, // Refetch every minute
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
   // Create conversation mutation
@@ -69,8 +77,14 @@ export function ContactList() {
     mutationFn: (contactId: string) => blockContact(contactId),
     onSuccess: () => {
       toast.success(t("contactBlocked", language));
+      // Explicitly refetch contacts after successful block
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+      
+      // Force immediate refetch
+      setTimeout(() => {
+        refetchContacts();
+      }, 300);
     },
     onError: (error) => {
       console.error("Error blocking contact:", error);
@@ -78,22 +92,58 @@ export function ContactList() {
     }
   });
 
-  // Delete contact mutation
+  // Delete contact mutation with improved refetching
   const deleteContactMutation = useMutation({
     mutationFn: (contactId: string) => deleteContact(contactId),
+    onMutate: async (contactId) => {
+      // Store previous contacts for potential rollback
+      const previousContacts = queryClient.getQueryData(['contacts']);
+      
+      // Optimistic update - remove the contact from the UI immediately
+      if (contacts) {
+        const optimisticContacts = contacts.filter(contact => contact.id !== contactId);
+        queryClient.setQueryData(['contacts'], optimisticContacts);
+      }
+      
+      // Return context with previous state for rollback if needed
+      return { previousContacts };
+    },
     onSuccess: () => {
       toast.success(t("contactDeleted", language));
+      
+      // Invalidate and refetch
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      
+      // Force immediate refetch with small delay to ensure server has processed the deletion
+      setTimeout(() => {
+        console.log('Forcing contacts refetch after deletion');
+        refetchContacts();
+      }, 300);
+      
       setDeleteDialogOpen(false);
       setContactToDelete(null);
     },
-    onError: (error) => {
+    onError: (error, _, context) => {
+      // Roll back to previous state on error
+      if (context?.previousContacts) {
+        queryClient.setQueryData(['contacts'], context.previousContacts);
+      }
+      
       console.error("Error deleting contact:", error);
       toast.error(t("errorDeletingContact", language));
       setDeleteDialogOpen(false);
       setContactToDelete(null);
+    },
+    onSettled: () => {
+      // Always refetch after error or success to ensure UI consistency
+      refetchContacts();
     }
   });
+
+  // Effect to log contacts changes for debugging
+  useEffect(() => {
+    console.log('Contacts data updated:', contacts);
+  }, [contacts]);
 
   const handleMessage = (contactId: string, name: string) => {
     createConversationMutation.mutate(contactId);
@@ -116,12 +166,14 @@ export function ContactList() {
 
   // Using the contact relationship ID for deletion
   const handleDeleteClick = (contact: ContactType, name: string) => {
+    console.log('Preparing to delete contact:', contact);
     setContactToDelete({ id: contact.id, name });
     setDeleteDialogOpen(true);
   };
 
   const handleDeleteConfirm = () => {
     if (contactToDelete) {
+      console.log('Confirming deletion of contact ID:', contactToDelete.id);
       deleteContactMutation.mutate(contactToDelete.id);
     }
   };
@@ -144,6 +196,9 @@ export function ContactList() {
       <Card className="p-6 text-center text-muted-foreground">
         <p>{t("errorLoadingContacts", language)}</p>
         <p className="text-sm mt-2">{(error as Error)?.message}</p>
+        <Button className="mt-4" onClick={() => refetchContacts()}>
+          {t("tryAgain", language)}
+        </Button>
       </Card>
     );
   }
@@ -191,7 +246,7 @@ export function ContactList() {
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleMessage(contact.contact_id, displayName)}
-                        disabled={createConversationMutation.isPending}
+                        disabled={createConversationMutation?.isPending}
                       >
                         <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       </Button>
