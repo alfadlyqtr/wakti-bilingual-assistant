@@ -166,5 +166,5 @@ export const en: Record<TranslationKey, string> = {
   imageTooLarge: "Image size is too large. Maximum size is 5MB.",
   uploading: "Uploading",
   blockedByContact: "You have been blocked by this contact.",
-  errorUploadingImage: "Error uploading image",
+  errorUploadingImage: "Error uploading image"
 };
