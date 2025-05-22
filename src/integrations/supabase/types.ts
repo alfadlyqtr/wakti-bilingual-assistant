@@ -619,6 +619,10 @@ export type Database = {
         }
         Returns: Json
       }
+      are_users_contacts: {
+        Args: { user1: string; user2: string }
+        Returns: boolean
+      }
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined

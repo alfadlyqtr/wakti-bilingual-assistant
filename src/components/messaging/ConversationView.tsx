@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -10,7 +11,9 @@ import { LoadingSpinner } from "@/components/ui/loading";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getBlockStatus, unblockContact } from "@/services/contactsService";
 
 interface ConversationViewProps {
   conversationId: string;
@@ -22,6 +25,10 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [blockStatus, setBlockStatus] = useState<{
+    isBlocked: boolean;
+    isBlockedBy: boolean;
+  }>({ isBlocked: false, isBlockedBy: false });
   
   // Get current user ID
   useEffect(() => {
@@ -45,6 +52,31 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     refetchInterval: 5000, // Refetch every 5 seconds
   });
 
+  // Check if the other participant is blocked
+  useEffect(() => {
+    async function checkBlockStatus() {
+      if (conversation && conversation.participants) {
+        // Find participant who is not current user
+        const otherParticipant = conversation.participants.find(
+          p => p.user_id !== currentUserId
+        );
+        
+        if (otherParticipant) {
+          try {
+            const status = await getBlockStatus(otherParticipant.user_id);
+            setBlockStatus(status);
+          } catch (error) {
+            console.error("Error checking block status:", error);
+          }
+        }
+      }
+    }
+    
+    if (currentUserId && conversation) {
+      checkBlockStatus();
+    }
+  }, [conversation, currentUserId]);
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: any) => sendMessage(conversationId, message),
@@ -57,6 +89,37 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
       toast.error(t("errorSendingMessage", language));
     }
   });
+
+  // Unblock contact mutation
+  const unblockMutation = useMutation({
+    mutationFn: (contactId: string) => unblockContact(contactId),
+    onSuccess: () => {
+      // Refetch conversations and block status
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+      
+      setBlockStatus(prev => ({ ...prev, isBlocked: false }));
+      toast.success(t("contactUnblocked", language));
+    },
+    onError: (error) => {
+      console.error("Error unblocking contact:", error);
+      toast.error(t("errorUnblockingContact", language));
+    }
+  });
+
+  // Handle unblock contact
+  const handleUnblock = async () => {
+    if (conversation && conversation.participants) {
+      // Find participant who is not current user
+      const otherParticipant = conversation.participants.find(
+        p => p.user_id !== currentUserId
+      );
+      
+      if (otherParticipant) {
+        unblockMutation.mutate(otherParticipant.user_id);
+      }
+    }
+  };
 
   // Setup realtime subscription
   useEffect(() => {
@@ -134,9 +197,6 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     );
   }
 
-  // Check if user is blocked
-  const isBlocked = false; // We need to implement this with the contacts API
-
   // Get other participant display info
   const getOtherParticipantName = () => {
     if (!conversation || !conversation.participants) return "";
@@ -150,6 +210,9 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
     const profile = otherParticipants[0].profile || {};
     return ((profile as any).display_name as string) || ((profile as any).username as string) || "";
   };
+
+  // Check if messaging is blocked
+  const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
 
   return (
     <div className="flex flex-col h-full bg-background relative">
@@ -192,14 +255,37 @@ export function ConversationView({ conversationId, onBack }: ConversationViewPro
       
       {/* Input Area - Now positioned at bottom with absolute positioning */}
       <div className="w-full bottom-0 left-0 right-0 bg-background z-10">
-        {isBlocked ? (
+        {isMessagingBlocked ? (
           <div className="p-4 text-center border-t border-border bg-muted">
-            <p className="text-sm text-muted-foreground mb-2">
-              {t("contactBlocked", language)}
-            </p>
-            <button className="px-4 py-2 bg-transparent text-blue-500 border border-blue-500 rounded-full text-sm">
-              {t("unblockContact", language)}
-            </button>
+            {blockStatus.isBlocked ? (
+              <>
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Shield className="h-4 w-4 text-destructive" />
+                  <p className="text-sm text-muted-foreground">
+                    {t("contactBlocked", language)}
+                  </p>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleUnblock}
+                  disabled={unblockMutation.isPending}
+                  className="px-4 py-2 text-sm"
+                >
+                  {unblockMutation.isPending ? (
+                    <LoadingSpinner size="sm" className="mr-2" />
+                  ) : null}
+                  {t("unblockContact", language)}
+                </Button>
+              </>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <Shield className="h-4 w-4 text-destructive" />
+                <p className="text-sm text-muted-foreground">
+                  {t("blockedByContact", language)}
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           <MessageInputBar 

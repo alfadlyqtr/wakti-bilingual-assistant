@@ -561,3 +561,68 @@ export async function deleteContact(contactId: string): Promise<boolean> {
 
   return true;
 }
+
+// Check if a user is blocked
+export async function isUserBlocked(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const currentUserId = session.session.user.id;
+  
+  // Check if the current user has blocked this user
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("user_id", currentUserId)
+    .eq("contact_id", userId)
+    .eq("status", "blocked")
+    .limit(1);
+
+  if (error) {
+    console.error("Error checking if user is blocked:", error);
+    throw error;
+  }
+  
+  return data && data.length > 0;
+}
+
+// Check if current user is blocked by another user
+export async function isBlockedByUser(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const currentUserId = session.session.user.id;
+  
+  // Check if this user has blocked the current user
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("contact_id", currentUserId)
+    .eq("status", "blocked")
+    .limit(1);
+
+  if (error) {
+    console.error("Error checking if blocked by user:", error);
+    throw error;
+  }
+  
+  return data && data.length > 0;
+}
+
+// Check both directions of blocking
+export async function getBlockStatus(userId: string): Promise<{
+  isBlocked: boolean;
+  isBlockedBy: boolean;
+}> {
+  const [isBlocked, isBlockedBy] = await Promise.all([
+    isUserBlocked(userId),
+    isBlockedByUser(userId)
+  ]);
+  
+  return { isBlocked, isBlockedBy };
+}

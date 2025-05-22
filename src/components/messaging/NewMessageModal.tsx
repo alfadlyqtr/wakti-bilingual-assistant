@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -6,9 +7,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, User, X } from "lucide-react";
+import { Search, User, X, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getContacts } from "@/services/contactsService";
+import { getContacts, isUserBlocked, isBlockedByUser } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
@@ -38,6 +39,8 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
+  const [blockedContacts, setBlockedContacts] = useState<Record<string, boolean>>({});
+  const [blockedByContacts, setBlockedByContacts] = useState<Record<string, boolean>>({});
   
   // Get contacts list
   const { data: contacts, isLoading, error } = useQuery({
@@ -60,6 +63,39 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
     }
   }, [error, language]);
 
+  // Check which contacts are blocked
+  useEffect(() => {
+    async function checkBlockStatuses() {
+      if (!contacts || contacts.length === 0) return;
+      
+      const blocked: Record<string, boolean> = {};
+      const blockedBy: Record<string, boolean> = {};
+      
+      await Promise.all(
+        contacts.map(async (contact: ContactType) => {
+          try {
+            const [isBlocked, isBlockedByResult] = await Promise.all([
+              isUserBlocked(contact.contact_id),
+              isBlockedByUser(contact.contact_id)
+            ]);
+            
+            blocked[contact.contact_id] = isBlocked;
+            blockedBy[contact.contact_id] = isBlockedByResult;
+          } catch (error) {
+            console.error(`Error checking block status for ${contact.contact_id}:`, error);
+          }
+        })
+      );
+      
+      setBlockedContacts(blocked);
+      setBlockedByContacts(blockedBy);
+    }
+    
+    if (contacts && contacts.length > 0) {
+      checkBlockStatuses();
+    }
+  }, [contacts]);
+
   // Filter contacts based on search query
   const filteredContacts = contacts?.filter((contact: ContactType) => {
     const profile = contact.profile || {} as UserProfile;
@@ -72,6 +108,17 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   });
 
   const handleSelectContact = async (contactId: string) => {
+    // Check if contact is blocked or has blocked user
+    if (blockedContacts[contactId]) {
+      toast.warning(t("cantMessageBlockedContact", language));
+      return;
+    }
+    
+    if (blockedByContacts[contactId]) {
+      toast.warning(t("blockedByContact", language));
+      return;
+    }
+    
     setSelectedContactId(contactId);
     setIsCreatingConversation(true);
     
@@ -91,6 +138,29 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   const getInitials = (name: string) => {
     if (!name) return "??";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
+  };
+
+  // Helper to render contact status indicator
+  const renderContactStatus = (contactId: string) => {
+    if (blockedContacts[contactId]) {
+      return (
+        <div className="flex items-center text-xs text-destructive ml-2">
+          <Shield className="h-3 w-3 mr-1" />
+          {t("blocked", language)}
+        </div>
+      );
+    }
+    
+    if (blockedByContacts[contactId]) {
+      return (
+        <div className="flex items-center text-xs text-muted-foreground ml-2">
+          <Shield className="h-3 w-3 mr-1" />
+          {t("youAreBlocked", language)}
+        </div>
+      );
+    }
+    
+    return null;
   };
 
   return (
@@ -138,6 +208,8 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                 filteredContacts.map((contact: ContactType) => {
                   const profile = contact.profile || {} as UserProfile;
                   const displayName = profile.display_name || profile.username || "Unknown User";
+                  const isContactBlocked = blockedContacts[contact.contact_id];
+                  const isBlockedByContact = blockedByContacts[contact.contact_id];
                   
                   return (
                     <Button
@@ -145,7 +217,10 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       variant="ghost"
                       className="w-full justify-start"
                       onClick={() => handleSelectContact(contact.contact_id)}
-                      disabled={isCreatingConversation || selectedContactId === contact.contact_id}
+                      disabled={isCreatingConversation || 
+                              selectedContactId === contact.contact_id || 
+                              isContactBlocked || 
+                              isBlockedByContact}
                     >
                       <Avatar className="h-8 w-8 mr-2">
                         <AvatarImage src={profile.avatar_url || ""} alt={displayName} />
@@ -154,6 +229,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                         </AvatarFallback>
                       </Avatar>
                       <span className="truncate">{displayName}</span>
+                      {renderContactStatus(contact.contact_id)}
                       {isCreatingConversation && selectedContactId === contact.contact_id && (
                         <LoadingSpinner size="sm" className="ml-2" />
                       )}
