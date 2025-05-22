@@ -393,5 +393,6 @@ export const ar: Record<TranslationKey, string> = {
   errorDeletingContact: "خطأ في حذف جهة الاتصال",
   blockedByContact: "تم حظرك من قبل هذا المستخدم",
   cantMessageBlockedContact: "لا يمكنك مراسلة شخص قمت بحظره",
-  youAreBlocked: "محظور"
+  youAreBlocked: "محظور",
+  errorUploadingImage: "خطأ في تحميل الصورة"
 };

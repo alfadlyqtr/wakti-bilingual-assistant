@@ -393,5 +393,6 @@ export const en: Record<TranslationKey, string> = {
   errorDeletingContact: "Error deleting contact",
   blockedByContact: "You've been blocked by this user",
   cantMessageBlockedContact: "You can't message someone you've blocked",
-  youAreBlocked: "Blocked"
+  youAreBlocked: "Blocked",
+  errorUploadingImage: "Error uploading image"
 };
