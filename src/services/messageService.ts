@@ -156,7 +156,7 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
 export const formatRecipient = (recipientData: any) => {
   if (!recipientData) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
 
-  // Fix: Check if recipientData is an array, access the first item if it is
+  // Fix: Check if recipientData is an array and access the first item if it is
   const data = Array.isArray(recipientData) ? recipientData[0] : recipientData;
 
   return {

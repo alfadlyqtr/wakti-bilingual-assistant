@@ -115,7 +115,7 @@ export const ar: Record<TranslationKey, string> = {
   contactCreated: "تم إنشاء جهة الاتصال بنجاح",
   contactUpdated: "تم تحديث جهة الاتصال بنجاح",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
-  // Adding missing error messages
+  // Error messages
   errorCreatingTask: "خطأ في إنشاء المهمة",
   errorUpdatingTask: "خطأ في تحديث المهمة",
   errorDeletingTask: "خطأ في حذف المهمة",
@@ -158,7 +158,6 @@ export const ar: Record<TranslationKey, string> = {
   thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء",
   errorBlockingContact: "خطأ في حظر جهة الاتصال",
   contactBlocked: "تم حظر جهة الاتصال",
-  contactDeleted: "تم حذف جهة الاتصال",
   searchToAddContacts: "ابحث لإضافة جهات اتصال",
   startConversation: "ابدأ المحادثة",
   sayHelloPrompt: "قل مرحباً أو ابدأ نقاشاً جديداً!",

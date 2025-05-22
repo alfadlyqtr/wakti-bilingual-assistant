@@ -157,7 +157,6 @@ export const en: Record<TranslationKey, string> = {
   thisActionCannotBeUndone: "This action cannot be undone",
   errorBlockingContact: "Error blocking contact",
   contactBlocked: "Contact blocked",
-  contactDeleted: "Contact deleted",
   searchToAddContacts: "Search to add contacts",
   startConversation: "Start the conversation",
   sayHelloPrompt: "Say hello or start a new discussion!",
