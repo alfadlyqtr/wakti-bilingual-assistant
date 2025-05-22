@@ -29,8 +29,9 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   const userId = session.session.user.id;
 
   // Get messages between current user and contact
+  // Changed from direct_messages to messages table
   const { data, error } = await supabase
-    .from("direct_messages")
+    .from("messages")
     .select(`
       id,
       sender_id,
@@ -100,9 +101,9 @@ export async function sendMessage(recipientId: string, messageData: {
 
   const userId = session.session.user.id;
 
-  // Send message
+  // Send message - using messages table instead of direct_messages
   const { data, error } = await supabase
-    .from("direct_messages")
+    .from("messages")
     .insert({
       sender_id: userId,
       recipient_id: recipientId,
