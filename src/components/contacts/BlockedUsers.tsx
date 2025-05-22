@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { UserPlus, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -6,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBlockedContacts, unblockContact } from "@/services/contactsService";
+import { getBlockedContacts, unblockContact, sendContactRequest } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 
@@ -37,13 +38,36 @@ export function BlockedUsers() {
   // Unblock contact mutation
   const unblockContactMutation = useMutation({
     mutationFn: (contactId: string) => unblockContact(contactId),
-    onSuccess: () => {
+    onSuccess: (result, contactId) => {
+      // Show success message
       toast.success(t("contactUnblocked", language));
+      
+      // After unblocking, automatically send a contact request to add them back to contacts
+      addToContactsMutation.mutate(contactId);
+      
+      // Invalidate both blocked contacts and regular contacts queries
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
     onError: (error) => {
       console.error("Error unblocking contact:", error);
       toast.error(t("errorUnblockingContact", language));
+    }
+  });
+
+  // Add to contacts mutation
+  const addToContactsMutation = useMutation({
+    mutationFn: (contactId: string) => sendContactRequest(contactId),
+    onSuccess: () => {
+      toast.success(t("userUnblockedDescription", language));
+      
+      // Invalidate contacts query to show the updated list
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+    onError: (error) => {
+      console.error("Error adding contact after unblock:", error);
+      // We don't show an error here as the unblock was successful,
+      // but we log it for debugging purposes
     }
   });
 
@@ -107,10 +131,10 @@ export function BlockedUsers() {
                     size="sm" 
                     variant="outline"
                     onClick={() => handleUnblock(user.contact_id)}
-                    disabled={unblockContactMutation.isPending}
+                    disabled={unblockContactMutation.isPending || addToContactsMutation.isPending}
                     className="flex gap-1"
                   >
-                    {unblockContactMutation.isPending ? (
+                    {(unblockContactMutation.isPending || addToContactsMutation.isPending) ? (
                       <LoadingSpinner size="sm" className="mr-2" />
                     ) : (
                       <UserPlus className="h-4 w-4 mr-1" />

@@ -8,7 +8,6 @@ export type TranslationKey =
   | "taskAndReminders"
   | "events"
   | "calendar"
-  // Removed "voiceSummary" and "voiceSummaryDetail" keys
   | "assistant"
   | "messages"
   | "contacts"
@@ -65,7 +64,6 @@ export type TranslationKey =
   | "user"
   | "summary"
   | "transcript"
-  // Removed "recording" related keys
   | "download"
   | "upload"
   | "share"
@@ -88,7 +86,6 @@ export type TranslationKey =
   | "writer"
   | "creative"
   | "general"
-  // Removed "startVoiceInput"
   | "ai"
   | "account"
   | "switchLanguage"
@@ -173,7 +170,6 @@ export type TranslationKey =
   | "noConversations"
   | "imageTooLarge"
   | "typeMessage"
-  // Removed "stopRecording"
   | "newMessage"
   | "noContactsFound"
   | "reminderTitle"
@@ -241,15 +237,12 @@ export type TranslationKey =
   | "aiFeature3Desc"
   | "aiFeature4Title"
   | "aiFeature4Desc"
-  // Error messages
   | "errorOccurred"
   | "errorProcessingRequest"
-  // Image generation
   | "generatingImage"
   | "imageGenerated"
   | "generatedImage"
   | "errorGeneratingImage"
-  // New message terms
   | "contactUnblocked"
   | "userUnblockedDescription"
   | "errorUnblockingContact"
@@ -281,17 +274,14 @@ export type TranslationKey =
   | "uploading"
   | "creatingConversation"
   | "searchMessages"
-  // New friendly messaging strings
   | "welcomeToMessages"
   | "tapNewMessageToStart"
   | "sayHelloPrompt"
   | "addContactsPrompt"
   | "goToContactsPage"
-  // Notification messages
   | "messagesSent"
   | "messagesDelivered"
   | "policiesUpdated"
-  // Contact settings
   | "appearance"
   | "appearanceSettings"
   | "contactsSettings"
@@ -304,7 +294,6 @@ export type TranslationKey =
   | "requests"
   | "blocked"
   | "waitingForRequests"
-  // Daily quote settings
   | "dailyQuoteSettings"
   | "quoteCategory"
   | "quoteChangeFrequency"
@@ -328,7 +317,6 @@ export type TranslationKey =
   | "deleteMyAccount"
   | "deleteAccountDescription"
   | "quotePreferencesUpdated"
-  // Quote categories
   | "motivational"
   | "islamic"
   | "positive"
@@ -359,13 +347,11 @@ export type TranslationKey =
   | "profileImage"
   | "changeImage"
   | "profileImageUpdated"
-  // Add the missing translation keys
   | "currentPassword"
   | "newPassword"
   | "currentPasswordRequired"
   | "tasjeel"
   | "uploadDescription"
-  // Add home to the TranslationKey type
   | "home"
   | "register"
   | "displayName"

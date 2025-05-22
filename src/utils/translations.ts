@@ -1,397 +1,12 @@
+
 import { en } from "./translations/en";
 import { ar } from "./translations/ar";
+import { TranslationKey, SupportedLanguage } from "./translationTypes";
 
 export type Translation = {
   en: string;
   ar: string;
 };
-
-export type SupportedLanguage = 'en' | 'ar';
-
-// Define the TranslationKey here directly
-export type TranslationKey =
-  | "dashboard"
-  | "tasks"
-  | "reminders"
-  | "taskAndReminders"
-  | "events"
-  | "calendar"
-  | "assistant"
-  | "messages"
-  | "contacts"
-  | "settings"
-  | "today"
-  | "tomorrow"
-  | "yesterday"
-  | "upcoming"
-  | "completed"
-  | "addNew"
-  | "addTask"
-  | "addReminder"
-  | "name"
-  | "date"
-  | "time"
-  | "description"
-  | "priority"
-  | "high"
-  | "medium"
-  | "low"
-  | "status"
-  | "pending"
-  | "inProgress"
-  | "save"
-  | "cancel"
-  | "delete"
-  | "edit"
-  | "view"
-  | "back"
-  | "next"
-  | "previous"
-  | "submit"
-  | "search"
-  | "enterAtLeastThreeCharacters"
-  | "filter"
-  | "sort"
-  | "ascending"
-  | "descending"
-  | "light"
-  | "dark"
-  | "system"
-  | "english"
-  | "arabic"
-  | "theme"
-  | "language"
-  | "logout"
-  | "login"
-  | "signup"
-  | "email"
-  | "password"
-  | "confirmPassword"
-  | "forgotPassword"
-  | "resetPassword"
-  | "user"
-  | "summary"
-  | "transcript"
-  | "download"
-  | "upload"
-  | "share"
-  | "create"
-  | "update"
-  | "messaging"
-  | "searchContacts"
-  | "selectConversation"
-  | "createFirstEvent"
-  | "decline"
-  | "accept"
-  | "noLocation"
-  | "attendee"
-  | "attendees"
-  | "readyToCreateTask"
-  | "noTasksYet"
-  | "nothingScheduled"
-  | "noEventsYet"
-  | "noRemindersYet"
-  | "writer"
-  | "creative"
-  | "general"
-  | "ai"
-  | "account"
-  | "switchLanguage"
-  | "commonQuestions"
-  | "whatCanYouDo"
-  | "howToCreateTask"
-  | "explainWAKTIFeatures"
-  | "tonePresets"
-  | "professional"
-  | "casual"
-  | "friendly"
-  | "academic"
-  | "lengthOptions"
-  | "short"
-  | "long"
-  | "grammarCheck"
-  | "imageTools"
-  | "textToImage"
-  | "imageToImage"
-  | "removeBg"
-  | "enhanceImage"
-  | "chartTypes"
-  | "barChart"
-  | "lineChart"
-  | "pieChart"
-  | "shortcuts"
-  | "createTask"
-  | "createReminder"
-  | "createEvent"
-  | "viewCalendar"
-  | "instructions"
-  | "knowledge"
-  | "month"
-  | "week"
-  | "year"
-  | "monthView"
-  | "weekView"
-  | "yearView"
-  | "noEvents"
-  | "notesLabel"
-  | "titleRequired"
-  | "dateRequired"
-  | "editNote"
-  | "createNote"
-  | "title"
-  | "titlePlaceholder"
-  | "descriptionPlaceholder"
-  | "requestAccepted"
-  | "contactRejectedDescription"
-  | "noContactRequests"
-  | "messageStarted"
-  | "chattingWithUser"
-  | "removedFromFavorites"
-  | "addedToFavorites"
-  | "contactBlocked"
-  | "userBlockedDescription"
-  | "contactAddedDescription"
-  | "requestRejected"
-  | "blockedUserDescription"
-  | "sendMessage"
-  | "dailyQuote"
-  | "error"
-  | "pleaseCompleteAllRequiredFields"
-  | "success"
-  | "eventCreatedSuccessfully"
-  | "errorCreatingEvent"
-  | "eventTitle" 
-  | "enterEventTitle"
-  | "descriptionField"
-  | "enterEventDescription"
-  | "location"
-  | "enterLocation"
-  | "selectDate"
-  | "creating"
-  | "generalSettings"
-  | "writerSettings"
-  | "creativeSettings"
-  | "assistantSettings"
-  | "contactRequestSettings"
-  | "manageBlockedUsers"
-  | "unblockContact"
-  | "noConversations"
-  | "imageTooLarge"
-  | "typeMessage"
-  | "newMessage"
-  | "noContactsFound"
-  | "reminderTitle"
-  | "dueDate"
-  | "dueTime"
-  | "recurring"
-  | "recurrencePattern"
-  | "daily"
-  | "weekly"
-  | "monthly"
-  | "yearly"
-  | "shareWith"
-  | "selectContact"
-  | "taskTitle"
-  | "urgent"
-  | "highPriority"
-  | "mediumPriority"
-  | "lowPriority"
-  | "subtaskGroupTitle"
-  | "subtasks"
-  | "addSubtask"
-  | "dailyRecurrence"
-  | "weeklyRecurrence"
-  | "monthlyRecurrence"
-  | "yearlyRecurrence"
-  | "sharedTask"
-  | "searchTasks"
-  | "searchReminders"
-  | "allTasks"
-  | "pendingTasks"
-  | "completedTasks"
-  | "overdueItems"
-  | "noTasks"
-  | "noReminders"
-  | "createYourFirst"
-  | "taskCreatedSuccessfully"
-  | "taskUpdatedSuccessfully"
-  | "taskDeletedSuccessfully"
-  | "reminderCreatedSuccessfully"
-  | "reminderUpdatedSuccessfully"
-  | "reminderDeletedSuccessfully"
-  | "taskSharedSuccessfully"
-  | "username"
-  | "tasks_view_all"
-  | "event"
-  | "task"
-  | "calendar_open"
-  | "events_today"
-  | "events_view_all"
-  | "reminders_view_all"
-  | "freeTrialDays"
-  | "eventDetail"
-  | "lightMode"
-  | "darkMode"
-  | "notificationPreferences"
-  | "widgetVisibility"
-  | "privacyControls"
-  | "deleteAccount"
-  | "aiSectionTitle"
-  | "aiFeature1Title"
-  | "aiFeature1Desc"
-  | "aiFeature2Title"
-  | "aiFeature2Desc"
-  | "aiFeature3Title"
-  | "aiFeature3Desc"
-  | "aiFeature4Title"
-  | "aiFeature4Desc"
-  | "errorOccurred"
-  | "errorProcessingRequest"
-  | "generatingImage"
-  | "imageGenerated"
-  | "generatedImage"
-  | "errorGeneratingImage"
-  | "contactUnblocked"
-  | "userUnblockedDescription"
-  | "errorUnblockingContact"
-  | "errorLoadingBlockedUsers"
-  | "noBlockedUsers"
-  | "noBlockedUsersDescription"  
-  | "unblock"
-  | "errorCreatingConversation"
-  | "errorBlockingContact"
-  | "errorLoadingContacts"
-  | "noContacts"
-  | "searchToAddContacts"
-  | "errorAcceptingRequest"
-  | "errorRejectingRequest"
-  | "errorBlockingUser"
-  | "errorLoadingRequests"
-  | "requestSent"
-  | "contactRequestSent"
-  | "errorSendingRequest"
-  | "searchResults"
-  | "sendRequest"
-  | "noUsersFound"
-  | "errorSendingMessage"
-  | "loadingMessages"
-  | "startConversation"
-  | "errorLoadingConversations"
-  | "noConversationsFound"
-  | "noMessages"
-  | "uploading"
-  | "creatingConversation"
-  | "searchMessages"
-  | "welcomeToMessages"
-  | "tapNewMessageToStart"
-  | "sayHelloPrompt"
-  | "addContactsPrompt"
-  | "goToContactsPage"
-  | "messagesSent"
-  | "messagesDelivered"
-  | "policiesUpdated"
-  | "appearance"
-  | "appearanceSettings"
-  | "contactsSettings"
-  | "contactsSettingsDescription"
-  | "autoApproveRequests"
-  | "autoApproveExplanation"
-  | "settingsUpdated"
-  | "contactSettingsUpdated"
-  | "errorUpdatingSettings"
-  | "requests"
-  | "blocked"
-  | "waitingForRequests"
-  | "dailyQuoteSettings"
-  | "quoteCategory"
-  | "quoteChangeFrequency"
-  | "manageCustomQuotes"
-  | "twiceDaily"
-  | "fourTimesDaily"
-  | "sixTimesDaily"
-  | "everyAppStart"
-  | "saveAllSettingsQuestion"
-  | "saveAllSettingsConfirmation"
-  | "allSettingsSaved"
-  | "saveAllSettings"
-  | "pushNotifications"
-  | "emailNotifications"
-  | "tasksWidget"
-  | "calendarWidget"
-  | "remindersWidget"
-  | "dailyQuoteWidget"
-  | "profileVisibility"
-  | "activityStatus"
-  | "deleteMyAccount"
-  | "deleteAccountDescription"
-  | "quotePreferencesUpdated"
-  | "motivational"
-  | "islamic"
-  | "positive"
-  | "health"
-  | "mixed"
-  | "custom"
-  | "productivity"
-  | "discipline"
-  | "gratitude"
-  | "leadership"
-  | "profileManagement"
-  | "usernameHelpText"
-  | "updating"
-  | "updateName"
-  | "updateEmail"
-  | "updatePassword"
-  | "passwordsDoNotMatch"
-  | "profileUpdated"
-  | "emailUpdated"
-  | "passwordUpdated"
-  | "errorUpdatingName"
-  | "errorUpdatingProfile"
-  | "errorUpdatingEmail"
-  | "errorUpdatingPassword"
-  | "errorSigningOut"
-  | "accountOptions"
-  | "profile"
-  | "profileImage"
-  | "changeImage"
-  | "profileImageUpdated"
-  | "currentPassword"
-  | "newPassword"
-  | "currentPasswordRequired"
-  | "tasjeel"
-  | "uploadDescription"
-  | "home"
-  | "register"
-  | "displayName"
-  | "invalidEmail"
-  | "passwordMismatch"
-  | "usernameRequired"
-  | "emailRequired"
-  | "passwordRequired"
-  | "confirmPasswordRequired"
-  | "registrationSuccess"
-  | "loginSuccess"
-  | "logoutSuccess"
-  | "editProfile"
-  | "saveChanges"
-  | "tasjeelTitle"
-  | "tasjeelDescription"
-  | "transcribe"
-  | "generateSpeech"
-  | "loading"
-  | "noAudio"
-  | "transcription" 
-  | "speech"
-  | "saved"
-  | "noRecordsFound"
-  | "deleteConfirmation"
-  | "deleteTasjeel"
-  | "tasjeelDeleted"
-  | "tasjeelSaved"
-  | "tasjeelUnsaved"
-  | "recordTitle"
-  | "updateTitle"
-  | "titleUpdated";
 
 export const translations: Record<TranslationKey, Translation> = {
   home: {
@@ -502,25 +117,9 @@ export const translations: Record<TranslationKey, Translation> = {
     en: "Your AI-powered audio toolkit",
     ar: "مجموعة أدوات الصوت المدعومة بالذكاء الاصطناعي",
   },
-  startRecording: {
-    en: "Start Recording",
-    ar: "بدء التسجيل",
-  },
-  stopRecording: {
-    en: "Stop Recording",
-    ar: "إيقاف التسجيل",
-  },
-  uploadAudio: {
-    en: "Upload Audio",
-    ar: "رفع الصوت",
-  },
   transcribe: {
     en: "Transcribe",
     ar: "نسخ",
-  },
-  summarize: {
-    en: "Summarize",
-    ar: "تلخيص",
   },
   generateSpeech: {
     en: "Generate Speech",
@@ -834,14 +433,281 @@ export const translations: Record<TranslationKey, Translation> = {
     en: "Custom",
     ar: "مخصص",
   },
-  "search": {
+  search: {
     en: "Search",
     ar: "بحث"
   },
-  "enterAtLeastThreeCharacters": {
+  enterAtLeastThreeCharacters: {
     en: "Enter at least 3 characters to search",
     ar: "أدخل 3 أحرف على الأقل للبحث"
   },
+  // Additional keys from the translationTypes.ts that we need to define
+  dashboard: { en: "Dashboard", ar: "لوحة القيادة" },
+  tasks: { en: "Tasks", ar: "المهام" },
+  reminders: { en: "Reminders", ar: "التذكيرات" },
+  taskAndReminders: { en: "Tasks & Reminders", ar: "المهام والتذكيرات" },
+  events: { en: "Events", ar: "الأحداث" },
+  calendar: { en: "Calendar", ar: "التقويم" },
+  assistant: { en: "Assistant", ar: "المساعد" },
+  messages: { en: "Messages", ar: "الرسائل" },
+  today: { en: "Today", ar: "اليوم" },
+  tomorrow: { en: "Tomorrow", ar: "غدًا" },
+  yesterday: { en: "Yesterday", ar: "أمس" },
+  upcoming: { en: "Upcoming", ar: "قادم" },
+  completed: { en: "Completed", ar: "مكتمل" },
+  addNew: { en: "Add New", ar: "إضافة جديد" },
+  addTask: { en: "Add Task", ar: "إضافة مهمة" },
+  addReminder: { en: "Add Reminder", ar: "إضافة تذكير" },
+  name: { en: "Name", ar: "الاسم" },
+  time: { en: "Time", ar: "الوقت" },
+  description: { en: "Description", ar: "الوصف" },
+  priority: { en: "Priority", ar: "الأولوية" },
+  high: { en: "High", ar: "عالي" },
+  medium: { en: "Medium", ar: "متوسط" },
+  low: { en: "Low", ar: "منخفض" },
+  status: { en: "Status", ar: "الحالة" },
+  pending: { en: "Pending", ar: "قيد الانتظار" },
+  inProgress: { en: "In Progress", ar: "قيد التنفيذ" },
+  cancel: { en: "Cancel", ar: "إلغاء" },
+  edit: { en: "Edit", ar: "تعديل" },
+  view: { en: "View", ar: "عرض" },
+  back: { en: "Back", ar: "رجوع" },
+  next: { en: "Next", ar: "التالي" },
+  previous: { en: "Previous", ar: "السابق" },
+  submit: { en: "Submit", ar: "إرسال" },
+  filter: { en: "Filter", ar: "تصفية" },
+  sort: { en: "Sort", ar: "فرز" },
+  ascending: { en: "Ascending", ar: "تصاعدي" },
+  descending: { en: "Descending", ar: "تنازلي" },
+  system: { en: "System", ar: "النظام" },
+  forgotPassword: { en: "Forgot Password", ar: "نسيت كلمة المرور" },
+  resetPassword: { en: "Reset Password", ar: "إعادة تعيين كلمة المرور" },
+  user: { en: "User", ar: "المستخدم" },
+  uploadDescription: { en: "Upload Description", ar: "وصف التحميل" },
+  share: { en: "Share", ar: "مشاركة" },
+  create: { en: "Create", ar: "إنشاء" },
+  upload: { en: "Upload", ar: "تحميل" },
+  messaging: { en: "Messaging", ar: "المراسلة" },
+  selectConversation: { en: "Select Conversation", ar: "اختر محادثة" },
+  createFirstEvent: { en: "Create First Event", ar: "إنشاء أول حدث" },
+  decline: { en: "Decline", ar: "رفض" },
+  accept: { en: "Accept", ar: "قبول" },
+  noLocation: { en: "No Location", ar: "لا موقع" },
+  attendee: { en: "Attendee", ar: "الحاضر" },
+  attendees: { en: "Attendees", ar: "الحضور" },
+  readyToCreateTask: { en: "Ready to Create Task", ar: "جاهز لإنشاء مهمة" },
+  noTasksYet: { en: "No Tasks Yet", ar: "لا توجد مهام بعد" },
+  nothingScheduled: { en: "Nothing Scheduled", ar: "لا يوجد شيء مجدول" },
+  noEventsYet: { en: "No Events Yet", ar: "لا توجد أحداث بعد" },
+  noRemindersYet: { en: "No Reminders Yet", ar: "لا توجد تذكيرات بعد" },
+  writer: { en: "Writer", ar: "كاتب" },
+  creative: { en: "Creative", ar: "إبداعي" },
+  general: { en: "General", ar: "عام" },
+  account: { en: "Account", ar: "الحساب" },
+  switchLanguage: { en: "Switch Language", ar: "تغيير اللغة" },
+  commonQuestions: { en: "Common Questions", ar: "أسئلة شائعة" },
+  whatCanYouDo: { en: "What Can You Do", ar: "ماذا يمكنك أن تفعل" },
+  howToCreateTask: { en: "How To Create Task", ar: "كيفية إنشاء مهمة" },
+  explainWAKTIFeatures: { en: "Explain WAKTI Features", ar: "شرح ميزات واكتي" },
+  tonePresets: { en: "Tone Presets", ar: "إعدادات النبرة" },
+  professional: { en: "Professional", ar: "احترافي" },
+  casual: { en: "Casual", ar: "عادي" },
+  academic: { en: "Academic", ar: "أكاديمي" },
+  lengthOptions: { en: "Length Options", ar: "خيارات الطول" },
+  short: { en: "Short", ar: "قصير" },
+  long: { en: "Long", ar: "طويل" },
+  grammarCheck: { en: "Grammar Check", ar: "فحص القواعد" },
+  imageTools: { en: "Image Tools", ar: "أدوات الصورة" },
+  textToImage: { en: "Text to Image", ar: "نص إلى صورة" },
+  imageToImage: { en: "Image to Image", ar: "صورة إلى صورة" },
+  removeBg: { en: "Remove Background", ar: "إزالة الخلفية" },
+  enhanceImage: { en: "Enhance Image", ar: "تحسين الصورة" },
+  chartTypes: { en: "Chart Types", ar: "أنواع الرسوم البيانية" },
+  barChart: { en: "Bar Chart", ar: "رسم بياني شريطي" },
+  lineChart: { en: "Line Chart", ar: "رسم بياني خطي" },
+  pieChart: { en: "Pie Chart", ar: "رسم بياني دائري" },
+  shortcuts: { en: "Shortcuts", ar: "اختصارات" },
+  createTask: { en: "Create Task", ar: "إنشاء مهمة" },
+  createReminder: { en: "Create Reminder", ar: "إنشاء تذكير" },
+  createEvent: { en: "Create Event", ar: "إنشاء حدث" },
+  viewCalendar: { en: "View Calendar", ar: "عرض التقويم" },
+  instructions: { en: "Instructions", ar: "تعليمات" },
+  knowledge: { en: "Knowledge", ar: "معرفة" },
+  month: { en: "Month", ar: "شهر" },
+  week: { en: "Week", ar: "أسبوع" },
+  year: { en: "Year", ar: "سنة" },
+  monthView: { en: "Month View", ar: "عرض الشهر" },
+  weekView: { en: "Week View", ar: "عرض الأسبوع" },
+  yearView: { en: "Year View", ar: "عرض السنة" },
+  noEvents: { en: "No Events", ar: "لا توجد أحداث" },
+  notesLabel: { en: "Notes", ar: "ملاحظات" },
+  titleRequired: { en: "Title Required", ar: "العنوان مطلوب" },
+  dateRequired: { en: "Date Required", ar: "التاريخ مطلوب" },
+  editNote: { en: "Edit Note", ar: "تعديل الملاحظة" },
+  createNote: { en: "Create Note", ar: "إنشاء ملاحظة" },
+  titlePlaceholder: { en: "Title Placeholder", ar: "نص توضيحي للعنوان" },
+  descriptionPlaceholder: { en: "Description Placeholder", ar: "نص توضيحي للوصف" },
+  requestAccepted: { en: "Request Accepted", ar: "تم قبول الطلب" },
+  contactRejectedDescription: { en: "Contact Rejected Description", ar: "وصف رفض جهة الاتصال" },
+  noContactRequests: { en: "No Contact Requests", ar: "لا توجد طلبات اتصال" },
+  chattingWithUser: { en: "Chatting with User", ar: "الدردشة مع المستخدم" },
+  userBlockedDescription: { en: "User Blocked Description", ar: "وصف المستخدم المحظور" },
+  contactAddedDescription: { en: "Contact Added Description", ar: "وصف إضافة جهة الاتصال" },
+  requestRejected: { en: "Request Rejected", ar: "تم رفض الطلب" },
+  blockedUserDescription: { en: "Blocked User Description", ar: "وصف المستخدم المحظور" },
+  sendMessage: { en: "Send Message", ar: "إرسال رسالة" },
+  dailyQuote: { en: "Daily Quote", ar: "اقتباس يومي" },
+  pleaseCompleteAllRequiredFields: { en: "Please Complete All Required Fields", ar: "يرجى إكمال جميع الحقول المطلوبة" },
+  success: { en: "Success", ar: "نجاح" },
+  eventCreatedSuccessfully: { en: "Event Created Successfully", ar: "تم إنشاء الحدث بنجاح" },
+  errorCreatingEvent: { en: "Error Creating Event", ar: "خطأ في إنشاء الحدث" },
+  eventTitle: { en: "Event Title", ar: "عنوان الحدث" },
+  enterEventTitle: { en: "Enter Event Title", ar: "أدخل عنوان الحدث" },
+  descriptionField: { en: "Description Field", ar: "حقل الوصف" },
+  enterEventDescription: { en: "Enter Event Description", ar: "أدخل وصف الحدث" },
+  location: { en: "Location", ar: "الموقع" },
+  enterLocation: { en: "Enter Location", ar: "أدخل الموقع" },
+  selectDate: { en: "Select Date", ar: "اختر التاريخ" },
+  creating: { en: "Creating", ar: "إنشاء" },
+  generalSettings: { en: "General Settings", ar: "إعدادات عامة" },
+  writerSettings: { en: "Writer Settings", ar: "إعدادات الكاتب" },
+  creativeSettings: { en: "Creative Settings", ar: "إعدادات إبداعية" },
+  assistantSettings: { en: "Assistant Settings", ar: "إعدادات المساعد" },
+  contactRequestSettings: { en: "Contact Request Settings", ar: "إعدادات طلب جهة الاتصال" },
+  manageBlockedUsers: { en: "Manage Blocked Users", ar: "إدارة المستخدمين المحظورين" },
+  unblockContact: { en: "Unblock Contact", ar: "إلغاء حظر جهة الاتصال" },
+  noConversations: { en: "No Conversations", ar: "لا توجد محادثات" },
+  imageTooLarge: { en: "Image Too Large", ar: "الصورة كبيرة جدًا" },
+  typeMessage: { en: "Type Message", ar: "اكتب رسالة" },
+  newMessage: { en: "New Message", ar: "رسالة جديدة" },
+  noContactsFound: { en: "No Contacts Found", ar: "لم يتم العثور على جهات اتصال" },
+  reminderTitle: { en: "Reminder Title", ar: "عنوان التذكير" },
+  dueDate: { en: "Due Date", ar: "تاريخ الاستحقاق" },
+  dueTime: { en: "Due Time", ar: "وقت الاستحقاق" },
+  recurring: { en: "Recurring", ar: "متكرر" },
+  recurrencePattern: { en: "Recurrence Pattern", ar: "نمط التكرار" },
+  daily: { en: "Daily", ar: "يومي" },
+  weekly: { en: "Weekly", ar: "أسبوعي" },
+  monthly: { en: "Monthly", ar: "شهري" },
+  yearly: { en: "Yearly", ar: "سنوي" },
+  shareWith: { en: "Share With", ar: "مشاركة مع" },
+  selectContact: { en: "Select Contact", ar: "اختر جهة اتصال" },
+  taskTitle: { en: "Task Title", ar: "عنوان المهمة" },
+  urgent: { en: "Urgent", ar: "عاجل" },
+  highPriority: { en: "High Priority", ar: "أولوية عالية" },
+  mediumPriority: { en: "Medium Priority", ar: "أولوية متوسطة" },
+  lowPriority: { en: "Low Priority", ar: "أولوية منخفضة" },
+  subtaskGroupTitle: { en: "Subtask Group Title", ar: "عنوان مجموعة المهام الفرعية" },
+  subtasks: { en: "Subtasks", ar: "المهام الفرعية" },
+  addSubtask: { en: "Add Subtask", ar: "إضافة مهمة فرعية" },
+  dailyRecurrence: { en: "Daily Recurrence", ar: "تكرار يومي" },
+  weeklyRecurrence: { en: "Weekly Recurrence", ar: "تكرار أسبوعي" },
+  monthlyRecurrence: { en: "Monthly Recurrence", ar: "تكرار شهري" },
+  yearlyRecurrence: { en: "Yearly Recurrence", ar: "تكرار سنوي" },
+  sharedTask: { en: "Shared Task", ar: "مهمة مشتركة" },
+  searchTasks: { en: "Search Tasks", ar: "البحث عن المهام" },
+  searchReminders: { en: "Search Reminders", ar: "البحث عن التذكيرات" },
+  allTasks: { en: "All Tasks", ar: "جميع المهام" },
+  pendingTasks: { en: "Pending Tasks", ar: "المهام قيد الانتظار" },
+  completedTasks: { en: "Completed Tasks", ar: "المهام المكتملة" },
+  overdueItems: { en: "Overdue Items", ar: "العناصر المتأخرة" },
+  noTasks: { en: "No Tasks", ar: "لا توجد مهام" },
+  noReminders: { en: "No Reminders", ar: "لا توجد تذكيرات" },
+  createYourFirst: { en: "Create Your First", ar: "إنشاء الأول الخاص بك" },
+  taskCreatedSuccessfully: { en: "Task Created Successfully", ar: "تم إنشاء المهمة بنجاح" },
+  taskUpdatedSuccessfully: { en: "Task Updated Successfully", ar: "تم تحديث المهمة بنجاح" },
+  taskDeletedSuccessfully: { en: "Task Deleted Successfully", ar: "تم حذف المهمة بنجاح" },
+  reminderCreatedSuccessfully: { en: "Reminder Created Successfully", ar: "تم إنشاء التذكير بنجاح" },
+  reminderUpdatedSuccessfully: { en: "Reminder Updated Successfully", ar: "تم تحديث التذكير بنجاح" },
+  reminderDeletedSuccessfully: { en: "Reminder Deleted Successfully", ar: "تم حذف التذكير بنجاح" },
+  taskSharedSuccessfully: { en: "Task Shared Successfully", ar: "تمت مشاركة المهمة بنجاح" },
+  tasks_view_all: { en: "View All Tasks", ar: "عرض جميع المهام" },
+  event: { en: "Event", ar: "حدث" },
+  task: { en: "Task", ar: "مهمة" },
+  calendar_open: { en: "Open Calendar", ar: "فتح التقويم" },
+  events_today: { en: "Events Today", ar: "أحداث اليوم" },
+  events_view_all: { en: "View All Events", ar: "عرض جميع الأحداث" },
+  reminders_view_all: { en: "View All Reminders", ar: "عرض جميع التذكيرات" },
+  freeTrialDays: { en: "Free Trial Days", ar: "أيام التجربة المجانية" },
+  eventDetail: { en: "Event Detail", ar: "تفاصيل الحدث" },
+  deleteMyAccount: { en: "Delete My Account", ar: "حذف حسابي" },
+  deleteAccountDescription: { en: "Delete Account Description", ar: "وصف حذف الحساب" },
+  aiSectionTitle: { en: "AI Section Title", ar: "عنوان قسم الذكاء الاصطناعي" },
+  aiFeature1Title: { en: "AI Feature 1 Title", ar: "عنوان ميزة الذكاء الاصطناعي 1" },
+  aiFeature1Desc: { en: "AI Feature 1 Description", ar: "وصف ميزة الذكاء الاصطناعي 1" },
+  aiFeature2Title: { en: "AI Feature 2 Title", ar: "عنوان ميزة الذكاء الاصطناعي 2" },
+  aiFeature2Desc: { en: "AI Feature 2 Description", ar: "وصف ميزة الذكاء الاصطناعي 2" },
+  aiFeature3Title: { en: "AI Feature 3 Title", ar: "عنوان ميزة الذكاء الاصطناعي 3" },
+  aiFeature3Desc: { en: "AI Feature 3 Description", ar: "وصف ميزة الذكاء الاصطناعي 3" },
+  aiFeature4Title: { en: "AI Feature 4 Title", ar: "عنوان ميزة الذكاء الاصطناعي 4" },
+  aiFeature4Desc: { en: "AI Feature 4 Description", ar: "وصف ميزة الذكاء الاصطناعي 4" },
+  errorOccurred: { en: "Error Occurred", ar: "حدث خطأ" },
+  errorProcessingRequest: { en: "Error Processing Request", ar: "خطأ في معالجة الطلب" },
+  generatingImage: { en: "Generating Image", ar: "توليد صورة" },
+  imageGenerated: { en: "Image Generated", ar: "تم توليد الصورة" },
+  generatedImage: { en: "Generated Image", ar: "الصورة المولدة" },
+  errorGeneratingImage: { en: "Error Generating Image", ar: "خطأ في توليد الصورة" },
+  contactUnblocked: { en: "Contact Unblocked", ar: "تم إلغاء حظر جهة الاتصال" },
+  userUnblockedDescription: { en: "User has been unblocked and added to your contacts", ar: "تم إلغاء حظر المستخدم وإضافته إلى جهات الاتصال الخاصة بك" },
+  errorUnblockingContact: { en: "Error Unblocking Contact", ar: "خطأ في إلغاء حظر جهة الاتصال" },
+  errorLoadingBlockedUsers: { en: "Error Loading Blocked Users", ar: "خطأ في تحميل المستخدمين المحظورين" },
+  noBlockedUsers: { en: "No Blocked Users", ar: "لا يوجد مستخدمون محظورون" },
+  noBlockedUsersDescription: { en: "You haven't blocked any contacts yet", ar: "لم تقم بحظر أي جهات اتصال حتى الآن" },
+  unblock: { en: "Unblock", ar: "إلغاء الحظر" },
+  errorCreatingConversation: { en: "Error Creating Conversation", ar: "خطأ في إنشاء محادثة" },
+  errorAcceptingRequest: { en: "Error Accepting Request", ar: "خطأ في قبول الطلب" },
+  errorRejectingRequest: { en: "Error Rejecting Request", ar: "خطأ في رفض الطلب" },
+  errorBlockingUser: { en: "Error Blocking User", ar: "خطأ في حظر المستخدم" },
+  errorLoadingRequests: { en: "Error Loading Requests", ar: "خطأ في تحميل الطلبات" },
+  contactRequestSent: { en: "Contact Request Sent", ar: "تم إرسال طلب جهة الاتصال" },
+  errorSendingMessage: { en: "Error Sending Message", ar: "خطأ في إرسال الرسالة" },
+  loadingMessages: { en: "Loading Messages", ar: "جار تحميل الرسائل" },
+  startConversation: { en: "Start Conversation", ar: "بدء محادثة" },
+  errorLoadingConversations: { en: "Error Loading Conversations", ar: "خطأ في تحميل المحادثات" },
+  noConversationsFound: { en: "No Conversations Found", ar: "لم يتم العثور على محادثات" },
+  noMessages: { en: "No Messages", ar: "لا توجد رسائل" },
+  uploading: { en: "Uploading", ar: "جار التحميل" },
+  creatingConversation: { en: "Creating Conversation", ar: "إنشاء محادثة" },
+  searchMessages: { en: "Search Messages", ar: "البحث عن الرسائل" },
+  welcomeToMessages: { en: "Welcome to Messages", ar: "مرحبًا بك في الرسائل" },
+  tapNewMessageToStart: { en: "Tap New Message to Start", ar: "اضغط على رسالة جديدة للبدء" },
+  sayHelloPrompt: { en: "Say Hello Prompt", ar: "مطالبة بقول مرحبًا" },
+  addContactsPrompt: { en: "Add Contacts Prompt", ar: "مطالبة بإضافة جهات اتصال" },
+  goToContactsPage: { en: "Go to Contacts Page", ar: "انتقل إلى صفحة جهات الاتصال" },
+  messagesSent: { en: "Messages Sent", ar: "تم إرسال الرسائل" },
+  messagesDelivered: { en: "Messages Delivered", ar: "تم تسليم الرسائل" },
+  policiesUpdated: { en: "Policies Updated", ar: "تم تحديث السياسات" },
+  waitingForRequests: { en: "Waiting for Requests", ar: "في انتظار الطلبات" },
+  motivational: { en: "Motivational", ar: "تحفيزي" },
+  islamic: { en: "Islamic", ar: "إسلامي" },
+  positive: { en: "Positive", ar: "إيجابي" },
+  health: { en: "Health", ar: "صحة" },
+  mixed: { en: "Mixed", ar: "مختلط" },
+  productivity: { en: "Productivity", ar: "إنتاجية" },
+  discipline: { en: "Discipline", ar: "انضباط" },
+  gratitude: { en: "Gratitude", ar: "امتنان" },
+  leadership: { en: "Leadership", ar: "قيادة" },
+  profileManagement: { en: "Profile Management", ar: "إدارة الملف الشخصي" },
+  usernameHelpText: { en: "Username Help Text", ar: "نص مساعدة اسم المستخدم" },
+  updating: { en: "Updating", ar: "جار التحديث" },
+  updateName: { en: "Update Name", ar: "تحديث الاسم" },
+  updateEmail: { en: "Update Email", ar: "تحديث البريد الإلكتروني" },
+  updatePassword: { en: "Update Password", ar: "تحديث كلمة المرور" },
+  passwordsDoNotMatch: { en: "Passwords Do Not Match", ar: "كلمات المرور غير متطابقة" },
+  emailUpdated: { en: "Email Updated", ar: "تم تحديث البريد الإلكتروني" },
+  passwordUpdated: { en: "Password Updated", ar: "تم تحديث كلمة المرور" },
+  errorUpdatingName: { en: "Error Updating Name", ar: "خطأ في تحديث الاسم" },
+  errorUpdatingProfile: { en: "Error Updating Profile", ar: "خطأ في تحديث الملف الشخصي" },
+  errorUpdatingEmail: { en: "Error Updating Email", ar: "خطأ في تحديث البريد الإلكتروني" },
+  errorUpdatingPassword: { en: "Error Updating Password", ar: "خطأ في تحديث كلمة المرور" },
+  errorSigningOut: { en: "Error Signing Out", ar: "خطأ في تسجيل الخروج" },
+  accountOptions: { en: "Account Options", ar: "خيارات الحساب" },
+  profileImage: { en: "Profile Image", ar: "صورة الملف الشخصي" },
+  changeImage: { en: "Change Image", ar: "تغيير الصورة" },
+  profileImageUpdated: { en: "Profile Image Updated", ar: "تم تحديث صورة الملف الشخصي" },
+  currentPassword: { en: "Current Password", ar: "كلمة المرور الحالية" },
+  newPassword: { en: "New Password", ar: "كلمة المرور الجديدة" },
+  currentPasswordRequired: { en: "Current Password Required", ar: "كلمة المرور الحالية مطلوبة" }
 };
 
 export const t = (key: TranslationKey, language: string): string => {
