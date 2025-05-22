@@ -393,4 +393,5 @@ export type TranslationKey =
   | "errorDeletingContact"
   | "blockedByContact"
   | "cantMessageBlockedContact"
-  | "youAreBlocked";
+  | "youAreBlocked"
+  | "errorUploadingImage"; // Added the missing translation key
