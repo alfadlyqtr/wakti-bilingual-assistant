@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -157,11 +158,11 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
   const transformedMessages: DirectMessage[] = data.map(message => {
     return {
       ...message,
-      sender: message.profiles ? {
-        display_name: message.profiles.display_name,
-        username: message.profiles.username,
-        avatar_url: message.profiles.avatar_url
-      } : undefined
+      sender: {
+        display_name: message.profiles?.display_name,
+        username: message.profiles?.username,
+        avatar_url: message.profiles?.avatar_url
+      }
     };
   });
 

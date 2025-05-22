@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact, deleteContact } from "@/services/contactsService";
-import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import {
@@ -61,93 +59,9 @@ export function ContactList() {
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
-  // Create conversation mutation
-  const createConversationMutation = useMutation({
-    mutationFn: (contactId: string) => createConversation(contactId),
-    onSuccess: (conversationId) => {
-      navigate(`/messages?conversation=${conversationId}`);
-    },
-    onError: (error) => {
-      console.error("Error creating conversation:", error);
-      toast.error(t("errorCreatingConversation", language));
-    }
-  });
-
-  // Block contact mutation
-  const blockContactMutation = useMutation({
-    mutationFn: (contactId: string) => blockContact(contactId),
-    onSuccess: () => {
-      toast.success(t("contactBlocked", language));
-      // Explicitly refetch contacts after successful block
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
-      
-      // Force immediate refetch
-      setTimeout(() => {
-        refetchContacts();
-      }, 300);
-    },
-    onError: (error) => {
-      console.error("Error blocking contact:", error);
-      toast.error(t("errorBlockingContact", language));
-    }
-  });
-
-  // Delete contact mutation with improved refetching
-  const deleteContactMutation = useMutation({
-    mutationFn: (contactId: string) => deleteContact(contactId),
-    onMutate: async (contactId) => {
-      // Store previous contacts for potential rollback
-      const previousContacts = queryClient.getQueryData(['contacts']);
-      
-      // Optimistic update - remove the contact from the UI immediately
-      if (contacts) {
-        const optimisticContacts = contacts.filter(contact => contact.id !== contactId);
-        queryClient.setQueryData(['contacts'], optimisticContacts);
-      }
-      
-      // Return context with previous state for rollback if needed
-      return { previousContacts };
-    },
-    onSuccess: () => {
-      toast.success(t("contactDeleted", language));
-      
-      // Invalidate and refetch
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      
-      // Force immediate refetch with small delay to ensure server has processed the deletion
-      setTimeout(() => {
-        console.log('Forcing contacts refetch after deletion');
-        refetchContacts();
-      }, 300);
-      
-      setDeleteDialogOpen(false);
-      setContactToDelete(null);
-    },
-    onError: (error, _, context) => {
-      // Roll back to previous state on error
-      if (context?.previousContacts) {
-        queryClient.setQueryData(['contacts'], context.previousContacts);
-      }
-      
-      console.error("Error deleting contact:", error);
-      toast.error(t("errorDeletingContact", language));
-      setDeleteDialogOpen(false);
-      setContactToDelete(null);
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure UI consistency
-      refetchContacts();
-    }
-  });
-
-  // Effect to log contacts changes for debugging
-  useEffect(() => {
-    console.log('Contacts data updated:', contacts);
-  }, [contacts]);
-
+  // Handle message directly by navigating to the messages page with the contact ID
   const handleMessage = (contactId: string, name: string) => {
-    createConversationMutation.mutate(contactId);
+    navigate(`/messages?contact=${contactId}`);
     toast(t("messageStarted", language) + " " + name);
   };
 
@@ -247,7 +161,6 @@ export function ContactList() {
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleMessage(contact.contact_id, displayName)}
-                        disabled={createConversationMutation?.isPending}
                       >
                         <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       </Button>
