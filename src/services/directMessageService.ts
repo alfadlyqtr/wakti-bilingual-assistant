@@ -27,6 +27,8 @@ export interface Contact {
     username?: string;
     avatar_url?: string;
   };
+  last_message?: DirectMessage;
+  unread_count?: number;
 }
 
 // Get all contacts with their latest message
@@ -86,7 +88,7 @@ export async function getContactsWithMessages(): Promise<Contact[]> {
         ...contact,
         last_message: latestMessage || null,
         unread_count: unreadCount || 0
-      };
+      } as Contact;
     })
   );
 
@@ -94,7 +96,7 @@ export async function getContactsWithMessages(): Promise<Contact[]> {
 }
 
 // Search contacts by name or username
-export async function searchContacts(query: string) {
+export async function searchContacts(query: string): Promise<Contact[]> {
   const contacts = await getContactsWithMessages();
   
   if (!query) return contacts;
@@ -152,10 +154,17 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
   // Mark messages as read
   await markMessagesAsRead(contactId);
 
-  const transformedMessages = data.map(message => ({
-    ...message,
-    sender: message.profiles
-  }));
+  // Transform the data to match our DirectMessage interface
+  const transformedMessages: DirectMessage[] = data.map(message => {
+    return {
+      ...message,
+      sender: {
+        display_name: message.profiles?.display_name,
+        username: message.profiles?.username,
+        avatar_url: message.profiles?.avatar_url
+      }
+    };
+  });
 
   return transformedMessages;
 }

@@ -104,7 +104,7 @@ export function ContactList({ onSelectContact, activeContactId, searchQuery = ""
               </div>
               <p className="text-lg font-medium mb-2">{searchQuery ? t("noContactsFound", language) : t("noContacts", language)}</p>
               <p className="text-sm mt-2">{t("welcomeToMessages", language)}</p>
-              <p className="text-sm mt-1">{t("addContactsToMessage", language)}</p>
+              <p className="text-sm mt-1">{t("addContactsPrompt", language)}</p>
             </div>
           ) : (
             filteredContacts.map((contact: any) => {

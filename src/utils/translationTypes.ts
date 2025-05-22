@@ -277,6 +277,7 @@ export type TranslationKey =
   | "welcomeToMessages"
   | "tapNewMessageToStart"
   | "sayHelloPrompt"
+  | "addContactsToMessage"
   | "addContactsPrompt"
   | "goToContactsPage"
   | "messagesSent"
@@ -390,7 +391,6 @@ export type TranslationKey =
   | "thisActionCannotBeUndone"
   | "contactDeleted"
   | "errorDeletingContact"
-  // Adding the missing keys from the error messages
   | "blockedByContact"
   | "cantMessageBlockedContact"
   | "youAreBlocked";
