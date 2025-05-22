@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -99,7 +98,7 @@ export async function sendMessage(recipientId: string, messageData: {
   }
 
   const userId = session.session.user.id;
-
+  
   // Send message using messages table
   const { data, error } = await supabase
     .from("messages")
@@ -152,3 +151,16 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
   
   return { isBlocked, isBlockedBy };
 }
+
+export const formatRecipient = (recipientData: any) => {
+  if (!recipientData) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
+
+  // Fix: Check if recipientData is an array, access the first item
+  const data = Array.isArray(recipientData) ? recipientData[0] : recipientData;
+
+  return {
+    displayName: data?.display_name || data?.username || "Unknown User",
+    username: data?.username || "unknown",
+    avatarUrl: data?.avatar_url || ""
+  };
+};
