@@ -1,3 +1,4 @@
+
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -349,7 +350,6 @@ export type TranslationKey =
   | "profileImageUpdated"
   | "currentPassword"
   | "newPassword"
-  | "currentPasswordRequired"
   | "tasjeel"
   | "uploadDescription"
   | "home"
@@ -385,7 +385,6 @@ export type TranslationKey =
   | "updateTitle"
   | "titleUpdated"
   | "alreadyInContacts"
-  | "deleteContact"
   | "deleteContactConfirmation"
   | "thisActionCannotBeUndone"
   | "contactDeleted"

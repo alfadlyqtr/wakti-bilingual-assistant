@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -12,14 +13,13 @@ export const ar: Record<TranslationKey, string> = {
   messages: "رسائل",
   contacts: "جهات الاتصال",
   settings: "إعدادات",
-  signOut: "تسجيل خروج",
+  logout: "تسجيل خروج",
   profile: "حسابي",
   general: "عام",
   account: "حساب",
   appearance: "مظهر",
   notifications: "إشعارات",
   privacy: "خصوصية",
-  security: "الأمان",
   language: "لغة",
   help: "مساعدة",
   about: "عن",

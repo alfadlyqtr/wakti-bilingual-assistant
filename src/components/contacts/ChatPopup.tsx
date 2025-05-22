@@ -254,7 +254,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         <DialogHeader className="flex flex-row items-center border-b pb-2">
           <Avatar className="h-8 w-8 mr-2">
             <AvatarImage src={contactAvatar || ""} />
-            <AvatarFallback>{getInitials(contactName)}</AvatarFallback>
+            <AvatarFallback>{contactName.substring(0, 2).toUpperCase()}</AvatarFallback>
           </Avatar>
           <DialogTitle className="flex-1">{contactName}</DialogTitle>
           <Button 
@@ -279,11 +279,42 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           ) : messages && messages.length > 0 ? (
             <div className="space-y-4 px-4">
               {messages.map((message) => (
-                <MessageBubble 
+                <div 
                   key={message.id}
-                  message={message}
-                  isSelf={message.sender_id === currentUserId}
-                />
+                  className={`flex flex-col max-w-[80%] ${message.sender_id === currentUserId ? 'ml-auto' : 'mr-auto'}`}
+                >
+                  <div 
+                    className={`px-4 py-2 ${
+                      message.sender_id === currentUserId
+                        ? "bg-blue-500 text-white ml-auto rounded-2xl rounded-br-none"
+                        : "bg-muted text-foreground mr-auto rounded-2xl rounded-bl-none"
+                    }`}
+                  >
+                    {message.message_type === 'image' ? (
+                      <div className="relative">
+                        <img 
+                          src={message.media_url} 
+                          alt="Image message" 
+                          className="max-h-60 max-w-60 rounded-lg object-contain"
+                          onLoad={() => {
+                            if (scrollAreaRef.current) {
+                              scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <p className="break-words">{message.content}</p>
+                    )}
+                  </div>
+                  <div 
+                    className={`text-xs text-muted-foreground mt-1 ${
+                      message.sender_id === currentUserId ? 'text-right mr-2' : 'ml-2'
+                    }`}
+                  >
+                    {formatTime(message.created_at)}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -322,7 +353,58 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={handleImageSelected}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    // Check file size (5MB limit)
+                    if (file.size > 5 * 1024 * 1024) {
+                      toast.error(t("imageTooLarge", language));
+                      return;
+                    }
+                
+                    setIsUploading(true);
+                    // Upload the image to Supabase Storage
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `${uuidv4()}.${fileExt}`;
+                    
+                    supabase.storage
+                      .from('message_media')
+                      .upload(`images/${fileName}`, file)
+                      .then(({ data: uploadData, error: uploadError }) => {
+                        if (uploadError) {
+                          console.error("Error uploading image:", uploadError);
+                          toast.error(t("errorUploadingImage", language));
+                          return;
+                        }
+                
+                        supabase.storage
+                          .from('message_media')
+                          .getPublicUrl(`images/${fileName}`)
+                          .then(({ data: urlData }) => {
+                            // Send the image message
+                            sendMessageMutation.mutate({
+                              message_type: "image",
+                              media_url: urlData.publicUrl,
+                              media_type: file.type,
+                              content: "📷 Image"
+                            });
+                          })
+                          .finally(() => {
+                            setIsUploading(false);
+                          });
+                      })
+                      .catch((error) => {
+                        console.error("Error processing image:", error);
+                        toast.error(t("errorUploadingImage", language));
+                        setIsUploading(false);
+                      });
+                
+                    // Reset the file input
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = "";
+                    }
+                  }}
                 />
               </Button>
               
@@ -335,7 +417,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    sendTextMessage();
+                    if (messageText.trim() && !isOverLimit) {
+                      sendMessageMutation.mutate({
+                        message_type: "text",
+                        content: messageText.trim(),
+                      });
+                      setMessageText("");
+                    }
                   }
                 }}
               />
@@ -344,7 +432,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full text-blue-500"
-                onClick={sendTextMessage}
+                onClick={() => {
+                  if (messageText.trim() && !isOverLimit) {
+                    sendMessageMutation.mutate({
+                      message_type: "text",
+                      content: messageText.trim(),
+                    });
+                    setMessageText("");
+                  }
+                }}
                 disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
               >
                 <Send className="h-4 w-4" />

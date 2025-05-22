@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -15,7 +16,6 @@ export const en: Record<TranslationKey, string> = {
   logout: "Logout",
   profile: "Profile",
   general: "General",
-  security: "Security",
   appearance: "Appearance",
   notifications: "Notifications",
   language: "Language",
@@ -155,7 +155,6 @@ export const en: Record<TranslationKey, string> = {
   deleteContactConfirmation: "Are you sure you want to delete",
   thisActionCannotBeUndone: "This action cannot be undone",
   errorBlockingContact: "Error blocking contact",
-  errorDeletingContact: "Error deleting contact",
   contactBlocked: "Contact blocked",
   contactDeleted: "Contact deleted",
   searchToAddContacts: "Search to add contacts",
@@ -166,7 +165,6 @@ export const en: Record<TranslationKey, string> = {
   removedFromFavorites: "Removed from favorites",
   imageTooLarge: "Image size is too large. Maximum size is 5MB.",
   uploading: "Uploading",
-  contactBlocked: "You have blocked this contact. Unblock to send messages.",
   blockedByContact: "You have been blocked by this contact.",
   errorUploadingImage: "Error uploading image",
 };
