@@ -1,3 +1,4 @@
+
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -363,4 +364,37 @@ export type TranslationKey =
   | "newPassword"
   | "currentPasswordRequired"
   | "tasjeel"
-  | "uploadDescription";
+  | "uploadDescription"
+  // Add home to the TranslationKey type
+  | "home"
+  | "register"
+  | "displayName"
+  | "invalidEmail"
+  | "passwordMismatch"
+  | "usernameRequired"
+  | "emailRequired"
+  | "passwordRequired"
+  | "confirmPasswordRequired"
+  | "registrationSuccess"
+  | "loginSuccess"
+  | "logoutSuccess"
+  | "editProfile"
+  | "saveChanges"
+  | "tasjeelTitle"
+  | "tasjeelDescription"
+  | "transcribe"
+  | "generateSpeech"
+  | "loading"
+  | "noAudio"
+  | "transcription" 
+  | "speech"
+  | "saved"
+  | "noRecordsFound"
+  | "deleteConfirmation"
+  | "deleteTasjeel"
+  | "tasjeelDeleted"
+  | "tasjeelSaved"
+  | "tasjeelUnsaved"
+  | "recordTitle"
+  | "updateTitle"
+  | "titleUpdated";
