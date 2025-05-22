@@ -152,7 +152,7 @@ export type TranslationKey =
   | "success"
   | "eventCreatedSuccessfully"
   | "errorCreatingEvent"
-  | "eventTitle" 
+  | "eventTitle"
   | "enterEventTitle"
   | "descriptionField"
   | "enterEventDescription"
@@ -248,7 +248,7 @@ export type TranslationKey =
   | "errorUnblockingContact"
   | "errorLoadingBlockedUsers"
   | "noBlockedUsers"
-  | "noBlockedUsersDescription"  
+  | "noBlockedUsersDescription"
   | "unblock"
   | "errorCreatingConversation"
   | "errorBlockingContact"
@@ -389,5 +389,8 @@ export type TranslationKey =
   | "deleteContactConfirmation"
   | "thisActionCannotBeUndone"
   | "contactDeleted"
-  | "errorDeletingContact";
-
+  | "errorDeletingContact"
+  // Adding the missing keys from the error messages
+  | "blockedByContact"
+  | "cantMessageBlockedContact"
+  | "youAreBlocked";

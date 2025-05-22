@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 export const en: Record<TranslationKey, string> = {
@@ -388,5 +389,9 @@ export const en: Record<TranslationKey, string> = {
   deleteContactConfirmation: "Are you sure you want to delete",
   thisActionCannotBeUndone: "This action cannot be undone.",
   contactDeleted: "Contact deleted successfully",
-  errorDeletingContact: "Error deleting contact"
+  errorDeletingContact: "Error deleting contact",
+  // Adding translations for the missing keys
+  blockedByContact: "You've been blocked by this user",
+  cantMessageBlockedContact: "You can't message someone you've blocked",
+  youAreBlocked: "Blocked"
 };
