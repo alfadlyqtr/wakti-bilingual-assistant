@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,19 +9,11 @@ import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/PageContainer";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
-import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import { Save, Check, AlertTriangle } from "lucide-react";
-import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { useToast } from "@/hooks/use-toast";
-import { quotes } from "@/utils/dailyQuotes";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
+import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
-import { TranslationKey } from "@/utils/translationTypes";
 import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
 import { 
   Dialog,
@@ -30,15 +23,16 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { AlertTriangle, Check } from "lucide-react";
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
-  const { theme, language, toggleTheme, toggleLanguage } = useTheme();
+  const { language } = useTheme();
   const { confirm } = useToast();
   const queryClient = useQueryClient();
   
-  // Account tab states
+  // Account states
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -56,32 +50,10 @@ export default function Account() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
   
-  // Settings tab states
-  const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
-  const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
-  const categories = Object.keys(quotes);
-  
   // Fetch user profile data
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['userProfile'],
     queryFn: getCurrentUserProfile,
-  });
-
-  // Auto approve contacts mutation
-  const autoApproveMutation = useMutation({
-    mutationFn: (autoApprove: boolean) => updateAutoApproveContacts(autoApprove),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-      toast.success(t("settingsUpdated", language), {
-        description: t("contactSettingsUpdated", language)
-      });
-    },
-    onError: (error) => {
-      console.error("Error updating contact settings:", error);
-      toast.error(t("error", language), {
-        description: t("errorUpdatingSettings", language)
-      });
-    }
   });
 
   // Load user data
@@ -98,8 +70,6 @@ export default function Account() {
       setLoadingUserData(false);
     }
   }, [user]);
-  
-  // Account Form Handlers - Removed handleUpdateProfile since we're making name read-only
   
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -160,55 +130,6 @@ export default function Account() {
     } catch (error) {
       toast(t("errorSigningOut", language));
     }
-  };
-  
-  // Settings tab handlers
-  const handleAutoApproveToggle = (checked: boolean) => {
-    autoApproveMutation.mutate(checked);
-  };
-  
-  const handleQuoteCategoryChange = (category: string) => {
-    const newPreferences = { ...quotePreferences, category };
-    setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
-    
-    // Open dialog when custom is selected
-    if (category === 'custom') {
-      setCustomQuoteDialogOpen(true);
-    }
-    
-    toast.success(t("quotePreferencesUpdated", language));
-  };
-  
-  const handleQuoteFrequencyChange = (frequency: string) => {
-    const newPreferences = { ...quotePreferences, frequency };
-    setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
-    
-    toast.success(t("quotePreferencesUpdated", language));
-  };
-  
-  const handleSaveAllSettings = () => {
-    confirm({
-      title: t("saveAllSettingsQuestion", language),
-      description: t("saveAllSettingsConfirmation", language),
-      onConfirm: () => {
-        // Save widget visibility settings
-        const widgetSettings = {
-          tasksWidget: true,
-          calendarWidget: true,
-          remindersWidget: true,
-          quoteWidget: true
-        };
-        
-        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
-        
-        toast.success(t("allSettingsSaved", language), {
-          description: <Check className="h-4 w-4" />
-        });
-      }
-    });
   };
   
   // Delete Account handlers
@@ -280,354 +201,152 @@ export default function Account() {
           {t("account", language)}
         </h1>
         
-        <Tabs defaultValue="account" className="w-full">
-          <TabsList className="mb-6">
-            <TabsTrigger value="account">
-              {t("account", language)}
-            </TabsTrigger>
-            <TabsTrigger value="settings">
-              {t("settings", language)}
-            </TabsTrigger>
-          </TabsList>
-          
-          {/* Account Tab */}
-          <TabsContent value="account" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("profile", language)}</CardTitle>
-                <CardDescription>
-                  {t("profileManagement", language)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <ProfileImageUpload />
-                
-                {/* Username - Read-only */}
-                <div className="grid gap-2">
-                  <Label htmlFor="username">{t("username", language)}</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    value={username}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t("usernameHelpText", language)}
-                  </p>
-                </div>
-                
-                {/* Name - Now read-only */}
-                <div className="grid gap-2">
-                  <Label htmlFor="name">{t("name", language)}</Label>
-                  <Input
-                    id="name"
-                    type="text"
-                    value={name}
-                    readOnly
-                    className="bg-muted cursor-not-allowed"
-                  />
-                </div>
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("profile", language)}</CardTitle>
+              <CardDescription>
+                {t("profileManagement", language)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <ProfileImageUpload />
+              
+              {/* Username - Read-only */}
+              <div className="grid gap-2">
+                <Label htmlFor="username">{t("username", language)}</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t("usernameHelpText", language)}
+                </p>
+              </div>
+              
+              {/* Name - Now read-only */}
+              <div className="grid gap-2">
+                <Label htmlFor="name">{t("name", language)}</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  readOnly
+                  className="bg-muted cursor-not-allowed"
+                />
+              </div>
 
-                {/* Email */}
-                <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
+              {/* Email */}
+              <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
+                <div className="grid gap-2">
+                  <Label htmlFor="email">{t("email", language)}</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loadingUserData || isUpdatingEmail}
+                  />
+                </div>
+                <div className="mt-4">
+                  <Button 
+                    disabled={isUpdatingEmail || loadingUserData} 
+                    type="submit"
+                  >
+                    {isUpdatingEmail
+                      ? t("updating", language)
+                      : t("updateEmail", language)}
+                  </Button>
+                </div>
+              </form>
+
+              {/* Password */}
+              <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
+                <div className="space-y-4">
                   <div className="grid gap-2">
-                    <Label htmlFor="email">{t("email", language)}</Label>
+                    <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
                     <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={loadingUserData || isUpdatingEmail}
+                      id="current-password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={isUpdatingPassword}
                     />
                   </div>
-                  <div className="mt-4">
-                    <Button 
-                      disabled={isUpdatingEmail || loadingUserData} 
-                      type="submit"
-                    >
-                      {isUpdatingEmail
-                        ? t("updating", language)
-                        : t("updateEmail", language)}
-                    </Button>
+                  <div className="grid gap-2">
+                    <Label htmlFor="password">{t("newPassword", language)}</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      disabled={isUpdatingPassword}
+                    />
                   </div>
-                </form>
-
-                {/* Password */}
-                <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
-                      <Input
-                        id="current-password"
-                        type="password"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="password">{t("newPassword", language)}</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
-                      <Input
-                        id="confirm-password"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        disabled={isUpdatingPassword}
-                      />
-                    </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={isUpdatingPassword}
+                    />
                   </div>
-                  <div className="mt-4">
-                    <Button 
-                      disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
-                      type="submit"
-                    >
-                      {isUpdatingPassword
-                        ? t("updating", language)
-                        : t("updatePassword", language)}
-                    </Button>
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
-            
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("accountOptions", language)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button 
-                  variant="destructive" 
-                  onClick={handleSignout}
-                >
-                  {t("logout", language)}
-                </Button>
-              </CardContent>
-            </Card>
-            
-            {/* Delete Account Section */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  {t("deleteAccount", language)}
-                </CardTitle>
-                <CardDescription>
-                  {t("deleteAccountDescription", language)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button 
-                  variant="destructive" 
-                  onClick={openDeleteDialog}
-                  className="w-full sm:w-auto"
-                >
-                  {t("deleteMyAccount", language)}
-                </Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                </div>
+                <div className="mt-4">
+                  <Button 
+                    disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
+                    type="submit"
+                  >
+                    {isUpdatingPassword
+                      ? t("updating", language)
+                      : t("updatePassword", language)}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
           
-          {/* Settings Tab - Integrated from Settings.tsx */}
-          <TabsContent value="settings" className="space-y-6">
-            {/* Appearance Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("appearance", language)}</CardTitle>
-                <CardDescription>{t("appearanceSettings", language)}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Theme & Language Toggles */}
-                <div className="flex justify-between items-center">
-                  <span>{t("language", language)}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleLanguage}
-                    className="h-9 px-3 rounded-full text-sm"
-                  >
-                    {language === "en" ? t("arabic", language) : t("english", language)}
-                  </Button>
-                </div>
-                
-                <div className="flex justify-between items-center">
-                  <span>{t("theme", language)}</span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleTheme}
-                    className="h-9 px-3 rounded-full text-sm"
-                  >
-                    {theme === "dark"
-                      ? t("lightMode", language)
-                      : t("darkMode", language)}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Contact Settings */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("contactsSettings", language)}</CardTitle>
-                <CardDescription>{t("contactsSettingsDescription", language)}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label htmlFor="auto-approve" className="mb-1 block font-medium">
-                      {t("autoApproveRequests", language)}
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {t("autoApproveExplanation", language)}
-                    </p>
-                  </div>
-                  <Switch 
-                    id="auto-approve" 
-                    checked={userProfile?.auto_approve_contacts} 
-                    onCheckedChange={handleAutoApproveToggle}
-                    disabled={isLoadingProfile || autoApproveMutation.isPending}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quote Settings */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>{t("dailyQuoteSettings", language)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">
-                    {t("quoteCategory", language)}
-                  </label>
-                  <Select 
-                    value={quotePreferences.category} 
-                    onValueChange={handleQuoteCategoryChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {t(category as TranslationKey, language)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium">
-                    {t("quoteChangeFrequency", language)}
-                  </label>
-                  <Select 
-                    value={quotePreferences.frequency}
-                    onValueChange={handleQuoteFrequencyChange}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2xday">
-                        {t("twiceDaily", language)}
-                      </SelectItem>
-                      <SelectItem value="4xday">
-                        {t("fourTimesDaily", language)}
-                      </SelectItem>
-                      <SelectItem value="6xday">
-                        {t("sixTimesDaily", language)}
-                      </SelectItem>
-                      <SelectItem value="appStart">
-                        {t("everyAppStart", language)}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Notification Preferences */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>{t("notificationPreferences", language)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>{t("pushNotifications", language)}</span>
-                  <Switch defaultChecked id="push-notifications" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>{t("emailNotifications", language)}</span>
-                  <Switch id="email-notifications" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Widget Visibility */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>{t("widgetVisibility", language)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>{t("tasksWidget", language)}</span>
-                  <Switch defaultChecked id="tasks-widget" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>{t("calendarWidget", language)}</span>
-                  <Switch defaultChecked id="calendar-widget" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>{t("remindersWidget", language)}</span>
-                  <Switch defaultChecked id="reminders-widget" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>{t("dailyQuoteWidget", language)}</span>
-                  <Switch defaultChecked id="quote-widget" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Privacy Controls */}
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle>{t("privacyControls", language)}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span>{t("profileVisibility", language)}</span>
-                  <Switch defaultChecked id="profile-visibility" />
-                </div>
-                <div className="flex justify-between items-center">
-                  <span>{t("activityStatus", language)}</span>
-                  <Switch defaultChecked id="activity-status" />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Save All Settings Button */}
-            <Button 
-              className="w-full mt-6 flex items-center gap-2" 
-              onClick={handleSaveAllSettings}
-            >
-              <Save className="h-4 w-4" />
-              {t("saveAllSettings", language)}
-            </Button>
-          </TabsContent>
-        </Tabs>
+          <Card>
+            <CardHeader>
+              <CardTitle>{t("accountOptions", language)}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button 
+                variant="destructive" 
+                onClick={handleSignout}
+              >
+                {t("logout", language)}
+              </Button>
+            </CardContent>
+          </Card>
+          
+          {/* Delete Account Section */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                {t("deleteAccount", language)}
+              </CardTitle>
+              <CardDescription>
+                {t("deleteAccountDescription", language)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="destructive" 
+                onClick={openDeleteDialog}
+                className="w-full sm:w-auto"
+              >
+                {t("deleteMyAccount", language)}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
       
       {/* Delete Account Confirmation Dialog */}
