@@ -17,6 +17,7 @@ export const en: Record<TranslationKey, string> = {
   profile: "Profile",
   general: "General",
   appearance: "Appearance",
+  notifications: "Notifications",
   pushNotifications: "Push Notifications",
   language: "Language",
   english: "English",
@@ -256,7 +257,7 @@ export const en: Record<TranslationKey, string> = {
   overdueItems: "Overdue Items",
   createYourFirst: "Create your first",
   edit: "Edit",
-  // New translations for TaskReminderContext
+  // Added translations for TaskReminderContext
   taskCreatedSuccessfully: "Task created successfully",
   taskUpdatedSuccessfully: "Task updated successfully",
   taskDeletedSuccessfully: "Task deleted successfully",
@@ -264,7 +265,7 @@ export const en: Record<TranslationKey, string> = {
   reminderUpdatedSuccessfully: "Reminder updated successfully",
   reminderDeletedSuccessfully: "Reminder deleted successfully",
   taskSharedSuccessfully: "Task shared successfully",
-  // New translations for Account.tsx
+  // Added translations for Account.tsx
   errorUpdatingEmail: "Error updating email",
   emailUpdated: "Email updated successfully",
   passwordsDoNotMatch: "Passwords do not match",
@@ -280,7 +281,7 @@ export const en: Record<TranslationKey, string> = {
   accountOptions: "Account Options",
   deleteAccountDescription: "This will permanently delete your account and all associated data",
   deleteMyAccount: "Delete My Account",
-  // New translations for Dashboard.tsx
+  // Added translations for Dashboard.tsx
   tasks_view_all: "View All Tasks",
   noTasksYet: "No tasks yet",
   event: "Event",
@@ -293,7 +294,7 @@ export const en: Record<TranslationKey, string> = {
   reminders_view_all: "View All Reminders",
   noRemindersYet: "No reminders yet",
   freeTrialDays: "Free trial days",
-  // New translations for Settings.tsx
+  // Added translations for Settings.tsx
   settingsUpdated: "Settings updated",
   contactSettingsUpdated: "Contact settings updated",
   errorUpdatingSettings: "Error updating settings",
@@ -307,5 +308,24 @@ export const en: Record<TranslationKey, string> = {
   contactsSettingsDescription: "Manage how contacts interact with you",
   autoApproveRequests: "Auto-approve contact requests",
   autoApproveExplanation: "Automatically approve all contact requests",
-  dailyQuoteSettings: "Daily Quote Settings"
+  dailyQuoteSettings: "Daily Quote Settings",
+  // Adding the missing keys from current errors
+  quoteCategory: "Quote Category",
+  quoteChangeFrequency: "Quote Change Frequency",
+  twiceDaily: "Twice Daily",
+  fourTimesDaily: "Four Times Daily",
+  sixTimesDaily: "Six Times Daily",
+  everyAppStart: "Every App Start",
+  manageCustomQuotes: "Manage Custom Quotes",
+  notificationPreferences: "Notification Preferences",
+  emailNotifications: "Email Notifications",
+  widgetVisibility: "Widget Visibility",
+  tasksWidget: "Tasks Widget",
+  calendarWidget: "Calendar Widget",
+  remindersWidget: "Reminders Widget",
+  dailyQuoteWidget: "Daily Quote Widget",
+  privacyControls: "Privacy Controls",
+  profileVisibility: "Profile Visibility",
+  activityStatus: "Activity Status",
+  saveAllSettings: "Save All Settings"
 };

@@ -167,7 +167,7 @@ export type TranslationKey =
   | "uploading"
   | "blockedByContact"
   | "errorUploadingImage"
-  // Additional keys for translations
+  // Previously added translation keys
   | "profileImageUpdated"
   | "error"
   | "profileImage"
@@ -256,7 +256,7 @@ export type TranslationKey =
   | "overdueItems"
   | "createYourFirst"
   | "edit"
-  // Add missing keys from TaskReminderContext
+  // Added keys from TaskReminderContext
   | "taskCreatedSuccessfully"
   | "taskUpdatedSuccessfully"
   | "taskDeletedSuccessfully"
@@ -264,7 +264,7 @@ export type TranslationKey =
   | "reminderUpdatedSuccessfully"
   | "reminderDeletedSuccessfully"
   | "taskSharedSuccessfully"
-  // Add missing keys from Account.tsx
+  // Added keys from Account.tsx
   | "errorUpdatingEmail"
   | "emailUpdated"
   | "passwordsDoNotMatch"
@@ -280,7 +280,7 @@ export type TranslationKey =
   | "accountOptions"
   | "deleteAccountDescription"
   | "deleteMyAccount"
-  // Add missing keys from Dashboard.tsx
+  // Added keys from Dashboard.tsx
   | "tasks_view_all"
   | "noTasksYet"
   | "event"
@@ -293,7 +293,7 @@ export type TranslationKey =
   | "reminders_view_all"
   | "noRemindersYet"
   | "freeTrialDays"
-  // Add missing keys from Settings.tsx
+  // Added keys from Settings.tsx
   | "settingsUpdated"
   | "contactSettingsUpdated"
   | "errorUpdatingSettings"
@@ -307,5 +307,23 @@ export type TranslationKey =
   | "contactsSettingsDescription"
   | "autoApproveRequests"
   | "autoApproveExplanation"
-  | "dailyQuoteSettings";
-
+  | "dailyQuoteSettings"
+  // Adding the missing keys from current errors
+  | "quoteCategory"
+  | "quoteChangeFrequency"
+  | "twiceDaily"
+  | "fourTimesDaily"
+  | "sixTimesDaily"
+  | "everyAppStart"
+  | "manageCustomQuotes"
+  | "notificationPreferences"
+  | "emailNotifications"
+  | "widgetVisibility"
+  | "tasksWidget"
+  | "calendarWidget"
+  | "remindersWidget"
+  | "dailyQuoteWidget"
+  | "privacyControls"
+  | "profileVisibility"
+  | "activityStatus"
+  | "saveAllSettings";

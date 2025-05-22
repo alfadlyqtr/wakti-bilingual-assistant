@@ -18,6 +18,7 @@ export const ar: Record<TranslationKey, string> = {
   general: "عام",
   account: "حساب",
   appearance: "مظهر",
+  notifications: "إشعارات",
   pushNotifications: "إشعارات فورية",
   language: "لغة",
   english: "English",
@@ -256,7 +257,7 @@ export const ar: Record<TranslationKey, string> = {
   overdueItems: "العناصر المتأخرة",
   createYourFirst: "أنشئ أول",
   edit: "تعديل",
-  // New translations for TaskReminderContext
+  // Added translations for TaskReminderContext
   taskCreatedSuccessfully: "تم إنشاء المهمة بنجاح",
   taskUpdatedSuccessfully: "تم تحديث المهمة بنجاح",
   taskDeletedSuccessfully: "تم حذف المهمة بنجاح",
@@ -264,7 +265,7 @@ export const ar: Record<TranslationKey, string> = {
   reminderUpdatedSuccessfully: "تم تحديث التذكير بنجاح",
   reminderDeletedSuccessfully: "تم حذف التذكير بنجاح",
   taskSharedSuccessfully: "تمت مشاركة المهمة بنجاح",
-  // New translations for Account.tsx
+  // Added translations for Account.tsx
   errorUpdatingEmail: "خطأ في تحديث البريد الإلكتروني",
   emailUpdated: "تم تحديث البريد الإلكتروني بنجاح",
   passwordsDoNotMatch: "كلمات المرور غير متطابقة",
@@ -280,7 +281,7 @@ export const ar: Record<TranslationKey, string> = {
   accountOptions: "خيارات الحساب",
   deleteAccountDescription: "هذا سيحذف حسابك بشكل دائم وجميع البيانات المرتبطة به",
   deleteMyAccount: "حذف حسابي",
-  // New translations for Dashboard.tsx
+  // Added translations for Dashboard.tsx
   tasks_view_all: "عرض كل المهام",
   noTasksYet: "لا توجد مهام حتى الآن",
   event: "حدث",
@@ -293,7 +294,7 @@ export const ar: Record<TranslationKey, string> = {
   reminders_view_all: "عرض جميع التذكيرات",
   noRemindersYet: "لا توجد تذكيرات حتى الآن",
   freeTrialDays: "أيام الفترة التجريبية المجانية",
-  // New translations for Settings.tsx
+  // Added translations for Settings.tsx
   settingsUpdated: "تم تحديث الإعدادات",
   contactSettingsUpdated: "تم تحديث إعدادات جهات الاتصال",
   errorUpdatingSettings: "خطأ في تحديث الإعدادات",
@@ -307,5 +308,24 @@ export const ar: Record<TranslationKey, string> = {
   contactsSettingsDescription: "إدارة كيفية تفاعل جهات الاتصال معك",
   autoApproveRequests: "الموافقة التلقائية على طلبات جهات الاتصال",
   autoApproveExplanation: "الموافقة تلقائيًا على جميع طلبات جهات الاتصال",
-  dailyQuoteSettings: "إعدادات الاقتباس اليومي"
+  dailyQuoteSettings: "إعدادات الاقتباس اليومي",
+  // Adding the missing keys from current errors
+  quoteCategory: "فئة الاقتباس",
+  quoteChangeFrequency: "تكرار تغيير الاقتباس",
+  twiceDaily: "مرتين يوميًا",
+  fourTimesDaily: "أربع مرات يوميًا",
+  sixTimesDaily: "ست مرات يوميًا",
+  everyAppStart: "عند كل بدء للتطبيق",
+  manageCustomQuotes: "إدارة الاقتباسات المخصصة",
+  notificationPreferences: "تفضيلات الإشعارات",
+  emailNotifications: "إشعارات البريد الإلكتروني",
+  widgetVisibility: "ظهور الأدوات المصغرة",
+  tasksWidget: "أداة المهام",
+  calendarWidget: "أداة التقويم",
+  remindersWidget: "أداة التذكيرات",
+  dailyQuoteWidget: "أداة الاقتباس اليومي",
+  privacyControls: "ضوابط الخصوصية",
+  profileVisibility: "ظهور الملف الشخصي",
+  activityStatus: "حالة النشاط",
+  saveAllSettings: "حفظ جميع الإعدادات"
 };
