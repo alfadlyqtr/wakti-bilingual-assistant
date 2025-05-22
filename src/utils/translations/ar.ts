@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
