@@ -14,6 +14,9 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { useAuth } from '@/contexts/AuthContext';
+import { getCurrentUserProfile } from '@/services/contactsService';
+import { useQuery } from '@tanstack/react-query';
 
 interface CustomQuoteManagerProps {
   onUpdate?: () => void;
@@ -23,13 +26,29 @@ interface CustomQuoteManagerProps {
 
 export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate, open, onOpenChange }) => {
   const { language } = useTheme();
+  const { user } = useAuth();
   const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes() || []);
   const [newQuote, setNewQuote] = useState('');
+  const [username, setUsername] = useState('');
   const MAX_QUOTES = 5;
   const MAX_CHARS = 30;
-  
-  // Use a fixed username - in a real app, this would come from auth
-  const username = 'jane_doe'; // This would normally come from your auth system
+
+  // Get user profile to display the correct username
+  const { data: userProfile } = useQuery({
+    queryKey: ['userProfile'],
+    queryFn: getCurrentUserProfile,
+    enabled: !!user
+  });
+
+  // Set username when profile is loaded
+  useEffect(() => {
+    if (userProfile?.username) {
+      setUsername(userProfile.username);
+    } else if (user?.email) {
+      // Fallback to email username if profile username is not available
+      setUsername(user.email.split('@')[0]);
+    }
+  }, [userProfile, user]);
 
   const handleAddQuote = () => {
     if (!newQuote.trim()) {

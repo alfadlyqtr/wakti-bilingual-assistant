@@ -296,21 +296,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Delete Account */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{t("deleteAccount", language)}</h2>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            {t("deleteAccountDescription", language)}
-          </p>
-          <Button variant="destructive">
-            {t("deleteMyAccount", language)}
-          </Button>
-        </CardContent>
-      </Card>
-
       {/* Save All Settings Button */}
       <Button 
         className="w-full mt-6 flex items-center gap-2" 
