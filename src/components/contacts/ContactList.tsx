@@ -114,7 +114,7 @@ export function ContactList() {
     blockContactMutation.mutate(contactId);
   };
 
-  // Fix: Update to store the actual contact record ID instead of just the contact's user ID
+  // Using the contact relationship ID for deletion
   const handleDeleteClick = (contact: ContactType, name: string) => {
     setContactToDelete({ id: contact.id, name });
     setDeleteDialogOpen(true);
