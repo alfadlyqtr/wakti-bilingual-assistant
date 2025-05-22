@@ -1,16 +1,27 @@
+
 import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { MessageSquare, Star, UserX, UserSearch } from "lucide-react";
+import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getContacts, blockContact } from "@/services/contactsService";
+import { getContacts, blockContact, deleteContact } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type UserProfile = {
   display_name?: string;
@@ -32,6 +43,8 @@ export function ContactList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
 
   // Fetch contacts
   const { data: contacts, isLoading, isError, error } = useQuery({
@@ -65,6 +78,23 @@ export function ContactList() {
     }
   });
 
+  // Delete contact mutation
+  const deleteContactMutation = useMutation({
+    mutationFn: (contactId: string) => deleteContact(contactId),
+    onSuccess: () => {
+      toast.success(t("contactDeleted", language));
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      setDeleteDialogOpen(false);
+      setContactToDelete(null);
+    },
+    onError: (error) => {
+      console.error("Error deleting contact:", error);
+      toast.error(t("errorDeletingContact", language));
+      setDeleteDialogOpen(false);
+      setContactToDelete(null);
+    }
+  });
+
   const handleMessage = (contactId: string, name: string) => {
     createConversationMutation.mutate(contactId);
     toast(t("messageStarted", language) + " " + name);
@@ -82,6 +112,17 @@ export function ContactList() {
 
   const handleBlock = (contactId: string) => {
     blockContactMutation.mutate(contactId);
+  };
+
+  const handleDeleteClick = (contactId: string, name: string) => {
+    setContactToDelete({ id: contactId, name });
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (contactToDelete) {
+      deleteContactMutation.mutate(contactToDelete.id);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -107,66 +148,100 @@ export function ContactList() {
   }
 
   return (
-    <div className="space-y-3">
-      {!contacts || contacts.length === 0 ? (
-        <Card className="p-6">
-          <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
-            <UserSearch className="h-12 w-12 opacity-50" />
-            <p className="font-medium text-lg">{t("noContacts", language)}</p>
-            <p className="text-sm">{t("searchToAddContacts", language)}</p>
-          </div>
-        </Card>
-      ) : (
-        contacts.map((contact: ContactType) => {
-          const contactProfile = contact.profile || {} as UserProfile;
-          const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
-          const username = contactProfile.username || "user";
-          
-          return (
-            <Card key={contact.id} className="overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar>
-                      <AvatarImage src={contactProfile.avatar_url || ""} />
-                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium">{displayName}</p>
-                      <p className="text-sm text-muted-foreground">@{username}</p>
+    <>
+      <div className="space-y-3">
+        {!contacts || contacts.length === 0 ? (
+          <Card className="p-6">
+            <div className="text-center flex flex-col items-center gap-3 text-muted-foreground">
+              <UserX className="h-12 w-12 opacity-50" />
+              <p className="font-medium text-lg">{t("noContacts", language)}</p>
+              <p className="text-sm">{t("searchToAddContacts", language)}</p>
+            </div>
+          </Card>
+        ) : (
+          contacts.map((contact: ContactType) => {
+            const contactProfile = contact.profile || {} as UserProfile;
+            const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
+            const username = contactProfile.username || "user";
+            
+            return (
+              <Card key={contact.id} className="overflow-hidden">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarImage src={contactProfile.avatar_url || ""} />
+                        <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="font-medium">{displayName}</p>
+                        <p className="text-sm text-muted-foreground">@{username}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        size="icon" 
+                        variant="ghost"
+                        onClick={() => handleToggleFavorite(contact.id, displayName)}
+                      >
+                        <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`} />
+                      </Button>
+                      <Button 
+                        size="icon" 
+                        variant="ghost"
+                        onClick={() => handleMessage(contact.contact_id, displayName)}
+                        disabled={createConversationMutation.isPending}
+                      >
+                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button 
+                        size="icon" 
+                        variant="ghost"
+                        onClick={() => handleBlock(contact.contact_id)}
+                        disabled={blockContactMutation.isPending}
+                      >
+                        <UserX className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                      <Button 
+                        size="icon" 
+                        variant="ghost"
+                        onClick={() => handleDeleteClick(contact.contact_id, displayName)}
+                        disabled={deleteContactMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      size="icon" 
-                      variant="ghost"
-                      onClick={() => handleToggleFavorite(contact.id, displayName)}
-                    >
-                      <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`} />
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="ghost"
-                      onClick={() => handleMessage(contact.contact_id, displayName)}
-                      disabled={createConversationMutation.isPending}
-                    >
-                      <MessageSquare className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="ghost"
-                      onClick={() => handleBlock(contact.contact_id)}
-                      disabled={blockContactMutation.isPending}
-                    >
-                      <UserX className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })
-      )}
-    </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
+      </div>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("deleteContact", language)}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("deleteContactConfirmation", language)} {contactToDelete?.name}?
+              {t("thisActionCannotBeUndone", language)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel", language)}</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteConfirm}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteContactMutation.isPending ? (
+                <LoadingSpinner size="sm" className="mr-2" />
+              ) : null}
+              {t("delete", language)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

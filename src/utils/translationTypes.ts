@@ -372,7 +372,7 @@ export type TranslationKey =
   | "generateSpeech"
   | "loading"
   | "noAudio"
-  | "transcription" 
+  | "transcription"
   | "speech"
   | "saved"
   | "noRecordsFound"
@@ -383,4 +383,11 @@ export type TranslationKey =
   | "tasjeelUnsaved"
   | "recordTitle"
   | "updateTitle"
-  | "titleUpdated";
+  | "titleUpdated"
+  | "alreadyInContacts"
+  | "deleteContact"
+  | "deleteContactConfirmation"
+  | "thisActionCannotBeUndone"
+  | "contactDeleted"
+  | "errorDeletingContact";
+

@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,12 @@ import { Card } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { toast } from "sonner";
-import { searchUsers, sendContactRequest } from "@/services/contactsService";
+import { searchUsers, sendContactRequest, checkIfUserInContacts } from "@/services/contactsService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { LoadingSpinner } from "@/components/ui/loading";
+import { Badge } from "@/components/ui/badge";
 
 export function ContactSearch() {
   const { language } = useTheme();
@@ -19,6 +20,7 @@ export function ContactSearch() {
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [contactStatus, setContactStatus] = useState<Record<string, boolean>>({});
 
   // Search users query
   const { 
@@ -41,9 +43,19 @@ export function ContactSearch() {
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       
-      // Clear search results
-      setSearchQuery("");
-      setIsSearching(false);
+      // Update contact status for this user
+      setContactStatus(prev => {
+        const updatedStatus = { ...prev };
+        // Set the status to true for the user that was just added
+        if (searchResults) {
+          searchResults.forEach(user => {
+            if (sendRequestMutation.variables === user.id) {
+              updatedStatus[user.id] = true;
+            }
+          });
+        }
+        return updatedStatus;
+      });
     },
     onError: (error) => {
       console.error("Error sending contact request:", error);
@@ -67,10 +79,53 @@ export function ContactSearch() {
     if (searchQuery.length >= 3) {
       setIsSearching(true);
       await performSearch();
+      
+      // Reset contact status
+      setContactStatus({});
+      
+      // Check contact status for each search result
+      if (searchResults) {
+        const statusChecks = searchResults.map(async (user) => {
+          try {
+            const isContact = await checkIfUserInContacts(user.id);
+            setContactStatus(prev => ({
+              ...prev,
+              [user.id]: isContact
+            }));
+          } catch (err) {
+            console.error(`Error checking contact status for ${user.id}:`, err);
+          }
+        });
+        
+        await Promise.all(statusChecks);
+      }
     } else if (searchQuery.length > 0) {
       toast.info(t("enterAtLeastThreeCharacters", language));
     }
   };
+
+  // Check contact status when search results are updated
+  useEffect(() => {
+    const checkContactsStatus = async () => {
+      if (!searchResults) return;
+      
+      for (const user of searchResults) {
+        try {
+          const isContact = await checkIfUserInContacts(user.id);
+          setContactStatus(prev => ({
+            ...prev,
+            [user.id]: isContact
+          }));
+        } catch (err) {
+          console.error(`Error checking contact status for ${user.id}:`, err);
+        }
+      }
+    };
+    
+    if (searchResults && searchResults.length > 0) {
+      checkContactsStatus();
+    }
+  }, [searchResults]);
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -138,16 +193,22 @@ export function ContactSearch() {
                     )}
                   </div>
                 </div>
-                <Button 
-                  onClick={() => handleSendRequest(user.id)}
-                  disabled={sendRequestMutation.isPending}
-                  size="sm"
-                >
-                  {sendRequestMutation.isPending ? (
-                    <LoadingSpinner size="sm" className="mr-2" />
-                  ) : null}
-                  {t("sendRequest", language)}
-                </Button>
+                {contactStatus[user.id] ? (
+                  <Badge variant="secondary" className="px-3 py-1">
+                    {t("alreadyInContacts", language)}
+                  </Badge>
+                ) : (
+                  <Button 
+                    onClick={() => handleSendRequest(user.id)}
+                    disabled={sendRequestMutation.isPending && sendRequestMutation.variables === user.id}
+                    size="sm"
+                  >
+                    {(sendRequestMutation.isPending && sendRequestMutation.variables === user.id) ? (
+                      <LoadingSpinner size="sm" className="mr-2" />
+                    ) : null}
+                    {t("sendRequest", language)}
+                  </Button>
+                )}
               </div>
             ))}
           </div>

@@ -221,6 +221,32 @@ export async function searchUsers(query: string): Promise<UserSearchResult[]> {
   return users;
 }
 
+// Check if a user is already in contacts
+export async function checkIfUserInContacts(userId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const currentUserId = session.session.user.id;
+  
+  // Check if this user is already in the contacts list with any status
+  const { data, error } = await supabase
+    .from("contacts")
+    .select("id, status")
+    .eq("user_id", currentUserId)
+    .eq("contact_id", userId)
+    .limit(1);
+    
+  if (error) {
+    console.error("Error checking contact status:", error);
+    throw error;
+  }
+  
+  // Return true if a contact entry exists and it's not blocked
+  return data && data.length > 0 && data[0].status !== 'blocked';
+}
+
 // Send a contact request
 export async function sendContactRequest(contactId: string) {
   const { data: session } = await supabase.auth.getSession();
@@ -484,4 +510,42 @@ export async function updateAutoApproveContacts(autoApprove: boolean) {
   }
 
   return data[0];
+}
+
+// Delete a contact
+export async function deleteContact(contactId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const userId = session.session.user.id;
+  
+  // Find the contact record to delete
+  const { data: contactRecord } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("contact_id", contactId)
+    .eq("status", "approved")
+    .limit(1);
+  
+  // If no contact record found, return false
+  if (!contactRecord || contactRecord.length === 0) {
+    console.error("Contact record not found for deletion");
+    return false;
+  }
+  
+  // Delete the contact record
+  const { error } = await supabase
+    .from("contacts")
+    .delete()
+    .eq("id", contactRecord[0].id);
+
+  if (error) {
+    console.error("Error deleting contact:", error);
+    throw error;
+  }
+
+  return true;
 }

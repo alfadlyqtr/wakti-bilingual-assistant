@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 export const en: Record<TranslationKey, string> = {
@@ -383,5 +382,11 @@ export const en: Record<TranslationKey, string> = {
   tasjeelUnsaved: "Tasjeel Unsaved",
   recordTitle: "Record Title",
   updateTitle: "Update Title",
-  titleUpdated: "Title Updated"
+  titleUpdated: "Title Updated",
+  alreadyInContacts: "Already in contacts",
+  deleteContact: "Delete Contact",
+  deleteContactConfirmation: "Are you sure you want to delete",
+  thisActionCannotBeUndone: "This action cannot be undone.",
+  contactDeleted: "Contact deleted successfully",
+  errorDeletingContact: "Error deleting contact"
 };
