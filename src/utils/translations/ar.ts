@@ -383,5 +383,12 @@ export const ar: Record<TranslationKey, string> = {
   tasjeelUnsaved: "لم يتم حفظ التسجيل",
   recordTitle: "عنوان التسجيل",
   updateTitle: "تحديث العنوان",
-  titleUpdated: "تم تحديث العنوان"
+  titleUpdated: "تم تحديث العنوان",
+  alreadyInContacts: "موجود في جهات الاتصال",
+  deleteContact: "حذف جهة الاتصال",
+  deleteContactConfirmation: "هل أنت متأكد من أنك تريد حذف",
+  thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء.",
+  contactDeleted: "تم حذف جهة الاتصال بنجاح",
+  errorDeletingContact: "خطأ في حذف جهة الاتصال"
 };
+
