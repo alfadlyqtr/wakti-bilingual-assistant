@@ -178,7 +178,7 @@ export function ContactList() {
                         <p className="text-sm text-muted-foreground">@{username}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 pr-1">
                       <Button 
                         size="icon" 
                         variant="ghost"
