@@ -63,9 +63,9 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
     return {
       ...message,
       sender: message.sender ? {
-        display_name: message.sender.display_name,
-        username: message.sender.username,
-        avatar_url: message.sender.avatar_url
+        display_name: Array.isArray(message.sender) ? message.sender[0]?.display_name : message.sender.display_name,
+        username: Array.isArray(message.sender) ? message.sender[0]?.username : message.sender.username,
+        avatar_url: Array.isArray(message.sender) ? message.sender[0]?.avatar_url : message.sender.avatar_url
       } : undefined
     };
   });
@@ -156,8 +156,11 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
 export const formatRecipient = (recipientData: any) => {
   if (!recipientData) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
 
-  // Fix: Check if recipientData is an array and access the first item if it is
+  // Handle both array and object formats safely
   const data = Array.isArray(recipientData) ? recipientData[0] : recipientData;
+  
+  // Ensure data is not undefined before accessing properties
+  if (!data) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
 
   return {
     displayName: data?.display_name || data?.username || "Unknown User",
@@ -165,3 +168,4 @@ export const formatRecipient = (recipientData: any) => {
     avatarUrl: data?.avatar_url || ""
   };
 };
+
