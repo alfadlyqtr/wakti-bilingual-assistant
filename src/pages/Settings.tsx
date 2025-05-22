@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -48,6 +47,7 @@ export default function Settings() {
   });
 
   const handleAutoApproveToggle = (checked: boolean) => {
+    console.log("Toggle auto-approve to:", checked);
     autoApproveMutation.mutate(checked);
   };
 
@@ -108,7 +108,8 @@ export default function Settings() {
     <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
       <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
       
-      <Card>
+      {/* Appearance Card */}
+      <Card className="mb-4">
         <CardHeader>
           <CardTitle>{t("appearance", language)}</CardTitle>
           <CardDescription>{t("appearanceSettings", language)}</CardDescription>
@@ -144,7 +145,8 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      <Card>
+      {/* Contacts Settings Card */}
+      <Card className="mb-4">
         <CardHeader>
           <CardTitle>{t("contactsSettings", language)}</CardTitle>
           <CardDescription>{t("contactsSettingsDescription", language)}</CardDescription>
@@ -161,7 +163,7 @@ export default function Settings() {
             </div>
             <Switch 
               id="auto-approve" 
-              checked={userProfile?.auto_approve_contacts} 
+              checked={userProfile?.auto_approve_contacts || false}
               onCheckedChange={handleAutoApproveToggle}
               disabled={isLoadingProfile || autoApproveMutation.isPending}
             />

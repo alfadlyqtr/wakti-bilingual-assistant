@@ -271,53 +271,62 @@ export async function sendContactRequest(contactId: string) {
     return existingContact[0];
   }
 
-  // Check if recipient has auto-approve enabled
-  const { data: recipientProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("auto_approve_contacts")
-    .eq("id", contactId)
-    .single();
+  try {
+    // Check if recipient has auto-approve enabled
+    const { data: recipientProfile, error: profileError } = await supabase
+      .from("profiles")
+      .select("auto_approve_contacts")
+      .eq("id", contactId)
+      .single();
 
-  if (profileError) {
-    console.error("Error checking recipient auto-approve settings:", profileError);
-    throw profileError;
-  }
+    if (profileError) {
+      console.error("Error checking recipient auto-approve settings:", profileError);
+      throw profileError;
+    }
 
-  // If auto-approve is enabled, insert as approved
-  const status = recipientProfile.auto_approve_contacts === true ? "approved" : "pending";
-  
-  // If contact exists but is blocked, update it instead of inserting
-  if (existingContact && existingContact.length > 0) {
+    console.log("Recipient auto-approve setting:", recipientProfile.auto_approve_contacts);
+    
+    // If auto-approve is enabled, insert as approved
+    const status = recipientProfile.auto_approve_contacts === true ? "approved" : "pending";
+    console.log("Setting contact request status to:", status);
+    
+    // If contact exists but is blocked, update it instead of inserting
+    if (existingContact && existingContact.length > 0) {
+      const { data, error } = await supabase
+        .from("contacts")
+        .update({ status: status })
+        .eq("id", existingContact[0].id)
+        .select();
+
+      if (error) {
+        console.error("Error updating contact status:", error);
+        throw error;
+      }
+
+      return data[0];
+    }
+
+    // Otherwise, insert a new contact
     const { data, error } = await supabase
       .from("contacts")
-      .update({ status: status })
-      .eq("id", existingContact[0].id)
+      .insert({
+        user_id: userId,
+        contact_id: contactId,
+        status: status
+      })
       .select();
 
     if (error) {
-      console.error("Error updating contact status:", error);
+      console.error("Error sending contact request:", error);
       throw error;
     }
 
+    console.log("Contact request created with status:", status);
     return data[0];
-  }
-
-  // Otherwise, insert a new contact
-  const { data, error } = await supabase
-    .from("contacts")
-    .insert({
-      user_id: userId,
-      contact_id: contactId,
-      status: status
-    })
-    .select();
-
-  if (error) {
-    console.error("Error sending contact request:", error);
+  } catch (error) {
+    console.error("Error in sendContactRequest:", error);
     throw error;
   }
-
-  return data[0];
 }
 
 // Accept a contact request
@@ -461,51 +470,73 @@ export async function unblockContact(contactId: string) {
 
 // Get user profile by ID
 export async function getUserProfile(userId: string) {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, username, display_name, avatar_url, auto_approve_contacts")
-    .eq("id", userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, username, display_name, avatar_url, auto_approve_contacts")
+      .eq("id", userId)
+      .maybeSingle(); // Changed from single() to maybeSingle() to avoid errors
 
-  if (error) {
-    console.error("Error getting user profile:", error);
+    if (error) {
+      console.error("Error getting user profile:", error);
+      throw error;
+    }
+
+    if (!data) {
+      console.log("No profile found for user ID:", userId);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Error in getUserProfile:", error);
     throw error;
   }
-
-  return data;
 }
 
 // Get current user profile
 export async function getCurrentUserProfile() {
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session) {
-    throw new Error("User not authenticated");
-  }
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      throw new Error("User not authenticated");
+    }
 
-  return getUserProfile(session.session.user.id);
+    return getUserProfile(session.session.user.id);
+  } catch (error) {
+    console.error("Error in getCurrentUserProfile:", error);
+    throw error;
+  }
 }
 
 // Update user auto-approve contacts setting
 export async function updateAutoApproveContacts(autoApprove: boolean) {
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session) {
-    throw new Error("User not authenticated");
-  }
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    if (!session.session) {
+      throw new Error("User not authenticated");
+    }
 
-  const userId = session.session.user.id;
+    const userId = session.session.user.id;
+    console.log("Updating auto-approve setting to:", autoApprove);
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .update({ auto_approve_contacts: autoApprove })
-    .eq("id", userId)
-    .select("auto_approve_contacts");
+    const { data, error } = await supabase
+      .from("profiles")
+      .update({ auto_approve_contacts: autoApprove })
+      .eq("id", userId)
+      .select("auto_approve_contacts");
 
-  if (error) {
-    console.error("Error updating auto-approve setting:", error);
+    if (error) {
+      console.error("Error updating auto-approve setting:", error);
+      throw error;
+    }
+
+    console.log("Auto-approve setting updated successfully:", data);
+    return data[0];
+  } catch (error) {
+    console.error("Error in updateAutoApproveContacts:", error);
     throw error;
   }
-
-  return data[0];
 }
 
 // Delete a contact
