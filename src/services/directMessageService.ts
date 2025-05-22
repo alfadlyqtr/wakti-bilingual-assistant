@@ -158,11 +158,11 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
   const transformedMessages: DirectMessage[] = data.map(message => {
     return {
       ...message,
-      sender: {
-        display_name: message.profiles?.display_name,
-        username: message.profiles?.username,
-        avatar_url: message.profiles?.avatar_url
-      }
+      sender: message.profiles ? {
+        display_name: message.profiles.display_name,
+        username: message.profiles.username,
+        avatar_url: message.profiles.avatar_url
+      } : undefined
     };
   });
 
