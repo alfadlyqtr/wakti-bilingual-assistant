@@ -156,6 +156,7 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
 
   // Transform the data to match our DirectMessage interface
   const transformedMessages: DirectMessage[] = data.map(message => {
+    // The profiles column returns a single object, not an array
     return {
       ...message,
       sender: message.profiles ? {
