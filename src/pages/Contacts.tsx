@@ -44,6 +44,11 @@ function ContactsContent({
   });
 
   const pendingCount = requests?.length || 0;
+  
+  // Handler for unblock success
+  const handleUnblockSuccess = () => {
+    setActiveTab("contacts");
+  };
 
   return (
     <div className="flex flex-col p-4 pb-24">
@@ -84,7 +89,7 @@ function ContactsContent({
         </TabsContent>
         
         <TabsContent value="blocked" className="space-y-4 animate-fade-in">
-          <BlockedUsers />
+          <BlockedUsers onUnblockSuccess={handleUnblockSuccess} />
         </TabsContent>
       </Tabs>
     </div>

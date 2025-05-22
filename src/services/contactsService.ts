@@ -230,6 +230,25 @@ export async function sendContactRequest(contactId: string) {
 
   const userId = session.session.user.id;
   
+  // First check if contact already exists
+  const { data: existingContact, error: checkError } = await supabase
+    .from("contacts")
+    .select("id, status")
+    .eq("user_id", userId)
+    .eq("contact_id", contactId)
+    .limit(1);
+
+  if (checkError) {
+    console.error("Error checking existing contact:", checkError);
+    throw checkError;
+  }
+
+  // If contact exists and is not blocked, return it
+  if (existingContact && existingContact.length > 0 && existingContact[0].status !== 'blocked') {
+    console.log("Contact already exists:", existingContact[0]);
+    return existingContact[0];
+  }
+
   // Check if recipient has auto-approve enabled
   const { data: recipientProfile, error: profileError } = await supabase
     .from("profiles")
@@ -245,6 +264,23 @@ export async function sendContactRequest(contactId: string) {
   // If auto-approve is enabled, insert as approved
   const status = recipientProfile.auto_approve_contacts === true ? "approved" : "pending";
   
+  // If contact exists but is blocked, update it instead of inserting
+  if (existingContact && existingContact.length > 0) {
+    const { data, error } = await supabase
+      .from("contacts")
+      .update({ status: status })
+      .eq("id", existingContact[0].id)
+      .select();
+
+    if (error) {
+      console.error("Error updating contact status:", error);
+      throw error;
+    }
+
+    return data[0];
+  }
+
+  // Otherwise, insert a new contact
   const { data, error } = await supabase
     .from("contacts")
     .insert({
@@ -374,6 +410,17 @@ export async function unblockContact(contactId: string) {
   }
 
   const userId = session.session.user.id;
+
+  // Get the contact record before deleting it (for logging)
+  const { data: contactRecord } = await supabase
+    .from("contacts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("contact_id", contactId)
+    .eq("status", "blocked")
+    .limit(1);
+
+  console.log("Unblocking contact record:", contactRecord);
 
   const { error } = await supabase
     .from("contacts")

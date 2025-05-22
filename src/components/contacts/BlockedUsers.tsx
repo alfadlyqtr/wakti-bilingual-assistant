@@ -25,7 +25,11 @@ type BlockedUserType = {
   [key: string]: any;
 };
 
-export function BlockedUsers() {
+interface BlockedUsersProps {
+  onUnblockSuccess?: () => void;
+}
+
+export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
@@ -63,11 +67,18 @@ export function BlockedUsers() {
       
       // Invalidate contacts query to show the updated list
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      
+      // Switch to contacts tab after successful unblock
+      if (onUnblockSuccess) {
+        onUnblockSuccess();
+      }
     },
     onError: (error) => {
       console.error("Error adding contact after unblock:", error);
-      // We don't show an error here as the unblock was successful,
-      // but we log it for debugging purposes
+      // Even if adding back to contacts fails, we still switch tabs because the unblock was successful
+      if (onUnblockSuccess) {
+        onUnblockSuccess();
+      }
     }
   });
 
