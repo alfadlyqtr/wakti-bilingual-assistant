@@ -26,7 +26,12 @@ export function ContactRequests() {
 
   // Accept contact request mutation
   const acceptRequestMutation = useMutation({
-    mutationFn: (requestId: string) => acceptContactRequest(requestId),
+    mutationFn: (requestId: string) => {
+      if (!requestId) {
+        throw new Error("Request ID is undefined");
+      }
+      return acceptContactRequest(requestId);
+    },
     onSuccess: () => {
       // Show a success toast with auto-dismiss after 2 seconds
       toast.success(t("requestAccepted", language), { 
@@ -46,7 +51,12 @@ export function ContactRequests() {
 
   // Reject contact request mutation
   const rejectRequestMutation = useMutation({
-    mutationFn: (requestId: string) => rejectContactRequest(requestId),
+    mutationFn: (requestId: string) => {
+      if (!requestId) {
+        throw new Error("Request ID is undefined");
+      }
+      return rejectContactRequest(requestId);
+    },
     onSuccess: () => {
       toast.success(t("requestRejected", language), { 
         duration: 2000,
@@ -62,7 +72,12 @@ export function ContactRequests() {
 
   // Block user mutation
   const blockUserMutation = useMutation({
-    mutationFn: (userId: string) => blockContact(userId),
+    mutationFn: (userId: string) => {
+      if (!userId) {
+        throw new Error("User ID is undefined");
+      }
+      return blockContact(userId);
+    },
     onSuccess: () => {
       toast.success(t("contactBlocked", language), { 
         duration: 2000,

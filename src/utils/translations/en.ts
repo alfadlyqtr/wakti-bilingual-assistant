@@ -309,7 +309,6 @@ export const en: Record<TranslationKey, string> = {
   autoApproveRequests: "Auto-approve contact requests",
   autoApproveExplanation: "Automatically approve all contact requests",
   dailyQuoteSettings: "Daily Quote Settings",
-  // Adding the missing keys from current errors
   quoteCategory: "Quote Category",
   quoteChangeFrequency: "Quote Change Frequency",
   twiceDaily: "Twice Daily",

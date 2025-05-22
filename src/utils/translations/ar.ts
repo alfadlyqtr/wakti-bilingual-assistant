@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -114,6 +115,19 @@ export const ar: Record<TranslationKey, string> = {
   contactCreated: "تم إنشاء جهة الاتصال بنجاح",
   contactUpdated: "تم تحديث جهة الاتصال بنجاح",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
+  // Adding missing error messages
+  errorCreatingTask: "خطأ في إنشاء المهمة",
+  errorUpdatingTask: "خطأ في تحديث المهمة",
+  errorDeletingTask: "خطأ في حذف المهمة",
+  errorCreatingReminder: "خطأ في إنشاء التذكير",
+  errorUpdatingReminder: "خطأ في تحديث التذكير",
+  errorDeletingReminder: "خطأ في حذف التذكير",
+  errorCreatingEvent: "خطأ في إنشاء الحدث",
+  errorUpdatingEvent: "خطأ في تحديث الحدث",
+  errorDeletingEvent: "خطأ في حذف الحدث",
+  errorCreatingContact: "خطأ في إنشاء جهة الاتصال",
+  errorUpdatingContact: "خطأ في تحديث جهة الاتصال",
+  errorDeletingContact: "خطأ في حذف جهة الاتصال",
   loading: "جاري التحميل",
   errorLoadingTasks: "خطأ في تحميل المهام",
   errorLoadingReminders: "خطأ في تحميل التذكيرات",
@@ -144,6 +158,7 @@ export const ar: Record<TranslationKey, string> = {
   thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء",
   errorBlockingContact: "خطأ في حظر جهة الاتصال",
   contactBlocked: "تم حظر جهة الاتصال",
+  contactDeleted: "تم حذف جهة الاتصال",
   searchToAddContacts: "ابحث لإضافة جهات اتصال",
   startConversation: "ابدأ المحادثة",
   sayHelloPrompt: "قل مرحباً أو ابدأ نقاشاً جديداً!",
