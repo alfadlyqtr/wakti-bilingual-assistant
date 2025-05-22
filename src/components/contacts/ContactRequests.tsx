@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Check, X, User, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,7 +28,13 @@ export function ContactRequests() {
   const acceptRequestMutation = useMutation({
     mutationFn: (requestId: string) => acceptContactRequest(requestId),
     onSuccess: () => {
-      toast.success(t("requestAccepted", language));
+      // Show a success toast with auto-dismiss after 2 seconds
+      toast.success(t("requestAccepted", language), { 
+        duration: 2000,
+        position: 'bottom-center'
+      });
+      
+      // Invalidate queries to refresh the contacts list and requests list
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
     },
@@ -41,7 +48,10 @@ export function ContactRequests() {
   const rejectRequestMutation = useMutation({
     mutationFn: (requestId: string) => rejectContactRequest(requestId),
     onSuccess: () => {
-      toast.success(t("requestRejected", language));
+      toast.success(t("requestRejected", language), { 
+        duration: 2000,
+        position: 'bottom-center'
+      });
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
     },
     onError: (error) => {
@@ -54,7 +64,10 @@ export function ContactRequests() {
   const blockUserMutation = useMutation({
     mutationFn: (userId: string) => blockContact(userId),
     onSuccess: () => {
-      toast.success(t("contactBlocked", language));
+      toast.success(t("contactBlocked", language), { 
+        duration: 2000,
+        position: 'bottom-center'
+      });
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
     },

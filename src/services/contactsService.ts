@@ -330,13 +330,35 @@ export async function sendContactRequest(contactId: string) {
 }
 
 // Accept a contact request
-export async function acceptContactRequest(requestId: string) {
+export async function acceptContactRequest(requestId: string): Promise<{ original: any, reciprocal: any }> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
     throw new Error("User not authenticated");
   }
 
-  const { data, error } = await supabase
+  const currentUserId = session.session.user.id;
+
+  // First, get the request details to identify the requester
+  const { data: requestData, error: requestError } = await supabase
+    .from("contacts")
+    .select("user_id, contact_id")
+    .eq("id", requestId)
+    .single();
+
+  if (requestError) {
+    console.error("Error getting contact request details:", requestError);
+    throw requestError;
+  }
+
+  // Ensure we're the recipient of this request
+  if (requestData.contact_id !== currentUserId) {
+    throw new Error("Cannot accept a request that wasn't sent to you");
+  }
+
+  const requesterId = requestData.user_id;
+
+  // Update the original request to 'approved'
+  const { data: originalRequest, error } = await supabase
     .from("contacts")
     .update({ status: "approved" })
     .eq("id", requestId)
@@ -347,7 +369,55 @@ export async function acceptContactRequest(requestId: string) {
     throw error;
   }
 
-  return data[0];
+  // Check if we already have a reciprocal record for this relationship
+  const { data: existingReciprocal } = await supabase
+    .from("contacts")
+    .select("id, status")
+    .eq("user_id", currentUserId)
+    .eq("contact_id", requesterId)
+    .maybeSingle();
+
+  let reciprocalRecord;
+  
+  if (existingReciprocal) {
+    // Update existing reciprocal record to 'approved' if it's not already
+    if (existingReciprocal.status !== 'approved') {
+      const { data, error: updateError } = await supabase
+        .from("contacts")
+        .update({ status: "approved" })
+        .eq("id", existingReciprocal.id)
+        .select();
+        
+      if (updateError) {
+        console.error("Error updating reciprocal contact:", updateError);
+        throw updateError;
+      }
+      reciprocalRecord = data[0];
+    } else {
+      reciprocalRecord = existingReciprocal;
+    }
+  } else {
+    // Create a new reciprocal record
+    const { data, error: insertError } = await supabase
+      .from("contacts")
+      .insert({
+        user_id: currentUserId,
+        contact_id: requesterId,
+        status: "approved"
+      })
+      .select();
+      
+    if (insertError) {
+      console.error("Error creating reciprocal contact:", insertError);
+      throw insertError;
+    }
+    reciprocalRecord = data[0];
+  }
+
+  return { 
+    original: originalRequest[0],
+    reciprocal: reciprocalRecord
+  };
 }
 
 // Reject a contact request
