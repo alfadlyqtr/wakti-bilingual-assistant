@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -155,6 +156,7 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
 
   // Transform the data to match our DirectMessage interface
   const transformedMessages: DirectMessage[] = data.map(message => {
+    // Fix: The profiles field is an object, not an array
     return {
       ...message,
       sender: message.profiles ? {
