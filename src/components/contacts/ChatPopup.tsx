@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -87,7 +86,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   });
 
-  // Setup realtime subscription - UPDATED to use 'messages' table
+  // Update the realtime subscription part to use the new messages table
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
 

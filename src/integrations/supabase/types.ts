@@ -169,48 +169,6 @@ export type Database = {
         }
         Relationships: []
       }
-      direct_messages: {
-        Row: {
-          content: string | null
-          created_at: string | null
-          expires_at: string | null
-          id: string
-          is_read: boolean | null
-          media_duration: number | null
-          media_type: string | null
-          media_url: string | null
-          message_type: string | null
-          recipient_id: string
-          sender_id: string
-        }
-        Insert: {
-          content?: string | null
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          is_read?: boolean | null
-          media_duration?: number | null
-          media_type?: string | null
-          media_url?: string | null
-          message_type?: string | null
-          recipient_id: string
-          sender_id: string
-        }
-        Update: {
-          content?: string | null
-          created_at?: string | null
-          expires_at?: string | null
-          id?: string
-          is_read?: boolean | null
-          media_duration?: number | null
-          media_type?: string | null
-          media_url?: string | null
-          message_type?: string | null
-          recipient_id?: string
-          sender_id?: string
-        }
-        Relationships: []
-      }
       event_invitees: {
         Row: {
           created_at: string | null
@@ -377,52 +335,38 @@ export type Database = {
       messages: {
         Row: {
           content: string | null
-          conversation_id: string
-          created_at: string | null
-          expires_at: string | null
+          created_at: string
           id: string
-          is_read: boolean | null
-          media_duration: number | null
+          is_read: boolean
           media_type: string | null
           media_url: string | null
-          message_type: string | null
+          message_type: string
+          recipient_id: string
           sender_id: string
         }
         Insert: {
           content?: string | null
-          conversation_id: string
-          created_at?: string | null
-          expires_at?: string | null
+          created_at?: string
           id?: string
-          is_read?: boolean | null
-          media_duration?: number | null
+          is_read?: boolean
           media_type?: string | null
           media_url?: string | null
-          message_type?: string | null
+          message_type: string
+          recipient_id: string
           sender_id: string
         }
         Update: {
           content?: string | null
-          conversation_id?: string
-          created_at?: string | null
-          expires_at?: string | null
+          created_at?: string
           id?: string
-          is_read?: boolean | null
-          media_duration?: number | null
+          is_read?: boolean
           media_type?: string | null
           media_url?: string | null
-          message_type?: string | null
+          message_type?: string
+          recipient_id?: string
           sender_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {

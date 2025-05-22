@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -40,7 +41,7 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       media_type,
       created_at,
       is_read,
-      profiles:sender_id (
+      sender:profiles!sender_id(
         display_name,
         username,
         avatar_url
@@ -61,10 +62,10 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   const transformedMessages: DirectMessage[] = data.map(message => {
     return {
       ...message,
-      sender: message.profiles ? {
-        display_name: message.profiles.display_name,
-        username: message.profiles.username,
-        avatar_url: message.profiles.avatar_url
+      sender: message.sender ? {
+        display_name: message.sender.display_name,
+        username: message.sender.username,
+        avatar_url: message.sender.avatar_url
       } : undefined
     };
   });
