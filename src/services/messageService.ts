@@ -19,104 +19,8 @@ export interface DirectMessage {
   };
 }
 
-export interface Contact {
-  id: string;
-  contact_id: string;
-  profile?: {
-    display_name?: string;
-    username?: string;
-    avatar_url?: string;
-  };
-  last_message?: DirectMessage;
-  unread_count?: number;
-}
-
-// Get all contacts with their latest message
-export async function getContactsWithMessages(): Promise<Contact[]> {
-  const { data: session } = await supabase.auth.getSession();
-  if (!session.session) {
-    throw new Error("User not authenticated");
-  }
-
-  const userId = session.session.user.id;
-
-  // Get all approved contacts
-  const { data: contacts, error } = await supabase
-    .from("contacts")
-    .select(`
-      id,
-      contact_id,
-      profiles:contact_id (
-        display_name,
-        username,
-        avatar_url
-      )
-    `)
-    .eq("user_id", userId)
-    .eq("status", "approved");
-
-  if (error) {
-    console.error("Error fetching contacts:", error);
-    throw error;
-  }
-
-  // For each contact, get the latest message (if any)
-  const contactsWithLastMessage = await Promise.all(
-    contacts.map(async (contact) => {
-      // Get latest message between current user and this contact
-      const { data: latestMessage } = await supabase
-        .from("direct_messages")
-        .select("*")
-        .or(`and(sender_id.eq.${userId},recipient_id.eq.${contact.contact_id}),and(sender_id.eq.${contact.contact_id},recipient_id.eq.${userId})`)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      // Get unread count
-      const { count: unreadCount, error: countError } = await supabase
-        .from("direct_messages")
-        .select("id", { count: 'exact', head: true })
-        .eq("recipient_id", userId)
-        .eq("sender_id", contact.contact_id)
-        .eq("is_read", false);
-
-      if (countError) {
-        console.error("Error counting unread messages:", countError);
-      }
-
-      return {
-        ...contact,
-        last_message: latestMessage || null,
-        unread_count: unreadCount || 0
-      } as Contact;
-    })
-  );
-
-  return contactsWithLastMessage;
-}
-
-// Search contacts by name or username
-export async function searchContacts(query: string): Promise<Contact[]> {
-  const contacts = await getContactsWithMessages();
-  
-  if (!query) return contacts;
-  
-  const lowerCaseQuery = query.toLowerCase();
-  
-  return contacts.filter(contact => {
-    const profile = contact.profile || {};
-    const displayName = profile.display_name || "";
-    const username = profile.username || "";
-    
-    return displayName.toLowerCase().includes(lowerCaseQuery) || 
-           username.toLowerCase().includes(lowerCaseQuery) ||
-           (contact.last_message?.content && 
-            contact.last_message.content.toLowerCase().includes(lowerCaseQuery));
-  });
-}
-
-// Get messages between current user and another user
-export async function getMessagesWithContact(contactId: string): Promise<DirectMessage[]> {
+// Get messages between current user and a contact
+export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
     throw new Error("User not authenticated");
@@ -152,17 +56,17 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
   }
 
   // Mark messages as read
-  await markMessagesAsRead(contactId);
+  await markAsRead(contactId);
 
   // Transform the data to match our DirectMessage interface
   const transformedMessages: DirectMessage[] = data.map(message => {
     return {
       ...message,
-      sender: {
-        display_name: message.profiles?.display_name,
-        username: message.profiles?.username,
-        avatar_url: message.profiles?.avatar_url
-      }
+      sender: message.profiles ? {
+        display_name: message.profiles.display_name,
+        username: message.profiles.username,
+        avatar_url: message.profiles.avatar_url
+      } : undefined
     };
   });
 
@@ -170,7 +74,7 @@ export async function getMessagesWithContact(contactId: string): Promise<DirectM
 }
 
 // Mark messages as read
-export async function markMessagesAsRead(senderId: string): Promise<void> {
+export async function markAsRead(senderId: string): Promise<void> {
   try {
     const { error } = await supabase.rpc('mark_messages_as_read', {
       other_user_id: senderId

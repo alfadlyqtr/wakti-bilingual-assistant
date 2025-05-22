@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -20,7 +19,6 @@ import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import EventCreate from "@/pages/EventCreate";
 import EventDetail from "@/pages/EventDetail";
-import Messages from "@/pages/Messages";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
@@ -152,7 +150,6 @@ function App() {
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
                   <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-                  <Route path="/messages" element={<AppLayout><Messages /></AppLayout>} />
                   <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                   <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
                 </Route>

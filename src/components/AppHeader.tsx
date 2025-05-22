@@ -32,7 +32,6 @@ export function AppHeader() {
   const menuItems = [
     { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
     { title: language === 'ar' ? 'الحساب' : 'Account', href: '/account' },
-    { title: language === 'ar' ? 'الرسائل' : 'Messages', href: '/messages' },
     { title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', href: '/contacts' },
     { title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', onClick: handleLogout }
   ];
@@ -49,7 +48,6 @@ export function AppHeader() {
       '/reminders': language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
       '/events': language === 'ar' ? 'الأحداث' : 'Events',
       '/settings': language === 'ar' ? 'الإعدادات' : 'Settings',
-      '/messages': language === 'ar' ? 'الرسائل' : 'Messages',
       '/contacts': language === 'ar' ? 'جهات الاتصال' : 'Contacts',
       '/account': language === 'ar' ? 'الحساب' : 'Account',
       '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',

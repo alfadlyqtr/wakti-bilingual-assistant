@@ -1,9 +1,9 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  LogOut, MessageCircle, 
-  Users, User as UserIcon, ChevronDown 
+  LogOut, Users, User as UserIcon, ChevronDown 
 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -61,9 +61,8 @@ export function UserMenu() {
   // Check if user has a profile picture
   const hasProfilePicture = !!user?.user_metadata?.avatar_url;
 
-  // User menu options - removed Settings from here
+  // User menu options - removed Messages from here
   const menuOptions = [
-    { icon: <MessageCircle size={16} />, label: t("messages", language), path: "/messages" },
     { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
     { divider: true },

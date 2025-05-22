@@ -6,11 +6,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact, deleteContact } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
+import { ChatPopup } from "./ChatPopup";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,11 +39,12 @@ type ContactType = {
 
 export function ContactList() {
   const { language } = useTheme();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
 
   // Fetch contacts with improved configuration
   const { 
@@ -87,10 +88,10 @@ export function ContactList() {
     }
   });
 
-  // Handle message directly by navigating to the messages page with the contact ID
-  const handleMessage = (contactId: string, name: string) => {
-    navigate(`/messages?contact=${contactId}`);
-    toast(t("messageStarted", language) + " " + name);
+  // Handle opening chat popup with a contact
+  const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
+    setSelectedContact({ id: contactId, name, avatar });
+    setChatOpen(true);
   };
 
   const handleToggleFavorite = (id: string, name: string) => {
@@ -188,7 +189,7 @@ export function ContactList() {
                       <Button 
                         size="icon" 
                         variant="ghost"
-                        onClick={() => handleMessage(contact.contact_id, displayName)}
+                        onClick={() => handleOpenChat(contact.contact_id, displayName, contactProfile.avatar_url)}
                       >
                         <MessageSquare className="h-4 w-4 text-muted-foreground" />
                       </Button>
@@ -217,6 +218,18 @@ export function ContactList() {
         )}
       </div>
 
+      {/* Chat popup */}
+      {selectedContact && (
+        <ChatPopup 
+          isOpen={chatOpen}
+          onClose={() => setChatOpen(false)}
+          contactId={selectedContact.id}
+          contactName={selectedContact.name}
+          contactAvatar={selectedContact.avatar}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
