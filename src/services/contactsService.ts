@@ -515,6 +515,8 @@ export async function deleteContact(contactId: string): Promise<boolean> {
     throw new Error("User not authenticated");
   }
   
+  console.log('Deleting contact with ID:', contactId);
+  
   // Delete the contact record directly using its ID
   const { error } = await supabase
     .from("contacts")
