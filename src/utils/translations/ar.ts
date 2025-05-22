@@ -389,6 +389,9 @@ export const ar: Record<TranslationKey, string> = {
   deleteContactConfirmation: "هل أنت متأكد من أنك تريد حذف",
   thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء.",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
-  errorDeletingContact: "خطأ في حذف جهة الاتصال"
+  errorDeletingContact: "خطأ في حذف جهة الاتصال",
+  // Adding the missing keys
+  blockedByContact: "تم حظرك من قبل هذا المستخدم",
+  cantMessageBlockedContact: "لا يمكنك مراسلة شخص قمت بحظره",
+  youAreBlocked: "محظور"
 };
-
