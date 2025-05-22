@@ -157,7 +157,6 @@ export const ar: Record<TranslationKey, string> = {
   thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء",
   errorBlockingContact: "خطأ في حظر جهة الاتصال",
   contactBlocked: "تم حظر جهة الاتصال",
-  contactDeleted: "تم حذف جهة الاتصال",
   searchToAddContacts: "ابحث لإضافة جهات اتصال",
   startConversation: "ابدأ المحادثة",
   sayHelloPrompt: "قل مرحباً أو ابدأ نقاشاً جديداً!",
