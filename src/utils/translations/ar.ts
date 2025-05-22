@@ -277,6 +277,7 @@ export const ar: Record<TranslationKey, string> = {
   welcomeToMessages: "مرحبًا بك في الرسائل",
   tapNewMessageToStart: "اضغط على رسالة جديدة للبدء",
   sayHelloPrompt: "مطالبة بقول مرحبًا",
+  addContactsToMessage: "إضافة جهات اتصال إلى الرسالة",
   addContactsPrompt: "مطالبة بإضافة جهات اتصال",
   goToContactsPage: "انتقل إلى صفحة جهات الاتصال",
   messagesSent: "تم إرسال الرسائل",
@@ -390,7 +391,6 @@ export const ar: Record<TranslationKey, string> = {
   thisActionCannotBeUndone: "لا يمكن التراجع عن هذا الإجراء.",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
   errorDeletingContact: "خطأ في حذف جهة الاتصال",
-  // Adding the missing keys
   blockedByContact: "تم حظرك من قبل هذا المستخدم",
   cantMessageBlockedContact: "لا يمكنك مراسلة شخص قمت بحظره",
   youAreBlocked: "محظور"
