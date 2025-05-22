@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -42,6 +41,7 @@ export type TranslationKey =
   | "previous"
   | "submit"
   | "search"
+  | "enterAtLeastThreeCharacters"
   | "filter"
   | "sort"
   | "ascending"

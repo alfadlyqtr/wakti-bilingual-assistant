@@ -1,744 +1,577 @@
-// Import the translation type
-import { TranslationKey } from './translationTypes';
-import { SupportedLanguage } from './translationTypes';
+import { en } from "./translations/en";
+import { ar } from "./translations/ar";
 
-// Default language
-export const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
+export type Translation = {
+  en: string;
+  ar: string;
+};
 
-// Translation function
-export function t(key: TranslationKey, language: string = DEFAULT_LANGUAGE): string {
-  const lang = language as SupportedLanguage;
-  if (!translations[key]) {
-    console.warn(`Translation key not found: ${key}`);
-    return key;
-  }
-  return translations[key][lang] || translations[key][DEFAULT_LANGUAGE];
-}
+export type TranslationKey =
+  | "home"
+  | "tasjeel"
+  | "settings"
+  | "logout"
+  | "login"
+  | "register"
+  | "email"
+  | "password"
+  | "username"
+  | "displayName"
+  | "confirmPassword"
+  | "invalidEmail"
+  | "passwordMismatch"
+  | "usernameRequired"
+  | "emailRequired"
+  | "passwordRequired"
+  | "confirmPasswordRequired"
+  | "registrationSuccess"
+  | "loginSuccess"
+  | "logoutSuccess"
+  | "error"
+  | "profile"
+  | "editProfile"
+  | "saveChanges"
+  | "profileUpdated"
+  | "tasjeelTitle"
+  | "tasjeelDescription"
+  | "startRecording"
+  | "stopRecording"
+  | "uploadAudio"
+  | "transcribe"
+  | "summarize"
+  | "generateSpeech"
+  | "download"
+  | "loading"
+  | "noAudio"
+  | "transcription"
+  | "summary"
+  | "speech"
+  | "title"
+  | "date"
+  | "saved"
+  | "save"
+  | "delete"
+  | "noRecordsFound"
+  | "deleteConfirmation"
+  | "deleteTasjeel"
+  | "tasjeelDeleted"
+  | "tasjeelSaved"
+  | "tasjeelUnsaved"
+  | "recordTitle"
+  | "update"
+  | "updateTitle"
+  | "titleUpdated"
+  | "contacts"
+  | "requests"
+  | "blocked"
+  | "searchContacts"
+  | "requestSent"
+  | "errorSendingRequest"
+  | "searchResults"
+  | "sendRequest"
+  | "noUsersFound"
+  | "noContacts"
+  | "searchToAddContacts"
+  | "errorLoadingContacts"
+  | "messageStarted"
+  | "contactBlocked"
+  | "errorBlockingContact"
+  | "removedFromFavorites"
+  | "addedToFavorites"
+  | "dailyQuoteSettings"
+  | "quoteCategory"
+  | "quoteChangeFrequency"
+  | "twiceDaily"
+  | "fourTimesDaily"
+  | "sixTimesDaily"
+  | "everyAppStart"
+  | "quotePreferencesUpdated"
+  | "manageCustomQuotes"
+  | "notificationPreferences"
+  | "pushNotifications"
+  | "emailNotifications"
+  | "widgetVisibility"
+  | "tasksWidget"
+  | "calendarWidget"
+  | "remindersWidget"
+  | "dailyQuoteWidget"
+  | "privacyControls"
+  | "profileVisibility"
+  | "activityStatus"
+  | "saveAllSettings"
+  | "saveAllSettingsQuestion"
+  | "saveAllSettingsConfirmation"
+  | "allSettingsSaved"
+  | "arabic"
+  | "english"
+  | "theme"
+  | "darkMode"
+  | "lightMode"
+  | "appearance"
+  | "appearanceSettings"
+  | "contactsSettings"
+  | "contactsSettingsDescription"
+  | "autoApproveRequests"
+  | "autoApproveExplanation"
+  | "settingsUpdated"
+  | "contactSettingsUpdated"
+  | "errorUpdatingSettings"
+  | "custom"
+  | "search"
+  | "enterAtLeastThreeCharacters"
+;
 
-export const translations: Record<string, Record<SupportedLanguage, string>> = {
-  // App-wide
-  appName: {
-    en: "Companion",
-    ar: "رفيق"
-  },
-  loading: {
-    en: "Loading...",
-    ar: "جاري التحميل..."
-  },
-  error: {
-    en: "Error",
-    ar: "خطأ"
-  },
-  success: {
-    en: "Success",
-    ar: "نجاح"
-  },
-  save: {
-    en: "Save",
-    ar: "حفظ"
-  },
-  cancel: {
-    en: "Cancel",
-    ar: "إلغاء"
-  },
-  delete: {
-    en: "Delete",
-    ar: "حذف"
-  },
-  edit: {
-    en: "Edit",
-    ar: "تعديل"
-  },
-  create: {
-    en: "Create",
-    ar: "إنشاء"
-  },
-  submit: {
-    en: "Submit",
-    ar: "إرسال"
-  },
-  search: {
-    en: "Search",
-    ar: "بحث"
-  },
-  
-  // Navigation
+export const translations: Record<TranslationKey, Translation> = {
   home: {
     en: "Home",
-    ar: "الرئيسية"
+    ar: "الرئيسية",
   },
-  chat: {
-    en: "Chat",
-    ar: "محادثة"
-  },
-  tasks: {
-    en: "Tasks",
-    ar: "المهام"
-  },
-  calendar: {
-    en: "Calendar",
-    ar: "التقويم"
+  tasjeel: {
+    en: "Tasjeel",
+    ar: "تسجيل",
   },
   settings: {
     en: "Settings",
-    ar: "الإعدادات"
-  },
-  profile: {
-    en: "Profile",
-    ar: "الملف الشخصي"
-  },
-  messages: {
-    en: "Messages",
-    ar: "الرسائل"
-  },
-  
-  // Settings translations 
-  appearance: {
-    en: "Appearance",
-    ar: "المظهر"
-  },
-  language: {
-    en: "Language",
-    ar: "اللغة"
-  },
-  theme: {
-    en: "Theme",
-    ar: "السمة"
-  },
-  notifications: {
-    en: "Notifications",
-    ar: "الإشعارات"
-  },
-  privacy: {
-    en: "Privacy",
-    ar: "الخصوصية"
-  },
-  account: {
-    en: "Account",
-    ar: "الحساب"
+    ar: "إعدادات",
   },
   logout: {
     en: "Logout",
-    ar: "تسجيل الخروج"
+    ar: "تسجيل الخروج",
   },
-  lightMode: {
-    en: "Light Mode",
-    ar: "الوضع الفاتح"
-  },
-  darkMode: {
-    en: "Dark Mode",
-    ar: "الوضع الداكن"
-  },
-  systemDefault: {
-    en: "System Default",
-    ar: "إعدادات النظام"
-  },
-  english: {
-    en: "English",
-    ar: "الإنجليزية"
-  },
-  arabic: {
-    en: "Arabic",
-    ar: "العربية"
-  },
-  appearanceSettings: {
-    en: "Customize how the app looks",
-    ar: "تخصيص مظهر التطبيق"
-  },
-  
-  // Chat
-  typeMessage: {
-    en: "Type a message...",
-    ar: "اكتب رسالة..."
-  },
-  sendMessage: {
-    en: "Send",
-    ar: "إرسال"
-  },
-  newChat: {
-    en: "New Chat",
-    ar: "محادثة جديدة"
-  },
-  clearChat: {
-    en: "Clear Chat",
-    ar: "مسح المحادثة"
-  },
-  thinking: {
-    en: "Thinking...",
-    ar: "يفكر..."
-  },
-  
-  // Tasks
-  newTask: {
-    en: "New Task",
-    ar: "مهمة جديدة"
-  },
-  taskTitle: {
-    en: "Task Title",
-    ar: "عنوان المهمة"
-  },
-  taskDescription: {
-    en: "Description",
-    ar: "الوصف"
-  },
-  dueDate: {
-    en: "Due Date",
-    ar: "تاريخ الاستحقاق"
-  },
-  priority: {
-    en: "Priority",
-    ar: "الأولوية"
-  },
-  status: {
-    en: "Status",
-    ar: "الحالة"
-  },
-  high: {
-    en: "High",
-    ar: "عالية"
-  },
-  medium: {
-    en: "Medium",
-    ar: "متوسطة"
-  },
-  low: {
-    en: "Low",
-    ar: "منخفضة"
-  },
-  completed: {
-    en: "Completed",
-    ar: "مكتملة"
-  },
-  inProgress: {
-    en: "In Progress",
-    ar: "قيد التنفيذ"
-  },
-  notStarted: {
-    en: "Not Started",
-    ar: "لم تبدأ"
-  },
-  
-  // Calendar
-  today: {
-    en: "Today",
-    ar: "اليوم"
-  },
-  month: {
-    en: "Month",
-    ar: "الشهر"
-  },
-  week: {
-    en: "Week",
-    ar: "الأسبوع"
-  },
-  day: {
-    en: "Day",
-    ar: "اليوم"
-  },
-  newEvent: {
-    en: "New Event",
-    ar: "حدث جديد"
-  },
-  eventTitle: {
-    en: "Event Title",
-    ar: "عنوان الحدث"
-  },
-  startTime: {
-    en: "Start Time",
-    ar: "وقت البدء"
-  },
-  endTime: {
-    en: "End Time",
-    ar: "وقت الانتهاء"
-  },
-  location: {
-    en: "Location",
-    ar: "الموقع"
-  },
-  
-  // Contacts
-  contactRequestSettings: {
-    en: "Contact Requests",
-    ar: "طلبات الاتصال"
-  },
-  manageBlockedUsers: {
-    en: "Blocked Users",
-    ar: "المستخدمون المحظورون"
-  },
-  searchContacts: {
-    en: "Search for users by name, username, or email",
-    ar: "البحث عن المستخدمين بالاسم أو اسم المستخدم أو البريد الإلكتروني"
-  },
-  searchResults: {
-    en: "Search Results",
-    ar: "نتائج البحث"
-  },
-  sendRequest: {
-    en: "Send Request",
-    ar: "إرسال طلب"
-  },
-  noUsersFound: {
-    en: "No users found",
-    ar: "لم يتم العثور على مستخدمين"
-  },
-  messageStarted: {
-    en: "Message Started",
-    ar: "بدأت المحادثة"
-  },
-  chattingWithUser: {
-    en: "Chatting with",
-    ar: "محادثة مع"
-  },
-  addedToFavorites: {
-    en: "Added to Favorites",
-    ar: "تمت الإضافة إلى المفضلة"
-  },
-  removedFromFavorites: {
-    en: "Removed from Favorites",
-    ar: "تمت الإزالة من المفضلة"
-  },
-  errorCreatingConversation: {
-    en: "Failed to create conversation",
-    ar: "فشل في إنشاء المحادثة"
-  },
-  unblock: {
-    en: "Unblock",
-    ar: "إلغاء الحظر"
-  },
-  
-  // Contact sections
-  contacts: {
-    en: "Contacts",
-    ar: "جهات الاتصال"
-  },
-  requests: {
-    en: "Requests",
-    ar: "الطلبات"
-  },
-  blocked: {
-    en: "Blocked",
-    ar: "المحظورين"
-  },
-  
-  // Empty states
-  noContacts: {
-    en: "No contacts yet",
-    ar: "لا توجد جهات اتصال بعد"
-  },
-  searchToAddContacts: {
-    en: "Search for people to add as contacts",
-    ar: "ابحث عن أشخاص لإضافتهم كجهات اتصال"
-  },
-  noContactRequests: {
-    en: "No contact requests",
-    ar: "لا توجد طلبات اتصال"
-  },
-  waitingForRequests: {
-    en: "When someone sends you a request, it will appear here",
-    ar: "عندما يرسل لك شخص ما طلباً، سيظهر هنا"
-  },
-  noBlockedUsers: {
-    en: "No blocked users",
-    ar: "لا يوجد مستخدمين محظورين"
-  },
-  noBlockedUsersDescription: {
-    en: "You haven't blocked any users yet",
-    ar: "لم تقم بحظر أي مستخدمين حتى الآن"
-  },
-  
-  // Contact settings
-  contactsSettings: {
-    en: "Contact Settings",
-    ar: "إعدادات جهات الاتصال"
-  },
-  contactsSettingsDescription: {
-    en: "Manage how others connect with you",
-    ar: "إدارة كيفية اتصال الآخرين بك"
-  },
-  autoApproveRequests: {
-    en: "Auto-approve contact requests",
-    ar: "الموافقة التلقائية على طلبات الاتصال"
-  },
-  autoApproveExplanation: {
-    en: "When enabled, all contact requests will be automatically approved",
-    ar: "عند التفعيل، ستتم المواقة تلقائياً على جميع طلبات الاتصال"
-  },
-  contactSettingsUpdated: {
-    en: "Contact settings updated successfully",
-    ar: "تم تحديث إعدادات جهات الاتصال بنجاح"
-  },
-  
-  // Success messages
-  settingsUpdated: {
-    en: "Settings Updated",
-    ar: "تم تحديث الإعدادات"
-  },
-  requestSent: {
-    en: "Request Sent",
-    ar: "تم إرسال الطلب"
-  },
-  contactRequestSent: {
-    en: "Contact request sent successfully",
-    ar: "تم إرسال طلب الاتصال بنجاح"
-  },
-  requestAccepted: {
-    en: "Request Accepted",
-    ar: "تم قبول الطلب"
-  },
-  contactAddedDescription: {
-    en: "Contact added to your contacts list",
-    ar: "تمت إضافة جهة الاتصال إلى قائمة جهات الاتصال الخاصة بك"
-  },
-  requestRejected: {
-    en: "Request Rejected",
-    ar: "تم رفض الطلب"
-  },
-  contactRejectedDescription: {
-    en: "Contact request has been rejected",
-    ar: "تم رفض طلب الاتصال"
-  },
-  contactBlocked: {
-    en: "Contact Blocked",
-    ar: "تم حظر جهة الاتصال"
-  },
-  userBlockedDescription: {
-    en: "User has been added to your blocked list",
-    ar: "تمت إضافة المستخدم إلى قائمة المحظورين"
-  },
-  blockedUserDescription: {
-    en: "User can no longer contact you",
-    ar: "لم يعد بإمكان المستخدم الاتصال بك"
-  },
-  contactUnblocked: {
-    en: "Contact Unblocked",
-    ar: "تم إلغاء حظر جهة الاتصال"
-  },
-  userUnblockedDescription: {
-    en: "User has been removed from your blocked list",
-    ar: "تمت إزالة المستخدم من قائمة المحظورين"
-  },
-  
-  // Error messages
-  errorSendingRequest: {
-    en: "Failed to send contact request",
-    ar: "فشل في إرسال طلب الاتصال"
-  },
-  errorAcceptingRequest: {
-    en: "Failed to accept contact request",
-    ar: "فشل في قبول طلب الاتصال"
-  },
-  errorRejectingRequest: {
-    en: "Failed to reject contact request",
-    ar: "فشل في رفض طلب الاتصال"
-  },
-  errorBlockingUser: {
-    en: "Failed to block user",
-    ar: "فشل في حظر المستخدم"
-  },
-  errorBlockingContact: {
-    en: "Failed to block contact",
-    ar: "فشل في حظر جهة الاتصال"
-  },
-  errorUnblockingContact: {
-    en: "Failed to unblock contact",
-    ar: "فشل في إلغاء حظر جهة الاتصال"
-  },
-  errorLoadingContacts: {
-    en: "Error loading contacts",
-    ar: "خطأ في تحميل جهات الاتصال"
-  },
-  errorLoadingRequests: {
-    en: "Error loading contact requests",
-    ar: "خطأ في تحميل طلبات الاتصال"
-  },
-  errorLoadingBlockedUsers: {
-    en: "Error loading blocked users",
-    ar: "خطأ في تحميل المستخدمين المحظورين"
-  },
-  errorUpdatingSettings: {
-    en: "Failed to update settings",
-    ar: "فشل في تحديث الإعدادات"
-  },
-  
-  // Messages
-  noMessages: {
-    en: "No messages yet",
-    ar: "لا توجد رسائل بعد"
-  },
-  startConversation: {
-    en: "Start a conversation",
-    ar: "بدء محادثة"
-  },
-  newMessage: {
-    en: "New Message",
-    ar: "رسالة جديدة"
-  },
-  selectContact: {
-    en: "Select a contact",
-    ar: "اختر جهة اتصال"
-  },
-  
-  // Image generation
-  generateImage: {
-    en: "Generate Image",
-    ar: "إنشاء صورة"
-  },
-  imagePrompt: {
-    en: "Describe the image you want to generate",
-    ar: "صف الصورة التي تريد إنشاءها"
-  },
-  generatingImage: {
-    en: "Generating image...",
-    ar: "جاري إنشاء الصورة..."
-  },
-  downloadImage: {
-    en: "Download Image",
-    ar: "تنزيل الصورة"
-  },
-  
-  // Auth
   login: {
     en: "Login",
-    ar: "تسجيل الدخول"
+    ar: "تسجيل الدخول",
   },
-  signup: {
-    en: "Sign Up",
-    ar: "إنشاء حساب"
+  register: {
+    en: "Register",
+    ar: "تسجيل",
   },
   email: {
     en: "Email",
-    ar: "البريد الإلكتروني"
+    ar: "البريد الإلكتروني",
   },
   password: {
     en: "Password",
-    ar: "كلمة المرور"
+    ar: "كلمة المرور",
   },
-  forgotPassword: {
-    en: "Forgot Password?",
-    ar: "نسيت كلمة المرور؟"
+  username: {
+    en: "Username",
+    ar: "اسم المستخدم",
   },
-  resetPassword: {
-    en: "Reset Password",
-    ar: "إعادة تعيين كلمة المرور"
+  displayName: {
+    en: "Display Name",
+    ar: "اسم العرض",
   },
-  
-  // Misc
-  welcomeBack: {
-    en: "Welcome back!",
-    ar: "مرحبًا بعودتك!"
+  confirmPassword: {
+    en: "Confirm Password",
+    ar: "تأكيد كلمة المرور",
   },
-  getStarted: {
-    en: "Get Started",
-    ar: "البدء"
+  invalidEmail: {
+    en: "Invalid email address",
+    ar: "عنوان بريد إلكتروني غير صالح",
   },
-  learnMore: {
-    en: "Learn More",
-    ar: "معرفة المزيد"
-  },
-  comingSoon: {
-    en: "Coming Soon",
-    ar: "قريبًا"
-  },
-  beta: {
-    en: "Beta",
-    ar: "تجريبي"
-  },
-  version: {
-    en: "Version",
-    ar: "الإصدار"
-  },
-  
-  // Additional translations for account and settings
-  profileManagement: {
-    en: "Manage your profile information.",
-    ar: "إدارة معلومات الملف الشخصي الخاص بك."
-  },
-  usernameHelpText: {
-    en: "Your account username. Cannot be changed.",
-    ar: "اسم المستخدم للحساب الخاص بك. لا يمكن تغييره."
-  },
-  updating: {
-    en: "Updating...",
-    ar: "جاري التحديث..."
-  },
-  updateName: {
-    en: "Update Name",
-    ar: "تحديث الاسم"
-  },
-  updateEmail: {
-    en: "Update Email",
-    ar: "تحديث البريد الإلكتروني"
-  },
-  updatePassword: {
-    en: "Update Password",
-    ar: "تحديث كلمة المرور"
-  },
-  passwordsDoNotMatch: {
+  passwordMismatch: {
     en: "Passwords do not match",
-    ar: "كلمات السر غير متطابقة"
+    ar: "كلمات المرور غير متطابقة",
+  },
+  usernameRequired: {
+    en: "Username is required",
+    ar: "اسم المستخدم مطلوب",
+  },
+  emailRequired: {
+    en: "Email is required",
+    ar: "البريد الإلكتروني مطلوب",
+  },
+  passwordRequired: {
+    en: "Password is required",
+    ar: "كلمة المرور مطلوبة",
+  },
+  confirmPasswordRequired: {
+    en: "Confirm password is required",
+    ar: "تأكيد كلمة المرور مطلوب",
+  },
+  registrationSuccess: {
+    en: "Registration successful!",
+    ar: "تم التسجيل بنجاح!",
+  },
+  loginSuccess: {
+    en: "Login successful!",
+    ar: "تم تسجيل الدخول بنجاح!",
+  },
+  logoutSuccess: {
+    en: "Logout successful!",
+    ar: "تم تسجيل الخروج بنجاح!",
+  },
+  error: {
+    en: "Error!",
+    ar: "خطأ!",
+  },
+  profile: {
+    en: "Profile",
+    ar: "الملف الشخصي",
+  },
+  editProfile: {
+    en: "Edit Profile",
+    ar: "تعديل الملف الشخصي",
+  },
+  saveChanges: {
+    en: "Save Changes",
+    ar: "حفظ التغييرات",
   },
   profileUpdated: {
-    en: "Profile updated successfully",
-    ar: "تم تحديث الملف الشخصي بنجاح"
+    en: "Profile updated!",
+    ar: "تم تحديث الملف الشخصي!",
   },
-  emailUpdated: {
-    en: "Email updated successfully",
-    ar: "تم تحديث البريد الإلكتروني بنجاح"
+  tasjeelTitle: {
+    en: "Record, Transcribe, Summarize, Generate Speech",
+    ar: "تسجيل، نسخ، تلخيص، توليد كلام",
   },
-  passwordUpdated: {
-    en: "Password updated successfully",
-    ar: "تم تحديث كلمة المرور بنجاح"
+  tasjeelDescription: {
+    en: "Your AI-powered audio toolkit",
+    ar: "مجموعة أدوات الصوت المدعومة بالذكاء الاصطناعي",
   },
-  errorUpdatingName: {
-    en: "Failed to update name",
-    ar: "فشل تحديث الاسم"
+  startRecording: {
+    en: "Start Recording",
+    ar: "بدء التسجيل",
   },
-  errorUpdatingProfile: {
-    en: "Failed to update profile",
-    ar: "فشل تحديث الملف الشخصي"
+  stopRecording: {
+    en: "Stop Recording",
+    ar: "إيقاف التسجيل",
   },
-  errorUpdatingEmail: {
-    en: "Failed to update email",
-    ar: "فشل تحديث البريد الإلكتروني"
+  uploadAudio: {
+    en: "Upload Audio",
+    ar: "رفع الصوت",
   },
-  errorUpdatingPassword: {
-    en: "Failed to update password",
-    ar: "فشل تحديث كلمة المرور"
+  transcribe: {
+    en: "Transcribe",
+    ar: "نسخ",
   },
-  errorSigningOut: {
-    en: "Failed to sign out",
-    ar: "فشل تسجيل الخروج"
+  summarize: {
+    en: "Summarize",
+    ar: "تلخيص",
   },
-  accountOptions: {
-    en: "Account Options",
-    ar: "خيارات الحساب"
+  generateSpeech: {
+    en: "Generate Speech",
+    ar: "توليد كلام",
   },
-  profileImage: {
-    en: "Profile image",
-    ar: "صورة الملف الشخصي"
+  download: {
+    en: "Download",
+    ar: "تنزيل",
   },
-  changeImage: {
-    en: "Change Image",
-    ar: "تغيير الصورة"
+  loading: {
+    en: "Loading...",
+    ar: "جار التحميل...",
   },
-  profileImageUpdated: {
-    en: "Profile image updated successfully",
-    ar: "تم تحديث صورة الملف الشخصي بنجاح"
+  noAudio: {
+    en: "No audio recorded",
+    ar: "لم يتم تسجيل أي صوت",
+  },
+  transcription: {
+    en: "Transcription",
+    ar: "النسخ",
+  },
+  summary: {
+    en: "Summary",
+    ar: "ملخص",
+  },
+  speech: {
+    en: "Speech",
+    ar: "الكلام",
+  },
+  title: {
+    en: "Title",
+    ar: "عنوان",
+  },
+  date: {
+    en: "Date",
+    ar: "تاريخ",
+  },
+  saved: {
+    en: "Saved",
+    ar: "تم الحفظ",
+  },
+  save: {
+    en: "Save",
+    ar: "حفظ",
+  },
+  delete: {
+    en: "Delete",
+    ar: "حذف",
+  },
+  noRecordsFound: {
+    en: "No records found",
+    ar: "لا توجد سجلات",
+  },
+  deleteConfirmation: {
+    en: "Are you sure you want to delete this?",
+    ar: "هل أنت متأكد أنك تريد حذف هذا؟",
+  },
+  deleteTasjeel: {
+    en: "Delete Tasjeel",
+    ar: "حذف التسجيل",
+  },
+  tasjeelDeleted: {
+    en: "Tasjeel deleted",
+    ar: "تم حذف التسجيل",
+  },
+  tasjeelSaved: {
+    en: "Tasjeel saved",
+    ar: "تم حفظ التسجيل",
+  },
+  tasjeelUnsaved: {
+    en: "Tasjeel unsaved",
+    ar: "تم إلغاء حفظ التسجيل",
+  },
+  recordTitle: {
+    en: "Recording Title",
+    ar: "عنوان التسجيل",
+  },
+  update: {
+    en: "Update",
+    ar: "تحديث",
+  },
+  updateTitle: {
+    en: "Update Title",
+    ar: "تحديث العنوان",
+  },
+  titleUpdated: {
+    en: "Title Updated!",
+    ar: "تم تحديث العنوان!",
+  },
+  contacts: {
+    en: "Contacts",
+    ar: "جهات الاتصال",
+  },
+  requests: {
+    en: "Requests",
+    ar: "الطلبات",
+  },
+  blocked: {
+    en: "Blocked",
+    ar: "المحظورين",
+  },
+  searchContacts: {
+    en: "Search contacts...",
+    ar: "البحث عن جهات الاتصال...",
+  },
+  requestSent: {
+    en: "Request sent!",
+    ar: "تم إرسال الطلب!",
+  },
+  errorSendingRequest: {
+    en: "Error sending request",
+    ar: "خطأ في إرسال الطلب",
+  },
+  searchResults: {
+    en: "Search Results",
+    ar: "نتائج البحث",
+  },
+  sendRequest: {
+    en: "Send Request",
+    ar: "إرسال طلب",
+  },
+  noUsersFound: {
+    en: "No users found",
+    ar: "لم يتم العثور على مستخدمين",
+  },
+  noContacts: {
+    en: "No contacts yet",
+    ar: "لا توجد جهات اتصال حتى الآن",
+  },
+  searchToAddContacts: {
+    en: "Search to add contacts",
+    ar: "ابحث لإضافة جهات اتصال",
+  },
+  errorLoadingContacts: {
+    en: "Error loading contacts",
+    ar: "خطأ في تحميل جهات الاتصال",
+  },
+  messageStarted: {
+    en: "Message started with",
+    ar: "بدأت الرسالة مع",
+  },
+  contactBlocked: {
+    en: "Contact blocked",
+    ar: "تم حظر جهة الاتصال",
+  },
+  errorBlockingContact: {
+    en: "Error blocking contact",
+    ar: "خطأ في حظر جهة الاتصال",
+  },
+  removedFromFavorites: {
+    en: "Removed from favorites",
+    ar: "تمت الإزالة من المفضلة",
+  },
+  addedToFavorites: {
+    en: "Added to favorites",
+    ar: "أضيف إلى المفضلة",
   },
   dailyQuoteSettings: {
     en: "Daily Quote Settings",
-    ar: "إعدادات الاقتباس اليومي"
+    ar: "إعدادات الاقتباس اليومي",
   },
   quoteCategory: {
     en: "Quote Category",
-    ar: "فئة الاقتباس"
+    ar: "فئة الاقتباس",
   },
   quoteChangeFrequency: {
     en: "Quote Change Frequency",
-    ar: "تكرار تغيير الاقتباس"
-  },
-  manageCustomQuotes: {
-    en: "Manage Custom Quotes",
-    ar: "إدارة الاقتباسات المخصصة"
+    ar: "تكرار تغيير الاقتباس",
   },
   twiceDaily: {
-    en: "2 times a day",
-    ar: "مرتان في اليوم"
+    en: "Twice Daily",
+    ar: "مرتين يوميًا",
   },
   fourTimesDaily: {
-    en: "4 times a day",
-    ar: "4 مرات في اليوم"
+    en: "Four Times Daily",
+    ar: "أربع مرات يوميًا",
   },
   sixTimesDaily: {
-    en: "6 times a day",
-    ar: "6 مرات في اليوم"
+    en: "Six Times Daily",
+    ar: "ست مرات يوميًا",
   },
   everyAppStart: {
-    en: "Every app start",
-    ar: "مع كل بدء تشغيل للتطبيق"
-  },
-  saveAllSettingsQuestion: {
-    en: "Save all settings?",
-    ar: "حفظ جميع الإعدادات؟"
-  },
-  saveAllSettingsConfirmation: {
-    en: "Are you sure you want to save all changes?",
-    ar: "هل أنت متأكد من أنك تريد حفظ جميع التغييرات؟"
-  },
-  allSettingsSaved: {
-    en: "All settings saved",
-    ar: "تم حفظ جميع الإعدادات"
-  },
-  saveAllSettings: {
-    en: "Save All Settings",
-    ar: "حفظ جميع الإعدادات"
-  },
-  pushNotifications: {
-    en: "Push Notifications",
-    ar: "إشعارات الدفع"
-  },
-  emailNotifications: {
-    en: "Email Notifications",
-    ar: "إشعارات البريد الإلكتروني"
-  },
-  tasksWidget: {
-    en: "Tasks Widget",
-    ar: "أداة المهام المصغرة"
-  },
-  calendarWidget: {
-    en: "Calendar Widget",
-    ar: "أداة التقويم المصغرة"
-  },
-  remindersWidget: {
-    en: "Reminders Widget",
-    ar: "أداة التذكيرات المصغرة"
-  },
-  dailyQuoteWidget: {
-    en: "Daily Quote Widget",
-    ar: "أداة الاقتباس اليومي المصغرة"
-  },
-  profileVisibility: {
-    en: "Profile Visibility",
-    ar: "رؤية الملف الشخصي"
-  },
-  activityStatus: {
-    en: "Activity Status",
-    ar: "حالة النشاط"
-  },
-  deleteMyAccount: {
-    en: "Delete My Account",
-    ar: "حذف حسابي"
-  },
-  deleteAccountDescription: {
-    en: "Permanently delete your account and all associated data. This action cannot be undone.",
-    ar: "حذف حسابك وجميع البيانات المرتبطة به بشكل دائم. لا يمكن التراجع عن هذا الإجراء."
+    en: "Every App Start",
+    ar: "في كل بداية للتطبيق",
   },
   quotePreferencesUpdated: {
     en: "Quote preferences updated",
-    ar: "تم تحديث تفضيلات الاقتباس"
+    ar: "تم تحديث تفضيلات الاقتباس",
   },
-  
-  // Add new translation keys for password fields
-  currentPassword: {
-    en: "Current Password",
-    ar: "كلمة المرور الحالية"
+  manageCustomQuotes: {
+    en: "Manage Custom Quotes",
+    ar: "إدارة الاقتباسات المخصصة",
   },
-  newPassword: {
-    en: "New Password",
-    ar: "كلمة المرور الجديدة"
+  notificationPreferences: {
+    en: "Notification Preferences",
+    ar: "تفضيلات الإشعارات",
   },
-  currentPasswordRequired: {
-    en: "Current password is required",
-    ar: "كلمة المرور الحالية مطلوبة"
+  pushNotifications: {
+    en: "Push Notifications",
+    ar: "إشعارات الدفع",
   },
-  
-  // Add translations for the Tasjeel component
-  tasjeel: {
-    en: "Tasjeel",
-    ar: "تسجيل"
+  emailNotifications: {
+    en: "Email Notifications",
+    ar: "إشعارات البريد الإلكتروني",
   },
-  uploadDescription: {
-    en: "Upload audio/text files for transcription and summary",
-    ar: "رفع ملفات صوتية/نصية للنسخ والتلخيص"
-  }
+  widgetVisibility: {
+    en: "Widget Visibility",
+    ar: "رؤية الأدوات",
+  },
+  tasksWidget: {
+    en: "Tasks Widget",
+    ar: "أداة المهام",
+  },
+  calendarWidget: {
+    en: "Calendar Widget",
+    ar: "أداة التقويم",
+  },
+  remindersWidget: {
+    en: "Reminders Widget",
+    ar: "أداة التذكيرات",
+  },
+  dailyQuoteWidget: {
+    en: "Daily Quote Widget",
+    ar: "أداة الاقتباس اليومي",
+  },
+  privacyControls: {
+    en: "Privacy Controls",
+    ar: "ضوابط الخصوصية",
+  },
+  profileVisibility: {
+    en: "Profile Visibility",
+    ar: "رؤية الملف الشخصي",
+  },
+  activityStatus: {
+    en: "Activity Status",
+    ar: "حالة النشاط",
+  },
+  saveAllSettings: {
+    en: "Save All Settings",
+    ar: "حفظ جميع الإعدادات",
+  },
+  saveAllSettingsQuestion: {
+    en: "Are you sure you want to save all settings?",
+    ar: "هل أنت متأكد أنك تريد حفظ جميع الإعدادات؟",
+  },
+  saveAllSettingsConfirmation: {
+    en: "This will save all your current settings.",
+    ar: "سيؤدي هذا إلى حفظ جميع إعداداتك الحالية.",
+  },
+  allSettingsSaved: {
+    en: "All settings saved!",
+    ar: "تم حفظ جميع الإعدادات!",
+  },
+  arabic: {
+    en: "Arabic",
+    ar: "العربية",
+  },
+  english: {
+    en: "English",
+    ar: "الإنجليزية",
+  },
+   theme: {
+    en: "Theme",
+    ar: "النمط",
+  },
+  darkMode: {
+    en: "Dark Mode",
+    ar: "الوضع الداكن",
+  },
+  lightMode: {
+    en: "Light Mode",
+    ar: "الوضع الفاتح",
+  },
+  appearance: {
+    en: "Appearance",
+    ar: "المظهر",
+  },
+  appearanceSettings: {
+    en: "Manage the look and feel of your app.",
+    ar: "إدارة شكل وتصميم تطبيقك.",
+  },
+  contactsSettings: {
+    en: "Manage your contacts settings.",
+    ar: "إدارة إعدادات جهات الاتصال الخاصة بك.",
+  },
+  contactsSettingsDescription: {
+    en: "Configure how you want to handle contact requests.",
+    ar: "تكوين الطريقة التي تريد بها التعامل مع طلبات جهات الاتصال.",
+  },
+  autoApproveRequests: {
+    en: "Auto-Approve Contact Requests",
+    ar: "الموافقة التلقائية على طلبات جهات الاتصال",
+  },
+  autoApproveExplanation: {
+    en: "Automatically approve contact requests from other users.",
+    ar: "الموافقة تلقائيًا على طلبات جهات الاتصال من المستخدمين الآخرين.",
+  },
+  settingsUpdated: {
+    en: "Settings updated",
+    ar: "تم تحديث الإعدادات",
+  },
+  contactSettingsUpdated: {
+    en: "Your contact settings have been updated.",
+    ar: "تم تحديث إعدادات جهات الاتصال الخاصة بك.",
+  },
+  errorUpdatingSettings: {
+    en: "There was an error updating your settings. Please try again.",
+    ar: "حدث خطأ أثناء تحديث إعداداتك. يرجى المحاولة مرة أخرى.",
+  },
+  custom: {
+    en: "Custom",
+    ar: "مخصص",
+  },
+  "search": {
+    en: "Search",
+    ar: "بحث"
+  },
+  "enterAtLeastThreeCharacters": {
+    en: "Enter at least 3 characters to search",
+    ar: "أدخل 3 أحرف على الأقل للبحث"
+  },
+};
+
+export const t = (key: TranslationKey, language: string): string => {
+  return translations[key][language as "en" | "ar"] || translations[key]["en"];
 };

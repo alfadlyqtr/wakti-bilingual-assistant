@@ -16,6 +16,7 @@ type UserProfile = {
   display_name?: string;
   username?: string;
   avatar_url?: string;
+  email?: string;
   [key: string]: any;
 };
 

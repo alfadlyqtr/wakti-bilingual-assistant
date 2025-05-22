@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useRef } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ export function ContactSearch() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Search users query
   const { 
@@ -61,6 +63,22 @@ export function ContactSearch() {
     }
   };
 
+  const handleSearchSubmit = async () => {
+    if (searchQuery.length >= 3) {
+      setIsSearching(true);
+      await performSearch();
+    } else if (searchQuery.length > 0) {
+      toast.info(t("enterAtLeastThreeCharacters", language));
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSearchSubmit();
+    }
+  };
+
   const handleSendRequest = (userId: string) => {
     sendRequestMutation.mutate(userId);
   };
@@ -80,8 +98,17 @@ export function ContactSearch() {
             className="pl-9"
             value={searchQuery}
             onChange={handleSearch}
+            onKeyPress={handleKeyPress}
+            ref={inputRef}
           />
         </div>
+        <Button 
+          onClick={handleSearchSubmit}
+          disabled={searchQuery.length < 1}
+          size="sm"
+        >
+          {t("search", language)}
+        </Button>
       </div>
 
       {isSearching && isSearchLoading && (
@@ -105,6 +132,9 @@ export function ContactSearch() {
                   <div>
                     <p className="font-medium">{user.display_name}</p>
                     <p className="text-xs text-muted-foreground">@{user.username}</p>
+                    {user.email && (
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    )}
                   </div>
                 </div>
                 <Button 
