@@ -114,8 +114,9 @@ export function ContactList() {
     blockContactMutation.mutate(contactId);
   };
 
-  const handleDeleteClick = (contactId: string, name: string) => {
-    setContactToDelete({ id: contactId, name });
+  // Fix: Update to store the actual contact record ID instead of just the contact's user ID
+  const handleDeleteClick = (contact: ContactType, name: string) => {
+    setContactToDelete({ id: contact.id, name });
     setDeleteDialogOpen(true);
   };
 
@@ -205,7 +206,7 @@ export function ContactList() {
                       <Button 
                         size="icon" 
                         variant="ghost"
-                        onClick={() => handleDeleteClick(contact.contact_id, displayName)}
+                        onClick={() => handleDeleteClick(contact, displayName)}
                         disabled={deleteContactMutation.isPending}
                       >
                         <Trash2 className="h-4 w-4 text-muted-foreground" />

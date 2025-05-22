@@ -518,29 +518,12 @@ export async function deleteContact(contactId: string): Promise<boolean> {
   if (!session.session) {
     throw new Error("User not authenticated");
   }
-
-  const userId = session.session.user.id;
   
-  // Find the contact record to delete
-  const { data: contactRecord } = await supabase
-    .from("contacts")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("contact_id", contactId)
-    .eq("status", "approved")
-    .limit(1);
-  
-  // If no contact record found, return false
-  if (!contactRecord || contactRecord.length === 0) {
-    console.error("Contact record not found for deletion");
-    return false;
-  }
-  
-  // Delete the contact record
+  // Delete the contact record directly using its ID
   const { error } = await supabase
     .from("contacts")
     .delete()
-    .eq("id", contactRecord[0].id);
+    .eq("id", contactId);
 
   if (error) {
     console.error("Error deleting contact:", error);
