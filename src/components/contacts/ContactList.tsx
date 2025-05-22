@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -197,7 +198,7 @@ export function ContactList() {
         <p>{t("errorLoadingContacts", language)}</p>
         <p className="text-sm mt-2">{(error as Error)?.message}</p>
         <Button className="mt-4" onClick={() => refetchContacts()}>
-          {t("tryAgain", language)}
+          {t("loading", language)}
         </Button>
       </Card>
     );
