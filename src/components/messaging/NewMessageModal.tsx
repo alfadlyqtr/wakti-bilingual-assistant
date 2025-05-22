@@ -10,14 +10,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, User, X, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getContacts, getBlockStatus } from "@/services/contactsService";
-import { createConversation } from "@/services/messageService";
-import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 
 interface NewMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectContact: (conversationId: string) => void;
+  onSelectContact: (contactId: string) => void;
 }
 
 type UserProfile = {
@@ -38,7 +36,6 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   const { language } = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
-  const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [blockStatuses, setBlockStatuses] = useState<Record<string, { isBlocked: boolean; isBlockedBy: boolean }>>({});
   
   // Get contacts list - we only want approved contacts
@@ -115,19 +112,8 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
     }
     
     setSelectedContactId(contactId);
-    setIsCreatingConversation(true);
-    
-    try {
-      // Create or get conversation with this contact
-      const conversationId = await createConversation(contactId);
-      onSelectContact(conversationId);
-      onClose();
-    } catch (error) {
-      console.error("Error creating conversation:", error);
-      toast.error(t("errorCreatingConversation", language));
-    } finally {
-      setIsCreatingConversation(false);
-    }
+    onSelectContact(contactId);
+    onClose();
   };
 
   const getInitials = (name: string) => {
@@ -191,7 +177,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
         <ScrollArea className="h-[300px]">
           {isLoading ? (
             <div className="flex justify-center items-center h-full">
-              <LoadingSpinner size="lg" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
             <div className="space-y-1">
@@ -216,8 +202,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       variant="ghost"
                       className="w-full justify-start"
                       onClick={() => handleSelectContact(contact.contact_id)}
-                      disabled={isCreatingConversation || 
-                              selectedContactId === contact.contact_id || 
+                      disabled={selectedContactId === contact.contact_id || 
                               isContactBlocked || 
                               isBlockedByContact}
                     >
@@ -229,9 +214,6 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                       </Avatar>
                       <span className="truncate">{displayName}</span>
                       {renderContactStatus(contact.contact_id)}
-                      {isCreatingConversation && selectedContactId === contact.contact_id && (
-                        <LoadingSpinner size="sm" className="ml-2" />
-                      )}
                     </Button>
                   );
                 })
@@ -239,13 +221,6 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
             </div>
           )}
         </ScrollArea>
-        
-        {isCreatingConversation && (
-          <div className="flex justify-center items-center pt-2">
-            <LoadingSpinner size="sm" />
-            <span className="ml-2 text-sm text-muted-foreground">{t("creatingConversation", language)}</span>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

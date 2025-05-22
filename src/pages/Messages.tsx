@@ -2,14 +2,15 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { ConversationsList } from "@/components/messaging/ConversationsList";
-import { ConversationView } from "@/components/messaging/ConversationView";
+import { ContactList } from "@/components/messaging/ContactList";
+import { DirectMessageView } from "@/components/messaging/DirectMessageView";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Search, PenSquare } from "lucide-react";
 import { NewMessageModal } from "@/components/messaging/NewMessageModal";
 import { Input } from "@/components/ui/input";
 import { useLocation, useNavigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -17,36 +18,56 @@ const queryClient = new QueryClient();
 export default function Messages() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { language, theme } = useTheme();
-  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const { language } = useTheme();
+  const [activeContactId, setActiveContactId] = useState<string | null>(null);
+  const [contactName, setContactName] = useState<string>("");
   const [showNewMessageModal, setShowNewMessageModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Check URL for conversation ID
+  // Check URL for contact ID
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const conversationId = params.get('conversation');
+    const contactId = params.get('contact');
     
-    if (conversationId) {
-      setActiveConversation(conversationId);
+    if (contactId) {
+      setActiveContactId(contactId);
+      fetchContactName(contactId);
     }
   }, [location.search]);
 
-  // Toggle back to conversation list on mobile
+  // Fetch contact name
+  const fetchContactName = async (contactId: string) => {
+    try {
+      const { data } = await supabase
+        .from("profiles")
+        .select("display_name, username")
+        .eq("id", contactId)
+        .single();
+      
+      if (data) {
+        setContactName(data.display_name || data.username || "");
+      }
+    } catch (error) {
+      console.error("Error fetching contact name:", error);
+    }
+  };
+
+  // Toggle back to contact list on mobile
   const handleBackToList = () => {
-    setActiveConversation(null);
+    setActiveContactId(null);
     navigate('/messages');
   };
 
-  // Handle selecting a conversation
-  const handleSelectConversation = (conversationId: string) => {
-    setActiveConversation(conversationId);
-    navigate(`/messages?conversation=${conversationId}`);
+  // Handle selecting a contact
+  const handleSelectContact = (contactId: string) => {
+    setActiveContactId(contactId);
+    navigate(`/messages?contact=${contactId}`);
+    fetchContactName(contactId);
   };
 
-  // Custom header content for conversation view
-  const renderConversationHeader = () => {
-    if (!activeConversation) return null;
+  // Custom header content for message view
+  const renderMessageHeader = () => {
+    if (!activeContactId) return null;
     
     return (
       <header className="sticky top-0 z-20 flex items-center py-4 px-4 bg-background border-b border-border w-full">
@@ -60,9 +81,9 @@ export default function Messages() {
         </Button>
         <div className="flex items-center justify-center">
           <div className="w-8 h-8 bg-muted rounded-full mr-2 flex items-center justify-center">
-            {activeConversation?.charAt(0)}
+            {contactName?.charAt(0) || activeContactId.charAt(0)}
           </div>
-          <h1 className="text-lg font-medium">{activeConversation}</h1>
+          <h1 className="text-lg font-medium">{contactName || activeContactId}</h1>
         </div>
       </header>
     );
@@ -72,7 +93,7 @@ export default function Messages() {
     <QueryClientProvider client={queryClient}>
       <div className="flex-1 overflow-y-auto pb-16">
         {/* Search bar - at top */}
-        {!activeConversation && (
+        {!activeContactId && (
           <div className="px-4 py-2 w-full">
             <div className="relative w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -98,30 +119,30 @@ export default function Messages() {
           </div>
         )}
 
-        {/* Active Conversation Header */}
-        {activeConversation && renderConversationHeader()}
+        {/* Active Message Header */}
+        {activeContactId && renderMessageHeader()}
 
         {/* Main content with proper padding to accommodate navigation */}
         <div className="flex flex-1 overflow-hidden w-full pb-16">
-          {/* Conversation List (hidden on mobile when a conversation is active) */}
-          <div className={`flex flex-col w-full md:w-1/3 ${activeConversation ? "hidden md:flex" : "flex"}`}>
-            <ConversationsList 
-              onSelectConversation={handleSelectConversation} 
-              activeConversationId={activeConversation}
+          {/* Contact List (hidden on mobile when a contact is active) */}
+          <div className={`flex flex-col w-full md:w-1/3 ${activeContactId ? "hidden md:flex" : "flex"}`}>
+            <ContactList 
+              onSelectContact={handleSelectContact} 
+              activeContactId={activeContactId}
               searchQuery={searchQuery}
             />
           </div>
 
-          {/* Active Conversation (full screen on mobile when active) */}
-          <div className={`flex-1 ${!activeConversation ? "hidden md:block" : "block"} h-full`}>
-            {activeConversation ? (
-              <ConversationView 
-                conversationId={activeConversation} 
+          {/* Active Message (full screen on mobile when active) */}
+          <div className={`flex-1 ${!activeContactId ? "hidden md:block" : "block"} h-full`}>
+            {activeContactId ? (
+              <DirectMessageView 
+                contactId={activeContactId} 
                 onBack={handleBackToList}
               />
             ) : (
               <div className="hidden md:flex h-full items-center justify-center text-muted-foreground">
-                <p>{t("selectConversation", language)}</p>
+                <p>{t("selectContact", language)}</p>
               </div>
             )}
           </div>
@@ -131,8 +152,8 @@ export default function Messages() {
         <NewMessageModal 
           isOpen={showNewMessageModal} 
           onClose={() => setShowNewMessageModal(false)}
-          onSelectContact={(conversationId) => {
-            handleSelectConversation(conversationId);
+          onSelectContact={(contactId) => {
+            handleSelectContact(contactId);
             setShowNewMessageModal(false);
           }}
         />

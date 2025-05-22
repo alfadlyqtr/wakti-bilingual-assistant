@@ -169,6 +169,48 @@ export type Database = {
         }
         Relationships: []
       }
+      direct_messages: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_read: boolean | null
+          media_duration: number | null
+          media_type: string | null
+          media_url: string | null
+          message_type: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          media_duration?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          message_type?: string | null
+          recipient_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          media_duration?: number | null
+          media_type?: string | null
+          media_url?: string | null
+          message_type?: string | null
+          recipient_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       event_invitees: {
         Row: {
           created_at: string | null
@@ -654,6 +696,10 @@ export type Database = {
       gtrgm_out: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      mark_messages_as_read: {
+        Args: { other_user_id: string }
+        Returns: undefined
       }
       set_limit: {
         Args: { "": number }
