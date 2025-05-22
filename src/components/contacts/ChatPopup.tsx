@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -87,18 +86,18 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   });
 
-  // Setup realtime subscription
+  // Setup realtime subscription - UPDATED to use 'messages' table
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
 
     const channel = supabase
-      .channel('public:direct_messages')
+      .channel('public:messages')
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'direct_messages',
+          table: 'messages',
           filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
         },
         () => {

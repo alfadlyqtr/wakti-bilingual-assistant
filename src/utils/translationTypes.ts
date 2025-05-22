@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = 'en' | 'ar';
 
 export type TranslationKey =
@@ -394,4 +393,4 @@ export type TranslationKey =
   | "blockedByContact"
   | "cantMessageBlockedContact"
   | "youAreBlocked"
-  | "errorUploadingImage"; // Added the missing translation key
+  | "errorUploadingImage";
