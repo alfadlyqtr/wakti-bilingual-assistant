@@ -19,6 +19,13 @@ export interface DirectMessage {
   };
 }
 
+// Type for the sender field as returned by Supabase
+interface SenderProfile {
+  display_name?: string;
+  username?: string;
+  avatar_url?: string;
+}
+
 // Get messages between current user and a contact
 export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   const { data: session } = await supabase.auth.getSession();
@@ -60,12 +67,15 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
 
   // Transform the data to match our DirectMessage interface
   const transformedMessages: DirectMessage[] = data.map(message => {
+    // Properly extract sender data regardless of format
+    const senderData = message.sender as SenderProfile;
+    
     return {
       ...message,
-      sender: message.sender ? {
-        display_name: Array.isArray(message.sender) ? message.sender[0]?.display_name : message.sender.display_name,
-        username: Array.isArray(message.sender) ? message.sender[0]?.username : message.sender.username,
-        avatar_url: Array.isArray(message.sender) ? message.sender[0]?.avatar_url : message.sender.avatar_url
+      sender: senderData ? {
+        display_name: senderData.display_name,
+        username: senderData.username,
+        avatar_url: senderData.avatar_url
       } : undefined
     };
   });
@@ -168,4 +178,3 @@ export const formatRecipient = (recipientData: any) => {
     avatarUrl: data?.avatar_url || ""
   };
 };
-
