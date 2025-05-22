@@ -46,37 +46,33 @@ export async function getContacts() {
 
   const userId = session.session.user.id;
 
-  // Step 1: Get contact IDs from the contacts table
-  const { data: rows, error: err1 } = await supabase
+  // Modified query to fetch contact relationship records along with profile data
+  const { data, error } = await supabase
     .from('contacts')
-    .select('contact_id')
+    .select(`
+      id,
+      user_id,
+      contact_id,
+      profiles:contact_id(
+        id, 
+        username, 
+        display_name, 
+        avatar_url
+      )
+    `)
     .eq('user_id', userId)
     .eq('status', 'approved');
   
-  if (err1) {
-    console.error("Error fetching contacts:", err1);
-    throw err1;
-  }
-
-  const ids = rows.map(r => r.contact_id);
-  if (!ids.length) return [];
-
-  // Step 2: Get profiles for those IDs
-  const { data: profiles, error: err2 } = await supabase
-    .from('profiles')
-    .select('id, username, display_name, avatar_url')
-    .in('id', ids);
-  
-  if (err2) {
-    console.error("Error fetching contact profiles:", err2);
-    throw err2;
+  if (error) {
+    console.error("Error fetching contacts:", error);
+    throw error;
   }
 
   // Transform data to match expected format
-  return profiles.map(profile => ({
-    id: profile.id,
-    contact_id: profile.id,
-    profile: profile
+  return data.map(contact => ({
+    id: contact.id,                  // This is now the contact relationship ID
+    contact_id: contact.contact_id,  // This is the user's ID we're contacting
+    profile: contact.profiles
   }));
 }
 
@@ -518,29 +514,12 @@ export async function deleteContact(contactId: string): Promise<boolean> {
   if (!session.session) {
     throw new Error("User not authenticated");
   }
-
-  const userId = session.session.user.id;
   
-  // Find the contact record to delete
-  const { data: contactRecord } = await supabase
-    .from("contacts")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("contact_id", contactId)
-    .eq("status", "approved")
-    .limit(1);
-  
-  // If no contact record found, return false
-  if (!contactRecord || contactRecord.length === 0) {
-    console.error("Contact record not found for deletion");
-    return false;
-  }
-  
-  // Delete the contact record
+  // Delete the contact record directly using its ID
   const { error } = await supabase
     .from("contacts")
     .delete()
-    .eq("id", contactRecord[0].id);
+    .eq("id", contactId);
 
   if (error) {
     console.error("Error deleting contact:", error);
