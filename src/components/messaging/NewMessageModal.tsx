@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, User, X, Shield } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { getContacts, isUserBlocked, isBlockedByUser } from "@/services/contactsService";
+import { getContacts, getBlockStatus } from "@/services/contactsService";
 import { createConversation } from "@/services/messageService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { toast } from "sonner";
 interface NewMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectContact: (contactId: string) => void;
+  onSelectContact: (conversationId: string) => void;
 }
 
 type UserProfile = {
@@ -39,10 +39,9 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
-  const [blockedContacts, setBlockedContacts] = useState<Record<string, boolean>>({});
-  const [blockedByContacts, setBlockedByContacts] = useState<Record<string, boolean>>({});
+  const [blockStatuses, setBlockStatuses] = useState<Record<string, { isBlocked: boolean; isBlockedBy: boolean }>>({});
   
-  // Get contacts list
+  // Get contacts list - we only want approved contacts
   const { data: contacts, isLoading, error } = useQuery({
     queryKey: ['contacts'],
     queryFn: getContacts,
@@ -68,27 +67,21 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
     async function checkBlockStatuses() {
       if (!contacts || contacts.length === 0) return;
       
-      const blocked: Record<string, boolean> = {};
-      const blockedBy: Record<string, boolean> = {};
+      const statuses: Record<string, { isBlocked: boolean; isBlockedBy: boolean }> = {};
       
       await Promise.all(
         contacts.map(async (contact: ContactType) => {
           try {
-            const [isBlocked, isBlockedByResult] = await Promise.all([
-              isUserBlocked(contact.contact_id),
-              isBlockedByUser(contact.contact_id)
-            ]);
-            
-            blocked[contact.contact_id] = isBlocked;
-            blockedBy[contact.contact_id] = isBlockedByResult;
+            const status = await getBlockStatus(contact.contact_id);
+            statuses[contact.contact_id] = status;
           } catch (error) {
             console.error(`Error checking block status for ${contact.contact_id}:`, error);
+            statuses[contact.contact_id] = { isBlocked: false, isBlockedBy: false };
           }
         })
       );
       
-      setBlockedContacts(blocked);
-      setBlockedByContacts(blockedBy);
+      setBlockStatuses(statuses);
     }
     
     if (contacts && contacts.length > 0) {
@@ -109,12 +102,14 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
 
   const handleSelectContact = async (contactId: string) => {
     // Check if contact is blocked or has blocked user
-    if (blockedContacts[contactId]) {
+    const blockStatus = blockStatuses[contactId] || { isBlocked: false, isBlockedBy: false };
+    
+    if (blockStatus.isBlocked) {
       toast.warning(t("cantMessageBlockedContact", language));
       return;
     }
     
-    if (blockedByContacts[contactId]) {
+    if (blockStatus.isBlockedBy) {
       toast.warning(t("blockedByContact", language));
       return;
     }
@@ -142,7 +137,10 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
 
   // Helper to render contact status indicator
   const renderContactStatus = (contactId: string) => {
-    if (blockedContacts[contactId]) {
+    const status = blockStatuses[contactId];
+    if (!status) return null;
+    
+    if (status.isBlocked) {
       return (
         <div className="flex items-center text-xs text-destructive ml-2">
           <Shield className="h-3 w-3 mr-1" />
@@ -151,7 +149,7 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
       );
     }
     
-    if (blockedByContacts[contactId]) {
+    if (status.isBlockedBy) {
       return (
         <div className="flex items-center text-xs text-muted-foreground ml-2">
           <Shield className="h-3 w-3 mr-1" />
@@ -208,8 +206,9 @@ export function NewMessageModal({ isOpen, onClose, onSelectContact }: NewMessage
                 filteredContacts.map((contact: ContactType) => {
                   const profile = contact.profile || {} as UserProfile;
                   const displayName = profile.display_name || profile.username || "Unknown User";
-                  const isContactBlocked = blockedContacts[contact.contact_id];
-                  const isBlockedByContact = blockedByContacts[contact.contact_id];
+                  const status = blockStatuses[contact.contact_id] || { isBlocked: false, isBlockedBy: false };
+                  const isContactBlocked = status.isBlocked;
+                  const isBlockedByContact = status.isBlockedBy;
                   
                   return (
                     <Button

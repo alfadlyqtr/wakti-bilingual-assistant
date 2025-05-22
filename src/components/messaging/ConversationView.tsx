@@ -8,7 +8,6 @@ import { MessageInputBar } from "./MessageInputBar";
 import { getMessages, getConversationById, sendMessage } from "@/services/messageService";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { LoadingSpinner } from "@/components/ui/loading";
-import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { MessageSquare, Shield } from "lucide-react";

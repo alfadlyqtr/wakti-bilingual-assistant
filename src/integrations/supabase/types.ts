@@ -623,6 +623,10 @@ export type Database = {
         Args: { user1: string; user2: string }
         Returns: boolean
       }
+      can_users_message: {
+        Args: { sender_id: string; recipient_id: string }
+        Returns: boolean
+      }
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined
