@@ -11,6 +11,7 @@ export interface Contact {
     display_name: string;
     username: string;
     avatar_url?: string;
+    email?: string;
   };
 }
 
@@ -24,7 +25,16 @@ export interface ContactRequest {
     display_name: string;
     username: string;
     avatar_url?: string;
+    email?: string;
   };
+}
+
+export interface UserSearchResult {
+  id: string;
+  username: string;
+  display_name: string;
+  avatar_url?: string;
+  email?: string;
 }
 
 // Get all approved contacts for the current user
@@ -181,7 +191,7 @@ export async function getBlockedContacts() {
 }
 
 // Search for users to add as contacts
-export async function searchUsers(query: string) {
+export async function searchUsers(query: string): Promise<UserSearchResult[]> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
     throw new Error("User not authenticated");
@@ -196,7 +206,8 @@ export async function searchUsers(query: string) {
       id,
       username,
       display_name,
-      avatar_url
+      avatar_url,
+      email
     `)
     .or(`username.ilike.%${query}%,display_name.ilike.%${query}%,email.ilike.%${query}%`)
     .neq('id', userId)

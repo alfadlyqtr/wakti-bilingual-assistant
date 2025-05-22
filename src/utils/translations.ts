@@ -1,5 +1,6 @@
 import { en } from "./translations/en";
 import { ar } from "./translations/ar";
+import { TranslationKey } from "./translationTypes";
 
 export type Translation = {
   en: string;
@@ -510,7 +511,7 @@ export const translations: Record<TranslationKey, Translation> = {
     en: "English",
     ar: "الإنجليزية",
   },
-   theme: {
+  theme: {
     en: "Theme",
     ar: "النمط",
   },
@@ -573,5 +574,5 @@ export const translations: Record<TranslationKey, Translation> = {
 };
 
 export const t = (key: TranslationKey, language: string): string => {
-  return translations[key][language as "en" | "ar"] || translations[key]["en"];
+  return translations[key]?.[language as "en" | "ar"] || en[key] || key;
 };

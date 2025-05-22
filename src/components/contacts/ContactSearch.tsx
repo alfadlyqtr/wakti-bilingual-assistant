@@ -132,6 +132,7 @@ export function ContactSearch() {
                   <div>
                     <p className="font-medium">{user.display_name}</p>
                     <p className="text-xs text-muted-foreground">@{user.username}</p>
+                    {/* Check if email exists before rendering it */}
                     {user.email && (
                       <p className="text-xs text-muted-foreground">{user.email}</p>
                     )}
