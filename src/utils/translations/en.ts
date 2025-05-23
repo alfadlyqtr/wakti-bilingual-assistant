@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -325,5 +324,9 @@ export const en: Record<TranslationKey, string> = {
   privacyControls: "Privacy Controls",
   profileVisibility: "Profile Visibility",
   activityStatus: "Activity Status",
-  saveAllSettings: "Save All Settings"
+  saveAllSettings: "Save All Settings",
+  // Added translations for ChatPopup.tsx
+  justNow: "Just now",
+  minsAgo: "m ago",
+  activeNow: "Active now"
 };

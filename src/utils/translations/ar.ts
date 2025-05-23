@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -321,5 +320,8 @@ export const ar: Record<TranslationKey, string> = {
   privacyControls: "ضوابط الخصوصية",
   profileVisibility: "ظهور الملف الشخصي",
   activityStatus: "حالة النشاط",
-  saveAllSettings: "حفظ جميع الإعدادات"
+  saveAllSettings: "حفظ جميع الإعدادات",
+  justNow: "الآن",
+  minsAgo: "د",
+  activeNow: "نشط الآن"
 };
