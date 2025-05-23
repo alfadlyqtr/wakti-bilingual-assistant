@@ -165,52 +165,52 @@ export function ContactList() {
             
             return (
               <Card key={contact.id} className="overflow-hidden">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
+                <CardContent className="p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarImage src={contactProfile.avatar_url || ""} />
                         <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="font-medium">{displayName}</p>
-                        <p className="text-sm text-muted-foreground">@{username}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{displayName}</p>
+                        <p className="text-sm text-muted-foreground truncate">@{username}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5 flex-shrink-0">
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleToggleFavorite(contact.id, displayName)}
-                        className="h-10 w-10 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
+                        className="h-8 w-8 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
                       >
-                        <Star className={`h-5 w-5 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
+                        <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleOpenChat(contact.contact_id, displayName, contactProfile.avatar_url)}
-                        className="h-10 w-10 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                       >
-                        <MessageSquare className="h-5 w-5 text-blue-600" />
+                        <MessageSquare className="h-4 w-4 text-blue-600" />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleBlock(contact.contact_id)}
                         disabled={blockContactMutation.isPending}
-                        className="h-10 w-10 hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                        className="h-8 w-8 hover:bg-orange-50 hover:text-orange-600 transition-colors"
                       >
-                        <UserX className="h-5 w-5 text-orange-600" />
+                        <UserX className="h-4 w-4 text-orange-600" />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleDeleteClick(contact, displayName)}
                         disabled={deleteContactMutation.isPending}
-                        className="h-10 w-10 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        className="h-8 w-8 hover:bg-red-50 hover:text-red-600 transition-colors"
                       >
-                        <Trash2 className="h-5 w-5 text-red-600" />
+                        <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>
                     </div>
                   </div>
