@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -16,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import BackgroundCustomizer from './BackgroundCustomizer';
+import TextStyleControls from './TextStyleControls';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -37,6 +37,16 @@ interface BackgroundData {
   backgroundImage?: string;
 }
 
+interface TextStyleData {
+  fontSize: number;
+  textColor: string;
+  textAlign: 'left' | 'center' | 'right';
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textDecoration: 'none' | 'underline';
+  fontFamily: string;
+}
+
 export default function EventCreate() {
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -44,6 +54,16 @@ export default function EventCreate() {
   const [backgroundData, setBackgroundData] = useState<BackgroundData>({
     type: 'color',
     backgroundColor: '#3b82f6'
+  });
+
+  const [textStyleData, setTextStyleData] = useState<TextStyleData>({
+    fontSize: 24,
+    textColor: '#ffffff',
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontStyle: 'normal',
+    textDecoration: 'none',
+    fontFamily: 'Inter'
   });
 
   const {
@@ -80,7 +100,7 @@ export default function EventCreate() {
 
       console.log('User authenticated:', userData.user.id);
 
-      // Prepare event data with explicit created_by field
+      // Prepare event data with explicit created_by field and text styling
       const eventData = {
         title: data.title,
         description: data.description || null,
@@ -95,6 +115,13 @@ export default function EventCreate() {
         background_color: backgroundData.backgroundColor || null,
         background_gradient: backgroundData.backgroundGradient || null,
         background_image: backgroundData.backgroundImage || null,
+        font_size: textStyleData.fontSize,
+        text_color: textStyleData.textColor,
+        text_align: textStyleData.textAlign,
+        font_weight: textStyleData.fontWeight,
+        font_style: textStyleData.fontStyle,
+        text_decoration: textStyleData.textDecoration,
+        font_family: textStyleData.fontFamily,
       };
 
       console.log('Creating event with prepared data:', eventData);
@@ -133,6 +160,10 @@ export default function EventCreate() {
       setValue('start_time', startOfDay.toISOString().slice(0, 16));
       setValue('end_time', endOfDay.toISOString().slice(0, 16));
     }
+  };
+
+  const handleBackgroundChange = (background: BackgroundData) => {
+    setBackgroundData(background);
   };
 
   return (
@@ -275,11 +306,52 @@ export default function EventCreate() {
               </div>
 
               {/* Background Customization */}
+              <div 
+                className="mt-2 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-white font-bold"
+                style={{
+                  background: backgroundData.type === 'gradient' 
+                    ? backgroundData.backgroundGradient
+                    : backgroundData.type === 'image' || backgroundData.type === 'ai'
+                    ? `url(${backgroundData.backgroundImage}) center/cover`
+                    : backgroundData.backgroundColor || '#3b82f6',
+                  fontSize: `${textStyleData.fontSize}px`,
+                  color: textStyleData.textColor,
+                  textAlign: textStyleData.textAlign,
+                  fontWeight: textStyleData.fontWeight,
+                  fontStyle: textStyleData.fontStyle,
+                  textDecoration: textStyleData.textDecoration,
+                  fontFamily: textStyleData.fontFamily,
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+                }}
+              >
+                <span>
+                  {watchedTitle || 'Your Event Title'}
+                </span>
+              </div>
+
               <BackgroundCustomizer 
-                onBackgroundChange={setBackgroundData}
+                onBackgroundChange={handleBackgroundChange}
                 currentBackground={backgroundData}
                 eventTitle={watchedTitle}
                 eventDescription={watchedDescription}
+              />
+
+              {/* Text Styling Controls */}
+              <TextStyleControls
+                fontSize={textStyleData.fontSize}
+                textColor={textStyleData.textColor}
+                textAlign={textStyleData.textAlign}
+                fontWeight={textStyleData.fontWeight}
+                fontStyle={textStyleData.fontStyle}
+                textDecoration={textStyleData.textDecoration}
+                fontFamily={textStyleData.fontFamily}
+                onFontSizeChange={(size) => setTextStyleData(prev => ({ ...prev, fontSize: size }))}
+                onTextColorChange={(color) => setTextStyleData(prev => ({ ...prev, textColor: color }))}
+                onTextAlignChange={(align) => setTextStyleData(prev => ({ ...prev, textAlign: align }))}
+                onFontWeightChange={(weight) => setTextStyleData(prev => ({ ...prev, fontWeight: weight }))}
+                onFontStyleChange={(style) => setTextStyleData(prev => ({ ...prev, fontStyle: style }))}
+                onTextDecorationChange={(decoration) => setTextStyleData(prev => ({ ...prev, textDecoration: decoration }))}
+                onFontFamilyChange={(family) => setTextStyleData(prev => ({ ...prev, fontFamily: family }))}
               />
 
               {/* Settings */}
