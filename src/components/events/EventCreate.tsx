@@ -61,20 +61,26 @@ export default function EventCreate() {
   });
 
   const isAllDay = watch('is_all_day');
+  const watchedTitle = watch('title');
+  const watchedDescription = watch('description');
 
   const onSubmit = async (data: EventFormData) => {
     try {
       setIsLoading(true);
+      console.log('Starting event creation with data:', data);
 
       // Get current user
       const { data: userData, error: userError } = await supabase.auth.getUser();
       
       if (userError || !userData.user) {
+        console.error('User authentication error:', userError);
         toast.error('You must be logged in to create events');
         return;
       }
 
-      // Prepare event data
+      console.log('User authenticated:', userData.user.id);
+
+      // Prepare event data with explicit created_by field
       const eventData = {
         title: data.title,
         description: data.description || null,
@@ -91,7 +97,7 @@ export default function EventCreate() {
         background_image: backgroundData.backgroundImage || null,
       };
 
-      console.log('Creating event with data:', eventData);
+      console.log('Creating event with prepared data:', eventData);
 
       const { data: newEvent, error } = await supabase
         .from('events')
@@ -100,8 +106,8 @@ export default function EventCreate() {
         .single();
 
       if (error) {
-        console.error('Error creating event:', error);
-        toast.error('Failed to create event: ' + error.message);
+        console.error('Supabase insert error:', error);
+        toast.error(`Failed to create event: ${error.message}`);
         return;
       }
 
@@ -109,8 +115,8 @@ export default function EventCreate() {
       toast.success(t("eventCreatedSuccessfully", language));
       navigate('/events');
     } catch (error) {
-      console.error('Error creating event:', error);
-      toast.error('Failed to create event');
+      console.error('Unexpected error creating event:', error);
+      toast.error('An unexpected error occurred while creating the event');
     } finally {
       setIsLoading(false);
     }
@@ -272,6 +278,8 @@ export default function EventCreate() {
               <BackgroundCustomizer 
                 onBackgroundChange={setBackgroundData}
                 currentBackground={backgroundData}
+                eventTitle={watchedTitle}
+                eventDescription={watchedDescription}
               />
 
               {/* Settings */}

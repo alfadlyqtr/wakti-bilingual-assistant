@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, Wand2, Palette, Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -21,9 +22,16 @@ interface BackgroundCustomizerProps {
     backgroundGradient?: string;
     backgroundImage?: string;
   };
+  eventTitle?: string;
+  eventDescription?: string;
 }
 
-export default function BackgroundCustomizer({ onBackgroundChange, currentBackground }: BackgroundCustomizerProps) {
+export default function BackgroundCustomizer({ 
+  onBackgroundChange, 
+  currentBackground,
+  eventTitle = '',
+  eventDescription = ''
+}: BackgroundCustomizerProps) {
   const [activeTab, setActiveTab] = useState<'color' | 'gradient' | 'image' | 'ai'>(currentBackground?.type || 'color');
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -38,6 +46,9 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
   
   // Image state
   const [imageUrl, setImageUrl] = useState(currentBackground?.backgroundImage || '');
+  
+  // AI prompt state
+  const [aiPrompt, setAiPrompt] = useState('');
 
   const handleColorChange = (color: string) => {
     setSolidColor(color);
@@ -106,18 +117,41 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
     }
   };
 
+  const generateSmartPrompt = (): string => {
+    // If user provided a custom prompt, use it
+    if (aiPrompt.trim()) {
+      return aiPrompt.trim();
+    }
+    
+    // If event has description, use it
+    if (eventDescription.trim()) {
+      return `Beautiful background image for event: ${eventDescription}. Professional, elegant, and visually appealing.`;
+    }
+    
+    // If event has title, use it
+    if (eventTitle.trim()) {
+      return `Professional background image for "${eventTitle}" event. Modern, elegant design.`;
+    }
+    
+    // Fallback prompt
+    return 'Beautiful event background, elegant and modern design, professional atmosphere';
+  };
+
   const generateAIImage = async () => {
     try {
       setIsGeneratingImage(true);
       
-      // Simple AI generation - you can enhance this with prompt input later
+      const prompt = generateSmartPrompt();
+      console.log('Generating AI image with prompt:', prompt);
+      
       const response = await supabase.functions.invoke('generate-event-image', {
-        body: { 
-          prompt: 'Beautiful event background, elegant and modern design'
-        }
+        body: { prompt }
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        console.error('AI generation error:', response.error);
+        throw response.error;
+      }
 
       const generatedImageUrl = response.data?.imageURL;
       if (generatedImageUrl) {
@@ -128,14 +162,19 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
         });
         toast.success('AI image generated successfully');
       } else {
-        throw new Error('No image URL returned');
+        throw new Error('No image URL returned from AI generation');
       }
     } catch (error) {
       console.error('AI generation error:', error);
-      toast.error('Failed to generate AI image');
+      toast.error('Failed to generate AI image. Please try again.');
     } finally {
       setIsGeneratingImage(false);
     }
+  };
+
+  const clearImage = () => {
+    setImageUrl('');
+    onBackgroundChange({ type: 'color', backgroundColor: solidColor });
   };
 
   return (
@@ -291,10 +330,7 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
                 variant="destructive"
                 size="sm"
                 className="absolute top-1 right-1 h-6 w-6 p-0"
-                onClick={() => {
-                  setImageUrl('');
-                  onBackgroundChange({ type: 'color', backgroundColor: solidColor });
-                }}
+                onClick={clearImage}
               >
                 ×
               </Button>
@@ -303,21 +339,38 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
         </TabsContent>
 
         <TabsContent value="ai" className="space-y-4">
-          <Button
-            type="button"
-            className="w-full"
-            disabled={isGeneratingImage}
-            onClick={generateAIImage}
-          >
-            {isGeneratingImage ? (
-              <>Generating...</>
-            ) : (
-              <>
-                <Wand2 className="h-4 w-4 mr-2" />
-                Generate AI Background
-              </>
-            )}
-          </Button>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="ai-prompt" className="text-sm">Custom Prompt (Optional)</Label>
+              <Textarea
+                id="ai-prompt"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Describe your ideal background image, or leave blank to auto-generate from event details..."
+                rows={3}
+                className="resize-none"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                If left blank, will use event title and description to generate the image
+              </p>
+            </div>
+            
+            <Button
+              type="button"
+              className="w-full"
+              disabled={isGeneratingImage}
+              onClick={generateAIImage}
+            >
+              {isGeneratingImage ? (
+                <>Generating...</>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Generate AI Background
+                </>
+              )}
+            </Button>
+          </div>
           
           {imageUrl && activeTab === 'ai' && (
             <div className="relative">
@@ -331,10 +384,7 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
                 variant="destructive"
                 size="sm"
                 className="absolute top-1 right-1 h-6 w-6 p-0"
-                onClick={() => {
-                  setImageUrl('');
-                  onBackgroundChange({ type: 'color', backgroundColor: solidColor });
-                }}
+                onClick={clearImage}
               >
                 ×
               </Button>
