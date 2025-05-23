@@ -14,6 +14,7 @@ export const ProfileImageUpload = () => {
   const { language } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
+  const [imageError, setImageError] = useState(false);
 
   // Get user initials for avatar fallback
   const getUserInitials = () => {
@@ -39,12 +40,15 @@ export const ProfileImageUpload = () => {
       const fileName = `${user?.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
       const filePath = `${fileName}`;
       
+      console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type });
+      
       // Upload the file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file);
         
       if (uploadError) {
+        console.error('Upload error:', uploadError);
         throw uploadError;
       }
       
@@ -53,44 +57,65 @@ export const ProfileImageUpload = () => {
         .from('avatars')
         .getPublicUrl(filePath);
       
-      const avatarUrl = storageData.publicUrl;
+      const newAvatarUrl = storageData.publicUrl;
+      console.log('New avatar URL:', newAvatarUrl);
       
       // Update user metadata with the correct structure expected by Supabase Auth
       const { error: authError } = await updateProfile({
         user_metadata: { 
-          avatar_url: avatarUrl 
+          avatar_url: newAvatarUrl 
         }
       });
       
       if (authError) {
+        console.error('Auth update error:', authError);
         throw authError;
       }
 
       // Also update the profiles table so ContactList can see the avatar
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ avatar_url: avatarUrl })
+        .update({ avatar_url: newAvatarUrl })
         .eq('id', user?.id);
       
       if (profileError) {
         console.error('Error updating profile avatar:', profileError);
         // Don't throw here as auth update was successful
+      } else {
+        console.log('Successfully updated profile avatar in database');
       }
       
-      setAvatarUrl(avatarUrl);
+      setAvatarUrl(newAvatarUrl);
+      setImageError(false); // Reset error state on successful upload
       toast.success(t("profileImageUpdated", language));
     } catch (error: any) {
+      console.error('Avatar upload failed:', error);
       toast.error(`${t("error", language)}: ${error.message}`);
     } finally {
       setUploading(false);
     }
   };
 
+  const handleImageError = () => {
+    console.log('Avatar image failed to load:', avatarUrl);
+    setImageError(true);
+  };
+
+  const shouldShowImage = avatarUrl && !imageError;
+
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar className="w-24 h-24">
-        <AvatarImage src={avatarUrl} alt={t("profileImage", language)} />
-        <AvatarFallback className="text-lg">{getUserInitials()}</AvatarFallback>
+        {shouldShowImage ? (
+          <AvatarImage 
+            src={avatarUrl} 
+            alt={t("profileImage", language)}
+            onError={handleImageError}
+          />
+        ) : null}
+        <AvatarFallback className="text-lg bg-blue-100 text-blue-700 font-semibold">
+          {getUserInitials()}
+        </AvatarFallback>
       </Avatar>
       
       <div className="flex items-center space-x-2">

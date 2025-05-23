@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ export function ContactList() {
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
 
   // Fetch contacts with improved configuration
   const { 
@@ -57,9 +59,9 @@ export function ContactList() {
   } = useQuery({
     queryKey: ['contacts'],
     queryFn: getContacts,
-    staleTime: 30000, // Consider data fresh for 30 seconds
-    refetchInterval: 60000, // Refetch every minute
-    refetchOnWindowFocus: true, // Refetch when window regains focus
+    staleTime: 30000,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
   });
 
   // Fetch unread counts for each contact
@@ -89,7 +91,7 @@ export function ContactList() {
     };
 
     fetchUnreadCounts();
-    const interval = setInterval(fetchUnreadCounts, 10000); // Update every 10 seconds
+    const interval = setInterval(fetchUnreadCounts, 10000);
 
     return () => clearInterval(interval);
   }, [contacts]);
@@ -141,7 +143,6 @@ export function ContactList() {
     blockContactMutation.mutate(contactId);
   };
 
-  // Using the contact relationship ID for deletion
   const handleDeleteClick = (contact: ContactType, name: string) => {
     console.log('Preparing to delete contact:', contact);
     setContactToDelete({ id: contact.id, name });
@@ -158,6 +159,15 @@ export function ContactList() {
   const getInitials = (name: string) => {
     if (!name) return "??";
     return name.substring(0, 2).toUpperCase();
+  };
+
+  const handleAvatarError = (contactId: string) => {
+    console.log(`Avatar failed to load for contact: ${contactId}`);
+    setAvatarErrors(prev => ({ ...prev, [contactId]: true }));
+  };
+
+  const shouldShowAvatar = (contactId: string, avatarUrl?: string) => {
+    return avatarUrl && !avatarErrors[contactId];
   };
 
   if (isLoading) {
@@ -197,6 +207,13 @@ export function ContactList() {
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
             const unreadCount = unreadCounts[contact.contact_id] || 0;
+            const avatarUrl = contactProfile.avatar_url;
+            
+            console.log(`Contact ${displayName} avatar:`, { 
+              avatarUrl, 
+              hasError: avatarErrors[contact.contact_id],
+              shouldShow: shouldShowAvatar(contact.contact_id, avatarUrl)
+            });
             
             return (
               <Card key={contact.id} className="overflow-hidden">
@@ -204,8 +221,16 @@ export function ContactList() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <Avatar className="h-10 w-10 flex-shrink-0">
-                        <AvatarImage src={contactProfile.avatar_url || ""} alt={displayName} />
-                        <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                        {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
+                          <AvatarImage 
+                            src={avatarUrl} 
+                            alt={displayName}
+                            onError={() => handleAvatarError(contact.contact_id)}
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-blue-100 text-blue-700 font-semibold">
+                          {getInitials(displayName)}
+                        </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-base truncate">@{displayName}</p>
@@ -224,7 +249,7 @@ export function ContactList() {
                       <Button 
                         size="icon" 
                         variant="ghost"
-                        onClick={() => handleOpenChat(contact.contact_id, displayName, contactProfile.avatar_url)}
+                        onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
                         className={`h-8 w-8 relative transition-colors ${
                           unreadCount > 0 
                             ? 'bg-blue-500 text-white hover:bg-blue-600' 
@@ -271,7 +296,6 @@ export function ContactList() {
           isOpen={chatOpen}
           onClose={() => {
             setChatOpen(false);
-            // Refresh unread counts when chat closes
             setTimeout(() => {
               const fetchUnreadCounts = async () => {
                 if (contacts) {
