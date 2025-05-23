@@ -74,10 +74,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   useEffect(() => {
     async function checkBlockStatus() {
       try {
+        console.log("Checking block status for contact:", contactId);
         const status = await getBlockStatus(contactId);
+        console.log("Block status result:", status);
         setBlockStatus(status);
       } catch (error) {
         console.error("Error checking block status:", error);
+        // Default to not blocked in case of errors
+        setBlockStatus({ isBlocked: false, isBlockedBy: false });
       }
     }
     
@@ -266,8 +270,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Check if messaging is blocked
+  // Check if messaging is blocked - with logging for debugging
+  console.log("Current block status:", blockStatus);
   const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
+  console.log("Is messaging blocked:", isMessagingBlocked);
 
   // Theme-based styles
   const containerClass = theme === 'dark' 
@@ -398,7 +404,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             )}
           </ScrollArea>
 
-          {/* Compose Area */}
+          {/* Compose Area - Always show unless explicitly blocked */}
           {!isMessagingBlocked && (
             <div className={`border-t p-3 ${headerClass}`}>
               <div className="space-y-2">

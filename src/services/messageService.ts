@@ -262,24 +262,44 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
 
   const userId = session.session.user.id;
   
-  const { data: blockedByMe } = await supabase
-    .from("contacts")
-    .select("status")
-    .eq("user_id", userId)
-    .eq("contact_id", contactId)
-    .single();
+  console.log("Checking block status between users:", { userId, contactId });
   
-  const { data: blockedMe } = await supabase
-    .from("contacts")
-    .select("status")
-    .eq("user_id", contactId)
-    .eq("contact_id", userId)
-    .single();
-  
-  const isBlocked = blockedByMe?.status === 'blocked';
-  const isBlockedBy = blockedMe?.status === 'blocked';
-  
-  return { isBlocked, isBlockedBy };
+  try {
+    // Check if current user has blocked the contact
+    const { data: blockedByMe, error: error1 } = await supabase
+      .from("contacts")
+      .select("status")
+      .eq("user_id", userId)
+      .eq("contact_id", contactId)
+      .single();
+    
+    if (error1 && error1.code !== 'PGRST116') { // PGRST116 is "no rows returned" error
+      console.error("Error checking if you blocked contact:", error1);
+    }
+    
+    // Check if contact has blocked the current user
+    const { data: blockedMe, error: error2 } = await supabase
+      .from("contacts")
+      .select("status")
+      .eq("user_id", contactId)
+      .eq("contact_id", userId)
+      .single();
+    
+    if (error2 && error2.code !== 'PGRST116') {
+      console.error("Error checking if contact blocked you:", error2);
+    }
+    
+    const isBlocked = blockedByMe?.status === 'blocked';
+    const isBlockedBy = blockedMe?.status === 'blocked';
+    
+    console.log("Block status results:", { isBlocked, isBlockedBy, blockedByMe, blockedMe });
+    
+    return { isBlocked, isBlockedBy };
+  } catch (error) {
+    console.error("Error in getBlockStatus:", error);
+    // Default to not blocked in case of errors
+    return { isBlocked: false, isBlockedBy: false };
+  }
 }
 
 export const formatRecipient = (recipientData: any) => {
