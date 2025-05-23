@@ -10,6 +10,8 @@ import {
   X,
   Users,
   ChevronDown,
+  Edit,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { MobileHeader } from "@/components/MobileHeader";
@@ -28,6 +30,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -50,6 +62,7 @@ export default function EventView() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("details");
   const [rsvpDialogOpen, setRsvpDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [rsvpChoice, setRsvpChoice] = useState<"accept" | "decline" | null>(null);
   const [isWaktiUser, setIsWaktiUser] = useState<boolean | null>(null);
   const [name, setName] = useState("");
@@ -125,6 +138,29 @@ export default function EventView() {
       return { accepted, declined, pending };
     },
     enabled: !!id
+  });
+  
+  // Delete event mutation
+  const deleteEventMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error("No event ID");
+      
+      const { error } = await supabase
+        .from("events")
+        .delete()
+        .eq("id", id)
+        .eq("created_by", user?.id); // Ensure only creator can delete
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Event deleted successfully");
+      navigate("/events");
+    },
+    onError: (error) => {
+      console.error("Delete error:", error);
+      toast.error("Failed to delete event");
+    }
   });
   
   // Mutation for submitting RSVP
@@ -268,6 +304,15 @@ export default function EventView() {
       navigator.clipboard.writeText(window.location.href);
       toast.success("Event link copied to clipboard!");
     }
+  };
+  
+  const handleDeleteEvent = () => {
+    setDeleteDialogOpen(true);
+  };
+  
+  const confirmDelete = () => {
+    deleteEventMutation.mutate();
+    setDeleteDialogOpen(false);
   };
   
   const openRsvpDialog = (choice: "accept" | "decline") => {
@@ -426,6 +471,9 @@ export default function EventView() {
     );
   }
   
+  // Check if current user is the event creator
+  const isEventCreator = user?.id === event.created_by;
+  
   // Determine the background style based on the background type
   const getBackgroundStyle = () => {
     switch (event.background_type) {
@@ -460,6 +508,30 @@ export default function EventView() {
         title="Event Details" 
         showBackButton={true} 
         onBackClick={() => navigate(-1)} 
+        rightComponent={
+          isEventCreator ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  •••
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate(`/events/${id}/edit`)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Event
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleDeleteEvent}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Event
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null
+        }
       />
       
       <div className="flex-1 overflow-y-auto pb-20">
@@ -472,8 +544,16 @@ export default function EventView() {
           }}
         >
           <h1 
-            className="font-bold mb-2" 
-            style={{ fontSize: `${event.font_size || 18}px` }}
+            className={cn(
+              "font-bold mb-2",
+              event.font_weight === 'bold' && "font-bold",
+              event.font_style === 'italic' && "italic",
+              event.text_decoration === 'underline' && "underline"
+            )}
+            style={{ 
+              fontSize: `${event.font_size || 18}px`,
+              textAlign: event.text_align as any || 'center'
+            }}
           >
             {event.title}
           </h1>
@@ -752,6 +832,29 @@ export default function EventView() {
           </Button>
         </div>
       </div>
+      
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this event? This action cannot be undone.
+              All RSVPs and related data will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteEventMutation.isPending}
+            >
+              {deleteEventMutation.isPending ? "Deleting..." : "Delete Event"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       
       {/* RSVP Dialog */}
       <Dialog open={rsvpDialogOpen} onOpenChange={setRsvpDialogOpen}>
