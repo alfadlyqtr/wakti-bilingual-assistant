@@ -3,9 +3,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { TranslationKey } from "@/utils/translationTypes";
 import { getUserPreferences, getWidgetOrder, saveWidgetOrder } from "@/utils/widgetPreferences";
-import { TasksWidget, CalendarWidget, EventsWidget, RemindersWidget } from "@/components/dashboard/widgets";
-import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
 import { toast } from "sonner";
+import React from "react";
 
 type WidgetType = {
   id: string;
@@ -21,44 +20,49 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
   useEffect(() => {
     const widgetVisibility = getUserPreferences();
     
-    const defaultWidgets = {
-      tasks: {
-        id: "tasks",
-        title: "tasks" as TranslationKey,
-        visible: widgetVisibility.tasks,
-        component: <TasksWidget isLoading={isLoading} tasks={tasks} language={language} />,
-      },
-      calendar: {
-        id: "calendar",
-        title: "calendar" as TranslationKey,
-        visible: widgetVisibility.calendar,
-        component: <CalendarWidget isLoading={isLoading} events={events} tasks={tasks} language={language} />,
-      },
-      events: {
-        id: "events",
-        title: "events" as TranslationKey,
-        visible: widgetVisibility.events,
-        component: <EventsWidget isLoading={isLoading} events={events} language={language} />,
-      },
-      reminders: {
-        id: "reminders",
-        title: "reminders" as TranslationKey,
-        visible: widgetVisibility.reminders,
-        component: <RemindersWidget isLoading={isLoading} reminders={reminders} language={language} />,
-      },
-      quote: {
-        id: "quote",
-        title: "dailyQuote" as TranslationKey,
-        visible: widgetVisibility.dailyQuote,
-        component: <QuoteWidget />
-      },
-    };
+    // Import components dynamically to avoid circular dependencies
+    import("@/components/dashboard/widgets").then(({ TasksWidget, CalendarWidget, EventsWidget, RemindersWidget }) => {
+      import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
+        const defaultWidgets = {
+          tasks: {
+            id: "tasks",
+            title: "tasks" as TranslationKey,
+            visible: widgetVisibility.tasks,
+            component: React.createElement(TasksWidget, { isLoading, tasks, language }),
+          },
+          calendar: {
+            id: "calendar",
+            title: "calendar" as TranslationKey,
+            visible: widgetVisibility.calendar,
+            component: React.createElement(CalendarWidget, { isLoading, events, tasks, language }),
+          },
+          events: {
+            id: "events",
+            title: "events" as TranslationKey,
+            visible: widgetVisibility.events,
+            component: React.createElement(EventsWidget, { isLoading, events, language }),
+          },
+          reminders: {
+            id: "reminders",
+            title: "reminders" as TranslationKey,
+            visible: widgetVisibility.reminders,
+            component: React.createElement(RemindersWidget, { isLoading, reminders, language }),
+          },
+          quote: {
+            id: "quote",
+            title: "dailyQuote" as TranslationKey,
+            visible: widgetVisibility.dailyQuote,
+            component: React.createElement(QuoteWidget)
+          },
+        };
 
-    // Get saved order and arrange widgets accordingly
-    const savedOrder = getWidgetOrder();
-    const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
-    
-    setWidgets(orderedWidgets);
+        // Get saved order and arrange widgets accordingly
+        const savedOrder = getWidgetOrder();
+        const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
+        
+        setWidgets(orderedWidgets);
+      });
+    });
   }, [language, navigate, isLoading, tasks, events, reminders]);
   
   const handleDragEnd = (result: any) => {
