@@ -29,6 +29,15 @@ export function AppHeader() {
     navigate('/login');
   };
   
+  // Add cache-busting to avatar URL
+  const getCacheBustedAvatarUrl = (url: string) => {
+    if (!url) return url;
+    const timestamp = Date.now();
+    return `${url}?t=${timestamp}`;
+  };
+
+  const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
+  
   const menuItems = [
     { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
     { title: language === 'ar' ? 'الحساب' : 'Account', href: '/account' },
@@ -103,7 +112,7 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.user_metadata?.avatar_url || ""} />
+                  <AvatarImage src={avatarUrl} />
                   <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                 </Avatar>
               </Button>

@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { t } from "@/utils/translations";
 
 export const ProfileImageUpload = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, refreshSession } = useAuth();
   const { language } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
@@ -61,8 +61,8 @@ export const ProfileImageUpload = () => {
       console.log('New avatar URL:', newAvatarUrl);
       
       // Update user metadata with the correct structure expected by Supabase Auth
-      const { error: authError } = await updateProfile({
-        user_metadata: { 
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+        data: { 
           avatar_url: newAvatarUrl 
         }
       });
@@ -72,7 +72,9 @@ export const ProfileImageUpload = () => {
         throw authError;
       }
 
-      // CRITICAL FIX: Also update the profiles table so ContactList can see the avatar
+      console.log('Auth update successful:', authData);
+
+      // Update the profiles table so ContactList can see the avatar
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ avatar_url: newAvatarUrl })
@@ -80,13 +82,16 @@ export const ProfileImageUpload = () => {
       
       if (profileError) {
         console.error('Error updating profile avatar:', profileError);
-        throw profileError; // Throw error to ensure both updates succeed
+        throw profileError;
       } else {
         console.log('Successfully updated profile avatar in both auth and profiles table');
       }
       
+      // Force refresh the auth session to get the latest user metadata
+      await refreshSession();
+      
       setAvatarUrl(newAvatarUrl);
-      setImageError(false); // Reset error state on successful upload
+      setImageError(false);
       toast.success(t("profileImageUpdated", language));
     } catch (error: any) {
       console.error('Avatar upload failed:', error);
@@ -125,14 +130,22 @@ export const ProfileImageUpload = () => {
     setImageError(true);
   };
 
+  // Add cache-busting to avatar URL
+  const getCacheBustedAvatarUrl = (url: string) => {
+    if (!url) return url;
+    const timestamp = Date.now();
+    return `${url}?t=${timestamp}`;
+  };
+
   const shouldShowImage = avatarUrl && !imageError;
+  const displayAvatarUrl = shouldShowImage ? getCacheBustedAvatarUrl(avatarUrl) : "";
 
   return (
     <div className="flex flex-col items-center space-y-4">
       <Avatar className="w-24 h-24">
         {shouldShowImage ? (
           <AvatarImage 
-            src={avatarUrl} 
+            src={displayAvatarUrl} 
             alt={t("profileImage", language)}
             onError={handleImageError}
           />

@@ -58,10 +58,16 @@ export function UserMenu() {
 
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || t("user", language);
   
-  // Check if user has a profile picture
-  const hasProfilePicture = !!user?.user_metadata?.avatar_url;
+  // Add cache-busting to avatar URL
+  const getCacheBustedAvatarUrl = (url: string) => {
+    if (!url) return url;
+    const timestamp = Date.now();
+    return `${url}?t=${timestamp}`;
+  };
 
-  // User menu options - removed Messages from here
+  const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
+
+  // User menu options
   const menuOptions = [
     { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
@@ -77,7 +83,7 @@ export function UserMenu() {
       >
         <Avatar className="h-6 w-6">
           <AvatarImage 
-            src={user?.user_metadata?.avatar_url || ''} 
+            src={avatarUrl} 
             alt={displayName}
           />
           <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
@@ -107,7 +113,7 @@ export function UserMenu() {
                 <div className="flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
                     <AvatarImage 
-                      src={user?.user_metadata?.avatar_url || ''} 
+                      src={avatarUrl} 
                       alt={displayName}
                     />
                     <AvatarFallback>{getInitials()}</AvatarFallback>
