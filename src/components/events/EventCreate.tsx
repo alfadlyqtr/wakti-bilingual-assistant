@@ -305,35 +305,49 @@ export default function EventCreate() {
                 </div>
               </div>
 
-              {/* Background Customization */}
-              <div 
-                className="mt-2 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-white font-bold"
-                style={{
-                  background: backgroundData.type === 'gradient' 
-                    ? backgroundData.backgroundGradient
-                    : backgroundData.type === 'image' || backgroundData.type === 'ai'
-                    ? `url(${backgroundData.backgroundImage}) center/cover`
-                    : backgroundData.backgroundColor || '#3b82f6',
-                  fontSize: `${textStyleData.fontSize}px`,
-                  color: textStyleData.textColor,
-                  textAlign: textStyleData.textAlign,
-                  fontWeight: textStyleData.fontWeight,
-                  fontStyle: textStyleData.fontStyle,
-                  textDecoration: textStyleData.textDecoration,
-                  fontFamily: textStyleData.fontFamily,
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
-                }}
-              >
-                <span>
-                  {watchedTitle || 'Your Event Title'}
-                </span>
+              {/* Main Preview */}
+              <div className="space-y-2">
+                <Label>Preview</Label>
+                <div 
+                  className="mt-2 h-40 rounded-lg border-2 border-dashed border-muted-foreground/20 flex flex-col items-center justify-center p-4"
+                  style={{
+                    background: backgroundData.type === 'gradient' 
+                      ? backgroundData.backgroundGradient
+                      : backgroundData.type === 'image' || backgroundData.type === 'ai'
+                      ? `url(${backgroundData.backgroundImage}) center/cover`
+                      : backgroundData.backgroundColor || '#3b82f6',
+                    color: textStyleData.textColor,
+                    textAlign: textStyleData.textAlign,
+                    fontWeight: textStyleData.fontWeight,
+                    fontStyle: textStyleData.fontStyle,
+                    textDecoration: textStyleData.textDecoration,
+                    fontFamily: textStyleData.fontFamily,
+                    textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+                  }}
+                >
+                  <h2 style={{ fontSize: `${textStyleData.fontSize}px`, margin: 0, lineHeight: 1.2 }}>
+                    {watchedTitle || 'Your Event Title'}
+                  </h2>
+                  {watchedDescription && (
+                    <p style={{ 
+                      fontSize: `${Math.max(textStyleData.fontSize * 0.6, 14)}px`, 
+                      margin: '8px 0 0 0', 
+                      lineHeight: 1.3,
+                      opacity: 0.9
+                    }}>
+                      {watchedDescription}
+                    </p>
+                  )}
+                </div>
               </div>
 
+              {/* Background Customization */}
               <BackgroundCustomizer 
                 onBackgroundChange={handleBackgroundChange}
                 currentBackground={backgroundData}
                 eventTitle={watchedTitle}
                 eventDescription={watchedDescription}
+                hidePreview={true}
               />
 
               {/* Text Styling Controls */}

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +24,7 @@ interface BackgroundCustomizerProps {
   };
   eventTitle?: string;
   eventDescription?: string;
+  hidePreview?: boolean;
 }
 
 const gradientPresets = [
@@ -40,7 +40,8 @@ export default function BackgroundCustomizer({
   onBackgroundChange,
   currentBackground,
   eventTitle = '',
-  eventDescription = ''
+  eventDescription = '',
+  hidePreview = false
 }: BackgroundCustomizerProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -281,23 +282,25 @@ export default function BackgroundCustomizer({
         </Tabs>
 
         {/* Preview */}
-        <div className="mt-6">
-          <Label>Preview</Label>
-          <div 
-            className="mt-2 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-white font-bold"
-            style={{
-              background: currentBackground.type === 'gradient' 
-                ? currentBackground.backgroundGradient
-                : currentBackground.type === 'image' || currentBackground.type === 'ai'
-                ? `url(${currentBackground.backgroundImage}) center/cover`
-                : currentBackground.backgroundColor || '#3b82f6'
-            }}
-          >
-            <span className="text-shadow-lg">
-              {eventTitle || 'Your Event Title'}
-            </span>
+        {!hidePreview && (
+          <div className="mt-6">
+            <Label>Preview</Label>
+            <div 
+              className="mt-2 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-white font-bold"
+              style={{
+                background: currentBackground.type === 'gradient' 
+                  ? currentBackground.backgroundGradient
+                  : currentBackground.type === 'image' || currentBackground.type === 'ai'
+                  ? `url(${currentBackground.backgroundImage}) center/cover`
+                  : currentBackground.backgroundColor || '#3b82f6'
+              }}
+            >
+              <span className="text-shadow-lg">
+                {eventTitle || 'Your Event Title'}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
