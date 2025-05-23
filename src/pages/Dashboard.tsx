@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { UserMenu } from "@/components/UserMenu";
@@ -13,7 +12,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, addDays, isSameDay, isToday, isTomorrow } from "date-fns";
 import { toast } from "sonner";
 import { QuoteWidget } from "@/components/dashboard/QuoteWidget";
-import { GripVertical, CalendarIcon, CheckCircle, BellRing, Calendar as CalendarIconFull } from "lucide-react";
+import { GripVertical, CalendarIcon, CheckCircle, BellRing, Calendar as CalendarIconFull, Hand } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -312,7 +311,7 @@ export default function Dashboard() {
         component: <QuoteWidget />
       },
     ]);
-  }, [language, navigate, widgetVisibility]); // Removed isLoading from the dependency array to fix the infinite loop
+  }, [language, navigate, widgetVisibility]);
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
@@ -328,30 +327,9 @@ export default function Dashboard() {
     toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
   };
 
-  // Handle long press start - Modified to use dedicated drag handle instead of the whole card
-  const handleLongPressStart = (e: React.TouchEvent) => {
-    // No longer needed as we're using the handle instead
-  };
-  
-  // Handle touch end - Only needed for the drag handle now
-  const handleTouchEnd = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-  
-  // Handle touch move - Only needed for the drag handle now
-  const handleTouchMove = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  // Dedicated handle drag mode activator
+  // Handle long press on drag handle
   const handleDragHandlePress = (e: React.TouchEvent) => {
-    e.stopPropagation(); // Prevent event from bubbling up
+    e.stopPropagation();
     
     if (longPressTimer.current !== null) {
       clearTimeout(longPressTimer.current);
@@ -360,11 +338,26 @@ export default function Dashboard() {
     longPressTimer.current = setTimeout(() => {
       setIsDragging(true);
       toast.info(language === 'ar' ? "تم تفعيل وضع السحب" : "Drag mode activated");
-      // Add haptic feedback if available
       if (navigator.vibrate) {
         navigator.vibrate(50);
       }
     }, longPressDuration);
+  };
+  
+  // Handle touch end
+  const handleTouchEnd = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+  
+  // Handle touch move
+  const handleTouchMove = () => {
+    if (longPressTimer.current !== null) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   };
   
   // Exit drag mode
@@ -425,18 +418,19 @@ export default function Dashboard() {
                                    ${isDragging ? 'select-none' : ''}`}
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                        {...provided.dragHandleProps}
                       >
-                        {/* New dedicated drag handle that appears in the corner when in drag mode */}
-                        {isDragging && (
-                          <div 
-                            className="absolute top-0 right-0 bg-primary/10 p-1 rounded-bl-md rounded-tr-md z-20"
-                          >
-                            <GripVertical className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                        )}
+                        {/* Drag handle with hand icon in top-left corner */}
+                        <div 
+                          className="absolute top-2 left-2 z-20 p-1 rounded-md bg-muted/60 hover:bg-muted/80 transition-colors cursor-grab active:cursor-grabbing"
+                          onTouchStart={handleDragHandlePress}
+                          onTouchEnd={handleTouchEnd}
+                          onTouchMove={handleTouchMove}
+                          {...provided.dragHandleProps}
+                        >
+                          <Hand className="h-4 w-4 text-muted-foreground" />
+                        </div>
                         
-                        <CardContent className="p-0">
+                        <CardContent className="p-0 pt-8">
                           {widget.component}
                         </CardContent>
                       </Card>
