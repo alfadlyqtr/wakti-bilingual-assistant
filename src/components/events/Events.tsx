@@ -84,7 +84,7 @@ export default function Events() {
           <h1 className="text-2xl font-bold sr-only">{t("events", language)}</h1>
           <div className="flex-1"></div>
           <Button 
-            onClick={() => navigate("/events/create")} 
+            onClick={() => navigate("/event/create")} 
             className="flex items-center gap-1"
           >
             <Plus size={18} />

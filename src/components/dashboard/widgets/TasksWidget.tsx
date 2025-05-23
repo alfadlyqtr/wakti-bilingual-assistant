@@ -35,7 +35,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
               <span className="text-sm">{task.title}</span>
             </div>
           ))}
-          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks')}>
+          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks-reminders')}>
             {t("tasks_view_all", language)}
           </Button>
         </div>
@@ -43,7 +43,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
         <div className="text-center py-3">
           <CheckCircle className="mx-auto h-8 w-8 text-muted-foreground opacity-50 mb-2" />
           <p className="text-sm text-muted-foreground">{t("noTasksYet", language)}</p>
-          <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/tasks')}>
+          <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate('/tasks-reminders')}>
             {t("createTask", language)}
           </Button>
         </div>

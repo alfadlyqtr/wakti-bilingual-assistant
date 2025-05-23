@@ -49,7 +49,7 @@ export default function EventList({
           <Button 
             variant="outline" 
             className="mt-4"
-            onClick={() => navigate("/events/create")}
+            onClick={() => navigate("/event/create")}
           >
             {t("createFirstEvent", language)}
           </Button>
@@ -72,7 +72,7 @@ function EventCard({ event, type }: { event: any; type: string }) {
   const { language } = useTheme();
 
   const handleEventClick = () => {
-    navigate(`/events/${event.id}`);
+    navigate(`/event/${event.id}`);
   };
 
   return (

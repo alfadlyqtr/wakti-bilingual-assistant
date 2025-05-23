@@ -68,7 +68,7 @@ const EventCreate: React.FC = () => {
       });
       
       if (data && data[0]) {
-        navigate(`/events/${data[0].id}`);
+        navigate(`/event/${data[0].id}`);
       } else {
         navigate('/events');
       }
