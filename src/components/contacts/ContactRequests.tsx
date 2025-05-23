@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, X, User, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,21 +18,51 @@ export function ContactRequests() {
   const { language } = useTheme();
   const queryClient = useQueryClient();
   
-  // Fetch contact requests
-  const { data: requests, isLoading, isError, error } = useQuery({
+  // Fetch contact requests with refetch enabled and staleTime set to 0 to always fetch fresh data
+  const { data: requests, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['contactRequests'],
     queryFn: getContactRequests,
+    staleTime: 0, // Consider data immediately stale to force refetch
+    refetchOnMount: true, // Always refetch on mount
   });
+
+  // Force refetch on mount to ensure we have fresh data
+  useEffect(() => {
+    console.log("ContactRequests mounted - forcing data refresh");
+    refetch();
+  }, [refetch]);
+
+  // Debug log the requests data whenever it changes
+  useEffect(() => {
+    console.log("Current requests data:", requests);
+    if (requests?.length) {
+      requests.forEach((req, index) => {
+        console.log(`Request ${index + 1}:`, {
+          id: req.id, 
+          user_id: req.user_id,
+          status: req.status,
+          created_at: req.created_at,
+          profiles: req.profiles
+        });
+      });
+    }
+  }, [requests]);
 
   // Accept contact request mutation
   const acceptRequestMutation = useMutation({
     mutationFn: (requestId: string) => {
+      // Add validation and debug logging
       if (!requestId) {
+        console.error("Attempted to accept with undefined requestId");
         throw new Error("Request ID is undefined");
       }
+      
+      console.log("Accepting request with ID:", requestId);
       return acceptContactRequest(requestId);
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log("Accept request succeeded:", data);
+      
       // Show a success toast with auto-dismiss after 2 seconds
       toast.success(t("requestAccepted", language), { 
         duration: 2000,
@@ -45,7 +75,7 @@ export function ContactRequests() {
     },
     onError: (error) => {
       console.error("Error accepting request:", error);
-      toast.error(t("errorAcceptingRequest", language));
+      toast.error(`${t("errorAcceptingRequest", language)}: ${error.message || 'Unknown error'}`);
     }
   });
 
@@ -53,8 +83,11 @@ export function ContactRequests() {
   const rejectRequestMutation = useMutation({
     mutationFn: (requestId: string) => {
       if (!requestId) {
+        console.error("Attempted to reject with undefined requestId");
         throw new Error("Request ID is undefined");
       }
+      
+      console.log("Rejecting request with ID:", requestId);
       return rejectContactRequest(requestId);
     },
     onSuccess: () => {
@@ -66,7 +99,7 @@ export function ContactRequests() {
     },
     onError: (error) => {
       console.error("Error rejecting request:", error);
-      toast.error(t("errorRejectingRequest", language));
+      toast.error(`${t("errorRejectingRequest", language)}: ${error.message || 'Unknown error'}`);
     }
   });
 
@@ -74,8 +107,11 @@ export function ContactRequests() {
   const blockUserMutation = useMutation({
     mutationFn: (userId: string) => {
       if (!userId) {
+        console.error("Attempted to block with undefined userId");
         throw new Error("User ID is undefined");
       }
+      
+      console.log("Blocking user with ID:", userId);
       return blockContact(userId);
     },
     onSuccess: () => {
@@ -88,19 +124,43 @@ export function ContactRequests() {
     },
     onError: (error) => {
       console.error("Error blocking user:", error);
-      toast.error(t("errorBlockingUser", language));
+      toast.error(`${t("errorBlockingUser", language)}: ${error.message || 'Unknown error'}`);
     }
   });
 
-  const handleAccept = (requestId: string) => {
+  const handleAccept = (requestId: string | undefined) => {
+    // Added safety check
+    if (!requestId) {
+      console.error("Cannot accept request: requestId is undefined");
+      toast.error(t("errorAcceptingRequest", language));
+      return;
+    }
+
+    console.log("Accept button clicked with requestId:", requestId);
     acceptRequestMutation.mutate(requestId);
   };
 
-  const handleReject = (requestId: string) => {
+  const handleReject = (requestId: string | undefined) => {
+    // Added safety check
+    if (!requestId) {
+      console.error("Cannot reject request: requestId is undefined");
+      toast.error(t("errorRejectingRequest", language));
+      return;
+    }
+
+    console.log("Reject button clicked with requestId:", requestId);
     rejectRequestMutation.mutate(requestId);
   };
 
-  const handleBlock = (userId: string) => {
+  const handleBlock = (userId: string | undefined) => {
+    // Added safety check
+    if (!userId) {
+      console.error("Cannot block user: userId is undefined");
+      toast.error(t("errorBlockingUser", language));
+      return;
+    }
+
+    console.log("Block button clicked with userId:", userId);
     blockUserMutation.mutate(userId);
   };
 
@@ -150,12 +210,14 @@ export function ContactRequests() {
         </Card>
       ) : (
         requests.map(request => {
+          console.log("Rendering request card for request:", request);
+          
           const userProfile = request.profiles || {};
           const displayName = ((userProfile as any).display_name as string) || ((userProfile as any).username as string) || "Unknown User";
           const username = ((userProfile as any).username as string) || "user";
           
           return (
-            <Card key={request.id} className="overflow-hidden">
+            <Card key={request.id || `request-${Math.random()}`} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -166,6 +228,9 @@ export function ContactRequests() {
                     <div>
                       <p className="font-medium">{displayName}</p>
                       <p className="text-sm text-muted-foreground">@{username}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Request ID: {request.id ? request.id.substring(0, 8) + '...' : 'missing'}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -174,7 +239,7 @@ export function ContactRequests() {
                       variant="outline"
                       className="h-8 w-8 rounded-full border-green-500/50 hover:border-green-500 hover:bg-green-500/10"
                       onClick={() => handleAccept(request.id)}
-                      disabled={acceptRequestMutation.isPending}
+                      disabled={acceptRequestMutation.isPending || !request.id}
                     >
                       <Check className="h-4 w-4 text-green-500" />
                     </Button>
@@ -183,7 +248,7 @@ export function ContactRequests() {
                       variant="outline"
                       className="h-8 w-8 rounded-full border-red-500/50 hover:border-red-500 hover:bg-red-500/10"
                       onClick={() => handleReject(request.id)}
-                      disabled={rejectRequestMutation.isPending}
+                      disabled={rejectRequestMutation.isPending || !request.id}
                     >
                       <X className="h-4 w-4 text-red-500" />
                     </Button>
@@ -192,16 +257,20 @@ export function ContactRequests() {
                       variant="outline"
                       className="h-8 w-8 rounded-full"
                       onClick={() => handleBlock(request.user_id)}
-                      disabled={blockUserMutation.isPending}
+                      disabled={blockUserMutation.isPending || !request.user_id}
                     >
                       <User className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground mt-2">
-                  <Badge variant="secondary">
-                    {formatTime(request.created_at)}
-                  </Badge>
+                  {request.created_at ? (
+                    <Badge variant="secondary">
+                      {formatTime(request.created_at)}
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline">Unknown date</Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>
