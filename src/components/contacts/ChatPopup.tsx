@@ -1,7 +1,8 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -25,7 +26,7 @@ interface ChatPopupProps {
 const MAX_CHARS = 300;
 
 export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvatar }: ChatPopupProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const [messageText, setMessageText] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -54,7 +55,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['directMessages', contactId],
     queryFn: () => getMessages(contactId),
-    refetchInterval: 5000, // Refetch every 5 seconds
+    refetchInterval: 5000,
     enabled: !!contactId && isOpen,
   });
 
@@ -86,7 +87,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   });
 
-  // Update the realtime subscription part to use the new messages table
+  // Realtime subscription
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
 
@@ -101,10 +102,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
         },
         () => {
-          // Refetch messages when new message is inserted
           queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-          
-          // Mark messages as read if they're from this contact
           if (currentUserId) {
             markAsRead(contactId);
           }
@@ -130,7 +128,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const file = e.target.files?.[0];
     if (!file) return;
     
-    // Check file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
       toast.error(t("imageTooLarge", language));
       return;
@@ -138,7 +135,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     try {
       setIsUploading(true);
-      // Upload the image to Supabase Storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${uuidv4()}.${fileExt}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
@@ -154,7 +150,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         .from('message_media')
         .getPublicUrl(`images/${fileName}`);
 
-      // Send the image message
       sendMessageMutation.mutate({
         message_type: "image",
         media_url: data.publicUrl,
@@ -166,7 +161,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       toast.error(t("errorUploadingImage", language));
     } finally {
       setIsUploading(false);
-      // Reset the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -184,11 +178,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return "??";
-    return name.substring(0, 2).toUpperCase();
-  };
-
   // Format message timestamp
   const formatTime = (dateString: string) => {
     try {
@@ -197,52 +186,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       const minutes = date.getMinutes().toString().padStart(2, "0");
       const ampm = hours >= 12 ? "pm" : "am";
       hours = hours % 12;
-      hours = hours ? hours : 12; // Handle midnight (0 hours)
+      hours = hours ? hours : 12;
       return `${hours}:${minutes} ${ampm}`;
     } catch (error) {
       return "";
     }
-  };
-
-  // Render the actual message bubble
-  const MessageBubble = ({ message, isSelf }: { message: any, isSelf: boolean }) => {
-    const [isImageLoaded, setIsImageLoaded] = useState(false);
-    
-    // Determine message styles based on sender
-    const bubbleStyle = isSelf
-      ? "bg-blue-500 text-white ml-auto rounded-2xl rounded-br-none"
-      : "bg-muted text-foreground mr-auto rounded-2xl rounded-bl-none";
-    
-    // Render different message types
-    const renderMessageContent = () => {
-      switch (message.message_type) {
-        case 'image':
-          return (
-            <div className="relative">
-              {!isImageLoaded && <div className="h-40 w-40 bg-muted animate-pulse rounded"></div>}
-              <img 
-                src={message.media_url} 
-                alt="Image message" 
-                className={`max-h-60 max-w-60 rounded-lg object-contain ${!isImageLoaded ? 'hidden' : ''}`}
-                onLoad={() => setIsImageLoaded(true)}
-              />
-            </div>
-          );
-        default:
-          return <p className="break-words">{message.content}</p>;
-      }
-    };
-    
-    return (
-      <div className={`flex flex-col max-w-[80%] ${isSelf ? 'ml-auto' : 'mr-auto'}`}>
-        <div className={`px-4 py-2 ${bubbleStyle}`}>
-          {renderMessageContent()}
-        </div>
-        <div className={`text-xs text-muted-foreground mt-1 ${isSelf ? 'text-right mr-2' : 'ml-2'}`}>
-          {formatTime(message.created_at)}
-        </div>
-      </div>
-    );
   };
 
   // Check if messaging is blocked
@@ -250,153 +198,189 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
-        <DialogHeader className="flex flex-row items-center border-b pb-2">
-          <Avatar className="h-8 w-8 mr-2">
-            <AvatarImage src={contactAvatar || ""} />
-            <AvatarFallback>{contactName.substring(0, 2).toUpperCase()}</AvatarFallback>
-          </Avatar>
-          <DialogTitle className="flex-1">{contactName}</DialogTitle>
+      <DialogContent 
+        className={`
+          w-full max-w-sm mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden
+          ${theme === 'dark' ? 'bg-dark-bg border-dark-secondary' : 'bg-light-bg border-light-secondary'}
+        `}
+        hideCloseButton
+      >
+        {/* Header */}
+        <div className={`
+          flex items-center justify-between p-4 border-b
+          ${theme === 'dark' ? 'border-dark-secondary bg-dark-bg' : 'border-light-secondary bg-light-bg'}
+        `}>
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={contactAvatar || ""} />
+              <AvatarFallback className={`
+                ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}
+              `}>
+                {contactName.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h3 className={`font-semibold text-sm ${theme === 'dark' ? 'text-white' : 'text-light-primary'}`}>
+                {contactName}
+              </h3>
+              <p className={`text-xs ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
+                {isMessagingBlocked ? 'Blocked' : 'Active'}
+              </p>
+            </div>
+          </div>
           <Button 
             variant="ghost" 
-            size="icon" 
+            size="icon"
             onClick={onClose}
-            className="ml-auto"
+            className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary' : 'hover:bg-light-secondary'}`}
           >
             <X className="h-4 w-4" />
           </Button>
-        </DialogHeader>
+        </div>
         
         {/* Messages area */}
         <ScrollArea 
-          className="flex-1 py-4"
+          className="flex-1 px-4"
           ref={scrollAreaRef}
         >
           {isLoadingMessages ? (
-            <div className="flex justify-center items-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="flex justify-center items-center h-40">
+              <div className={`animate-spin rounded-full h-8 w-8 border-2 border-t-transparent ${
+                theme === 'dark' ? 'border-white' : 'border-light-primary'
+              }`}></div>
             </div>
           ) : messages && messages.length > 0 ? (
-            <div className="space-y-4 px-4">
+            <div className="space-y-3 py-4">
               {messages.map((message) => (
                 <div 
                   key={message.id}
-                  className={`flex flex-col max-w-[80%] ${message.sender_id === currentUserId ? 'ml-auto' : 'mr-auto'}`}
+                  className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
                 >
                   <div 
-                    className={`px-4 py-2 ${
+                    className={`max-w-[80%] px-3 py-2 rounded-2xl ${
                       message.sender_id === currentUserId
-                        ? "bg-blue-500 text-white ml-auto rounded-2xl rounded-br-none"
-                        : "bg-muted text-foreground mr-auto rounded-2xl rounded-bl-none"
+                        ? `${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'} text-white rounded-br-md`
+                        : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-md`
                     }`}
                   >
                     {message.message_type === 'image' ? (
-                      <div className="relative">
-                        <img 
-                          src={message.media_url} 
-                          alt="Image message" 
-                          className="max-h-60 max-w-60 rounded-lg object-contain"
-                          onLoad={() => {
-                            if (scrollAreaRef.current) {
-                              scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-                            }
-                          }}
-                        />
-                      </div>
+                      <img 
+                        src={message.media_url} 
+                        alt="Image message" 
+                        className="max-w-full h-auto rounded-lg"
+                        onLoad={() => {
+                          if (scrollAreaRef.current) {
+                            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+                          }
+                        }}
+                      />
                     ) : (
-                      <p className="break-words">{message.content}</p>
+                      <p className="text-sm break-words">{message.content}</p>
                     )}
                   </div>
-                  <div 
-                    className={`text-xs text-muted-foreground mt-1 ${
-                      message.sender_id === currentUserId ? 'text-right mr-2' : 'ml-2'
-                    }`}
-                  >
+                  <span className={`text-xs mt-1 px-1 ${
+                    theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'
+                  }`}>
                     {formatTime(message.created_at)}
-                  </div>
+                  </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex flex-col justify-center items-center h-40 px-4 text-center">
-              <p className="text-lg font-medium text-muted-foreground mb-2">{t("startConversation", language)}</p>
-              <p className="text-sm text-muted-foreground">{t("sayHelloPrompt", language)}</p>
+            <div className="flex flex-col justify-center items-center h-40 text-center">
+              <div className={`text-4xl mb-2 ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-300'}`}>💬</div>
+              <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-light-primary'}`}>
+                {t("startConversation", language)}
+              </p>
+              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
+                {t("sayHelloPrompt", language)}
+              </p>
             </div>
           )}
         </ScrollArea>
         
         {/* Input area */}
-        <div className="border-t mt-auto pt-2">
+        <div className={`border-t p-4 ${theme === 'dark' ? 'border-dark-secondary bg-dark-bg' : 'border-light-secondary bg-light-bg'}`}>
           {isMessagingBlocked ? (
-            <div className="p-2 text-center">
-              <div className="flex items-center justify-center gap-2">
-                <Shield className="h-4 w-4 text-destructive" />
-                <p className="text-sm text-muted-foreground">
-                  {blockStatus.isBlocked 
-                    ? t("contactBlocked", language) 
-                    : t("blockedByContact", language)}
-                </p>
-              </div>
+            <div className="flex items-center justify-center gap-2 py-2">
+              <Shield className="h-4 w-4 text-red-500" />
+              <p className={`text-sm ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
+                {blockStatus.isBlocked 
+                  ? t("contactBlocked", language) 
+                  : t("blockedByContact", language)}
+              </p>
             </div>
           ) : (
-            <div className="flex items-center gap-2 p-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sendMessageMutation.isPending || isUploading}
-              >
-                <Image className="h-4 w-4" />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageSelected}
-                />
-              </Button>
-              
-              <Input
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                placeholder={t("typeMessage", language)}
-                className="flex-1 h-10"
-                disabled={sendMessageMutation.isPending || isUploading}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendTextMessage();
-                  }
-                }}
-              />
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full text-blue-500"
-                onClick={sendTextMessage}
-                disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-          
-          {/* Character count */}
-          {messageText && (
-            <div className={`text-xs px-3 pb-1 text-right ${isOverLimit ? 'text-destructive' : 'text-muted-foreground'}`}>
-              {charCount}/{MAX_CHARS}
-            </div>
-          )}
-          
-          {/* Uploading indicator */}
-          {isUploading && (
-            <div className="mt-1 flex items-center justify-center pb-1">
-              <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
-                <span className="animate-pulse">{t("uploading", language)}...</span>
+            <>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary' : 'hover:bg-light-secondary'}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                >
+                  <Image className="h-4 w-4" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelected}
+                  />
+                </Button>
+                
+                <div className="flex-1 relative">
+                  <Input
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={t("typeMessage", language)}
+                    className={`
+                      h-9 pr-10 rounded-full border-none
+                      ${theme === 'dark' 
+                        ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary' 
+                        : 'bg-gray-100 text-gray-900 placeholder:text-gray-500'
+                      }
+                    `}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendTextMessage();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-blue-500 hover:bg-blue-50"
+                    onClick={sendTextMessage}
+                    disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                  >
+                    <Send className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
-            </div>
+              
+              {/* Character count */}
+              {messageText && (
+                <div className={`text-xs text-right mt-1 ${
+                  isOverLimit ? 'text-red-500' : (theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500')
+                }`}>
+                  {charCount}/{MAX_CHARS}
+                </div>
+              )}
+              
+              {/* Uploading indicator */}
+              {isUploading && (
+                <div className="flex items-center justify-center mt-2">
+                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
+                    <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>{t("uploading", language)}...</span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </DialogContent>
