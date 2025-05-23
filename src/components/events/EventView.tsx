@@ -29,12 +29,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 export default function EventView() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [event, setEvent] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("details");
   const [rsvpDialogOpen, setRsvpDialogOpen] = useState(false);
   const [rsvpChoice, setRsvpChoice] = useState<"accept" | "decline" | null>(null);
@@ -44,50 +43,55 @@ export default function EventView() {
   const [usernameError, setUsernameError] = useState("");
   const [rsvpLoading, setRsvpLoading] = useState(false);
   
-  useEffect(() => {
-    // In a real implementation, we would fetch the event from Supabase
-    // For now, we'll use dummy data
-    setTimeout(() => {
-      const dummyEvent = {
-        id: id || "1",
-        title: "Tech Conference 2025",
-        description: "Join us for the biggest tech conference of the year featuring the latest innovations and industry leaders.",
-        location: "San Francisco Convention Center",
-        locationLink: "https://maps.google.com/?q=San+Francisco+Convention+Center",
-        startDate: new Date("2025-06-15T09:00:00"),
-        endDate: new Date("2025-06-17T18:00:00"),
-        isAllDay: false,
-        backgroundColor: "",
-        backgroundGradient: "linear-gradient(135deg, #3b82f6 0%, #2dd4bf 100%)",
-        backgroundImage: "",
-        isPublic: true,
-        textColor: "#ffffff",
-        fontSize: 18,
-        buttonStyle: "rounded",
-        organizer: {
-          id: "123",
-          name: "John Smith",
-          username: "johnsmith",
-        },
-        attendees: {
-          accepted: [
-            { id: "1", name: "Sarah Johnson", username: "sarahj", isWaktiUser: true },
-            { id: "2", name: "Mike Chen", username: "mikechen", isWaktiUser: true },
-          ],
-          declined: [
-            { id: "3", name: "Lisa Wong", username: "lwong", isWaktiUser: true },
-          ],
-          pending: [
-            { id: "4", name: "Carlos Rodriguez", username: "crodriguez", isWaktiUser: true },
-            { id: "5", name: "Anna Smith", username: "asmith", isWaktiUser: true },
-          ],
-        },
-      };
+  // Fetch event data from Supabase
+  const { data: event, isLoading: loading, error } = useQuery({
+    queryKey: ["event", id],
+    queryFn: async () => {
+      if (!id) throw new Error("No event ID provided");
       
-      setEvent(dummyEvent);
-      setLoading(false);
-    }, 1000);
-    
+      const { data, error } = await supabase
+        .from("events")
+        .select("*")
+        .eq("id", id)
+        .single();
+      
+      if (error) {
+        console.error("Error fetching event:", error);
+        throw error;
+      }
+      
+      return data;
+    },
+    enabled: !!id
+  });
+  
+  // Fetch RSVP data for attendees display
+  const { data: rsvpData = { accepted: [], declined: [], pending: [] } } = useQuery({
+    queryKey: ["event-rsvps", id],
+    queryFn: async () => {
+      if (!id) return { accepted: [], declined: [], pending: [] };
+      
+      const { data, error } = await supabase
+        .from("event_rsvps")
+        .select("*")
+        .eq("event_id", id);
+      
+      if (error) {
+        console.error("Error fetching RSVPs:", error);
+        return { accepted: [], declined: [], pending: [] };
+      }
+      
+      // Group RSVPs by response type
+      const accepted = data?.filter(rsvp => rsvp.response === "accept") || [];
+      const declined = data?.filter(rsvp => rsvp.response === "decline") || [];
+      const pending: any[] = []; // For now, we don't have pending invites
+      
+      return { accepted, declined, pending };
+    },
+    enabled: !!id
+  });
+  
+  useEffect(() => {
     // Check if user has already RSVP'd using localStorage
     const storedRsvp = localStorage.getItem(`event-rsvp-${id}`);
     if (storedRsvp) {
@@ -100,8 +104,8 @@ export default function EventView() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: event.title,
-          text: `Join me at ${event.title}!`,
+          title: event?.title || "Event",
+          text: `Join me at ${event?.title || "this event"}!`,
           url: window.location.href,
         });
       } catch (err) {
@@ -168,23 +172,6 @@ export default function EventView() {
       // Close dialog and update UI
       setRsvpDialogOpen(false);
       setRsvpLoading(false);
-      
-      // Update event data (in real implementation, we would refetch from Supabase)
-      const updatedEvent = {...event};
-      const attendee = {
-        id: Math.random().toString(),
-        name: isWaktiUser ? username : name,
-        username: isWaktiUser ? username : null,
-        isWaktiUser: isWaktiUser || false,
-      };
-      
-      if (rsvpChoice === "accept") {
-        updatedEvent.attendees.accepted.push(attendee);
-      } else {
-        updatedEvent.attendees.declined.push(attendee);
-      }
-      
-      setEvent(updatedEvent);
       
       // If not a WAKTI user, show join prompt
       if (!isWaktiUser) {
@@ -254,7 +241,7 @@ export default function EventView() {
     );
   }
   
-  if (!event) {
+  if (error || !event) {
     return (
       <div className="flex flex-col h-full">
         <MobileHeader 
@@ -274,11 +261,15 @@ export default function EventView() {
   }
   
   // Determine the background style
-  const backgroundStyle = event.backgroundImage
-    ? { backgroundImage: `url(${event.backgroundImage})`, backgroundSize: 'cover' }
-    : event.backgroundGradient
-    ? { background: event.backgroundGradient }
-    : { backgroundColor: event.backgroundColor || "#3b82f6" };
+  const backgroundStyle = event.cover_image
+    ? { backgroundImage: `url(${event.cover_image})`, backgroundSize: 'cover' }
+    : event.background_gradient
+    ? { background: event.background_gradient }
+    : { backgroundColor: event.background_color || "#3b82f6" };
+  
+  // Convert database dates to Date objects
+  const startDate = event.start_time ? new Date(event.start_time) : null;
+  const endDate = event.end_time ? new Date(event.end_time) : null;
   
   return (
     <div className="flex flex-col h-full">
@@ -294,17 +285,17 @@ export default function EventView() {
           className="relative pt-16 pb-8 px-4 text-center"
           style={{
             ...backgroundStyle,
-            color: event.textColor || '#ffffff',
+            color: event.text_color || '#ffffff',
           }}
         >
           <h1 
             className="font-bold mb-2" 
-            style={{ fontSize: `${event.fontSize}px` || '24px' }}
+            style={{ fontSize: `${event.font_size || 18}px` }}
           >
             {event.title}
           </h1>
           <div className="flex items-center justify-center text-sm opacity-90">
-            <span>Organized by {event.organizer.name}</span>
+            <span>Organized by Event Creator</span>
           </div>
         </div>
         
@@ -347,12 +338,12 @@ export default function EventView() {
                 <div>
                   <h3 className="font-medium">Date</h3>
                   <p className="text-sm text-muted-foreground">
-                    {event.startDate && event.endDate ? (
-                      event.startDate.toDateString() === event.endDate.toDateString() ? (
-                        format(event.startDate, "EEEE, MMMM d, yyyy")
+                    {startDate && endDate ? (
+                      startDate.toDateString() === endDate.toDateString() ? (
+                        format(startDate, "EEEE, MMMM d, yyyy")
                       ) : (
                         <>
-                          {format(event.startDate, "MMM d")} - {format(event.endDate, "MMM d, yyyy")}
+                          {format(startDate, "MMM d")} - {format(endDate, "MMM d, yyyy")}
                         </>
                       )
                     ) : (
@@ -362,13 +353,13 @@ export default function EventView() {
                 </div>
               </div>
               
-              {!event.isAllDay && (
+              {!event.is_all_day && startDate && endDate && (
                 <div className="flex items-start">
                   <Clock className="h-5 w-5 mr-3 text-muted-foreground mt-0.5" />
                   <div>
                     <h3 className="font-medium">Time</h3>
                     <p className="text-sm text-muted-foreground">
-                      {format(event.startDate, "h:mm a")} - {format(event.endDate, "h:mm a")}
+                      {format(startDate, "h:mm a")} - {format(endDate, "h:mm a")}
                     </p>
                   </div>
                 </div>
@@ -382,12 +373,12 @@ export default function EventView() {
                 <div>
                   <h3 className="font-medium">Location</h3>
                   <p className="text-sm text-muted-foreground mb-1">{event.location}</p>
-                  {event.locationLink && (
+                  {event.location_link && (
                     <Button 
                       variant="outline" 
                       size="sm" 
                       className="mt-1"
-                      onClick={() => window.open(event.locationLink, '_blank')}
+                      onClick={() => window.open(event.location_link, '_blank')}
                     >
                       Get Directions
                     </Button>
@@ -424,22 +415,22 @@ export default function EventView() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium flex items-center">
                     <Check className="h-4 w-4 mr-2 text-green-500" />
-                    Going ({event.attendees.accepted.length})
+                    Going ({rsvpData.accepted.length})
                   </h3>
                 </div>
                 
-                {event.attendees.accepted.length > 0 ? (
+                {rsvpData.accepted.length > 0 ? (
                   <div className="space-y-2">
-                    {event.attendees.accepted.map((attendee: any) => (
-                      <div key={attendee.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                    {rsvpData.accepted.map((rsvp: any) => (
+                      <div key={rsvp.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                         <div className="flex items-center">
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-3">
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{attendee.name}</p>
-                            {attendee.isWaktiUser && (
-                              <p className="text-xs text-muted-foreground">@{attendee.username}</p>
+                            <p className="font-medium text-sm">{rsvp.guest_name || "WAKTI User"}</p>
+                            {rsvp.user_id && (
+                              <p className="text-xs text-muted-foreground">WAKTI User</p>
                             )}
                           </div>
                         </div>
@@ -456,22 +447,22 @@ export default function EventView() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium flex items-center">
                     <X className="h-4 w-4 mr-2 text-red-500" />
-                    Not Going ({event.attendees.declined.length})
+                    Not Going ({rsvpData.declined.length})
                   </h3>
                 </div>
                 
-                {event.attendees.declined.length > 0 ? (
+                {rsvpData.declined.length > 0 ? (
                   <div className="space-y-2">
-                    {event.attendees.declined.map((attendee: any) => (
-                      <div key={attendee.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                    {rsvpData.declined.map((rsvp: any) => (
+                      <div key={rsvp.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                         <div className="flex items-center">
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-3">
                             <User className="h-4 w-4" />
                           </div>
                           <div>
-                            <p className="font-medium text-sm">{attendee.name}</p>
-                            {attendee.isWaktiUser && (
-                              <p className="text-xs text-muted-foreground">@{attendee.username}</p>
+                            <p className="font-medium text-sm">{rsvp.guest_name || "WAKTI User"}</p>
+                            {rsvp.user_id && (
+                              <p className="text-xs text-muted-foreground">WAKTI User</p>
                             )}
                           </div>
                         </div>
@@ -488,18 +479,18 @@ export default function EventView() {
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-medium flex items-center">
                     <Users className="h-4 w-4 mr-2 text-yellow-500" />
-                    Pending ({event.attendees.pending.length})
+                    Pending ({rsvpData.pending.length})
                   </h3>
-                  {event.attendees.pending.length > 0 && (
+                  {rsvpData.pending.length > 0 && (
                     <Button variant="ghost" size="sm">
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
                 
-                {event.attendees.pending.length > 0 ? (
+                {rsvpData.pending.length > 0 ? (
                   <div className="space-y-2">
-                    {event.attendees.pending.map((attendee: any) => (
+                    {rsvpData.pending.map((attendee: any) => (
                       <div key={attendee.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                         <div className="flex items-center">
                           <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-3">
@@ -530,7 +521,7 @@ export default function EventView() {
           <Button 
             className={cn(
               "flex-1",
-              event.buttonStyle === "rounded" ? "rounded-full" : "rounded-md"
+              event.button_style === "rounded" ? "rounded-full" : "rounded-md"
             )}
             onClick={() => openRsvpDialog("accept")}
             disabled={rsvpChoice !== null}
@@ -542,7 +533,7 @@ export default function EventView() {
             variant="outline" 
             className={cn(
               "flex-1",
-              event.buttonStyle === "rounded" ? "rounded-full" : "rounded-md"
+              event.button_style === "rounded" ? "rounded-full" : "rounded-md"
             )}
             onClick={() => openRsvpDialog("decline")}
             disabled={rsvpChoice !== null}
@@ -553,7 +544,7 @@ export default function EventView() {
             variant="outline"
             size="icon"
             className={cn(
-              event.buttonStyle === "rounded" ? "rounded-full" : "rounded-md"
+              event.button_style === "rounded" ? "rounded-full" : "rounded-md"
             )}
             onClick={handleShare}
           >
