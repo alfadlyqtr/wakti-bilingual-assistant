@@ -323,5 +323,12 @@ export const ar: Record<TranslationKey, string> = {
   saveAllSettings: "حفظ جميع الإعدادات",
   justNow: "الآن",
   minsAgo: "د",
-  activeNow: "نشط الآن"
+  activeNow: "نشط الآن",
+  // Image cropping translations
+  cropProfileImage: "قص صورة الملف الشخصي",
+  zoom: "التكبير",
+  cropInstructions: "اسحب الدائرة لتحديد موضع الصورة. استخدم التكبير لضبط الحجم.",
+  cropAndSave: "قص وحفظ",
+  pleaseSelectImageFile: "يرجى تحديد ملف صورة",
+  fileTooLarge: "حجم الملف كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت",
 };

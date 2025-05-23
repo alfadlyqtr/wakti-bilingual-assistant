@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Camera } from "lucide-react";
 import { toast } from "sonner";
 import { t } from "@/utils/translations";
+import { ImageCropper } from "./ImageCropper";
 
 export const ProfileImageUpload = () => {
   const { user, updateProfile } = useAuth();
@@ -15,6 +16,8 @@ export const ProfileImageUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
   const [imageError, setImageError] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [cropperOpen, setCropperOpen] = useState(false);
 
   // Get user initials for avatar fallback
   const getUserInitials = () => {
@@ -27,25 +30,47 @@ export const ProfileImageUpload = () => {
       .substring(0, 2);
   };
 
-  const uploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || !event.target.files.length) {
+      return;
+    }
+    
+    const file = event.target.files[0];
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error(t("pleaseSelectImageFile", language) || "Please select an image file");
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t("fileTooLarge", language) || "File size too large. Please select an image under 5MB");
+      return;
+    }
+    
+    setSelectedFile(file);
+    setCropperOpen(true);
+    
+    // Reset the input
+    event.target.value = '';
+  };
+
+  const uploadCroppedImage = async (croppedBlob: Blob) => {
     try {
       setUploading(true);
+      setCropperOpen(false);
       
-      if (!event.target.files || !event.target.files.length) {
-        return;
-      }
-      
-      const file = event.target.files[0];
-      const fileExt = file.name.split('.').pop();
+      const fileExt = selectedFile?.name.split('.').pop() || 'jpg';
       const fileName = `${user?.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
       const filePath = `${fileName}`;
       
-      console.log('Uploading avatar file:', { fileName, fileSize: file.size, fileType: file.type });
+      console.log('Uploading cropped avatar:', { fileName, fileSize: croppedBlob.size });
       
-      // Upload the file to Supabase storage
+      // Upload the cropped file to Supabase storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, file);
+        .upload(filePath, croppedBlob);
         
       if (uploadError) {
         console.error('Upload error:', uploadError);
@@ -93,6 +118,7 @@ export const ProfileImageUpload = () => {
       toast.error(`${t("error", language)}: ${error.message}`);
     } finally {
       setUploading(false);
+      setSelectedFile(null);
     }
   };
 
@@ -159,11 +185,24 @@ export const ProfileImageUpload = () => {
             type="file"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             accept="image/*"
-            onChange={uploadAvatar}
+            onChange={handleFileSelect}
             disabled={uploading}
           />
         </Button>
       </div>
+
+      {/* Image Cropper Modal */}
+      {selectedFile && (
+        <ImageCropper
+          isOpen={cropperOpen}
+          onClose={() => {
+            setCropperOpen(false);
+            setSelectedFile(null);
+          }}
+          imageFile={selectedFile}
+          onCropComplete={uploadCroppedImage}
+        />
+      )}
     </div>
   );
 };
