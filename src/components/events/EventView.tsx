@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -337,12 +336,25 @@ export default function EventView() {
     );
   }
   
-  // Determine the background style
-  const backgroundStyle = event.cover_image
-    ? { backgroundImage: `url(${event.cover_image})`, backgroundSize: 'cover' }
-    : event.background_gradient
-    ? { background: event.background_gradient }
-    : { backgroundColor: event.background_color || "#3b82f6" };
+  // Determine the background style based on the background type
+  const getBackgroundStyle = () => {
+    switch (event.background_type) {
+      case 'image':
+      case 'ai':
+        return event.background_image 
+          ? { backgroundImage: `url(${event.background_image})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { backgroundColor: event.background_color || "#3b82f6" };
+      case 'gradient':
+        return event.background_gradient 
+          ? { background: event.background_gradient }
+          : { backgroundColor: event.background_color || "#3b82f6" };
+      case 'color':
+      default:
+        return { backgroundColor: event.background_color || "#3b82f6" };
+    }
+  };
+  
+  const backgroundStyle = getBackgroundStyle();
   
   // Convert database dates to Date objects
   const startDate = event.start_time ? new Date(event.start_time) : null;
@@ -361,7 +373,7 @@ export default function EventView() {
       />
       
       <div className="flex-1 overflow-y-auto pb-20">
-        {/* Event Header */}
+        {/* Event Header with custom background */}
         <div 
           className="relative pt-16 pb-8 px-4 text-center"
           style={{

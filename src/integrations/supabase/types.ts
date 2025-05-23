@@ -246,6 +246,8 @@ export type Database = {
         Row: {
           background_color: string | null
           background_gradient: string | null
+          background_image: string | null
+          background_type: string | null
           button_style: string | null
           cover_image: string | null
           created_at: string | null
@@ -266,6 +268,8 @@ export type Database = {
         Insert: {
           background_color?: string | null
           background_gradient?: string | null
+          background_image?: string | null
+          background_type?: string | null
           button_style?: string | null
           cover_image?: string | null
           created_at?: string | null
@@ -286,6 +290,8 @@ export type Database = {
         Update: {
           background_color?: string | null
           background_gradient?: string | null
+          background_image?: string | null
+          background_type?: string | null
           button_style?: string | null
           cover_image?: string | null
           created_at?: string | null

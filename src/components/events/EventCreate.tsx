@@ -12,6 +12,7 @@ import { CalendarIcon, MapPin, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import BackgroundCustomizer from "./BackgroundCustomizer";
 
 const EventCreate: React.FC = () => {
   const { language } = useTheme();
@@ -24,6 +25,17 @@ const EventCreate: React.FC = () => {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Background customization state
+  const [backgroundData, setBackgroundData] = useState<{
+    type: 'color' | 'gradient' | 'image' | 'ai';
+    backgroundColor?: string;
+    backgroundGradient?: string;
+    backgroundImage?: string;
+  }>({
+    type: 'color',
+    backgroundColor: '#3b82f6'
+  });
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,17 +85,35 @@ const EventCreate: React.FC = () => {
         return;
       }
 
+      // Prepare event data with background customization
+      const eventData: any = {
+        title,
+        description: description || null,
+        location: location || null,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime.toISOString(),
+        organizer_id: userData.user.id,
+        is_public: true,
+        background_type: backgroundData.type
+      };
+
+      // Add background-specific fields
+      switch (backgroundData.type) {
+        case 'color':
+          eventData.background_color = backgroundData.backgroundColor;
+          break;
+        case 'gradient':
+          eventData.background_gradient = backgroundData.backgroundGradient;
+          break;
+        case 'image':
+        case 'ai':
+          eventData.background_image = backgroundData.backgroundImage;
+          break;
+      }
+
       const { data, error } = await supabase
         .from('events')
-        .insert({
-          title,
-          description: description || null,
-          location: location || null,
-          start_time: startDateTime.toISOString(),
-          end_time: endDateTime.toISOString(),
-          organizer_id: userData.user.id,
-          is_public: true // Default to public for now
-        })
+        .insert(eventData)
         .select()
         .single();
       
@@ -198,6 +228,12 @@ const EventCreate: React.FC = () => {
             </div>
           </div>
         </div>
+        
+        {/* Background Customization Section */}
+        <BackgroundCustomizer
+          onBackgroundChange={setBackgroundData}
+          currentBackground={backgroundData}
+        />
         
         <Button 
           type="submit" 
