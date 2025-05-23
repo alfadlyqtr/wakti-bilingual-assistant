@@ -194,8 +194,8 @@ export function ContactList() {
         ) : (
           contacts.map((contact: ContactType) => {
             const contactProfile = contact.profile || {} as UserProfile;
-            const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
-            const username = contactProfile.username || "user";
+            const displayName = contactProfile.username || "unknown";
+            const emailOrName = contactProfile.display_name || contactProfile.email || "";
             const unreadCount = unreadCounts[contact.contact_id] || 0;
             
             return (
@@ -204,12 +204,12 @@ export function ContactList() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <Avatar className="h-10 w-10 flex-shrink-0">
-                        <AvatarImage src={contactProfile.avatar_url || ""} />
+                        <AvatarImage src={contactProfile.avatar_url || ""} alt={displayName} />
                         <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <p className="font-medium truncate">{displayName}</p>
-                        <p className="text-sm text-muted-foreground truncate">@{username}</p>
+                        <p className="font-medium text-base truncate">@{displayName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{emailOrName}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-0.5 flex-shrink-0">
