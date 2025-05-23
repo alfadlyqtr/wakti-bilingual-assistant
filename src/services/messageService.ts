@@ -96,6 +96,33 @@ export async function markAsRead(senderId: string): Promise<void> {
   }
 }
 
+// Validate if users can message each other
+async function validateCanMessage(recipientId: string): Promise<boolean> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const userId = session.session.user.id;
+  
+  try {
+    const { data, error } = await supabase.rpc('can_users_message', {
+      sender_id: userId,
+      recipient_id: recipientId
+    });
+
+    if (error) {
+      console.error("Error validating message permission:", error);
+      return false;
+    }
+
+    return data === true;
+  } catch (error) {
+    console.error("Error in validateCanMessage:", error);
+    return false;
+  }
+}
+
 // Send a message to a contact
 export async function sendMessage(recipientId: string, messageData: {
   message_type: 'text' | 'image';
@@ -109,6 +136,12 @@ export async function sendMessage(recipientId: string, messageData: {
   }
 
   const userId = session.session.user.id;
+  
+  // Validate that users can message each other
+  const canMessage = await validateCanMessage(recipientId);
+  if (!canMessage) {
+    throw new Error("You cannot send messages to this user. Make sure you are both in each other's contact lists.");
+  }
   
   // Send message using messages table
   const { data, error } = await supabase

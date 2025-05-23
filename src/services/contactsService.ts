@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Contact {
@@ -334,7 +335,7 @@ export async function sendContactRequest(contactId: string) {
   }
 }
 
-// Accept a contact request
+// Accept a contact request and ensure bi-directional relationship
 export async function acceptContactRequest(requestId: string): Promise<{ original: any, reciprocal: any }> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
@@ -374,6 +375,7 @@ export async function acceptContactRequest(requestId: string): Promise<{ origina
     throw error;
   }
 
+  // CRITICAL: Create bi-directional relationship
   // Check if we already have a reciprocal record for this relationship
   const { data: existingReciprocal } = await supabase
     .from("contacts")
@@ -402,7 +404,7 @@ export async function acceptContactRequest(requestId: string): Promise<{ origina
       reciprocalRecord = existingReciprocal;
     }
   } else {
-    // Create a new reciprocal record
+    // Create a new reciprocal record - THIS IS ESSENTIAL FOR BI-DIRECTIONAL MESSAGING
     const { data, error: insertError } = await supabase
       .from("contacts")
       .insert({
@@ -418,6 +420,11 @@ export async function acceptContactRequest(requestId: string): Promise<{ origina
     }
     reciprocalRecord = data[0];
   }
+
+  console.log("Bi-directional contact relationship established:", {
+    original: originalRequest[0],
+    reciprocal: reciprocalRecord
+  });
 
   return { 
     original: originalRequest[0],
