@@ -21,14 +21,24 @@ export default function Events() {
   const { language } = useTheme();
   
   const fetchEvents = async (type: "upcoming" | "past") => {
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !userData.user) {
+      console.log('No authenticated user found');
+      return [];
+    }
+
     const now = new Date().toISOString();
     const queryConstraint = type === "upcoming" 
       ? { column: "start_time", operator: "gt", value: now }
       : { column: "end_time", operator: "lt", value: now };
       
+    console.log(`Fetching ${type} events for user:`, userData.user.id);
+    
     const { data, error } = await supabase
       .from("events")
       .select("*")
+      .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
       .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       
@@ -37,6 +47,7 @@ export default function Events() {
       throw new Error(`Failed to fetch ${type} events: ${error.message}`);
     }
     
+    console.log(`Found ${data?.length || 0} ${type} events`);
     return data || [];
   };
   

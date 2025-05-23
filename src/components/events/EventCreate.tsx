@@ -1,250 +1,298 @@
 
 import React, { useState } from 'react';
-import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { CalendarIcon, MapPin, Clock } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
-import { toast } from "@/hooks/use-toast";
-import BackgroundCustomizer from "./BackgroundCustomizer";
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Calendar, Clock, MapPin, ArrowLeft, Save } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
+import BackgroundCustomizer from './BackgroundCustomizer';
 
-const EventCreate: React.FC = () => {
-  const { language } = useTheme();
+const eventSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  location_link: z.string().url().optional().or(z.literal('')),
+  start_time: z.string().min(1, 'Start time is required'),
+  end_time: z.string().min(1, 'End time is required'),
+  is_all_day: z.boolean().default(false),
+  is_public: z.boolean().default(false),
+});
+
+type EventFormData = z.infer<typeof eventSchema>;
+
+interface BackgroundData {
+  type: 'color' | 'gradient' | 'image' | 'ai';
+  backgroundColor?: string;
+  backgroundGradient?: string;
+  backgroundImage?: string;
+}
+
+export default function EventCreate() {
   const navigate = useNavigate();
-  
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Background customization state
-  const [backgroundData, setBackgroundData] = useState<{
-    type: 'color' | 'gradient' | 'image' | 'ai';
-    backgroundColor?: string;
-    backgroundGradient?: string;
-    backgroundImage?: string;
-  }>({
+  const { language } = useTheme();
+  const [isLoading, setIsLoading] = useState(false);
+  const [backgroundData, setBackgroundData] = useState<BackgroundData>({
     type: 'color',
     backgroundColor: '#3b82f6'
   });
-  
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!title || !date || !startTime || !endTime) {
-      toast({
-        title: t("error", language),
-        description: t("pleaseCompleteAllRequiredFields", language),
-        variant: "destructive"
-      });
-      return;
-    }
-    
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<EventFormData>({
+    resolver: zodResolver(eventSchema),
+    defaultValues: {
+      is_all_day: false,
+      is_public: false,
+    },
+  });
+
+  const isAllDay = watch('is_all_day');
+
+  const onSubmit = async (data: EventFormData) => {
     try {
-      setIsSubmitting(true);
-      
-      // Format the start date and time
-      const startDateTime = new Date(date!);
-      const [startHours, startMinutes] = startTime.split(':').map(Number);
-      startDateTime.setHours(startHours, startMinutes, 0, 0);
-      
-      // Format the end date and time  
-      const endDateTime = new Date(date!);
-      const [endHours, endMinutes] = endTime.split(':').map(Number);
-      endDateTime.setHours(endHours, endMinutes, 0, 0);
-      
-      // Validate that end time is after start time
-      if (endDateTime <= startDateTime) {
-        toast({
-          title: t("error", language),
-          description: "End time must be after start time",
-          variant: "destructive"
-        });
-        setIsSubmitting(false);
-        return;
-      }
+      setIsLoading(true);
 
       // Get current user
       const { data: userData, error: userError } = await supabase.auth.getUser();
+      
       if (userError || !userData.user) {
-        toast({
-          title: t("error", language),
-          description: "You must be logged in to create an event",
-          variant: "destructive"
-        });
-        setIsSubmitting(false);
+        toast.error('You must be logged in to create events');
         return;
       }
 
-      // Prepare event data with background customization
-      const eventData: any = {
-        title,
-        description: description || null,
-        location: location || null,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime.toISOString(),
-        organizer_id: userData.user.id,
-        is_public: true,
-        background_type: backgroundData.type
+      // Prepare event data
+      const eventData = {
+        title: data.title,
+        description: data.description || null,
+        location: data.location || null,
+        location_link: data.location_link || null,
+        start_time: data.start_time,
+        end_time: data.end_time,
+        is_all_day: data.is_all_day,
+        is_public: data.is_public,
+        created_by: userData.user.id, // Set the creator
+        background_type: backgroundData.type,
+        background_color: backgroundData.backgroundColor || null,
+        background_gradient: backgroundData.backgroundGradient || null,
+        background_image: backgroundData.backgroundImage || null,
       };
 
-      // Add background-specific fields
-      switch (backgroundData.type) {
-        case 'color':
-          eventData.background_color = backgroundData.backgroundColor;
-          break;
-        case 'gradient':
-          eventData.background_gradient = backgroundData.backgroundGradient;
-          break;
-        case 'image':
-        case 'ai':
-          eventData.background_image = backgroundData.backgroundImage;
-          break;
-      }
+      console.log('Creating event with data:', eventData);
 
-      const { data, error } = await supabase
+      const { data: newEvent, error } = await supabase
         .from('events')
-        .insert(eventData)
+        .insert([eventData])
         .select()
         .single();
-      
-      if (error) throw error;
-      
-      toast({
-        title: t("success", language),
-        description: t("eventCreatedSuccessfully", language)
-      });
-      
-      // Navigate to the created event detail page
-      navigate(`/event/${data.id}`);
+
+      if (error) {
+        console.error('Error creating event:', error);
+        toast.error('Failed to create event: ' + error.message);
+        return;
+      }
+
+      console.log('Event created successfully:', newEvent);
+      toast.success('Event created successfully!');
+      navigate('/events');
     } catch (error) {
       console.error('Error creating event:', error);
-      toast({
-        title: t("error", language),
-        description: t("errorCreatingEvent", language),
-        variant: "destructive"
-      });
+      toast.error('Failed to create event');
     } finally {
-      setIsSubmitting(false);
+      setIsLoading(false);
     }
   };
-  
+
+  const handleAllDayToggle = (checked: boolean) => {
+    setValue('is_all_day', checked);
+    if (checked) {
+      // Set to full day times
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0);
+      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59);
+      
+      setValue('start_time', startOfDay.toISOString().slice(0, 16));
+      setValue('end_time', endOfDay.toISOString().slice(0, 16));
+    }
+  };
+
   return (
-    <div className="p-4">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("eventTitle", language)} *</label>
-          <Input 
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={t("enterEventTitle", language)}
-            required
-          />
+    <div className="flex flex-col h-full">
+      {/* Mobile Header */}
+      <header className="mobile-header">
+        <div className="flex items-center">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate('/events')}
+            className="mr-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <h1 className="text-xl font-bold">{t("createEvent", language)}</h1>
         </div>
-        
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("descriptionField", language)}</label>
-          <Textarea 
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={t("enterEventDescription", language)}
-            className="min-h-[100px]"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <label className="text-sm font-medium">{t("location", language)}</label>
-          <div className="relative">
-            <MapPin className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder={t("enterLocation", language)}
-              className="pl-8"
-            />
-          </div>
-        </div>
-        
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t("date", language)} *</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, 'PPP') : <span>{t("selectDate", language)}</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start Time *</label>
-              <div className="relative">
-                <Clock className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
-                  className="pl-8"
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End Time *</label>
-              <div className="relative">
-                <Clock className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  type="time"
-                  value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
-                  className="pl-8"
-                  required
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Background Customization Section */}
-        <BackgroundCustomizer
-          onBackgroundChange={setBackgroundData}
-          currentBackground={backgroundData}
-        />
-        
         <Button 
           type="submit" 
-          className="w-full"
-          disabled={isSubmitting}
+          form="event-form"
+          disabled={isLoading}
+          size="sm"
         >
-          {isSubmitting ? t("creating", language) : t("createEvent", language)}
+          <Save className="h-4 w-4 mr-1" />
+          {isLoading ? 'Saving...' : 'Save'}
         </Button>
-      </form>
+      </header>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {t("eventDetails", language)}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form id="event-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="title">{t("title", language)} *</Label>
+                  <Input
+                    id="title"
+                    {...register('title')}
+                    placeholder={t("enterEventTitle", language)}
+                    className={errors.title ? 'border-destructive' : ''}
+                  />
+                  {errors.title && (
+                    <p className="text-sm text-destructive mt-1">{errors.title.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="description">{t("description", language)}</Label>
+                  <Textarea
+                    id="description"
+                    {...register('description')}
+                    placeholder={t("enterEventDescription", language)}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              {/* Location */}
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="location" className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4" />
+                    {t("location", language)}
+                  </Label>
+                  <Input
+                    id="location"
+                    {...register('location')}
+                    placeholder={t("enterLocation", language)}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="location_link">{t("locationLink", language)}</Label>
+                  <Input
+                    id="location_link"
+                    {...register('location_link')}
+                    placeholder="https://maps.google.com/..."
+                    type="url"
+                    className={errors.location_link ? 'border-destructive' : ''}
+                  />
+                  {errors.location_link && (
+                    <p className="text-sm text-destructive mt-1">{errors.location_link.message}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Date and Time */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    {t("dateTime", language)}
+                  </Label>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="is_all_day"
+                      checked={isAllDay}
+                      onCheckedChange={handleAllDayToggle}
+                    />
+                    <Label htmlFor="is_all_day" className="text-sm">
+                      {t("allDay", language)}
+                    </Label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="start_time">{t("startTime", language)} *</Label>
+                    <Input
+                      id="start_time"
+                      type="datetime-local"
+                      {...register('start_time')}
+                      className={errors.start_time ? 'border-destructive' : ''}
+                    />
+                    {errors.start_time && (
+                      <p className="text-sm text-destructive mt-1">{errors.start_time.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="end_time">{t("endTime", language)} *</Label>
+                    <Input
+                      id="end_time"
+                      type="datetime-local"
+                      {...register('end_time')}
+                      className={errors.end_time ? 'border-destructive' : ''}
+                    />
+                    {errors.end_time && (
+                      <p className="text-sm text-destructive mt-1">{errors.end_time.message}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Background Customization */}
+              <BackgroundCustomizer 
+                onBackgroundChange={setBackgroundData}
+                currentBackground={backgroundData}
+              />
+
+              {/* Settings */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="is_public">{t("publicEvent", language)}</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {t("publicEventDescription", language)}
+                    </p>
+                  </div>
+                  <Switch
+                    id="is_public"
+                    {...register('is_public')}
+                  />
+                </div>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
-};
-
-export default EventCreate;
+}

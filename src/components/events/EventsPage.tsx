@@ -19,12 +19,28 @@ const EventsPage: React.FC = () => {
   const fetchEvents = async () => {
     setIsLoading(true);
     try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData.user) {
+        console.log('No authenticated user found');
+        setEvents([]);
+        return;
+      }
+
+      console.log('Fetching events for user:', userData.user.id);
+      
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching events:', error);
+        throw error;
+      }
+      
+      console.log(`Found ${data?.length || 0} events`);
       setEvents(data || []);
     } catch (error) {
       console.error('Error fetching events:', error);
