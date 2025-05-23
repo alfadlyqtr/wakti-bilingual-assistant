@@ -99,9 +99,15 @@ export async function getContactRequests() {
 
   const requestIds = rows.map(r => r.id);
   const userIds = rows.map(r => r.user_id);
+  
+  // Use separate objects for different mappings
   const createdDates = rows.reduce((acc, row) => {
     acc[row.user_id] = row.created_at;
-    acc[row.id] = row.id;
+    return acc;
+  }, {});
+  
+  const userToRequestIdMap = rows.reduce((acc, row) => {
+    acc[row.user_id] = row.id;
     return acc;
   }, {});
   
@@ -120,9 +126,8 @@ export async function getContactRequests() {
 
   // Transform data to match expected format
   return profiles.map(profile => {
-    const requestId = Object.entries(createdDates).find(([id, userId]) => userId === profile.id)?.[0];
     return {
-      id: requestId,
+      id: userToRequestIdMap[profile.id], // Get request ID from the dedicated map
       user_id: profile.id,
       contact_id: userId,
       status: 'pending' as const,
