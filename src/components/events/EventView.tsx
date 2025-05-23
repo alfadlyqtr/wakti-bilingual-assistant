@@ -29,11 +29,14 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function EventView() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("details");
   const [rsvpDialogOpen, setRsvpDialogOpen] = useState(false);
   const [rsvpChoice, setRsvpChoice] = useState<"accept" | "decline" | null>(null);
@@ -41,7 +44,6 @@ export default function EventView() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
-  const [rsvpLoading, setRsvpLoading] = useState(false);
   
   // Fetch event data from Supabase
   const { data: event, isLoading: loading, error } = useQuery({
@@ -65,6 +67,29 @@ export default function EventView() {
     enabled: !!id
   });
   
+  // Fetch current user's RSVP status
+  const { data: currentUserRsvp } = useQuery({
+    queryKey: ["user-rsvp", id, user?.id],
+    queryFn: async () => {
+      if (!id || !user?.id) return null;
+      
+      const { data, error } = await supabase
+        .from("event_rsvps")
+        .select("*")
+        .eq("event_id", id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching user RSVP:", error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!id && !!user?.id
+  });
+  
   // Fetch RSVP data for attendees display
   const { data: rsvpData = { accepted: [], declined: [], pending: [] } } = useQuery({
     queryKey: ["event-rsvps", id],
@@ -82,8 +107,8 @@ export default function EventView() {
       }
       
       // Group RSVPs by response type
-      const accepted = data?.filter(rsvp => rsvp.response === "accept") || [];
-      const declined = data?.filter(rsvp => rsvp.response === "decline") || [];
+      const accepted = data?.filter(rsvp => rsvp.response === "accepted") || [];
+      const declined = data?.filter(rsvp => rsvp.response === "declined") || [];
       const pending: any[] = []; // For now, we don't have pending invites
       
       return { accepted, declined, pending };
@@ -91,14 +116,91 @@ export default function EventView() {
     enabled: !!id
   });
   
-  useEffect(() => {
-    // Check if user has already RSVP'd using localStorage
-    const storedRsvp = localStorage.getItem(`event-rsvp-${id}`);
-    if (storedRsvp) {
-      const parsedRsvp = JSON.parse(storedRsvp);
-      setRsvpChoice(parsedRsvp.choice);
+  // Mutation for submitting RSVP
+  const rsvpMutation = useMutation({
+    mutationFn: async ({ response, isWaktiUser, name, username }: {
+      response: "accepted" | "declined";
+      isWaktiUser: boolean;
+      name?: string;
+      username?: string;
+    }) => {
+      if (!id) throw new Error("No event ID");
+      
+      const rsvpData: any = {
+        event_id: id,
+        response: response,
+      };
+      
+      if (isWaktiUser && user?.id) {
+        rsvpData.user_id = user.id;
+        rsvpData.is_wakti_user = true;
+      } else if (!isWaktiUser && name) {
+        rsvpData.guest_name = name;
+        rsvpData.is_wakti_user = false;
+      } else {
+        throw new Error("Invalid RSVP data");
+      }
+      
+      // Check if user already has an RSVP and update instead of insert
+      if (currentUserRsvp && user?.id) {
+        const { data, error } = await supabase
+          .from("event_rsvps")
+          .update({ response: response })
+          .eq("id", currentUserRsvp.id)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return data;
+      } else {
+        const { data, error } = await supabase
+          .from("event_rsvps")
+          .insert(rsvpData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        return data;
+      }
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch RSVP data
+      queryClient.invalidateQueries({ queryKey: ["event-rsvps", id] });
+      queryClient.invalidateQueries({ queryKey: ["user-rsvp", id, user?.id] });
+      
+      toast.success(
+        data.response === "accepted" 
+          ? "You're going to this event!" 
+          : "Response recorded"
+      );
+      
+      // Close dialog
+      setRsvpDialogOpen(false);
+      
+      // If not a WAKTI user, show join prompt
+      if (!user) {
+        setTimeout(() => {
+          toast("Want to stay organized? Join WAKTI.", {
+            action: {
+              label: "Sign Up",
+              onClick: () => navigate("/signup"),
+            },
+          });
+        }, 1500);
+      }
+    },
+    onError: (error) => {
+      console.error("RSVP error:", error);
+      toast.error("Failed to submit response. Please try again.");
     }
-  }, [id]);
+  });
+  
+  // Set initial RSVP choice based on current user's response
+  useEffect(() => {
+    if (currentUserRsvp) {
+      setRsvpChoice(currentUserRsvp.response === "accepted" ? "accept" : "decline");
+    }
+  }, [currentUserRsvp]);
   
   const handleShare = async () => {
     if (navigator.share) {
@@ -122,6 +224,13 @@ export default function EventView() {
   const openRsvpDialog = (choice: "accept" | "decline") => {
     setRsvpChoice(choice);
     setRsvpDialogOpen(true);
+    
+    // If user is logged in, default to WAKTI user
+    if (user) {
+      setIsWaktiUser(true);
+    } else {
+      setIsWaktiUser(null);
+    }
   };
   
   const handleRsvpTypeChange = (value: string) => {
@@ -133,61 +242,28 @@ export default function EventView() {
   const handleRsvpSubmit = async () => {
     if (!rsvpChoice) return;
     
-    setRsvpLoading(true);
-    
     try {
       // Validate RSVP data
-      if (isWaktiUser === true && !username) {
+      if (isWaktiUser === true && !user && !username) {
         setUsernameError("Username is required");
-        setRsvpLoading(false);
         return;
       }
       
       if (isWaktiUser === false && !name) {
         toast.error("Name is required");
-        setRsvpLoading(false);
         return;
       }
       
-      // In a real implementation, we would validate the username against Supabase
-      // and save the RSVP response
+      const response = rsvpChoice === "accept" ? "accepted" : "declined";
       
-      // For now, let's simulate an API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Store RSVP in localStorage to prevent multiple submissions
-      localStorage.setItem(`event-rsvp-${id}`, JSON.stringify({
-        choice: rsvpChoice,
-        name: isWaktiUser ? username : name,
-        isWaktiUser,
-        timestamp: new Date().toISOString(),
-      }));
-      
-      toast.success(
-        rsvpChoice === "accept" 
-          ? "You're going to this event!" 
-          : "Response recorded"
-      );
-      
-      // Close dialog and update UI
-      setRsvpDialogOpen(false);
-      setRsvpLoading(false);
-      
-      // If not a WAKTI user, show join prompt
-      if (!isWaktiUser) {
-        setTimeout(() => {
-          toast("Want to stay organized? Join WAKTI.", {
-            action: {
-              label: "Sign Up",
-              onClick: () => navigate("/signup"),
-            },
-          });
-        }, 1500);
-      }
+      await rsvpMutation.mutateAsync({
+        response,
+        isWaktiUser: isWaktiUser === true,
+        name: isWaktiUser === false ? name : undefined,
+        username: isWaktiUser === true ? username : undefined,
+      });
     } catch (error) {
-      console.error("RSVP error:", error);
-      toast.error("Failed to submit response. Please try again.");
-      setRsvpLoading(false);
+      console.error("RSVP submission error:", error);
     }
   };
   
@@ -196,8 +272,6 @@ export default function EventView() {
       setUsernameError("Username is required");
       return false;
     }
-    
-    setRsvpLoading(true);
     
     try {
       // In a real implementation, we would validate the username against Supabase
@@ -208,17 +282,14 @@ export default function EventView() {
       
       if (!userExists) {
         setUsernameError("Username not found. Please retype or continue as guest.");
-        setRsvpLoading(false);
         return false;
       }
       
       setUsernameError("");
-      setRsvpLoading(false);
       return true;
     } catch (error) {
       console.error("Username validation error:", error);
       setUsernameError("Error validating username. Please try again.");
-      setRsvpLoading(false);
       return false;
     }
   };
@@ -270,6 +341,10 @@ export default function EventView() {
   // Convert database dates to Date objects
   const startDate = event.start_time ? new Date(event.start_time) : null;
   const endDate = event.end_time ? new Date(event.end_time) : null;
+  
+  // Determine current user's RSVP status for button display
+  const userRsvpStatus = currentUserRsvp?.response;
+  const hasResponded = !!userRsvpStatus;
   
   return (
     <div className="flex flex-col h-full">
@@ -524,10 +599,10 @@ export default function EventView() {
               event.button_style === "rounded" ? "rounded-full" : "rounded-md"
             )}
             onClick={() => openRsvpDialog("accept")}
-            disabled={rsvpChoice !== null}
-            variant={rsvpChoice === "accept" ? "default" : "outline"}
+            disabled={rsvpMutation.isPending}
+            variant={userRsvpStatus === "accepted" ? "default" : "outline"}
           >
-            {rsvpChoice === "accept" ? "Going ✓" : "Going"}
+            {userRsvpStatus === "accepted" ? "Going ✓" : "Going"}
           </Button>
           <Button 
             variant="outline" 
@@ -536,9 +611,9 @@ export default function EventView() {
               event.button_style === "rounded" ? "rounded-full" : "rounded-md"
             )}
             onClick={() => openRsvpDialog("decline")}
-            disabled={rsvpChoice !== null}
+            disabled={rsvpMutation.isPending}
           >
-            {rsvpChoice === "decline" ? "Not Going ✓" : "Not Going"}
+            {userRsvpStatus === "declined" ? "Not Going ✓" : "Not Going"}
           </Button>
           <Button
             variant="outline"
@@ -562,7 +637,7 @@ export default function EventView() {
             </DialogTitle>
           </DialogHeader>
           
-          {isWaktiUser === null ? (
+          {!user && isWaktiUser === null ? (
             <div className="space-y-4 py-2">
               <p className="text-sm text-muted-foreground">Are you a WAKTI user?</p>
               <RadioGroup 
@@ -586,45 +661,49 @@ export default function EventView() {
                 Continue
               </Button>
             </div>
-          ) : isWaktiUser ? (
+          ) : (user || isWaktiUser) ? (
             <div className="space-y-4 py-2">
-              <div>
-                <Label htmlFor="username">WAKTI Username</Label>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value);
-                    if (usernameError) setUsernameError("");
-                  }}
-                  placeholder="Enter your username"
-                  className="mt-1"
-                />
-                {usernameError && (
-                  <p className="text-xs text-destructive mt-1">{usernameError}</p>
-                )}
-              </div>
+              {!user && (
+                <div>
+                  <Label htmlFor="username">WAKTI Username</Label>
+                  <Input
+                    id="username"
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (usernameError) setUsernameError("");
+                    }}
+                    placeholder="Enter your username"
+                    className="mt-1"
+                  />
+                  {usernameError && (
+                    <p className="text-xs text-destructive mt-1">{usernameError}</p>
+                  )}
+                </div>
+              )}
               
               <DialogFooter className="flex gap-2 sm:justify-between">
+                {!user && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsWaktiUser(false)}
+                    className="flex-1"
+                    disabled={rsvpMutation.isPending}
+                  >
+                    Continue as guest
+                  </Button>
+                )}
                 <Button 
-                  variant="outline" 
-                  onClick={() => setIsWaktiUser(false)}
-                  className="flex-1"
-                  disabled={rsvpLoading}
-                >
-                  Continue as guest
-                </Button>
-                <Button 
-                  onClick={async () => {
+                  onClick={user ? handleRsvpSubmit : async () => {
                     const isValid = await validateWaktiUsername();
                     if (isValid) {
                       handleRsvpSubmit();
                     }
                   }}
                   className="flex-1"
-                  disabled={rsvpLoading}
+                  disabled={rsvpMutation.isPending}
                 >
-                  {rsvpLoading ? "Checking..." : "Continue"}
+                  {rsvpMutation.isPending ? "Submitting..." : "Continue"}
                 </Button>
               </DialogFooter>
             </div>
@@ -646,16 +725,16 @@ export default function EventView() {
                   variant="outline" 
                   onClick={() => setIsWaktiUser(true)}
                   className="flex-1"
-                  disabled={rsvpLoading}
+                  disabled={rsvpMutation.isPending}
                 >
                   I have a WAKTI account
                 </Button>
                 <Button 
                   onClick={handleRsvpSubmit}
                   className="flex-1"
-                  disabled={rsvpLoading || !name}
+                  disabled={rsvpMutation.isPending || !name}
                 >
-                  {rsvpLoading ? "Submitting..." : "Submit"}
+                  {rsvpMutation.isPending ? "Submitting..." : "Submit"}
                 </Button>
               </DialogFooter>
             </div>
