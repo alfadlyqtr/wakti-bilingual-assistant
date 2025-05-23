@@ -84,7 +84,7 @@ export default function EventCreate() {
         end_time: data.end_time,
         is_all_day: data.is_all_day,
         is_public: data.is_public,
-        created_by: userData.user.id, // Set the creator
+        created_by: userData.user.id,
         background_type: backgroundData.type,
         background_color: backgroundData.backgroundColor || null,
         background_gradient: backgroundData.backgroundGradient || null,
@@ -106,7 +106,7 @@ export default function EventCreate() {
       }
 
       console.log('Event created successfully:', newEvent);
-      toast.success('Event created successfully!');
+      toast.success(t("eventCreatedSuccessfully", language));
       navigate('/events');
     } catch (error) {
       console.error('Error creating event:', error);
@@ -130,9 +130,9 @@ export default function EventCreate() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-screen">
       {/* Mobile Header */}
-      <header className="mobile-header">
+      <header className="mobile-header shrink-0">
         <div className="flex items-center">
           <Button 
             variant="ghost" 
@@ -151,11 +151,11 @@ export default function EventCreate() {
           size="sm"
         >
           <Save className="h-4 w-4 mr-1" />
-          {isLoading ? 'Saving...' : 'Save'}
+          {isLoading ? t("creating", language) : t("save", language)}
         </Button>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-20">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
