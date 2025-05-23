@@ -56,6 +56,30 @@ export default function Dashboard() {
     };
   };
   
+  // Get widget order from localStorage
+  const getWidgetOrder = () => {
+    try {
+      const storedOrder = localStorage.getItem('widgetOrder');
+      if (storedOrder) {
+        return JSON.parse(storedOrder);
+      }
+    } catch (error) {
+      console.error('Error loading widget order:', error);
+    }
+    
+    // Default order if nothing is stored
+    return ['tasks', 'calendar', 'events', 'reminders', 'quote'];
+  };
+  
+  // Save widget order to localStorage
+  const saveWidgetOrder = (newOrder: string[]) => {
+    try {
+      localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
+    } catch (error) {
+      console.error('Error saving widget order:', error);
+    }
+  };
+  
   const widgetVisibility = getUserPreferences();
   
   // Fetch data from Supabase
@@ -115,10 +139,10 @@ export default function Dashboard() {
     fetchData();
   }, []);
   
-  // Initialize widgets
+  // Initialize widgets with saved order
   useEffect(() => {
-    setWidgets([
-      {
+    const defaultWidgets = {
+      tasks: {
         id: "tasks",
         title: "tasks" as TranslationKey,
         visible: widgetVisibility.tasks,
@@ -158,7 +182,7 @@ export default function Dashboard() {
           </div>
         ),
       },
-      {
+      calendar: {
         id: "calendar",
         title: "calendar" as TranslationKey,
         visible: widgetVisibility.calendar,
@@ -223,7 +247,7 @@ export default function Dashboard() {
           </div>
         ),
       },
-      {
+      events: {
         id: "events",
         title: "events" as TranslationKey,
         visible: widgetVisibility.events,
@@ -264,7 +288,7 @@ export default function Dashboard() {
           </div>
         ),
       },
-      {
+      reminders: {
         id: "reminders",
         title: "reminders" as TranslationKey,
         visible: widgetVisibility.reminders,
@@ -302,16 +326,22 @@ export default function Dashboard() {
           </div>
         ),
       },
-      {
+      quote: {
         id: "quote",
         title: "dailyQuote" as TranslationKey,
         visible: widgetVisibility.dailyQuote,
         component: <QuoteWidget />
       },
-    ]);
-  }, [language, navigate, widgetVisibility]);
+    };
 
-  // Handle drag end
+    // Get saved order and arrange widgets accordingly
+    const savedOrder = getWidgetOrder();
+    const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
+    
+    setWidgets(orderedWidgets);
+  }, [language, navigate, widgetVisibility, isLoading, tasks, events, reminders]);
+  
+  // Handle drag end with localStorage persistence
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
     
@@ -319,8 +349,14 @@ export default function Dashboard() {
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
     
+    // Update the widgets state
     setWidgets(items);
-    toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
+    
+    // Save the new order to localStorage
+    const newOrder = items.map(widget => widget.id);
+    saveWidgetOrder(newOrder);
+    
+    toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة وحفظها" : "Widget rearranged and saved");
   };
 
   // Toggle drag mode button handler
@@ -386,7 +422,7 @@ export default function Dashboard() {
                     key={widget.id} 
                     draggableId={widget.id} 
                     index={index}
-                    isDragDisabled={false} // Always allow dragging
+                    isDragDisabled={false}
                   >
                     {(provided, snapshot) => (
                       <Card 
