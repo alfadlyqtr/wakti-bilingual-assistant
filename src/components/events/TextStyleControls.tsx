@@ -96,93 +96,92 @@ export default function TextStyleControls({
           </div>
         </div>
 
-        {/* Color and Formatting Row */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Text Color</Label>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Input
-                  type="color"
-                  value={textColor}
-                  onChange={(e) => onTextColorChange(e.target.value)}
-                  className="w-12 h-9 p-1 rounded-md cursor-pointer border"
-                />
-              </div>
+        {/* Color */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">Text Color</Label>
+          <div className="flex items-center gap-3">
+            <div className="relative">
               <Input
-                type="text"
+                type="color"
                 value={textColor}
                 onChange={(e) => onTextColorChange(e.target.value)}
-                placeholder="#ffffff"
-                className="flex-1 h-9 font-mono text-sm"
+                className="w-12 h-9 p-1 rounded-md cursor-pointer border"
               />
             </div>
+            <Input
+              type="text"
+              value={textColor}
+              onChange={(e) => onTextColorChange(e.target.value)}
+              placeholder="#ffffff"
+              className="flex-1 h-9 font-mono text-sm"
+            />
           </div>
+        </div>
 
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Formatting</Label>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant={fontWeight === 'bold' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onFontWeightChange(fontWeight === 'bold' ? 'normal' : 'bold')}
-                className="h-9 px-3"
-              >
-                <Bold className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant={fontStyle === 'italic' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onFontStyleChange(fontStyle === 'italic' ? 'normal' : 'italic')}
-                className="h-9 px-3"
-              >
-                <Italic className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant={textDecoration === 'underline' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onTextDecorationChange(textDecoration === 'underline' ? 'none' : 'underline')}
-                className="h-9 px-3"
-              >
-                <Underline className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <Label className="text-sm font-medium">Text Alignment</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={textAlign === 'left' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onTextAlignChange('left')}
-                className="h-9 px-3"
-              >
-                <AlignLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant={textAlign === 'center' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onTextAlignChange('center')}
-                className="h-9 px-3"
-              >
-                <AlignCenter className="h-4 w-4" />
-              </Button>
-              <Button
-                type="button"
-                variant={textAlign === 'right' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onTextAlignChange('right')}
-                className="h-9 px-3"
-              >
-                <AlignRight className="h-4 w-4" />
-              </Button>
-            </div>
+        {/* Formatting and Alignment Row */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium">Formatting & Alignment</Label>
+          <div className="flex flex-wrap gap-2">
+            {/* Formatting buttons */}
+            <Button
+              type="button"
+              variant={fontWeight === 'bold' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onFontWeightChange(fontWeight === 'bold' ? 'normal' : 'bold')}
+              className="h-9 px-3"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={fontStyle === 'italic' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onFontStyleChange(fontStyle === 'italic' ? 'normal' : 'italic')}
+              className="h-9 px-3"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={textDecoration === 'underline' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onTextDecorationChange(textDecoration === 'underline' ? 'none' : 'underline')}
+              className="h-9 px-3"
+            >
+              <Underline className="h-4 w-4" />
+            </Button>
+            
+            {/* Separator */}
+            <div className="w-px h-9 bg-border mx-1" />
+            
+            {/* Alignment buttons */}
+            <Button
+              type="button"
+              variant={textAlign === 'left' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onTextAlignChange('left')}
+              className="h-9 px-3"
+            >
+              <AlignLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={textAlign === 'center' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onTextAlignChange('center')}
+              className="h-9 px-3"
+            >
+              <AlignCenter className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant={textAlign === 'right' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => onTextAlignChange('right')}
+              className="h-9 px-3"
+            >
+              <AlignRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
