@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -178,36 +177,40 @@ export function ContactList() {
                         <p className="text-sm text-muted-foreground">@{username}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 pr-1">
+                    <div className="flex items-center gap-1">
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleToggleFavorite(contact.id, displayName)}
+                        className="h-10 w-10 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
                       >
-                        <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-muted-foreground'}`} />
+                        <Star className={`h-5 w-5 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleOpenChat(contact.contact_id, displayName, contactProfile.avatar_url)}
+                        className="h-10 w-10 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                       >
-                        <MessageSquare className="h-4 w-4 text-muted-foreground" />
+                        <MessageSquare className="h-5 w-5 text-blue-600" />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleBlock(contact.contact_id)}
                         disabled={blockContactMutation.isPending}
+                        className="h-10 w-10 hover:bg-orange-50 hover:text-orange-600 transition-colors"
                       >
-                        <UserX className="h-4 w-4 text-muted-foreground" />
+                        <UserX className="h-5 w-5 text-orange-600" />
                       </Button>
                       <Button 
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleDeleteClick(contact, displayName)}
                         disabled={deleteContactMutation.isPending}
+                        className="h-10 w-10 hover:bg-red-50 hover:text-red-600 transition-colors"
                       >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        <Trash2 className="h-5 w-5 text-red-600" />
                       </Button>
                     </div>
                   </div>
