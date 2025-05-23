@@ -30,8 +30,6 @@ export default function Dashboard() {
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const longPressDuration = 500; // ms
   const [isLoading, setIsLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
   const [events, setEvents] = useState([]);
@@ -315,8 +313,6 @@ export default function Dashboard() {
 
   // Handle drag end
   const handleDragEnd = (result: any) => {
-    setIsDragging(false);
-    
     if (!result.destination) return;
     
     const items = Array.from(widgets);
@@ -327,43 +323,16 @@ export default function Dashboard() {
     toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة" : "Widget rearranged");
   };
 
-  // Handle long press on drag handle
-  const handleDragHandlePress = (e: React.TouchEvent) => {
-    e.stopPropagation();
+  // Toggle drag mode button handler
+  const toggleDragMode = () => {
+    const newDraggingState = !isDragging;
+    setIsDragging(newDraggingState);
     
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-    }
-    
-    longPressTimer.current = setTimeout(() => {
-      setIsDragging(true);
+    if (newDraggingState) {
       toast.info(language === 'ar' ? "تم تفعيل وضع السحب" : "Drag mode activated");
-      if (navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    }, longPressDuration);
-  };
-  
-  // Handle touch end
-  const handleTouchEnd = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+    } else {
+      toast.info(language === 'ar' ? "تم إلغاء تفعيل وضع السحب" : "Drag mode deactivated");
     }
-  };
-  
-  // Handle touch move
-  const handleTouchMove = () => {
-    if (longPressTimer.current !== null) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-  
-  // Exit drag mode
-  const exitDragMode = () => {
-    setIsDragging(false);
-    toast.info(language === 'ar' ? "تم إلغاء تفعيل وضع السحب" : "Drag mode deactivated");
   };
 
   return (
@@ -394,14 +363,21 @@ export default function Dashboard() {
               {...provided.droppableProps}
               ref={provided.innerRef}
             >
-              {isDragging && (
-                <div className="bg-primary/10 rounded-md p-2 mb-4 flex items-center justify-between">
-                  <div className="text-sm">{language === 'ar' ? "وضع سحب الأدوات" : "Widget dragging mode"}</div>
-                  <Button size="sm" variant="outline" onClick={exitDragMode}>
-                    {language === 'ar' ? "تم" : "Done"}
-                  </Button>
-                </div>
-              )}
+              {/* Drag mode toggle button */}
+              <div className="flex justify-end mb-2">
+                <Button 
+                  size="sm" 
+                  variant={isDragging ? "default" : "outline"} 
+                  onClick={toggleDragMode}
+                  className="flex items-center gap-1"
+                >
+                  <Hand className="h-3 w-3" />
+                  {isDragging 
+                    ? (language === 'ar' ? "إيقاف السحب" : "Exit Drag Mode") 
+                    : (language === 'ar' ? "تنظيم الأدوات" : "Organize Widgets")
+                  }
+                </Button>
+              </div>
               
               {widgets
                 .filter(widget => widget.visible)
@@ -410,24 +386,24 @@ export default function Dashboard() {
                     key={widget.id} 
                     draggableId={widget.id} 
                     index={index}
-                    isDragDisabled={!isDragging}
+                    isDragDisabled={false} // Always allow dragging
                   >
                     {(provided, snapshot) => (
                       <Card 
                         className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''} 
-                                   ${isDragging ? 'select-none' : ''}`}
+                                   ${isDragging ? 'border-dashed border-primary/70' : ''}`}
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                       >
-                        {/* Drag handle with hand icon in top-left corner */}
+                        {/* Drag handle always visible in top-left corner */}
                         <div 
-                          className="absolute top-2 left-2 z-20 p-1 rounded-md bg-muted/60 hover:bg-muted/80 transition-colors cursor-grab active:cursor-grabbing"
-                          onTouchStart={handleDragHandlePress}
-                          onTouchEnd={handleTouchEnd}
-                          onTouchMove={handleTouchMove}
+                          className={`absolute top-2 left-2 z-20 p-1 rounded-md 
+                                    ${isDragging ? 'bg-primary text-primary-foreground' : 'bg-muted/60'}
+                                    hover:bg-primary/80 hover:text-primary-foreground transition-colors 
+                                    cursor-grab active:cursor-grabbing`}
                           {...provided.dragHandleProps}
                         >
-                          <Hand className="h-4 w-4 text-muted-foreground" />
+                          <Hand className="h-4 w-4" />
                         </div>
                         
                         <CardContent className="p-0 pt-8">
