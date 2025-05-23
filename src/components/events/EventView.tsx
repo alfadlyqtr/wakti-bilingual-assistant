@@ -22,6 +22,12 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -30,6 +36,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  downloadICSFile,
+  generateGoogleCalendarUrl,
+  generateOutlookCalendarUrl,
+  type CalendarEvent,
+} from "@/utils/calendarIntegration";
 
 export default function EventView() {
   const { id } = useParams();
@@ -200,6 +212,35 @@ export default function EventView() {
     }
   });
   
+  // Add to WAKTI Calendar mutation
+  const addToWaktiCalendarMutation = useMutation({
+    mutationFn: async () => {
+      if (!event || !user?.id) throw new Error("Event or user not found");
+      
+      const { error } = await supabase
+        .from("tasks")
+        .insert({
+          title: event.title,
+          description: event.description,
+          due_date: event.start_time,
+          reminder_time: event.start_time,
+          user_id: user.id,
+          priority: "medium",
+          status: "pending",
+          type: "event"
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Event added to your WAKTI calendar!");
+    },
+    onError: (error) => {
+      console.error("Add to WAKTI calendar error:", error);
+      toast.error("Failed to add event to WAKTI calendar");
+    }
+  });
+  
   // Set initial RSVP choice based on current user's response
   useEffect(() => {
     if (currentUserRsvp) {
@@ -296,6 +337,52 @@ export default function EventView() {
       console.error("Username validation error:", error);
       setUsernameError("Error validating username. Please try again.");
       return false;
+    }
+  };
+  
+  // Calendar integration handlers
+  const handleCalendarIntegration = (type: 'apple' | 'google' | 'outlook' | 'wakti') => {
+    if (!event) return;
+
+    const startDate = event.start_time ? new Date(event.start_time) : null;
+    const endDate = event.end_time ? new Date(event.end_time) : null;
+    
+    if (!startDate || !endDate) {
+      toast.error("Event dates are not available");
+      return;
+    }
+
+    const calendarEvent: CalendarEvent = {
+      title: event.title,
+      description: event.description || undefined,
+      location: event.location || undefined,
+      startTime: startDate,
+      endTime: endDate,
+    };
+
+    switch (type) {
+      case 'apple':
+        downloadICSFile(calendarEvent, `${event.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`);
+        toast.success("Calendar file downloaded for Apple Calendar");
+        break;
+      
+      case 'google':
+        const googleUrl = generateGoogleCalendarUrl(calendarEvent);
+        window.open(googleUrl, '_blank');
+        break;
+      
+      case 'outlook':
+        const outlookUrl = generateOutlookCalendarUrl(calendarEvent);
+        window.open(outlookUrl, '_blank');
+        break;
+      
+      case 'wakti':
+        if (!user) {
+          toast.error("Please log in to add to WAKTI Calendar");
+          return;
+        }
+        addToWaktiCalendarMutation.mutate();
+        break;
     }
   };
   
@@ -484,17 +571,34 @@ export default function EventView() {
             <div>
               <h3 className="font-medium mb-2">Add to Calendar</h3>
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleCalendarIntegration('apple')}
+                >
                   Apple Calendar
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleCalendarIntegration('google')}
+                >
                   Google Calendar
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleCalendarIntegration('outlook')}
+                >
                   Outlook
                 </Button>
-                <Button variant="outline" size="sm">
-                  WAKTI Calendar
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleCalendarIntegration('wakti')}
+                  disabled={addToWaktiCalendarMutation.isPending}
+                >
+                  {addToWaktiCalendarMutation.isPending ? "Adding..." : "WAKTI Calendar"}
                 </Button>
               </div>
             </div>

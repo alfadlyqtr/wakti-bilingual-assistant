@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Upload, Wand2, Palette, Gradient } from "lucide-react";
+import { Upload, Wand2, Palette, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -149,7 +149,7 @@ export default function BackgroundCustomizer({ onBackgroundChange, currentBackgr
             Color
           </TabsTrigger>
           <TabsTrigger value="gradient" className="flex items-center gap-1">
-            <Gradient className="h-4 w-4" />
+            <Zap className="h-4 w-4" />
             Gradient
           </TabsTrigger>
           <TabsTrigger value="image" className="flex items-center gap-1">
