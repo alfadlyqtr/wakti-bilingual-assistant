@@ -330,4 +330,18 @@ export type TranslationKey =
   // Missing keys from ChatPopup.tsx
   | "justNow"
   | "minsAgo"
-  | "activeNow";
+  | "activeNow"
+  // Event form translations - NEW KEYS ADDED
+  | "eventDetails"
+  | "locationLink"
+  | "dateTime"
+  | "allDay"
+  | "startTime"
+  | "endTime"
+  | "publicEvent"
+  | "publicEventDescription"
+  // Notification translations - NEW KEYS ADDED
+  | "rsvpNotificationAccepted"
+  | "rsvpNotificationDeclined"
+  | "newRsvpResponse";
+

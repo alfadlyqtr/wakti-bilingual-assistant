@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -327,9 +328,6 @@ export const ar: Record<TranslationKey, string> = {
   
   // Event form translations
   eventDetails: "تفاصيل الحدث",
-  enterEventTitle: "أدخل عنوان الحدث",
-  enterEventDescription: "أدخل وصف الحدث (اختياري)",
-  enterLocation: "أدخل الموقع (اختياري)",
   locationLink: "رابط الموقع",
   dateTime: "التاريخ والوقت",
   allDay: "طوال اليوم",
@@ -343,3 +341,4 @@ export const ar: Record<TranslationKey, string> = {
   rsvpNotificationDeclined: "{name} رفض دعوة حدثك",
   newRsvpResponse: "رد جديد على الدعوة",
 } as const;
+

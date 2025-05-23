@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -332,9 +333,6 @@ export const en: Record<TranslationKey, string> = {
   
   // Event form translations
   eventDetails: "Event Details",
-  enterEventTitle: "Enter event title",
-  enterEventDescription: "Enter event description (optional)",
-  enterLocation: "Enter location (optional)",
   locationLink: "Location Link",
   dateTime: "Date & Time",
   allDay: "All Day",
@@ -348,3 +346,4 @@ export const en: Record<TranslationKey, string> = {
   rsvpNotificationDeclined: "{name} declined your event invitation",
   newRsvpResponse: "New RSVP Response",
 } as const;
+
