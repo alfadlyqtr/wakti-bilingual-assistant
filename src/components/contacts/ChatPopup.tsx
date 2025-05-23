@@ -92,7 +92,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     mutationFn: (message: any) => sendMessage(contactId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-      setActiveTab("previous");
+      setActiveTab("previous"); // Switch to previous tab after sending
     },
     onError: (error) => {
       console.error("Error sending message:", error);
@@ -227,13 +227,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Audio playback functions
   const toggleAudioPlayback = (messageId: string, audioUrl: string) => {
     if (playingAudio === messageId) {
+      // Pause current audio
       audioRefs.current[messageId]?.pause();
       setPlayingAudio(null);
     } else {
+      // Stop any currently playing audio
       if (playingAudio) {
         audioRefs.current[playingAudio]?.pause();
       }
 
+      // Play new audio
       if (!audioRefs.current[messageId]) {
         audioRefs.current[messageId] = new Audio(audioUrl);
         audioRefs.current[messageId].onended = () => setPlayingAudio(null);
@@ -268,64 +271,76 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Check if messaging is blocked
   const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
 
+  // Theme-based styles
+  const containerClass = theme === 'dark' 
+    ? 'bg-dark-bg border-dark-secondary' 
+    : 'bg-light-bg border-light-secondary';
+  
+  const headerClass = theme === 'dark' 
+    ? 'border-dark-secondary bg-dark-bg' 
+    : 'border-light-secondary bg-light-bg';
+    
+  const textPrimary = theme === 'dark' ? 'text-white' : 'text-light-primary';
+  const textSecondary = theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500';
+
   const renderMessage = (message: any) => {
     const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
     
     return (
       <div 
         key={message.id}
-        className={`flex ${message.sender_id === currentUserId ? 'justify-end' : 'justify-start'} mb-2`}
+        className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
       >
         <div 
-          className={`max-w-[80%] px-3 py-2 rounded-lg ${
+          className={`max-w-[75%] px-4 py-3 rounded-2xl ${
             message.sender_id === currentUserId
-              ? 'bg-blue-500 text-white rounded-br-sm'
-              : `${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-900'} rounded-bl-sm`
+              ? 'bg-blue-500 text-white rounded-br-lg'
+              : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
           }`}
         >
           {message.message_type === 'image' ? (
             <img 
               src={message.media_url} 
               alt="Image message" 
-              className="max-w-full h-auto rounded"
+              className="max-w-full h-auto rounded-lg"
             />
           ) : message.message_type === 'voice' ? (
-            <div className="flex items-center gap-2 min-w-[100px]">
+            <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => toggleAudioPlayback(message.id, message.media_url)}
-                className="h-6 w-6 p-0 hover:bg-white/20"
+                className="h-8 w-8 p-0 hover:bg-white/20"
               >
                 {playingAudio === message.id ? 
-                  <Pause className="h-3 w-3" /> : 
-                  <Play className="h-3 w-3" />
+                  <Pause className="h-4 w-4" /> : 
+                  <Play className="h-4 w-4" />
                 }
               </Button>
-              <span className="text-xs font-mono">
+              <span className="text-sm">
                 {formatDuration(message.voice_duration || 0)}
               </span>
             </div>
           ) : message.message_type === 'pdf' ? (
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              <span className="text-xs truncate">{message.content?.replace('📄 ', '')}</span>
+              <span className="text-sm flex-1">{message.content}</span>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => window.open(message.media_url, '_blank')}
-                className="h-5 w-5 p-0 hover:bg-white/20"
+                className="h-8 w-8 p-0 hover:bg-white/20"
               >
-                <Download className="h-3 w-3" />
+                <Download className="h-4 w-4" />
               </Button>
             </div>
           ) : (
-            <p className="text-sm break-words">{message.content}</p>
+            <p className="text-sm leading-relaxed break-words">{message.content}</p>
           )}
-          <div className={`text-xs mt-1 opacity-70 ${message.sender_id === currentUserId ? 'text-right' : 'text-left'}`}>
-            {formatTime(message.created_at)}
-          </div>
         </div>
+        <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
+          {formatTime(message.created_at)}
+        </span>
       </div>
     );
   };
@@ -333,27 +348,23 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`w-full max-w-sm mx-auto h-[80vh] p-0 gap-0 rounded-xl border-0 shadow-2xl ${
-          theme === 'dark' ? 'bg-gray-900' : 'bg-white'
-        }`}
+        className={`w-full max-w-md mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
         hideCloseButton
       >
         {/* Header */}
-        <div className={`flex items-center justify-between px-4 py-3 border-b ${
-          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
-        }`}>
+        <div className={`flex items-center justify-between p-4 border-b ${headerClass}`}>
           <div className="flex items-center gap-3 flex-1">
-            <Avatar className="h-8 w-8">
+            <Avatar className="h-10 w-10 border-2 border-gray-200 dark:border-dark-secondary">
               <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className="text-xs">
+              <AvatarFallback className={`text-sm font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                 {contactName.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold text-sm truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              <h3 className={`font-semibold text-base truncate ${textPrimary}`}>
                 {contactName}
               </h3>
-              <p className="text-xs text-gray-500">
+              <p className={`text-xs ${textSecondary}`}>
                 {isMessagingBlocked ? 'Blocked' : 'Active now'}
               </p>
             </div>
@@ -362,15 +373,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className="h-8 w-8 rounded-full"
+            className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
         </div>
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 mx-4 mt-2 h-9">
+          <TabsList className="grid w-full grid-cols-2 mx-4 mt-3">
             <TabsTrigger value="inbox" className="text-xs">
               Inbox {inboxMessages.length > 0 && `(${inboxMessages.length})`}
             </TabsTrigger>
@@ -378,124 +389,124 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           </TabsList>
 
           {/* Inbox Tab */}
-          <TabsContent value="inbox" className="flex-1 flex flex-col mt-2">
+          <TabsContent value="inbox" className="flex-1 flex flex-col mt-0">
             <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
               {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin border-blue-500"></div>
+                <div className="flex justify-center items-center h-40">
+                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
                 </div>
               ) : inboxMessages.length > 0 ? (
-                <div className="py-2">
+                <div className="space-y-4 py-4">
                   {inboxMessages.map(renderMessage)}
                 </div>
               ) : (
                 <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className="text-4xl mb-2">📬</div>
-                  <p className="text-sm text-gray-500">No new messages</p>
+                  <div className={`text-4xl mb-4 ${textSecondary}`}>📬</div>
+                  <p className={`text-sm ${textSecondary}`}>No new messages</p>
                 </div>
               )}
             </ScrollArea>
 
             {/* Compose Area */}
             {!isMessagingBlocked && (
-              <div className={`border-t px-4 py-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-                {/* Media buttons */}
-                <div className="flex items-center gap-1 mb-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                  >
-                    <Image className="h-4 w-4" />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageSelected}
-                    />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => pdfInputRef.current?.click()}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                  >
-                    <FileText className="h-4 w-4" />
-                    <input
-                      ref={pdfInputRef}
-                      type="file"
-                      accept=".pdf"
-                      className="hidden"
-                      onChange={handlePDFSelected}
-                    />
-                  </Button>
-
-                  <VoiceRecorder 
-                    onRecordingComplete={handleVoiceRecording}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                  />
-                </div>
-
-                {/* Text input */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <Input
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      placeholder={t("typeMessage", language)}
-                      className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
-                        ? 'bg-gray-800 text-white placeholder:text-gray-400' 
-                        : 'bg-gray-100 text-gray-900 placeholder:text-gray-500'
-                      }`}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendTextMessage();
-                        }
-                      }}
-                    />
+              <div className={`border-t p-4 ${headerClass}`}>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50"
-                      onClick={sendTextMessage}
-                      disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={sendMessageMutation.isPending || isUploading}
                     >
-                      <Send className="h-4 w-4" />
+                      <Image className="h-4 w-4" />
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageSelected}
+                      />
                     </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      onClick={() => pdfInputRef.current?.click()}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                    >
+                      <FileText className="h-4 w-4" />
+                      <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={handlePDFSelected}
+                      />
+                    </Button>
+
+                    <VoiceRecorder 
+                      onRecordingComplete={handleVoiceRecording}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                    />
                   </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 relative">
+                      <Input
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        placeholder={t("typeMessage", language)}
+                        className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                          ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
+                          : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
+                        }`}
+                        disabled={sendMessageMutation.isPending || isUploading}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            sendTextMessage();
+                          }
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        onClick={sendTextMessage}
+                        disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {messageText && (
+                    <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
+                      {charCount}/{MAX_CHARS}
+                    </div>
+                  )}
                 </div>
-                
-                {messageText && (
-                  <div className={`text-xs text-right mt-1 ${isOverLimit ? 'text-red-500' : 'text-gray-500'}`}>
-                    {charCount}/{MAX_CHARS}
-                  </div>
-                )}
               </div>
             )}
           </TabsContent>
 
           {/* Previous Tab */}
-          <TabsContent value="previous" className="flex-1 flex flex-col mt-2">
+          <TabsContent value="previous" className="flex-1 flex flex-col mt-0">
             <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
               {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-32">
-                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin border-blue-500"></div>
+                <div className="flex justify-center items-center h-40">
+                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
                 </div>
               ) : previousMessages.length > 0 ? (
-                <div className="py-2">
+                <div className="space-y-4 py-4">
                   {previousMessages.map(renderMessage)}
                 </div>
               ) : (
                 <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className="text-4xl mb-2">📭</div>
-                  <p className="text-sm text-gray-500">No previous messages</p>
+                  <div className={`text-4xl mb-4 ${textSecondary}`}>📭</div>
+                  <p className={`text-sm ${textSecondary}`}>No previous messages</p>
                 </div>
               )}
             </ScrollArea>
@@ -503,9 +514,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         </Tabs>
 
         {isMessagingBlocked && (
-          <div className="flex items-center justify-center gap-2 py-4 border-t">
-            <Shield className="h-4 w-4 text-red-500" />
-            <p className="text-sm font-medium text-gray-500">
+          <div className="flex items-center justify-center gap-2 py-3 border-t">
+            <Shield className="h-5 w-5 text-red-500" />
+            <p className={`text-sm font-medium ${textSecondary}`}>
               {blockStatus.isBlocked 
                 ? t("contactBlocked", language) 
                 : t("blockedByContact", language)}
