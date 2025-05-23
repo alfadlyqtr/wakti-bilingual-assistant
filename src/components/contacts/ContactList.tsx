@@ -10,6 +10,7 @@ import { getContacts, blockContact, deleteContact } from "@/services/contactsSer
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import { ChatPopup } from "./ChatPopup";
+import { supabase } from "@/integrations/supabase/client";
 import {
   AlertDialog,
   AlertDialogAction,
