@@ -328,5 +328,23 @@ export const en: Record<TranslationKey, string> = {
   // Added translations for ChatPopup.tsx
   justNow: "Just now",
   minsAgo: "m ago",
-  activeNow: "Active now"
-};
+  activeNow: "Active now",
+  
+  // Event form translations
+  eventDetails: "Event Details",
+  enterEventTitle: "Enter event title",
+  enterEventDescription: "Enter event description (optional)",
+  enterLocation: "Enter location (optional)",
+  locationLink: "Location Link",
+  dateTime: "Date & Time",
+  allDay: "All Day",
+  startTime: "Start Time",
+  endTime: "End Time",
+  publicEvent: "Public Event",
+  publicEventDescription: "Anyone can view and RSVP to this event",
+  
+  // Notification translations
+  rsvpNotificationAccepted: "{name} accepted your event invitation",
+  rsvpNotificationDeclined: "{name} declined your event invitation",
+  newRsvpResponse: "New RSVP Response",
+} as const;

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { UserMenu } from "@/components/UserMenu";
 import { t } from "@/utils/translations";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useRsvpNotifications } from "@/hooks/useRsvpNotifications";
 
 // Define the type for our events
 type Event = Tables<"events">;
@@ -19,6 +19,9 @@ export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
   const navigate = useNavigate();
   const { language } = useTheme();
+  
+  // Initialize RSVP notifications
+  useRsvpNotifications();
   
   const fetchEvents = async (type: "upcoming" | "past") => {
     const { data: userData, error: userError } = await supabase.auth.getUser();

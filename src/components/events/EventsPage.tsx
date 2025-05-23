@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -6,11 +5,15 @@ import EventCreate from './EventCreate';
 import EventList from './EventList';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
+import { useRsvpNotifications } from '@/hooks/useRsvpNotifications';
 
 const EventsPage: React.FC = () => {
   const { language } = useTheme();
   const [events, setEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Initialize RSVP notifications
+  useRsvpNotifications();
   
   useEffect(() => {
     fetchEvents();

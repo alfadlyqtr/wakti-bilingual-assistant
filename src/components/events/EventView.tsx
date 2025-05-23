@@ -185,6 +185,9 @@ export default function EventView() {
       queryClient.invalidateQueries({ queryKey: ["event-rsvps", id] });
       queryClient.invalidateQueries({ queryKey: ["user-rsvp", id, user?.id] });
       
+      // Also invalidate events list to trigger real-time updates
+      queryClient.invalidateQueries({ queryKey: ["events"] });
+      
       toast.success(
         data.response === "accepted" 
           ? "You're going to this event!" 

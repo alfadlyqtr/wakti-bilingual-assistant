@@ -323,5 +323,23 @@ export const ar: Record<TranslationKey, string> = {
   saveAllSettings: "حفظ جميع الإعدادات",
   justNow: "الآن",
   minsAgo: "د",
-  activeNow: "نشط الآن"
-};
+  activeNow: "نشط الآن",
+  
+  // Event form translations
+  eventDetails: "تفاصيل الحدث",
+  enterEventTitle: "أدخل عنوان الحدث",
+  enterEventDescription: "أدخل وصف الحدث (اختياري)",
+  enterLocation: "أدخل الموقع (اختياري)",
+  locationLink: "رابط الموقع",
+  dateTime: "التاريخ والوقت",
+  allDay: "طوال اليوم",
+  startTime: "وقت البداية",
+  endTime: "وقت النهاية",
+  publicEvent: "حدث عام",
+  publicEventDescription: "يمكن لأي شخص مشاهدة هذا الحدث والرد عليه",
+  
+  // Notification translations
+  rsvpNotificationAccepted: "{name} قبل دعوة حدثك",
+  rsvpNotificationDeclined: "{name} رفض دعوة حدثك",
+  newRsvpResponse: "رد جديد على الدعوة",
+} as const;
