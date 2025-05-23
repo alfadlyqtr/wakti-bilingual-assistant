@@ -254,14 +254,19 @@ export type Database = {
           created_by: string | null
           description: string | null
           end_time: string
+          font_family: string | null
           font_size: number | null
+          font_style: string | null
+          font_weight: string | null
           id: string
           is_all_day: boolean | null
           is_public: boolean | null
           location: string | null
           location_link: string | null
           start_time: string
+          text_align: string | null
           text_color: string | null
+          text_decoration: string | null
           title: string
           updated_at: string | null
         }
@@ -276,14 +281,19 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           end_time: string
+          font_family?: string | null
           font_size?: number | null
+          font_style?: string | null
+          font_weight?: string | null
           id?: string
           is_all_day?: boolean | null
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
           start_time: string
+          text_align?: string | null
           text_color?: string | null
+          text_decoration?: string | null
           title: string
           updated_at?: string | null
         }
@@ -298,14 +308,19 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           end_time?: string
+          font_family?: string | null
           font_size?: number | null
+          font_style?: string | null
+          font_weight?: string | null
           id?: string
           is_all_day?: boolean | null
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
           start_time?: string
+          text_align?: string | null
           text_color?: string | null
+          text_decoration?: string | null
           title?: string
           updated_at?: string | null
         }

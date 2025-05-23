@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -433,6 +434,11 @@ export default function EventView() {
         break;
     }
   };
+
+  // Fixed back button handler - navigate to events page
+  const handleBackClick = () => {
+    navigate('/events');
+  };
   
   if (loading) {
     return (
@@ -440,7 +446,7 @@ export default function EventView() {
         <MobileHeader 
           title="Event Details" 
           showBackButton={true} 
-          onBackClick={() => navigate(-1)} 
+          onBackClick={handleBackClick} 
         />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-pulse flex flex-col items-center">
@@ -458,7 +464,7 @@ export default function EventView() {
         <MobileHeader 
           title="Event Details" 
           showBackButton={true} 
-          onBackClick={() => navigate(-1)} 
+          onBackClick={handleBackClick} 
         />
         <div className="flex-1 flex flex-col items-center justify-center p-4">
           <h2 className="text-xl font-bold mb-2">Event Not Found</h2>
@@ -507,7 +513,7 @@ export default function EventView() {
       <MobileHeader 
         title="Event Details" 
         showBackButton={true} 
-        onBackClick={() => navigate(-1)}
+        onBackClick={handleBackClick}
       >
         {isEventCreator && (
           <DropdownMenu>
