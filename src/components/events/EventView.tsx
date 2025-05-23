@@ -551,7 +551,8 @@ export default function EventView() {
             )}
             style={{ 
               fontSize: `${event.font_size || 18}px`,
-              textAlign: event.text_align as any || 'center'
+              textAlign: event.text_align as any || 'center',
+              fontFamily: event.font_family || 'Inter'
             }}
           >
             {event.title}

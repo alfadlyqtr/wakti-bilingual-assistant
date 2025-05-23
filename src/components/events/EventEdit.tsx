@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -57,6 +56,7 @@ export default function EventEdit() {
   const [fontWeight, setFontWeight] = useState<'normal' | 'bold'>('normal');
   const [fontStyle, setFontStyle] = useState<'normal' | 'italic'>('normal');
   const [textDecoration, setTextDecoration] = useState<'none' | 'underline'>('none');
+  const [fontFamily, setFontFamily] = useState('Inter');
 
   // Fetch event data
   const { data: event, isLoading: eventLoading } = useQuery({
@@ -120,6 +120,7 @@ export default function EventEdit() {
       setFontWeight(event.font_weight || 'normal');
       setFontStyle(event.font_style || 'normal');
       setTextDecoration(event.text_decoration || 'none');
+      setFontFamily(event.font_family || 'Inter');
     }
   }, [event, reset]);
 
@@ -151,6 +152,7 @@ export default function EventEdit() {
         font_weight: fontWeight,
         font_style: fontStyle,
         text_decoration: textDecoration,
+        font_family: fontFamily,
         updated_at: new Date().toISOString(),
       };
 
@@ -411,12 +413,14 @@ export default function EventEdit() {
             fontWeight={fontWeight}
             fontStyle={fontStyle}
             textDecoration={textDecoration}
+            fontFamily={fontFamily}
             onFontSizeChange={setFontSize}
             onTextColorChange={setTextColor}
             onTextAlignChange={setTextAlign}
             onFontWeightChange={setFontWeight}
             onFontStyleChange={setFontStyle}
             onTextDecorationChange={setTextDecoration}
+            onFontFamilyChange={setFontFamily}
           />
         </div>
       </div>
