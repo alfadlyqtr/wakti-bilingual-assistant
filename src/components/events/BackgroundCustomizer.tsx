@@ -153,7 +153,8 @@ export default function BackgroundCustomizer({
         throw response.error;
       }
 
-      const generatedImageUrl = response.data?.imageURL;
+      // Fixed: Use imageUrl instead of imageURL
+      const generatedImageUrl = response.data?.imageUrl;
       if (generatedImageUrl) {
         setImageUrl(generatedImageUrl);
         onBackgroundChange({
