@@ -22,7 +22,6 @@ interface ChatPopupProps {
   contactAvatar?: string;
 }
 
-// Maximum character limit for text messages
 const MAX_CHARS = 300;
 
 export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvatar }: ChatPopupProps) {
@@ -38,7 +37,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     isBlockedBy: boolean;
   }>({ isBlocked: false, isBlockedBy: false });
 
-  // Character count display
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
 
@@ -196,35 +194,39 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Check if messaging is blocked
   const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
 
+  // Theme-based styles
+  const containerClass = theme === 'dark' 
+    ? 'bg-dark-bg border-dark-secondary' 
+    : 'bg-light-bg border-light-secondary';
+  
+  const headerClass = theme === 'dark' 
+    ? 'border-dark-secondary bg-dark-bg' 
+    : 'border-light-secondary bg-light-bg';
+    
+  const textPrimary = theme === 'dark' ? 'text-white' : 'text-light-primary';
+  const textSecondary = theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500';
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`
-          w-full max-w-sm mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden
-          ${theme === 'dark' ? 'bg-dark-bg border-dark-secondary' : 'bg-light-bg border-light-secondary'}
-        `}
+        className={`w-full max-w-sm mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
         hideCloseButton
       >
-        {/* Header */}
-        <div className={`
-          flex items-center justify-between p-4 border-b
-          ${theme === 'dark' ? 'border-dark-secondary bg-dark-bg' : 'border-light-secondary bg-light-bg'}
-        `}>
-          <div className="flex items-center gap-3">
-            <Avatar className="h-10 w-10">
+        {/* Clean Header */}
+        <div className={`flex items-center justify-between p-4 border-b ${headerClass}`}>
+          <div className="flex items-center gap-3 flex-1">
+            <Avatar className="h-10 w-10 border-2 border-gray-200 dark:border-dark-secondary">
               <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className={`
-                ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}
-              `}>
+              <AvatarFallback className={`text-sm font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                 {contactName.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <div>
-              <h3 className={`font-semibold text-sm ${theme === 'dark' ? 'text-white' : 'text-light-primary'}`}>
+            <div className="flex-1 min-w-0">
+              <h3 className={`font-semibold text-base truncate ${textPrimary}`}>
                 {contactName}
               </h3>
-              <p className={`text-xs ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
-                {isMessagingBlocked ? 'Blocked' : 'Active'}
+              <p className={`text-xs ${textSecondary}`}>
+                {isMessagingBlocked ? 'Blocked' : 'Active now'}
               </p>
             </div>
           </div>
@@ -232,35 +234,30 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary' : 'hover:bg-light-secondary'}`}
+            className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
         </div>
         
-        {/* Messages area */}
-        <ScrollArea 
-          className="flex-1 px-4"
-          ref={scrollAreaRef}
-        >
+        {/* Messages Area */}
+        <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
           {isLoadingMessages ? (
             <div className="flex justify-center items-center h-40">
-              <div className={`animate-spin rounded-full h-8 w-8 border-2 border-t-transparent ${
-                theme === 'dark' ? 'border-white' : 'border-light-primary'
-              }`}></div>
+              <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
             </div>
           ) : messages && messages.length > 0 ? (
-            <div className="space-y-3 py-4">
+            <div className="space-y-4 py-4">
               {messages.map((message) => (
                 <div 
                   key={message.id}
                   className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
                 >
                   <div 
-                    className={`max-w-[80%] px-3 py-2 rounded-2xl ${
+                    className={`max-w-[75%] px-4 py-3 rounded-2xl ${
                       message.sender_id === currentUserId
-                        ? `${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'} text-white rounded-br-md`
-                        : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-md`
+                        ? 'bg-blue-500 text-white rounded-br-lg'
+                        : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
                     }`}
                   >
                     {message.message_type === 'image' ? (
@@ -275,36 +272,34 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                         }}
                       />
                     ) : (
-                      <p className="text-sm break-words">{message.content}</p>
+                      <p className="text-sm leading-relaxed break-words">{message.content}</p>
                     )}
                   </div>
-                  <span className={`text-xs mt-1 px-1 ${
-                    theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'
-                  }`}>
+                  <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
                     {formatTime(message.created_at)}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="flex flex-col justify-center items-center h-40 text-center">
-              <div className={`text-4xl mb-2 ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-300'}`}>💬</div>
-              <p className={`text-sm font-medium ${theme === 'dark' ? 'text-white' : 'text-light-primary'}`}>
+            <div className="flex flex-col justify-center items-center h-full text-center py-8">
+              <div className={`text-6xl mb-4 ${textSecondary}`}>💬</div>
+              <p className={`text-base font-medium mb-2 ${textPrimary}`}>
                 {t("startConversation", language)}
               </p>
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
+              <p className={`text-sm ${textSecondary}`}>
                 {t("sayHelloPrompt", language)}
               </p>
             </div>
           )}
         </ScrollArea>
         
-        {/* Input area */}
-        <div className={`border-t p-4 ${theme === 'dark' ? 'border-dark-secondary bg-dark-bg' : 'border-light-secondary bg-light-bg'}`}>
+        {/* Clean Input Area */}
+        <div className={`border-t p-4 ${headerClass}`}>
           {isMessagingBlocked ? (
-            <div className="flex items-center justify-center gap-2 py-2">
-              <Shield className="h-4 w-4 text-red-500" />
-              <p className={`text-sm ${theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500'}`}>
+            <div className="flex items-center justify-center gap-2 py-3">
+              <Shield className="h-5 w-5 text-red-500" />
+              <p className={`text-sm font-medium ${textSecondary}`}>
                 {blockStatus.isBlocked 
                   ? t("contactBlocked", language) 
                   : t("blockedByContact", language)}
@@ -312,15 +307,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary' : 'hover:bg-light-secondary'}`}
+                  className={`h-10 w-10 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sendMessageMutation.isPending || isUploading}
                 >
-                  <Image className="h-4 w-4" />
+                  <Image className="h-5 w-5" />
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -335,13 +330,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     value={messageText}
                     onChange={(e) => setMessageText(e.target.value)}
                     placeholder={t("typeMessage", language)}
-                    className={`
-                      h-9 pr-10 rounded-full border-none
-                      ${theme === 'dark' 
-                        ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary' 
-                        : 'bg-gray-100 text-gray-900 placeholder:text-gray-500'
-                      }
-                    `}
+                    className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                      ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
+                      : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
+                    }`}
                     disabled={sendMessageMutation.isPending || isUploading}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
@@ -353,29 +345,27 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-blue-500 hover:bg-blue-50"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                     onClick={sendTextMessage}
                     disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
                   >
-                    <Send className="h-3 w-3" />
+                    <Send className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
               
               {/* Character count */}
               {messageText && (
-                <div className={`text-xs text-right mt-1 ${
-                  isOverLimit ? 'text-red-500' : (theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500')
-                }`}>
+                <div className={`text-xs text-right mt-2 ${isOverLimit ? 'text-red-500' : textSecondary}`}>
                   {charCount}/{MAX_CHARS}
                 </div>
               )}
               
-              {/* Uploading indicator */}
+              {/* Clean uploading indicator */}
               {isUploading && (
-                <div className="flex items-center justify-center mt-2">
-                  <div className="flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
-                    <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="flex items-center justify-center mt-3">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-full text-sm">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>{t("uploading", language)}...</span>
                   </div>
                 </div>
