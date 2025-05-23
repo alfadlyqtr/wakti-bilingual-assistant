@@ -507,32 +507,31 @@ export default function EventView() {
       <MobileHeader 
         title="Event Details" 
         showBackButton={true} 
-        onBackClick={() => navigate(-1)} 
-        rightComponent={
-          isEventCreator ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  •••
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate(`/events/${id}/edit`)}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Event
-                </DropdownMenuItem>
-                <DropdownMenuItem 
-                  onClick={handleDeleteEvent}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Event
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null
-        }
-      />
+        onBackClick={() => navigate(-1)}
+      >
+        {isEventCreator && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm">
+                •••
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate(`/event/${id}/edit`)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Event
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={handleDeleteEvent}
+                className="text-destructive focus:text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Event
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </MobileHeader>
       
       <div className="flex-1 overflow-y-auto pb-20">
         {/* Event Header with custom background */}
