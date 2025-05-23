@@ -7,13 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Send, Image, FileText, X, Shield, Download, Play, Pause } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, getBlockStatus, uploadMessageAttachment } from "@/services/messageService";
+import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ChatPopupProps {
   isOpen: boolean;
@@ -29,22 +29,23 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const { language, theme } = useTheme();
   const [messageText, setMessageText] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState("inbox");
   const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const messageEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
-  const [blockStatus, setBlockStatus] = useState<{
-    isBlocked: boolean;
-    isBlockedBy: boolean;
-  }>({ isBlocked: false, isBlockedBy: false });
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
 
+  // Auto scroll to bottom on new messages
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+  
   // Get current user ID
   useEffect(() => {
     async function getUserId() {
@@ -62,65 +63,19 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     enabled: !!contactId && isOpen,
   });
 
-  // Debug log the messages
+  // Auto scroll when messages change or on open
   useEffect(() => {
-    if (allMessages) {
-      console.log("📱 ChatPopup - All messages received:", allMessages.length, allMessages);
-      console.log("📱 Current user ID:", currentUserId);
-      console.log("📱 Contact ID:", contactId);
+    if (allMessages && allMessages.length > 0) {
+      setTimeout(scrollToBottom, 100); // Small delay to ensure content is rendered
     }
-  }, [allMessages, currentUserId, contactId]);
-
-  // Separate messages into inbox (unread received) and previous (all messages)
-  const inboxMessages = allMessages?.filter(msg => {
-    const isReceivedByMe = msg.recipient_id === currentUserId && msg.sender_id === contactId;
-    const isUnread = !msg.is_read;
-    const result = isReceivedByMe && isUnread;
-    
-    console.log(`📬 Inbox filter - Message ${msg.id}:`, {
-      isReceivedByMe,
-      isUnread,
-      result,
-      sender_id: msg.sender_id,
-      recipient_id: msg.recipient_id,
-      currentUserId,
-      contactId
-    });
-    
-    return result;
-  }) || [];
-  
-  // Previous tab shows ALL messages in the conversation
-  const previousMessages = allMessages || [];
-
-  console.log("📊 Message distribution:", {
-    total: allMessages?.length || 0,
-    inbox: inboxMessages.length,
-    previous: previousMessages.length
-  });
-
-  // Check if the contact is blocked
-  useEffect(() => {
-    async function checkBlockStatus() {
-      try {
-        const status = await getBlockStatus(contactId);
-        setBlockStatus(status);
-      } catch (error) {
-        console.error("Error checking block status:", error);
-      }
-    }
-    
-    if (contactId && isOpen) {
-      checkBlockStatus();
-    }
-  }, [contactId, isOpen]);
+  }, [allMessages, isOpen]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: any) => sendMessage(contactId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-      setActiveTab("previous"); // Switch to previous tab after sending
+      scrollToBottom();
     },
     onError: (error) => {
       console.error("Error sending message:", error);
@@ -131,8 +86,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Realtime subscription
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
-
-    console.log("🔄 Setting up realtime subscription for:", { currentUserId, contactId });
 
     const channel = supabase
       .channel('public:messages')
@@ -145,11 +98,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
         },
         (payload) => {
-          console.log("🔄 Realtime message received:", payload);
           queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
           if (currentUserId) {
             markAsRead(contactId);
           }
+          scrollToBottom();
         }
       )
       .subscribe();
@@ -279,15 +232,33 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   };
 
   // Format message timestamp
-  const formatTime = (dateString: string) => {
+  const formatMessageTime = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      let hours = date.getHours();
-      const minutes = date.getMinutes().toString().padStart(2, "0");
-      const ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12;
-      hours = hours ? hours : 12;
-      return `${hours}:${minutes} ${ampm}`;
+      const messageDate = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - messageDate.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMins < 1) {
+        return t("justNow", language);
+      } else if (diffMins < 60) {
+        return `${diffMins}${t("minsAgo", language)}`;
+      } else if (diffHours < 24) {
+        const hours = messageDate.getHours() % 12 || 12;
+        const minutes = messageDate.getMinutes().toString().padStart(2, "0");
+        const ampm = messageDate.getHours() >= 12 ? "pm" : "am";
+        return `${t("today", language)} ${hours}:${minutes} ${ampm}`;
+      } else if (diffDays === 1) {
+        return t("yesterday", language);
+      } else {
+        // For older messages, show the date
+        return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
+          month: 'short',
+          day: 'numeric',
+        }).format(messageDate);
+      }
     } catch (error) {
       return "";
     }
@@ -295,118 +266,148 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Check if messaging is blocked
-  const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
-
   // Theme-based styles
-  const containerClass = theme === 'dark' 
-    ? 'bg-dark-bg border-dark-secondary' 
-    : 'bg-light-bg border-light-secondary';
+  const isDark = theme === 'dark';
   
-  const headerClass = theme === 'dark' 
-    ? 'border-dark-secondary bg-dark-bg' 
-    : 'border-light-secondary bg-light-bg';
-    
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-light-primary';
-  const textSecondary = theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500';
+  // Colors based on theme and app colors
+  const colors = {
+    primary: isDark ? '#fcfefd' : '#060541',
+    secondary: isDark ? '#606062' : '#e9ceb0',
+    tertiary: isDark ? '#858384' : '#d3b89d',
+    background: isDark ? '#0c0f14' : '#fcfefd',
+    surfaceLight: isDark ? 'rgba(96, 96, 98, 0.2)' : 'rgba(233, 206, 176, 0.2)',
+    surfaceDark: isDark ? 'rgba(12, 15, 20, 0.9)' : 'rgba(6, 5, 65, 0.05)',
+  };
 
-  const renderMessage = (message: any) => {
+  // Render message bubble
+  const renderMessage = (message: any, index: number, messages: any[]) => {
     const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
     const isSentByMe = message.sender_id === currentUserId;
-    
-    console.log(`🎨 Rendering message ${message.id}:`, {
-      content: message.content,
-      type: message.message_type,
-      sender: senderDisplayName,
-      isSentByMe,
-      sender_id: message.sender_id,
-      currentUserId
-    });
+    const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
+    const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
     
     return (
-      <div 
+      <motion.div 
         key={message.id}
-        className={`flex flex-col ${isSentByMe ? 'items-end' : 'items-start'}`}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className={`flex mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'}`}
       >
-        <div 
-          className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-            isSentByMe
-              ? 'bg-blue-500 text-white rounded-br-lg'
-              : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
-          }`}
-        >
-          {message.message_type === 'image' ? (
-            <img 
-              src={message.media_url} 
-              alt="Image message" 
-              className="max-w-full h-auto rounded-lg"
-            />
-          ) : message.message_type === 'voice' ? (
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => toggleAudioPlayback(message.id, message.media_url)}
-                className="h-8 w-8 p-0 hover:bg-white/20"
-              >
-                {playingAudio === message.id ? 
-                  <Pause className="h-4 w-4" /> : 
-                  <Play className="h-4 w-4" />
-                }
-              </Button>
-              <span className="text-sm">
-                {formatDuration(message.voice_duration || 0)}
-              </span>
-            </div>
-          ) : message.message_type === 'pdf' ? (
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="text-sm flex-1">{message.content}</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => window.open(message.media_url, '_blank')}
-                className="h-8 w-8 p-0 hover:bg-white/20"
-              >
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm leading-relaxed break-words">{message.content}</p>
+        <div className={`flex ${isSentByMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 max-w-[80%]`}>
+          {/* Avatar for other user messages */}
+          {!isSentByMe && showAvatar && (
+            <Avatar className="h-8 w-8 mb-1 flex-shrink-0">
+              <AvatarImage src={contactAvatar || ""} />
+              <AvatarFallback className={`text-xs font-semibold ${isDark ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
+                {contactName.substring(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
           )}
+          
+          {/* Invisible placeholder to align sent messages */}
+          {!isSentByMe && !showAvatar && <div className="w-8 flex-shrink-0"></div>}
+          
+          <div className="flex flex-col">
+            {/* Message bubble */}
+            <div 
+              className={`px-4 py-3 rounded-2xl ${
+                isSentByMe
+                  ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
+                  : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
+              } backdrop-blur-sm shadow-sm`}
+            >
+              {message.message_type === 'image' ? (
+                <img 
+                  src={message.media_url} 
+                  alt="Image message" 
+                  className="max-w-full h-auto rounded-lg"
+                  loading="lazy"
+                />
+              ) : message.message_type === 'voice' ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant={isSentByMe ? "ghost" : "secondary"}
+                    onClick={() => toggleAudioPlayback(message.id, message.media_url)}
+                    className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+                  >
+                    {playingAudio === message.id ? 
+                      <Pause className="h-4 w-4" /> : 
+                      <Play className="h-4 w-4" />
+                    }
+                  </Button>
+                  <span className="text-sm">
+                    {formatDuration(message.voice_duration || 0)}
+                  </span>
+                </div>
+              ) : message.message_type === 'pdf' ? (
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  <span className="text-sm flex-1">{message.content}</span>
+                  <Button
+                    size="sm"
+                    variant={isSentByMe ? "ghost" : "secondary"}
+                    onClick={() => window.open(message.media_url, '_blank')}
+                    className={`h-7 w-7 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+                  >
+                    <Download className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{message.content}</p>
+              )}
+            </div>
+            
+            {/* Timestamp */}
+            <div className={`text-xs mt-1 ${
+              isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
+            } ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {formatMessageTime(message.created_at)}
+            </div>
+          </div>
         </div>
-        <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
-          {formatTime(message.created_at)}
-        </span>
-      </div>
+      </motion.div>
     );
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`w-full max-w-md mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
+        className={`w-full max-w-sm md:max-w-md mx-auto h-[80vh] p-0 gap-0 rounded-2xl overflow-hidden border-0 shadow-xl`}
+        style={{
+          background: colors.background,
+          boxShadow: `0 10px 25px -5px ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}`,
+        }}
         hideCloseButton
       >
-        {/* Header */}
-        <div className={`flex items-center justify-between p-4 border-b ${headerClass}`}>
+        {/* Glassmorphic header */}
+        <div 
+          className="flex items-center justify-between p-4 border-b backdrop-blur-md sticky top-0 z-10"
+          style={{
+            borderColor: `${colors.secondary}30`,
+            background: isDark ? 
+              `linear-gradient(to bottom, ${colors.surfaceDark}, transparent)` : 
+              `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
+          }}
+        >
           <div className="flex items-center gap-3 flex-1">
-            <Avatar className="h-10 w-10 border-2 border-gray-200 dark:border-dark-secondary">
+            <Avatar className={`h-10 w-10 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
               <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className={`text-sm font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
+              <AvatarFallback className={`text-sm font-semibold ${isDark ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                 {contactName.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold text-base truncate ${textPrimary}`}>
+              <h3 className={`font-semibold text-base truncate ${isDark ? 'text-white' : 'text-light-primary'}`}>
                 {contactName}
               </h3>
-              <p className={`text-xs ${textSecondary}`}>
-                {isMessagingBlocked ? 'Blocked' : 'Active now'}
+              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                {t("activeNow", language)}
               </p>
             </div>
           </div>
@@ -414,156 +415,147 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`h-9 w-9 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
           >
             <X className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 mx-4 mt-3">
-            <TabsTrigger value="inbox" className="text-xs">
-              Inbox {inboxMessages.length > 0 && `(${inboxMessages.length})`}
-            </TabsTrigger>
-            <TabsTrigger value="previous" className="text-xs">Previous</TabsTrigger>
-          </TabsList>
-
-          {/* Inbox Tab */}
-          <TabsContent value="inbox" className="flex-1 flex flex-col mt-0">
-            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
-              {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-40">
-                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
-                </div>
-              ) : inboxMessages.length > 0 ? (
-                <div className="space-y-4 py-4">
-                  {inboxMessages.map(renderMessage)}
-                </div>
-              ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className={`text-4xl mb-4 ${textSecondary}`}>📬</div>
-                  <p className={`text-sm ${textSecondary}`}>No new messages</p>
-                </div>
-              )}
-            </ScrollArea>
-
-            {/* Compose Area */}
-            {!isMessagingBlocked && (
-              <div className={`border-t p-4 ${headerClass}`}>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                    >
-                      <Image className="h-4 w-4" />
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageSelected}
-                      />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                      onClick={() => pdfInputRef.current?.click()}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                    >
-                      <FileText className="h-4 w-4" />
-                      <input
-                        ref={pdfInputRef}
-                        type="file"
-                        accept=".pdf"
-                        className="hidden"
-                        onChange={handlePDFSelected}
-                      />
-                    </Button>
-
-                    <VoiceRecorder 
-                      onRecordingComplete={handleVoiceRecording}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                    />
+        {/* Message area */}
+        <ScrollArea className="flex-1 px-4 pt-4 pb-2">
+          {isLoadingMessages ? (
+            <div className="flex flex-col gap-3 p-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex gap-2">
+                  <div className={`h-8 w-8 rounded-full ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} animate-pulse`}></div>
+                  <div className="flex-1">
+                    <div className={`h-20 ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} rounded-xl animate-pulse`}></div>
+                    <div className={`h-3 w-16 mt-1 ml-1 ${isDark ? 'bg-dark-secondary/40' : 'bg-light-secondary/30'} rounded animate-pulse`}></div>
                   </div>
+                </div>
+              ))}
+            </div>
+          ) : allMessages && allMessages.length > 0 ? (
+            <div className="space-y-1 py-2">
+              <AnimatePresence>
+                {allMessages.map((message, index) => (
+                  renderMessage(message, index, allMessages)
+                ))}
+              </AnimatePresence>
+              <div ref={messageEndRef} />
+            </div>
+          ) : (
+            <div className="flex flex-col justify-center items-center h-48 text-center py-8">
+              <div className={`text-4xl mb-4 ${isDark ? 'text-dark-tertiary' : 'text-light-secondary'}`}>👋</div>
+              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                {t("startConversation", language)}
+              </p>
+            </div>
+          )}
+        </ScrollArea>
 
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 relative">
-                      <Input
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        placeholder={t("typeMessage", language)}
-                        className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
-                          ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
-                          : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
-                        }`}
-                        disabled={sendMessageMutation.isPending || isUploading}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            sendTextMessage();
-                          }
-                        }}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={sendTextMessage}
-                        disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {messageText && (
-                    <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
-                      {charCount}/{MAX_CHARS}
-                    </div>
-                  )}
+        {/* Floating compose area */}
+        <div 
+          className="p-4 pt-2 border-t"
+          style={{
+            borderColor: `${colors.secondary}30`,
+            background: isDark ? 
+              `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
+              `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+          }}
+        >
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={sendMessageMutation.isPending || isUploading}
+              >
+                <Image className="h-4 w-4" />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageSelected}
+                />
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={sendMessageMutation.isPending || isUploading}
+              >
+                <FileText className="h-4 w-4" />
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={handlePDFSelected}
+                />
+              </Button>
+
+              <VoiceRecorder 
+                onRecordingComplete={handleVoiceRecording}
+                disabled={sendMessageMutation.isPending || isUploading}
+              />
+            </div>
+
+            <div className="relative">
+              <div 
+                className={`p-1 rounded-2xl backdrop-blur-sm ${isDark ? 'bg-dark-secondary/30' : 'bg-light-secondary/20'}`}
+                style={{
+                  boxShadow: `0 4px 12px ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'}`
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={t("typeMessage", language)}
+                    className={`h-10 border-0 bg-transparent text-sm flex-1 ${isDark ? 'text-white placeholder:text-gray-400' : 'text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendTextMessage();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button" 
+                    size="icon"
+                    onClick={sendTextMessage}
+                    disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                    className={`rounded-full h-9 w-9 ${
+                      messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                    } transition-colors`}
+                  >
+                    <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
+                  </Button>
                 </div>
               </div>
-            )}
-          </TabsContent>
-
-          {/* Previous Tab */}
-          <TabsContent value="previous" className="flex-1 flex flex-col mt-0">
-            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
-              {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-40">
-                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
-                </div>
-              ) : previousMessages.length > 0 ? (
-                <div className="space-y-4 py-4">
-                  {previousMessages.map(renderMessage)}
-                </div>
-              ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className={`text-4xl mb-4 ${textSecondary}`}>📭</div>
-                  <p className={`text-sm ${textSecondary}`}>No previous messages</p>
+              
+              {/* Character counter */}
+              {messageText && (
+                <div 
+                  className={`absolute right-14 bottom-3 text-xs ${
+                    isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'
+                  } transition-colors`}
+                >
+                  {charCount}/{MAX_CHARS}
                 </div>
               )}
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-
-        {isMessagingBlocked && (
-          <div className="flex items-center justify-center gap-2 py-3 border-t">
-            <Shield className="h-5 w-5 text-red-500" />
-            <p className={`text-sm font-medium ${textSecondary}`}>
-              {blockStatus.isBlocked 
-                ? t("contactBlocked", language) 
-                : t("blockedByContact", language)}
-            </p>
+            </div>
           </div>
-        )}
+        </div>
       </DialogContent>
     </Dialog>
   );
