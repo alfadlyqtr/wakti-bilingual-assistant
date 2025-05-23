@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+
+import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,19 +23,6 @@ export function AppHeader() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [avatarUrl, setAvatarUrl] = useState("");
-  
-  // Update avatar URL with cache-busting parameter
-  useEffect(() => {
-    if (user?.user_metadata?.avatar_url) {
-      // Add cache-busting parameter
-      const baseUrl = user.user_metadata.avatar_url.split('?')[0];
-      const timestamp = new Date().getTime();
-      setAvatarUrl(`${baseUrl}?t=${timestamp}`);
-    } else {
-      setAvatarUrl("");
-    }
-  }, [user?.user_metadata?.avatar_url]);
   
   const handleLogout = async () => {
     await signOut();
@@ -115,7 +103,7 @@ export function AppHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={avatarUrl} />
+                  <AvatarImage src={user?.user_metadata?.avatar_url || ""} />
                   <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
                 </Avatar>
               </Button>

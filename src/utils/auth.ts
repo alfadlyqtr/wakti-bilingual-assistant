@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
@@ -26,13 +25,6 @@ export async function updateProfile(data: { user_metadata: {
 } }) {
   try {
     console.log("Updating profile with data:", data);
-    
-    // Add cache busting for avatar URL if present
-    if (data.user_metadata.avatar_url) {
-      const baseUrl = data.user_metadata.avatar_url.split('?')[0];
-      const timestamp = new Date().getTime();
-      data.user_metadata.avatar_url = `${baseUrl}?t=${timestamp}`;
-    }
     
     // Convert to the format expected by Supabase
     const userData: UserAttributes = {

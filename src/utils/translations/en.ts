@@ -328,12 +328,5 @@ export const en: Record<TranslationKey, string> = {
   // Added translations for ChatPopup.tsx
   justNow: "Just now",
   minsAgo: "m ago",
-  activeNow: "Active now",
-  // Image cropping translations
-  cropProfileImage: "Crop Profile Image",
-  zoom: "Zoom",
-  cropInstructions: "Drag the circle to position your image. Use zoom to adjust the size.",
-  cropAndSave: "Crop & Save",
-  pleaseSelectImageFile: "Please select an image file",
-  fileTooLarge: "File size too large. Please select an image under 5MB",
+  activeNow: "Active now"
 };
