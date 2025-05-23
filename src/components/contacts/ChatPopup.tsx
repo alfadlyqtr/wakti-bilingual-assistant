@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Send, Image, FileText, X, Shield, Download, Play, Pause } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
+import { getMessages, sendMessage, markAsRead, getBlockStatus, uploadMessageAttachment } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
@@ -28,6 +29,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const { language, theme } = useTheme();
   const [messageText, setMessageText] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("inbox");
   const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +37,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [isUploading, setIsUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
+  const [blockStatus, setBlockStatus] = useState<{
+    isBlocked: boolean;
+    isBlockedBy: boolean;
+  }>({ isBlocked: false, isBlockedBy: false });
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -49,28 +55,72 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   }, []);
 
   // Get messages for this contact
-  const { data: messages, isLoading: isLoadingMessages } = useQuery({
+  const { data: allMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ['directMessages', contactId],
     queryFn: () => getMessages(contactId),
     refetchInterval: 5000,
     enabled: !!contactId && isOpen,
   });
 
-  // Auto-scroll to bottom when messages change
+  // Debug log the messages
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      const scrollElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-      if (scrollElement) {
-        scrollElement.scrollTop = scrollElement.scrollHeight;
+    if (allMessages) {
+      console.log("📱 ChatPopup - All messages received:", allMessages.length, allMessages);
+      console.log("📱 Current user ID:", currentUserId);
+      console.log("📱 Contact ID:", contactId);
+    }
+  }, [allMessages, currentUserId, contactId]);
+
+  // Separate messages into inbox (unread received) and previous (all messages)
+  const inboxMessages = allMessages?.filter(msg => {
+    const isReceivedByMe = msg.recipient_id === currentUserId && msg.sender_id === contactId;
+    const isUnread = !msg.is_read;
+    const result = isReceivedByMe && isUnread;
+    
+    console.log(`📬 Inbox filter - Message ${msg.id}:`, {
+      isReceivedByMe,
+      isUnread,
+      result,
+      sender_id: msg.sender_id,
+      recipient_id: msg.recipient_id,
+      currentUserId,
+      contactId
+    });
+    
+    return result;
+  }) || [];
+  
+  // Previous tab shows ALL messages in the conversation
+  const previousMessages = allMessages || [];
+
+  console.log("📊 Message distribution:", {
+    total: allMessages?.length || 0,
+    inbox: inboxMessages.length,
+    previous: previousMessages.length
+  });
+
+  // Check if the contact is blocked
+  useEffect(() => {
+    async function checkBlockStatus() {
+      try {
+        const status = await getBlockStatus(contactId);
+        setBlockStatus(status);
+      } catch (error) {
+        console.error("Error checking block status:", error);
       }
     }
-  }, [messages]);
+    
+    if (contactId && isOpen) {
+      checkBlockStatus();
+    }
+  }, [contactId, isOpen]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: (message: any) => sendMessage(contactId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
+      setActiveTab("previous"); // Switch to previous tab after sending
     },
     onError: (error) => {
       console.error("Error sending message:", error);
@@ -81,6 +131,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Realtime subscription
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
+
+    console.log("🔄 Setting up realtime subscription for:", { currentUserId, contactId });
 
     const channel = supabase
       .channel('public:messages')
@@ -93,6 +145,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
         },
         (payload) => {
+          console.log("🔄 Realtime message received:", payload);
           queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
           if (currentUserId) {
             markAsRead(contactId);
@@ -246,6 +299,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Check if messaging is blocked
+  const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
+
   // Theme-based styles
   const containerClass = theme === 'dark' 
     ? 'bg-dark-bg border-dark-secondary' 
@@ -262,13 +318,22 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
     const isSentByMe = message.sender_id === currentUserId;
     
+    console.log(`🎨 Rendering message ${message.id}:`, {
+      content: message.content,
+      type: message.message_type,
+      sender: senderDisplayName,
+      isSentByMe,
+      sender_id: message.sender_id,
+      currentUserId
+    });
+    
     return (
       <div 
         key={message.id}
-        className={`flex flex-col ${isSentByMe ? 'items-end' : 'items-start'} mb-3`}
+        className={`flex flex-col ${isSentByMe ? 'items-end' : 'items-start'}`}
       >
         <div 
-          className={`max-w-[75%] px-4 py-3 rounded-2xl shadow-sm ${
+          className={`max-w-[75%] px-4 py-3 rounded-2xl ${
             isSentByMe
               ? 'bg-blue-500 text-white rounded-br-lg'
               : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
@@ -324,13 +389,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`w-full max-w-md mx-4 h-[75vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
+        className={`w-full max-w-md mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
         hideCloseButton
       >
         {/* Header */}
-        <div className={`flex items-center justify-between p-3 border-b ${headerClass}`}>
+        <div className={`flex items-center justify-between p-4 border-b ${headerClass}`}>
           <div className="flex items-center gap-3 flex-1">
-            <Avatar className="h-9 w-9 border-2 border-gray-200 dark:border-dark-secondary">
+            <Avatar className="h-10 w-10 border-2 border-gray-200 dark:border-dark-secondary">
               <AvatarImage src={contactAvatar || ""} />
               <AvatarFallback className={`text-sm font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                 {contactName.substring(0, 2).toUpperCase()}
@@ -341,7 +406,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 {contactName}
               </h3>
               <p className={`text-xs ${textSecondary}`}>
-                Active now
+                {isMessagingBlocked ? 'Blocked' : 'Active now'}
               </p>
             </div>
           </div>
@@ -349,114 +414,156 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </Button>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 flex flex-col">
-          <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
-            {isLoadingMessages ? (
-              <div className="flex justify-center items-center h-40">
-                <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
-              </div>
-            ) : messages && messages.length > 0 ? (
-              <div className="py-4">
-                {messages.map(renderMessage)}
-              </div>
-            ) : (
-              <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                <div className={`text-4xl mb-4 ${textSecondary}`}>💬</div>
-                <p className={`text-sm ${textSecondary}`}>Start a conversation</p>
-                <p className={`text-xs mt-1 ${textSecondary}`}>Send a message to get started</p>
-              </div>
-            )}
-          </ScrollArea>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 mx-4 mt-3">
+            <TabsTrigger value="inbox" className="text-xs">
+              Inbox {inboxMessages.length > 0 && `(${inboxMessages.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="previous" className="text-xs">Previous</TabsTrigger>
+          </TabsList>
 
-          {/* Compose Area - Always visible */}
-          <div className={`border-t p-3 ${headerClass}`}>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={sendMessageMutation.isPending || isUploading}
-                >
-                  <Image className="h-4 w-4" />
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageSelected}
-                  />
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                  onClick={() => pdfInputRef.current?.click()}
-                  disabled={sendMessageMutation.isPending || isUploading}
-                >
-                  <FileText className="h-4 w-4" />
-                  <input
-                    ref={pdfInputRef}
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={handlePDFSelected}
-                  />
-                </Button>
-
-                <VoiceRecorder 
-                  onRecordingComplete={handleVoiceRecording}
-                  disabled={sendMessageMutation.isPending || isUploading}
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="flex-1 relative">
-                  <Input
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={t("typeMessage", language)}
-                    className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
-                      ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
-                      : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
-                    }`}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendTextMessage();
-                      }
-                    }}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                    onClick={sendTextMessage}
-                    disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
+          {/* Inbox Tab */}
+          <TabsContent value="inbox" className="flex-1 flex flex-col mt-0">
+            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+              {isLoadingMessages ? (
+                <div className="flex justify-center items-center h-40">
+                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
                 </div>
-              </div>
-              
-              {messageText && (
-                <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
-                  {charCount}/{MAX_CHARS}
+              ) : inboxMessages.length > 0 ? (
+                <div className="space-y-4 py-4">
+                  {inboxMessages.map(renderMessage)}
+                </div>
+              ) : (
+                <div className="flex flex-col justify-center items-center h-full text-center py-8">
+                  <div className={`text-4xl mb-4 ${textSecondary}`}>📬</div>
+                  <p className={`text-sm ${textSecondary}`}>No new messages</p>
                 </div>
               )}
-            </div>
+            </ScrollArea>
+
+            {/* Compose Area */}
+            {!isMessagingBlocked && (
+              <div className={`border-t p-4 ${headerClass}`}>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                    >
+                      <Image className="h-4 w-4" />
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageSelected}
+                      />
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      onClick={() => pdfInputRef.current?.click()}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                    >
+                      <FileText className="h-4 w-4" />
+                      <input
+                        ref={pdfInputRef}
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        onChange={handlePDFSelected}
+                      />
+                    </Button>
+
+                    <VoiceRecorder 
+                      onRecordingComplete={handleVoiceRecording}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 relative">
+                      <Input
+                        value={messageText}
+                        onChange={(e) => setMessageText(e.target.value)}
+                        placeholder={t("typeMessage", language)}
+                        className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                          ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
+                          : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
+                        }`}
+                        disabled={sendMessageMutation.isPending || isUploading}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            sendTextMessage();
+                          }
+                        }}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        onClick={sendTextMessage}
+                        disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {messageText && (
+                    <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
+                      {charCount}/{MAX_CHARS}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Previous Tab */}
+          <TabsContent value="previous" className="flex-1 flex flex-col mt-0">
+            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+              {isLoadingMessages ? (
+                <div className="flex justify-center items-center h-40">
+                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
+                </div>
+              ) : previousMessages.length > 0 ? (
+                <div className="space-y-4 py-4">
+                  {previousMessages.map(renderMessage)}
+                </div>
+              ) : (
+                <div className="flex flex-col justify-center items-center h-full text-center py-8">
+                  <div className={`text-4xl mb-4 ${textSecondary}`}>📭</div>
+                  <p className={`text-sm ${textSecondary}`}>No previous messages</p>
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
+
+        {isMessagingBlocked && (
+          <div className="flex items-center justify-center gap-2 py-3 border-t">
+            <Shield className="h-5 w-5 text-red-500" />
+            <p className={`text-sm font-medium ${textSecondary}`}>
+              {blockStatus.isBlocked 
+                ? t("contactBlocked", language) 
+                : t("blockedByContact", language)}
+            </p>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
