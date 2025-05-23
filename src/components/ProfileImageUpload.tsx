@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Slider } from "@/components/ui/slider";
 
 export const ProfileImageUpload = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, refreshSession } = useAuth();
   const { language } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(user?.user_metadata?.avatar_url || "");
@@ -104,6 +104,35 @@ export const ProfileImageUpload = () => {
     setDragging(false);
   };
   
+  // Touch event handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setDragging(true);
+      setDragStart({
+        x: e.touches[0].clientX - position.x,
+        y: e.touches[0].clientY - position.y
+      });
+    }
+  };
+  
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!dragging || e.touches.length !== 1) return;
+    
+    // Calculate new position
+    const newX = e.touches[0].clientX - dragStart.x;
+    const newY = e.touches[0].clientY - dragStart.y;
+    
+    // Update position state
+    setPosition({
+      x: newX,
+      y: newY
+    });
+  };
+  
+  const handleTouchEnd = () => {
+    setDragging(false);
+  };
+  
   // Handle crop and upload
   const handleCrop = async () => {
     if (!selectedFile || !canvasRef.current) return;
@@ -178,7 +207,9 @@ export const ProfileImageUpload = () => {
   const uploadImage = async (croppedBlob: Blob) => {
     try {
       const fileExt = selectedFile?.name.split('.').pop() || 'jpg';
-      const fileName = `${user?.id}-${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      // Add timestamp for cache busting
+      const timestamp = new Date().getTime();
+      const fileName = `${user?.id}-${timestamp}.${fileExt}`;
       const filePath = `${fileName}`;
       
       console.log('Uploading cropped avatar:', { fileName, fileSize: croppedBlob.size });
@@ -198,8 +229,9 @@ export const ProfileImageUpload = () => {
         .from('avatars')
         .getPublicUrl(filePath);
       
-      const newAvatarUrl = storageData.publicUrl;
-      console.log('New avatar URL:', newAvatarUrl);
+      // Add cache busting parameter to URL
+      const newAvatarUrl = `${storageData.publicUrl}?t=${timestamp}`;
+      console.log('New avatar URL with cache busting:', newAvatarUrl);
       
       // Update user metadata
       const { error: authError } = await updateProfile({
@@ -226,9 +258,13 @@ export const ProfileImageUpload = () => {
         console.log('Successfully updated profile avatar in both auth and profiles table');
       }
       
+      // Force refresh the session to get the latest user metadata
+      await refreshSession();
+      
       setAvatarUrl(newAvatarUrl);
       setImageError(false);
       toast.success(t("profileImageUpdated", language) || "Profile image updated");
+      
     } catch (error: any) {
       console.error('Avatar upload failed:', error);
       toast.error(`${t("error", language)}: ${error.message}`);
@@ -241,6 +277,12 @@ export const ProfileImageUpload = () => {
     const syncAvatarToProfiles = async () => {
       if (user?.user_metadata?.avatar_url) {
         try {
+          // Add cache busting parameter
+          const timestamp = new Date().getTime();
+          const cacheBustUrl = `${user.user_metadata.avatar_url.split('?')[0]}?t=${timestamp}`;
+          
+          setAvatarUrl(cacheBustUrl);
+          
           const { error } = await supabase
             .from('profiles')
             .update({ avatar_url: user.user_metadata.avatar_url })
@@ -332,6 +374,9 @@ export const ProfileImageUpload = () => {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             >
               {/* Image Preview */}
               {imagePreviewUrl && (

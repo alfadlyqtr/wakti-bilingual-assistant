@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -16,6 +15,19 @@ export function UserMenu() {
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user, signOut } = useAuth();
+  const [avatarUrl, setAvatarUrl] = useState("");
+
+  // Update avatar URL with cache-busting parameter
+  useEffect(() => {
+    if (user?.user_metadata?.avatar_url) {
+      // Add cache-busting parameter
+      const baseUrl = user.user_metadata.avatar_url.split('?')[0];
+      const timestamp = new Date().getTime();
+      setAvatarUrl(`${baseUrl}?t=${timestamp}`);
+    } else {
+      setAvatarUrl("");
+    }
+  }, [user?.user_metadata?.avatar_url]);
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -77,7 +89,7 @@ export function UserMenu() {
       >
         <Avatar className="h-6 w-6">
           <AvatarImage 
-            src={user?.user_metadata?.avatar_url || ''} 
+            src={avatarUrl} 
             alt={displayName}
           />
           <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
@@ -107,7 +119,7 @@ export function UserMenu() {
                 <div className="flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
                     <AvatarImage 
-                      src={user?.user_metadata?.avatar_url || ''} 
+                      src={avatarUrl} 
                       alt={displayName}
                     />
                     <AvatarFallback>{getInitials()}</AvatarFallback>

@@ -125,14 +125,28 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     };
   }, [navigate, requireAuth, location.pathname]);
 
-  // Add a function to refresh the session
+  // Enhanced refreshSession function to force a complete refresh of user data
   const refreshSession = async () => {
     try {
+      logAuthState('Refreshing session');
+      
+      // First get the current session
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
       if (currentSession) {
-        setSession(currentSession);
-        setUser(currentSession.user);
+        // Then get the user with the latest metadata
+        const { data: { user: refreshedUser } } = await supabase.auth.getUser();
+        
+        // Update both session and user state
+        if (refreshedUser) {
+          logAuthState('Session refreshed successfully');
+          setSession(currentSession);
+          setUser(refreshedUser);
+          return;
+        }
       }
+      
+      logAuthState('No active session found during refresh');
     } catch (error) {
       console.error("Error refreshing session:", error);
     }
