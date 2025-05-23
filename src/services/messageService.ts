@@ -29,8 +29,11 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   }
 
   const userId = session.session.user.id;
+  
+  console.log("🔍 Fetching messages between:", { userId, contactId });
 
-  const { data, error } = await supabase
+  // First, get all messages between these two users
+  const { data: messagesData, error: messagesError } = await supabase
     .from("messages")
     .select(`
       id,
@@ -43,30 +46,72 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       voice_duration,
       file_size,
       created_at,
-      is_read,
-      profiles!messages_sender_id_fkey(
-        display_name,
-        username,
-        avatar_url
-      )
+      is_read
     `)
     .or(`and(sender_id.eq.${userId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${userId})`)
     .order("created_at", { ascending: true });
 
-  if (error) {
-    console.error("Error fetching messages:", error);
-    throw error;
+  if (messagesError) {
+    console.error("❌ Error fetching messages:", messagesError);
+    throw messagesError;
   }
 
-  // Mark messages as read
-  await markAsRead(contactId);
+  console.log("📨 Raw messages from database:", messagesData?.length || 0, messagesData);
 
-  const transformedData = data?.map(message => ({
-    ...message,
-    sender: Array.isArray(message.profiles) ? message.profiles[0] : message.profiles
-  })) || [];
+  if (!messagesData || messagesData.length === 0) {
+    console.log("📭 No messages found");
+    return [];
+  }
 
-  return transformedData;
+  // Now get sender profiles for all unique sender IDs
+  const senderIds = [...new Set(messagesData.map(msg => msg.sender_id))];
+  console.log("👥 Fetching profiles for sender IDs:", senderIds);
+
+  const { data: profilesData, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id, display_name, username, avatar_url")
+    .in("id", senderIds);
+
+  if (profilesError) {
+    console.error("❌ Error fetching profiles:", profilesError);
+    // Continue without profiles rather than failing completely
+  }
+
+  console.log("👤 Fetched profiles:", profilesData);
+
+  // Create a map of sender ID to profile
+  const profilesMap = new Map();
+  if (profilesData) {
+    profilesData.forEach(profile => {
+      profilesMap.set(profile.id, profile);
+    });
+  }
+
+  // Combine messages with sender profiles
+  const messagesWithProfiles = messagesData.map(message => {
+    const senderProfile = profilesMap.get(message.sender_id);
+    console.log(`📝 Message ${message.id}: sender=${message.sender_id}, profile=`, senderProfile);
+    
+    return {
+      ...message,
+      sender: senderProfile || {
+        display_name: "Unknown User",
+        username: "unknown",
+        avatar_url: ""
+      }
+    };
+  });
+
+  console.log("✅ Final messages with profiles:", messagesWithProfiles.length, messagesWithProfiles);
+
+  // Mark messages as read (only messages received by current user)
+  try {
+    await markAsRead(contactId);
+  } catch (error) {
+    console.error("⚠️ Error marking messages as read:", error);
+  }
+
+  return messagesWithProfiles;
 }
 
 // Get unread messages for notification indicator
@@ -177,6 +222,8 @@ export async function sendMessage(recipientId: string, messageData: {
 
   const userId = session.session.user.id;
   
+  console.log("📤 Sending message:", { recipientId, messageData, userId });
+  
   const canMessage = await validateCanMessage(recipientId);
   if (!canMessage) {
     throw new Error("You cannot send messages to this user. Make sure you are both in each other's contact lists.");
@@ -198,10 +245,11 @@ export async function sendMessage(recipientId: string, messageData: {
     .single();
 
   if (error) {
-    console.error("Error sending message:", error);
+    console.error("❌ Error sending message:", error);
     throw error;
   }
 
+  console.log("✅ Message sent successfully:", data);
   return data;
 }
 

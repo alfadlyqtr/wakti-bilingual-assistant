@@ -62,14 +62,42 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     enabled: !!contactId && isOpen,
   });
 
-  // Separate messages into inbox (unread) and previous (read)
-  const inboxMessages = allMessages?.filter(msg => 
-    msg.recipient_id === currentUserId && !msg.is_read
-  ) || [];
+  // Debug log the messages
+  useEffect(() => {
+    if (allMessages) {
+      console.log("📱 ChatPopup - All messages received:", allMessages.length, allMessages);
+      console.log("📱 Current user ID:", currentUserId);
+      console.log("📱 Contact ID:", contactId);
+    }
+  }, [allMessages, currentUserId, contactId]);
+
+  // Separate messages into inbox (unread received) and previous (all messages)
+  const inboxMessages = allMessages?.filter(msg => {
+    const isReceivedByMe = msg.recipient_id === currentUserId && msg.sender_id === contactId;
+    const isUnread = !msg.is_read;
+    const result = isReceivedByMe && isUnread;
+    
+    console.log(`📬 Inbox filter - Message ${msg.id}:`, {
+      isReceivedByMe,
+      isUnread,
+      result,
+      sender_id: msg.sender_id,
+      recipient_id: msg.recipient_id,
+      currentUserId,
+      contactId
+    });
+    
+    return result;
+  }) || [];
   
-  const previousMessages = allMessages?.filter(msg => 
-    msg.recipient_id !== currentUserId || msg.is_read
-  ) || [];
+  // Previous tab shows ALL messages in the conversation
+  const previousMessages = allMessages || [];
+
+  console.log("📊 Message distribution:", {
+    total: allMessages?.length || 0,
+    inbox: inboxMessages.length,
+    previous: previousMessages.length
+  });
 
   // Check if the contact is blocked
   useEffect(() => {
@@ -104,6 +132,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   useEffect(() => {
     if (!isOpen || !contactId || !currentUserId) return;
 
+    console.log("🔄 Setting up realtime subscription for:", { currentUserId, contactId });
+
     const channel = supabase
       .channel('public:messages')
       .on(
@@ -114,7 +144,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           table: 'messages',
           filter: `or(and(sender_id.eq.${currentUserId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${currentUserId}))`
         },
-        () => {
+        (payload) => {
+          console.log("🔄 Realtime message received:", payload);
           queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
           if (currentUserId) {
             markAsRead(contactId);
@@ -285,15 +316,25 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
   const renderMessage = (message: any) => {
     const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
+    const isSentByMe = message.sender_id === currentUserId;
+    
+    console.log(`🎨 Rendering message ${message.id}:`, {
+      content: message.content,
+      type: message.message_type,
+      sender: senderDisplayName,
+      isSentByMe,
+      sender_id: message.sender_id,
+      currentUserId
+    });
     
     return (
       <div 
         key={message.id}
-        className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
+        className={`flex flex-col ${isSentByMe ? 'items-end' : 'items-start'}`}
       >
         <div 
           className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-            message.sender_id === currentUserId
+            isSentByMe
               ? 'bg-blue-500 text-white rounded-br-lg'
               : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
           }`}
