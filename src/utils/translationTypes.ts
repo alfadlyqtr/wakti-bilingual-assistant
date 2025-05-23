@@ -326,4 +326,8 @@ export type TranslationKey =
   | "privacyControls"
   | "profileVisibility"
   | "activityStatus"
-  | "saveAllSettings";
+  | "saveAllSettings"
+  // Missing keys from ChatPopup.tsx
+  | "justNow"
+  | "minsAgo"
+  | "activeNow";
