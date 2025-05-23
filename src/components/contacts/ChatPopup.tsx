@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -289,13 +288,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     return (
       <div 
         key={message.id}
-        className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
+        className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'} mb-3`}
       >
         <div 
-          className={`max-w-[75%] px-4 py-3 rounded-2xl ${
+          className={`max-w-[85%] px-3 py-2 rounded-2xl ${
             message.sender_id === currentUserId
-              ? 'bg-blue-500 text-white rounded-br-lg'
-              : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
+              ? 'bg-blue-500 text-white rounded-br-md'
+              : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-md`
           }`}
         >
           {message.message_type === 'image' ? (
@@ -305,40 +304,40 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               className="max-w-full h-auto rounded-lg"
             />
           ) : message.message_type === 'voice' ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-[120px]">
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => toggleAudioPlayback(message.id, message.media_url)}
-                className="h-8 w-8 p-0 hover:bg-white/20"
+                className="h-7 w-7 p-0 hover:bg-white/20"
               >
                 {playingAudio === message.id ? 
-                  <Pause className="h-4 w-4" /> : 
-                  <Play className="h-4 w-4" />
+                  <Pause className="h-3 w-3" /> : 
+                  <Play className="h-3 w-3" />
                 }
               </Button>
-              <span className="text-sm">
+              <span className="text-xs font-mono">
                 {formatDuration(message.voice_duration || 0)}
               </span>
             </div>
           ) : message.message_type === 'pdf' ? (
-            <div className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              <span className="text-sm flex-1">{message.content}</span>
+            <div className="flex items-center gap-2 min-w-[100px]">
+              <FileText className="h-3 w-3" />
+              <span className="text-xs flex-1 truncate">{message.content?.replace('📄 ', '')}</span>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => window.open(message.media_url, '_blank')}
-                className="h-8 w-8 p-0 hover:bg-white/20"
+                className="h-6 w-6 p-0 hover:bg-white/20"
               >
-                <Download className="h-4 w-4" />
+                <Download className="h-3 w-3" />
               </Button>
             </div>
           ) : (
             <p className="text-sm leading-relaxed break-words">{message.content}</p>
           )}
         </div>
-        <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
+        <span className={`text-xs mt-1 px-1 ${textSecondary}`}>
           {formatTime(message.created_at)}
         </span>
       </div>
@@ -348,20 +347,20 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`w-full max-w-md mx-4 h-[70vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
+        className={`w-full max-w-md mx-4 h-[75vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
         hideCloseButton
       >
-        {/* Header */}
-        <div className={`flex items-center justify-between p-4 border-b ${headerClass}`}>
-          <div className="flex items-center gap-3 flex-1">
-            <Avatar className="h-10 w-10 border-2 border-gray-200 dark:border-dark-secondary">
+        {/* Enhanced Header with minimal padding */}
+        <div className={`flex items-center justify-between p-3 border-b ${headerClass}`}>
+          <div className="flex items-center gap-3 flex-1 min-w-0">
+            <Avatar className="h-9 w-9 border border-gray-200 dark:border-dark-secondary">
               <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className={`text-sm font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
+              <AvatarFallback className={`text-xs font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
                 {contactName.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold text-base truncate ${textPrimary}`}>
+              <h3 className={`font-semibold text-sm truncate ${textPrimary}`}>
                 {contactName}
               </h3>
               <p className={`text-xs ${textSecondary}`}>
@@ -373,53 +372,53 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className={`h-9 w-9 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+            className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Tabs */}
+        {/* Enhanced Tabs with compact design */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 mx-4 mt-3">
-            <TabsTrigger value="inbox" className="text-xs">
+          <TabsList className="grid w-full grid-cols-2 mx-3 mt-2 mb-0 h-8">
+            <TabsTrigger value="inbox" className="text-xs h-7 px-2">
               Inbox {inboxMessages.length > 0 && `(${inboxMessages.length})`}
             </TabsTrigger>
-            <TabsTrigger value="previous" className="text-xs">Previous</TabsTrigger>
+            <TabsTrigger value="previous" className="text-xs h-7 px-2">Previous</TabsTrigger>
           </TabsList>
 
           {/* Inbox Tab */}
-          <TabsContent value="inbox" className="flex-1 flex flex-col mt-0">
-            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+          <TabsContent value="inbox" className="flex-1 flex flex-col mt-2">
+            <ScrollArea className="flex-1 px-3" ref={scrollAreaRef}>
               {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-40">
-                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
+                <div className="flex justify-center items-center h-32">
+                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
                 </div>
               ) : inboxMessages.length > 0 ? (
-                <div className="space-y-4 py-4">
+                <div className="space-y-1 py-2">
                   {inboxMessages.map(renderMessage)}
                 </div>
               ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className={`text-4xl mb-4 ${textSecondary}`}>📬</div>
+                <div className="flex flex-col justify-center items-center h-full text-center py-6">
+                  <div className={`text-3xl mb-3 ${textSecondary}`}>📬</div>
                   <p className={`text-sm ${textSecondary}`}>No new messages</p>
                 </div>
               )}
             </ScrollArea>
 
-            {/* Compose Area */}
+            {/* Enhanced Compose Area with minimal padding */}
             {!isMessagingBlocked && (
-              <div className={`border-t p-4 ${headerClass}`}>
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
+              <div className={`border-t p-3 ${headerClass}`}>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      className={`h-7 w-7 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
                       onClick={() => fileInputRef.current?.click()}
                       disabled={sendMessageMutation.isPending || isUploading}
                     >
-                      <Image className="h-4 w-4" />
+                      <Image className="h-3.5 w-3.5" />
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -432,11 +431,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     <Button
                       variant="ghost"
                       size="icon"
-                      className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                      className={`h-7 w-7 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
                       onClick={() => pdfInputRef.current?.click()}
                       disabled={sendMessageMutation.isPending || isUploading}
                     >
-                      <FileText className="h-4 w-4" />
+                      <FileText className="h-3.5 w-3.5" />
                       <input
                         ref={pdfInputRef}
                         type="file"
@@ -452,13 +451,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     />
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="flex-1 relative">
                       <Input
                         value={messageText}
                         onChange={(e) => setMessageText(e.target.value)}
                         placeholder={t("typeMessage", language)}
-                        className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                        className={`h-9 pr-10 rounded-full border-0 text-sm ${theme === 'dark' 
                           ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
                           : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
                         }`}
@@ -473,11 +472,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                         onClick={sendTextMessage}
                         disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
                       >
-                        <Send className="h-4 w-4" />
+                        <Send className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </div>
@@ -493,19 +492,19 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           </TabsContent>
 
           {/* Previous Tab */}
-          <TabsContent value="previous" className="flex-1 flex flex-col mt-0">
-            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
+          <TabsContent value="previous" className="flex-1 flex flex-col mt-2">
+            <ScrollArea className="flex-1 px-3" ref={scrollAreaRef}>
               {isLoadingMessages ? (
-                <div className="flex justify-center items-center h-40">
-                  <div className={`w-6 h-6 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
+                <div className="flex justify-center items-center h-32">
+                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
                 </div>
               ) : previousMessages.length > 0 ? (
-                <div className="space-y-4 py-4">
+                <div className="space-y-1 py-2">
                   {previousMessages.map(renderMessage)}
                 </div>
               ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-8">
-                  <div className={`text-4xl mb-4 ${textSecondary}`}>📭</div>
+                <div className="flex flex-col justify-center items-center h-full text-center py-6">
+                  <div className={`text-3xl mb-3 ${textSecondary}`}>📭</div>
                   <p className={`text-sm ${textSecondary}`}>No previous messages</p>
                 </div>
               )}
@@ -515,7 +514,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
         {isMessagingBlocked && (
           <div className="flex items-center justify-center gap-2 py-3 border-t">
-            <Shield className="h-5 w-5 text-red-500" />
+            <Shield className="h-4 w-4 text-red-500" />
             <p className={`text-sm font-medium ${textSecondary}`}>
               {blockStatus.isBlocked 
                 ? t("contactBlocked", language) 
