@@ -67,7 +67,7 @@ export default function EventView() {
     enabled: !!id
   });
   
-  // Fetch current user's RSVP status
+  // Fetch current user's RSVP status (only if user is logged in)
   const { data: currentUserRsvp } = useQuery({
     queryKey: ["user-rsvp", id, user?.id],
     queryFn: async () => {
@@ -132,9 +132,15 @@ export default function EventView() {
       };
       
       if (isWaktiUser && user?.id) {
+        // Authenticated WAKTI user
         rsvpData.user_id = user.id;
         rsvpData.is_wakti_user = true;
+      } else if (isWaktiUser && username) {
+        // Guest claiming to be a WAKTI user
+        rsvpData.guest_name = username;
+        rsvpData.is_wakti_user = true;
       } else if (!isWaktiUser && name) {
+        // Regular guest
         rsvpData.guest_name = name;
         rsvpData.is_wakti_user = false;
       } else {

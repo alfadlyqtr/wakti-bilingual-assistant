@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -120,6 +121,9 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
+                {/* Public event detail route - accessible without authentication */}
+                <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+
                 {/* WAKTI AI route - now using AppLayout */}
                 <Route path="/wakti-ai" element={
                   <AppLayout>
@@ -149,7 +153,6 @@ function App() {
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-                  <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
                   <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                   <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
                 </Route>
