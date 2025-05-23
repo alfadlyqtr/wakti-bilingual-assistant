@@ -19,13 +19,6 @@ export interface DirectMessage {
   };
 }
 
-// Type for the sender field as returned by Supabase
-interface SenderProfile {
-  display_name?: string;
-  username?: string;
-  avatar_url?: string;
-}
-
 // Get messages between current user and a contact
 export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   const { data: session } = await supabase.auth.getSession();
@@ -35,7 +28,7 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
 
   const userId = session.session.user.id;
 
-  // Get messages between current user and contact using messages table
+  // Get messages between current user and contact with proper foreign key joins
   const { data, error } = await supabase
     .from("messages")
     .select(`
@@ -48,7 +41,7 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       media_type,
       created_at,
       is_read,
-      sender:profiles!sender_id(
+      sender:sender_id(
         display_name,
         username,
         avatar_url
@@ -65,22 +58,7 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   // Mark messages as read
   await markAsRead(contactId);
 
-  // Transform the data to match our DirectMessage interface
-  const transformedMessages: DirectMessage[] = data.map(message => {
-    // Properly extract sender data regardless of format
-    const senderData = message.sender as SenderProfile;
-    
-    return {
-      ...message,
-      sender: senderData ? {
-        display_name: senderData.display_name,
-        username: senderData.username,
-        avatar_url: senderData.avatar_url
-      } : undefined
-    };
-  });
-
-  return transformedMessages;
+  return data || [];
 }
 
 // Mark messages as read

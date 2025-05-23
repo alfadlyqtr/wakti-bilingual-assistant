@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -248,38 +247,43 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             </div>
           ) : messages && messages.length > 0 ? (
             <div className="space-y-4 py-4">
-              {messages.map((message) => (
-                <div 
-                  key={message.id}
-                  className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
-                >
+              {messages.map((message) => {
+                // Get sender display name from the foreign key relationship
+                const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
+                
+                return (
                   <div 
-                    className={`max-w-[75%] px-4 py-3 rounded-2xl ${
-                      message.sender_id === currentUserId
-                        ? 'bg-blue-500 text-white rounded-br-lg'
-                        : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
-                    }`}
+                    key={message.id}
+                    className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'}`}
                   >
-                    {message.message_type === 'image' ? (
-                      <img 
-                        src={message.media_url} 
-                        alt="Image message" 
-                        className="max-w-full h-auto rounded-lg"
-                        onLoad={() => {
-                          if (scrollAreaRef.current) {
-                            scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-sm leading-relaxed break-words">{message.content}</p>
-                    )}
+                    <div 
+                      className={`max-w-[75%] px-4 py-3 rounded-2xl ${
+                        message.sender_id === currentUserId
+                          ? 'bg-blue-500 text-white rounded-br-lg'
+                          : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-lg`
+                      }`}
+                    >
+                      {message.message_type === 'image' ? (
+                        <img 
+                          src={message.media_url} 
+                          alt="Image message" 
+                          className="max-w-full h-auto rounded-lg"
+                          onLoad={() => {
+                            if (scrollAreaRef.current) {
+                              scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+                            }
+                          }}
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed break-words">{message.content}</p>
+                      )}
+                    </div>
+                    <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
+                      {formatTime(message.created_at)}
+                    </span>
                   </div>
-                  <span className={`text-xs mt-1 px-2 ${textSecondary}`}>
-                    {formatTime(message.created_at)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col justify-center items-center h-full text-center py-8">
