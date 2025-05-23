@@ -56,14 +56,25 @@ export const ProfileImageUpload = () => {
       const avatarUrl = storageData.publicUrl;
       
       // Update user metadata with the correct structure expected by Supabase Auth
-      const { error } = await updateProfile({
+      const { error: authError } = await updateProfile({
         user_metadata: { 
           avatar_url: avatarUrl 
         }
       });
       
-      if (error) {
-        throw error;
+      if (authError) {
+        throw authError;
+      }
+
+      // Also update the profiles table so ContactList can see the avatar
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: avatarUrl })
+        .eq('id', user?.id);
+      
+      if (profileError) {
+        console.error('Error updating profile avatar:', profileError);
+        // Don't throw here as auth update was successful
       }
       
       setAvatarUrl(avatarUrl);
