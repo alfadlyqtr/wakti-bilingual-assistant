@@ -330,4 +330,11 @@ export type TranslationKey =
   // Missing keys from ChatPopup.tsx
   | "justNow"
   | "minsAgo"
-  | "activeNow";
+  | "activeNow"
+  // Image cropping translation keys
+  | "cropProfileImage"
+  | "zoom"
+  | "cropInstructions"
+  | "cropAndSave"
+  | "pleaseSelectImageFile"
+  | "fileTooLarge";
