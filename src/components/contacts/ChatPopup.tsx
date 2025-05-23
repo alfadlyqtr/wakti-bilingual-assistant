@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -91,7 +92,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     mutationFn: (message: any) => sendMessage(contactId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-      setActiveTab("previous"); // Switch to previous tab after sending
+      setActiveTab("previous");
     },
     onError: (error) => {
       console.error("Error sending message:", error);
@@ -226,16 +227,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Audio playback functions
   const toggleAudioPlayback = (messageId: string, audioUrl: string) => {
     if (playingAudio === messageId) {
-      // Pause current audio
       audioRefs.current[messageId]?.pause();
       setPlayingAudio(null);
     } else {
-      // Stop any currently playing audio
       if (playingAudio) {
         audioRefs.current[playingAudio]?.pause();
       }
 
-      // Play new audio
       if (!audioRefs.current[messageId]) {
         audioRefs.current[messageId] = new Audio(audioUrl);
         audioRefs.current[messageId].onended = () => setPlayingAudio(null);
@@ -270,46 +268,34 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Check if messaging is blocked
   const isMessagingBlocked = blockStatus.isBlocked || blockStatus.isBlockedBy;
 
-  // Theme-based styles
-  const containerClass = theme === 'dark' 
-    ? 'bg-dark-bg border-dark-secondary' 
-    : 'bg-light-bg border-light-secondary';
-  
-  const headerClass = theme === 'dark' 
-    ? 'border-dark-secondary bg-dark-bg' 
-    : 'border-light-secondary bg-light-bg';
-    
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-light-primary';
-  const textSecondary = theme === 'dark' ? 'text-dark-tertiary' : 'text-gray-500';
-
   const renderMessage = (message: any) => {
     const senderDisplayName = message.sender?.display_name || message.sender?.username || "Unknown User";
     
     return (
       <div 
         key={message.id}
-        className={`flex flex-col ${message.sender_id === currentUserId ? 'items-end' : 'items-start'} mb-3`}
+        className={`flex ${message.sender_id === currentUserId ? 'justify-end' : 'justify-start'} mb-2`}
       >
         <div 
-          className={`max-w-[85%] px-3 py-2 rounded-2xl ${
+          className={`max-w-[80%] px-3 py-2 rounded-lg ${
             message.sender_id === currentUserId
-              ? 'bg-blue-500 text-white rounded-br-md'
-              : `${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-gray-100 text-gray-900'} rounded-bl-md`
+              ? 'bg-blue-500 text-white rounded-br-sm'
+              : `${theme === 'dark' ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-900'} rounded-bl-sm`
           }`}
         >
           {message.message_type === 'image' ? (
             <img 
               src={message.media_url} 
               alt="Image message" 
-              className="max-w-full h-auto rounded-lg"
+              className="max-w-full h-auto rounded"
             />
           ) : message.message_type === 'voice' ? (
-            <div className="flex items-center gap-2 min-w-[120px]">
+            <div className="flex items-center gap-2 min-w-[100px]">
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => toggleAudioPlayback(message.id, message.media_url)}
-                className="h-7 w-7 p-0 hover:bg-white/20"
+                className="h-6 w-6 p-0 hover:bg-white/20"
               >
                 {playingAudio === message.id ? 
                   <Pause className="h-3 w-3" /> : 
@@ -321,25 +307,25 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               </span>
             </div>
           ) : message.message_type === 'pdf' ? (
-            <div className="flex items-center gap-2 min-w-[100px]">
-              <FileText className="h-3 w-3" />
-              <span className="text-xs flex-1 truncate">{message.content?.replace('📄 ', '')}</span>
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="text-xs truncate">{message.content?.replace('📄 ', '')}</span>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={() => window.open(message.media_url, '_blank')}
-                className="h-6 w-6 p-0 hover:bg-white/20"
+                className="h-5 w-5 p-0 hover:bg-white/20"
               >
                 <Download className="h-3 w-3" />
               </Button>
             </div>
           ) : (
-            <p className="text-sm leading-relaxed break-words">{message.content}</p>
+            <p className="text-sm break-words">{message.content}</p>
           )}
+          <div className={`text-xs mt-1 opacity-70 ${message.sender_id === currentUserId ? 'text-right' : 'text-left'}`}>
+            {formatTime(message.created_at)}
+          </div>
         </div>
-        <span className={`text-xs mt-1 px-1 ${textSecondary}`}>
-          {formatTime(message.created_at)}
-        </span>
       </div>
     );
   };
@@ -347,23 +333,27 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
-        className={`w-full max-w-md mx-4 h-[75vh] max-h-[600px] p-0 gap-0 rounded-2xl overflow-hidden ${containerClass}`}
+        className={`w-full max-w-sm mx-auto h-[80vh] p-0 gap-0 rounded-xl border-0 shadow-2xl ${
+          theme === 'dark' ? 'bg-gray-900' : 'bg-white'
+        }`}
         hideCloseButton
       >
-        {/* Enhanced Header with minimal padding */}
-        <div className={`flex items-center justify-between p-3 border-b ${headerClass}`}>
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <Avatar className="h-9 w-9 border border-gray-200 dark:border-dark-secondary">
+        {/* Header */}
+        <div className={`flex items-center justify-between px-4 py-3 border-b ${
+          theme === 'dark' ? 'border-gray-700' : 'border-gray-200'
+        }`}>
+          <div className="flex items-center gap-3 flex-1">
+            <Avatar className="h-8 w-8">
               <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className={`text-xs font-semibold ${theme === 'dark' ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
+              <AvatarFallback className="text-xs">
                 {contactName.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold text-sm truncate ${textPrimary}`}>
+              <h3 className={`font-semibold text-sm truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 {contactName}
               </h3>
-              <p className={`text-xs ${textSecondary}`}>
+              <p className="text-xs text-gray-500">
                 {isMessagingBlocked ? 'Blocked' : 'Active now'}
               </p>
             </div>
@@ -372,140 +362,140 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             variant="ghost" 
             size="icon"
             onClick={onClose}
-            className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+            className="h-8 w-8 rounded-full"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
 
-        {/* Enhanced Tabs with compact design */}
+        {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 mx-3 mt-2 mb-0 h-8">
-            <TabsTrigger value="inbox" className="text-xs h-7 px-2">
+          <TabsList className="grid w-full grid-cols-2 mx-4 mt-2 h-9">
+            <TabsTrigger value="inbox" className="text-xs">
               Inbox {inboxMessages.length > 0 && `(${inboxMessages.length})`}
             </TabsTrigger>
-            <TabsTrigger value="previous" className="text-xs h-7 px-2">Previous</TabsTrigger>
+            <TabsTrigger value="previous" className="text-xs">Previous</TabsTrigger>
           </TabsList>
 
           {/* Inbox Tab */}
           <TabsContent value="inbox" className="flex-1 flex flex-col mt-2">
-            <ScrollArea className="flex-1 px-3" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-32">
-                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin border-blue-500"></div>
                 </div>
               ) : inboxMessages.length > 0 ? (
-                <div className="space-y-1 py-2">
+                <div className="py-2">
                   {inboxMessages.map(renderMessage)}
                 </div>
               ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-6">
-                  <div className={`text-3xl mb-3 ${textSecondary}`}>📬</div>
-                  <p className={`text-sm ${textSecondary}`}>No new messages</p>
+                <div className="flex flex-col justify-center items-center h-full text-center py-8">
+                  <div className="text-4xl mb-2">📬</div>
+                  <p className="text-sm text-gray-500">No new messages</p>
                 </div>
               )}
             </ScrollArea>
 
-            {/* Enhanced Compose Area with minimal padding */}
+            {/* Compose Area */}
             {!isMessagingBlocked && (
-              <div className={`border-t p-3 ${headerClass}`}>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-7 w-7 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                    >
-                      <Image className="h-3.5 w-3.5" />
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleImageSelected}
-                      />
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-7 w-7 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                      onClick={() => pdfInputRef.current?.click()}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                    >
-                      <FileText className="h-3.5 w-3.5" />
-                      <input
-                        ref={pdfInputRef}
-                        type="file"
-                        accept=".pdf"
-                        className="hidden"
-                        onChange={handlePDFSelected}
-                      />
-                    </Button>
-
-                    <VoiceRecorder 
-                      onRecordingComplete={handleVoiceRecording}
-                      disabled={sendMessageMutation.isPending || isUploading}
+              <div className={`border-t px-4 py-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                {/* Media buttons */}
+                <div className="flex items-center gap-1 mb-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                  >
+                    <Image className="h-4 w-4" />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageSelected}
                     />
-                  </div>
+                  </Button>
 
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 relative">
-                      <Input
-                        value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
-                        placeholder={t("typeMessage", language)}
-                        className={`h-9 pr-10 rounded-full border-0 text-sm ${theme === 'dark' 
-                          ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
-                          : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
-                        }`}
-                        disabled={sendMessageMutation.isPending || isUploading}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            sendTextMessage();
-                          }
-                        }}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={sendTextMessage}
-                        disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  {messageText && (
-                    <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
-                      {charCount}/{MAX_CHARS}
-                    </div>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => pdfInputRef.current?.click()}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                  >
+                    <FileText className="h-4 w-4" />
+                    <input
+                      ref={pdfInputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={handlePDFSelected}
+                    />
+                  </Button>
+
+                  <VoiceRecorder 
+                    onRecordingComplete={handleVoiceRecording}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                  />
                 </div>
+
+                {/* Text input */}
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 relative">
+                    <Input
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      placeholder={t("typeMessage", language)}
+                      className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                        ? 'bg-gray-800 text-white placeholder:text-gray-400' 
+                        : 'bg-gray-100 text-gray-900 placeholder:text-gray-500'
+                      }`}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendTextMessage();
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50"
+                      onClick={sendTextMessage}
+                      disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {messageText && (
+                  <div className={`text-xs text-right mt-1 ${isOverLimit ? 'text-red-500' : 'text-gray-500'}`}>
+                    {charCount}/{MAX_CHARS}
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>
 
           {/* Previous Tab */}
           <TabsContent value="previous" className="flex-1 flex flex-col mt-2">
-            <ScrollArea className="flex-1 px-3" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 px-4" ref={scrollAreaRef}>
               {isLoadingMessages ? (
                 <div className="flex justify-center items-center h-32">
-                  <div className={`w-5 h-5 border-2 border-t-transparent rounded-full animate-spin ${theme === 'dark' ? 'border-white' : 'border-light-primary'}`}></div>
+                  <div className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin border-blue-500"></div>
                 </div>
               ) : previousMessages.length > 0 ? (
-                <div className="space-y-1 py-2">
+                <div className="py-2">
                   {previousMessages.map(renderMessage)}
                 </div>
               ) : (
-                <div className="flex flex-col justify-center items-center h-full text-center py-6">
-                  <div className={`text-3xl mb-3 ${textSecondary}`}>📭</div>
-                  <p className={`text-sm ${textSecondary}`}>No previous messages</p>
+                <div className="flex flex-col justify-center items-center h-full text-center py-8">
+                  <div className="text-4xl mb-2">📭</div>
+                  <p className="text-sm text-gray-500">No previous messages</p>
                 </div>
               )}
             </ScrollArea>
@@ -513,9 +503,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         </Tabs>
 
         {isMessagingBlocked && (
-          <div className="flex items-center justify-center gap-2 py-3 border-t">
+          <div className="flex items-center justify-center gap-2 py-4 border-t">
             <Shield className="h-4 w-4 text-red-500" />
-            <p className={`text-sm font-medium ${textSecondary}`}>
+            <p className="text-sm font-medium text-gray-500">
               {blockStatus.isBlocked 
                 ? t("contactBlocked", language) 
                 : t("blockedByContact", language)}
