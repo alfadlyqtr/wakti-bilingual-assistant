@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -5,10 +6,12 @@ export interface DirectMessage {
   id: string;
   sender_id: string;
   recipient_id: string;
-  message_type: 'text' | 'image';
+  message_type: 'text' | 'image' | 'voice' | 'pdf';
   content?: string;
   media_url?: string;
   media_type?: string;
+  voice_duration?: number;
+  file_size?: number;
   created_at: string;
   is_read: boolean;
   sender?: {
@@ -27,7 +30,6 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
 
   const userId = session.session.user.id;
 
-  // Get messages between current user and contact with proper foreign key joins
   const { data, error } = await supabase
     .from("messages")
     .select(`
@@ -38,6 +40,8 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       content,
       media_url,
       media_type,
+      voice_duration,
+      file_size,
       created_at,
       is_read,
       profiles!messages_sender_id_fkey(
@@ -57,13 +61,34 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
   // Mark messages as read
   await markAsRead(contactId);
 
-  // Transform the data to match our DirectMessage interface
   const transformedData = data?.map(message => ({
     ...message,
     sender: Array.isArray(message.profiles) ? message.profiles[0] : message.profiles
   })) || [];
 
   return transformedData;
+}
+
+// Get unread messages for notification indicator
+export async function getUnreadMessages(contactId: string): Promise<number> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return 0;
+
+  const userId = session.session.user.id;
+
+  const { count, error } = await supabase
+    .from("messages")
+    .select("*", { count: "exact", head: true })
+    .eq("sender_id", contactId)
+    .eq("recipient_id", userId)
+    .eq("is_read", false);
+
+  if (error) {
+    console.error("Error fetching unread count:", error);
+    return 0;
+  }
+
+  return count || 0;
 }
 
 // Mark messages as read
@@ -106,12 +131,44 @@ async function validateCanMessage(recipientId: string): Promise<boolean> {
   }
 }
 
+// Upload voice or PDF file
+export async function uploadMessageAttachment(file: File, type: 'voice' | 'pdf'): Promise<string> {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) {
+    throw new Error("User not authenticated");
+  }
+
+  const userId = session.session.user.id;
+  const fileExt = file.name.split('.').pop();
+  const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from('message_attachments')
+    .upload(fileName, file, {
+      contentType: file.type,
+      cacheControl: '3600'
+    });
+
+  if (error) {
+    console.error("Error uploading file:", error);
+    throw error;
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('message_attachments')
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+}
+
 // Send a message to a contact
 export async function sendMessage(recipientId: string, messageData: {
-  message_type: 'text' | 'image';
+  message_type: 'text' | 'image' | 'voice' | 'pdf';
   content?: string;
   media_url?: string;
   media_type?: string;
+  voice_duration?: number;
+  file_size?: number;
 }): Promise<DirectMessage> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
@@ -120,13 +177,11 @@ export async function sendMessage(recipientId: string, messageData: {
 
   const userId = session.session.user.id;
   
-  // Validate that users can message each other
   const canMessage = await validateCanMessage(recipientId);
   if (!canMessage) {
     throw new Error("You cannot send messages to this user. Make sure you are both in each other's contact lists.");
   }
   
-  // Send message using messages table
   const { data, error } = await supabase
     .from("messages")
     .insert({
@@ -135,7 +190,9 @@ export async function sendMessage(recipientId: string, messageData: {
       message_type: messageData.message_type,
       content: messageData.content,
       media_url: messageData.media_url,
-      media_type: messageData.media_type
+      media_type: messageData.media_type,
+      voice_duration: messageData.voice_duration,
+      file_size: messageData.file_size
     })
     .select()
     .single();
@@ -157,16 +214,14 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
 
   const userId = session.session.user.id;
   
-  // Check if current user has blocked the contact
-  const { data: blockedByMe, error: error1 } = await supabase
+  const { data: blockedByMe } = await supabase
     .from("contacts")
     .select("status")
     .eq("user_id", userId)
     .eq("contact_id", contactId)
     .single();
   
-  // Check if contact has blocked the current user
-  const { data: blockedMe, error: error2 } = await supabase
+  const { data: blockedMe } = await supabase
     .from("contacts")
     .select("status")
     .eq("user_id", contactId)
@@ -182,10 +237,8 @@ export async function getBlockStatus(contactId: string): Promise<{ isBlocked: bo
 export const formatRecipient = (recipientData: any) => {
   if (!recipientData) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
 
-  // Handle both array and object formats safely
   const data = Array.isArray(recipientData) ? recipientData[0] : recipientData;
   
-  // Ensure data is not undefined before accessing properties
   if (!data) return { displayName: "Unknown User", username: "unknown", avatarUrl: "" };
 
   return {

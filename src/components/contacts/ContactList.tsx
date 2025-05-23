@@ -44,6 +44,7 @@ export function ContactList() {
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   // Fetch contacts with improved configuration
   const { 
@@ -59,6 +60,38 @@ export function ContactList() {
     refetchInterval: 60000, // Refetch every minute
     refetchOnWindowFocus: true, // Refetch when window regains focus
   });
+
+  // Fetch unread counts for each contact
+  useEffect(() => {
+    const fetchUnreadCounts = async () => {
+      if (contacts) {
+        const counts: Record<string, number> = {};
+        for (const contact of contacts) {
+          try {
+            const { data } = await supabase.auth.getSession();
+            if (data.session) {
+              const { count } = await supabase
+                .from("messages")
+                .select("*", { count: "exact", head: true })
+                .eq("sender_id", contact.contact_id)
+                .eq("recipient_id", data.session.user.id)
+                .eq("is_read", false);
+              counts[contact.contact_id] = count || 0;
+            }
+          } catch (error) {
+            console.error("Error fetching unread count:", error);
+            counts[contact.contact_id] = 0;
+          }
+        }
+        setUnreadCounts(counts);
+      }
+    };
+
+    fetchUnreadCounts();
+    const interval = setInterval(fetchUnreadCounts, 10000); // Update every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [contacts]);
 
   // Block contact mutation
   const blockContactMutation = useMutation({
@@ -162,6 +195,7 @@ export function ContactList() {
             const contactProfile = contact.profile || {} as UserProfile;
             const displayName = contactProfile.display_name || contactProfile.username || "Unknown User";
             const username = contactProfile.username || "user";
+            const unreadCount = unreadCounts[contact.contact_id] || 0;
             
             return (
               <Card key={contact.id} className="overflow-hidden">
@@ -190,9 +224,18 @@ export function ContactList() {
                         size="icon" 
                         variant="ghost"
                         onClick={() => handleOpenChat(contact.contact_id, displayName, contactProfile.avatar_url)}
-                        className="h-8 w-8 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        className={`h-8 w-8 relative transition-colors ${
+                          unreadCount > 0 
+                            ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                            : 'hover:bg-blue-50 hover:text-blue-600'
+                        }`}
                       >
-                        <MessageSquare className="h-4 w-4 text-blue-600" />
+                        <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'}`} />
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                          </span>
+                        )}
                       </Button>
                       <Button 
                         size="icon" 
@@ -225,7 +268,36 @@ export function ContactList() {
       {selectedContact && (
         <ChatPopup 
           isOpen={chatOpen}
-          onClose={() => setChatOpen(false)}
+          onClose={() => {
+            setChatOpen(false);
+            // Refresh unread counts when chat closes
+            setTimeout(() => {
+              const fetchUnreadCounts = async () => {
+                if (contacts) {
+                  const counts: Record<string, number> = {};
+                  for (const contact of contacts) {
+                    try {
+                      const { data } = await supabase.auth.getSession();
+                      if (data.session) {
+                        const { count } = await supabase
+                          .from("messages")
+                          .select("*", { count: "exact", head: true })
+                          .eq("sender_id", contact.contact_id)
+                          .eq("recipient_id", data.session.user.id)
+                          .eq("is_read", false);
+                        counts[contact.contact_id] = count || 0;
+                      }
+                    } catch (error) {
+                      console.error("Error fetching unread count:", error);
+                      counts[contact.contact_id] = 0;
+                    }
+                  }
+                  setUnreadCounts(counts);
+                }
+              };
+              fetchUnreadCounts();
+            }, 1000);
+          }}
           contactId={selectedContact.id}
           contactName={selectedContact.name}
           contactAvatar={selectedContact.avatar}

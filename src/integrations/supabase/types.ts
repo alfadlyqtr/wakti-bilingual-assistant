@@ -336,6 +336,7 @@ export type Database = {
         Row: {
           content: string | null
           created_at: string
+          file_size: number | null
           id: string
           is_read: boolean
           media_type: string | null
@@ -343,10 +344,12 @@ export type Database = {
           message_type: string
           recipient_id: string
           sender_id: string
+          voice_duration: number | null
         }
         Insert: {
           content?: string | null
           created_at?: string
+          file_size?: number | null
           id?: string
           is_read?: boolean
           media_type?: string | null
@@ -354,10 +357,12 @@ export type Database = {
           message_type: string
           recipient_id: string
           sender_id: string
+          voice_duration?: number | null
         }
         Update: {
           content?: string | null
           created_at?: string
+          file_size?: number | null
           id?: string
           is_read?: boolean
           media_type?: string | null
@@ -365,6 +370,7 @@ export type Database = {
           message_type?: string
           recipient_id?: string
           sender_id?: string
+          voice_duration?: number | null
         }
         Relationships: []
       }
@@ -614,6 +620,10 @@ export type Database = {
         Returns: boolean
       }
       cleanup_expired_chat_history: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_old_messages: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
