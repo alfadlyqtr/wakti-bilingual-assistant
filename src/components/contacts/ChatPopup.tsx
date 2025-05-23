@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Shield, Download, Play, Pause, Loader2 } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, getBlockStatus, uploadMessageAttachment } from "@/services/messageService";
+import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
@@ -35,15 +35,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [isUploading, setIsUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
-  
-  // Initialize block status to allow messaging by default (important fix!)
-  const [blockStatus, setBlockStatus] = useState<{
-    isBlocked: boolean;
-    isBlockedBy: boolean;
-  }>({ isBlocked: false, isBlockedBy: false });
-  
-  // Add a loading state for block status
-  const [isCheckingBlockStatus, setIsCheckingBlockStatus] = useState(false);
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -74,31 +65,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       }
     }
   }, [messages]);
-
-  // Check if the contact is blocked
-  useEffect(() => {
-    async function checkBlockStatus() {
-      if (!contactId) return;
-      
-      try {
-        setIsCheckingBlockStatus(true);
-        console.log("Checking block status for contact:", contactId);
-        const status = await getBlockStatus(contactId);
-        console.log("Block status result:", status);
-        setBlockStatus(status);
-      } catch (error) {
-        console.error("Error checking block status:", error);
-        // Default to not blocked in case of errors
-        setBlockStatus({ isBlocked: false, isBlockedBy: false });
-      } finally {
-        setIsCheckingBlockStatus(false);
-      }
-    }
-    
-    if (contactId && isOpen) {
-      checkBlockStatus();
-    }
-  }, [contactId, isOpen]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
@@ -280,15 +246,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Check if messaging is blocked - with better handling and loading state
-  console.log("Current block status:", blockStatus);
-  console.log("Is checking block status:", isCheckingBlockStatus);
-  
-  // Only block messaging if we've completed the check and have a confirmed block
-  // This is a key fix - we default to allowing messaging until we're sure it's blocked
-  const isMessagingBlocked = !isCheckingBlockStatus && (blockStatus.isBlocked || blockStatus.isBlockedBy);
-  console.log("Is messaging blocked:", isMessagingBlocked);
-
   // Theme-based styles
   const containerClass = theme === 'dark' 
     ? 'bg-dark-bg border-dark-secondary' 
@@ -384,8 +341,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 {contactName}
               </h3>
               <p className={`text-xs ${textSecondary}`}>
-                {isCheckingBlockStatus ? 'Checking status...' : 
-                  isMessagingBlocked ? 'Blocked' : 'Active now'}
+                Active now
               </p>
             </div>
           </div>
@@ -419,121 +375,88 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             )}
           </ScrollArea>
 
-          {/* Debug indicator - temporary help during troubleshooting */}
-          {/* Will show the current state for debugging */}
-          {/* {isCheckingBlockStatus && (
-            <div className="px-4 py-1 bg-yellow-100 text-yellow-800 text-xs text-center">
-              Checking block status...
-            </div>
-          )} */}
-
-          {/* Compose Area - Modified logic to show by default */}
-          {/* Only hide when we are sure that messaging should be blocked */}
-          {!isMessagingBlocked && (
-            <div className={`border-t p-3 ${headerClass}`}>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                  >
-                    <Image className="h-4 w-4" />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleImageSelected}
-                    />
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
-                    onClick={() => pdfInputRef.current?.click()}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                  >
-                    <FileText className="h-4 w-4" />
-                    <input
-                      ref={pdfInputRef}
-                      type="file"
-                      accept=".pdf"
-                      className="hidden"
-                      onChange={handlePDFSelected}
-                    />
-                  </Button>
-
-                  <VoiceRecorder 
-                    onRecordingComplete={handleVoiceRecording}
-                    disabled={sendMessageMutation.isPending || isUploading}
+          {/* Compose Area - Always visible */}
+          <div className={`border-t p-3 ${headerClass}`}>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                >
+                  <Image className="h-4 w-4" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelected}
                   />
-                </div>
+                </Button>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <Input
-                      value={messageText}
-                      onChange={(e) => setMessageText(e.target.value)}
-                      placeholder={t("typeMessage", language)}
-                      className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
-                        ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
-                        : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
-                      }`}
-                      disabled={sendMessageMutation.isPending || isUploading}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendTextMessage();
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      onClick={sendTextMessage}
-                      disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                
-                {messageText && (
-                  <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
-                    {charCount}/{MAX_CHARS}
-                  </div>
-                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 rounded-full ${theme === 'dark' ? 'hover:bg-dark-secondary text-white' : 'hover:bg-gray-100 text-gray-600'}`}
+                  onClick={() => pdfInputRef.current?.click()}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                >
+                  <FileText className="h-4 w-4" />
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handlePDFSelected}
+                  />
+                </Button>
+
+                <VoiceRecorder 
+                  onRecordingComplete={handleVoiceRecording}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                />
               </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <Input
+                    value={messageText}
+                    onChange={(e) => setMessageText(e.target.value)}
+                    placeholder={t("typeMessage", language)}
+                    className={`h-10 pr-12 rounded-full border-0 ${theme === 'dark' 
+                      ? 'bg-dark-secondary text-white placeholder:text-dark-tertiary focus:ring-1 focus:ring-white' 
+                      : 'bg-gray-100 text-gray-900 placeholder:text-gray-500 focus:ring-1 focus:ring-light-primary'
+                    }`}
+                    disabled={sendMessageMutation.isPending || isUploading}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendTextMessage();
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    onClick={sendTextMessage}
+                    disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              
+              {messageText && (
+                <div className={`text-xs text-right ${isOverLimit ? 'text-red-500' : textSecondary}`}>
+                  {charCount}/{MAX_CHARS}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-
-        {/* Only show the blocked message when we're sure messaging is blocked */}
-        {isMessagingBlocked && (
-          <div className="flex items-center justify-center gap-2 py-3 border-t">
-            <Shield className="h-5 w-5 text-red-500" />
-            <p className={`text-sm font-medium ${textSecondary}`}>
-              {blockStatus.isBlocked 
-                ? t("contactBlocked", language) 
-                : t("blockedByContact", language)}
-            </p>
-          </div>
-        )}
-
-        {/* Loading indicator when checking block status */}
-        {isCheckingBlockStatus && (
-          <div className="absolute inset-0 bg-black/10 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-zinc-800 p-4 rounded-lg flex items-center gap-2">
-              <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-              <span className={`text-sm font-medium ${textPrimary}`}>Checking status...</span>
-            </div>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );
