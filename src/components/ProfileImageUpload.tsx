@@ -72,7 +72,7 @@ export const ProfileImageUpload = () => {
         throw authError;
       }
 
-      // Also update the profiles table so ContactList can see the avatar
+      // CRITICAL FIX: Also update the profiles table so ContactList can see the avatar
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ avatar_url: newAvatarUrl })
@@ -80,9 +80,9 @@ export const ProfileImageUpload = () => {
       
       if (profileError) {
         console.error('Error updating profile avatar:', profileError);
-        // Don't throw here as auth update was successful
+        throw profileError; // Throw error to ensure both updates succeed
       } else {
-        console.log('Successfully updated profile avatar in database');
+        console.log('Successfully updated profile avatar in both auth and profiles table');
       }
       
       setAvatarUrl(newAvatarUrl);
@@ -95,6 +95,30 @@ export const ProfileImageUpload = () => {
       setUploading(false);
     }
   };
+
+  // Sync existing avatar from auth to profiles table on component mount
+  React.useEffect(() => {
+    const syncAvatarToProfiles = async () => {
+      if (user?.user_metadata?.avatar_url) {
+        try {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_url: user.user_metadata.avatar_url })
+            .eq('id', user.id);
+          
+          if (error) {
+            console.error('Error syncing avatar to profiles:', error);
+          } else {
+            console.log('Avatar synced to profiles table');
+          }
+        } catch (error) {
+          console.error('Failed to sync avatar:', error);
+        }
+      }
+    };
+
+    syncAvatarToProfiles();
+  }, [user]);
 
   const handleImageError = () => {
     console.log('Avatar image failed to load:', avatarUrl);
