@@ -20,6 +20,7 @@ import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import EventCreate from "@/pages/EventCreate";
 import EventDetail from "@/pages/EventDetail";
+import EventEdit from "@/pages/EventEdit";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
@@ -153,6 +154,7 @@ function App() {
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
                   <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
+                  <Route path="/event/:id/edit" element={<AppLayout><EventEdit /></AppLayout>} />
                   <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                   <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
                 </Route>
