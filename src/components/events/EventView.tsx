@@ -103,7 +103,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       console.log('Event data loaded successfully:', data);
       setEvent(data);
 
-      // Fetch creator's profile - only select existing columns
+      // Fetch creator's profile - prioritize display_name which contains the full name
       if (data.created_by) {
         console.log('Fetching creator profile for ID:', data.created_by);
         
@@ -116,7 +116,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
         console.log('Profile query result:', { profileData, error: profileError });
         
         if (profileData && !profileError) {
-          // Prioritize display_name, then username, then email
+          // Use display_name first (this contains the full name), then fallback to username, then email
           const finalName = profileData.display_name || profileData.username || profileData.email || 'Unknown User';
           setCreatorName(finalName);
           console.log('Creator name set to:', finalName);
@@ -359,6 +359,17 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Open WAKTI
               </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Creator Name Above Card - More Visible */}
+        {isGuestView && creatorName && (
+          <div className="mb-4 text-center">
+            <div className="inline-block bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-gray-200">
+              <p className="text-sm font-medium text-gray-700">
+                Created by <span className="font-bold text-gray-900">{creatorName}</span>
+              </p>
             </div>
           </div>
         )}
