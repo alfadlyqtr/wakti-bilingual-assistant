@@ -35,6 +35,21 @@ export default function EventsPage() {
 
   const fetchEvents = async () => {
     try {
+      // Get authenticated user first
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData.user) {
+        console.log('No authenticated user found');
+        toast.error('Please log in to view events');
+        setEvents([]);
+        return;
+      }
+
+      console.log('Fetching events for authenticated user:', userData.user.id);
+      
+      // With RLS policies in place, this query will automatically filter to:
+      // 1. Events created by the current user (both public and private)
+      // 2. Public events created by other users
       const { data, error } = await supabase
         .from('events')
         .select('*')
@@ -46,6 +61,7 @@ export default function EventsPage() {
         return;
       }
 
+      console.log(`Found ${data?.length || 0} events (user's own + public events)`);
       setEvents(data || []);
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -70,7 +86,16 @@ export default function EventsPage() {
     if (isAllDay) {
       return date.toLocaleDateString();
     }
-    return date.toLocaleString();
+    
+    // Use 12-hour format to match event creation view
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
   };
 
   if (loading) {
