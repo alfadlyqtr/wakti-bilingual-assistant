@@ -11,6 +11,8 @@ import {
 import { QuoteWidget } from './QuoteWidget';
 import { DragModeToggle } from './DragModeToggle';
 import { useWidgetManager } from '@/hooks/useWidgetManager';
+import { useDashboardData } from '@/hooks/useDashboardData';
+import { useTheme } from '@/providers/ThemeProvider';
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -21,23 +23,25 @@ interface WidgetGridProps {
 
 export default function WidgetGrid({ dragMode, setDragMode }: WidgetGridProps) {
   const { layouts, saveLayouts, widgets, updateWidgetVisibility } = useWidgetManager();
+  const { tasks, reminders, events, isLoading } = useDashboardData();
+  const { language } = useTheme();
 
   const availableWidgets = [
     { 
       id: 'tasksWidget', 
-      component: <TasksWidget />, 
+      component: <TasksWidget isLoading={isLoading} tasks={tasks} language={language} />, 
       title: 'Tasks',
       visible: widgets.tasksWidget
     },
     { 
       id: 'calendarWidget', 
-      component: <CalendarWidget />, 
+      component: <CalendarWidget isLoading={isLoading} events={events} tasks={tasks} language={language} />, 
       title: 'Calendar',
       visible: widgets.calendarWidget
     },
     { 
       id: 'remindersWidget', 
-      component: <RemindersWidget />, 
+      component: <RemindersWidget isLoading={isLoading} reminders={reminders} language={language} />, 
       title: 'Reminders',
       visible: widgets.remindersWidget
     },

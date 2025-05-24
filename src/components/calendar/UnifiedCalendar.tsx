@@ -116,6 +116,7 @@ export default function UnifiedCalendar() {
   const handleEntryCreated = () => {
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['reminders'] });
+    setShowEntryDialog(false);
   };
 
   const handleCloseAgenda = () => {
@@ -150,7 +151,6 @@ export default function UnifiedCalendar() {
           open={showEntryDialog}
           onOpenChange={setShowEntryDialog}
           selectedDate={selectedDate}
-          onEntryCreated={handleEntryCreated}
           entry={null}
           onSave={handleEntryCreated}
         />
@@ -264,7 +264,6 @@ export default function UnifiedCalendar() {
         open={showEntryDialog}
         onOpenChange={setShowEntryDialog}
         selectedDate={selectedDate}
-        onEntryCreated={handleEntryCreated}
         entry={null}
         onSave={handleEntryCreated}
       />
