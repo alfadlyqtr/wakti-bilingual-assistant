@@ -139,24 +139,11 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const deadlinePassed = rsvpDeadline && new Date() > new Date(rsvpDeadline);
 
   return (
-    <div className="space-y-4 border-t border-white/30 pt-6 mt-6">
-      {/* Show creator name with better styling */}
-      {creatorName && (
-        <p 
-          className="text-center text-white/90"
-          style={{ 
-            fontSize: `${Math.max(14, 12)}px`,
-            textShadow: '2px 2px 8px rgba(0,0,0,0.8)'
-          }}
-        >
-          Created by {creatorName}
-        </p>
-      )}
-
+    <div className="space-y-4 border-t border-white/40 pt-6 mt-6">
       {rsvpDeadline && (
         <div className="flex items-center justify-center gap-2 text-sm text-white/90">
           <Clock className="h-4 w-4" />
-          <span style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}>
+          <span style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.8)' }}>
             Deadline: {new Date(rsvpDeadline).toLocaleDateString()}
           </span>
         </div>
@@ -166,30 +153,38 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         <div className="text-center py-4">
           <p 
             className="text-white/75"
-            style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}
+            style={{ textShadow: '1px 1px 4px rgba(0,0,0,0.8)' }}
           >
             {t("rsvpDeadlinePassed", language)}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Response Buttons - More visible styling */}
+          {/* Response Buttons - Much more visible styling */}
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <Button
                 variant={selectedResponse === 'going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('going')}
-                className="flex items-center gap-2 py-3 text-sm font-semibold bg-green-600/90 hover:bg-green-500 border-2 border-white/40 text-white shadow-lg backdrop-blur-sm"
+                className="flex items-center gap-2 py-4 text-base font-bold bg-green-600 hover:bg-green-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+                style={{ 
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+                }}
               >
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle className="h-5 w-5" />
                 Accept
               </Button>
               <Button
                 variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('not_going')}
-                className="flex items-center gap-2 py-3 text-sm font-semibold bg-red-600/90 hover:bg-red-500 border-2 border-white/40 text-white shadow-lg backdrop-blur-sm"
+                className="flex items-center gap-2 py-4 text-base font-bold bg-red-600 hover:bg-red-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+                style={{ 
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+                }}
               >
-                <XCircle className="h-4 w-4" />
+                <XCircle className="h-5 w-5" />
                 Decline
               </Button>
             </div>
@@ -201,8 +196,8 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
               <div>
                 <Label 
                   htmlFor="guest_name" 
-                  className="text-white text-sm font-medium block mb-2"
-                  style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}
+                  className="text-white text-sm font-bold block mb-2"
+                  style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}
                 >
                   Your Name *
                 </Label>
@@ -211,18 +206,25 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="Enter your name"
-                  className="bg-white/20 border-2 border-white/40 text-white placeholder:text-white/70 backdrop-blur-sm font-medium shadow-lg"
+                  className="bg-white/30 border-3 border-white text-white placeholder:text-white/80 backdrop-blur-sm font-medium shadow-xl text-base py-3"
+                  style={{ 
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.3)'
+                  }}
                 />
               </div>
             </div>
           )}
 
-          {/* Submit Button - More visible */}
+          {/* Submit Button - Much more visible */}
           {selectedResponse && (
             <Button 
               onClick={submitRSVP} 
               disabled={submitting}
-              className="w-full py-3 text-base font-semibold bg-blue-600/90 hover:bg-blue-500 text-white border-2 border-white/40 shadow-lg backdrop-blur-sm"
+              className="w-full py-4 text-lg font-bold bg-blue-600 hover:bg-blue-500 text-white border-3 border-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+              style={{ 
+                boxShadow: '0 10px 30px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.9)',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+              }}
             >
               {submitting ? "Submitting..." : "Submit Response"}
             </Button>

@@ -266,7 +266,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
     }
   };
 
-  // Calculate text style based on event settings
+  // Calculate text style based on event settings - reduced shadow to 2.5%
   const getTextStyle = () => {
     return {
       color: event.text_color || '#ffffff',
@@ -275,7 +275,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       fontStyle: event.font_style || 'normal',
       textDecoration: event.text_decoration || 'none',
       fontFamily: event.font_family || 'Inter',
-      textShadow: '0 0 10px rgba(0,0,0,0.5), 2px 2px 8px rgba(0,0,0,0.8), 4px 4px 16px rgba(0,0,0,0.6)'
+      textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
     };
   };
 
@@ -353,11 +353,24 @@ export default function EventView({ standalone = false }: EventViewProps) {
           style={getBackgroundStyle()}
         >
           <div style={getTextStyle()}>
+            {/* Show creator name above title */}
+            {isGuestView && creatorName && (
+              <p 
+                className="text-center text-white/90 mb-4"
+                style={{ 
+                  fontSize: `${Math.max(14, 12)}px`,
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.025)'
+                }}
+              >
+                Created by {creatorName}
+              </p>
+            )}
+
             <h1 
               className="mb-4 leading-tight"
               style={{ 
                 fontSize: `${event.font_size || 24}px`,
-                textShadow: '0 0 10px rgba(0,0,0,0.5), 2px 2px 8px rgba(0,0,0,0.8), 4px 4px 16px rgba(0,0,0,0.6)'
+                textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
               }}
             >
               {event.title}
@@ -368,7 +381,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 style={{ 
                   fontSize: `${Math.max((event.font_size || 24) * 0.6, 14)}px`,
                   marginTop: '16px',
-                  textShadow: '0 0 8px rgba(0,0,0,0.5), 2px 2px 6px rgba(0,0,0,0.8), 3px 3px 12px rgba(0,0,0,0.6)'
+                  textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
                 }}
               >
                 {event.description}
