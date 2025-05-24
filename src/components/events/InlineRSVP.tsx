@@ -20,14 +20,13 @@ interface InlineRSVPProps {
 
 interface RSVPResponse {
   id: string;
-  response: 'going' | 'not_going' | 'maybe';
+  response: 'going' | 'not_going';
   guest_name?: string;
-  guest_email?: string;
   user_id?: string;
   created_at: string;
 }
 
-export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic, guestEmail, creatorName }: InlineRSVPProps) {
+export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic }: InlineRSVPProps) {
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
@@ -35,53 +34,72 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [userLoaded, setUserLoaded] = useState(false);
 
   useEffect(() => {
-    checkUser();
-    if (rsvpEnabled && isPublic) {
-      fetchUserRSVP();
-    }
+    checkUserAndFetchRSVP();
   }, [eventId, rsvpEnabled, isPublic]);
 
-  const checkUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-  };
-
-  const fetchUserRSVP = async () => {
+  const checkUserAndFetchRSVP = async () => {
+    console.log('Starting user check and RSVP fetch...');
+    
     try {
-      if (!user) return;
+      // First, get the current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      console.log('Current user:', currentUser?.id || 'No user');
+      
+      setUser(currentUser);
+      setUserLoaded(true);
+      
+      // Only fetch existing RSVP if user is authenticated and RSVP is enabled
+      if (currentUser && rsvpEnabled && isPublic) {
+        console.log('Fetching existing RSVP for user:', currentUser.id);
+        
+        const { data, error } = await supabase
+          .from('event_rsvps')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
 
-      const { data, error } = await supabase
-        .from('event_rsvps')
-        .select('*')
-        .eq('event_id', eventId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
-
-      if (data) {
-        setUserRsvp(data);
-        setSelectedResponse(data.response);
+        if (error) {
+          console.error('Error fetching user RSVP:', error);
+        } else if (data) {
+          console.log('Found existing RSVP:', data);
+          setUserRsvp(data);
+          setSelectedResponse(data.response);
+        } else {
+          console.log('No existing RSVP found');
+        }
       }
     } catch (error) {
-      console.error('Error fetching user RSVP:', error);
+      console.error('Error in checkUserAndFetchRSVP:', error);
     }
   };
 
   const submitRSVP = async () => {
-    if (!selectedResponse) return;
+    console.log('Starting RSVP submission...');
+    console.log('Selected response:', selectedResponse);
+    console.log('Guest name:', guestName);
+    console.log('User:', user?.id || 'No user');
+    
+    if (!selectedResponse) {
+      console.log('No response selected');
+      toast.error('Please select a response');
+      return;
+    }
 
     // Check deadline
     if (rsvpDeadline && new Date() > new Date(rsvpDeadline)) {
+      console.log('Deadline passed');
       toast.error(t("rsvpDeadlinePassed", language));
       return;
     }
 
-    // Validate guest info for non-authenticated users - only name required now
+    // For guests, require name
     if (!user && !guestName.trim()) {
-      toast.error(t("pleaseEnterYourName", language));
+      console.log('Guest name required but not provided');
+      toast.error('Please enter your name');
       return;
     }
 
@@ -93,12 +111,14 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         response: selectedResponse,
         user_id: user?.id || null,
         guest_name: user ? null : guestName.trim(),
-        guest_email: user ? null : null, // Remove email requirement
       };
+
+      console.log('Submitting RSVP data:', rsvpData);
 
       let result;
       if (userRsvp) {
         // Update existing RSVP
+        console.log('Updating existing RSVP:', userRsvp.id);
         result = await supabase
           .from('event_rsvps')
           .update({ response: selectedResponse })
@@ -107,6 +127,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
           .single();
       } else {
         // Create new RSVP
+        console.log('Creating new RSVP');
         result = await supabase
           .from('event_rsvps')
           .insert(rsvpData)
@@ -114,8 +135,15 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
           .single();
       }
 
-      if (result.error) throw result.error;
+      console.log('RSVP submission result:', result);
 
+      if (result.error) {
+        console.error('RSVP submission error:', result.error);
+        throw result.error;
+      }
+
+      console.log('RSVP submitted successfully');
+      
       // Show thank you popup
       setShowThankYou(true);
       setTimeout(() => {
@@ -125,10 +153,12 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       // Update local state
       setUserRsvp(result.data);
       
-      // Clear guest fields if they were used
+      // Clear guest name if it was used
       if (!user) {
         setGuestName('');
       }
+      
+      toast.success('Response submitted successfully!');
     } catch (error: any) {
       console.error('Error submitting RSVP:', error);
       toast.error(error.message || 'Failed to submit response');
@@ -139,6 +169,16 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
 
   if (!rsvpEnabled || !isPublic) {
     return null;
+  }
+
+  if (!userLoaded) {
+    return (
+      <div className="space-y-4 border-t border-white/40 pt-6 mt-6">
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mx-auto"></div>
+        </div>
+      </div>
+    );
   }
 
   const deadlinePassed = rsvpDeadline && new Date() > new Date(rsvpDeadline);
@@ -175,65 +215,63 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Response Buttons - Only Accept and Decline */}
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                variant={selectedResponse === 'going' ? 'default' : 'outline'}
-                onClick={() => setSelectedResponse('going')}
-                className="flex items-center gap-2 py-4 text-base font-bold bg-green-600 hover:bg-green-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
-                style={{ 
-                  boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
-                }}
+          {/* Guest Name Input - Show for non-authenticated users */}
+          {!user && (
+            <div>
+              <Label 
+                htmlFor="guest_name" 
+                className="text-white text-lg font-bold block mb-3"
+                style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.9)' }}
               >
-                <CheckCircle className="h-5 w-5" />
-                Accept
-              </Button>
-              <Button
-                variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
-                onClick={() => setSelectedResponse('not_going')}
-                className="flex items-center gap-2 py-4 text-base font-bold bg-red-600 hover:bg-red-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+                Enter Your Name *
+              </Label>
+              <Input
+                id="guest_name"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Your full name"
+                className="bg-white/95 border-4 border-white text-gray-900 placeholder:text-gray-600 backdrop-blur-sm font-bold shadow-2xl text-lg py-4 px-4"
                 style={{ 
-                  boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
-                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(255,255,255,0.9)',
+                  fontSize: '18px',
+                  fontWeight: '600'
                 }}
-              >
-                <XCircle className="h-5 w-5" />
-                Decline
-              </Button>
-            </div>
-          </div>
-
-          {/* Guest Name Only (for non-authenticated users) */}
-          {!user && selectedResponse && (
-            <div className="space-y-3">
-              <div>
-                <Label 
-                  htmlFor="guest_name" 
-                  className="text-white text-lg font-bold block mb-3"
-                  style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.9)' }}
-                >
-                  Enter Your Name *
-                </Label>
-                <Input
-                  id="guest_name"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Your full name"
-                  className="bg-white/95 border-4 border-white text-gray-900 placeholder:text-gray-600 backdrop-blur-sm font-bold shadow-2xl text-lg py-4 px-4"
-                  style={{ 
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(255,255,255,0.9)',
-                    fontSize: '18px',
-                    fontWeight: '600'
-                  }}
-                />
-              </div>
+              />
             </div>
           )}
 
+          {/* Response Buttons */}
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              variant={selectedResponse === 'going' ? 'default' : 'outline'}
+              onClick={() => setSelectedResponse('going')}
+              className="flex items-center gap-2 py-4 text-base font-bold bg-green-600 hover:bg-green-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+              style={{ 
+                boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                opacity: selectedResponse === 'going' ? 1 : 0.8
+              }}
+            >
+              <CheckCircle className="h-5 w-5" />
+              Accept
+            </Button>
+            <Button
+              variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
+              onClick={() => setSelectedResponse('not_going')}
+              className="flex items-center gap-2 py-4 text-base font-bold bg-red-600 hover:bg-red-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
+              style={{ 
+                boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                opacity: selectedResponse === 'not_going' ? 1 : 0.8
+              }}
+            >
+              <XCircle className="h-5 w-5" />
+              Decline
+            </Button>
+          </div>
+
           {/* Submit Button */}
-          {selectedResponse && (
+          {selectedResponse && ((!user && guestName.trim()) || user) && (
             <Button 
               onClick={submitRSVP} 
               disabled={submitting}
