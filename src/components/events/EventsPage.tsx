@@ -20,7 +20,9 @@ interface Event {
   is_all_day: boolean;
   is_public: boolean;
   created_at: string;
+  created_by: string;
   short_id?: string;
+  is_invited?: boolean; // To distinguish between owned and invited events
 }
 
 export default function EventsPage() {
@@ -47,22 +49,46 @@ export default function EventsPage() {
 
       console.log('Fetching events for authenticated user:', userData.user.id);
       
-      // With RLS policies in place, this query will automatically filter to:
-      // 1. Events created by the current user (both public and private)
-      // 2. Public events created by other users
-      const { data, error } = await supabase
+      // Fetch user's own events
+      const { data: ownEvents, error: ownEventsError } = await supabase
         .from('events')
         .select('*')
+        .eq('created_by', userData.user.id)
         .order('start_time', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching events:', error);
-        toast.error('Failed to load events');
+      if (ownEventsError) {
+        console.error('Error fetching own events:', ownEventsError);
+        toast.error('Failed to load your events');
         return;
       }
 
-      console.log(`Found ${data?.length || 0} events (user's own + public events)`);
-      setEvents(data || []);
+      // Fetch invited events with invitation details
+      const { data: invitedEvents, error: invitedEventsError } = await supabase
+        .from('events')
+        .select(`
+          *,
+          event_invitations!inner(status)
+        `)
+        .eq('event_invitations.invitee_id', userData.user.id)
+        .order('start_time', { ascending: true });
+
+      if (invitedEventsError) {
+        console.error('Error fetching invited events:', invitedEventsError);
+        toast.error('Failed to load invited events');
+        return;
+      }
+
+      // Combine and mark events appropriately
+      const ownEventsMarked = (ownEvents || []).map(event => ({ ...event, is_invited: false }));
+      const invitedEventsMarked = (invitedEvents || []).map(event => ({ ...event, is_invited: true }));
+      
+      const allEvents = [...ownEventsMarked, ...invitedEventsMarked];
+      
+      // Sort by start time
+      allEvents.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+
+      console.log(`Found ${ownEvents?.length || 0} own events and ${invitedEvents?.length || 0} invited events`);
+      setEvents(allEvents);
     } catch (error) {
       console.error('Unexpected error:', error);
       toast.error('An unexpected error occurred');
@@ -139,9 +165,16 @@ export default function EventsPage() {
               <CardContent className="p-4">
                 <div className="flex justify-between items-start mb-2">
                   <h3 className="font-semibold text-lg truncate">{event.title}</h3>
-                  <Badge variant={event.is_public ? "default" : "secondary"}>
-                    {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
-                  </Badge>
+                  <div className="flex gap-2">
+                    {event.is_invited && (
+                      <Badge variant="outline" className="text-xs">
+                        {t("invited", language)}
+                      </Badge>
+                    )}
+                    <Badge variant={event.is_public ? "default" : "secondary"}>
+                      {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
+                    </Badge>
+                  </div>
                 </div>
                 
                 {event.description && (

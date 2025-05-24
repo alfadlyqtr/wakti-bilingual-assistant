@@ -169,6 +169,44 @@ export type Database = {
         }
         Relationships: []
       }
+      event_invitations: {
+        Row: {
+          created_at: string | null
+          event_id: string | null
+          id: string
+          invitee_id: string | null
+          inviter_id: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          invitee_id?: string | null
+          inviter_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string | null
+          id?: string
+          invitee_id?: string | null
+          inviter_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_invitations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_invitees: {
         Row: {
           created_at: string | null

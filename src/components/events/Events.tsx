@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -12,8 +13,10 @@ import { t } from "@/utils/translations";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRsvpNotifications } from "@/hooks/useRsvpNotifications";
 
-// Define the type for our events
-type Event = Tables<"events">;
+// Define the type for our events with invitation info
+type Event = Tables<"events"> & {
+  is_invited?: boolean;
+};
 
 export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
@@ -38,20 +41,53 @@ export default function Events() {
       
     console.log(`Fetching ${type} events for user:`, userData.user.id);
     
-    const { data, error } = await supabase
+    // Fetch user's own events
+    const { data: ownEvents, error: ownEventsError } = await supabase
       .from("events")
       .select("*")
-      .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
+      .eq('created_by', userData.user.id)
       .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       
-    if (error) {
-      console.error("Error fetching events:", error);
-      throw new Error(`Failed to fetch ${type} events: ${error.message}`);
+    if (ownEventsError) {
+      console.error("Error fetching own events:", ownEventsError);
+      throw new Error(`Failed to fetch own ${type} events: ${ownEventsError.message}`);
+    }
+
+    // Fetch invited events
+    const { data: invitedEvents, error: invitedEventsError } = await supabase
+      .from("events")
+      .select(`
+        *,
+        event_invitations!inner(status)
+      `)
+      .eq('event_invitations.invitee_id', userData.user.id)
+      .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
+      .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
+
+    if (invitedEventsError) {
+      console.error("Error fetching invited events:", invitedEventsError);
+      throw new Error(`Failed to fetch invited ${type} events: ${invitedEventsError.message}`);
     }
     
-    console.log(`Found ${data?.length || 0} ${type} events`);
-    return data || [];
+    // Combine and mark events appropriately
+    const ownEventsMarked = (ownEvents || []).map(event => ({ ...event, is_invited: false }));
+    const invitedEventsMarked = (invitedEvents || []).map(event => ({ ...event, is_invited: true }));
+    
+    const allEvents = [...ownEventsMarked, ...invitedEventsMarked];
+    
+    // Sort by start time or end time based on type
+    const sortKey = type === "upcoming" ? "start_time" : "end_time";
+    const ascending = type === "upcoming";
+    
+    allEvents.sort((a, b) => {
+      const dateA = new Date(a[sortKey]).getTime();
+      const dateB = new Date(b[sortKey]).getTime();
+      return ascending ? dateA - dateB : dateB - dateA;
+    });
+    
+    console.log(`Found ${ownEvents?.length || 0} own ${type} events and ${invitedEvents?.length || 0} invited ${type} events`);
+    return allEvents;
   };
   
   const { 
