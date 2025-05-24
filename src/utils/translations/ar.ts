@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -340,5 +339,7 @@ export const ar: Record<TranslationKey, string> = {
   rsvpNotificationAccepted: "{name} قبل دعوة حدثك",
   rsvpNotificationDeclined: "{name} رفض دعوة حدثك",
   newRsvpResponse: "رد جديد على الدعوة",
+  
+  // MISSING TRANSLATION THAT CAUSED THE ERROR
+  privateEvent: "حدث خاص",
 } as const;
-
