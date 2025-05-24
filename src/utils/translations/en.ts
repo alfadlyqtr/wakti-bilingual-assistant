@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -345,5 +344,7 @@ export const en: Record<TranslationKey, string> = {
   rsvpNotificationAccepted: "{name} accepted your event invitation",
   rsvpNotificationDeclined: "{name} declined your event invitation",
   newRsvpResponse: "New RSVP Response",
+  
+  // MISSING TRANSLATION THAT CAUSED THE ERROR
+  privateEvent: "Private Event",
 } as const;
-

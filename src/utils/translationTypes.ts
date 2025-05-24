@@ -343,5 +343,6 @@ export type TranslationKey =
   // Notification translations - NEW KEYS ADDED
   | "rsvpNotificationAccepted"
   | "rsvpNotificationDeclined"
-  | "newRsvpResponse";
-
+  | "newRsvpResponse"
+  // MISSING KEY THAT CAUSED THE ERROR
+  | "privateEvent";
