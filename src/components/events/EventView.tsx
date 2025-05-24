@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -211,7 +210,7 @@ export default function EventView() {
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => navigate(`/events/${event.id}/edit`)}
+              onClick={() => navigate(`/event/${event.id}/edit`)}
             >
               <Edit className="h-4 w-4" />
             </Button>
