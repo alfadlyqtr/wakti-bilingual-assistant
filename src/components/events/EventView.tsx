@@ -274,7 +274,8 @@ export default function EventView({ standalone = false }: EventViewProps) {
           backgroundImage: `url(${event.background_image})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
+          backgroundRepeat: 'no-repeat',
+          filter: 'blur(1px)'
         };
       case 'color':
       default:
@@ -282,7 +283,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
     }
   };
 
-  // Calculate text style based on event settings - reduced shadow to 2.5%
+  // Calculate text style based on event settings - increased shadow to 3.5%
   const getTextStyle = () => {
     return {
       color: event.text_color || '#ffffff',
@@ -291,7 +292,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       fontStyle: event.font_style || 'normal',
       textDecoration: event.text_decoration || 'none',
       fontFamily: event.font_family || 'Inter',
-      textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
+      textShadow: '0 0 2px rgba(0,0,0,0.035), 1px 1px 2px rgba(0,0,0,0.035)'
     };
   };
 
@@ -384,7 +385,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
               className="mb-4 leading-tight"
               style={{ 
                 fontSize: `${event.font_size || 24}px`,
-                textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
+                textShadow: '0 0 2px rgba(0,0,0,0.035), 1px 1px 2px rgba(0,0,0,0.035)'
               }}
             >
               {event.title}
@@ -395,7 +396,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 style={{ 
                   fontSize: `${Math.max((event.font_size || 24) * 0.6, 14)}px`,
                   marginTop: '16px',
-                  textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
+                  textShadow: '0 0 2px rgba(0,0,0,0.035), 1px 1px 2px rgba(0,0,0,0.035)'
                 }}
               >
                 {event.description}
