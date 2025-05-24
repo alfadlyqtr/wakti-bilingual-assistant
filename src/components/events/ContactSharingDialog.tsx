@@ -96,14 +96,14 @@ export default function ContactSharingDialog({
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(t('invitationsSent', language));
+      toast.success('Invitations sent successfully');
       queryClient.invalidateQueries({ queryKey: ['events'] });
       setSelectedContacts([]);
       onOpenChange(false);
     },
     onError: (error) => {
       console.error('Error sending invitations:', error);
-      toast.error(t('errorSendingInvitations', language));
+      toast.error('Error sending invitations');
     }
   });
 
@@ -117,7 +117,7 @@ export default function ContactSharingDialog({
 
   const handleSendInvitations = () => {
     if (selectedContacts.length === 0) {
-      toast.error(t('selectContactsToInvite', language));
+      toast.error('Please select contacts to invite');
       return;
     }
     sendInvitationsMutation.mutate(selectedContacts);
@@ -132,12 +132,12 @@ export default function ContactSharingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t('shareWithContacts', language)}</DialogTitle>
+          <DialogTitle>Share with Contacts</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            {t('selectContactsToInvite', language)} "{eventTitle}"
+            Select contacts to invite to "{eventTitle}"
           </p>
 
           {isLoading ? (
@@ -146,7 +146,7 @@ export default function ContactSharingDialog({
             </div>
           ) : contacts.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">{t('noContactsFound', language)}</p>
+              <p className="text-muted-foreground">No contacts found</p>
             </div>
           ) : (
             <div className="max-h-60 overflow-y-auto space-y-2">
@@ -175,7 +175,7 @@ export default function ContactSharingDialog({
               onClick={() => onOpenChange(false)}
               className="flex-1"
             >
-              {t('cancel', language)}
+              Cancel
             </Button>
             <Button 
               onClick={handleSendInvitations}
@@ -185,7 +185,7 @@ export default function ContactSharingDialog({
               {sendInvitationsMutation.isPending && (
                 <LoadingSpinner size="sm" className="mr-2" />
               )}
-              {t('sendInvitations', language)} ({selectedContacts.length})
+              Send Invitations ({selectedContacts.length})
             </Button>
           </div>
         </div>
