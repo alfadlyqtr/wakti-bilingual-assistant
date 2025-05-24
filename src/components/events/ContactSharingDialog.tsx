@@ -43,7 +43,7 @@ export default function ContactSharingDialog({
   // Fetch user's contacts
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ['contacts'],
-    queryFn: async () => {
+    queryFn: async (): Promise<Contact[]> => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) return [];
 
