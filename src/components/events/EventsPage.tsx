@@ -208,31 +208,4 @@ export default function EventsPage() {
       )}
     </div>
   );
-
-  function handleCreateEvent() {
-    console.log('Navigating to event creation');
-    navigate('/event/create');
-  }
-
-  function handleEventClick(event: Event) {
-    console.log('Navigating to event:', event.id);
-    navigate(`/event/${event.id}`);
-  }
-
-  function formatDateTime(dateTime: string, isAllDay: boolean) {
-    const date = new Date(dateTime);
-    if (isAllDay) {
-      return date.toLocaleDateString();
-    }
-    
-    // Use 12-hour format to match event creation view
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  }
 }
