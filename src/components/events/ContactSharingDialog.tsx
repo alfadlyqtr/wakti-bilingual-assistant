@@ -51,7 +51,7 @@ export default function ContactSharingDialog({
         .from('contacts')
         .select(`
           contact_id,
-          profiles!contacts_contact_id_fkey (
+          profiles:contact_id (
             id,
             display_name,
             username,
