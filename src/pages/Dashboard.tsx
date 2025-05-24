@@ -17,7 +17,7 @@ export default function Dashboard() {
   const { layouts, widgets, saveLayouts, updateWidgetVisibility } = useWidgetManager();
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 pb-28">
+    <div className="flex-1 overflow-y-auto p-4">
       <TrialBanner trialDaysLeft={trialDaysLeft} language={language} />
       
       <WidgetGrid 

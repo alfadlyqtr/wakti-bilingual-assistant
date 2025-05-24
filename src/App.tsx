@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/providers/ThemeProvider";
+import { AppLayout } from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
@@ -37,40 +38,54 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 
-                {/* Protected Routes */}
+                {/* Protected Routes with AppLayout */}
                 <Route path="/dashboard" element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <AppLayout>
+                      <Dashboard />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/tasks" element={
                   <ProtectedRoute>
-                    <Tasks />
+                    <AppLayout>
+                      <Tasks />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/reminders" element={
                   <ProtectedRoute>
-                    <Reminders />
+                    <AppLayout>
+                      <Reminders />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/calendar" element={
                   <ProtectedRoute>
-                    <Calendar />
+                    <AppLayout>
+                      <Calendar />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/settings" element={
                   <ProtectedRoute>
-                    <Settings />
+                    <AppLayout>
+                      <Settings />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/contacts" element={
                   <ProtectedRoute>
-                    <Contacts />
+                    <AppLayout>
+                      <Contacts />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 <Route path="/tasks-reminders" element={
                   <ProtectedRoute>
-                    <TasksReminders />
+                    <AppLayout>
+                      <TasksReminders />
+                    </AppLayout>
                   </ProtectedRoute>
                 } />
                 

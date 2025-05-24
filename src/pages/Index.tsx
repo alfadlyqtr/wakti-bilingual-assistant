@@ -14,8 +14,8 @@ export default function Index() {
       duration: 3000 // 3 seconds
     });
     
-    // Redirect to home instead of login
-    navigate("/home");
+    // Redirect to dashboard instead of home
+    navigate("/dashboard");
   }, [navigate]);
   
   return <div className="loading">Loading...</div>;
