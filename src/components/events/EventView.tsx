@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -48,6 +47,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -57,22 +57,33 @@ export default function EventView({ standalone = false }: EventViewProps) {
 
   const fetchEvent = async () => {
     try {
-      console.log('Fetching event with ID:', id);
+      console.log('DEBUG: Fetching event with ID:', id);
+      console.log('DEBUG: Standalone mode:', standalone);
       
-      // Try to fetch by short_id first, then by UUID
+      setError(null);
+      
+      // Check if the ID looks like a UUID (contains hyphens and is 36 chars)
+      const isUuid = id && id.includes('-') && id.length === 36;
+      console.log('DEBUG: Is UUID?', isUuid);
+      
       let query = supabase.from('events').select('*');
       
-      // Check if the ID looks like a UUID (contains hyphens)
-      if (id && id.includes('-')) {
+      if (isUuid) {
+        console.log('DEBUG: Querying by UUID');
         query = query.eq('id', id);
       } else {
+        console.log('DEBUG: Querying by short_id');
         query = query.eq('short_id', id);
       }
       
-      const { data, error } = await query.single();
+      console.log('DEBUG: About to execute query');
+      const { data, error: queryError } = await query.maybeSingle();
+      
+      console.log('DEBUG: Query result:', { data, error: queryError });
 
-      if (error) {
-        console.error('Error fetching event:', error);
+      if (queryError) {
+        console.error('DEBUG: Database error:', queryError);
+        setError(`Database error: ${queryError.message}`);
         toast.error('Failed to load event');
         if (!standalone) {
           navigate('/events');
@@ -80,18 +91,35 @@ export default function EventView({ standalone = false }: EventViewProps) {
         return;
       }
 
-      console.log('Event data fetched:', data);
+      if (!data) {
+        console.log('DEBUG: No event found');
+        setError('Event not found in database');
+        toast.error('Event not found');
+        if (!standalone) {
+          navigate('/events');
+        }
+        return;
+      }
+
+      console.log('DEBUG: Event data loaded successfully:', data);
       setEvent(data);
 
       // Check if current user is the owner (only for non-standalone mode)
       if (!standalone) {
-        const { data: userData } = await supabase.auth.getUser();
-        if (userData.user) {
-          setIsOwner(userData.user.id === data.created_by);
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          console.log('DEBUG: User data for ownership check:', userData);
+          if (userData.user) {
+            setIsOwner(userData.user.id === data.created_by);
+          }
+        } catch (authError) {
+          console.log('DEBUG: Auth error (non-critical):', authError);
+          // Auth errors are non-critical for public events
         }
       }
     } catch (error) {
-      console.error('Unexpected error fetching event:', error);
+      console.error('DEBUG: Unexpected error fetching event:', error);
+      setError(`Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast.error('An unexpected error occurred');
       if (!standalone) {
         navigate('/events');
@@ -160,7 +188,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
     );
   }
 
-  if (!event) {
+  if (error || !event) {
     return (
       <div className="flex flex-col h-screen">
         {!standalone && (
@@ -178,8 +206,25 @@ export default function EventView({ standalone = false }: EventViewProps) {
             </div>
           </header>
         )}
-        <div className="flex-1 flex items-center justify-center">
-          <p>Event not found</p>
+        <div className="flex-1 flex items-center justify-center flex-col gap-4">
+          <p className="text-center">Event not found</p>
+          {error && (
+            <div className="text-sm text-muted-foreground bg-muted p-4 rounded max-w-md">
+              <p className="font-medium">Debug Info:</p>
+              <p>ID: {id}</p>
+              <p>Error: {error}</p>
+              <p>Standalone: {standalone ? 'Yes' : 'No'}</p>
+            </div>
+          )}
+          {standalone && (
+            <Button 
+              variant="outline" 
+              onClick={() => window.open('/', '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              Open WAKTI
+            </Button>
+          )}
         </div>
       </div>
     );
