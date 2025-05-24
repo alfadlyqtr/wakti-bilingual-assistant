@@ -377,4 +377,11 @@ export type TranslationKey =
   | "rsvpDeadlineLabel"
   // MISSING KEYS CAUSING THE CURRENT ERRORS
   | "pleaseEnterYourName"
-  | "responseSubmitted";
+  | "responseSubmitted"
+  | "invited"
+  | "shareWithContacts"
+  | "selectContactsToInvite"
+  | "noContactsFound"
+  | "sendInvitations"
+  | "invitationsSent"
+  | "errorSendingInvitations";
