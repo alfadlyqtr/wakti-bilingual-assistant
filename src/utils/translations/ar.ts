@@ -372,4 +372,7 @@ export const ar: Record<TranslationKey, string> = {
   rsvpResponses: "ردود تأكيد الحضور",
   noRsvpsYet: "لا توجد ردود تأكيد حضور بعد",
   rsvpDeadlineLabel: "تأكيد الحضور قبل",
+  // NEW MISSING KEYS
+  pleaseEnterYourName: "يرجى إدخال اسمك",
+  responseSubmitted: "تم إرسال الرد بنجاح",
 } as const;

@@ -377,4 +377,7 @@ export const en: Record<TranslationKey, string> = {
   rsvpResponses: "RSVP Responses",
   noRsvpsYet: "No RSVPs yet",
   rsvpDeadlineLabel: "RSVP by",
+  // NEW MISSING KEYS
+  pleaseEnterYourName: "Please enter your name",
+  responseSubmitted: "Response submitted successfully",
 } as const;
