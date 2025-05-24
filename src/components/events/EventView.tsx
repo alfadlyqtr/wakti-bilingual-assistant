@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -274,8 +275,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           backgroundImage: `url(${event.background_image})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          filter: 'blur(1px)'
+          backgroundRepeat: 'no-repeat'
         };
       case 'color':
       default:
