@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { utcToLocalDateTime } from '@/utils/timeUtils';
 import CalendarDropdown from './CalendarDropdown';
 import RSVPSection from './RSVPSection';
 import InlineRSVP from './InlineRSVP';
@@ -155,11 +156,29 @@ export default function EventView({ standalone = false }: EventViewProps) {
   };
 
   const formatDateTime = (dateTime: string, isAllDay: boolean) => {
-    const date = new Date(dateTime);
+    console.log('Formatting datetime:', { dateTime, isAllDay });
+    
     if (isAllDay) {
+      // For all-day events, just show the date
+      const date = new Date(dateTime);
       return date.toLocaleDateString();
     }
-    return date.toLocaleString();
+    
+    // For timed events, convert UTC to local time and format
+    try {
+      // The dateTime from database is in UTC, convert to local for display
+      const utcDate = new Date(dateTime);
+      console.log('UTC date from database:', utcDate.toISOString());
+      
+      // Display in local time
+      const localDateTime = utcDate.toLocaleString();
+      console.log('Formatted local time for display:', localDateTime);
+      
+      return localDateTime;
+    } catch (error) {
+      console.error('Error formatting date time:', error);
+      return 'Invalid date';
+    }
   };
 
   const handleShare = async () => {
