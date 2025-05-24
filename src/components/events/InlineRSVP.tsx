@@ -31,7 +31,6 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
-  const [guestEmailInput, setGuestEmailInput] = useState(guestEmail || '');
   const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | 'maybe' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -79,9 +78,9 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       return;
     }
 
-    // Validate guest info for non-authenticated users
-    if (!user && (!guestName.trim() || !guestEmailInput.trim())) {
-      toast.error(t("pleaseCompleteAllRequiredFields", language));
+    // Validate guest info for non-authenticated users - only name required now
+    if (!user && !guestName.trim()) {
+      toast.error(t("pleaseEnterYourName", language));
       return;
     }
 
@@ -93,7 +92,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         response: selectedResponse,
         user_id: user?.id || null,
         guest_name: user ? null : guestName.trim(),
-        guest_email: user ? null : guestEmailInput.trim(),
+        guest_email: user ? null : null, // Remove email requirement
       };
 
       let result;
@@ -116,7 +115,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
 
       if (result.error) throw result.error;
 
-      toast.success(t("rsvpSubmitted", language));
+      toast.success(t("responseSubmitted", language));
       
       // Update local state
       setUserRsvp(result.data);
@@ -124,11 +123,10 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       // Clear guest fields if they were used
       if (!user) {
         setGuestName('');
-        setGuestEmailInput('');
       }
     } catch (error: any) {
       console.error('Error submitting RSVP:', error);
-      toast.error(error.message || 'Failed to submit RSVP');
+      toast.error(error.message || 'Failed to submit response');
     } finally {
       setSubmitting(false);
     }
@@ -141,13 +139,14 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const deadlinePassed = rsvpDeadline && new Date() > new Date(rsvpDeadline);
 
   return (
-    <div className="space-y-4 border-t border-white/20 pt-4 mt-4">
-      {/* Show creator name */}
+    <div className="space-y-4 border-t border-white/30 pt-6 mt-6">
+      {/* Show creator name with better styling */}
       {creatorName && (
         <p 
-          className="opacity-75 text-center"
+          className="text-center text-white/90"
           style={{ 
-            fontSize: `${Math.max(14, 12)}px`
+            fontSize: `${Math.max(14, 12)}px`,
+            textShadow: '2px 2px 8px rgba(0,0,0,0.8)'
           }}
         >
           Created by {creatorName}
@@ -155,75 +154,77 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       )}
 
       {rsvpDeadline && (
-        <div className="flex items-center gap-2 text-sm opacity-90">
+        <div className="flex items-center justify-center gap-2 text-sm text-white/90">
           <Clock className="h-4 w-4" />
-          {t("rsvpDeadlineLabel", language)}: {new Date(rsvpDeadline).toLocaleDateString()}
+          <span style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}>
+            Deadline: {new Date(rsvpDeadline).toLocaleDateString()}
+          </span>
         </div>
       )}
 
       {deadlinePassed ? (
-        <div className="text-center py-2">
-          <p className="opacity-75">{t("rsvpDeadlinePassed", language)}</p>
+        <div className="text-center py-4">
+          <p 
+            className="text-white/75"
+            style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}
+          >
+            {t("rsvpDeadlinePassed", language)}
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {/* RSVP Buttons - Only Accept and Decline */}
+          {/* Response Buttons - More visible styling */}
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <Button
                 variant={selectedResponse === 'going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('going')}
-                className="flex items-center gap-2 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                className="flex items-center gap-2 py-3 text-sm font-semibold bg-green-600/90 hover:bg-green-500 border-2 border-white/40 text-white shadow-lg backdrop-blur-sm"
               >
-                <CheckCircle className="h-3 w-3" />
+                <CheckCircle className="h-4 w-4" />
                 Accept
               </Button>
               <Button
                 variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('not_going')}
-                className="flex items-center gap-2 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
+                className="flex items-center gap-2 py-3 text-sm font-semibold bg-red-600/90 hover:bg-red-500 border-2 border-white/40 text-white shadow-lg backdrop-blur-sm"
               >
-                <XCircle className="h-3 w-3" />
+                <XCircle className="h-4 w-4" />
                 Decline
               </Button>
             </div>
           </div>
 
-          {/* Guest Information (for non-authenticated users) */}
+          {/* Guest Name Only (for non-authenticated users) */}
           {!user && selectedResponse && (
             <div className="space-y-3">
               <div>
-                <Label htmlFor="guest_name" className="text-white text-sm">{t("guestName", language)} *</Label>
+                <Label 
+                  htmlFor="guest_name" 
+                  className="text-white text-sm font-medium block mb-2"
+                  style={{ textShadow: '2px 2px 8px rgba(0,0,0,0.8)' }}
+                >
+                  Your Name *
+                </Label>
                 <Input
                   id="guest_name"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
-                  placeholder={t("yourName", language)}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                />
-              </div>
-              <div>
-                <Label htmlFor="guest_email" className="text-white text-sm">{t("guestEmail", language)} *</Label>
-                <Input
-                  id="guest_email"
-                  type="email"
-                  value={guestEmailInput}
-                  onChange={(e) => setGuestEmailInput(e.target.value)}
-                  placeholder={t("yourEmail", language)}
-                  className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
+                  placeholder="Enter your name"
+                  className="bg-white/20 border-2 border-white/40 text-white placeholder:text-white/70 backdrop-blur-sm font-medium shadow-lg"
                 />
               </div>
             </div>
           )}
 
-          {/* Submit Button */}
+          {/* Submit Button - More visible */}
           {selectedResponse && (
             <Button 
               onClick={submitRSVP} 
               disabled={submitting}
-              className="w-full bg-white/20 hover:bg-white/30 text-white border-white/20"
+              className="w-full py-3 text-base font-semibold bg-blue-600/90 hover:bg-blue-500 text-white border-2 border-white/40 shadow-lg backdrop-blur-sm"
             >
-              {submitting ? t("loading", language) : t("submitRsvp", language)}
+              {submitting ? "Submitting..." : "Submit Response"}
             </Button>
           )}
         </div>

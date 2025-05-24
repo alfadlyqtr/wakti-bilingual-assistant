@@ -103,7 +103,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       console.log('Event data loaded successfully:', data);
       setEvent(data);
 
-      // Fetch creator's name
+      // Fetch creator's name with better fallback
       if (data.created_by) {
         const { data: profileData } = await supabase
           .from('profiles')
@@ -112,7 +112,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           .single();
         
         if (profileData) {
-          setCreatorName(profileData.display_name || profileData.username || 'Event Organizer');
+          setCreatorName(profileData.display_name || profileData.username || null);
         }
       }
 
@@ -275,7 +275,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
       fontStyle: event.font_style || 'normal',
       textDecoration: event.text_decoration || 'none',
       fontFamily: event.font_family || 'Inter',
-      textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+      textShadow: '0 0 10px rgba(0,0,0,0.5), 2px 2px 8px rgba(0,0,0,0.8), 4px 4px 16px rgba(0,0,0,0.6)'
     };
   };
 
@@ -347,7 +347,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           </div>
         )}
 
-        {/* Event Header with Custom Styling */}
+        {/* Event Header with Enhanced Text Shadows */}
         <div 
           className="rounded-lg mb-6 p-8 text-center relative overflow-hidden"
           style={getBackgroundStyle()}
@@ -355,7 +355,10 @@ export default function EventView({ standalone = false }: EventViewProps) {
           <div style={getTextStyle()}>
             <h1 
               className="mb-4 leading-tight"
-              style={{ fontSize: `${event.font_size || 24}px` }}
+              style={{ 
+                fontSize: `${event.font_size || 24}px`,
+                textShadow: '0 0 10px rgba(0,0,0,0.5), 2px 2px 8px rgba(0,0,0,0.8), 4px 4px 16px rgba(0,0,0,0.6)'
+              }}
             >
               {event.title}
             </h1>
@@ -364,7 +367,8 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 className="opacity-90 leading-relaxed"
                 style={{ 
                   fontSize: `${Math.max((event.font_size || 24) * 0.6, 14)}px`,
-                  marginTop: '16px'
+                  marginTop: '16px',
+                  textShadow: '0 0 8px rgba(0,0,0,0.5), 2px 2px 6px rgba(0,0,0,0.8), 3px 3px 12px rgba(0,0,0,0.6)'
                 }}
               >
                 {event.description}
