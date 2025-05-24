@@ -103,25 +103,43 @@ export default function EventView({ standalone = false }: EventViewProps) {
       console.log('Event data loaded successfully:', data);
       setEvent(data);
 
-      // Fetch creator's profile with proper display name fallback
+      // Fetch creator's profile with proper field handling
       if (data.created_by) {
-        const { data: profileData } = await supabase
+        console.log('Fetching creator profile for ID:', data.created_by);
+        
+        const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('display_name, username, first_name, last_name')
           .eq('id', data.created_by)
           .single();
         
-        console.log('Profile data for creator:', profileData);
+        console.log('Profile query result:', { profileData, error: profileError });
         
-        if (profileData) {
-          // Use display_name first, then construct from first/last name, then username as fallback
-          const name = profileData.display_name || 
-                      (profileData.first_name && profileData.last_name 
-                        ? `${profileData.first_name} ${profileData.last_name}`.trim()
-                        : profileData.first_name || profileData.username) || 
-                      'Unknown User';
-          setCreatorName(name);
-          console.log('Creator name set to:', name);
+        if (profileData && !profileError) {
+          // Prioritize display_name, then construct from first/last name, then username
+          let displayName = profileData.display_name;
+          
+          if (!displayName && profileData.first_name && profileData.last_name) {
+            displayName = `${profileData.first_name} ${profileData.last_name}`.trim();
+          } else if (!displayName && profileData.first_name) {
+            displayName = profileData.first_name;
+          } else if (!displayName && profileData.username) {
+            displayName = profileData.username;
+          }
+          
+          const finalName = displayName || 'Unknown User';
+          setCreatorName(finalName);
+          console.log('Creator name set to:', finalName);
+          console.log('Profile data breakdown:', {
+            display_name: profileData.display_name,
+            first_name: profileData.first_name,
+            last_name: profileData.last_name,
+            username: profileData.username,
+            final_name: finalName
+          });
+        } else {
+          console.log('No profile found or error:', profileError);
+          setCreatorName('Unknown User');
         }
       }
 
@@ -362,6 +380,19 @@ export default function EventView({ standalone = false }: EventViewProps) {
           style={getBackgroundStyle()}
         >
           <div style={getTextStyle()}>
+            {/* Show creator name above title for guest view */}
+            {isGuestView && creatorName && (
+              <p 
+                className="text-white/90 mb-4 font-medium"
+                style={{ 
+                  fontSize: `${Math.max((event.font_size || 24) * 0.5, 12)}px`,
+                  textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
+                }}
+              >
+                Created by {creatorName}
+              </p>
+            )}
+            
             <h1 
               className="mb-4 leading-tight"
               style={{ 
@@ -517,17 +548,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
         {isGuestView && (
           <Card className="mb-6">
             <CardContent className="p-6 space-y-4">
-              {/* Show creator name above date/time for guest view */}
-              {creatorName && (
-                <div className="flex items-start gap-3">
-                  <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">Created by</p>
-                    <p className="text-sm text-muted-foreground">{creatorName}</p>
-                  </div>
-                </div>
-              )}
-
               {/* Date and Time */}
               <div className="flex items-start gap-3">
                 <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
