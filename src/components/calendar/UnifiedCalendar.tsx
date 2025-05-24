@@ -11,23 +11,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-
-type ViewMode = 'month' | 'agenda';
-
-interface CalendarEntry {
-  id: string;
-  title: string;
-  date: Date;
-  type: 'task' | 'reminder';
-  time?: string;
-  completed?: boolean;
-  priority?: 'low' | 'medium' | 'high';
-  recurring?: boolean;
-}
+import { CalendarView, CalendarEntry, EntryType } from '@/utils/calendarUtils';
 
 export default function UnifiedCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [viewMode, setViewMode] = useState<CalendarView>('month');
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showEntryDialog, setShowEntryDialog] = useState(false);
   const queryClient = useQueryClient();
@@ -71,11 +59,9 @@ export default function UnifiedCalendar() {
         entries.push({
           id: task.id,
           title: task.title,
-          date: new Date(task.due_date),
-          type: 'task',
-          completed: task.status === 'completed',
-          priority: task.priority,
-          recurring: task.is_recurring
+          date: task.due_date,
+          type: EntryType.TASK,
+          priority: task.priority
         });
       }
     });
@@ -85,9 +71,8 @@ export default function UnifiedCalendar() {
       entries.push({
         id: reminder.id,
         title: reminder.title,
-        date: new Date(reminder.due_date),
-        type: 'reminder',
-        recurring: reminder.is_recurring
+        date: reminder.due_date,
+        type: EntryType.REMINDER
       });
     });
 
@@ -105,7 +90,7 @@ export default function UnifiedCalendar() {
     const today = new Date();
 
     return days.map(date => {
-      const dayEntries = calendarEntries.filter(entry => isSameDay(entry.date, date));
+      const dayEntries = calendarEntries.filter(entry => isSameDay(new Date(entry.date), date));
       
       return {
         date,
@@ -133,25 +118,41 @@ export default function UnifiedCalendar() {
     queryClient.invalidateQueries({ queryKey: ['reminders'] });
   };
 
+  const handleCloseAgenda = () => {
+    setViewMode('month');
+  };
+
+  const handleEditEntry = (entry: CalendarEntry) => {
+    // Handle editing entry
+    console.log('Edit entry:', entry);
+  };
+
   if (viewMode === 'agenda') {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">{t("calendar", language)}</h2>
           <div className="flex items-center gap-2">
-            <CalendarViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
+            <CalendarViewSwitcher view={viewMode} onViewChange={setViewMode} />
             <Button onClick={() => setShowEntryDialog(true)}>
               <Plus className="h-4 w-4 mr-2" />
               {t("add", language)}
             </Button>
           </div>
         </div>
-        <CalendarAgenda entries={calendarEntries} />
+        <CalendarAgenda 
+          date={selectedDate || new Date()}
+          entries={calendarEntries} 
+          onClose={handleCloseAgenda}
+          onEditEntry={handleEditEntry}
+        />
         <CalendarEntryDialog
           open={showEntryDialog}
           onOpenChange={setShowEntryDialog}
           selectedDate={selectedDate}
           onEntryCreated={handleEntryCreated}
+          entry={null}
+          onSave={handleEntryCreated}
         />
       </div>
     );
@@ -163,7 +164,7 @@ export default function UnifiedCalendar() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{t("calendar", language)}</h2>
         <div className="flex items-center gap-2">
-          <CalendarViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
+          <CalendarViewSwitcher view={viewMode} onViewChange={setViewMode} />
           <Button onClick={() => setShowEntryDialog(true)}>
             <Plus className="h-4 w-4 mr-2" />
             {t("add", language)}
@@ -238,10 +239,8 @@ export default function UnifiedCalendar() {
                       key={entry.id}
                       className={`
                         text-xs px-1 py-0.5 rounded truncate w-full text-left
-                        ${entry.type === 'task' 
-                          ? entry.completed 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        ${entry.type === EntryType.TASK 
+                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                           : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                         }
                       `}
@@ -266,6 +265,8 @@ export default function UnifiedCalendar() {
         onOpenChange={setShowEntryDialog}
         selectedDate={selectedDate}
         onEntryCreated={handleEntryCreated}
+        entry={null}
+        onSave={handleEntryCreated}
       />
     </div>
   );

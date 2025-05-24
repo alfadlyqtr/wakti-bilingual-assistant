@@ -11,31 +11,31 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 
 interface CalendarEntryDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSave: (entry: CalendarEntry | Omit<CalendarEntry, 'id'>) => void;
   onDelete?: (entryId: string) => void;
-  initialDate: Date;
+  selectedDate: Date | null;
   entry: CalendarEntry | null;
 }
 
 export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
-  isOpen,
-  onClose,
+  open,
+  onOpenChange,
   onSave,
   onDelete,
-  initialDate,
+  selectedDate,
   entry
 }) => {
   const { language } = useTheme();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState<Date | undefined>(initialDate);
+  const [date, setDate] = useState<Date | undefined>(selectedDate || new Date());
   const [error, setError] = useState<string | null>(null);
   
   // Reset form when dialog opens or entry changes
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       if (entry) {
         setTitle(entry.title);
         setDescription(entry.description || "");
@@ -43,11 +43,11 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
       } else {
         setTitle("");
         setDescription("");
-        setDate(initialDate);
+        setDate(selectedDate || new Date());
       }
       setError(null);
     }
-  }, [isOpen, entry, initialDate]);
+  }, [open, entry, selectedDate]);
   
   const handleSave = () => {
     // Validate form
@@ -80,7 +80,7 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
   };
   
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[450px]">
         <DialogHeader>
           <DialogTitle>
@@ -146,7 +146,7 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
             )}
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t("cancel", language)}
             </Button>
             <Button onClick={handleSave}>

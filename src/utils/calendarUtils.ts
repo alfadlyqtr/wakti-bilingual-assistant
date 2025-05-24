@@ -16,6 +16,25 @@ export interface CalendarItem {
   completed?: boolean;
 }
 
+export interface CalendarEntry {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;
+  type: EntryType;
+  due?: string;
+  priority?: 'urgent' | 'high' | 'medium' | 'low';
+}
+
+export type CalendarView = 'month' | 'week' | 'year' | 'agenda';
+
+export enum EntryType {
+  TASK = 'task',
+  EVENT = 'event',
+  REMINDER = 'reminder',
+  MANUAL_NOTE = 'manual_note'
+}
+
 export const generateCalendarDays = (currentDate: Date): CalendarDay[] => {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);

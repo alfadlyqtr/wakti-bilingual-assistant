@@ -13,7 +13,7 @@ interface CalendarWidgetProps {
   language: 'en' | 'ar';
 }
 
-export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, tasks, language }) => {
+const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, tasks, language }) => {
   const navigate = useNavigate();
 
   return (
@@ -77,3 +77,5 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     </div>
   );
 };
+
+export default CalendarWidget;
