@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -9,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Clock, MapPin, ArrowLeft, Save } from 'lucide-react';
+import { Calendar, Clock, MapPin, ArrowLeft, Save, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -27,6 +28,8 @@ const eventSchema = z.object({
   end_time: z.string().min(1, 'End time is required'),
   is_all_day: z.boolean().default(false),
   is_public: z.boolean().default(false),
+  rsvp_enabled: z.boolean().default(false),
+  rsvp_deadline: z.string().optional(),
 });
 
 type EventFormData = z.infer<typeof eventSchema>;
@@ -88,6 +91,7 @@ export default function EventEdit() {
     defaultValues: {
       is_all_day: false,
       is_public: false,
+      rsvp_enabled: false,
     },
   });
 
@@ -103,6 +107,8 @@ export default function EventEdit() {
         end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
         is_all_day: event.is_all_day || false,
         is_public: event.is_public || false,
+        rsvp_enabled: event.rsvp_enabled || false,
+        rsvp_deadline: event.rsvp_deadline ? new Date(event.rsvp_deadline).toISOString().slice(0, 16) : '',
       });
 
       // Set background data
@@ -125,6 +131,7 @@ export default function EventEdit() {
   }, [event, reset]);
 
   const isAllDay = watch('is_all_day');
+  const rsvpEnabled = watch('rsvp_enabled');
   const watchedTitle = watch('title');
   const watchedDescription = watch('description');
 
@@ -142,6 +149,8 @@ export default function EventEdit() {
         end_time: data.end_time,
         is_all_day: data.is_all_day,
         is_public: data.is_public,
+        rsvp_enabled: data.rsvp_enabled,
+        rsvp_deadline: data.rsvp_deadline || null,
         background_type: backgroundData.type,
         background_color: backgroundData.backgroundColor || null,
         background_gradient: backgroundData.backgroundGradient || null,
@@ -391,6 +400,41 @@ export default function EventEdit() {
                       id="is_public"
                       {...register('is_public')}
                     />
+                  </div>
+                  
+                  {/* RSVP Settings */}
+                  <div className="space-y-4 border-t pt-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label htmlFor="rsvp_enabled" className="flex items-center gap-2">
+                          <Users className="h-4 w-4" />
+                          {t("enableRsvp", language)}
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          {t("allowGuestRsvp", language)}
+                        </p>
+                      </div>
+                      <Switch
+                        id="rsvp_enabled"
+                        checked={rsvpEnabled}
+                        onCheckedChange={(checked) => setValue('rsvp_enabled', checked)}
+                      />
+                    </div>
+
+                    {rsvpEnabled && (
+                      <div>
+                        <Label htmlFor="rsvp_deadline">{t("rsvpDeadline", language)}</Label>
+                        <Input
+                          id="rsvp_deadline"
+                          type="datetime-local"
+                          {...register('rsvp_deadline')}
+                          placeholder="Optional RSVP deadline"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Leave empty for no deadline
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </form>

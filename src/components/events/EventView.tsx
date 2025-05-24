@@ -4,11 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, MapPin, Clock, Users, Share2, Calendar, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, MapPin, Clock, Users, Share2, Calendar, ExternalLink, Navigation } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import CalendarDropdown from './CalendarDropdown';
+import RSVPSection from './RSVPSection';
 
 interface Event {
   id: string;
@@ -33,6 +35,8 @@ interface Event {
   text_decoration?: 'none' | 'underline';
   font_family?: string;
   short_id?: string;
+  rsvp_enabled?: boolean;
+  rsvp_deadline?: string;
   created_at: string;
   updated_at: string;
 }
@@ -144,6 +148,14 @@ export default function EventView({ standalone = false }: EventViewProps) {
       navigator.clipboard.writeText(shareUrl);
       toast.success('Event link copied to clipboard');
     }
+  };
+
+  const handleGetDirections = () => {
+    if (!event?.location) return;
+    
+    const query = encodeURIComponent(event.location);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    window.open(mapsUrl, '_blank');
   };
 
   const handleBackNavigation = () => {
@@ -348,8 +360,33 @@ export default function EventView({ standalone = false }: EventViewProps) {
           </div>
         </div>
 
+        {/* Action Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <CalendarDropdown event={event} />
+          
+          {event.location && (
+            <Button 
+              variant="outline" 
+              onClick={handleGetDirections}
+              className="flex items-center gap-2"
+            >
+              <Navigation className="h-4 w-4" />
+              {t("getDirections", language)}
+            </Button>
+          )}
+
+          <Button 
+            variant="outline" 
+            onClick={handleShare}
+            className="flex items-center gap-2"
+          >
+            <Share2 className="h-4 w-4" />
+            {t("share", language)}
+          </Button>
+        </div>
+
         {/* Event Details */}
-        <Card>
+        <Card className="mb-6">
           <CardContent className="p-6 space-y-4">
             {/* Date and Time */}
             <div className="flex items-start gap-3">
@@ -395,7 +432,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
               <div>
                 <p className="font-medium">{t("events", language)}</p>
                 <Badge variant={event.is_public ? "default" : "secondary"}>
-                  {event.is_public ? t("publicEvent", language) : t("events", language)}
+                  {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
                 </Badge>
               </div>
             </div>
@@ -412,6 +449,14 @@ export default function EventView({ standalone = false }: EventViewProps) {
             </div>
           </CardContent>
         </Card>
+
+        {/* RSVP Section */}
+        <RSVPSection 
+          eventId={event.id}
+          rsvpEnabled={event.rsvp_enabled || false}
+          rsvpDeadline={event.rsvp_deadline}
+          isPublic={event.is_public}
+        />
 
         {/* Standalone footer */}
         {standalone && (

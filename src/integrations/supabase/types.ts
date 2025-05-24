@@ -263,6 +263,8 @@ export type Database = {
           is_public: boolean | null
           location: string | null
           location_link: string | null
+          rsvp_deadline: string | null
+          rsvp_enabled: boolean | null
           short_id: string | null
           start_time: string
           text_align: string | null
@@ -291,6 +293,8 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
+          rsvp_deadline?: string | null
+          rsvp_enabled?: boolean | null
           short_id?: string | null
           start_time: string
           text_align?: string | null
@@ -319,6 +323,8 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
+          rsvp_deadline?: string | null
+          rsvp_enabled?: boolean | null
           short_id?: string | null
           start_time?: string
           text_align?: string | null
