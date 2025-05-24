@@ -23,6 +23,16 @@ interface Contact {
   avatar_url?: string;
 }
 
+interface ContactQueryResult {
+  contact_id: string;
+  profiles: {
+    id: string;
+    display_name: string;
+    username: string;
+    avatar_url?: string;
+  } | null;
+}
+
 interface ContactSharingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -59,19 +69,21 @@ export default function ContactSharingDialog({
           )
         `)
         .eq('user_id', userData.user.id)
-        .eq('status', 'approved');
+        .eq('status', 'approved') as { data: ContactQueryResult[] | null, error: any };
 
       if (error) {
         console.error('Error fetching contacts:', error);
         return [];
       }
 
-      return (data || []).map(contact => ({
-        id: contact.contact_id,
-        display_name: contact.profiles?.display_name || contact.profiles?.username || 'Unknown',
-        username: contact.profiles?.username || '',
-        avatar_url: contact.profiles?.avatar_url
-      }));
+      return (data || [])
+        .filter(contact => contact.profiles !== null)
+        .map(contact => ({
+          id: contact.contact_id,
+          display_name: contact.profiles!.display_name || contact.profiles!.username || 'Unknown',
+          username: contact.profiles!.username || '',
+          avatar_url: contact.profiles!.avatar_url
+        }));
     },
     enabled: open
   });
