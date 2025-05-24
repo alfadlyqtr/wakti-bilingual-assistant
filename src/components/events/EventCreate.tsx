@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -88,6 +89,8 @@ export default function EventCreate() {
     try {
       setIsLoading(true);
       console.log('Starting event creation with data:', data);
+      console.log('Background data:', backgroundData);
+      console.log('Text style data:', textStyleData);
 
       // Get current user
       const { data: userData, error: userError } = await supabase.auth.getUser();
@@ -163,6 +166,7 @@ export default function EventCreate() {
   };
 
   const handleBackgroundChange = (background: BackgroundData) => {
+    console.log('Background changed:', background);
     setBackgroundData(background);
   };
 

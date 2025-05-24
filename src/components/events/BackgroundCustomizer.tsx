@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -114,7 +115,8 @@ export default function BackgroundCustomizer({
       // Create a more detailed prompt including event context
       const fullPrompt = `${aiPrompt}. Event: "${eventTitle}"${eventDescription ? `. ${eventDescription}` : ''}. Professional event background, high quality, suitable for text overlay.`;
       
-      console.log('Generating AI image with prompt:', fullPrompt);
+      console.log('Starting AI image generation...');
+      console.log('Full prompt:', fullPrompt);
 
       const { data, error } = await supabase.functions.invoke('generate-event-image', {
         body: { 
@@ -125,13 +127,28 @@ export default function BackgroundCustomizer({
         }
       });
 
+      console.log('Edge function response:', { data, error });
+
       if (error) {
-        console.error('AI generation error:', error);
-        toast.error(`Failed to generate AI image: ${error.message}`);
+        console.error('Edge function error:', error);
+        toast.error(`AI generation failed: ${error.message || 'Unknown error'}`);
         return;
       }
 
-      if (data?.imageUrl) {
+      if (!data) {
+        console.error('No data returned from edge function');
+        toast.error('No response from AI service');
+        return;
+      }
+
+      if (data.error) {
+        console.error('AI service error:', data.error);
+        toast.error(`AI service error: ${data.error}`);
+        return;
+      }
+
+      if (data.imageUrl) {
+        console.log('AI image generated successfully:', data.imageUrl);
         onBackgroundChange({
           type: 'ai',
           backgroundImage: data.imageUrl
@@ -139,11 +156,12 @@ export default function BackgroundCustomizer({
         toast.success(`Image generated successfully${data.provider ? ` via ${data.provider}` : ''}`);
         setAiPrompt('');
       } else {
+        console.error('No image URL in response:', data);
         toast.error('No image was generated. Please try again.');
       }
     } catch (error) {
-      console.error('Error generating AI image:', error);
-      toast.error('Failed to generate AI image. Please try again.');
+      console.error('Unexpected error generating AI image:', error);
+      toast.error('Failed to generate AI image. Please check your connection and try again.');
     } finally {
       setIsGenerating(false);
     }
