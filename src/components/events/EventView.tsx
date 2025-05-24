@@ -164,14 +164,21 @@ export default function EventView({ standalone = false }: EventViewProps) {
       return date.toLocaleDateString();
     }
     
-    // For timed events, convert UTC to local time and format
+    // For timed events, convert UTC to local time and format in 12-hour format
     try {
       // The dateTime from database is in UTC, convert to local for display
       const utcDate = new Date(dateTime);
       console.log('UTC date from database:', utcDate.toISOString());
       
-      // Display in local time
-      const localDateTime = utcDate.toLocaleString();
+      // Display in local time with 12-hour format
+      const localDateTime = utcDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
       console.log('Formatted local time for display:', localDateTime);
       
       return localDateTime;
