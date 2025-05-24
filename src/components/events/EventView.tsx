@@ -291,9 +291,9 @@ export default function EventView() {
             <div className="flex items-center gap-3">
               <Users className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">{t("eventType", language)}</p>
+                <p className="font-medium">{t("events", language)}</p>
                 <Badge variant={event.is_public ? "default" : "secondary"}>
-                  {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
+                  {event.is_public ? t("publicEvent", language) : t("events", language)}
                 </Badge>
               </div>
             </div>
@@ -302,7 +302,7 @@ export default function EventView() {
             <div className="flex items-center gap-3">
               <Calendar className="h-5 w-5 text-muted-foreground" />
               <div>
-                <p className="font-medium">{t("created", language)}</p>
+                <p className="font-medium">{t("eventCreated", language)}</p>
                 <p className="text-sm text-muted-foreground">
                   {new Date(event.created_at).toLocaleDateString()}
                 </p>
