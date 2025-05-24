@@ -42,10 +42,11 @@ export default function Events() {
     console.log(`Fetching ${type} events for user:`, userData.user.id);
     console.log('Time filter:', timeFilter);
     
-    // Simplified query - RLS policy handles access control
+    // Restore original working query with explicit filtering
     const { data, error } = await supabase
       .from("events")
       .select("*")
+      .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
       .filter(timeFilter[0], timeFilter[1] as any, timeFilter[2])
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       

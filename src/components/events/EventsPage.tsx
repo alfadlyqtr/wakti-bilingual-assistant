@@ -48,10 +48,11 @@ export default function EventsPage() {
 
       console.log('Authenticated user:', userData.user.id);
 
-      // Simplified query that matches the RLS policy: created_by = auth.uid() OR is_public = true
+      // Restore original working query with explicit filtering
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
         .order('start_time', { ascending: true });
 
       if (error) {
