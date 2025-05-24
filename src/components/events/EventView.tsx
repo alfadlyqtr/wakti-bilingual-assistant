@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -57,73 +58,63 @@ export default function EventView({ standalone = false }: EventViewProps) {
 
   const fetchEvent = async () => {
     try {
-      console.log('DEBUG: Fetching event with ID:', id);
-      console.log('DEBUG: Standalone mode:', standalone);
+      console.log('Fetching event with ID:', id);
+      console.log('Standalone mode:', standalone);
       
       setError(null);
       
       // Check if the ID looks like a UUID (contains hyphens and is 36 chars)
       const isUuid = id && id.includes('-') && id.length === 36;
-      console.log('DEBUG: Is UUID?', isUuid);
+      console.log('Is UUID?', isUuid);
       
       let query = supabase.from('events').select('*');
       
       if (isUuid) {
-        console.log('DEBUG: Querying by UUID');
+        console.log('Querying by UUID');
         query = query.eq('id', id);
       } else {
-        console.log('DEBUG: Querying by short_id');
+        console.log('Querying by short_id');
         query = query.eq('short_id', id);
       }
       
-      console.log('DEBUG: About to execute query');
       const { data, error: queryError } = await query.maybeSingle();
       
-      console.log('DEBUG: Query result:', { data, error: queryError });
+      console.log('Query result:', { data, error: queryError });
 
       if (queryError) {
-        console.error('DEBUG: Database error:', queryError);
+        console.error('Database error:', queryError);
         setError(`Database error: ${queryError.message}`);
         toast.error('Failed to load event');
-        if (!standalone) {
-          navigate('/events');
-        }
         return;
       }
 
       if (!data) {
-        console.log('DEBUG: No event found');
+        console.log('No event found');
         setError('Event not found in database');
         toast.error('Event not found');
-        if (!standalone) {
-          navigate('/events');
-        }
         return;
       }
 
-      console.log('DEBUG: Event data loaded successfully:', data);
+      console.log('Event data loaded successfully:', data);
       setEvent(data);
 
       // Check if current user is the owner (only for non-standalone mode)
       if (!standalone) {
         try {
           const { data: userData } = await supabase.auth.getUser();
-          console.log('DEBUG: User data for ownership check:', userData);
+          console.log('User data for ownership check:', userData);
           if (userData.user) {
             setIsOwner(userData.user.id === data.created_by);
           }
         } catch (authError) {
-          console.log('DEBUG: Auth error (non-critical):', authError);
+          console.log('Auth error (non-critical):', authError);
           // Auth errors are non-critical for public events
         }
       }
     } catch (error) {
-      console.error('DEBUG: Unexpected error fetching event:', error);
+      console.error('Unexpected error fetching event:', error);
       setError(`Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       toast.error('An unexpected error occurred');
-      if (!standalone) {
-        navigate('/events');
-      }
     } finally {
       setLoading(false);
     }
