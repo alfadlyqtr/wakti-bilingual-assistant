@@ -71,7 +71,7 @@ export default function ContactSharingDialog({
         display_name: contact.profiles?.display_name || contact.profiles?.username || 'Unknown',
         username: contact.profiles?.username || '',
         avatar_url: contact.profiles?.avatar_url
-      })) as Contact[];
+      }));
     },
     enabled: open
   });
