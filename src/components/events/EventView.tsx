@@ -103,38 +103,27 @@ export default function EventView({ standalone = false }: EventViewProps) {
       console.log('Event data loaded successfully:', data);
       setEvent(data);
 
-      // Fetch creator's profile with proper field handling
+      // Fetch creator's profile - only select existing columns
       if (data.created_by) {
         console.log('Fetching creator profile for ID:', data.created_by);
         
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('display_name, username, first_name, last_name')
+          .select('display_name, username, email')
           .eq('id', data.created_by)
           .single();
         
         console.log('Profile query result:', { profileData, error: profileError });
         
         if (profileData && !profileError) {
-          // Prioritize display_name, then construct from first/last name, then username
-          let displayName = profileData.display_name;
-          
-          if (!displayName && profileData.first_name && profileData.last_name) {
-            displayName = `${profileData.first_name} ${profileData.last_name}`.trim();
-          } else if (!displayName && profileData.first_name) {
-            displayName = profileData.first_name;
-          } else if (!displayName && profileData.username) {
-            displayName = profileData.username;
-          }
-          
-          const finalName = displayName || 'Unknown User';
+          // Prioritize display_name, then username, then email
+          const finalName = profileData.display_name || profileData.username || profileData.email || 'Unknown User';
           setCreatorName(finalName);
           console.log('Creator name set to:', finalName);
           console.log('Profile data breakdown:', {
             display_name: profileData.display_name,
-            first_name: profileData.first_name,
-            last_name: profileData.last_name,
             username: profileData.username,
+            email: profileData.email,
             final_name: finalName
           });
         } else {
