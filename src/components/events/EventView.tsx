@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -381,19 +380,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
           style={getBackgroundStyle()}
         >
           <div style={getTextStyle()}>
-            {/* Show creator name above title ONLY for guest view */}
-            {isGuestView && creatorName && (
-              <p 
-                className="text-white/90 mb-4 font-medium"
-                style={{ 
-                  fontSize: `${Math.max((event.font_size || 24) * 0.5, 12)}px`,
-                  textShadow: '0 0 2px rgba(0,0,0,0.025), 1px 1px 2px rgba(0,0,0,0.025)'
-                }}
-              >
-                Created by {creatorName}
-              </p>
-            )}
-            
             <h1 
               className="mb-4 leading-tight"
               style={{ 

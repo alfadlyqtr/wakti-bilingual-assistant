@@ -31,7 +31,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
-  const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | 'maybe' | null>(null);
+  const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showThankYou, setShowThankYou] = useState(false);
@@ -175,7 +175,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Response Buttons - Much more visible styling */}
+          {/* Response Buttons - Only Accept and Decline */}
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-4">
               <Button
@@ -205,7 +205,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
             </div>
           </div>
 
-          {/* Guest Name Only (for non-authenticated users) - Enhanced visibility */}
+          {/* Guest Name Only (for non-authenticated users) */}
           {!user && selectedResponse && (
             <div className="space-y-3">
               <div>
@@ -232,7 +232,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
             </div>
           )}
 
-          {/* Submit Button - Much more visible */}
+          {/* Submit Button */}
           {selectedResponse && (
             <Button 
               onClick={submitRSVP} 
