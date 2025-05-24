@@ -66,7 +66,7 @@ export default function ContactSharingDialog({
         return [];
       }
 
-      return data.map(contact => ({
+      return (data || []).map(contact => ({
         id: contact.contact_id,
         display_name: contact.profiles?.display_name || contact.profiles?.username || 'Unknown',
         username: contact.profiles?.username || '',
