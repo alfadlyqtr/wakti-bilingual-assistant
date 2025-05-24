@@ -147,9 +147,9 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
 
   const deadlinePassed = rsvpDeadline && new Date() > new Date(rsvpDeadline);
   
-  const goingCount = rsvps.filter(r => r.response === 'going').length;
-  const notGoingCount = rsvps.filter(r => r.response === 'not_going').length;
-  const maybeCount = rsvps.filter(r => r.response === 'maybe').length;
+  // Filter to show only accepted and declined responses (not maybe)
+  const goingRsvps = rsvps.filter(r => r.response === 'going');
+  const notGoingRsvps = rsvps.filter(r => r.response === 'not_going');
 
   return (
     <Card>
@@ -241,24 +241,52 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
           </div>
         )}
 
-        {/* RSVP Summary */}
-        {rsvps.length > 0 && (
+        {/* RSVP Summary - Only show accepted and declined */}
+        {(goingRsvps.length > 0 || notGoingRsvps.length > 0) && (
           <div className="space-y-3 border-t pt-4">
             <h4 className="font-medium">{t("rsvpResponses", language)}</h4>
             <div className="flex gap-4">
-              <Badge variant="default" className="flex items-center gap-1">
-                <CheckCircle className="h-3 w-3" />
-                {goingCount} {t("peopleGoing", language)}
-              </Badge>
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <HelpCircle className="h-3 w-3" />
-                {maybeCount} {t("peopleMaybe", language)}
-              </Badge>
-              <Badge variant="outline" className="flex items-center gap-1">
-                <XCircle className="h-3 w-3" />
-                {notGoingCount} {t("peopleNotGoing", language)}
-              </Badge>
+              {goingRsvps.length > 0 && (
+                <Badge variant="default" className="flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  {goingRsvps.length} {t("peopleGoing", language)}
+                </Badge>
+              )}
+              {notGoingRsvps.length > 0 && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <XCircle className="h-3 w-3" />
+                  {notGoingRsvps.length} {t("peopleNotGoing", language)}
+                </Badge>
+              )}
             </div>
+
+            {/* Show names of people who accepted */}
+            {goingRsvps.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-green-600">Who's Going:</p>
+                <div className="space-y-1">
+                  {goingRsvps.map((rsvp) => (
+                    <p key={rsvp.id} className="text-sm text-muted-foreground">
+                      • {rsvp.guest_name || 'Anonymous User'}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Show names of people who declined */}
+            {notGoingRsvps.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-red-600">Who Declined:</p>
+                <div className="space-y-1">
+                  {notGoingRsvps.map((rsvp) => (
+                    <p key={rsvp.id} className="text-sm text-muted-foreground">
+                      • {rsvp.guest_name || 'Anonymous User'}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

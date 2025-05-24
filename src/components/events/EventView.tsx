@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -363,7 +364,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           </div>
         )}
 
-        {/* Creator Name Above Card - More Visible */}
+        {/* Creator Name Above Card - Only for guest view */}
         {isGuestView && creatorName && (
           <div className="mb-4 text-center">
             <div className="inline-block bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border border-gray-200">
@@ -374,13 +375,13 @@ export default function EventView({ standalone = false }: EventViewProps) {
           </div>
         )}
 
-        {/* Event Header with Enhanced Text Shadows */}
+        {/* Event Header */}
         <div 
           className="rounded-lg mb-6 p-8 text-center relative overflow-hidden"
           style={getBackgroundStyle()}
         >
           <div style={getTextStyle()}>
-            {/* Show creator name above title for guest view */}
+            {/* Show creator name above title ONLY for guest view */}
             {isGuestView && creatorName && (
               <p 
                 className="text-white/90 mb-4 font-medium"
@@ -460,17 +461,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
         {isOwner && (
           <Card className="mb-6">
             <CardContent className="p-6 space-y-4">
-              {/* Show creator name above date/time for creator view */}
-              {creatorName && (
-                <div className="flex items-start gap-3">
-                  <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium">Created by</p>
-                    <p className="text-sm text-muted-foreground">{creatorName}</p>
-                  </div>
-                </div>
-              )}
-
               {/* Date and Time */}
               <div className="flex items-start gap-3">
                 <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />

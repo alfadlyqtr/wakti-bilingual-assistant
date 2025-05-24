@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Check } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -34,6 +34,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | 'maybe' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [showThankYou, setShowThankYou] = useState(false);
 
   useEffect(() => {
     checkUser();
@@ -115,7 +116,11 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
 
       if (result.error) throw result.error;
 
-      toast.success(t("responseSubmitted", language));
+      // Show thank you popup
+      setShowThankYou(true);
+      setTimeout(() => {
+        setShowThankYou(false);
+      }, 2000);
       
       // Update local state
       setUserRsvp(result.data);
@@ -140,6 +145,16 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
 
   return (
     <div className="space-y-4 border-t border-white/40 pt-6 mt-6">
+      {/* Thank You Popup */}
+      {showThankYou && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="bg-green-600 text-white px-8 py-4 rounded-lg shadow-2xl flex items-center gap-3 animate-in fade-in-0 zoom-in-95">
+            <Check className="h-6 w-6" />
+            <span className="text-lg font-bold">Thank you for your response!</span>
+          </div>
+        </div>
+      )}
+
       {rsvpDeadline && (
         <div className="flex items-center justify-center gap-2 text-sm text-white/90">
           <Clock className="h-4 w-4" />
