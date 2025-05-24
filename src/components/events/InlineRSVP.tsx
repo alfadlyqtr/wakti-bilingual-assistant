@@ -20,7 +20,7 @@ interface InlineRSVPProps {
 
 interface RSVPResponse {
   id: string;
-  response: 'going' | 'not_going';
+  response: 'accepted' | 'declined';
   guest_name?: string;
   user_id?: string;
   created_at: string;
@@ -30,7 +30,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
-  const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | null>(null);
+  const [selectedResponse, setSelectedResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [showThankYou, setShowThankYou] = useState(false);
@@ -243,26 +243,26 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
           {/* Response Buttons */}
           <div className="grid grid-cols-2 gap-4">
             <Button
-              variant={selectedResponse === 'going' ? 'default' : 'outline'}
-              onClick={() => setSelectedResponse('going')}
+              variant={selectedResponse === 'accepted' ? 'default' : 'outline'}
+              onClick={() => setSelectedResponse('accepted')}
               className="flex items-center gap-2 py-4 text-base font-bold bg-green-600 hover:bg-green-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
               style={{ 
                 boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
                 textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                opacity: selectedResponse === 'going' ? 1 : 0.8
+                opacity: selectedResponse === 'accepted' ? 1 : 0.8
               }}
             >
               <CheckCircle className="h-5 w-5" />
               Accept
             </Button>
             <Button
-              variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
-              onClick={() => setSelectedResponse('not_going')}
+              variant={selectedResponse === 'declined' ? 'default' : 'outline'}
+              onClick={() => setSelectedResponse('declined')}
               className="flex items-center gap-2 py-4 text-base font-bold bg-red-600 hover:bg-red-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
               style={{ 
                 boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
                 textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
-                opacity: selectedResponse === 'not_going' ? 1 : 0.8
+                opacity: selectedResponse === 'declined' ? 1 : 0.8
               }}
             >
               <XCircle className="h-5 w-5" />

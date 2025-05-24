@@ -17,7 +17,7 @@ interface RSVPSectionProps {
 
 interface RSVPResponse {
   id: string;
-  response: 'going' | 'not_going';
+  response: 'accepted' | 'declined';
   guest_name?: string;
   user_id?: string;
   created_at: string;
@@ -75,8 +75,8 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
   }
 
   // Only show accepted and declined responses
-  const goingRsvps = rsvps.filter(r => r.response === 'going');
-  const notGoingRsvps = rsvps.filter(r => r.response === 'not_going');
+  const acceptedRsvps = rsvps.filter(r => r.response === 'accepted');
+  const declinedRsvps = rsvps.filter(r => r.response === 'declined');
 
   return (
     <Card>
@@ -109,20 +109,20 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
         <div className="flex gap-4">
           <Badge variant="default" className="flex items-center gap-1">
             <CheckCircle className="h-3 w-3" />
-            {goingRsvps.length} Accepted
+            {acceptedRsvps.length} Accepted
           </Badge>
           <Badge variant="outline" className="flex items-center gap-1">
             <XCircle className="h-3 w-3" />
-            {notGoingRsvps.length} Declined
+            {declinedRsvps.length} Declined
           </Badge>
         </div>
 
         {/* Show names of people who accepted */}
-        {goingRsvps.length > 0 && (
+        {acceptedRsvps.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium text-green-600">Who's Going:</p>
             <div className="space-y-1">
-              {goingRsvps.map((rsvp) => (
+              {acceptedRsvps.map((rsvp) => (
                 <p key={rsvp.id} className="text-sm text-muted-foreground">
                   • {rsvp.guest_name || 'Anonymous User'}
                 </p>
@@ -132,11 +132,11 @@ export default function RSVPSection({ eventId, rsvpEnabled, rsvpDeadline, isPubl
         )}
 
         {/* Show names of people who declined */}
-        {notGoingRsvps.length > 0 && (
+        {declinedRsvps.length > 0 && (
           <div className="space-y-2">
             <p className="text-sm font-medium text-red-600">Who Declined:</p>
             <div className="space-y-1">
-              {notGoingRsvps.map((rsvp) => (
+              {declinedRsvps.map((rsvp) => (
                 <p key={rsvp.id} className="text-sm text-muted-foreground">
                   • {rsvp.guest_name || 'Anonymous User'}
                 </p>
