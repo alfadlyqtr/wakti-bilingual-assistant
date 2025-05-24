@@ -380,11 +380,4 @@ export const en: Record<TranslationKey, string> = {
   // NEW MISSING KEYS
   pleaseEnterYourName: "Please enter your name",
   responseSubmitted: "Response submitted successfully",
-  invited: "Invited",
-  shareWithContacts: "Share with Contacts",
-  selectContactsToInvite: "Select contacts to invite to",
-  noContactsFound: "No contacts found",
-  sendInvitations: "Send Invitations",
-  invitationsSent: "Invitations sent successfully",
-  errorSendingInvitations: "Error sending invitations",
 } as const;

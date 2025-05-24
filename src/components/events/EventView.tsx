@@ -12,7 +12,6 @@ import { utcToLocalDateTime } from '@/utils/timeUtils';
 import CalendarDropdown from './CalendarDropdown';
 import RSVPSection from './RSVPSection';
 import InlineRSVP from './InlineRSVP';
-import ContactSharingDialog from './ContactSharingDialog';
 
 interface Event {
   id: string;
@@ -56,7 +55,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
   const [isOwner, setIsOwner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState<string | null>(null);
-  const [showContactSharing, setShowContactSharing] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -191,15 +189,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
   };
 
   const handleShare = async () => {
-    if (!event) return;
-
-    // For private events owned by the user, show contact sharing dialog
-    if (!event.is_public && isOwner) {
-      setShowContactSharing(true);
-      return;
-    }
-
-    // For public events, use the existing link sharing
     const shareUrl = event?.short_id 
       ? `${window.location.origin}/wakti/${event.short_id}`
       : window.location.href;
@@ -452,7 +441,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
           </div>
         </div>
 
-        {/* Action Buttons - updated for private event sharing */}
+        {/* Action Buttons - different for creator vs guest */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <CalendarDropdown event={event} />
           
@@ -467,7 +456,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
             </Button>
           )}
 
-          {/* Share button - different behavior for private vs public events */}
+          {/* Only show share button for creators or in non-standalone guest view */}
           {(isOwner || !standalone) && (
             <Button 
               variant="outline" 
@@ -475,7 +464,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
               className="flex items-center gap-2"
             >
               <Share2 className="h-4 w-4" />
-              {event.is_public ? t("share", language) : t("shareWithContacts", language)}
+              {t("share", language)}
             </Button>
           )}
         </div>

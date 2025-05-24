@@ -375,11 +375,4 @@ export const ar: Record<TranslationKey, string> = {
   // NEW MISSING KEYS
   pleaseEnterYourName: "يرجى إدخال اسمك",
   responseSubmitted: "تم إرسال الرد بنجاح",
-  invited: "مدعو",
-  shareWithContacts: "مشاركة مع جهات الاتصال",
-  selectContactsToInvite: "اختر جهات الاتصال للدعوة إلى",
-  noContactsFound: "لم يتم العثور على جهات اتصال",
-  sendInvitations: "إرسال الدعوات",
-  invitationsSent: "تم إرسال الدعوات بنجاح",
-  errorSendingInvitations: "خطأ في إرسال الدعوات",
 } as const;
