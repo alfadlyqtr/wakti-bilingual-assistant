@@ -289,7 +289,7 @@ export type Database = {
           button_style: string | null
           cover_image: string | null
           created_at: string | null
-          created_by: string | null
+          created_by: string
           description: string | null
           end_time: string
           font_family: string | null
@@ -319,7 +319,7 @@ export type Database = {
           button_style?: string | null
           cover_image?: string | null
           created_at?: string | null
-          created_by?: string | null
+          created_by: string
           description?: string | null
           end_time: string
           font_family?: string | null
@@ -349,7 +349,7 @@ export type Database = {
           button_style?: string | null
           cover_image?: string | null
           created_at?: string | null
-          created_by?: string | null
+          created_by?: string
           description?: string | null
           end_time?: string
           font_family?: string | null
