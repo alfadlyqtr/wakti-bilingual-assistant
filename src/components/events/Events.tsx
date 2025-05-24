@@ -31,7 +31,7 @@ export default function Events() {
     
     if (userError || !userData.user) {
       console.log('No authenticated user found');
-      return [];
+      throw new Error('Authentication required');
     }
 
     const now = new Date().toISOString();
@@ -42,11 +42,10 @@ export default function Events() {
     console.log(`Fetching ${type} events for user:`, userData.user.id);
     console.log('Time filter:', timeFilter);
     
-    // Fetch events that the user created OR public events
+    // Simplified query - RLS policy handles access control
     const { data, error } = await supabase
       .from("events")
       .select("*")
-      .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
       .filter(timeFilter[0], timeFilter[1] as any, timeFilter[2])
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       

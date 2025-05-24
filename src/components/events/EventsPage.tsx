@@ -41,22 +41,22 @@ export default function EventsPage() {
       
       if (userError || !userData.user) {
         console.log('No authenticated user found');
+        toast.error('Please log in to view events');
         setEvents([]);
         return;
       }
 
       console.log('Authenticated user:', userData.user.id);
 
-      // With the new RLS policies, we can fetch events that the user created OR public events
+      // Simplified query that matches the RLS policy: created_by = auth.uid() OR is_public = true
       const { data, error } = await supabase
         .from('events')
         .select('*')
-        .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
         .order('start_time', { ascending: true });
 
       if (error) {
         console.error('Error fetching events:', error);
-        toast.error('Failed to load events');
+        toast.error(`Failed to load events: ${error.message}`);
         return;
       }
 
@@ -64,7 +64,7 @@ export default function EventsPage() {
       setEvents(data || []);
     } catch (error) {
       console.error('Unexpected error:', error);
-      toast.error('An unexpected error occurred');
+      toast.error('An unexpected error occurred while loading events');
     } finally {
       setLoading(false);
     }
