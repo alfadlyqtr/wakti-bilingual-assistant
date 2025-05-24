@@ -69,27 +69,41 @@ export default function CalendarDropdown({ event }: CalendarDropdownProps) {
       return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     };
 
+    const escapeText = (text: string) => {
+      return text.replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    };
+
     const icsContent = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//WAKTI//EN',
+      'PRODID:-//WAKTI//Event Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
       'BEGIN:VEVENT',
       `UID:${Date.now()}@wakti.app`,
       `DTSTART:${formatICSDate(startDate)}`,
       `DTEND:${formatICSDate(endDate)}`,
-      `SUMMARY:${event.title}`,
-      `DESCRIPTION:${event.description || ''}`,
-      `LOCATION:${event.location || ''}`,
+      `SUMMARY:${escapeText(event.title)}`,
+      event.description ? `DESCRIPTION:${escapeText(event.description)}` : '',
+      event.location ? `LOCATION:${escapeText(event.location)}` : '',
+      `CREATED:${formatICSDate(new Date())}`,
+      `DTSTAMP:${formatICSDate(new Date())}`,
+      'STATUS:CONFIRMED',
+      'SEQUENCE:0',
       'END:VEVENT',
       'END:VCALENDAR'
-    ].join('\r\n');
+    ].filter(line => line !== '').join('\r\n');
 
-    const blob = new Blob([icsContent], { type: 'text/calendar' });
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `${event.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.ics`;
+    link.style.display = 'none';
+    
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
@@ -121,7 +135,7 @@ export default function CalendarDropdown({ event }: CalendarDropdownProps) {
           className="flex items-center gap-2"
         >
           <Download className="h-4 w-4" />
-          Apple Calendar
+          Apple Calendar (.ics)
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
