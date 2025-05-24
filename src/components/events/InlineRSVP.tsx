@@ -14,6 +14,7 @@ interface InlineRSVPProps {
   rsvpEnabled: boolean;
   rsvpDeadline?: string;
   isPublic: boolean;
+  guestEmail?: string;
 }
 
 interface RSVPResponse {
@@ -25,11 +26,11 @@ interface RSVPResponse {
   created_at: string;
 }
 
-export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic }: InlineRSVPProps) {
+export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic, guestEmail }: InlineRSVPProps) {
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
+  const [guestEmailInput, setGuestEmailInput] = useState(guestEmail || '');
   const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | 'maybe' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -78,7 +79,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
     }
 
     // Validate guest info for non-authenticated users
-    if (!user && (!guestName.trim() || !guestEmail.trim())) {
+    if (!user && (!guestName.trim() || !guestEmailInput.trim())) {
       toast.error(t("pleaseCompleteAllRequiredFields", language));
       return;
     }
@@ -91,7 +92,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         response: selectedResponse,
         user_id: user?.id || null,
         guest_name: user ? null : guestName.trim(),
-        guest_email: user ? null : guestEmail.trim(),
+        guest_email: user ? null : guestEmailInput.trim(),
       };
 
       let result;
@@ -122,7 +123,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
       // Clear guest fields if they were used
       if (!user) {
         setGuestName('');
-        setGuestEmail('');
+        setGuestEmailInput('');
       }
     } catch (error: any) {
       console.error('Error submitting RSVP:', error);
@@ -198,7 +199,6 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder={t("yourName", language)}
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                  size="sm"
                 />
               </div>
               <div>
@@ -206,11 +206,10 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
                 <Input
                   id="guest_email"
                   type="email"
-                  value={guestEmail}
-                  onChange={(e) => setGuestEmail(e.target.value)}
+                  value={guestEmailInput}
+                  onChange={(e) => setGuestEmailInput(e.target.value)}
                   placeholder={t("yourEmail", language)}
                   className="bg-white/10 border-white/20 text-white placeholder:text-white/60"
-                  size="sm"
                 />
               </div>
             </div>
@@ -222,7 +221,6 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
               onClick={submitRSVP} 
               disabled={submitting}
               className="w-full bg-white/20 hover:bg-white/30 text-white border-white/20"
-              size="sm"
             >
               {submitting ? t("loading", language) : t("submitRsvp", language)}
             </Button>
