@@ -35,9 +35,23 @@ export default function EventsPage() {
 
   const fetchEvents = async () => {
     try {
+      console.log('Fetching events...');
+      
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData.user) {
+        console.log('No authenticated user found');
+        setEvents([]);
+        return;
+      }
+
+      console.log('Authenticated user:', userData.user.id);
+
+      // With the new RLS policies, we can fetch events that the user created OR public events
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
         .order('start_time', { ascending: true });
 
       if (error) {
@@ -46,6 +60,7 @@ export default function EventsPage() {
         return;
       }
 
+      console.log('Successfully fetched events:', data);
       setEvents(data || []);
     } catch (error) {
       console.error('Unexpected error:', error);

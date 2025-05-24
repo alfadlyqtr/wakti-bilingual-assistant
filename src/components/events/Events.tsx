@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,8 @@ export default function Events() {
   useRsvpNotifications();
   
   const fetchEvents = async (type: "upcoming" | "past") => {
+    console.log(`Fetching ${type} events...`);
+    
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
     if (userError || !userData.user) {
@@ -32,47 +35,61 @@ export default function Events() {
     }
 
     const now = new Date().toISOString();
-    const queryConstraint = type === "upcoming" 
-      ? { column: "start_time", operator: "gt", value: now }
-      : { column: "end_time", operator: "lt", value: now };
+    const timeFilter = type === "upcoming" 
+      ? ["start_time", "gt", now]
+      : ["end_time", "lt", now];
       
     console.log(`Fetching ${type} events for user:`, userData.user.id);
+    console.log('Time filter:', timeFilter);
     
+    // Fetch events that the user created OR public events
     const { data, error } = await supabase
       .from("events")
       .select("*")
       .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
-      .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
+      .filter(timeFilter[0], timeFilter[1] as any, timeFilter[2])
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       
     if (error) {
-      console.error("Error fetching events:", error);
+      console.error(`Error fetching ${type} events:`, error);
       throw new Error(`Failed to fetch ${type} events: ${error.message}`);
     }
     
-    console.log(`Found ${data?.length || 0} ${type} events`);
+    console.log(`Successfully fetched ${data?.length || 0} ${type} events:`, data);
     return data || [];
   };
   
   const { 
     data: upcomingEvents = [], 
-    isLoading: isLoadingUpcoming 
+    isLoading: isLoadingUpcoming,
+    error: upcomingError
   } = useQuery({
     queryKey: ["events", "upcoming"],
-    queryFn: () => fetchEvents("upcoming")
+    queryFn: () => fetchEvents("upcoming"),
+    retry: 2
   });
   
   const { 
     data: pastEvents = [], 
-    isLoading: isLoadingPast 
+    isLoading: isLoadingPast,
+    error: pastError
   } = useQuery({
     queryKey: ["events", "past"],
-    queryFn: () => fetchEvents("past")
+    queryFn: () => fetchEvents("past"),
+    retry: 2
   });
 
   const handleLogoClick = () => {
     navigate('/dashboard');
   };
+
+  if (upcomingError) {
+    console.error('Error loading upcoming events:', upcomingError);
+  }
+  
+  if (pastError) {
+    console.error('Error loading past events:', pastError);
+  }
   
   return (
     <div className="flex flex-col h-full w-full">
