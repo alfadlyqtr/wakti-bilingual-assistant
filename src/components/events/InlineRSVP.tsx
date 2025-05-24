@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckCircle, XCircle, HelpCircle, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -15,6 +15,7 @@ interface InlineRSVPProps {
   rsvpDeadline?: string;
   isPublic: boolean;
   guestEmail?: string;
+  creatorName?: string;
 }
 
 interface RSVPResponse {
@@ -26,7 +27,7 @@ interface RSVPResponse {
   created_at: string;
 }
 
-export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic, guestEmail }: InlineRSVPProps) {
+export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPublic, guestEmail, creatorName }: InlineRSVPProps) {
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
@@ -141,6 +142,18 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
 
   return (
     <div className="space-y-4 border-t border-white/20 pt-4 mt-4">
+      {/* Show creator name */}
+      {creatorName && (
+        <p 
+          className="opacity-75 text-center"
+          style={{ 
+            fontSize: `${Math.max(14, 12)}px`
+          }}
+        >
+          Created by {creatorName}
+        </p>
+      )}
+
       {rsvpDeadline && (
         <div className="flex items-center gap-2 text-sm opacity-90">
           <Clock className="h-4 w-4" />
@@ -154,36 +167,24 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         </div>
       ) : (
         <div className="space-y-4">
-          {/* RSVP Buttons */}
+          {/* RSVP Buttons - Only Accept and Decline */}
           <div className="space-y-3">
-            <Label className="text-white font-medium">{t("rsvp", language)}</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <Button
                 variant={selectedResponse === 'going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('going')}
                 className="flex items-center gap-2 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
-                size="sm"
               >
                 <CheckCircle className="h-3 w-3" />
-                {t("going", language)}
-              </Button>
-              <Button
-                variant={selectedResponse === 'maybe' ? 'default' : 'outline'}
-                onClick={() => setSelectedResponse('maybe')}
-                className="flex items-center gap-2 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
-                size="sm"
-              >
-                <HelpCircle className="h-3 w-3" />
-                {t("maybe", language)}
+                Accept
               </Button>
               <Button
                 variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
                 onClick={() => setSelectedResponse('not_going')}
                 className="flex items-center gap-2 text-xs bg-white/10 border-white/20 text-white hover:bg-white/20"
-                size="sm"
               >
                 <XCircle className="h-3 w-3" />
-                {t("notGoing", language)}
+                Decline
               </Button>
             </div>
           </div>

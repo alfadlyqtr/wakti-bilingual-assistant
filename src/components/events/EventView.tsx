@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -54,6 +53,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
   const [loading, setLoading] = useState(true);
   const [isOwner, setIsOwner] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creatorName, setCreatorName] = useState<string | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -102,6 +102,19 @@ export default function EventView({ standalone = false }: EventViewProps) {
 
       console.log('Event data loaded successfully:', data);
       setEvent(data);
+
+      // Fetch creator's name
+      if (data.created_by) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', data.created_by)
+          .single();
+        
+        if (profileData) {
+          setCreatorName(profileData.display_name || profileData.username || 'Event Organizer');
+        }
+      }
 
       // Check if current user is the owner (only for non-standalone mode)
       if (!standalone) {
@@ -357,18 +370,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 {event.description}
               </p>
             )}
-            
-            {/* Show event creator name for guests */}
-            {isGuestView && (
-              <p 
-                className="opacity-75 mt-4"
-                style={{ 
-                  fontSize: `${Math.max((event.font_size || 24) * 0.5, 12)}px`
-                }}
-              >
-                Created by Event Organizer
-              </p>
-            )}
 
             {/* Inline RSVP for guest view */}
             {isGuestView && (
@@ -377,6 +378,7 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 rsvpEnabled={event.rsvp_enabled || false}
                 rsvpDeadline={event.rsvp_deadline}
                 isPublic={event.is_public}
+                creatorName={creatorName || undefined}
               />
             )}
           </div>
