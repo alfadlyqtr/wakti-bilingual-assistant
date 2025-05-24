@@ -263,6 +263,7 @@ export type Database = {
           is_public: boolean | null
           location: string | null
           location_link: string | null
+          short_id: string | null
           start_time: string
           text_align: string | null
           text_color: string | null
@@ -290,6 +291,7 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
+          short_id?: string | null
           start_time: string
           text_align?: string | null
           text_color?: string | null
@@ -317,6 +319,7 @@ export type Database = {
           is_public?: boolean | null
           location?: string | null
           location_link?: string | null
+          short_id?: string | null
           start_time?: string
           text_align?: string | null
           text_color?: string | null
@@ -650,6 +653,10 @@ export type Database = {
       }
       format_timestamp: {
         Args: { ts: string }
+        Returns: string
+      }
+      generate_event_short_id: {
+        Args: { event_uuid: string }
         Returns: string
       }
       gtrgm_compress: {

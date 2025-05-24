@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Edit, MapPin, Clock, Users, Share2, Calendar } from 'lucide-react';
+import { ArrowLeft, Edit, MapPin, Clock, Users, Share2, Calendar, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -31,11 +32,16 @@ interface Event {
   font_style?: 'normal' | 'italic';
   text_decoration?: 'none' | 'underline';
   font_family?: string;
+  short_id?: string;
   created_at: string;
   updated_at: string;
 }
 
-export default function EventView() {
+interface EventViewProps {
+  standalone?: boolean;
+}
+
+export default function EventView({ standalone = false }: EventViewProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { language } = useTheme();
@@ -53,31 +59,43 @@ export default function EventView() {
     try {
       console.log('Fetching event with ID:', id);
       
-      const { data, error } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', id)
-        .single();
+      // Try to fetch by short_id first, then by UUID
+      let query = supabase.from('events').select('*');
+      
+      // Check if the ID looks like a UUID (contains hyphens)
+      if (id && id.includes('-')) {
+        query = query.eq('id', id);
+      } else {
+        query = query.eq('short_id', id);
+      }
+      
+      const { data, error } = await query.single();
 
       if (error) {
         console.error('Error fetching event:', error);
         toast.error('Failed to load event');
-        navigate('/events');
+        if (!standalone) {
+          navigate('/events');
+        }
         return;
       }
 
       console.log('Event data fetched:', data);
       setEvent(data);
 
-      // Check if current user is the owner
-      const { data: userData } = await supabase.auth.getUser();
-      if (userData.user) {
-        setIsOwner(userData.user.id === data.created_by);
+      // Check if current user is the owner (only for non-standalone mode)
+      if (!standalone) {
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+          setIsOwner(userData.user.id === data.created_by);
+        }
       }
     } catch (error) {
       console.error('Unexpected error fetching event:', error);
       toast.error('An unexpected error occurred');
-      navigate('/events');
+      if (!standalone) {
+        navigate('/events');
+      }
     } finally {
       setLoading(false);
     }
@@ -92,35 +110,49 @@ export default function EventView() {
   };
 
   const handleShare = async () => {
+    const shareUrl = event?.short_id 
+      ? `${window.location.origin}/wakti/${event.short_id}`
+      : window.location.href;
+      
     try {
       await navigator.share({
         title: event?.title,
         text: event?.description,
-        url: window.location.href,
+        url: shareUrl,
       });
     } catch (error) {
       // Fallback to copying URL
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard.writeText(shareUrl);
       toast.success('Event link copied to clipboard');
+    }
+  };
+
+  const handleBackNavigation = () => {
+    if (standalone) {
+      window.close(); // Try to close the window if opened in new tab
+    } else {
+      navigate('/events');
     }
   };
 
   if (loading) {
     return (
       <div className="flex flex-col h-screen">
-        <header className="mobile-header shrink-0">
-          <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => navigate('/events')}
-              className="mr-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-xl font-bold">Loading...</h1>
-          </div>
-        </header>
+        {!standalone && (
+          <header className="mobile-header shrink-0">
+            <div className="flex items-center">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleBackNavigation}
+                className="mr-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-xl font-bold">Loading...</h1>
+            </div>
+          </header>
+        )}
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -131,19 +163,21 @@ export default function EventView() {
   if (!event) {
     return (
       <div className="flex flex-col h-screen">
-        <header className="mobile-header shrink-0">
-          <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => navigate('/events')}
-              className="mr-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-xl font-bold">Event Not Found</h1>
-          </div>
-        </header>
+        {!standalone && (
+          <header className="mobile-header shrink-0">
+            <div className="flex items-center">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={handleBackNavigation}
+                className="mr-2"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-xl font-bold">Event Not Found</h1>
+            </div>
+          </header>
+        )}
         <div className="flex-1 flex items-center justify-center">
           <p>Event not found</p>
         </div>
@@ -185,40 +219,73 @@ export default function EventView() {
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Mobile Header */}
-      <header className="mobile-header shrink-0">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => navigate('/events')}
-            className="mr-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <h1 className="text-xl font-bold truncate">{event.title}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={handleShare}
-          >
-            <Share2 className="h-4 w-4" />
-          </Button>
-          {isOwner && (
+      {/* Mobile Header - only show in non-standalone mode */}
+      {!standalone && (
+        <header className="mobile-header shrink-0">
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleBackNavigation}
+              className="mr-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h1 className="text-xl font-bold truncate">{event.title}</h1>
+          </div>
+          <div className="flex items-center gap-2">
             <Button 
               variant="ghost" 
               size="sm"
-              onClick={() => navigate(`/event/${event.id}/edit`)}
+              onClick={handleShare}
             >
-              <Edit className="h-4 w-4" />
+              <Share2 className="h-4 w-4" />
             </Button>
-          )}
-        </div>
-      </header>
+            {isOwner && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => navigate(`/event/${event.id}/edit`)}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </header>
+      )}
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 pb-20">
+      <div className={`flex-1 min-h-0 overflow-y-auto p-4 ${standalone ? 'pb-4' : 'pb-20'}`}>
+        {/* Standalone mode header */}
+        {standalone && (
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <img 
+                src="/lovable-uploads/b2ccfe85-51b7-4b00-af3f-9919d8b5be57.png" 
+                alt="WAKTI" 
+                className="h-8 w-auto"
+              />
+              <span className="text-xl font-bold">WAKTI</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleShare}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => window.open('/', '_blank')}
+              >
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Open WAKTI
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Event Header with Custom Styling */}
         <div 
           className="rounded-lg mb-6 p-8 text-center relative overflow-hidden"
@@ -309,6 +376,21 @@ export default function EventView() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Standalone footer */}
+        {standalone && (
+          <div className="mt-8 pt-6 border-t text-center text-sm text-muted-foreground">
+            <p>Powered by WAKTI - Your Smart Task & Event Manager</p>
+            <Button 
+              variant="link" 
+              size="sm"
+              onClick={() => window.open('/', '_blank')}
+              className="text-primary"
+            >
+              Get WAKTI
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

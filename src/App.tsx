@@ -21,6 +21,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import EventCreate from "@/pages/EventCreate";
 import EventDetail from "@/pages/EventDetail";
 import EventEdit from "@/pages/EventEdit";
+import StandaloneEvent from "@/pages/StandaloneEvent";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
@@ -122,8 +123,11 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Public event detail route - accessible without authentication */}
+                {/* Public event detail routes - accessible without authentication */}
                 <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+                
+                {/* Standalone event routes with pretty URLs */}
+                <Route path="/wakti/:id" element={<StandaloneEvent />} />
 
                 {/* WAKTI AI route - now using AppLayout */}
                 <Route path="/wakti-ai" element={
