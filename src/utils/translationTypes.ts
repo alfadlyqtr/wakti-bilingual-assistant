@@ -374,4 +374,7 @@ export type TranslationKey =
   | "peopleMaybe"
   | "rsvpResponses"
   | "noRsvpsYet"
-  | "rsvpDeadlineLabel";
+  | "rsvpDeadlineLabel"
+  // MISSING KEYS CAUSING THE CURRENT ERRORS
+  | "pleaseEnterYourName"
+  | "responseSubmitted";
