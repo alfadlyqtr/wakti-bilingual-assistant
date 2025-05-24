@@ -167,7 +167,6 @@ export type TranslationKey =
   | "uploading"
   | "blockedByContact"
   | "errorUploadingImage"
-  // Previously added translation keys
   | "profileImageUpdated"
   | "error"
   | "profileImage"
@@ -256,7 +255,6 @@ export type TranslationKey =
   | "overdueItems"
   | "createYourFirst"
   | "edit"
-  // Added keys from TaskReminderContext
   | "taskCreatedSuccessfully"
   | "taskUpdatedSuccessfully"
   | "taskDeletedSuccessfully"
@@ -264,7 +262,6 @@ export type TranslationKey =
   | "reminderUpdatedSuccessfully"
   | "reminderDeletedSuccessfully"
   | "taskSharedSuccessfully"
-  // Added keys from Account.tsx
   | "errorUpdatingEmail"
   | "emailUpdated"
   | "passwordsDoNotMatch"
@@ -280,7 +277,6 @@ export type TranslationKey =
   | "accountOptions"
   | "deleteAccountDescription"
   | "deleteMyAccount"
-  // Added keys from Dashboard.tsx
   | "tasks_view_all"
   | "noTasksYet"
   | "event"
@@ -293,7 +289,6 @@ export type TranslationKey =
   | "reminders_view_all"
   | "noRemindersYet"
   | "freeTrialDays"
-  // Added keys from Settings.tsx
   | "settingsUpdated"
   | "contactSettingsUpdated"
   | "errorUpdatingSettings"
@@ -308,7 +303,6 @@ export type TranslationKey =
   | "autoApproveRequests"
   | "autoApproveExplanation"
   | "dailyQuoteSettings"
-  // Adding the missing keys from current errors
   | "quoteCategory"
   | "quoteChangeFrequency"
   | "twiceDaily"
@@ -327,11 +321,9 @@ export type TranslationKey =
   | "profileVisibility"
   | "activityStatus"
   | "saveAllSettings"
-  // Missing keys from ChatPopup.tsx
   | "justNow"
   | "minsAgo"
   | "activeNow"
-  // Event form translations - NEW KEYS ADDED
   | "eventDetails"
   | "locationLink"
   | "dateTime"
@@ -340,13 +332,10 @@ export type TranslationKey =
   | "endTime"
   | "publicEvent"
   | "publicEventDescription"
-  // Notification translations - NEW KEYS ADDED
   | "rsvpNotificationAccepted"
   | "rsvpNotificationDeclined"
   | "newRsvpResponse"
-  // MISSING KEY THAT CAUSED THE ERROR
   | "privateEvent"
-  // NEW RSVP AND CALENDAR KEYS
   | "enableRsvp"
   | "rsvpDeadline"
   | "rsvpSettings"
@@ -375,6 +364,6 @@ export type TranslationKey =
   | "rsvpResponses"
   | "noRsvpsYet"
   | "rsvpDeadlineLabel"
-  // MISSING KEYS CAUSING THE CURRENT ERRORS
   | "pleaseEnterYourName"
-  | "responseSubmitted";
+  | "responseSubmitted"
+  | "add";
