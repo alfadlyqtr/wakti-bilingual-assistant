@@ -17,6 +17,7 @@ import { t } from '@/utils/translations';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import BackgroundCustomizer from './BackgroundCustomizer';
 import TextStyleControls from './TextStyleControls';
+import { utcToLocalDateTime, localToUtcDateTime, getAllDayLocalTimes } from '@/utils/timeUtils';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -97,17 +98,30 @@ export default function EventEdit() {
   // Update form and styling when event data is loaded
   useEffect(() => {
     if (event) {
+      console.log('Loading event data for editing:', event);
+      console.log('Original start_time (UTC):', event.start_time);
+      console.log('Original end_time (UTC):', event.end_time);
+      
+      // Convert UTC times to local times for the form inputs
+      const localStartTime = utcToLocalDateTime(event.start_time);
+      const localEndTime = utcToLocalDateTime(event.end_time);
+      const localRsvpDeadline = event.rsvp_deadline ? utcToLocalDateTime(event.rsvp_deadline) : '';
+      
+      console.log('Converted start_time (local):', localStartTime);
+      console.log('Converted end_time (local):', localEndTime);
+      console.log('Converted rsvp_deadline (local):', localRsvpDeadline);
+
       reset({
         title: event.title,
         description: event.description || '',
         location: event.location || '',
         location_link: event.location_link || '',
-        start_time: event.start_time ? new Date(event.start_time).toISOString().slice(0, 16) : '',
-        end_time: event.end_time ? new Date(event.end_time).toISOString().slice(0, 16) : '',
+        start_time: localStartTime,
+        end_time: localEndTime,
         is_all_day: event.is_all_day || false,
         is_public: event.is_public || false,
         rsvp_enabled: event.rsvp_enabled || false,
-        rsvp_deadline: event.rsvp_deadline ? new Date(event.rsvp_deadline).toISOString().slice(0, 16) : '',
+        rsvp_deadline: localRsvpDeadline,
       });
 
       // Set background data
@@ -140,17 +154,30 @@ export default function EventEdit() {
     mutationFn: async (data: EventFormData) => {
       if (!id) throw new Error("No event ID");
 
+      console.log('Saving event data:', data);
+      console.log('Form start_time (local):', data.start_time);
+      console.log('Form end_time (local):', data.end_time);
+
+      // Convert local times back to UTC for database storage
+      const utcStartTime = localToUtcDateTime(data.start_time);
+      const utcEndTime = localToUtcDateTime(data.end_time);
+      const utcRsvpDeadline = data.rsvp_deadline ? localToUtcDateTime(data.rsvp_deadline) : null;
+
+      console.log('Converted start_time (UTC):', utcStartTime);
+      console.log('Converted end_time (UTC):', utcEndTime);
+      console.log('Converted rsvp_deadline (UTC):', utcRsvpDeadline);
+
       const eventData = {
         title: data.title,
         description: data.description || null,
         location: data.location || null,
         location_link: data.location_link || null,
-        start_time: data.start_time,
-        end_time: data.end_time,
+        start_time: utcStartTime,
+        end_time: utcEndTime,
         is_all_day: data.is_all_day,
         is_public: data.is_public,
         rsvp_enabled: data.rsvp_enabled,
-        rsvp_deadline: data.rsvp_deadline || null,
+        rsvp_deadline: utcRsvpDeadline,
         background_type: backgroundData.type,
         background_color: backgroundData.backgroundColor || null,
         background_gradient: backgroundData.backgroundGradient || null,
@@ -194,13 +221,12 @@ export default function EventEdit() {
   const handleAllDayToggle = (checked: boolean) => {
     setValue('is_all_day', checked);
     if (checked) {
-      // Set to full day times
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0);
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59);
+      // Set to full day times in local timezone
+      const { start, end } = getAllDayLocalTimes();
+      console.log('Setting all-day times:', { start, end });
       
-      setValue('start_time', startOfDay.toISOString().slice(0, 16));
-      setValue('end_time', endOfDay.toISOString().slice(0, 16));
+      setValue('start_time', start);
+      setValue('end_time', end);
     }
   };
 

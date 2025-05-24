@@ -17,6 +17,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import BackgroundCustomizer from './BackgroundCustomizer';
 import TextStyleControls from './TextStyleControls';
+import { localToUtcDateTime, getAllDayLocalTimes } from '@/utils/timeUtils';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -88,7 +89,9 @@ export default function EventCreate() {
   const onSubmit = async (data: EventFormData) => {
     try {
       setIsLoading(true);
-      console.log('Starting event creation with data:', data);
+      console.log('Starting event creation with form data:', data);
+      console.log('Form start_time (local):', data.start_time);
+      console.log('Form end_time (local):', data.end_time);
       console.log('Background data:', backgroundData);
       console.log('Text style data:', textStyleData);
 
@@ -103,14 +106,21 @@ export default function EventCreate() {
 
       console.log('User authenticated:', userData.user.id);
 
+      // Convert local times to UTC for database storage
+      const utcStartTime = localToUtcDateTime(data.start_time);
+      const utcEndTime = localToUtcDateTime(data.end_time);
+
+      console.log('Converted start_time (UTC):', utcStartTime);
+      console.log('Converted end_time (UTC):', utcEndTime);
+
       // Prepare event data with explicit created_by field and text styling
       const eventData = {
         title: data.title,
         description: data.description || null,
         location: data.location || null,
         location_link: data.location_link || null,
-        start_time: data.start_time,
-        end_time: data.end_time,
+        start_time: utcStartTime,
+        end_time: utcEndTime,
         is_all_day: data.is_all_day,
         is_public: data.is_public,
         created_by: userData.user.id,
@@ -165,13 +175,12 @@ export default function EventCreate() {
   const handleAllDayToggle = (checked: boolean) => {
     setValue('is_all_day', checked);
     if (checked) {
-      // Set to full day times
-      const today = new Date();
-      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0);
-      const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59);
+      // Set to full day times in local timezone
+      const { start, end } = getAllDayLocalTimes();
+      console.log('Setting all-day times:', { start, end });
       
-      setValue('start_time', startOfDay.toISOString().slice(0, 16));
-      setValue('end_time', endOfDay.toISOString().slice(0, 16));
+      setValue('start_time', start);
+      setValue('end_time', end);
     }
   };
 
