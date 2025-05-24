@@ -11,6 +11,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import CalendarDropdown from './CalendarDropdown';
 import RSVPSection from './RSVPSection';
+import InlineRSVP from './InlineRSVP';
 
 interface Event {
   id: string;
@@ -265,6 +266,9 @@ export default function EventView({ standalone = false }: EventViewProps) {
     };
   };
 
+  // Determine if this is guest view
+  const isGuestView = standalone || !isOwner;
+
   return (
     <div className="flex flex-col h-screen">
       {/* Mobile Header - only show in non-standalone mode */}
@@ -282,13 +286,16 @@ export default function EventView({ standalone = false }: EventViewProps) {
             <h1 className="text-xl font-bold truncate">{event.title}</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={handleShare}
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
+            {/* Only show share button for creators */}
+            {isOwner && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={handleShare}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+            )}
             {isOwner && (
               <Button 
                 variant="ghost" 
@@ -315,13 +322,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
               <span className="text-xl font-bold">WAKTI</span>
             </div>
             <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={handleShare}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
               <Button 
                 variant="outline" 
                 size="sm"
@@ -357,10 +357,32 @@ export default function EventView({ standalone = false }: EventViewProps) {
                 {event.description}
               </p>
             )}
+            
+            {/* Show event creator name for guests */}
+            {isGuestView && (
+              <p 
+                className="opacity-75 mt-4"
+                style={{ 
+                  fontSize: `${Math.max((event.font_size || 24) * 0.5, 12)}px`
+                }}
+              >
+                Created by Event Organizer
+              </p>
+            )}
+
+            {/* Inline RSVP for guest view */}
+            {isGuestView && (
+              <InlineRSVP 
+                eventId={event.id}
+                rsvpEnabled={event.rsvp_enabled || false}
+                rsvpDeadline={event.rsvp_deadline}
+                isPublic={event.is_public}
+              />
+            )}
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* Action Buttons - different for creator vs guest */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
           <CalendarDropdown event={event} />
           
@@ -375,88 +397,140 @@ export default function EventView({ standalone = false }: EventViewProps) {
             </Button>
           )}
 
-          <Button 
-            variant="outline" 
-            onClick={handleShare}
-            className="flex items-center gap-2"
-          >
-            <Share2 className="h-4 w-4" />
-            {t("share", language)}
-          </Button>
+          {/* Only show share button for creators or in non-standalone guest view */}
+          {(isOwner || !standalone) && (
+            <Button 
+              variant="outline" 
+              onClick={handleShare}
+              className="flex items-center gap-2"
+            >
+              <Share2 className="h-4 w-4" />
+              {t("share", language)}
+            </Button>
+          )}
         </div>
 
-        {/* Event Details */}
-        <Card className="mb-6">
-          <CardContent className="p-6 space-y-4">
-            {/* Date and Time */}
-            <div className="flex items-start gap-3">
-              <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">
-                  {event.is_all_day ? t("allDay", language) : t("dateTime", language)}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {formatDateTime(event.start_time, event.is_all_day)}
-                  {!event.is_all_day && (
-                    <span> - {formatDateTime(event.end_time, event.is_all_day)}</span>
-                  )}
-                </p>
-              </div>
-            </div>
-
-            {/* Location */}
-            {event.location && (
+        {/* Creator View - Event Details */}
+        {isOwner && (
+          <Card className="mb-6">
+            <CardContent className="p-6 space-y-4">
+              {/* Date and Time */}
               <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
-                  <p className="font-medium">{t("location", language)}</p>
-                  {event.location_link ? (
-                    <a 
-                      href={event.location_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:underline"
-                    >
-                      {event.location}
-                    </a>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">{event.location}</p>
-                  )}
+                  <p className="font-medium">
+                    {event.is_all_day ? t("allDay", language) : t("dateTime", language)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDateTime(event.start_time, event.is_all_day)}
+                    {!event.is_all_day && (
+                      <span> - {formatDateTime(event.end_time, event.is_all_day)}</span>
+                    )}
+                  </p>
                 </div>
               </div>
-            )}
 
-            {/* Event Type */}
-            <div className="flex items-center gap-3">
-              <Users className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">{t("events", language)}</p>
-                <Badge variant={event.is_public ? "default" : "secondary"}>
-                  {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
-                </Badge>
+              {/* Location */}
+              {event.location && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">{t("location", language)}</p>
+                    {event.location_link ? (
+                      <a 
+                        href={event.location_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        {event.location}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{event.location}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Event Type */}
+              <div className="flex items-center gap-3">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{t("events", language)}</p>
+                  <Badge variant={event.is_public ? "default" : "secondary"}>
+                    {event.is_public ? t("publicEvent", language) : t("privateEvent", language)}
+                  </Badge>
+                </div>
               </div>
-            </div>
 
-            {/* Created Date */}
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-muted-foreground" />
-              <div>
-                <p className="font-medium">{t("eventCreated", language)}</p>
-                <p className="text-sm text-muted-foreground">
-                  {new Date(event.created_at).toLocaleDateString()}
-                </p>
+              {/* Created Date */}
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="font-medium">{t("eventCreated", language)}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(event.created_at).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* RSVP Section */}
-        <RSVPSection 
-          eventId={event.id}
-          rsvpEnabled={event.rsvp_enabled || false}
-          rsvpDeadline={event.rsvp_deadline}
-          isPublic={event.is_public}
-        />
+        {/* Creator View - RSVP Management Section */}
+        {isOwner && (
+          <RSVPSection 
+            eventId={event.id}
+            rsvpEnabled={event.rsvp_enabled || false}
+            rsvpDeadline={event.rsvp_deadline}
+            isPublic={event.is_public}
+          />
+        )}
+
+        {/* Guest View - Simple Event Info */}
+        {isGuestView && (
+          <Card className="mb-6">
+            <CardContent className="p-6 space-y-4">
+              {/* Date and Time */}
+              <div className="flex items-start gap-3">
+                <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div>
+                  <p className="font-medium">
+                    {event.is_all_day ? t("allDay", language) : t("dateTime", language)}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {formatDateTime(event.start_time, event.is_all_day)}
+                    {!event.is_all_day && (
+                      <span> - {formatDateTime(event.end_time, event.is_all_day)}</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Location */}
+              {event.location && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">{t("location", language)}</p>
+                    {event.location_link ? (
+                      <a 
+                        href={event.location_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline"
+                      >
+                        {event.location}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{event.location}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Standalone footer */}
         {standalone && (

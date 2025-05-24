@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -131,6 +130,7 @@ export default function EventEdit() {
   }, [event, reset]);
 
   const isAllDay = watch('is_all_day');
+  const isPublic = watch('is_public');
   const rsvpEnabled = watch('rsvp_enabled');
   const watchedTitle = watch('title');
   const watchedDescription = watch('description');
@@ -398,7 +398,8 @@ export default function EventEdit() {
                     </div>
                     <Switch
                       id="is_public"
-                      {...register('is_public')}
+                      checked={isPublic}
+                      onCheckedChange={(checked) => setValue('is_public', checked)}
                     />
                   </div>
                   
