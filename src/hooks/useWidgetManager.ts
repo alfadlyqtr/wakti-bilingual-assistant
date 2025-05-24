@@ -1,86 +1,103 @@
 
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { TranslationKey } from "@/utils/translationTypes";
-import { getUserPreferences, getWidgetOrder, saveWidgetOrder } from "@/utils/widgetPreferences";
-import { toast } from "sonner";
-import React from "react";
+import { useState, useEffect } from 'react';
+import { Layout, Layouts } from 'react-grid-layout';
 
-type WidgetType = {
-  id: string;
-  title: TranslationKey;
-  component: React.ReactNode;
-  visible: boolean;
+interface WidgetSettings {
+  tasksWidget: boolean;
+  calendarWidget: boolean;
+  remindersWidget: boolean;
+  quoteWidget: boolean;
+}
+
+const defaultLayouts: Layouts = {
+  lg: [
+    { i: 'tasksWidget', x: 0, y: 0, w: 6, h: 4 },
+    { i: 'calendarWidget', x: 6, y: 0, w: 6, h: 4 },
+    { i: 'remindersWidget', x: 0, y: 4, w: 6, h: 4 },
+    { i: 'quoteWidget', x: 6, y: 4, w: 6, h: 2 }
+  ],
+  md: [
+    { i: 'tasksWidget', x: 0, y: 0, w: 5, h: 4 },
+    { i: 'calendarWidget', x: 5, y: 0, w: 5, h: 4 },
+    { i: 'remindersWidget', x: 0, y: 4, w: 5, h: 4 },
+    { i: 'quoteWidget', x: 5, y: 4, w: 5, h: 2 }
+  ],
+  sm: [
+    { i: 'tasksWidget', x: 0, y: 0, w: 6, h: 4 },
+    { i: 'calendarWidget', x: 0, y: 4, w: 6, h: 4 },
+    { i: 'remindersWidget', x: 0, y: 8, w: 6, h: 4 },
+    { i: 'quoteWidget', x: 0, y: 12, w: 6, h: 2 }
+  ],
+  xs: [
+    { i: 'tasksWidget', x: 0, y: 0, w: 4, h: 4 },
+    { i: 'calendarWidget', x: 0, y: 4, w: 4, h: 4 },
+    { i: 'remindersWidget', x: 0, y: 8, w: 4, h: 4 },
+    { i: 'quoteWidget', x: 0, y: 12, w: 4, h: 2 }
+  ],
+  xxs: [
+    { i: 'tasksWidget', x: 0, y: 0, w: 2, h: 4 },
+    { i: 'calendarWidget', x: 0, y: 4, w: 2, h: 4 },
+    { i: 'remindersWidget', x: 0, y: 8, w: 2, h: 4 },
+    { i: 'quoteWidget', x: 0, y: 12, w: 2, h: 2 }
+  ]
 };
 
-export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, tasks: any[], events: any[], reminders: any[]) => {
-  const [widgets, setWidgets] = useState<WidgetType[]>([]);
-  const navigate = useNavigate();
-  
-  useEffect(() => {
-    const widgetVisibility = getUserPreferences();
-    
-    // Import components dynamically to avoid circular dependencies
-    import("@/components/dashboard/widgets").then(({ TasksWidget, CalendarWidget, EventsWidget, RemindersWidget }) => {
-      import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
-        const defaultWidgets = {
-          tasks: {
-            id: "tasks",
-            title: "tasks" as TranslationKey,
-            visible: widgetVisibility.tasks,
-            component: React.createElement(TasksWidget, { isLoading, tasks, language }),
-          },
-          calendar: {
-            id: "calendar",
-            title: "calendar" as TranslationKey,
-            visible: widgetVisibility.calendar,
-            component: React.createElement(CalendarWidget, { isLoading, events, tasks, language }),
-          },
-          events: {
-            id: "events",
-            title: "events" as TranslationKey,
-            visible: widgetVisibility.events,
-            component: React.createElement(EventsWidget, { isLoading, events, language }),
-          },
-          reminders: {
-            id: "reminders",
-            title: "reminders" as TranslationKey,
-            visible: widgetVisibility.reminders,
-            component: React.createElement(RemindersWidget, { isLoading, reminders, language }),
-          },
-          quote: {
-            id: "quote",
-            title: "dailyQuote" as TranslationKey,
-            visible: widgetVisibility.dailyQuote,
-            component: React.createElement(QuoteWidget)
-          },
-        };
+const defaultWidgets: WidgetSettings = {
+  tasksWidget: true,
+  calendarWidget: true,
+  remindersWidget: true,
+  quoteWidget: true
+};
 
-        // Get saved order and arrange widgets accordingly
-        const savedOrder = getWidgetOrder();
-        const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
-        
-        setWidgets(orderedWidgets);
-      });
-    });
-  }, [language, navigate, isLoading, tasks, events, reminders]);
-  
-  const handleDragEnd = (result: any) => {
-    if (!result.destination) return;
+export const useWidgetManager = () => {
+  const [layouts, setLayouts] = useState<Layouts>(defaultLayouts);
+  const [widgets, setWidgets] = useState<WidgetSettings>(defaultWidgets);
+
+  // Load saved layouts and widget settings on mount
+  useEffect(() => {
+    const savedLayouts = localStorage.getItem('dashboard-layouts');
+    const savedWidgets = localStorage.getItem('dashboard-widgets');
     
-    const items = Array.from(widgets);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    if (savedLayouts) {
+      try {
+        setLayouts(JSON.parse(savedLayouts));
+      } catch (error) {
+        console.error('Error parsing saved layouts:', error);
+      }
+    }
     
-    // Update the widgets state
-    setWidgets(items);
-    
-    // Save the new order to localStorage
-    const newOrder = items.map(widget => widget.id);
-    saveWidgetOrder(newOrder);
-    
-    toast.success(language === 'ar' ? "تم إعادة ترتيب الأداة وحفظها" : "Widget rearranged and saved");
+    if (savedWidgets) {
+      try {
+        setWidgets(JSON.parse(savedWidgets));
+      } catch (error) {
+        console.error('Error parsing saved widgets:', error);
+      }
+    }
+  }, []);
+
+  const saveLayouts = (newLayouts: Layouts) => {
+    setLayouts(newLayouts);
+    localStorage.setItem('dashboard-layouts', JSON.stringify(newLayouts));
   };
-  
-  return { widgets, handleDragEnd };
+
+  const updateWidgetVisibility = (widgetId: keyof WidgetSettings, visible: boolean) => {
+    const newWidgets = { ...widgets, [widgetId]: visible };
+    setWidgets(newWidgets);
+    localStorage.setItem('dashboard-widgets', JSON.stringify(newWidgets));
+  };
+
+  const resetToDefaults = () => {
+    setLayouts(defaultLayouts);
+    setWidgets(defaultWidgets);
+    localStorage.removeItem('dashboard-layouts');
+    localStorage.removeItem('dashboard-widgets');
+  };
+
+  return {
+    layouts,
+    widgets,
+    saveLayouts,
+    updateWidgetVisibility,
+    resetToDefaults
+  };
 };

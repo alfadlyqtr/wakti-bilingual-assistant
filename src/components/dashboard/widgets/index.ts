@@ -1,5 +1,4 @@
 
-export { TasksWidget } from './TasksWidget';
-export { CalendarWidget } from './CalendarWidget';
-export { EventsWidget } from './EventsWidget';
-export { RemindersWidget } from './RemindersWidget';
+export { default as TasksWidget } from './TasksWidget';
+export { default as CalendarWidget } from './CalendarWidget';
+export { default as RemindersWidget } from './RemindersWidget';

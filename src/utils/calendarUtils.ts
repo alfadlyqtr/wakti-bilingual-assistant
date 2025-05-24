@@ -1,74 +1,56 @@
 
-import { Task, Reminder } from "@/contexts/TaskReminderContext";
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 
-export enum EntryType {
-  TASK = "task",
-  EVENT = "event",
-  REMINDER = "reminder",
-  MANUAL_NOTE = "manual_note"
+export interface CalendarDay {
+  date: Date;
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  hasItems: boolean;
 }
 
-export interface CalendarEntry {
+export interface CalendarItem {
   id: string;
   title: string;
-  description?: string;
-  date: string;
-  type: EntryType;
-  priority?: "urgent" | "high" | "medium" | "low";
-  due?: string;
+  date: Date;
+  type: 'task' | 'reminder';
+  completed?: boolean;
 }
 
-export type CalendarView = "day" | "week" | "month" | "year";
+export const generateCalendarDays = (currentDate: Date): CalendarDay[] => {
+  const monthStart = startOfMonth(currentDate);
+  const monthEnd = endOfMonth(currentDate);
+  const calendarStart = startOfWeek(monthStart);
+  const calendarEnd = endOfWeek(monthEnd);
 
-// Convert tasks to calendar entries
-const tasksToCalendarEntries = (tasks: Task[]): CalendarEntry[] => {
-  return tasks.map(task => ({
-    id: task.id,
-    title: task.title,
-    description: task.description,
-    date: task.due_date || new Date().toISOString().split('T')[0],
-    type: EntryType.TASK,
-    priority: task.priority,
-    // Due time is optional, check if it exists
-    due: task.due_date 
+  const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  const today = new Date();
+
+  return days.map(date => ({
+    date,
+    isCurrentMonth: isSameMonth(date, currentDate),
+    isToday: isSameDay(date, today),
+    hasItems: false, // Will be updated based on actual items
   }));
 };
 
-// Convert reminders to calendar entries
-const remindersToCalendarEntries = (reminders: Reminder[]): CalendarEntry[] => {
-  return reminders.map(reminder => ({
-    id: reminder.id,
-    title: reminder.title,
-    date: reminder.due_date || new Date().toISOString().split('T')[0],
-    type: EntryType.REMINDER,
-    // No separate time field in reminders, use due_date
-    due: reminder.due_date
+export const getItemsForDate = (items: CalendarItem[], date: Date): CalendarItem[] => {
+  return items.filter(item => isSameDay(item.date, date));
+};
+
+export const updateCalendarDaysWithItems = (
+  calendarDays: CalendarDay[], 
+  items: CalendarItem[]
+): CalendarDay[] => {
+  return calendarDays.map(day => ({
+    ...day,
+    hasItems: getItemsForDate(items, day.date).length > 0
   }));
 };
 
-// Convert events to calendar entries (assuming events have a similar structure)
-const eventsToCalendarEntries = (events: any[]): CalendarEntry[] => {
-  return events.map(event => ({
-    id: event.id,
-    title: event.title,
-    description: event.description,
-    date: event.date || event.start_date || new Date().toISOString().split('T')[0],
-    type: EntryType.EVENT,
-    due: event.time || event.start_time
-  }));
+export const formatCalendarDate = (date: Date): string => {
+  return format(date, 'yyyy-MM-dd');
 };
 
-// Combine all entries
-export const getCalendarEntries = (
-  tasks: Task[], 
-  reminders: Reminder[], 
-  manualEntries: CalendarEntry[] = [],
-  events: any[] = []
-): CalendarEntry[] => {
-  return [
-    ...tasksToCalendarEntries(tasks),
-    ...remindersToCalendarEntries(reminders),
-    ...eventsToCalendarEntries(events),
-    ...manualEntries
-  ];
+export const navigateMonth = (currentDate: Date, direction: 'prev' | 'next'): Date => {
+  return direction === 'prev' ? subMonths(currentDate, 1) : addMonths(currentDate, 1);
 };
