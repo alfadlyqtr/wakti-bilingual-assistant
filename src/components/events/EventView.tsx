@@ -103,16 +103,25 @@ export default function EventView({ standalone = false }: EventViewProps) {
       console.log('Event data loaded successfully:', data);
       setEvent(data);
 
-      // Fetch creator's name with better fallback
+      // Fetch creator's profile with proper display name fallback
       if (data.created_by) {
         const { data: profileData } = await supabase
           .from('profiles')
-          .select('display_name, username')
+          .select('display_name, username, first_name, last_name')
           .eq('id', data.created_by)
           .single();
         
+        console.log('Profile data for creator:', profileData);
+        
         if (profileData) {
-          setCreatorName(profileData.display_name || profileData.username || null);
+          // Use display_name first, then construct from first/last name, then username as fallback
+          const name = profileData.display_name || 
+                      (profileData.first_name && profileData.last_name 
+                        ? `${profileData.first_name} ${profileData.last_name}`.trim()
+                        : profileData.first_name || profileData.username) || 
+                      'Unknown User';
+          setCreatorName(name);
+          console.log('Creator name set to:', name);
         }
       }
 
@@ -353,19 +362,6 @@ export default function EventView({ standalone = false }: EventViewProps) {
           style={getBackgroundStyle()}
         >
           <div style={getTextStyle()}>
-            {/* Show creator name above title */}
-            {isGuestView && creatorName && (
-              <p 
-                className="text-center text-white/90 mb-4"
-                style={{ 
-                  fontSize: `${Math.max(14, 12)}px`,
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.025)'
-                }}
-              >
-                Created by {creatorName}
-              </p>
-            )}
-
             <h1 
               className="mb-4 leading-tight"
               style={{ 
@@ -433,6 +429,17 @@ export default function EventView({ standalone = false }: EventViewProps) {
         {isOwner && (
           <Card className="mb-6">
             <CardContent className="p-6 space-y-4">
+              {/* Show creator name above date/time for creator view */}
+              {creatorName && (
+                <div className="flex items-start gap-3">
+                  <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Created by</p>
+                    <p className="text-sm text-muted-foreground">{creatorName}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Date and Time */}
               <div className="flex items-start gap-3">
                 <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />
@@ -510,6 +517,17 @@ export default function EventView({ standalone = false }: EventViewProps) {
         {isGuestView && (
           <Card className="mb-6">
             <CardContent className="p-6 space-y-4">
+              {/* Show creator name above date/time for guest view */}
+              {creatorName && (
+                <div className="flex items-start gap-3">
+                  <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div>
+                    <p className="font-medium">Created by</p>
+                    <p className="text-sm text-muted-foreground">{creatorName}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Date and Time */}
               <div className="flex items-start gap-3">
                 <Clock className="h-5 w-5 text-muted-foreground mt-0.5" />

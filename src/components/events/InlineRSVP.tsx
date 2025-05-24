@@ -190,25 +190,27 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
             </div>
           </div>
 
-          {/* Guest Name Only (for non-authenticated users) */}
+          {/* Guest Name Only (for non-authenticated users) - Enhanced visibility */}
           {!user && selectedResponse && (
             <div className="space-y-3">
               <div>
                 <Label 
                   htmlFor="guest_name" 
-                  className="text-white text-sm font-bold block mb-2"
-                  style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}
+                  className="text-white text-lg font-bold block mb-3"
+                  style={{ textShadow: '2px 2px 6px rgba(0,0,0,0.9)' }}
                 >
-                  Your Name *
+                  Enter Your Name *
                 </Label>
                 <Input
                   id="guest_name"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="bg-white/30 border-3 border-white text-white placeholder:text-white/80 backdrop-blur-sm font-medium shadow-xl text-base py-3"
+                  placeholder="Your full name"
+                  className="bg-white/95 border-4 border-white text-gray-900 placeholder:text-gray-600 backdrop-blur-sm font-bold shadow-2xl text-lg py-4 px-4"
                   style={{ 
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.3)'
+                    boxShadow: '0 8px 25px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(255,255,255,0.9)',
+                    fontSize: '18px',
+                    fontWeight: '600'
                   }}
                 />
               </div>
