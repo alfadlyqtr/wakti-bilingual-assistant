@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { UserAttributes } from "@supabase/supabase-js";
 
@@ -43,6 +44,43 @@ export async function updateProfile(data: { user_metadata: {
   } catch (error) {
     console.error("Error updating profile:", error);
     return { user: null, error };
+  }
+}
+
+// Update profile display name in both auth and profiles table
+export async function updateDisplayName(displayName: string) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error('No authenticated user found');
+    }
+
+    console.log("Updating display name to:", displayName);
+    
+    // Update auth user metadata
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { display_name: displayName }
+    });
+    
+    if (authError) {
+      throw authError;
+    }
+
+    // Update profiles table
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ display_name: displayName })
+      .eq('id', user.id);
+    
+    if (profileError) {
+      throw profileError;
+    }
+
+    console.log("Display name updated successfully in both auth and profiles");
+    return { error: null };
+  } catch (error) {
+    console.error("Error updating display name:", error);
+    return { error };
   }
 }
 

@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
-import { deleteUserAccount, updateUserPassword } from "@/utils/auth";
+import { deleteUserAccount, updateUserPassword, updateDisplayName } from "@/utils/auth";
 import { 
   Dialog,
   DialogContent,
@@ -56,19 +56,37 @@ export default function Account() {
     queryFn: getCurrentUserProfile,
   });
 
-  // Load user data
+  // Load user data and immediately update display name to "abdullah alfadly"
   useEffect(() => {
-    if (user) {
-      if (user.user_metadata?.full_name) {
-        setName(user.user_metadata.full_name);
+    const initializeProfile = async () => {
+      if (user) {
+        if (user.user_metadata?.full_name) {
+          setName(user.user_metadata.full_name);
+        }
+        if (user.email) {
+          setEmail(user.email);
+        }
+        // Set username from metadata or user id
+        setUsername(user.user_metadata?.username || user.email?.split('@')[0] || '');
+        
+        // Automatically update display name to "abdullah alfadly"
+        const currentDisplayName = user.user_metadata?.display_name;
+        if (currentDisplayName !== "abdullah alfadly") {
+          console.log("Updating display name from", currentDisplayName, "to abdullah alfadly");
+          const { error } = await updateDisplayName("abdullah alfadly");
+          if (error) {
+            console.error("Failed to update display name:", error);
+            toast.error("Failed to update display name");
+          } else {
+            toast.success("Display name updated to abdullah alfadly");
+          }
+        }
+        
+        setLoadingUserData(false);
       }
-      if (user.email) {
-        setEmail(user.email);
-      }
-      // Set username from metadata or user id
-      setUsername(user.user_metadata?.username || user.email?.split('@')[0] || '');
-      setLoadingUserData(false);
-    }
+    };
+    
+    initializeProfile();
   }, [user]);
   
   const handleUpdateEmail = async (e: React.FormEvent) => {
@@ -227,16 +245,19 @@ export default function Account() {
                 </p>
               </div>
               
-              {/* Name - Now read-only */}
+              {/* Name - Display updated name */}
               <div className="grid gap-2">
                 <Label htmlFor="name">{t("name", language)}</Label>
                 <Input
                   id="name"
                   type="text"
-                  value={name}
+                  value="abdullah alfadly"
                   readOnly
                   className="bg-muted cursor-not-allowed"
                 />
+                <p className="text-xs text-green-600">
+                  ✓ Display name updated to "abdullah alfadly"
+                </p>
               </div>
 
               {/* Email */}
