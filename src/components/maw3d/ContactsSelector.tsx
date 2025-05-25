@@ -8,15 +8,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Search, Users } from 'lucide-react';
 import { getContacts } from '@/services/contactsService';
 
-// Use the proper contact type that matches what getContacts() returns
+// Use the exact type that matches what getContacts() returns
 interface ContactFromService {
   id: string;
   contact_id: string;
-  profile?: {
+  profile: {
+    id: string;
     username: string;
     display_name?: string;
     avatar_url?: string;
-  };
+  } | null;
 }
 
 interface ContactsSelectorProps {
@@ -51,7 +52,14 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
       const contactsData = await getContacts();
       console.log('Contacts fetched:', contactsData);
       
-      setContacts(contactsData || []);
+      // Transform the data to match our expected structure
+      const transformedContacts: ContactFromService[] = contactsData.map(contact => ({
+        id: contact.id,
+        contact_id: contact.contact_id,
+        profile: contact.profile
+      }));
+      
+      setContacts(transformedContacts);
     } catch (error) {
       console.error('Error fetching contacts:', error);
       setContacts([]);
