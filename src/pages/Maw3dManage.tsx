@@ -124,7 +124,7 @@ export default function Maw3dManage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
         <div className="animate-pulse text-center">
           <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
           <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
@@ -136,7 +136,7 @@ export default function Maw3dManage() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Event not found</h1>
           <Button onClick={() => navigate('/maw3d')}>
@@ -158,8 +158,8 @@ export default function Maw3dManage() {
   console.log('All RSVPs:', rsvps);
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="p-4 pb-24">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Button 
@@ -326,24 +326,6 @@ export default function Maw3dManage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Management Debug Information */}
-        <Card className="mt-8 border-dashed">
-          <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Management Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-xs space-y-2 text-muted-foreground">
-              <div>Event ID: {event.id}</div>
-              <div>Short ID: {event.short_id}</div>
-              <div>Created By: {event.created_by}</div>
-              <div>Current User: {user?.id}</div>
-              <div>Total RSVPs in state: {rsvps.length}</div>
-              <div>Accepted: {acceptedRsvps.length}</div>
-              <div>Declined: {declinedRsvps.length}</div>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Event Details */}
         <Card className="mt-8">
