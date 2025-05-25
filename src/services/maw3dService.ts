@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/types/maw3d";
 
@@ -7,9 +6,20 @@ export class Maw3dService {
   static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string }): Promise<Maw3dEvent> {
     console.log('Creating Maw3d event:', eventData);
     
+    // Prepare the data for database insertion - exclude invited_contacts and fix time fields
+    const dbEventData = {
+      ...eventData,
+      // Convert time fields to null for all-day events
+      start_time: eventData.is_all_day ? null : eventData.start_time,
+      end_time: eventData.is_all_day ? null : eventData.end_time,
+    };
+    
+    // Remove any fields that don't belong in the database
+    delete (dbEventData as any).invited_contacts;
+    
     const { data, error } = await supabase
       .from('maw3d_events')
-      .insert(eventData)
+      .insert(dbEventData)
       .select('*')
       .single();
 

@@ -83,6 +83,10 @@ export default function Maw3dCreate() {
     }));
   };
 
+  const isFormValid = () => {
+    return formData.title.trim() !== '' && formData.event_date !== '';
+  };
+
   const handleSubmit = async () => {
     if (!user) {
       toast.error('You must be logged in to create an event');
@@ -101,24 +105,45 @@ export default function Maw3dCreate() {
 
     setIsLoading(true);
     try {
-      // Create the event
+      console.log('Starting event creation with form data:', formData);
+      
+      // Create the event data without invited_contacts
+      const { invited_contacts, ...eventDataForDB } = formData;
       const eventData = {
-        ...formData,
+        ...eventDataForDB,
         created_by: user.id
       };
 
+      console.log('Event data prepared for database:', eventData);
       const event = await Maw3dService.createEvent(eventData);
+      console.log('Event created successfully:', event);
 
       // Create invitations for selected contacts
       if (!formData.is_public && formData.invited_contacts.length > 0) {
+        console.log('Creating invitations for contacts:', formData.invited_contacts);
         await Maw3dService.createInvitations(event.id, formData.invited_contacts);
+        console.log('Invitations created successfully');
       }
 
       toast.success('Event created successfully!');
       navigate('/maw3d');
     } catch (error) {
       console.error('Error creating event:', error);
-      toast.error('Failed to create event. Please try again.');
+      
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('invited_contacts')) {
+          toast.error('Error with invitation settings. Please try again.');
+        } else if (error.message.includes('time')) {
+          toast.error('Invalid time format. Please check your time settings.');
+        } else if (error.message.includes('permission')) {
+          toast.error('You do not have permission to create events.');
+        } else {
+          toast.error(`Failed to create event: ${error.message}`);
+        }
+      } else {
+        toast.error('Failed to create event. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -134,7 +159,11 @@ export default function Maw3dCreate() {
             Back
           </Button>
           <h1 className="text-lg font-semibold">Create Event</h1>
-          <Button onClick={handleSubmit} disabled={isLoading}>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={isLoading || !isFormValid()}
+            className="min-w-[100px]"
+          >
             <Save className="w-4 h-4 mr-2" />
             {isLoading ? 'Creating...' : 'Create'}
           </Button>
@@ -178,6 +207,7 @@ export default function Maw3dCreate() {
                     value={formData.title}
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     placeholder="Enter event title"
+                    className={!formData.title.trim() ? 'border-red-300' : ''}
                   />
                 </div>
 
@@ -200,6 +230,7 @@ export default function Maw3dCreate() {
                       type="date"
                       value={formData.event_date}
                       onChange={(e) => handleInputChange('event_date', e.target.value)}
+                      className={!formData.event_date ? 'border-red-300' : ''}
                     />
                   </div>
 
@@ -278,6 +309,7 @@ export default function Maw3dCreate() {
                       variant="outline"
                       onClick={() => setShowContactsSelector(true)}
                       className="w-full"
+                      type="button"
                     >
                       <Users className="w-4 h-4 mr-2" />
                       Select Contacts to Invite ({formData.invited_contacts.length} selected)
