@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -51,7 +52,11 @@ export default function Maw3dEdit() {
         return;
       }
 
-      setEvent(eventData);
+      // Ensure show_attending_count has a default value if undefined
+      setEvent({
+        ...eventData,
+        show_attending_count: eventData.show_attending_count ?? true
+      });
 
       // Fetch current invitations
       if (!eventData.is_public) {
@@ -67,6 +72,7 @@ export default function Maw3dEdit() {
 
   const handleInputChange = (field: keyof Maw3dEvent, value: any) => {
     if (!event) return;
+    console.log(`Updating field ${field} with value:`, value);
     setEvent(prev => prev ? { ...prev, [field]: value } : null);
   };
 
@@ -117,8 +123,17 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
+      console.log('Saving event with show_attending_count:', event.show_attending_count);
+      
+      // Prepare the update data with explicit show_attending_count
+      const updateData = {
+        ...event,
+        show_attending_count: event.show_attending_count ?? true
+      };
+
       // Update the event
-      await Maw3dService.updateEvent(event.id, event);
+      const updatedEvent = await Maw3dService.updateEvent(event.id, updateData);
+      console.log('Event updated with show_attending_count:', updatedEvent.show_attending_count);
 
       // Update invitations if it's a private event
       if (!event.is_public) {
@@ -176,7 +191,7 @@ export default function Maw3dEdit() {
                   textStyle={event.text_style}
                   backgroundType={event.background_type}
                   backgroundValue={event.background_value}
-                  showAttendingCount={event.show_attending_count}
+                  showAttendingCount={event.show_attending_count ?? true}
                 />
               </CardContent>
             </Card>
@@ -364,7 +379,10 @@ export default function Maw3dEdit() {
                         <Switch
                           id="show_attending_count"
                           checked={event.show_attending_count ?? true}
-                          onCheckedChange={(checked) => handleInputChange('show_attending_count', checked)}
+                          onCheckedChange={(checked) => {
+                            console.log('Toggle changed to:', checked);
+                            handleInputChange('show_attending_count', checked);
+                          }}
                         />
                         <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
                       </div>
