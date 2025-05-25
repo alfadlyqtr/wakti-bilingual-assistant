@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -326,53 +325,6 @@ export default function Maw3dManage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Event Details */}
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle>Event Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-muted-foreground" />
-                <span>
-                  {event.is_all_day ? 'All Day' : `${event.start_time} - ${event.end_time}`}
-                </span>
-              </div>
-
-              {event.location && (
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-muted-foreground" />
-                  <span>{event.location}</span>
-                  {event.google_maps_link && (
-                    <a 
-                      href={event.google_maps_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline ml-2"
-                    >
-                      View on Maps
-                    </a>
-                  )}
-                </div>
-              )}
-
-              {event.organizer && (
-                <div className="flex gap-2 pt-2">
-                  <Badge variant="outline">
-                    Organized by {event.organizer}
-                  </Badge>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
