@@ -4,13 +4,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Share2, Edit } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
-import { ShareService } from '@/services/shareService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 
 export default function Maw3dView() {
@@ -88,15 +88,6 @@ export default function Maw3dView() {
     }
   };
 
-  const handleShare = async () => {
-    if (!event?.short_id) {
-      toast.error('Cannot generate link for this event');
-      return;
-    }
-    
-    await ShareService.shareEvent(event.id, event.short_id);
-  };
-
   const getRsvpCounts = () => {
     const accepted = rsvps.filter(rsvp => rsvp.response === 'accepted').length;
     const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
@@ -133,26 +124,6 @@ export default function Maw3dView() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={() => navigate('/maw3d')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleShare}>
-              <Share2 className="w-4 h-4 mr-2" />
-              Share
-            </Button>
-            {event.created_by === user?.id && (
-              <Button variant="outline" onClick={() => navigate(`/maw3d/edit/${event.id}`)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Edit
-              </Button>
-            )}
-          </div>
-        </div>
-
         {/* Event Preview */}
         <div className="mb-8">
           <EventPreview
@@ -168,20 +139,16 @@ export default function Maw3dView() {
         {/* RSVP Section */}
         <Card className="mb-6">
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4">RSVP to this event</h3>
+            <h3 className="text-lg font-semibold mb-4">Are you attending?</h3>
             
             {!user && (
               <div className="mb-4">
-                <label htmlFor="guestName" className="block text-sm font-medium mb-2">
-                  Your Name
-                </label>
-                <input
-                  id="guestName"
+                <Input
                   type="text"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   placeholder="Enter your name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full"
                 />
               </div>
             )}
@@ -190,14 +157,14 @@ export default function Maw3dView() {
               <Button
                 onClick={() => handleRsvp('accepted')}
                 variant={userRsvp?.response === 'accepted' ? 'default' : 'outline'}
-                className="flex-1"
+                className="flex-1 h-12 text-base font-medium border-2 transition-all duration-200 hover:scale-105"
               >
                 Accept
               </Button>
               <Button
                 onClick={() => handleRsvp('declined')}
                 variant={userRsvp?.response === 'declined' ? 'destructive' : 'outline'}
-                className="flex-1"
+                className="flex-1 h-12 text-base font-medium border-2 transition-all duration-200 hover:scale-105"
               >
                 Decline
               </Button>
@@ -212,7 +179,7 @@ export default function Maw3dView() {
         </Card>
 
         {/* Event Details */}
-        <Card>
+        <Card className="mb-8">
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold mb-4">Event Details</h3>
             
@@ -255,19 +222,23 @@ export default function Maw3dView() {
                 </div>
               )}
 
-              <div className="flex gap-2 pt-2">
-                <Badge variant={event.is_public ? "default" : "secondary"}>
-                  {event.is_public ? "Public Event" : "Private Event"}
-                </Badge>
-                {event.organizer && (
+              {event.organizer && (
+                <div className="flex gap-2 pt-2">
                   <Badge variant="outline">
                     Organized by {event.organizer}
                   </Badge>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        {/* Powered by WAKTI */}
+        <div className="text-center">
+          <p className="text-sm text-muted-foreground">
+            Powered by <span className="font-semibold text-primary">WAKTI</span>
+          </p>
+        </div>
       </div>
     </div>
   );
