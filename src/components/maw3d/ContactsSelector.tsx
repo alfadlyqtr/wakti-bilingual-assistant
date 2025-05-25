@@ -53,11 +53,11 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
       console.log('Contacts fetched:', contactsData);
       
       // Transform the data to match our expected structure
-      // The getContacts() service returns data with 'profiles' property, not 'profile'
+      // The getContacts() service returns data with 'profile' property that is an array
       const transformedContacts: ContactFromService[] = contactsData.map(contact => ({
         id: contact.id,
         contact_id: contact.contact_id,
-        profile: contact.profiles || null // Use 'profiles' from the service
+        profile: Array.isArray(contact.profile) && contact.profile.length > 0 ? contact.profile[0] : null
       }));
       
       setContacts(transformedContacts);
