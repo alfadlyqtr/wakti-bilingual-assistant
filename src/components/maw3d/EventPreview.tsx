@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Maw3dEvent, TextStyle } from '@/types/maw3d';
 import { Calendar, Clock, MapPin, Users } from 'lucide-react';
@@ -130,23 +131,6 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* WAKTI Branding - Moved outside and below the card */}
-      <div className="mt-4 flex justify-center">
-        <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1.5 rounded-md border border-primary/20">
-          <span className="text-xs text-muted-foreground">
-            Powered by{' '}
-            <a 
-              href="/" 
-              className="text-primary hover:text-primary/80 transition-colors underline decoration-1 underline-offset-2"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              WAKTI
-            </a>
-          </span>
         </div>
       </div>
     </div>
