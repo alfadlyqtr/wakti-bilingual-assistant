@@ -10,6 +10,7 @@ interface EventPreviewProps {
   backgroundType: string;
   backgroundValue: string;
   rsvpCount?: { accepted: number; declined: number };
+  showAttendingCount?: boolean;
 }
 
 export const EventPreview: React.FC<EventPreviewProps> = ({
@@ -17,7 +18,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   textStyle,
   backgroundType,
   backgroundValue,
-  rsvpCount
+  rsvpCount,
+  showAttendingCount = true
 }) => {
   const getBackgroundStyle = () => {
     switch (backgroundType) {
@@ -120,7 +122,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
               </div>
             )}
 
-            {rsvpCount && (
+            {rsvpCount && showAttendingCount && (
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
@@ -130,17 +132,22 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
             )}
           </div>
         </div>
+      </div>
 
-        {/* WAKTI Branding */}
-        <div className="absolute bottom-2 right-2">
-          <a 
-            href="/" 
-            className="text-xs text-white/70 hover:text-white/90 transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Powered by WAKTI
-          </a>
+      {/* WAKTI Branding - Moved outside and below the card */}
+      <div className="mt-4 flex justify-center">
+        <div className="bg-primary/10 dark:bg-primary/20 px-3 py-1.5 rounded-md border border-primary/20">
+          <span className="text-xs text-muted-foreground">
+            Powered by{' '}
+            <a 
+              href="/" 
+              className="text-primary hover:text-primary/80 transition-colors underline decoration-1 underline-offset-2"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              WAKTI
+            </a>
+          </span>
         </div>
       </div>
     </div>

@@ -19,8 +19,6 @@ import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, TextStyle, EventTemplate } from '@/types/maw3d';
 
 export default function Maw3dEdit() {
-  
-
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -178,6 +176,7 @@ export default function Maw3dEdit() {
                   textStyle={event.text_style}
                   backgroundType={event.background_type}
                   backgroundValue={event.background_value}
+                  showAttendingCount={event.show_attending_count}
                 />
               </CardContent>
             </Card>
@@ -359,6 +358,15 @@ export default function Maw3dEdit() {
                           onCheckedChange={(checked) => handleInputChange('is_public', checked)}
                         />
                         <Label htmlFor="is_public">Public Event (Anyone with link can view)</Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="show_attending_count"
+                          checked={event.show_attending_count ?? true}
+                          onCheckedChange={(checked) => handleInputChange('show_attending_count', checked)}
+                        />
+                        <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
                       </div>
                     </CardContent>
                   </AccordionContent>

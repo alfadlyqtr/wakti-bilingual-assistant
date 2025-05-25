@@ -1,4 +1,3 @@
-
 export interface Maw3dEvent {
   id: string;
   title: string;
@@ -19,6 +18,7 @@ export interface Maw3dEvent {
   updated_at: string;
   short_id?: string;
   template_type?: string;
+  show_attending_count?: boolean;
 }
 
 export interface CreateEventFormData {
@@ -37,6 +37,7 @@ export interface CreateEventFormData {
   text_style: TextStyle;
   invited_contacts: string[];
   template_type?: string;
+  show_attending_count?: boolean;
 }
 
 export interface TextStyle {
