@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -24,6 +22,7 @@ export default function Maw3dView() {
   const [guestName, setGuestName] = useState('');
   const [userRsvp, setUserRsvp] = useState<Maw3dRsvp | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasSubmittedResponse, setHasSubmittedResponse] = useState(false);
 
   useEffect(() => {
     if (shortId) {
@@ -52,9 +51,9 @@ export default function Maw3dView() {
       if (user) {
         const userResponse = eventRsvps.find(rsvp => rsvp.user_id === user.id);
         setUserRsvp(userResponse || null);
-      } else {
-        // For guests, check if there's an existing RSVP with the same name
-        // This will be checked during submission
+        if (userResponse) {
+          setHasSubmittedResponse(true);
+        }
       }
     } catch (error) {
       console.error('Error fetching event:', error);
@@ -68,9 +67,10 @@ export default function Maw3dView() {
   const handleRsvp = async (response: 'accepted' | 'declined') => {
     if (!event) return;
     
-    if (isSubmitting) return; // Prevent double submission
+    if (isSubmitting || hasSubmittedResponse) return; // Prevent double submission
     
-    if (!guestName.trim()) {
+    const trimmedName = guestName.trim();
+    if (!trimmedName) {
       toast.error('Please enter your name');
       return;
     }
@@ -81,11 +81,11 @@ export default function Maw3dView() {
       return;
     }
 
-    // For guests, check if name already exists in RSVPs
+    // For guests, check if name already exists in RSVPs (case-insensitive)
     if (!user) {
       const existingGuestRsvp = rsvps.find(rsvp => 
         rsvp.guest_name && 
-        rsvp.guest_name.toLowerCase().trim() === guestName.toLowerCase().trim()
+        rsvp.guest_name.toLowerCase() === trimmedName.toLowerCase()
       );
       if (existingGuestRsvp) {
         toast.error('Someone with this name has already responded');
@@ -105,21 +105,28 @@ export default function Maw3dView() {
         }
       } else {
         // Guest RSVP
-        await Maw3dService.createRsvp(event.id, response, guestName.trim());
+        await Maw3dService.createRsvp(event.id, response, trimmedName);
       }
 
-      // Show personalized thank you message
-      const name = guestName.trim();
-      if (response === 'accepted') {
-        toast.success(`Thank you for accepting, ${name}`);
-      } else {
-        toast.success(`It's okay, ${name}, would have liked your presence`);
-      }
+      // Mark as submitted to prevent further submissions
+      setHasSubmittedResponse(true);
       
-      fetchEvent(); // Refresh data
+      // Refresh data first
+      await fetchEvent();
+      
+      // Show personalized thank you message after data refresh
+      setTimeout(() => {
+        if (response === 'accepted') {
+          toast.success(`Thank you for accepting, ${trimmedName}!`);
+        } else {
+          toast.success(`It's okay, ${trimmedName}, would have liked your presence`);
+        }
+      }, 100);
+      
     } catch (error) {
       console.error('Error updating RSVP:', error);
       toast.error('Failed to update RSVP');
+      setHasSubmittedResponse(false); // Reset on error
     } finally {
       setIsSubmitting(false);
     }
@@ -132,10 +139,10 @@ export default function Maw3dView() {
   };
 
   // Check if user has already responded (for button states)
-  const hasResponded = user ? !!userRsvp : false;
+  const hasResponded = user ? !!userRsvp : hasSubmittedResponse;
   const guestHasResponded = !user && guestName.trim() && rsvps.some(rsvp => 
     rsvp.guest_name && 
-    rsvp.guest_name.toLowerCase().trim() === guestName.toLowerCase().trim()
+    rsvp.guest_name.toLowerCase() === guestName.toLowerCase().trim()
   );
 
   if (isLoading) {
@@ -307,4 +314,3 @@ export default function Maw3dView() {
     </div>
   );
 }
-
