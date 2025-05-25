@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Users, Share2, Save } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ArrowLeft, Users, Share2, Save, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
@@ -23,11 +23,13 @@ export default function Maw3dCreate() {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showContactsSelector, setShowContactsSelector] = useState(false);
+  const [isTemplateOpen, setIsTemplateOpen] = useState(false);
 
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
   const [formData, setFormData] = useState<CreateEventFormData>({
     title: '',
     description: '',
+    organizer: '',
     event_date: '',
     start_time: '09:00',
     end_time: '17:00',
@@ -56,6 +58,7 @@ export default function Maw3dCreate() {
         ...prev,
         title: selectedTemplate.title,
         description: selectedTemplate.description,
+        organizer: selectedTemplate.organizer,
         background_type: selectedTemplate.background_type,
         background_value: selectedTemplate.background_value,
         text_style: selectedTemplate.text_style,
@@ -185,20 +188,28 @@ export default function Maw3dCreate() {
               </CardContent>
             </Card>
 
-            {/* Templates */}
+            {/* Collapsible Templates */}
             <Card>
               <CardContent className="p-6">
-                <EventTemplates
-                  onSelectTemplate={setSelectedTemplate}
-                  selectedTemplate={selectedTemplate}
-                />
+                <Collapsible open={isTemplateOpen} onOpenChange={setIsTemplateOpen}>
+                  <CollapsibleTrigger className="flex items-center justify-between w-full">
+                    <h2 className="text-lg font-semibold">🧩 Choose Template</h2>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${isTemplateOpen ? 'rotate-180' : ''}`} />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-4">
+                    <EventTemplates
+                      onSelectTemplate={setSelectedTemplate}
+                      selectedTemplate={selectedTemplate}
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
               </CardContent>
             </Card>
 
             {/* Basic Information */}
             <Card>
               <CardContent className="p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Event Details</h2>
+                <h2 className="text-lg font-semibold">📝 Event Details</h2>
                 
                 <div>
                   <Label htmlFor="title">Event Title *</Label>
@@ -208,6 +219,16 @@ export default function Maw3dCreate() {
                     onChange={(e) => handleInputChange('title', e.target.value)}
                     placeholder="Enter event title"
                     className={!formData.title.trim() ? 'border-red-300' : ''}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="organizer">Organizer</Label>
+                  <Input
+                    id="organizer"
+                    value={formData.organizer}
+                    onChange={(e) => handleInputChange('organizer', e.target.value)}
+                    placeholder="Your name (so invitees know who is organizing)"
                   />
                 </div>
 

@@ -23,8 +23,8 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
   onTextStyleChange
 }) => {
   return (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Text Styling</h3>
+    <div className="space-y-6">
+      <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
       
       <div className="grid grid-cols-2 gap-4">
         <div>
@@ -67,57 +67,64 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label>Text Formatting</Label>
-        <div className="flex gap-2">
-          <Toggle
-            pressed={textStyle.isBold}
-            onPressedChange={(pressed) => onTextStyleChange({ isBold: pressed })}
-          >
-            <Bold className="w-4 h-4" />
-          </Toggle>
-          <Toggle
-            pressed={textStyle.isItalic}
-            onPressedChange={(pressed) => onTextStyleChange({ isItalic: pressed })}
-          >
-            <Italic className="w-4 h-4" />
-          </Toggle>
-          <Toggle
-            pressed={textStyle.isUnderline}
-            onPressedChange={(pressed) => onTextStyleChange({ isUnderline: pressed })}
-          >
-            <Underline className="w-4 h-4" />
-          </Toggle>
-          <Toggle
-            pressed={textStyle.hasShadow}
-            onPressedChange={(pressed) => onTextStyleChange({ hasShadow: pressed })}
-          >
-            <Palette className="w-4 h-4" />
-          </Toggle>
+      <div className="grid grid-cols-2 gap-6">
+        <div className="space-y-2">
+          <Label>Text Formatting</Label>
+          <div className="flex gap-2">
+            <Toggle
+              pressed={textStyle.isBold}
+              onPressedChange={(pressed) => onTextStyleChange({ isBold: pressed })}
+            >
+              <Bold className="w-4 h-4" />
+            </Toggle>
+            <Toggle
+              pressed={textStyle.isItalic}
+              onPressedChange={(pressed) => onTextStyleChange({ isItalic: pressed })}
+            >
+              <Italic className="w-4 h-4" />
+            </Toggle>
+            <Toggle
+              pressed={textStyle.isUnderline}
+              onPressedChange={(pressed) => onTextStyleChange({ isUnderline: pressed })}
+            >
+              <Underline className="w-4 h-4" />
+            </Toggle>
+            <Toggle
+              pressed={textStyle.hasShadow}
+              onPressedChange={(pressed) => onTextStyleChange({ hasShadow: pressed })}
+              className={`transition-all duration-200 ${
+                textStyle.hasShadow 
+                  ? 'shadow-lg shadow-black/25 bg-slate-100 dark:bg-slate-800' 
+                  : 'hover:shadow-md hover:shadow-black/15'
+              }`}
+            >
+              <Palette className="w-4 h-4" />
+            </Toggle>
+          </div>
         </div>
-      </div>
 
-      <div className="space-y-2">
-        <Label>Text Alignment</Label>
-        <div className="flex gap-2">
-          <Toggle
-            pressed={textStyle.alignment === 'left'}
-            onPressedChange={() => onTextStyleChange({ alignment: 'left' })}
-          >
-            <AlignLeft className="w-4 h-4" />
-          </Toggle>
-          <Toggle
-            pressed={textStyle.alignment === 'center'}
-            onPressedChange={() => onTextStyleChange({ alignment: 'center' })}
-          >
-            <AlignCenter className="w-4 h-4" />
-          </Toggle>
-          <Toggle
-            pressed={textStyle.alignment === 'right'}
-            onPressedChange={() => onTextStyleChange({ alignment: 'right' })}
-          >
-            <AlignRight className="w-4 h-4" />
-          </Toggle>
+        <div className="space-y-2">
+          <Label>Text Alignment</Label>
+          <div className="flex gap-2">
+            <Toggle
+              pressed={textStyle.alignment === 'left'}
+              onPressedChange={() => onTextStyleChange({ alignment: 'left' })}
+            >
+              <AlignLeft className="w-4 h-4" />
+            </Toggle>
+            <Toggle
+              pressed={textStyle.alignment === 'center'}
+              onPressedChange={() => onTextStyleChange({ alignment: 'center' })}
+            >
+              <AlignCenter className="w-4 h-4" />
+            </Toggle>
+            <Toggle
+              pressed={textStyle.alignment === 'right'}
+              onPressedChange={() => onTextStyleChange({ alignment: 'right' })}
+            >
+              <AlignRight className="w-4 h-4" />
+            </Toggle>
+          </div>
         </div>
       </div>
     </div>
