@@ -22,6 +22,11 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   showAttendingCount = true
 }) => {
   const getBackgroundStyle = () => {
+    // For transparent background, return empty object
+    if (backgroundType === 'transparent') {
+      return {};
+    }
+    
     switch (backgroundType) {
       case 'color':
         return { backgroundColor: backgroundValue };
@@ -71,8 +76,10 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         className="relative rounded-lg overflow-hidden shadow-lg"
         style={getBackgroundStyle()}
       >
-        {/* Overlay for better text readability */}
-        <div className="absolute inset-0 bg-black/20" />
+        {/* Only add overlay if not transparent */}
+        {backgroundType !== 'transparent' && (
+          <div className="absolute inset-0 bg-black/20" />
+        )}
         
         <div className="relative p-4 space-y-3">
           {/* Title and Description with custom text styling */}
