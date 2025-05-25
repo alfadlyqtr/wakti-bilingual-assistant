@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ export default function Maw3dView() {
   const [isLoading, setIsLoading] = useState(true);
   const [guestName, setGuestName] = useState('');
   const [userRsvp, setUserRsvp] = useState<Maw3dRsvp | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (shortId) {
@@ -50,6 +52,9 @@ export default function Maw3dView() {
       if (user) {
         const userResponse = eventRsvps.find(rsvp => rsvp.user_id === user.id);
         setUserRsvp(userResponse || null);
+      } else {
+        // For guests, check if there's an existing RSVP with the same name
+        // This will be checked during submission
       }
     } catch (error) {
       console.error('Error fetching event:', error);
@@ -62,6 +67,33 @@ export default function Maw3dView() {
 
   const handleRsvp = async (response: 'accepted' | 'declined') => {
     if (!event) return;
+    
+    if (isSubmitting) return; // Prevent double submission
+    
+    if (!guestName.trim()) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    // Check if user already has an RSVP to prevent spam
+    if (user && userRsvp) {
+      toast.error('You have already responded to this invitation');
+      return;
+    }
+
+    // For guests, check if name already exists in RSVPs
+    if (!user) {
+      const existingGuestRsvp = rsvps.find(rsvp => 
+        rsvp.guest_name && 
+        rsvp.guest_name.toLowerCase().trim() === guestName.toLowerCase().trim()
+      );
+      if (existingGuestRsvp) {
+        toast.error('Someone with this name has already responded');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
 
     try {
       if (user) {
@@ -73,18 +105,23 @@ export default function Maw3dView() {
         }
       } else {
         // Guest RSVP
-        if (!guestName.trim()) {
-          toast.error('Please enter your name');
-          return;
-        }
         await Maw3dService.createRsvp(event.id, response, guestName.trim());
       }
 
-      toast.success(`Successfully ${response === 'accepted' ? 'accepted' : 'declined'} the invitation!`);
+      // Show personalized thank you message
+      const name = guestName.trim();
+      if (response === 'accepted') {
+        toast.success(`Thank you for accepting, ${name}`);
+      } else {
+        toast.success(`It's okay, ${name}, would have liked your presence`);
+      }
+      
       fetchEvent(); // Refresh data
     } catch (error) {
       console.error('Error updating RSVP:', error);
       toast.error('Failed to update RSVP');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -93,6 +130,13 @@ export default function Maw3dView() {
     const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
     return { accepted, declined };
   };
+
+  // Check if user has already responded (for button states)
+  const hasResponded = user ? !!userRsvp : false;
+  const guestHasResponded = !user && guestName.trim() && rsvps.some(rsvp => 
+    rsvp.guest_name && 
+    rsvp.guest_name.toLowerCase().trim() === guestName.toLowerCase().trim()
+  );
 
   if (isLoading) {
     return (
@@ -149,29 +193,40 @@ export default function Maw3dView() {
                 onChange={(e) => setGuestName(e.target.value)}
                 placeholder="Enter your name"
                 className="w-full"
+                disabled={hasResponded || guestHasResponded || isSubmitting}
               />
             </div>
 
             <div className="flex gap-3">
               <Button
                 onClick={() => handleRsvp('accepted')}
-                variant={userRsvp?.response === 'accepted' ? 'default' : 'outline'}
-                className="flex-1 h-12 text-base font-medium border-2 transition-all duration-200 hover:scale-105"
+                disabled={hasResponded || guestHasResponded || isSubmitting || !guestName.trim()}
+                className="flex-1 h-12 text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90 border-2 border-primary transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Accept
+                {isSubmitting ? 'Processing...' : 'Accept'}
               </Button>
               <Button
                 onClick={() => handleRsvp('declined')}
-                variant={userRsvp?.response === 'declined' ? 'destructive' : 'outline'}
-                className="flex-1 h-12 text-base font-medium border-2 transition-all duration-200 hover:scale-105"
+                disabled={hasResponded || guestHasResponded || isSubmitting || !guestName.trim()}
+                className="flex-1 h-12 text-base font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 border-2 border-destructive transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
-                Decline
+                {isSubmitting ? 'Processing...' : 'Decline'}
               </Button>
             </div>
 
-            {userRsvp && (
+            {(hasResponded || guestHasResponded) && (
               <div className="mt-3 text-sm text-muted-foreground text-center">
-                You have {userRsvp.response === 'accepted' ? 'accepted' : 'declined'} this invitation
+                {user && userRsvp ? (
+                  `You have ${userRsvp.response === 'accepted' ? 'accepted' : 'declined'} this invitation`
+                ) : (
+                  'You have already responded to this invitation'
+                )}
+              </div>
+            )}
+
+            {!guestName.trim() && !hasResponded && !guestHasResponded && (
+              <div className="mt-3 text-sm text-muted-foreground text-center">
+                Please enter your name to respond
               </div>
             )}
           </CardContent>
@@ -252,3 +307,4 @@ export default function Maw3dView() {
     </div>
   );
 }
+
