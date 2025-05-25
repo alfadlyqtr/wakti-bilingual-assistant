@@ -1,10 +1,14 @@
 
 import React, { useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Loading from "@/components/ui/loading";
 
-export default function ProtectedRoute() {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, session, isLoading } = useAuth();
   const location = useLocation();
 
@@ -24,5 +28,5 @@ export default function ProtectedRoute() {
 
   // DISABLED AUTHENTICATION REDIRECT - Just pass through and render content
   console.log("ProtectedRoute: Rendering content without authentication check");
-  return <Outlet />;
+  return <>{children}</>;
 }

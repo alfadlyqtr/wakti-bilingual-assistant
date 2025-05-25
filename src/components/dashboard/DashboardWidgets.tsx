@@ -37,7 +37,6 @@ export const DashboardWidgets: React.FC<DashboardWidgetsProps> = ({
         <CalendarWidget 
           isLoading={isLoading} 
           tasks={tasks} 
-          reminders={reminders} 
           language={language} 
         />
       </div>
