@@ -4,17 +4,23 @@ import { toast } from 'sonner';
 
 export class ShareService {
   static generateEventLink(shortId: string): string {
-    return `https://wakti.qa/maw3d/${shortId}`;
+    const link = `https://wakti.qa/maw3d/${shortId}`;
+    console.log('Generated event link:', link);
+    return link;
   }
 
   static async shareEvent(eventId: string, shortId: string) {
-    console.log('ShareService.shareEvent called with:', { eventId, shortId });
+    console.log('=== ShareService.shareEvent START ===');
+    console.log('Called with eventId:', eventId, 'shortId:', shortId);
     
     try {
       const link = this.generateEventLink(shortId);
-      console.log('Generated link:', link);
+      console.log('Generated link for sharing:', link);
       
       // Check if we can use the native share API
+      console.log('Checking navigator.share availability:', !!navigator.share);
+      console.log('Checking navigator.canShare availability:', !!navigator.canShare);
+      
       if (navigator.share) {
         console.log('Using navigator.share');
         const shareData = {
@@ -23,20 +29,30 @@ export class ShareService {
           url: link,
         };
         
+        console.log('Share data prepared:', shareData);
+        
         // Check if the data can be shared before attempting to share
-        if (navigator.canShare && !navigator.canShare(shareData)) {
-          console.log('Data cannot be shared, falling back to clipboard');
-          throw new Error('Data cannot be shared');
+        if (navigator.canShare) {
+          const canShare = navigator.canShare(shareData);
+          console.log('Can share this data:', canShare);
+          
+          if (!canShare) {
+            console.log('Data cannot be shared, falling back to clipboard');
+            throw new Error('Data cannot be shared');
+          }
         }
         
+        console.log('Attempting to share...');
         await navigator.share(shareData);
-        console.log('Share successful');
+        console.log('Share successful via navigator.share');
+        toast.success('Event shared successfully!');
       } else {
         console.log('navigator.share not available, using clipboard');
         throw new Error('Navigator share not available');
       }
     } catch (error) {
       console.error('Error in native share:', error);
+      console.log('Falling back to clipboard...');
       
       // Fallback to clipboard
       try {
@@ -49,6 +65,7 @@ export class ShareService {
           return;
         }
         
+        console.log('Writing to clipboard...');
         await navigator.clipboard.writeText(link);
         console.log('Clipboard copy successful');
         toast.success('Event link copied to clipboard!');
@@ -57,5 +74,7 @@ export class ShareService {
         toast.error('Failed to copy link. Please try again.');
       }
     }
+    
+    console.log('=== ShareService.shareEvent END ===');
   }
 }

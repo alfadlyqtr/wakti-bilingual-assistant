@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,9 @@ export default function Maw3dEvents() {
   };
 
   const handleShare = async (event: Maw3dEvent) => {
+    console.log('=== SHARE DEBUG START ===');
     console.log('Share button clicked for event:', event.id, 'short_id:', event.short_id);
+    console.log('Event object:', event);
     
     if (!event.short_id) {
       console.error('No short_id found for event:', event.id);
@@ -45,11 +46,14 @@ export default function Maw3dEvents() {
     }
     
     try {
+      console.log('Calling ShareService.shareEvent...');
       await ShareService.shareEvent(event.id, event.short_id);
+      console.log('ShareService.shareEvent completed successfully');
     } catch (error) {
       console.error('Error in handleShare:', error);
       toast.error('Failed to share event');
     }
+    console.log('=== SHARE DEBUG END ===');
   };
 
   const handleDelete = async (eventId: string) => {
@@ -103,15 +107,13 @@ export default function Maw3dEvents() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
-              ))}
-            </div>
+      <div className="min-h-screen bg-background p-4 pb-20">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
+            ))}
           </div>
         </div>
       </div>
@@ -119,132 +121,130 @@ export default function Maw3dEvents() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Maw3d Events</h1>
-            <p className="text-muted-foreground mt-2">Create and manage your events</p>
-          </div>
-          <Button onClick={() => navigate('/maw3d/create')} className="gap-2">
-            <Plus className="w-4 h-4" />
+    <div className="min-h-screen bg-background p-4 pb-20">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-3xl font-bold">Maw3d Events</h1>
+          <p className="text-muted-foreground mt-2">Create and manage your events</p>
+        </div>
+        <Button onClick={() => navigate('/maw3d/create')} className="gap-2">
+          <Plus className="w-4 h-4" />
+          Create Event
+        </Button>
+      </div>
+
+      {/* Events Grid */}
+      {events.length === 0 ? (
+        <div className="text-center py-12">
+          <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-xl font-semibold mb-2">No events yet</h3>
+          <p className="text-muted-foreground mb-6">
+            Create your first event to get started
+          </p>
+          <Button onClick={() => navigate('/maw3d/create')}>
+            <Plus className="w-4 h-4 mr-2" />
             Create Event
           </Button>
         </div>
-
-        {/* Events Grid */}
-        {events.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No events yet</h3>
-            <p className="text-muted-foreground mb-6">
-              Create your first event to get started
-            </p>
-            <Button onClick={() => navigate('/maw3d/create')}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Event
-            </Button>
-          </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {events.map((event) => (
-              <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
-                <div 
-                  className="relative h-48 flex items-end p-4"
-                  style={getBackgroundStyle(event)}
-                  onClick={() => navigate(`/maw3d/${event.short_id}`)}
-                >
-                  {/* Overlay for better text readability */}
-                  <div className="absolute inset-0 bg-black/20" />
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {events.map((event) => (
+            <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+              <div 
+                className="relative h-48 flex items-end p-4"
+                style={getBackgroundStyle(event)}
+                onClick={() => navigate(`/maw3d/${event.short_id}`)}
+              >
+                {/* Overlay for better text readability */}
+                <div className="absolute inset-0 bg-black/20" />
+                
+                <div className="relative text-white">
+                  <h3 className="font-bold text-xl mb-1">{event.title}</h3>
+                  {event.description && (
+                    <p className="text-sm opacity-90 line-clamp-2">{event.description}</p>
+                  )}
+                </div>
+              </div>
+              
+              <CardContent className="p-4">
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="w-4 h-4" />
+                    <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                  </div>
                   
-                  <div className="relative text-white">
-                    <h3 className="font-bold text-xl mb-1">{event.title}</h3>
-                    {event.description && (
-                      <p className="text-sm opacity-90 line-clamp-2">{event.description}</p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span>{formatEventTime(event)}</span>
+                  </div>
+
+                  {event.location && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <MapPin className="w-4 h-4" />
+                      <span className="truncate">{event.location}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={event.created_by === user?.id ? "default" : "secondary"}>
+                      {event.created_by === user?.id ? "Created by You" : "Invited"}
+                    </Badge>
+                    {event.is_public && (
+                      <Badge variant="outline">Public</Badge>
                     )}
                   </div>
                 </div>
-                
-                <CardContent className="p-4">
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
-                    </div>
+
+                {/* Action buttons */}
+                {event.created_by === user?.id && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/maw3d/edit/${event.id}`);
+                      }}
+                      className="flex-1"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
+                    </Button>
                     
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <span>{formatEventTime(event)}</span>
-                    </div>
-
-                    {event.location && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <MapPin className="w-4 h-4" />
-                        <span className="truncate">{event.location}</span>
-                      </div>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShare(event);
+                      }}
+                      className="flex-1"
+                    >
+                      <Share2 className="w-4 h-4 mr-1" />
+                      Share
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(event.id);
+                      }}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={event.created_by === user?.id ? "default" : "secondary"}>
-                        {event.created_by === user?.id ? "Created by You" : "Invited"}
-                      </Badge>
-                      {event.is_public && (
-                        <Badge variant="outline">Public</Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  {event.created_by === user?.id && (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/maw3d/edit/${event.id}`);
-                        }}
-                        className="flex-1"
-                      >
-                        <Edit className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleShare(event);
-                        }}
-                        className="flex-1"
-                      >
-                        <Share2 className="w-4 h-4 mr-1" />
-                        Share
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(event.id);
-                        }}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
