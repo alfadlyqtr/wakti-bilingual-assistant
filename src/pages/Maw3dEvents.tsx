@@ -95,8 +95,8 @@ export default function Maw3dEvents() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
+      <div className="min-h-screen bg-background p-4">
+        <div className="max-w-7xl mx-auto">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -111,8 +111,8 @@ export default function Maw3dEvents() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -178,7 +178,7 @@ export default function Maw3dEvents() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
                       <Badge variant={event.created_by === user?.id ? "default" : "secondary"}>
                         {event.created_by === user?.id ? "Created by You" : "Invited"}
@@ -191,7 +191,7 @@ export default function Maw3dEvents() {
 
                   {/* Action buttons */}
                   {event.created_by === user?.id && (
-                    <div className="flex items-center gap-2 mt-4">
+                    <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
