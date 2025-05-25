@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Calendar, Clock, MapPin, Users } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +20,7 @@ export default function Maw3dView() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [eventNotFound, setEventNotFound] = useState(false);
   const [guestName, setGuestName] = useState('');
   const [userRsvp, setUserRsvp] = useState<Maw3dRsvp | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -41,8 +42,7 @@ export default function Maw3dView() {
       const eventData = await Maw3dService.getEventByShortId(shortId);
       if (!eventData) {
         console.error('Event not found by short ID');
-        toast.error('Event not found');
-        navigate('/maw3d');
+        setEventNotFound(true);
         return;
       }
 
@@ -66,8 +66,7 @@ export default function Maw3dView() {
       }
     } catch (error) {
       console.error('Error fetching event:', error);
-      toast.error('Failed to load event');
-      navigate('/maw3d');
+      setEventNotFound(true);
     } finally {
       setIsLoading(false);
     }
@@ -181,13 +180,15 @@ export default function Maw3dView() {
     );
   }
 
-  if (!event) {
+  if (eventNotFound || !event) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Event not found</h1>
-          <Button onClick={() => navigate('/maw3d')}>
-            Back to Events
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Event not found</h1>
+          <p className="text-muted-foreground">This event link may be invalid or the event may have been deleted.</p>
+          <Button onClick={() => navigate('/')} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Go to Home
           </Button>
         </div>
       </div>
@@ -268,20 +269,6 @@ export default function Maw3dView() {
                 Please enter your name to respond
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Debug Information */}
-        <Card className="mb-6 border-dashed">
-          <CardContent className="p-4">
-            <div className="text-xs space-y-1 text-muted-foreground">
-              <div>Event ID: {event.id}</div>
-              <div>Short ID: {shortId}</div>
-              <div>Guest Name: "{guestName}"</div>
-              <div>Has Responded: {hasResponded.toString()}</div>
-              <div>Is Submitting: {isSubmitting.toString()}</div>
-              <div>RSVPs Count: {rsvps.length}</div>
-            </div>
           </CardContent>
         </Card>
 
