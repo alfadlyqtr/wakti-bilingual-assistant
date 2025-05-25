@@ -6,13 +6,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Search, Users } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { getContacts } from '@/services/contactsService';
 
 interface Contact {
   id: string;
-  username: string;
-  display_name: string;
-  avatar_url?: string;
+  contact_id: string;
+  profile?: {
+    username: string;
+    display_name?: string;
+    avatar_url?: string;
+  };
 }
 
 interface ContactsSelectorProps {
@@ -40,52 +43,32 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
 
   const fetchContacts = async () => {
     try {
-      const { data, error } = await supabase
-        .from('contacts')
-        .select(`
-          contact_id,
-          profiles!contacts_contact_id_fkey (
-            id,
-            username,
-            display_name,
-            avatar_url
-          )
-        `)
-        .eq('status', 'approved');
-
-      if (error) throw error;
-
-      // Transform the data properly
-      const transformedContacts: Contact[] = [];
+      setIsLoading(true);
+      console.log('Fetching contacts for selector...');
       
-      if (data) {
-        for (const item of data) {
-          if (item.profiles && typeof item.profiles === 'object') {
-            const profile = item.profiles as any;
-            if (profile.id) {
-              transformedContacts.push({
-                id: profile.id,
-                username: profile.username || '',
-                display_name: profile.display_name || '',
-                avatar_url: profile.avatar_url
-              });
-            }
-          }
-        }
-      }
-
-      setContacts(transformedContacts);
+      // Use the same service as the Contacts page
+      const contactsData = await getContacts();
+      console.log('Contacts fetched:', contactsData);
+      
+      setContacts(contactsData || []);
     } catch (error) {
       console.error('Error fetching contacts:', error);
+      setContacts([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    contact.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.username?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredContacts = contacts.filter(contact => {
+    const profile = contact.profile;
+    if (!profile) return false;
+    
+    const displayName = profile.display_name || '';
+    const username = profile.username || '';
+    
+    return displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           username.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   const handleContactToggle = (contactId: string) => {
     const newSelection = selectedContacts.includes(contactId)
@@ -93,6 +76,14 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
       : [...selectedContacts, contactId];
     
     onContactsChange(newSelection);
+  };
+
+  const getContactDisplayName = (contact: Contact) => {
+    return contact.profile?.display_name || contact.profile?.username || 'Unknown';
+  };
+
+  const getContactUsername = (contact: Contact) => {
+    return contact.profile?.username || '';
   };
 
   return (
@@ -121,39 +112,44 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
               <div className="text-center py-4 text-gray-500">Loading contacts...</div>
             ) : filteredContacts.length === 0 ? (
               <div className="text-center py-4 text-gray-500">
-                {searchTerm ? 'No contacts found' : 'No contacts available'}
+                {searchTerm ? 'No contacts found' : contacts.length === 0 ? 'No contacts available' : 'No matching contacts'}
               </div>
             ) : (
-              filteredContacts.map((contact) => (
-                <div key={contact.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50">
-                  <Checkbox
-                    id={contact.id}
-                    checked={selectedContacts.includes(contact.id)}
-                    onCheckedChange={() => handleContactToggle(contact.id)}
-                  />
-                  <div className="flex items-center space-x-2 flex-1">
-                    {contact.avatar_url ? (
-                      <img
-                        src={contact.avatar_url}
-                        alt={contact.display_name}
-                        className="w-8 h-8 rounded-full"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
-                        <span className="text-xs font-medium">
-                          {contact.display_name?.charAt(0) || contact.username?.charAt(0) || '?'}
-                        </span>
-                      </div>
-                    )}
-                    <Label htmlFor={contact.id} className="cursor-pointer">
-                      <div className="font-medium">{contact.display_name || contact.username}</div>
-                      {contact.display_name && contact.username && (
-                        <div className="text-xs text-gray-500">@{contact.username}</div>
+              filteredContacts.map((contact) => {
+                const displayName = getContactDisplayName(contact);
+                const username = getContactUsername(contact);
+                
+                return (
+                  <div key={contact.contact_id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50">
+                    <Checkbox
+                      id={contact.contact_id}
+                      checked={selectedContacts.includes(contact.contact_id)}
+                      onCheckedChange={() => handleContactToggle(contact.contact_id)}
+                    />
+                    <div className="flex items-center space-x-2 flex-1">
+                      {contact.profile?.avatar_url ? (
+                        <img
+                          src={contact.profile.avatar_url}
+                          alt={displayName}
+                          className="w-8 h-8 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                          <span className="text-xs font-medium">
+                            {displayName.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
                       )}
-                    </Label>
+                      <Label htmlFor={contact.contact_id} className="cursor-pointer">
+                        <div className="font-medium">{displayName}</div>
+                        {username && (
+                          <div className="text-xs text-gray-500">@{username}</div>
+                        )}
+                      </Label>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
 
