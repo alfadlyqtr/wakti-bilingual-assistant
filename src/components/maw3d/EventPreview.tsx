@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Maw3dEvent, TextStyle } from '@/types/maw3d';
 import { Calendar, Clock, MapPin, Users } from 'lucide-react';

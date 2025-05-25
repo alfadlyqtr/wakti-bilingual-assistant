@@ -212,6 +212,7 @@ export type Database = {
           location: string | null
           organizer: string | null
           short_id: string | null
+          show_attending_count: boolean
           start_time: string | null
           template_type: string | null
           text_style: Json
@@ -233,6 +234,7 @@ export type Database = {
           location?: string | null
           organizer?: string | null
           short_id?: string | null
+          show_attending_count?: boolean
           start_time?: string | null
           template_type?: string | null
           text_style?: Json
@@ -254,6 +256,7 @@ export type Database = {
           location?: string | null
           organizer?: string | null
           short_id?: string | null
+          show_attending_count?: boolean
           start_time?: string | null
           template_type?: string | null
           text_style?: Json

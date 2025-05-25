@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -52,11 +51,8 @@ export default function Maw3dEdit() {
         return;
       }
 
-      // Ensure show_attending_count has a default value if undefined
-      setEvent({
-        ...eventData,
-        show_attending_count: eventData.show_attending_count ?? true
-      });
+      // The field should now always exist due to database default
+      setEvent(eventData);
 
       // Fetch current invitations
       if (!eventData.is_public) {
@@ -125,14 +121,8 @@ export default function Maw3dEdit() {
     try {
       console.log('Saving event with show_attending_count:', event.show_attending_count);
       
-      // Prepare the update data with explicit show_attending_count
-      const updateData = {
-        ...event,
-        show_attending_count: event.show_attending_count ?? true
-      };
-
-      // Update the event
-      const updatedEvent = await Maw3dService.updateEvent(event.id, updateData);
+      // Update the event - no need for fallback logic since field is now required
+      const updatedEvent = await Maw3dService.updateEvent(event.id, event);
       console.log('Event updated with show_attending_count:', updatedEvent.show_attending_count);
 
       // Update invitations if it's a private event
@@ -191,7 +181,7 @@ export default function Maw3dEdit() {
                   textStyle={event.text_style}
                   backgroundType={event.background_type}
                   backgroundValue={event.background_value}
-                  showAttendingCount={event.show_attending_count ?? true}
+                  showAttendingCount={event.show_attending_count}
                 />
               </CardContent>
             </Card>
@@ -378,7 +368,7 @@ export default function Maw3dEdit() {
                       <div className="flex items-center space-x-2">
                         <Switch
                           id="show_attending_count"
-                          checked={event.show_attending_count ?? true}
+                          checked={event.show_attending_count}
                           onCheckedChange={(checked) => {
                             console.log('Toggle changed to:', checked);
                             handleInputChange('show_attending_count', checked);
