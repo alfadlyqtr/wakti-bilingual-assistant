@@ -172,14 +172,24 @@ export class Maw3dService {
     const { data: userData } = await supabase.auth.getUser();
     console.log('Current user:', userData?.user?.id || 'No user');
     
+    // Guest name is required for both authenticated and non-authenticated users
+    if (!guestName?.trim()) {
+      const errorMsg = 'Guest name is required for all RSVPs';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const trimmedName = guestName.trim();
+    
     const rsvpData: any = {
       event_id: eventId,
       response,
+      guest_name: trimmedName, // Always store the guest name
     };
 
     if (userData?.user) {
       rsvpData.user_id = userData.user.id;
-      console.log('Creating RSVP for authenticated user:', userData.user.id);
+      console.log('Creating RSVP for authenticated user:', userData.user.id, 'with name:', trimmedName);
       
       // Use upsert with proper conflict resolution for authenticated users
       const { data, error } = await supabase
@@ -197,9 +207,7 @@ export class Maw3dService {
       
       console.log('RSVP created/updated successfully for user:', data);
       return data;
-    } else if (guestName) {
-      const trimmedName = guestName.trim();
-      rsvpData.guest_name = trimmedName;
+    } else {
       console.log('Creating RSVP for guest:', trimmedName);
       
       // For guests, first check if name already exists (case-insensitive)
@@ -233,10 +241,6 @@ export class Maw3dService {
       
       console.log('RSVP created successfully for guest:', data);
       return data;
-    } else {
-      const errorMsg = 'Either user must be logged in or guest name must be provided';
-      console.error(errorMsg);
-      throw new Error(errorMsg);
     }
   }
 
