@@ -35,22 +35,30 @@ export default function Maw3dView() {
     try {
       if (!shortId) return;
       
+      console.log('=== FETCHING EVENT BY SHORT ID ===');
+      console.log('Short ID:', shortId);
+      
       const eventData = await Maw3dService.getEventByShortId(shortId);
       if (!eventData) {
+        console.error('Event not found by short ID');
         toast.error('Event not found');
         navigate('/maw3d');
         return;
       }
 
+      console.log('Event data found:', eventData);
       setEvent(eventData);
       
       // Fetch RSVPs
+      console.log('Fetching RSVPs for event:', eventData.id);
       const eventRsvps = await Maw3dService.getRsvps(eventData.id);
+      console.log('Fetched RSVPs:', eventRsvps);
       setRsvps(eventRsvps);
       
       // Find user's RSVP if logged in
       if (user) {
         const userResponse = eventRsvps.find(rsvp => rsvp.user_id === user.id);
+        console.log('User RSVP found:', userResponse);
         setUserRsvp(userResponse || null);
         if (userResponse) {
           setHasSubmittedResponse(true);
@@ -68,20 +76,29 @@ export default function Maw3dView() {
   const handleRsvp = async (response: 'accepted' | 'declined') => {
     if (!event) return;
     
+    console.log('=== HANDLE RSVP START ===');
+    console.log('Response:', response);
+    console.log('Guest name:', guestName);
+    console.log('User:', user);
+    console.log('Is submitting:', isSubmitting);
+    console.log('Has submitted:', hasSubmittedResponse);
+    
     // Prevent multiple submissions
     if (isSubmitting || hasSubmittedResponse) {
-      console.log('Submission blocked - already submitting or submitted:', { isSubmitting, hasSubmittedResponse });
+      console.log('Submission blocked - already submitting or submitted');
       return;
     }
     
     const trimmedName = guestName.trim();
     if (!trimmedName) {
+      console.log('No name provided');
       toast.error('Please enter your name');
       return;
     }
 
     // Additional check for logged-in users
     if (user && userRsvp) {
+      console.log('User already has RSVP');
       toast.error('You have already responded to this invitation');
       return;
     }
@@ -89,20 +106,25 @@ export default function Maw3dView() {
     setIsSubmitting(true);
 
     try {
-      console.log('Submitting RSVP:', { user: !!user, trimmedName, response });
+      console.log('Submitting RSVP to service...');
       
       if (user) {
         // User is logged in - use createRsvp which handles upsert
+        console.log('Creating RSVP for authenticated user');
         await Maw3dService.createRsvp(event.id, response);
       } else {
         // Guest RSVP - createRsvp will handle duplicate checking
+        console.log('Creating RSVP for guest with name:', trimmedName);
         await Maw3dService.createRsvp(event.id, response, trimmedName);
       }
 
+      console.log('RSVP submitted successfully');
+      
       // Mark as submitted immediately to prevent further attempts
       setHasSubmittedResponse(true);
       
       // Refresh data
+      console.log('Refreshing event data...');
       await fetchEvent();
       
       // Show personalized message with slight delay to ensure state is updated
@@ -128,6 +150,7 @@ export default function Maw3dView() {
       }
     } finally {
       setIsSubmitting(false);
+      console.log('=== HANDLE RSVP END ===');
     }
   };
 
@@ -198,7 +221,10 @@ export default function Maw3dView() {
               <Input
                 type="text"
                 value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
+                onChange={(e) => {
+                  console.log('Name input changed:', e.target.value);
+                  setGuestName(e.target.value);
+                }}
                 placeholder="Enter your name"
                 className="w-full"
                 disabled={hasResponded || isSubmitting}
@@ -242,6 +268,20 @@ export default function Maw3dView() {
                 Please enter your name to respond
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Debug Information */}
+        <Card className="mb-6 border-dashed">
+          <CardContent className="p-4">
+            <div className="text-xs space-y-1 text-muted-foreground">
+              <div>Event ID: {event.id}</div>
+              <div>Short ID: {shortId}</div>
+              <div>Guest Name: "{guestName}"</div>
+              <div>Has Responded: {hasResponded.toString()}</div>
+              <div>Is Submitting: {isSubmitting.toString()}</div>
+              <div>RSVPs Count: {rsvps.length}</div>
+            </div>
           </CardContent>
         </Card>
 

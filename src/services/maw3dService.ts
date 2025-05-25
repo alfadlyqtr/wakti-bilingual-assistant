@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/types/maw3d";
 
@@ -134,7 +133,8 @@ export class Maw3dService {
 
   // RSVPs
   static async getRsvps(eventId: string): Promise<Maw3dRsvp[]> {
-    console.log('Fetching RSVPs for event:', eventId);
+    console.log('=== FETCHING RSVPs ===');
+    console.log('Event ID:', eventId);
     
     const { data, error } = await supabase
       .from('maw3d_rsvps')
@@ -146,14 +146,34 @@ export class Maw3dService {
       console.error('Error fetching RSVPs:', error);
       throw error;
     }
-    console.log('Fetched RSVPs:', data?.length || 0);
+    
+    console.log('Raw RSVP data from database:', data);
+    console.log('Number of RSVPs found:', data?.length || 0);
+    
+    if (data && data.length > 0) {
+      data.forEach((rsvp, index) => {
+        console.log(`RSVP ${index + 1}:`, {
+          id: rsvp.id,
+          event_id: rsvp.event_id,
+          user_id: rsvp.user_id,
+          guest_name: rsvp.guest_name,
+          response: rsvp.response,
+          created_at: rsvp.created_at
+        });
+      });
+    }
+    
     return data || [];
   }
 
   static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName?: string): Promise<Maw3dRsvp> {
-    console.log('Creating RSVP:', { eventId, response, guestName });
+    console.log('=== CREATING RSVP ===');
+    console.log('Event ID:', eventId);
+    console.log('Response:', response);
+    console.log('Guest Name:', guestName);
     
     const { data: userData } = await supabase.auth.getUser();
+    console.log('Current user:', userData?.user?.id || 'No user');
     
     const rsvpData: any = {
       event_id: eventId,
@@ -162,6 +182,7 @@ export class Maw3dService {
 
     if (userData?.user) {
       rsvpData.user_id = userData.user.id;
+      console.log('Creating RSVP for authenticated user:', userData.user.id);
       
       // Use upsert with proper conflict resolution for authenticated users
       const { data, error } = await supabase
@@ -180,17 +201,20 @@ export class Maw3dService {
       console.log('RSVP created/updated successfully for user:', data);
       return data;
     } else if (guestName) {
-      rsvpData.guest_name = guestName.trim();
+      const trimmedName = guestName.trim();
+      rsvpData.guest_name = trimmedName;
+      console.log('Creating RSVP for guest:', trimmedName);
       
       // For guests, first check if name already exists (case-insensitive)
       const { data: existingRsvp } = await supabase
         .from('maw3d_rsvps')
         .select('*')
         .eq('event_id', eventId)
-        .ilike('guest_name', guestName.trim())
+        .ilike('guest_name', trimmedName)
         .maybeSingle();
         
       if (existingRsvp) {
+        console.error('Guest name already exists:', existingRsvp);
         throw new Error('Someone with this name has already responded to this event');
       }
       
@@ -213,7 +237,9 @@ export class Maw3dService {
       console.log('RSVP created successfully for guest:', data);
       return data;
     } else {
-      throw new Error('Either user must be logged in or guest name must be provided');
+      const errorMsg = 'Either user must be logged in or guest name must be provided';
+      console.error(errorMsg);
+      throw new Error(errorMsg);
     }
   }
 

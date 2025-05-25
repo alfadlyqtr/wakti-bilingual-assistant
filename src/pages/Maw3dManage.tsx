@@ -31,15 +31,22 @@ export default function Maw3dManage() {
     try {
       if (!id) return;
       
+      console.log('=== FETCHING EVENT DATA ===');
+      console.log('Event ID:', id);
+      
       const eventData = await Maw3dService.getEvent(id);
       if (!eventData) {
+        console.error('Event not found');
         toast.error('Event not found');
         navigate('/maw3d');
         return;
       }
 
+      console.log('Event data:', eventData);
+
       // Check if user is the creator
       if (eventData.created_by !== user?.id) {
+        console.error('User not creator:', { eventCreatedBy: eventData.created_by, currentUser: user?.id });
         toast.error('You can only manage events you created');
         navigate('/maw3d');
         return;
@@ -48,7 +55,9 @@ export default function Maw3dManage() {
       setEvent(eventData);
       
       // Fetch RSVPs
+      console.log('Fetching RSVPs for event:', eventData.id);
       const eventRsvps = await Maw3dService.getRsvps(eventData.id);
+      console.log('Fetched RSVPs:', eventRsvps);
       setRsvps(eventRsvps);
     } catch (error) {
       console.error('Error fetching event data:', error);
@@ -93,7 +102,21 @@ export default function Maw3dManage() {
   };
 
   const formatRsvpName = (rsvp: Maw3dRsvp) => {
-    return rsvp.guest_name || 'Anonymous User';
+    console.log('Formatting RSVP name:', rsvp);
+    
+    // For authenticated users, try to get display name from user metadata
+    if (rsvp.user_id && !rsvp.guest_name) {
+      // TODO: We might need to fetch user profile data here
+      return 'Registered User';
+    }
+    
+    // For guest users, use the guest_name
+    if (rsvp.guest_name) {
+      return rsvp.guest_name;
+    }
+    
+    // Fallback
+    return 'Anonymous User';
   };
 
   if (isLoading) {
@@ -124,6 +147,12 @@ export default function Maw3dManage() {
   const rsvpCounts = getRsvpCounts();
   const acceptedRsvps = rsvps.filter(rsvp => rsvp.response === 'accepted');
   const declinedRsvps = rsvps.filter(rsvp => rsvp.response === 'declined');
+
+  console.log('=== RENDER DEBUG ===');
+  console.log('Total RSVPs:', rsvps.length);
+  console.log('Accepted RSVPs:', acceptedRsvps.length);
+  console.log('Declined RSVPs:', declinedRsvps.length);
+  console.log('All RSVPs:', rsvps);
 
   return (
     <div className="min-h-screen bg-background">
@@ -232,18 +261,28 @@ export default function Maw3dManage() {
             </CardHeader>
             <CardContent>
               {acceptedRsvps.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950/20 rounded">
-                      <span className="font-medium">{formatRsvpName(rsvp)}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                    <div key={rsvp.id} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border">
+                      <div className="flex-1">
+                        <div className="font-medium text-green-800 dark:text-green-200">
+                          {formatRsvpName(rsvp)}
+                        </div>
+                        <div className="text-xs text-green-600 dark:text-green-400">
+                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                        Accepted
                       </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-4">No one has accepted yet</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No one has accepted yet</p>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -258,22 +297,50 @@ export default function Maw3dManage() {
             </CardHeader>
             <CardContent>
               {declinedRsvps.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center justify-between p-2 bg-red-50 dark:bg-red-950/20 rounded">
-                      <span className="font-medium">{formatRsvpName(rsvp)}</span>
-                      <Badge variant="secondary" className="text-xs">
-                        {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                    <div key={rsvp.id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border">
+                      <div className="flex-1">
+                        <div className="font-medium text-red-800 dark:text-red-200">
+                          {formatRsvpName(rsvp)}
+                        </div>
+                        <div className="text-xs text-red-600 dark:text-red-400">
+                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                        Declined
                       </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-4">No one has declined yet</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <XCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No one has declined yet</p>
+                </div>
               )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Debug Information (Remove in production) */}
+        <Card className="mt-8 border-dashed">
+          <CardHeader>
+            <CardTitle className="text-sm text-muted-foreground">Debug Info</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-xs space-y-2 text-muted-foreground">
+              <div>Event ID: {event.id}</div>
+              <div>Short ID: {event.short_id}</div>
+              <div>Total RSVPs in state: {rsvps.length}</div>
+              <div>RSVP Details:</div>
+              <pre className="text-xs bg-muted p-2 rounded">
+                {JSON.stringify(rsvps, null, 2)}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Event Details */}
         <Card className="mt-8">
