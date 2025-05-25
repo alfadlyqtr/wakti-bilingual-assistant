@@ -73,28 +73,30 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         <div className="absolute inset-0 bg-black/20" />
         
         <div className="relative p-6 space-y-4">
+          {/* Title and Description with custom text styling */}
           <div style={getTextStyle()}>
-            <h1 className="text-2xl font-bold mb-2">
+            <h1 className="font-bold mb-2" style={{ fontSize: `${textStyle.fontSize + 6}px` }}>
               {event.title || 'Event Title'}
             </h1>
-            {event.description && (
-              <p className="text-sm opacity-90 mb-4">
+            {(event.description && event.description.trim()) && (
+              <p className="opacity-90 mb-4" style={{ fontSize: `${textStyle.fontSize - 2}px` }}>
                 {event.description}
               </p>
             )}
           </div>
 
-          <div className="space-y-2 text-white/90">
+          {/* Event details with consistent styling */}
+          <div className="space-y-2" style={{ color: textStyle.color }}>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              <span className="text-sm">
+              <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
                 {event.event_date ? formatDate(event.event_date) : 'Select Date'}
               </span>
             </div>
 
             <div className="flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              <span className="text-sm">
+              <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
                 {event.is_all_day 
                   ? 'All Day' 
                   : `${formatTime(event.start_time || '')} - ${formatTime(event.end_time || '')}`
@@ -105,14 +107,16 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
             {event.location && (
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4" />
-                <span className="text-sm">{event.location}</span>
+                <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
+                  {event.location}
+                </span>
               </div>
             )}
 
             {rsvpCount && (
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
-                <span className="text-sm">
+                <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
                   {rsvpCount.accepted} attending, {rsvpCount.declined} declined
                 </span>
               </div>
