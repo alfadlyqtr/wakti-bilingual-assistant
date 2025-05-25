@@ -86,13 +86,8 @@ export default function Maw3dView() {
     setIsSubmitting(true);
 
     try {
-      if (user) {
-        // User is logged in - use createRsvp which handles upsert
-        await Maw3dService.createRsvp(event.id, response);
-      } else {
-        // Guest RSVP - createRsvp will handle duplicate checking
-        await Maw3dService.createRsvp(event.id, response, trimmedName);
-      }
+      // Always pass the guest name for both authenticated and non-authenticated users
+      await Maw3dService.createRsvp(event.id, response, trimmedName);
       
       // Mark as submitted immediately to prevent further attempts
       setHasSubmittedResponse(true);
@@ -102,7 +97,7 @@ export default function Maw3dView() {
       
       // Show personalized message with slight delay to ensure state is updated
       setTimeout(() => {
-        const displayName = user ? (user.user_metadata?.display_name || user.email?.split('@')[0] || 'there') : trimmedName;
+        const displayName = trimmedName;
         if (response === 'accepted') {
           toast.success(`Thank you for accepting, ${displayName}!`);
         } else {
