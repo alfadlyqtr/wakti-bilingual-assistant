@@ -104,21 +104,7 @@ export default function Maw3dManage() {
   };
 
   const formatRsvpName = (rsvp: Maw3dRsvp) => {
-    console.log('Formatting RSVP name:', rsvp);
-    
-    // For guest users, use the guest_name
-    if (rsvp.guest_name) {
-      return rsvp.guest_name;
-    }
-    
-    // For authenticated users, try to get display name from user metadata
-    if (rsvp.user_id && !rsvp.guest_name) {
-      // TODO: We might need to fetch user profile data here
-      return 'Registered User';
-    }
-    
-    // Fallback
-    return 'Anonymous User';
+    return rsvp.guest_name;
   };
 
   const getBackgroundStyle = (event: Maw3dEvent) => {
