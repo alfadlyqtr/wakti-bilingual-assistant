@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,22 @@ export default function Maw3dEvents() {
     }
   };
 
-  const handleShare = async (event: Maw3dEvent) => {
+  const handleEventClick = (event: Maw3dEvent) => {
+    console.log('Event clicked:', event.id, 'created_by:', event.created_by, 'current_user:', user?.id);
+    
+    // If user created this event, go to management view
+    if (event.created_by === user?.id) {
+      console.log('Navigating to management view for creator');
+      navigate(`/maw3d/manage/${event.id}`);
+    } else {
+      console.log('Navigating to public view for invitee');
+      // If user is invited to this event, go to public view
+      navigate(`/maw3d/${event.short_id}`);
+    }
+  };
+
+  const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event click
     console.log('=== SHARE DEBUG START ===');
     console.log('Share button clicked for event:', event.id, 'short_id:', event.short_id);
     console.log('Event object:', event);
@@ -56,7 +72,14 @@ export default function Maw3dEvents() {
     console.log('=== SHARE DEBUG END ===');
   };
 
-  const handleDelete = async (eventId: string) => {
+  const handleEdit = (eventId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event click
+    navigate(`/maw3d/edit/${eventId}`);
+  };
+
+  const handleDelete = async (eventId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event click
+    
     if (!confirm('Are you sure you want to delete this event?')) return;
     
     try {
@@ -154,7 +177,7 @@ export default function Maw3dEvents() {
               <div 
                 className="relative h-48 flex items-end p-4"
                 style={getBackgroundStyle(event)}
-                onClick={() => navigate(`/maw3d/${event.short_id}`)}
+                onClick={() => handleEventClick(event)}
               >
                 {/* Overlay for better text readability */}
                 <div className="absolute inset-0 bg-black/20" />
@@ -198,16 +221,13 @@ export default function Maw3dEvents() {
                   </div>
                 </div>
 
-                {/* Action buttons */}
+                {/* Action buttons - only show for events created by user */}
                 {event.created_by === user?.id && (
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/maw3d/edit/${event.id}`);
-                      }}
+                      onClick={(e) => handleEdit(event.id, e)}
                       className="flex-1"
                     >
                       <Edit className="w-4 h-4 mr-1" />
@@ -217,10 +237,7 @@ export default function Maw3dEvents() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShare(event);
-                      }}
+                      onClick={(e) => handleShare(event, e)}
                       className="flex-1"
                     >
                       <Share2 className="w-4 h-4 mr-1" />
@@ -230,10 +247,7 @@ export default function Maw3dEvents() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(event.id);
-                      }}
+                      onClick={(e) => handleDelete(event.id, e)}
                       className="text-destructive hover:text-destructive"
                     >
                       <Trash2 className="w-4 h-4" />

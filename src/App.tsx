@@ -34,6 +34,7 @@ import Maw3dEvents from "@/pages/Maw3dEvents";
 import Maw3dCreate from "@/pages/Maw3dCreate";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEdit from "@/pages/Maw3dEdit";
+import Maw3dManage from "@/pages/Maw3dManage";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -167,6 +168,7 @@ function App() {
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />
                   <Route path="/maw3d/create" element={<Maw3dCreate />} />
                   <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
+                  <Route path="/maw3d/manage/:id" element={<Maw3dManage />} />
                   
                   {/* Other protected routes */}
                   <Route path="/settings" element={<AppLayout><PageContainer title="Settings"><Settings /></PageContainer></AppLayout>} />
