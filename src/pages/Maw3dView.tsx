@@ -206,156 +206,161 @@ export default function Maw3dView() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-2xl">
-        {/* Event Preview */}
-        <div className="mb-8">
-          <EventPreview
-            event={event}
-            textStyle={event.text_style}
-            backgroundType={event.background_type}
-            backgroundValue={event.background_value}
-            rsvpCount={rsvpCounts}
-            showAttendingCount={event.show_attending_count}
-          />
-        </div>
-
-        {/* RSVP Section */}
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Are you attending?</h3>
-            
-            {/* Name input field for ALL users */}
-            <div className="mb-4">
-              <Input
-                type="text"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full"
-                disabled={hasResponded || isSubmitting}
-              />
-              {guestNameConflict && (
-                <p className="text-sm text-destructive mt-1">
-                  Someone with this name has already responded
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={() => handleRsvp('accepted')}
-                disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
-                className="flex-1 h-12 text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90 border-2 border-primary transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isSubmitting ? 'Processing...' : 'Accept'}
-              </Button>
-              <Button
-                onClick={() => handleRsvp('declined')}
-                disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
-                className="flex-1 h-12 text-base font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 border-2 border-destructive transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-              >
-                {isSubmitting ? 'Processing...' : 'Decline'}
-              </Button>
-            </div>
-
-            {hasResponded && (
-              <div className="mt-3 text-sm text-muted-foreground text-center">
-                {user && userRsvp ? (
-                  `You have ${userRsvp.response === 'accepted' ? 'accepted' : 'declined'} this invitation`
-                ) : (
-                  'You have already responded to this invitation'
-                )}
-              </div>
-            )}
-
-            {!guestName.trim() && !hasResponded && (
-              <div className="mt-3 text-sm text-muted-foreground text-center">
-                Please enter your name to respond
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Add to Calendar Section */}
-        {calendarEvent && (
-          <Card className="mb-6">
+        <div className="border border-border rounded-lg shadow-md p-6 space-y-8">
+          {/* Event Preview Section */}
+          <Card>
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold mb-4">Add to Calendar</h3>
-              <div className="flex justify-center">
-                <CalendarDropdown event={calendarEvent} />
+              <h3 className="text-lg font-semibold mb-4">Event Preview</h3>
+              <EventPreview
+                event={event}
+                textStyle={event.text_style}
+                backgroundType={event.background_type}
+                backgroundValue={event.background_value}
+                rsvpCount={rsvpCounts}
+                showAttendingCount={event.show_attending_count}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Add to Calendar Section */}
+          {calendarEvent && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold mb-4">Add to Calendar</h3>
+                <div className="flex justify-center">
+                  <CalendarDropdown event={calendarEvent} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Event Details Section (Simplified) */}
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Event Details</h3>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-5 h-5 text-muted-foreground" />
+                  <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-muted-foreground" />
+                  <span>
+                    {event.is_all_day ? 'All Day' : `${event.start_time} - ${event.end_time}`}
+                  </span>
+                </div>
+
+                {event.location && (
+                  <div className="flex items-center gap-3">
+                    <MapPin className="w-5 h-5 text-muted-foreground" />
+                    <span>{event.location}</span>
+                    {event.google_maps_link && (
+                      <a 
+                        href={event.google_maps_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline ml-2"
+                      >
+                        View on Maps
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {event.organizer && (
+                  <div className="flex gap-2 pt-2">
+                    <Badge variant="outline">
+                      Organized by {event.organizer}
+                    </Badge>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
-        )}
 
-        {/* Event Details */}
-        <Card className="mb-8">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Event Details</h3>
-            
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <Calendar className="w-5 h-5 text-muted-foreground" />
-                <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
+          {/* RSVP Section - Moved to bottom above footer */}
+          <Card>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Are you attending?</h3>
+              
+              {/* Name input field for ALL users */}
+              <div className="mb-4">
+                <Input
+                  type="text"
+                  value={guestName}
+                  onChange={(e) => setGuestName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full"
+                  disabled={hasResponded || isSubmitting}
+                />
+                {guestNameConflict && (
+                  <p className="text-sm text-destructive mt-1">
+                    Someone with this name has already responded
+                  </p>
+                )}
               </div>
 
-              <div className="flex items-center gap-3">
-                <Clock className="w-5 h-5 text-muted-foreground" />
-                <span>
-                  {event.is_all_day ? 'All Day' : `${event.start_time} - ${event.end_time}`}
-                </span>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => handleRsvp('accepted')}
+                  disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
+                  className="flex-1 h-12 text-base font-medium bg-primary text-primary-foreground hover:bg-primary/90 border-2 border-primary transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {isSubmitting ? 'Processing...' : 'Accept'}
+                </Button>
+                <Button
+                  onClick={() => handleRsvp('declined')}
+                  disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
+                  className="flex-1 h-12 text-base font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 border-2 border-destructive transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                >
+                  {isSubmitting ? 'Processing...' : 'Decline'}
+                </Button>
               </div>
 
-              {event.location && (
-                <div className="flex items-center gap-3">
-                  <MapPin className="w-5 h-5 text-muted-foreground" />
-                  <span>{event.location}</span>
-                  {event.google_maps_link && (
-                    <a 
-                      href={event.google_maps_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline ml-2"
-                    >
-                      View on Maps
-                    </a>
+              {hasResponded && (
+                <div className="mt-3 text-sm text-muted-foreground text-center">
+                  {user && userRsvp ? (
+                    `You have ${userRsvp.response === 'accepted' ? 'accepted' : 'declined'} this invitation`
+                  ) : (
+                    'You have already responded to this invitation'
                   )}
                 </div>
               )}
 
+              {!guestName.trim() && !hasResponded && (
+                <div className="mt-3 text-sm text-muted-foreground text-center">
+                  Please enter your name to respond
+                </div>
+              )}
+
               {event.show_attending_count && (
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t">
                   <Users className="w-5 h-5 text-muted-foreground" />
-                  <span>
+                  <span className="text-sm text-muted-foreground">
                     {rsvpCounts.accepted} attending, {rsvpCounts.declined} declined
                   </span>
                 </div>
               )}
+            </CardContent>
+          </Card>
 
-              {event.organizer && (
-                <div className="flex gap-2 pt-2">
-                  <Badge variant="outline">
-                    Organized by {event.organizer}
-                  </Badge>
-                </div>
-              )}
+          {/* Styled Powered by WAKTI */}
+          <div className="flex justify-center">
+            <div className="bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-lg border border-primary/20">
+              <span className="text-sm text-muted-foreground">
+                Powered by{' '}
+                <a 
+                  href="https://wakti.qa" 
+                  className="text-primary hover:text-primary/80 transition-colors underline decoration-2 underline-offset-2 font-semibold"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  WAKTI
+                </a>
+              </span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Styled Powered by WAKTI */}
-        <div className="flex justify-center">
-          <div className="bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-lg border border-primary/20">
-            <span className="text-sm text-muted-foreground">
-              Powered by{' '}
-              <a 
-                href="https://wakti.qa" 
-                className="text-primary hover:text-primary/80 transition-colors underline decoration-2 underline-offset-2 font-semibold"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                WAKTI
-              </a>
-            </span>
           </div>
         </div>
       </div>
