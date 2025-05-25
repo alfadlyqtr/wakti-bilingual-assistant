@@ -5,17 +5,25 @@ import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/t
 export class Maw3dService {
   // Events
   static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string }): Promise<Maw3dEvent> {
+    console.log('Creating Maw3d event:', eventData);
+    
     const { data, error } = await supabase
       .from('maw3d_events')
       .insert(eventData)
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error creating event:', error);
+      throw error;
+    }
+    console.log('Event created successfully:', data);
     return data;
   }
 
   static async getEvent(id: string): Promise<Maw3dEvent | null> {
+    console.log('Fetching Maw3d event by ID:', id);
+    
     const { data, error } = await supabase
       .from('maw3d_events')
       .select('*')
@@ -23,13 +31,17 @@ export class Maw3dService {
       .single();
 
     if (error) {
+      console.error('Error fetching event by ID:', error);
       if (error.code === 'PGRST116') return null;
       throw error;
     }
+    console.log('Event fetched by ID:', data);
     return data;
   }
 
   static async getEventByShortId(shortId: string): Promise<Maw3dEvent | null> {
+    console.log('Fetching Maw3d event by short ID:', shortId);
+    
     const { data, error } = await supabase
       .from('maw3d_events')
       .select('*')
@@ -37,13 +49,17 @@ export class Maw3dService {
       .single();
 
     if (error) {
+      console.error('Error fetching event by short ID:', error);
       if (error.code === 'PGRST116') return null;
       throw error;
     }
+    console.log('Event fetched by short ID:', data);
     return data;
   }
 
   static async getUserEvents(): Promise<Maw3dEvent[]> {
+    console.log('Fetching user Maw3d events');
+    
     const { data: userData, error: userError } = await supabase.auth.getUser();
     
     if (userError || !userData.user) {
@@ -51,54 +67,30 @@ export class Maw3dService {
       return [];
     }
 
-    // Get events where user is creator OR invited (through invitations table)
-    const { data: createdEvents, error: createdError } = await supabase
+    console.log('Fetching events for user:', userData.user.id);
+
+    // The RLS policies will automatically handle access control
+    // This will return events where:
+    // 1. User is the creator (maw3d_view_own_events)
+    // 2. Event is public (maw3d_view_public_events) 
+    // 3. User is invited (maw3d_view_invited_events)
+    const { data: events, error } = await supabase
       .from('maw3d_events')
       .select('*')
-      .eq('created_by', userData.user.id);
+      .order('event_date', { ascending: true });
 
-    if (createdError) throw createdError;
-
-    // Get events where user is invited
-    const { data: invitations, error: invitationsError } = await supabase
-      .from('maw3d_invitations')
-      .select('event_id')
-      .eq('invited_user_id', userData.user.id);
-
-    if (invitationsError) throw invitationsError;
-
-    const invitedEventIds = invitations?.map(inv => inv.event_id) || [];
-    
-    let invitedEvents: Maw3dEvent[] = [];
-    if (invitedEventIds.length > 0) {
-      const { data, error } = await supabase
-        .from('maw3d_events')
-        .select('*')
-        .in('id', invitedEventIds);
-
-      if (error) throw error;
-      invitedEvents = data || [];
+    if (error) {
+      console.error('Error fetching user events:', error);
+      throw error;
     }
 
-    // Get public events (exclude user's own events)
-    const { data: publicEvents, error: publicError } = await supabase
-      .from('maw3d_events')
-      .select('*')
-      .eq('is_public', true)
-      .neq('created_by', userData.user.id);
-
-    if (publicError) throw publicError;
-
-    // Combine all events and remove duplicates
-    const allEvents = [...(createdEvents || []), ...invitedEvents, ...(publicEvents || [])];
-    const uniqueEvents = allEvents.filter((event, index, self) => 
-      index === self.findIndex(e => e.id === event.id)
-    );
-
-    return uniqueEvents.sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime());
+    console.log('Fetched Maw3d events:', events?.length || 0);
+    return events || [];
   }
 
   static async updateEvent(id: string, updates: Partial<Maw3dEvent>): Promise<Maw3dEvent> {
+    console.log('Updating Maw3d event:', id, updates);
+    
     const { data, error } = await supabase
       .from('maw3d_events')
       .update(updates)
@@ -106,32 +98,50 @@ export class Maw3dService {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error updating event:', error);
+      throw error;
+    }
+    console.log('Event updated successfully:', data);
     return data;
   }
 
   static async deleteEvent(id: string): Promise<void> {
+    console.log('Deleting Maw3d event:', id);
+    
     const { error } = await supabase
       .from('maw3d_events')
       .delete()
       .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error deleting event:', error);
+      throw error;
+    }
+    console.log('Event deleted successfully');
   }
 
   // RSVPs
   static async getRsvps(eventId: string): Promise<Maw3dRsvp[]> {
+    console.log('Fetching RSVPs for event:', eventId);
+    
     const { data, error } = await supabase
       .from('maw3d_rsvps')
       .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching RSVPs:', error);
+      throw error;
+    }
+    console.log('Fetched RSVPs:', data?.length || 0);
     return data || [];
   }
 
   static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName?: string): Promise<Maw3dRsvp> {
+    console.log('Creating RSVP:', { eventId, response, guestName });
+    
     const { data: userData } = await supabase.auth.getUser();
     
     const rsvpData: any = {
@@ -155,11 +165,17 @@ export class Maw3dService {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error creating RSVP:', error);
+      throw error;
+    }
+    console.log('RSVP created successfully:', data);
     return data;
   }
 
   static async updateRsvp(eventId: string, response: 'accepted' | 'declined'): Promise<Maw3dRsvp> {
+    console.log('Updating RSVP:', { eventId, response });
+    
     const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user) throw new Error('Must be logged in to update RSVP');
 
@@ -171,12 +187,18 @@ export class Maw3dService {
       .select('*')
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error updating RSVP:', error);
+      throw error;
+    }
+    console.log('RSVP updated successfully:', data);
     return data;
   }
 
   // Invitations
   static async createInvitations(eventId: string, userIds: string[]): Promise<Maw3dInvitation[]> {
+    console.log('Creating invitations:', { eventId, userIds });
+    
     const invitations = userIds.map(userId => ({
       event_id: eventId,
       invited_user_id: userId
@@ -187,23 +209,35 @@ export class Maw3dService {
       .insert(invitations)
       .select('*');
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error creating invitations:', error);
+      throw error;
+    }
+    console.log('Invitations created successfully:', data?.length || 0);
     return data || [];
   }
 
   static async getEventInvitations(eventId: string): Promise<Maw3dInvitation[]> {
+    console.log('Fetching invitations for event:', eventId);
+    
     const { data, error } = await supabase
       .from('maw3d_invitations')
       .select('*')
       .eq('event_id', eventId);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching invitations:', error);
+      throw error;
+    }
+    console.log('Fetched invitations:', data?.length || 0);
     return data || [];
   }
 
   // Generate AI background using Runware
   static async generateAIBackground(prompt: string): Promise<string> {
     try {
+      console.log('Generating AI background with prompt:', prompt);
+      
       const response = await fetch('https://api.runware.ai/v1', {
         method: 'POST',
         headers: {
@@ -230,6 +264,7 @@ export class Maw3dService {
       const result = await response.json();
       
       if (result.data && result.data.length > 1) {
+        console.log('AI background generated successfully');
         return result.data[1].imageURL;
       }
       

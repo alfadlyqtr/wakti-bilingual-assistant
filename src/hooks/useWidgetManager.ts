@@ -21,7 +21,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
     const widgetVisibility = getUserPreferences();
     
     // Import components dynamically to avoid circular dependencies
-    import("@/components/dashboard/widgets").then(({ TasksWidget, CalendarWidget, RemindersWidget }) => {
+    import("@/components/dashboard/widgets").then(({ TasksWidget, RemindersWidget }) => {
       import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
         const defaultWidgets = {
           tasks: {
@@ -30,13 +30,8 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
             visible: widgetVisibility.tasks,
             component: React.createElement(TasksWidget, { isLoading, tasks, language }),
           },
-          calendar: {
-            id: "calendar",
-            title: "calendar" as TranslationKey,
-            visible: widgetVisibility.calendar,
-            // Use legacy events for calendar widget to avoid conflicts
-            component: React.createElement(CalendarWidget, { isLoading, events: legacyEvents, tasks, language }),
-          },
+          // Removed calendar widget to avoid conflicts with Maw3d system
+          // Users should use the dedicated Maw3d page for events
           reminders: {
             id: "reminders",
             title: "reminders" as TranslationKey,
@@ -55,6 +50,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
         const savedOrder = getWidgetOrder();
         const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
         
+        console.log('Dashboard widgets configured:', orderedWidgets.map(w => w.id));
         setWidgets(orderedWidgets);
       });
     });
