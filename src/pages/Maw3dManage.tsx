@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -201,7 +200,7 @@ export default function Maw3dManage() {
                   textDecoration: event?.text_style?.isUnderline ? 'underline' : 'none',
                   textShadow: event?.text_style?.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
                   textAlign: event?.text_style?.alignment as any || 'center',
-                  color: event?.text_style?.color || '#ffffff'
+                  color: event?.text_style?.color || '#000000'
                 }}
               >
                 {event?.title || 'Event Title'}
