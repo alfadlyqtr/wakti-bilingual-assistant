@@ -22,6 +22,20 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
   textStyle,
   onTextStyleChange
 }) => {
+  const handleFontSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Allow empty string temporarily for better UX while typing
+    if (value === '') {
+      return;
+    }
+    
+    const numValue = parseInt(value);
+    // Only update if it's a valid number within reasonable bounds
+    if (!isNaN(numValue) && numValue >= 8 && numValue <= 72) {
+      onTextStyleChange({ fontSize: numValue });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
@@ -52,7 +66,16 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
             min="8"
             max="72"
             value={textStyle.fontSize}
-            onChange={(e) => onTextStyleChange({ fontSize: parseInt(e.target.value) })}
+            onChange={handleFontSizeChange}
+            onBlur={(e) => {
+              // Ensure we have a valid value on blur
+              const value = parseInt(e.target.value);
+              if (isNaN(value) || value < 8) {
+                onTextStyleChange({ fontSize: 8 });
+              } else if (value > 72) {
+                onTextStyleChange({ fontSize: 72 });
+              }
+            }}
           />
         </div>
       </div>

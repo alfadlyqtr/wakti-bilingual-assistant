@@ -210,6 +210,7 @@ export type Database = {
           is_all_day: boolean
           is_public: boolean
           location: string | null
+          organizer: string | null
           short_id: string | null
           start_time: string | null
           template_type: string | null
@@ -230,6 +231,7 @@ export type Database = {
           is_all_day?: boolean
           is_public?: boolean
           location?: string | null
+          organizer?: string | null
           short_id?: string | null
           start_time?: string | null
           template_type?: string | null
@@ -250,6 +252,7 @@ export type Database = {
           is_all_day?: boolean
           is_public?: boolean
           location?: string | null
+          organizer?: string | null
           short_id?: string | null
           start_time?: string | null
           template_type?: string | null
