@@ -265,19 +265,23 @@ export default function Maw3dView() {
               </div>
 
               {/* Add to Calendar and Location Section */}
-              {calendarEvent && (
+              {(calendarEvent || event.location || event.google_maps_link) && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold">Add to Calendar & Location</h3>
                   
                   <div className="flex flex-col gap-4">
-                    <div className="flex justify-center">
-                      <CalendarDropdown event={calendarEvent} />
-                    </div>
+                    {calendarEvent && (
+                      <div className="flex justify-center">
+                        <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30">
+                          <CalendarDropdown event={calendarEvent} />
+                        </div>
+                      </div>
+                    )}
                     
-                    {event.location && (
+                    {(event.location || event.google_maps_link) && (
                       <div className="flex items-center justify-center gap-3">
                         <MapPin className="w-5 h-5" />
-                        <span>{event.location}</span>
+                        <span>{event.location || 'View Location'}</span>
                         {event.google_maps_link && (
                           <a 
                             href={event.google_maps_link}
