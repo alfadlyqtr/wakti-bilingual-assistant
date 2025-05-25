@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -176,16 +177,37 @@ export default function Maw3dManage() {
           </div>
         </div>
 
-        {/* Event Preview */}
+        {/* Simplified Event Preview - Title and Background Only */}
         <div className="mb-8">
-          <EventPreview
-            event={event}
-            textStyle={event.text_style}
-            backgroundType={event.background_type}
-            backgroundValue={event.background_value}
-            rsvpCount={rsvpCounts}
-            showAttendingCount={event.show_attending_count}
-          />
+          <div className="w-full max-w-md mx-auto">
+            <div 
+              className="relative rounded-lg overflow-hidden shadow-lg h-32 flex items-center justify-center"
+              style={{
+                backgroundColor: event?.background_type === 'color' ? event.background_value : undefined,
+                background: event?.background_type === 'gradient' ? event.background_value : undefined,
+                backgroundImage: (event?.background_type === 'image' || event?.background_type === 'ai') ? `url(${event.background_value})` : undefined,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center'
+              }}
+            >
+              <div className="absolute inset-0 bg-black/20" />
+              <h1 
+                className="relative font-bold text-2xl text-center px-4"
+                style={{
+                  fontSize: `${(event?.text_style?.fontSize || 16) + 8}px`,
+                  fontFamily: event?.text_style?.fontFamily || 'Arial',
+                  fontWeight: event?.text_style?.isBold ? 'bold' : 'normal',
+                  fontStyle: event?.text_style?.isItalic ? 'italic' : 'normal',
+                  textDecoration: event?.text_style?.isUnderline ? 'underline' : 'none',
+                  textShadow: event?.text_style?.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+                  textAlign: event?.text_style?.alignment as any || 'center',
+                  color: event?.text_style?.color || '#ffffff'
+                }}
+              >
+                {event?.title || 'Event Title'}
+              </h1>
+            </div>
+          </div>
         </div>
 
         {/* Management Actions */}
@@ -196,7 +218,7 @@ export default function Maw3dManage() {
           <CardContent>
             <div className="flex gap-3">
               <Button
-                onClick={() => navigate(`/maw3d/edit/${event.id}`)}
+                onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
                 className="flex-1 gap-2"
               >
                 <Edit className="w-4 h-4" />
