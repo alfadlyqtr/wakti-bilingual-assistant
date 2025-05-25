@@ -15,6 +15,7 @@ const templates: EventTemplate[] = [
     name: 'Birthday',
     title: 'Happy Birthday!',
     description: 'Join us for a birthday celebration',
+    organizer: '',
     background_type: 'gradient',
     background_value: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     text_style: {
@@ -33,6 +34,7 @@ const templates: EventTemplate[] = [
     name: 'Meeting',
     title: 'Team Meeting',
     description: 'Important team discussion',
+    organizer: '',
     background_type: 'color',
     background_value: '#1e40af',
     text_style: {
@@ -51,6 +53,7 @@ const templates: EventTemplate[] = [
     name: 'Gathering',
     title: 'Friends Gathering',
     description: 'Come and join us for a fun time',
+    organizer: '',
     background_type: 'gradient',
     background_value: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
     text_style: {

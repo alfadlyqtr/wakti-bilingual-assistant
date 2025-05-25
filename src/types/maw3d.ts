@@ -52,8 +52,10 @@ export interface TextStyle {
 
 export interface EventTemplate {
   id: string;
+  name: string;
   title: string;
   description: string;
+  organizer: string;
   background_type: 'color' | 'gradient' | 'image' | 'ai';
   background_value: string;
   text_style: TextStyle;
