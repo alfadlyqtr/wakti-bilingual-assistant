@@ -251,9 +251,9 @@ export default function Maw3dView() {
           <div className="bg-black/20">
             <div className="p-6 space-y-8" style={textStyle}>
               
-              {/* Event Preview Section with transparent background and blur */}
+              {/* Event Preview Section with same background as footer */}
               <div className="space-y-6">
-                <div className="backdrop-blur-sm bg-transparent p-4 rounded-lg">
+                <div className="backdrop-blur-sm bg-white/20 p-4 rounded-lg border border-white/30">
                   <EventPreview
                     event={event}
                     textStyle={event.text_style}
@@ -301,7 +301,7 @@ export default function Maw3dView() {
                 </div>
               )}
 
-              {/* RSVP Section - Moved to bottom */}
+              {/* RSVP Section */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Are you attending?</h3>
                 
