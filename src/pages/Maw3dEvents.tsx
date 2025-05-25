@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2 } from 'lucide-react';
+import { Plus, Calendar, Clock, MapPin, Edit, Share2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,34 +36,14 @@ export default function Maw3dEvents() {
   };
 
   const handleEventClick = (event: Maw3dEvent) => {
-    console.log('=== EVENT CLICK DEBUG ===');
     console.log('Event clicked:', event.id);
-    console.log('Event title:', event.title);
-    console.log('Event created_by:', event.created_by);
-    console.log('Current user ID:', user?.id);
-    console.log('User object:', user);
-    console.log('Are they equal?', event.created_by === user?.id);
-    console.log('Types - event.created_by:', typeof event.created_by, 'user?.id:', typeof user?.id);
-    
-    // If user created this event, go to management view
-    if (event.created_by === user?.id) {
-      console.log('✅ User is creator - navigating to management view');
-      console.log('Management URL:', `/maw3d/manage/${event.id}`);
-      navigate(`/maw3d/manage/${event.id}`);
-    } else {
-      console.log('👥 User is invitee - navigating to public view');
-      console.log('Public URL:', `/maw3d/${event.short_id}`);
-      // If user is invited to this event, go to public view
-      navigate(`/maw3d/${event.short_id}`);
-    }
-    console.log('=== END EVENT CLICK DEBUG ===');
+    // Navigate to management view since users only see their own events now
+    navigate(`/maw3d/manage/${event.id}`);
   };
 
   const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click
-    console.log('=== SHARE DEBUG START ===');
     console.log('Share button clicked for event:', event.id, 'short_id:', event.short_id);
-    console.log('Event object:', event);
     
     if (!event.short_id) {
       console.error('No short_id found for event:', event.id);
@@ -72,14 +52,11 @@ export default function Maw3dEvents() {
     }
     
     try {
-      console.log('Calling ShareService.shareEvent...');
       await ShareService.shareEvent(event.id, event.short_id);
-      console.log('ShareService.shareEvent completed successfully');
     } catch (error) {
       console.error('Error in handleShare:', error);
       toast.error('Failed to share event');
     }
-    console.log('=== SHARE DEBUG END ===');
   };
 
   const handleEdit = (eventId: string, e: React.MouseEvent) => {
@@ -223,8 +200,8 @@ export default function Maw3dEvents() {
 
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
-                      <Badge variant={event.created_by === user?.id ? "default" : "secondary"} className="text-sm px-3 py-1">
-                        {event.created_by === user?.id ? "Created by You" : "Invited"}
+                      <Badge variant="default" className="text-sm px-3 py-1">
+                        Your Event
                       </Badge>
                       {event.is_public && (
                         <Badge variant="outline" className="text-sm px-3 py-1">Public</Badge>
@@ -232,37 +209,35 @@ export default function Maw3dEvents() {
                     </div>
                   </div>
 
-                  {/* Action buttons - only show for events created by user */}
-                  {event.created_by === user?.id && (
-                    <div className="grid grid-cols-3 gap-3">
-                      <Button
-                        variant="outline"
-                        onClick={(e) => handleEdit(event.id, e)}
-                        className="flex items-center justify-center gap-2"
-                      >
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        onClick={(e) => handleShare(event, e)}
-                        className="flex items-center justify-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Share
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        onClick={(e) => handleDelete(event.id, e)}
-                        className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete
-                      </Button>
-                    </div>
-                  )}
+                  {/* Action buttons */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={(e) => handleEdit(event.id, e)}
+                      className="flex items-center justify-center gap-2"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Edit
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={(e) => handleShare(event, e)}
+                      className="flex items-center justify-center gap-2"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={(e) => handleDelete(event.id, e)}
+                      className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

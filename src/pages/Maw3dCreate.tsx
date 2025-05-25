@@ -8,13 +8,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowLeft, Plus, Users, UserPlus } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
-import { ContactsSelector } from '@/components/maw3d/ContactsSelector';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
 import { Maw3dService } from '@/services/maw3dService';
 import { CreateEventFormData, TextStyle, EventTemplate } from '@/types/maw3d';
@@ -34,8 +33,6 @@ export default function Maw3dCreate() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [showContactsSelector, setShowContactsSelector] = useState(false);
-  const [invitedContacts, setInvitedContacts] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
 
   const [formData, setFormData] = useState<CreateEventFormData>({
@@ -121,17 +118,11 @@ export default function Maw3dCreate() {
         end_time: formData.is_all_day ? null : formData.end_time,
       };
 
-      // Remove invited_contacts from the event data as it's not a database field
+      // Remove invited_contacts from the event data as it's not used anymore
       const { invited_contacts, ...dbEventData } = eventData;
       
       const newEvent = await Maw3dService.createEvent(dbEventData);
       console.log('Event created successfully:', newEvent);
-
-      // Create invitations if any contacts are selected
-      if (invitedContacts.length > 0) {
-        await Maw3dService.createInvitations(newEvent.id, invitedContacts);
-        console.log(`Created ${invitedContacts.length} invitations`);
-      }
 
       toast.success('Event created successfully!');
       navigate('/maw3d');
@@ -358,11 +349,11 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy & Invitations Section */}
+            {/* Privacy Settings Section - Simplified */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🔒 Privacy & Invitations</h2>
+                  <h2 className="text-lg font-semibold">🔒 Privacy Settings</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
@@ -384,33 +375,11 @@ export default function Maw3dCreate() {
                       <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
                     </div>
 
-                    {/* Send to Contacts Section */}
-                    <div className="border-t pt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <Label className="text-base font-medium">Send to Contacts</Label>
-                          <p className="text-sm text-muted-foreground">Invite your Wakti contacts to this event</p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => setShowContactsSelector(true)}
-                          className="gap-2"
-                        >
-                          <UserPlus className="w-4 h-4" />
-                          Select Contacts
-                        </Button>
-                      </div>
-                      
-                      {invitedContacts.length > 0 && (
-                        <div className="bg-muted/50 p-3 rounded-lg">
-                          <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4" />
-                            <span className="text-sm font-medium">
-                              {invitedContacts.length} contact{invitedContacts.length !== 1 ? 's' : ''} will be invited
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                    <div className="bg-muted/50 p-4 rounded-lg">
+                      <p className="text-sm text-muted-foreground">
+                        After creating your event, you can share it with others using the shareable link. 
+                        Anyone with the link will be able to view the event details and RSVP.
+                      </p>
                     </div>
                   </CardContent>
                 </AccordionContent>
@@ -419,15 +388,6 @@ export default function Maw3dCreate() {
 
           </Accordion>
         </div>
-
-        {/* ContactsSelector */}
-        <ContactsSelector
-          isOpen={showContactsSelector}
-          onClose={() => setShowContactsSelector(false)}
-          selectedContacts={invitedContacts}
-          onContactsChange={setInvitedContacts}
-          isEditMode={false}
-        />
       </div>
     </div>
   );

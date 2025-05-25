@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/types/maw3d";
+import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
 export class Maw3dService {
   // Events
@@ -80,11 +80,7 @@ export class Maw3dService {
 
     console.log('Fetching events for user:', userData.user.id);
 
-    // The RLS policies will automatically handle access control
-    // This will return events where:
-    // 1. User is the creator (own events)
-    // 2. User is invited (invited events)
-    // Public events are no longer automatically visible to all users
+    // The RLS policy now only returns events the user created
     const { data: events, error } = await supabase
       .from('maw3d_events')
       .select('*')
@@ -264,60 +260,6 @@ export class Maw3dService {
     }
     console.log('RSVP updated successfully:', data);
     return data;
-  }
-
-  // Invitations
-  static async createInvitations(eventId: string, userIds: string[]): Promise<Maw3dInvitation[]> {
-    console.log('Creating invitations:', { eventId, userIds });
-    
-    const invitations = userIds.map(userId => ({
-      event_id: eventId,
-      invited_user_id: userId
-    }));
-
-    const { data, error } = await supabase
-      .from('maw3d_invitations')
-      .insert(invitations)
-      .select('*');
-
-    if (error) {
-      console.error('Error creating invitations:', error);
-      throw error;
-    }
-    console.log('Invitations created successfully:', data?.length || 0);
-    return data || [];
-  }
-
-  static async getEventInvitations(eventId: string): Promise<Maw3dInvitation[]> {
-    console.log('Fetching invitations for event:', eventId);
-    
-    const { data, error } = await supabase
-      .from('maw3d_invitations')
-      .select('*')
-      .eq('event_id', eventId);
-
-    if (error) {
-      console.error('Error fetching invitations:', error);
-      throw error;
-    }
-    console.log('Fetched invitations:', data?.length || 0);
-    return data || [];
-  }
-
-  static async deleteInvitations(eventId: string, userIds: string[]): Promise<void> {
-    console.log('Deleting invitations:', { eventId, userIds });
-    
-    const { error } = await supabase
-      .from('maw3d_invitations')
-      .delete()
-      .eq('event_id', eventId)
-      .in('invited_user_id', userIds);
-
-    if (error) {
-      console.error('Error deleting invitations:', error);
-      throw error;
-    }
-    console.log('Invitations deleted successfully:', userIds.length);
   }
 
   // Generate AI background using Runware
