@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -143,9 +142,9 @@ export default function Maw3dEvents() {
       <div className="min-h-screen bg-background p-4 pb-20">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 bg-gray-200 rounded-lg"></div>
+              <div key={i} className="h-48 bg-gray-200 rounded-lg"></div>
             ))}
           </div>
         </div>
@@ -167,7 +166,7 @@ export default function Maw3dEvents() {
         </Button>
       </div>
 
-      {/* Events Grid */}
+      {/* Events List - Stacked Layout */}
       {events.length === 0 ? (
         <div className="text-center py-12">
           <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
@@ -181,86 +180,84 @@ export default function Maw3dEvents() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="space-y-6">
           {events.map((event) => (
             <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
               <div 
-                className="relative h-48 flex items-end p-4"
+                className="relative h-56 flex items-end p-6"
                 style={getBackgroundStyle(event)}
                 onClick={() => handleEventClick(event)}
               >
                 {/* Overlay for better text readability */}
-                <div className="absolute inset-0 bg-black/20" />
+                <div className="absolute inset-0 bg-black/30" />
                 
-                <div className="relative text-white">
-                  <h3 className="font-bold text-xl mb-1">{event.title}</h3>
+                <div className="relative text-white w-full">
+                  <h3 className="font-bold text-2xl mb-2">{event.title}</h3>
                   {event.description && (
-                    <p className="text-sm opacity-90 line-clamp-2">{event.description}</p>
+                    <p className="text-lg opacity-90 line-clamp-2">{event.description}</p>
                   )}
                 </div>
               </div>
               
-              <CardContent className="p-4">
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="w-4 h-4" />
-                    <span>{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
+              <CardContent className="p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <Calendar className="w-5 h-5" />
+                    <span className="text-base">{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Clock className="w-4 h-4" />
-                    <span>{formatEventTime(event)}</span>
+                  <div className="flex items-center gap-3 text-muted-foreground">
+                    <Clock className="w-5 h-5" />
+                    <span className="text-base">{formatEventTime(event)}</span>
                   </div>
 
                   {event.location && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <MapPin className="w-4 h-4" />
-                      <span className="truncate">{event.location}</span>
+                    <div className="flex items-center gap-3 text-muted-foreground sm:col-span-2">
+                      <MapPin className="w-5 h-5" />
+                      <span className="text-base">{event.location}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={event.created_by === user?.id ? "default" : "secondary"}>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <Badge variant={event.created_by === user?.id ? "default" : "secondary"} className="text-sm px-3 py-1">
                       {event.created_by === user?.id ? "Created by You" : "Invited"}
                     </Badge>
                     {event.is_public && (
-                      <Badge variant="outline">Public</Badge>
+                      <Badge variant="outline" className="text-sm px-3 py-1">Public</Badge>
                     )}
                   </div>
                 </div>
 
                 {/* Action buttons - only show for events created by user */}
                 {event.created_by === user?.id && (
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-3 gap-3">
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={(e) => handleEdit(event.id, e)}
-                      className="flex-1"
+                      className="flex items-center justify-center gap-2"
                     >
-                      <Edit className="w-4 h-4 mr-1" />
+                      <Edit className="w-4 h-4" />
                       Edit
                     </Button>
                     
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={(e) => handleShare(event, e)}
-                      className="flex-1"
+                      className="flex items-center justify-center gap-2"
                     >
-                      <Share2 className="w-4 h-4 mr-1" />
+                      <Share2 className="w-4 h-4" />
                       Share
                     </Button>
                     
                     <Button
                       variant="outline"
-                      size="sm"
                       onClick={(e) => handleDelete(event.id, e)}
-                      className="text-destructive hover:text-destructive"
+                      className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="w-4 h-4" />
+                      Delete
                     </Button>
                   </div>
                 )}
