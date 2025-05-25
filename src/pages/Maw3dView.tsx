@@ -12,6 +12,7 @@ import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 
+// Force cache refresh - clean public event view
 export default function Maw3dView() {
   const { shortId } = useParams();
   const navigate = useNavigate();
