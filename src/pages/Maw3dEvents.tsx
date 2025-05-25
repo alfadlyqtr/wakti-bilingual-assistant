@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Calendar, Clock, MapPin, Users, Share2, Trash2 } from 'lucide-react';
+import { Plus, Calendar, Clock, MapPin, Users, Share2, Trash2, CalendarClock } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Maw3dService } from '@/services/maw3dService';

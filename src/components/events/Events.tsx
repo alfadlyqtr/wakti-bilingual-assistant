@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -6,14 +7,28 @@ import { useNavigate } from "react-router-dom";
 import EventList from "@/components/events/EventList";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 import { UserMenu } from "@/components/UserMenu";
 import { t } from "@/utils/translations";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useRsvpNotifications } from "@/hooks/useRsvpNotifications";
 
-// Define the type for our events
-type Event = Tables<"events">;
+// Define the type for our events from the events table (not maw3d_events)
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  start_time: string;
+  end_time: string;
+  created_by: string;
+  is_public: boolean;
+  background_color?: string;
+  text_color?: string;
+  font_style?: any;
+  location?: string;
+  short_id?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Events() {
   const [activeTab, setActiveTab] = useState<string>("upcoming");
@@ -38,6 +53,7 @@ export default function Events() {
       
     console.log(`Fetching ${type} events for user:`, userData.user.id);
     
+    // Query the events table from the existing system, not maw3d_events
     const { data, error } = await supabase
       .from("events")
       .select("*")

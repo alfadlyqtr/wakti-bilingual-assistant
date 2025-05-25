@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
-import { Bold, Italic, Underline, Shadow, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Bold, Italic, Underline, Palette, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 
 interface TextStyleCustomizerProps {
   textStyle: TextStyle;
@@ -92,7 +92,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
             pressed={textStyle.hasShadow}
             onPressedChange={(pressed) => onTextStyleChange({ hasShadow: pressed })}
           >
-            <Shadow className="w-4 h-4" />
+            <Palette className="w-4 h-4" />
           </Toggle>
         </div>
       </div>

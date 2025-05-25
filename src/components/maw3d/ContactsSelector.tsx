@@ -55,12 +55,12 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
 
       if (error) throw error;
 
-      const contactsData = data?.map(item => ({
-        id: item.profiles.id,
-        username: item.profiles.username,
-        display_name: item.profiles.display_name,
-        avatar_url: item.profiles.avatar_url
-      })) || [];
+      const contactsData: Contact[] = data?.map(item => ({
+        id: item.profiles?.id || '',
+        username: item.profiles?.username || '',
+        display_name: item.profiles?.display_name || '',
+        avatar_url: item.profiles?.avatar_url
+      })).filter(contact => contact.id) || [];
 
       setContacts(contactsData);
     } catch (error) {
