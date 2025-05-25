@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -101,10 +102,6 @@ export default function Maw3dManage() {
     const accepted = rsvps.filter(rsvp => rsvp.response === 'accepted').length;
     const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
     return { accepted, declined };
-  };
-
-  const formatRsvpName = (rsvp: Maw3dRsvp) => {
-    return rsvp.guest_name;
   };
 
   const getBackgroundStyle = (event: Maw3dEvent) => {
@@ -270,7 +267,7 @@ export default function Maw3dManage() {
           </Card>
         </div>
 
-        {/* RSVP Lists */}
+        {/* RSVP Lists - Simplified Guest Names */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Accepted RSVPs */}
           <Card>
@@ -287,7 +284,7 @@ export default function Maw3dManage() {
                     <div key={rsvp.id} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border">
                       <div className="flex-1">
                         <div className="font-medium text-green-800 dark:text-green-200">
-                          {formatRsvpName(rsvp)}
+                          {rsvp.guest_name}
                         </div>
                         <div className="text-xs text-green-600 dark:text-green-400">
                           {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
@@ -323,7 +320,7 @@ export default function Maw3dManage() {
                     <div key={rsvp.id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border">
                       <div className="flex-1">
                         <div className="font-medium text-red-800 dark:text-red-200">
-                          {formatRsvpName(rsvp)}
+                          {rsvp.guest_name}
                         </div>
                         <div className="text-xs text-red-600 dark:text-red-400">
                           {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}

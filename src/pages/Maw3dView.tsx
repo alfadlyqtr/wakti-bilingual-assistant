@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Calendar, Clock, MapPin, Users, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
@@ -16,13 +16,11 @@ import CalendarDropdown from '@/components/events/CalendarDropdown';
 export default function Maw3dView() {
   const { shortId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [eventNotFound, setEventNotFound] = useState(false);
   const [guestName, setGuestName] = useState('');
-  const [userRsvp, setUserRsvp] = useState<Maw3dRsvp | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmittedResponse, setHasSubmittedResponse] = useState(false);
 
@@ -48,14 +46,6 @@ export default function Maw3dView() {
       const eventRsvps = await Maw3dService.getRsvps(eventData.id);
       setRsvps(eventRsvps);
       
-      // Find user's RSVP if logged in
-      if (user) {
-        const userResponse = eventRsvps.find(rsvp => rsvp.user_id === user.id);
-        setUserRsvp(userResponse || null);
-        if (userResponse) {
-          setHasSubmittedResponse(true);
-        }
-      }
     } catch (error) {
       setEventNotFound(true);
     } finally {
@@ -77,16 +67,10 @@ export default function Maw3dView() {
       return;
     }
 
-    // Additional check for logged-in users
-    if (user && userRsvp) {
-      toast.error('You have already responded to this invitation');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
-      // Always pass the guest name for both authenticated and non-authenticated users
+      // Create guest RSVP
       await Maw3dService.createRsvp(event.id, response, trimmedName);
       
       // Mark as submitted immediately to prevent further attempts
@@ -95,13 +79,12 @@ export default function Maw3dView() {
       // Refresh data
       await fetchEvent();
       
-      // Show personalized message with slight delay to ensure state is updated
+      // Show personalized message
       setTimeout(() => {
-        const displayName = trimmedName;
         if (response === 'accepted') {
-          toast.success(`Thank you for accepting, ${displayName}!`);
+          toast.success(`Thank you for accepting, ${trimmedName}!`);
         } else {
-          toast.success(`It's okay, ${displayName}, we would have liked your presence`);
+          toast.success(`It's okay, ${trimmedName}, we would have liked your presence`);
         }
       }, 200);
       
@@ -124,12 +107,9 @@ export default function Maw3dView() {
     const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
     return { accepted, declined };
   };
-
-  // Check if user has already responded
-  const hasResponded = user ? !!userRsvp : hasSubmittedResponse;
   
   // Check if current guest name conflicts with existing RSVPs (case-insensitive)
-  const guestNameConflict = !user && guestName.trim() && rsvps.some(rsvp => 
+  const guestNameConflict = guestName.trim() && rsvps.some(rsvp => 
     rsvp.guest_name && 
     rsvp.guest_name.toLowerCase() === guestName.trim().toLowerCase()
   );
@@ -296,11 +276,11 @@ export default function Maw3dView() {
                 </div>
               )}
 
-              {/* RSVP Section */}
+              {/* RSVP Section - Simplified Guest Only */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Are you attending?</h3>
                 
-                {/* Name input field for ALL users */}
+                {/* Name input field */}
                 <div className="mb-4">
                   <Input
                     type="text"
@@ -308,7 +288,7 @@ export default function Maw3dView() {
                     onChange={(e) => setGuestName(e.target.value)}
                     placeholder="Enter your name"
                     className="w-full bg-white/90 text-black"
-                    disabled={hasResponded || isSubmitting}
+                    disabled={hasSubmittedResponse || isSubmitting}
                   />
                   {guestNameConflict && (
                     <p className="text-sm mt-1">
@@ -320,31 +300,27 @@ export default function Maw3dView() {
                 <div className="flex gap-3">
                   <Button
                     onClick={() => handleRsvp('accepted')}
-                    disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
+                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim() || guestNameConflict}
                     className="flex-1 h-12 text-base font-medium bg-green-600 text-white hover:bg-green-700 border-2 border-green-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {isSubmitting ? 'Processing...' : 'Accept'}
                   </Button>
                   <Button
                     onClick={() => handleRsvp('declined')}
-                    disabled={hasResponded || isSubmitting || !guestName.trim() || guestNameConflict}
+                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim() || guestNameConflict}
                     className="flex-1 h-12 text-base font-medium bg-red-600 text-white hover:bg-red-700 border-2 border-red-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {isSubmitting ? 'Processing...' : 'Decline'}
                   </Button>
                 </div>
 
-                {hasResponded && (
+                {hasSubmittedResponse && (
                   <div className="mt-3 text-sm text-center opacity-90">
-                    {user && userRsvp ? (
-                      `You have ${userRsvp.response === 'accepted' ? 'accepted' : 'declined'} this invitation`
-                    ) : (
-                      'You have already responded to this invitation'
-                    )}
+                    You have already responded to this invitation
                   </div>
                 )}
 
-                {!guestName.trim() && !hasResponded && (
+                {!guestName.trim() && !hasSubmittedResponse && (
                   <div className="mt-3 text-sm text-center opacity-90">
                     Please enter your name to respond
                   </div>

@@ -128,7 +128,7 @@ export class Maw3dService {
     console.log('Event deleted successfully');
   }
 
-  // RSVPs
+  // RSVPs - Simplified guest-only system
   static async getRsvps(eventId: string): Promise<Maw3dRsvp[]> {
     console.log('=== FETCHING RSVPs ===');
     console.log('Event ID:', eventId);
@@ -152,7 +152,6 @@ export class Maw3dService {
         console.log(`RSVP ${index + 1}:`, {
           id: rsvp.id,
           event_id: rsvp.event_id,
-          user_id: rsvp.user_id,
           guest_name: rsvp.guest_name,
           response: rsvp.response,
           created_at: rsvp.created_at
@@ -163,106 +162,48 @@ export class Maw3dService {
     return data || [];
   }
 
-  static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName?: string): Promise<Maw3dRsvp> {
-    console.log('=== CREATING RSVP ===');
+  static async createRsvp(eventId: string, response: 'accepted' | 'declined', guestName: string): Promise<Maw3dRsvp> {
+    console.log('=== CREATING GUEST RSVP ===');
     console.log('Event ID:', eventId);
     console.log('Response:', response);
     console.log('Guest Name:', guestName);
     
-    const { data: userData } = await supabase.auth.getUser();
-    console.log('Current user:', userData?.user?.id || 'No user');
-    
-    // Guest name is required for both authenticated and non-authenticated users
+    // Guest name is required
     if (!guestName?.trim()) {
-      const errorMsg = 'Guest name is required for all RSVPs';
+      const errorMsg = 'Guest name is required';
       console.error(errorMsg);
       throw new Error(errorMsg);
     }
 
     const trimmedName = guestName.trim();
     
-    const rsvpData: any = {
+    // Simple guest RSVP - no user_id needed
+    const rsvpData = {
       event_id: eventId,
       response,
-      guest_name: trimmedName, // Always store the guest name
+      guest_name: trimmedName,
+      user_id: null // Always null for guest system
     };
 
-    if (userData?.user) {
-      rsvpData.user_id = userData.user.id;
-      console.log('Creating RSVP for authenticated user:', userData.user.id, 'with name:', trimmedName);
-      
-      // Use upsert with proper conflict resolution for authenticated users
-      const { data, error } = await supabase
-        .from('maw3d_rsvps')
-        .upsert(rsvpData, {
-          onConflict: 'event_id,user_id'
-        })
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('Error creating RSVP for user:', error);
-        throw error;
-      }
-      
-      console.log('RSVP created/updated successfully for user:', data);
-      return data;
-    } else {
-      console.log('Creating RSVP for guest:', trimmedName);
-      
-      // For guests, first check if name already exists (case-insensitive)
-      const { data: existingRsvp } = await supabase
-        .from('maw3d_rsvps')
-        .select('*')
-        .eq('event_id', eventId)
-        .ilike('guest_name', trimmedName)
-        .maybeSingle();
-        
-      if (existingRsvp) {
-        console.error('Guest name already exists:', existingRsvp);
-        throw new Error('Someone with this name has already responded to this event');
-      }
-      
-      // Insert new guest RSVP
-      const { data, error } = await supabase
-        .from('maw3d_rsvps')
-        .insert(rsvpData)
-        .select('*')
-        .single();
-
-      if (error) {
-        console.error('Error creating RSVP for guest:', error);
-        // Handle unique constraint violation
-        if (error.code === '23505') {
-          throw new Error('Someone with this name has already responded to this event');
-        }
-        throw error;
-      }
-      
-      console.log('RSVP created successfully for guest:', data);
-      return data;
-    }
-  }
-
-  static async updateRsvp(eventId: string, response: 'accepted' | 'declined'): Promise<Maw3dRsvp> {
-    console.log('Updating RSVP:', { eventId, response });
+    console.log('Creating RSVP for guest:', trimmedName);
     
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user) throw new Error('Must be logged in to update RSVP');
-
+    // Insert new guest RSVP - the unique constraint will prevent duplicates
     const { data, error } = await supabase
       .from('maw3d_rsvps')
-      .update({ response })
-      .eq('event_id', eventId)
-      .eq('user_id', userData.user.id)
+      .insert(rsvpData)
       .select('*')
       .single();
 
     if (error) {
-      console.error('Error updating RSVP:', error);
+      console.error('Error creating RSVP for guest:', error);
+      // Handle unique constraint violation
+      if (error.code === '23505') {
+        throw new Error('Someone with this name has already responded to this event');
+      }
       throw error;
     }
-    console.log('RSVP updated successfully:', data);
+    
+    console.log('RSVP created successfully for guest:', data);
     return data;
   }
 
