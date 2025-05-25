@@ -166,7 +166,6 @@ export const en: Record<TranslationKey, string> = {
   uploading: "Uploading",
   blockedByContact: "You have been blocked by this contact.",
   errorUploadingImage: "Error uploading image",
-  // Previously added translation keys
   profileImageUpdated: "Profile image updated successfully",
   error: "Error",
   profileImage: "Profile Image",
@@ -255,7 +254,6 @@ export const en: Record<TranslationKey, string> = {
   overdueItems: "Overdue Items",
   createYourFirst: "Create your first",
   edit: "Edit",
-  // Added translations for TaskReminderContext
   taskCreatedSuccessfully: "Task created successfully",
   taskUpdatedSuccessfully: "Task updated successfully",
   taskDeletedSuccessfully: "Task deleted successfully",
@@ -263,7 +261,6 @@ export const en: Record<TranslationKey, string> = {
   reminderUpdatedSuccessfully: "Reminder updated successfully",
   reminderDeletedSuccessfully: "Reminder deleted successfully",
   taskSharedSuccessfully: "Task shared successfully",
-  // Added translations for Account.tsx
   errorUpdatingEmail: "Error updating email",
   emailUpdated: "Email updated successfully",
   passwordsDoNotMatch: "Passwords do not match",
@@ -279,7 +276,6 @@ export const en: Record<TranslationKey, string> = {
   accountOptions: "Account Options",
   deleteAccountDescription: "This will permanently delete your account and all associated data",
   deleteMyAccount: "Delete My Account",
-  // Added translations for Dashboard.tsx
   tasks_view_all: "View All Tasks",
   noTasksYet: "No tasks yet",
   event: "Event",
@@ -292,7 +288,6 @@ export const en: Record<TranslationKey, string> = {
   reminders_view_all: "View All Reminders",
   noRemindersYet: "No reminders yet",
   freeTrialDays: "Free trial days",
-  // Added translations for Settings.tsx
   settingsUpdated: "Settings updated",
   contactSettingsUpdated: "Contact settings updated",
   errorUpdatingSettings: "Error updating settings",
@@ -325,12 +320,9 @@ export const en: Record<TranslationKey, string> = {
   profileVisibility: "Profile Visibility",
   activityStatus: "Activity Status",
   saveAllSettings: "Save All Settings",
-  // Added translations for ChatPopup.tsx
   justNow: "Just now",
   minsAgo: "m ago",
   activeNow: "Active now",
-  
-  // Event form translations
   eventDetails: "Event Details",
   locationLink: "Location Link",
   dateTime: "Date & Time",
@@ -339,16 +331,10 @@ export const en: Record<TranslationKey, string> = {
   endTime: "End Time",
   publicEvent: "Public Event",
   publicEventDescription: "Anyone can view and RSVP to this event",
-  
-  // Notification translations
   rsvpNotificationAccepted: "{name} accepted your event invitation",
   rsvpNotificationDeclined: "{name} declined your event invitation",
   newRsvpResponse: "New RSVP Response",
-  
-  // MISSING TRANSLATION THAT CAUSED THE ERROR
   privateEvent: "Private Event",
-  
-  // NEW RSVP AND CALENDAR TRANSLATIONS
   enableRsvp: "Enable RSVP",
   rsvpDeadline: "RSVP Deadline",
   rsvpSettings: "RSVP Settings",
@@ -377,7 +363,8 @@ export const en: Record<TranslationKey, string> = {
   rsvpResponses: "RSVP Responses",
   noRsvpsYet: "No RSVPs yet",
   rsvpDeadlineLabel: "RSVP by",
-  // NEW MISSING KEYS
   pleaseEnterYourName: "Please enter your name",
   responseSubmitted: "Response submitted successfully",
+  reminder: "Reminder",
+  noItemsForDate: "No items for this date",
 } as const;

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import MobileHeader from '@/components/MobileHeader';
+import { MobileHeader } from '@/components/MobileHeader';
 import MobileNav from '@/components/MobileNav';
 
 interface AppLayoutProps {
