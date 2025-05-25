@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -36,17 +35,27 @@ export default function Maw3dEvents() {
   };
 
   const handleEventClick = (event: Maw3dEvent) => {
-    console.log('Event clicked:', event.id, 'created_by:', event.created_by, 'current_user:', user?.id);
+    console.log('=== EVENT CLICK DEBUG ===');
+    console.log('Event clicked:', event.id);
+    console.log('Event title:', event.title);
+    console.log('Event created_by:', event.created_by);
+    console.log('Current user ID:', user?.id);
+    console.log('User object:', user);
+    console.log('Are they equal?', event.created_by === user?.id);
+    console.log('Types - event.created_by:', typeof event.created_by, 'user?.id:', typeof user?.id);
     
     // If user created this event, go to management view
     if (event.created_by === user?.id) {
-      console.log('Navigating to management view for creator');
+      console.log('✅ User is creator - navigating to management view');
+      console.log('Management URL:', `/maw3d/manage/${event.id}`);
       navigate(`/maw3d/manage/${event.id}`);
     } else {
-      console.log('Navigating to public view for invitee');
+      console.log('👥 User is invitee - navigating to public view');
+      console.log('Public URL:', `/maw3d/${event.short_id}`);
       // If user is invited to this event, go to public view
       navigate(`/maw3d/${event.short_id}`);
     }
+    console.log('=== END EVENT CLICK DEBUG ===');
   };
 
   const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
@@ -157,6 +166,17 @@ export default function Maw3dEvents() {
         </Button>
       </div>
 
+      {/* Debug Current User */}
+      <Card className="mb-6 border-dashed">
+        <CardContent className="p-4">
+          <div className="text-xs space-y-1 text-muted-foreground">
+            <div>Current User ID: {user?.id || 'No user'}</div>
+            <div>Current User Email: {user?.email || 'No email'}</div>
+            <div>Events Count: {events.length}</div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Events Grid */}
       {events.length === 0 ? (
         <div className="text-center py-12">
@@ -219,6 +239,13 @@ export default function Maw3dEvents() {
                       <Badge variant="outline">Public</Badge>
                     )}
                   </div>
+                </div>
+
+                {/* Event Debug Info */}
+                <div className="text-xs text-muted-foreground mb-2 p-2 bg-muted/50 rounded">
+                  <div>Event ID: {event.id}</div>
+                  <div>Created By: {event.created_by}</div>
+                  <div>Is Creator: {(event.created_by === user?.id).toString()}</div>
                 </div>
 
                 {/* Action buttons - only show for events created by user */}

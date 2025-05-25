@@ -31,8 +31,9 @@ export default function Maw3dManage() {
     try {
       if (!id) return;
       
-      console.log('=== FETCHING EVENT DATA ===');
+      console.log('=== MANAGEMENT PAGE: FETCHING EVENT DATA ===');
       console.log('Event ID:', id);
+      console.log('Current user ID:', user?.id);
       
       const eventData = await Maw3dService.getEvent(id);
       if (!eventData) {
@@ -43,6 +44,8 @@ export default function Maw3dManage() {
       }
 
       console.log('Event data:', eventData);
+      console.log('Event created_by:', eventData.created_by);
+      console.log('Current user:', user?.id);
 
       // Check if user is the creator
       if (eventData.created_by !== user?.id) {
@@ -104,15 +107,15 @@ export default function Maw3dManage() {
   const formatRsvpName = (rsvp: Maw3dRsvp) => {
     console.log('Formatting RSVP name:', rsvp);
     
+    // For guest users, use the guest_name
+    if (rsvp.guest_name) {
+      return rsvp.guest_name;
+    }
+    
     // For authenticated users, try to get display name from user metadata
     if (rsvp.user_id && !rsvp.guest_name) {
       // TODO: We might need to fetch user profile data here
       return 'Registered User';
-    }
-    
-    // For guest users, use the guest_name
-    if (rsvp.guest_name) {
-      return rsvp.guest_name;
     }
     
     // Fallback
@@ -148,7 +151,7 @@ export default function Maw3dManage() {
   const acceptedRsvps = rsvps.filter(rsvp => rsvp.response === 'accepted');
   const declinedRsvps = rsvps.filter(rsvp => rsvp.response === 'declined');
 
-  console.log('=== RENDER DEBUG ===');
+  console.log('=== MANAGEMENT PAGE RENDER DEBUG ===');
   console.log('Total RSVPs:', rsvps.length);
   console.log('Accepted RSVPs:', acceptedRsvps.length);
   console.log('Declined RSVPs:', declinedRsvps.length);
@@ -324,20 +327,20 @@ export default function Maw3dManage() {
           </Card>
         </div>
 
-        {/* Debug Information (Remove in production) */}
+        {/* Management Debug Information */}
         <Card className="mt-8 border-dashed">
           <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">Debug Info</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Management Debug Info</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-xs space-y-2 text-muted-foreground">
               <div>Event ID: {event.id}</div>
               <div>Short ID: {event.short_id}</div>
+              <div>Created By: {event.created_by}</div>
+              <div>Current User: {user?.id}</div>
               <div>Total RSVPs in state: {rsvps.length}</div>
-              <div>RSVP Details:</div>
-              <pre className="text-xs bg-muted p-2 rounded">
-                {JSON.stringify(rsvps, null, 2)}
-              </pre>
+              <div>Accepted: {acceptedRsvps.length}</div>
+              <div>Declined: {declinedRsvps.length}</div>
             </div>
           </CardContent>
         </Card>
