@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Search, Users } from 'lucide-react';
 import { getContacts } from '@/services/contactsService';
 
-interface Contact {
+// Use the proper contact type that matches what getContacts() returns
+interface ContactFromService {
   id: string;
   contact_id: string;
   profile?: {
@@ -31,7 +32,7 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
   selectedContacts,
   onContactsChange
 }) => {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<ContactFromService[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -78,11 +79,11 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
     onContactsChange(newSelection);
   };
 
-  const getContactDisplayName = (contact: Contact) => {
+  const getContactDisplayName = (contact: ContactFromService) => {
     return contact.profile?.display_name || contact.profile?.username || 'Unknown';
   };
 
-  const getContactUsername = (contact: Contact) => {
+  const getContactUsername = (contact: ContactFromService) => {
     return contact.profile?.username || '';
   };
 
