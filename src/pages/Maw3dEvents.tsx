@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -166,17 +167,6 @@ export default function Maw3dEvents() {
         </Button>
       </div>
 
-      {/* Debug Current User */}
-      <Card className="mb-6 border-dashed">
-        <CardContent className="p-4">
-          <div className="text-xs space-y-1 text-muted-foreground">
-            <div>Current User ID: {user?.id || 'No user'}</div>
-            <div>Current User Email: {user?.email || 'No email'}</div>
-            <div>Events Count: {events.length}</div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Events Grid */}
       {events.length === 0 ? (
         <div className="text-center py-12">
@@ -239,13 +229,6 @@ export default function Maw3dEvents() {
                       <Badge variant="outline">Public</Badge>
                     )}
                   </div>
-                </div>
-
-                {/* Event Debug Info */}
-                <div className="text-xs text-muted-foreground mb-2 p-2 bg-muted/50 rounded">
-                  <div>Event ID: {event.id}</div>
-                  <div>Created By: {event.created_by}</div>
-                  <div>Is Creator: {(event.created_by === user?.id).toString()}</div>
                 </div>
 
                 {/* Action buttons - only show for events created by user */}
