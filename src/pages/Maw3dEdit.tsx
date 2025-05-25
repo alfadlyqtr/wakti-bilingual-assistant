@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -20,6 +19,8 @@ import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, TextStyle, EventTemplate } from '@/types/maw3d';
 
 export default function Maw3dEdit() {
+  
+
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();

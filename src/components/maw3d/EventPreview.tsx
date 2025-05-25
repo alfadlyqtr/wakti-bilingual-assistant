@@ -72,18 +72,25 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         {/* Overlay for better text readability */}
         <div className="absolute inset-0 bg-black/20" />
         
-        <div className="relative p-6 space-y-4">
+        <div className="relative p-4 space-y-3">
           {/* Title and Description with custom text styling */}
           <div style={getTextStyle()}>
-            <h1 className="font-bold mb-2" style={{ fontSize: `${textStyle.fontSize + 6}px` }}>
+            <h1 className="font-bold mb-1" style={{ fontSize: `${textStyle.fontSize + 6}px` }}>
               {event.title || 'Event Title'}
             </h1>
             {(event.description && event.description.trim()) && (
-              <p className="opacity-90 mb-4" style={{ fontSize: `${textStyle.fontSize - 2}px` }}>
+              <p className="opacity-90 mb-2" style={{ fontSize: `${textStyle.fontSize - 2}px` }}>
                 {event.description}
               </p>
             )}
           </div>
+
+          {/* Organizer */}
+          {(event.organizer && event.organizer.trim()) && (
+            <div className="text-sm opacity-90" style={{ color: textStyle.color, fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
+              Organized by {event.organizer}
+            </div>
+          )}
 
           {/* Event details with consistent styling */}
           <div className="space-y-2" style={{ color: textStyle.color }}>
