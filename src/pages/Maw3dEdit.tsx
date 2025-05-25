@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,8 +15,9 @@ import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { ContactsSelector } from '@/components/maw3d/ContactsSelector';
+import { EventTemplates } from '@/components/maw3d/EventTemplates';
 import { Maw3dService } from '@/services/maw3dService';
-import { Maw3dEvent, TextStyle } from '@/types/maw3d';
+import { Maw3dEvent, TextStyle, EventTemplate } from '@/types/maw3d';
 
 export default function Maw3dEdit() {
   const { id } = useParams();
@@ -25,6 +27,7 @@ export default function Maw3dEdit() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [showContactsSelector, setShowContactsSelector] = useState(false);
   const [invitedContacts, setInvitedContacts] = useState<string[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -83,6 +86,21 @@ export default function Maw3dEdit() {
       background_type: type,
       background_value: value
     } : null);
+  };
+
+  const handleTemplateSelect = (template: EventTemplate | null) => {
+    setSelectedTemplate(template);
+    if (template && event) {
+      setEvent(prev => prev ? {
+        ...prev,
+        title: template.title,
+        description: template.description,
+        organizer: template.organizer || prev.organizer,
+        background_type: template.background_type,
+        background_value: template.background_value,
+        text_style: template.text_style
+      } : null);
+    }
   };
 
   const handleSubmit = async () => {
@@ -163,134 +181,180 @@ export default function Maw3dEdit() {
               </CardContent>
             </Card>
 
-            {/* Basic Information */}
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Event Details</h2>
-                
-                <div>
-                  <Label htmlFor="title">Event Title *</Label>
-                  <Input
-                    id="title"
-                    value={event.title}
-                    onChange={(e) => handleInputChange('title', e.target.value)}
-                    placeholder="Enter event title"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={event.description || ''}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    placeholder="Tell people about your event"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="event_date">Date *</Label>
-                    <Input
-                      id="event_date"
-                      type="date"
-                      value={event.event_date}
-                      onChange={(e) => handleInputChange('event_date', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="all_day"
-                      checked={event.is_all_day}
-                      onCheckedChange={(checked) => handleInputChange('is_all_day', checked)}
-                    />
-                    <Label htmlFor="all_day">All Day Event</Label>
-                  </div>
-                </div>
-
-                {!event.is_all_day && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="start_time">Start Time</Label>
-                      <Input
-                        id="start_time"
-                        type="time"
-                        value={event.start_time || ''}
-                        onChange={(e) => handleInputChange('start_time', e.target.value)}
+            {/* Collapsible Sections */}
+            <Accordion type="multiple" defaultValue={["templates", "details", "text-styling", "background", "privacy"]} className="space-y-4">
+              
+              {/* Choose Template Section */}
+              <AccordionItem value="templates" className="border rounded-lg">
+                <Card>
+                  <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
+                    <h2 className="text-lg font-semibold">📂 Choose Template</h2>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="px-6 pb-6">
+                      <EventTemplates
+                        onSelectTemplate={handleTemplateSelect}
+                        selectedTemplate={selectedTemplate}
                       />
-                    </div>
-                    <div>
-                      <Label htmlFor="end_time">End Time</Label>
-                      <Input
-                        id="end_time"
-                        type="time"
-                        value={event.end_time || ''}
-                        onChange={(e) => handleInputChange('end_time', e.target.value)}
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+
+              {/* Event Details Section */}
+              <AccordionItem value="details" className="border rounded-lg">
+                <Card>
+                  <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
+                    <h2 className="text-lg font-semibold">📝 Event Details</h2>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="px-6 pb-6 space-y-4">
+                      <div>
+                        <Label htmlFor="title">Event Title *</Label>
+                        <Input
+                          id="title"
+                          value={event.title}
+                          onChange={(e) => handleInputChange('title', e.target.value)}
+                          placeholder="Enter event title"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={event.description || ''}
+                          onChange={(e) => handleInputChange('description', e.target.value)}
+                          placeholder="Tell people about your event"
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="event_date">Date *</Label>
+                          <Input
+                            id="event_date"
+                            type="date"
+                            value={event.event_date}
+                            onChange={(e) => handleInputChange('event_date', e.target.value)}
+                          />
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="all_day"
+                            checked={event.is_all_day}
+                            onCheckedChange={(checked) => handleInputChange('is_all_day', checked)}
+                          />
+                          <Label htmlFor="all_day">All Day Event</Label>
+                        </div>
+                      </div>
+
+                      {!event.is_all_day && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="start_time">Start Time</Label>
+                            <Input
+                              id="start_time"
+                              type="time"
+                              value={event.start_time || ''}
+                              onChange={(e) => handleInputChange('start_time', e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="end_time">End Time</Label>
+                            <Input
+                              id="end_time"
+                              type="time"
+                              value={event.end_time || ''}
+                              onChange={(e) => handleInputChange('end_time', e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <Label htmlFor="location">Location (Optional)</Label>
+                        <Input
+                          id="location"
+                          value={event.location || ''}
+                          onChange={(e) => handleInputChange('location', e.target.value)}
+                          placeholder="Enter event location"
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="google_maps_link">Google Maps Link (Optional)</Label>
+                        <Input
+                          id="google_maps_link"
+                          value={event.google_maps_link || ''}
+                          onChange={(e) => handleInputChange('google_maps_link', e.target.value)}
+                          placeholder="https://maps.google.com/..."
+                        />
+                      </div>
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
+
+              {/* Text Styling Section */}
+              <AccordionItem value="text-styling" className="border rounded-lg">
+                <Card>
+                  <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
+                    <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="px-6 pb-6">
+                      <TextStyleCustomizer
+                        textStyle={event.text_style}
+                        onTextStyleChange={handleTextStyleChange}
                       />
-                    </div>
-                  </div>
-                )}
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
 
-                <div>
-                  <Label htmlFor="location">Location (Optional)</Label>
-                  <Input
-                    id="location"
-                    value={event.location || ''}
-                    onChange={(e) => handleInputChange('location', e.target.value)}
-                    placeholder="Enter event location"
-                  />
-                </div>
+              {/* Background Customization Section */}
+              <AccordionItem value="background" className="border rounded-lg">
+                <Card>
+                  <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
+                    <h2 className="text-lg font-semibold">🖼️ Background Customization</h2>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="px-6 pb-6">
+                      <BackgroundCustomizer
+                        backgroundType={event.background_type}
+                        backgroundValue={event.background_value}
+                        onBackgroundChange={handleBackgroundChange}
+                      />
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
 
-                <div>
-                  <Label htmlFor="google_maps_link">Google Maps Link (Optional)</Label>
-                  <Input
-                    id="google_maps_link"
-                    value={event.google_maps_link || ''}
-                    onChange={(e) => handleInputChange('google_maps_link', e.target.value)}
-                    placeholder="https://maps.google.com/..."
-                  />
-                </div>
-              </CardContent>
-            </Card>
+              {/* Privacy Settings Section - Moved to bottom */}
+              <AccordionItem value="privacy" className="border rounded-lg">
+                <Card>
+                  <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
+                    <h2 className="text-lg font-semibold">🔒 Privacy Settings</h2>
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <CardContent className="px-6 pb-6 space-y-4">
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="is_public"
+                          checked={event.is_public}
+                          onCheckedChange={(checked) => handleInputChange('is_public', checked)}
+                        />
+                        <Label htmlFor="is_public">Public Event (Anyone with link can view)</Label>
+                      </div>
+                    </CardContent>
+                  </AccordionContent>
+                </Card>
+              </AccordionItem>
 
-            {/* Privacy Settings */}
-            <Card>
-              <CardContent className="p-6 space-y-4">
-                <h2 className="text-lg font-semibold">Privacy Settings</h2>
-                
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="is_public"
-                    checked={event.is_public}
-                    onCheckedChange={(checked) => handleInputChange('is_public', checked)}
-                  />
-                  <Label htmlFor="is_public">Public Event (Anyone with link can view)</Label>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Background Customization */}
-            <Card>
-              <CardContent className="p-6">
-                <BackgroundCustomizer
-                  backgroundType={event.background_type}
-                  backgroundValue={event.background_value}
-                  onBackgroundChange={handleBackgroundChange}
-                />
-              </CardContent>
-            </Card>
-
-            {/* Text Styling */}
-            <Card>
-              <CardContent className="p-6">
-                <TextStyleCustomizer
-                  textStyle={event.text_style}
-                  onTextStyleChange={handleTextStyleChange}
-                />
-              </CardContent>
-            </Card>
+            </Accordion>
           </div>
         </div>
       </div>
