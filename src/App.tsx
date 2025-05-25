@@ -166,9 +166,9 @@ function App() {
                   
                   {/* Maw3d system routes - protected */}
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />
-                  <Route path="/maw3d/create" element={<Maw3dCreate />} />
-                  <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
-                  <Route path="/maw3d/manage/:id" element={<Maw3dManage />} />
+                  <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
+                  <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
+                  <Route path="/maw3d/manage/:id" element={<AppLayout><Maw3dManage /></AppLayout>} />
                   
                   {/* Other protected routes */}
                   <Route path="/settings" element={<AppLayout><PageContainer title="Settings"><Settings /></PageContainer></AppLayout>} />
