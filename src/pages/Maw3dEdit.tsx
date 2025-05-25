@@ -181,8 +181,8 @@ export default function Maw3dEdit() {
               </CardContent>
             </Card>
 
-            {/* Collapsible Sections */}
-            <Accordion type="multiple" defaultValue={["templates", "details", "text-styling", "background", "privacy"]} className="space-y-4">
+            {/* Collapsible Sections - All collapsed by default */}
+            <Accordion type="multiple" className="space-y-4">
               
               {/* Choose Template Section */}
               <AccordionItem value="templates" className="border rounded-lg">
@@ -227,6 +227,16 @@ export default function Maw3dEdit() {
                           onChange={(e) => handleInputChange('description', e.target.value)}
                           placeholder="Tell people about your event"
                           rows={3}
+                        />
+                      </div>
+
+                      <div>
+                        <Label htmlFor="organizer">Organizer</Label>
+                        <Input
+                          id="organizer"
+                          value={event.organizer || ''}
+                          onChange={(e) => handleInputChange('organizer', e.target.value)}
+                          placeholder="Enter organizer name"
                         />
                       </div>
 
@@ -333,7 +343,7 @@ export default function Maw3dEdit() {
                 </Card>
               </AccordionItem>
 
-              {/* Privacy Settings Section - Moved to bottom */}
+              {/* Privacy Settings Section - At the bottom */}
               <AccordionItem value="privacy" className="border rounded-lg">
                 <Card>
                   <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
