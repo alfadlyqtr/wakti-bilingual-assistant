@@ -127,13 +127,13 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Public event detail routes - accessible without authentication */}
+                {/* Public legacy event detail routes - accessible without authentication */}
                 <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
                 
-                {/* Standalone event routes with pretty URLs */}
+                {/* Standalone legacy event routes with pretty URLs */}
                 <Route path="/wakti/:id" element={<StandaloneEvent />} />
 
-                {/* Public Maw3d event routes */}
+                {/* Public Maw3d event routes - These work without authentication */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
 
                 {/* WAKTI AI route - now using AppLayout */}
@@ -158,26 +158,23 @@ function App() {
                   {/* New combined tasks and reminders route */}
                   <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
                   
-                  {/* Redirect old routes to the new combined page */}
-                  <Route path="/tasks" element={<Navigate to="/tasks-reminders" replace />} />
-                  <Route path="/reminders" element={<Navigate to="/tasks-reminders" replace />} />
+                  {/* Legacy events system routes - keep separate from Maw3d */}
+                  <Route path="/legacy-events" element={<AppLayout><Events /></AppLayout>} />
+                  <Route path="/legacy-event/create" element={<AppLayout><EventCreate /></AppLayout>} />
+                  <Route path="/legacy-event/:id/edit" element={<AppLayout><EventEdit /></AppLayout>} />
                   
-                  {/* Old Events system (keeping for compatibility until Maw3d is ready) */}
-                  <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                  <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-                  <Route path="/event/:id/edit" element={<AppLayout><EventEdit /></AppLayout>} />
-                  
-                  {/* New Maw3d Events system */}
+                  {/* Maw3d system routes - protected */}
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />
-                  <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
-                  <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
+                  <Route path="/maw3d/create" element={<Maw3dCreate />} />
+                  <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
                   
-                  <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
-                  <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
-                  <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
+                  {/* Other protected routes */}
+                  <Route path="/settings" element={<AppLayout><PageContainer title="Settings"><Settings /></PageContainer></AppLayout>} />
+                  <Route path="/contacts" element={<AppLayout><PageContainer title="Contacts"><Contacts /></PageContainer></AppLayout>} />
+                  <Route path="/account" element={<AppLayout><PageContainer title="Account"><Account /></PageContainer></AppLayout>} />
                 </Route>
 
-                {/* 404 route */}
+                {/* Catch all route for 404 */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </AuthProvider>

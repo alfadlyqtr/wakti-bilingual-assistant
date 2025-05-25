@@ -13,11 +13,11 @@ export default function Dashboard() {
   const [trialDaysLeft, setTrialDaysLeft] = useState(3);
   const [isDragging, setIsDragging] = useState(false);
   
-  // Fetch dashboard data
-  const { isLoading, tasks, events, reminders } = useDashboardData();
+  // Fetch dashboard data (this uses the legacy events system)
+  const { isLoading, tasks, events: legacyEvents, reminders } = useDashboardData();
   
-  // Manage widgets
-  const { widgets, handleDragEnd } = useWidgetManager(language, isLoading, tasks, events, reminders);
+  // Manage widgets - pass legacyEvents to avoid conflicts with Maw3d system
+  const { widgets, handleDragEnd } = useWidgetManager(language, isLoading, tasks, legacyEvents, reminders);
 
   // Toggle drag mode button handler
   const toggleDragMode = () => {
