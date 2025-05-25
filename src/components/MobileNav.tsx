@@ -10,7 +10,7 @@ export function MobileNav() {
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - updated to combine Tasks & Reminders
+  // Navigation items - updated to include Maw3d
   const navItems = [
     {
       name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
@@ -23,8 +23,8 @@ export function MobileNav() {
       icon: 'calendar',
     },
     {
-      name: language === 'ar' ? 'الأحداث' : 'Events',
-      path: '/events',
+      name: language === 'ar' ? 'مواعيد' : 'Maw3d',
+      path: '/maw3d',
       icon: 'calendar-clock',
     },
     {
@@ -52,7 +52,7 @@ export function MobileNav() {
       <ul className="flex justify-around items-center h-16">
         {navItems.map((item) => {
           const IconComponent = iconMap[item.icon] || CheckSquare;
-          const isActive = pathname === item.path;
+          const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d'));
           
           return (
             <li key={item.path} className="flex-1 flex justify-center">

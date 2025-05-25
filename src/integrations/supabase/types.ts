@@ -169,172 +169,6 @@ export type Database = {
         }
         Relationships: []
       }
-      event_invitees: {
-        Row: {
-          created_at: string | null
-          email: string | null
-          event_id: string | null
-          id: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          email?: string | null
-          event_id?: string | null
-          id?: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string | null
-          event_id?: string | null
-          id?: string
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_invitees_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      event_rsvps: {
-        Row: {
-          created_at: string | null
-          device_id: string | null
-          event_id: string | null
-          guest_name: string | null
-          id: string
-          ip_address: string | null
-          response: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          device_id?: string | null
-          event_id?: string | null
-          guest_name?: string | null
-          id?: string
-          ip_address?: string | null
-          response: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          device_id?: string | null
-          event_id?: string | null
-          guest_name?: string | null
-          id?: string
-          ip_address?: string | null
-          response?: string
-          user_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_rsvps_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      events: {
-        Row: {
-          background_color: string | null
-          background_gradient: string | null
-          background_image: string | null
-          background_type: string | null
-          button_style: string | null
-          cover_image: string | null
-          created_at: string | null
-          created_by: string | null
-          description: string | null
-          end_time: string
-          font_family: string | null
-          font_size: number | null
-          font_style: string | null
-          font_weight: string | null
-          id: string
-          is_all_day: boolean | null
-          is_public: boolean | null
-          location: string | null
-          location_link: string | null
-          rsvp_deadline: string | null
-          rsvp_enabled: boolean | null
-          short_id: string | null
-          start_time: string
-          text_align: string | null
-          text_color: string | null
-          text_decoration: string | null
-          title: string
-          updated_at: string | null
-        }
-        Insert: {
-          background_color?: string | null
-          background_gradient?: string | null
-          background_image?: string | null
-          background_type?: string | null
-          button_style?: string | null
-          cover_image?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          end_time: string
-          font_family?: string | null
-          font_size?: number | null
-          font_style?: string | null
-          font_weight?: string | null
-          id?: string
-          is_all_day?: boolean | null
-          is_public?: boolean | null
-          location?: string | null
-          location_link?: string | null
-          rsvp_deadline?: string | null
-          rsvp_enabled?: boolean | null
-          short_id?: string | null
-          start_time: string
-          text_align?: string | null
-          text_color?: string | null
-          text_decoration?: string | null
-          title: string
-          updated_at?: string | null
-        }
-        Update: {
-          background_color?: string | null
-          background_gradient?: string | null
-          background_image?: string | null
-          background_type?: string | null
-          button_style?: string | null
-          cover_image?: string | null
-          created_at?: string | null
-          created_by?: string | null
-          description?: string | null
-          end_time?: string
-          font_family?: string | null
-          font_size?: number | null
-          font_style?: string | null
-          font_weight?: string | null
-          id?: string
-          is_all_day?: boolean | null
-          is_public?: boolean | null
-          location?: string | null
-          location_link?: string | null
-          rsvp_deadline?: string | null
-          rsvp_enabled?: boolean | null
-          short_id?: string | null
-          start_time?: string
-          text_align?: string | null
-          text_color?: string | null
-          text_decoration?: string | null
-          title?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       images: {
         Row: {
           created_at: string
@@ -361,6 +195,133 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      maw3d_events: {
+        Row: {
+          background_type: string
+          background_value: string
+          created_at: string
+          created_by: string
+          description: string | null
+          end_time: string | null
+          event_date: string
+          google_maps_link: string | null
+          id: string
+          is_all_day: boolean
+          is_public: boolean
+          location: string | null
+          short_id: string | null
+          start_time: string | null
+          template_type: string | null
+          text_style: Json
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          background_type?: string
+          background_value?: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          end_time?: string | null
+          event_date: string
+          google_maps_link?: string | null
+          id?: string
+          is_all_day?: boolean
+          is_public?: boolean
+          location?: string | null
+          short_id?: string | null
+          start_time?: string | null
+          template_type?: string | null
+          text_style?: Json
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          background_type?: string
+          background_value?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          end_time?: string | null
+          event_date?: string
+          google_maps_link?: string | null
+          id?: string
+          is_all_day?: boolean
+          is_public?: boolean
+          location?: string | null
+          short_id?: string | null
+          start_time?: string | null
+          template_type?: string | null
+          text_style?: Json
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      maw3d_invitations: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          invited_user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          invited_user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          invited_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maw3d_invitations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "maw3d_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      maw3d_rsvps: {
+        Row: {
+          created_at: string
+          event_id: string
+          guest_name: string | null
+          id: string
+          response: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          guest_name?: string | null
+          id?: string
+          response: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          guest_name?: string | null
+          id?: string
+          response?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "maw3d_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "maw3d_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       messages: {
         Row: {
@@ -653,6 +614,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      cleanup_expired_maw3d_events: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_old_messages: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -663,6 +628,14 @@ export type Database = {
       }
       generate_event_short_id: {
         Args: { event_uuid: string }
+        Returns: string
+      }
+      generate_maw3d_short_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_current_user_id: {
+        Args: Record<PropertyKey, never>
         Returns: string
       }
       gtrgm_compress: {

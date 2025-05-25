@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -30,6 +29,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
 import Tasjeel from "@/components/tasjeel/Tasjeel";
 import { PageContainer } from "@/components/PageContainer";
+// Maw3d imports
+import Maw3dEvents from "@/pages/Maw3dEvents";
+import Maw3dCreate from "@/pages/Maw3dCreate";
+import Maw3dView from "@/pages/Maw3dView";
+import Maw3dEdit from "@/pages/Maw3dEdit";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -129,6 +133,9 @@ function App() {
                 {/* Standalone event routes with pretty URLs */}
                 <Route path="/wakti/:id" element={<StandaloneEvent />} />
 
+                {/* Public Maw3d event routes */}
+                <Route path="/maw3d/:shortId" element={<Maw3dView />} />
+
                 {/* WAKTI AI route - now using AppLayout */}
                 <Route path="/wakti-ai" element={
                   <AppLayout>
@@ -155,10 +162,17 @@ function App() {
                   <Route path="/tasks" element={<Navigate to="/tasks-reminders" replace />} />
                   <Route path="/reminders" element={<Navigate to="/tasks-reminders" replace />} />
                   
+                  {/* Old Events system (keeping for compatibility until Maw3d is ready) */}
                   <Route path="/events" element={<AppLayout><Events /></AppLayout>} />
-                  <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/event/create" element={<AppLayout><EventCreate /></AppLayout>} />
                   <Route path="/event/:id/edit" element={<AppLayout><EventEdit /></AppLayout>} />
+                  
+                  {/* New Maw3d Events system */}
+                  <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />
+                  <Route path="/maw3d/create" element={<AppLayout><Maw3dCreate /></AppLayout>} />
+                  <Route path="/maw3d/edit/:id" element={<AppLayout><Maw3dEdit /></AppLayout>} />
+                  
+                  <Route path="/settings" element={<AppLayout><Settings /></AppLayout>} />
                   <Route path="/contacts" element={<AppLayout><Contacts /></AppLayout>} />
                   <Route path="/account" element={<AppLayout><Account /></AppLayout>} />
                 </Route>
