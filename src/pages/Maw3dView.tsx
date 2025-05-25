@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -252,16 +251,18 @@ export default function Maw3dView() {
           <div className="bg-black/20">
             <div className="p-6 space-y-8" style={textStyle}>
               
-              {/* Event Preview Section - No title, integrated styling */}
+              {/* Event Preview Section with transparent background and blur */}
               <div className="space-y-6">
-                <EventPreview
-                  event={event}
-                  textStyle={event.text_style}
-                  backgroundType="transparent"
-                  backgroundValue=""
-                  rsvpCount={rsvpCounts}
-                  showAttendingCount={event.show_attending_count}
-                />
+                <div className="backdrop-blur-sm bg-transparent p-4 rounded-lg">
+                  <EventPreview
+                    event={event}
+                    textStyle={event.text_style}
+                    backgroundType="transparent"
+                    backgroundValue=""
+                    rsvpCount={rsvpCounts}
+                    showAttendingCount={event.show_attending_count}
+                  />
+                </div>
               </div>
 
               {/* Add to Calendar and Location Section */}
@@ -273,7 +274,9 @@ export default function Maw3dView() {
                     {calendarEvent && (
                       <div className="flex justify-center">
                         <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30">
-                          <CalendarDropdown event={calendarEvent} />
+                          <div className="[&_button]:bg-white [&_button]:text-black [&_button]:hover:bg-white [&_button]:hover:text-black">
+                            <CalendarDropdown event={calendarEvent} />
+                          </div>
                         </div>
                       </div>
                     )}
