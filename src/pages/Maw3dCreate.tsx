@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ export default function Maw3dCreate() {
         background_type: template.background_type,
         background_value: template.background_value,
         text_style: template.text_style,
-        template_type: template.type
+        template_type: template.id
       }));
     }
   };
