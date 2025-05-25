@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -269,20 +268,6 @@ export default function Maw3dView() {
                 Please enter your name to respond
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* Debug Information */}
-        <Card className="mb-6 border-dashed">
-          <CardContent className="p-4">
-            <div className="text-xs space-y-1 text-muted-foreground">
-              <div>Event ID: {event.id}</div>
-              <div>Short ID: {shortId}</div>
-              <div>Guest Name: "{guestName}"</div>
-              <div>Has Responded: {hasResponded.toString()}</div>
-              <div>Is Submitting: {isSubmitting.toString()}</div>
-              <div>RSVPs Count: {rsvps.length}</div>
-            </div>
           </CardContent>
         </Card>
 
