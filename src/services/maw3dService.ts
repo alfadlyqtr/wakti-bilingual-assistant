@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/types/maw3d";
 
@@ -161,26 +162,59 @@ export class Maw3dService {
 
     if (userData?.user) {
       rsvpData.user_id = userData.user.id;
+      
+      // Use upsert with proper conflict resolution for authenticated users
+      const { data, error } = await supabase
+        .from('maw3d_rsvps')
+        .upsert(rsvpData, {
+          onConflict: 'event_id,user_id'
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('Error creating RSVP for user:', error);
+        throw error;
+      }
+      
+      console.log('RSVP created/updated successfully for user:', data);
+      return data;
     } else if (guestName) {
-      rsvpData.guest_name = guestName;
+      rsvpData.guest_name = guestName.trim();
+      
+      // For guests, first check if name already exists (case-insensitive)
+      const { data: existingRsvp } = await supabase
+        .from('maw3d_rsvps')
+        .select('*')
+        .eq('event_id', eventId)
+        .ilike('guest_name', guestName.trim())
+        .maybeSingle();
+        
+      if (existingRsvp) {
+        throw new Error('Someone with this name has already responded to this event');
+      }
+      
+      // Insert new guest RSVP
+      const { data, error } = await supabase
+        .from('maw3d_rsvps')
+        .insert(rsvpData)
+        .select('*')
+        .single();
+
+      if (error) {
+        console.error('Error creating RSVP for guest:', error);
+        // Handle unique constraint violation
+        if (error.code === '23505') {
+          throw new Error('Someone with this name has already responded to this event');
+        }
+        throw error;
+      }
+      
+      console.log('RSVP created successfully for guest:', data);
+      return data;
     } else {
       throw new Error('Either user must be logged in or guest name must be provided');
     }
-
-    const { data, error } = await supabase
-      .from('maw3d_rsvps')
-      .upsert(rsvpData, {
-        onConflict: userData?.user ? 'event_id,user_id' : 'event_id,guest_name'
-      })
-      .select('*')
-      .single();
-
-    if (error) {
-      console.error('Error creating RSVP:', error);
-      throw error;
-    }
-    console.log('RSVP created successfully:', data);
-    return data;
   }
 
   static async updateRsvp(eventId: string, response: 'accepted' | 'declined'): Promise<Maw3dRsvp> {
