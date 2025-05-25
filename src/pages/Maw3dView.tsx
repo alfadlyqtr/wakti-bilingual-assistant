@@ -272,6 +272,20 @@ export default function Maw3dView() {
           </CardContent>
         </Card>
 
+        {/* Debug Information */}
+        <Card className="mb-6 border-dashed">
+          <CardContent className="p-4">
+            <div className="text-xs space-y-1 text-muted-foreground">
+              <div>Event ID: {event.id}</div>
+              <div>Short ID: {shortId}</div>
+              <div>Guest Name: "{guestName}"</div>
+              <div>Has Responded: {hasResponded.toString()}</div>
+              <div>Is Submitting: {isSubmitting.toString()}</div>
+              <div>RSVPs Count: {rsvps.length}</div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Event Details */}
         <Card className="mb-8">
           <CardContent className="p-6">
