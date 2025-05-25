@@ -13,7 +13,7 @@ interface RemindersWidgetProps {
   language: 'en' | 'ar';
 }
 
-const RemindersWidget: React.FC<RemindersWidgetProps> = ({ isLoading, reminders, language }) => {
+export const RemindersWidget: React.FC<RemindersWidgetProps> = ({ isLoading, reminders, language }) => {
   const navigate = useNavigate();
 
   return (
@@ -50,5 +50,3 @@ const RemindersWidget: React.FC<RemindersWidgetProps> = ({ isLoading, reminders,
     </div>
   );
 };
-
-export default RemindersWidget;

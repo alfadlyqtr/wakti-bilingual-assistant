@@ -12,7 +12,7 @@ interface TasksWidgetProps {
   language: 'en' | 'ar';
 }
 
-const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, language }) => {
+export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, language }) => {
   const navigate = useNavigate();
 
   return (
@@ -51,5 +51,3 @@ const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, language })
     </div>
   );
 };
-
-export default TasksWidget;

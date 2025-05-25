@@ -1,59 +1,75 @@
 
-import { Home, CheckSquare, Calendar, Bell, Settings, Users } from "lucide-react";
+import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
+import { cn } from "@/lib/utils";
+import { Calendar, CheckSquare, CalendarClock, Sparkles, Mic } from "lucide-react";
 
-export default function MobileNav() {
-  const location = useLocation();
+export function MobileNav() {
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
-
+  
+  // Navigation items - updated to combine Tasks & Reminders
   const navItems = [
-    { 
-      icon: Home, 
-      label: t("dashboard", language), 
-      path: "/dashboard", 
-      isActive: location.pathname === "/dashboard" 
+    {
+      name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
+      path: '/tasks-reminders',
+      icon: 'check-square',
     },
-    { 
-      icon: CheckSquare, 
-      label: t("tasks", language), 
-      path: "/tasks-reminders", 
-      isActive: location.pathname === "/tasks-reminders" || location.pathname === "/tasks" || location.pathname === "/reminders"
+    {
+      name: language === 'ar' ? 'التقويم' : 'Calendar',
+      path: '/calendar',
+      icon: 'calendar',
     },
-    { 
-      icon: Calendar, 
-      label: t("calendar", language), 
-      path: "/calendar", 
-      isActive: location.pathname === "/calendar"
+    {
+      name: language === 'ar' ? 'الأحداث' : 'Events',
+      path: '/events',
+      icon: 'calendar-clock',
     },
-    { 
-      icon: Users, 
-      label: t("contacts", language), 
-      path: "/contacts", 
-      isActive: location.pathname === "/contacts"
+    {
+      name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
+      path: '/wakti-ai',
+      icon: 'sparkles',
     },
-    { 
-      icon: Settings, 
-      label: t("settings", language), 
-      path: "/settings", 
-      isActive: location.pathname === "/settings"
+    {
+      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
+      path: '/tasjeel',
+      icon: 'mic',
     }
   ];
-
+  
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    calendar: Calendar,
+    'check-square': CheckSquare,
+    'calendar-clock': CalendarClock,
+    sparkles: Sparkles,
+    mic: Mic,
+  };
+  
   return (
-    <nav className="mobile-nav">
-      {navItems.map((item) => (
-        <button
-          key={item.path}
-          onClick={() => navigate(item.path)}
-          className={`mobile-nav-item ${item.isActive ? 'active' : ''}`}
-        >
-          <item.icon className="h-5 w-5" />
-          <span className="text-xs">{item.label}</span>
-        </button>
-      ))}
+    <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
+      <ul className="flex justify-around items-center h-16">
+        {navItems.map((item) => {
+          const IconComponent = iconMap[item.icon] || CheckSquare;
+          const isActive = pathname === item.path;
+          
+          return (
+            <li key={item.path} className="flex-1 flex justify-center">
+              <button
+                onClick={() => navigate(item.path)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 p-2 rounded-md w-full",
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-primary"
+                )}
+              >
+                <IconComponent className="h-5 w-5" />
+                <span className="text-xs">{item.name}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

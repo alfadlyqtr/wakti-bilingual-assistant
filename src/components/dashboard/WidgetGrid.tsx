@@ -1,87 +1,71 @@
 
-import React, { useState } from 'react';
-import { Responsive, WidthProvider } from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
-import { 
-  TasksWidget, 
-  CalendarWidget, 
-  RemindersWidget 
-} from './widgets';
-import { QuoteWidget } from './QuoteWidget';
-import { DragModeToggle } from './DragModeToggle';
-import { useWidgetManager } from '@/hooks/useWidgetManager';
-import { useDashboardData } from '@/hooks/useDashboardData';
-import { useTheme } from '@/providers/ThemeProvider';
+import React from "react";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { Card, CardContent } from "@/components/ui/card";
+import { Hand } from "lucide-react";
+import { TranslationKey } from "@/utils/translationTypes";
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+type WidgetType = {
+  id: string;
+  title: TranslationKey;
+  component: React.ReactNode;
+  visible: boolean;
+};
 
 interface WidgetGridProps {
-  dragMode: boolean;
-  setDragMode: (enabled: boolean) => void;
+  widgets: WidgetType[];
+  isDragging: boolean;
+  onDragEnd: (result: any) => void;
 }
 
-export default function WidgetGrid({ dragMode, setDragMode }: WidgetGridProps) {
-  const { layouts, saveLayouts, widgets, updateWidgetVisibility } = useWidgetManager();
-  const { tasks, reminders, events, isLoading } = useDashboardData();
-  const { language } = useTheme();
-
-  const availableWidgets = [
-    { 
-      id: 'tasksWidget', 
-      component: <TasksWidget isLoading={isLoading} tasks={tasks} language={language} />, 
-      title: 'Tasks',
-      visible: widgets.tasksWidget
-    },
-    { 
-      id: 'calendarWidget', 
-      component: <CalendarWidget isLoading={isLoading} events={events} tasks={tasks} language={language} />, 
-      title: 'Calendar',
-      visible: widgets.calendarWidget
-    },
-    { 
-      id: 'remindersWidget', 
-      component: <RemindersWidget isLoading={isLoading} reminders={reminders} language={language} />, 
-      title: 'Reminders',
-      visible: widgets.remindersWidget
-    },
-    { 
-      id: 'quoteWidget', 
-      component: <QuoteWidget />, 
-      title: 'Quote',
-      visible: widgets.quoteWidget
-    }
-  ];
-
-  const visibleWidgets = availableWidgets.filter(widget => widget.visible);
-
+export const WidgetGrid: React.FC<WidgetGridProps> = ({ widgets, isDragging, onDragEnd }) => {
   return (
-    <div className="relative">
-      <DragModeToggle 
-        dragMode={dragMode} 
-        setDragMode={setDragMode}
-        widgets={widgets}
-        updateWidgetVisibility={updateWidgetVisibility}
-      />
-      
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={layouts}
-        onLayoutChange={(layout, layouts) => saveLayouts(layouts)}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-        isDraggable={dragMode}
-        isResizable={dragMode}
-        margin={[16, 16]}
-        containerPadding={[0, 0]}
-        rowHeight={60}
-      >
-        {visibleWidgets.map((widget) => (
-          <div key={widget.id} className="widget-container">
-            {widget.component}
+    <DragDropContext onDragEnd={onDragEnd}>
+      <Droppable droppableId="widgets">
+        {(provided) => (
+          <div 
+            className="space-y-4"
+            {...provided.droppableProps}
+            ref={provided.innerRef}
+          >
+            {widgets
+              .filter(widget => widget.visible)
+              .map((widget, index) => (
+                <Draggable 
+                  key={widget.id} 
+                  draggableId={widget.id} 
+                  index={index}
+                  isDragDisabled={false}
+                >
+                  {(provided, snapshot) => (
+                    <Card 
+                      className={`shadow-sm relative ${snapshot.isDragging ? 'ring-2 ring-primary' : ''} 
+                                 ${isDragging ? 'border-dashed border-primary/70' : ''}`}
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                    >
+                      {/* Drag handle always visible in top-left corner */}
+                      <div 
+                        className={`absolute top-2 left-2 z-20 p-1 rounded-md 
+                                  ${isDragging ? 'bg-primary text-primary-foreground' : 'bg-muted/60'}
+                                  hover:bg-primary/80 hover:text-primary-foreground transition-colors 
+                                  cursor-grab active:cursor-grabbing`}
+                        {...provided.dragHandleProps}
+                      >
+                        <Hand className="h-4 w-4" />
+                      </div>
+                      
+                      <CardContent className="p-0 pt-8">
+                        {widget.component}
+                      </CardContent>
+                    </Card>
+                  )}
+                </Draggable>
+              ))}
+            {provided.placeholder}
           </div>
-        ))}
-      </ResponsiveGridLayout>
-    </div>
+        )}
+      </Droppable>
+    </DragDropContext>
   );
-}
+};

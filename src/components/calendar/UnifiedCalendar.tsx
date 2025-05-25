@@ -1,272 +1,405 @@
 
-import React, { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarViewSwitcher } from './CalendarViewSwitcher';
-import { CalendarEntryDialog } from './CalendarEntryDialog';
-import { CalendarAgenda } from './CalendarAgenda';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { CalendarView, CalendarEntry, EntryType } from '@/utils/calendarUtils';
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
+  isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
+  addWeeks, subWeeks, setMonth, getMonth, startOfYear, endOfYear, 
+  setYear, getYear, addYears, subYears, parse } from "date-fns";
+import { arSA, enUS } from "date-fns/locale";
+import { useTheme } from "@/providers/ThemeProvider";
+import { useTaskReminder } from "@/contexts/TaskReminderContext";
+import { t } from "@/utils/translations";
+import { CalendarControls } from "./CalendarControls";
+import { CalendarGrid } from "./CalendarGrid";
+import { CalendarAgenda } from "./CalendarAgenda";
+import { CalendarEntryDialog } from "./CalendarEntryDialog";
+import { CalendarViewSwitcher } from "./CalendarViewSwitcher";
+import { getCalendarEntries, CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
+import { 
+  Drawer, 
+  DrawerContent, 
+  DrawerTrigger, 
+  DrawerClose
+} from "@/components/ui/drawer";
+import { 
+  Calendar as CalendarIcon,
+  ChevronLeft, 
+  ChevronRight, 
+  Plus,
+  ChevronDown
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
-export default function UnifiedCalendar() {
+export const UnifiedCalendar: React.FC = () => {
+  const { language, theme } = useTheme();
+  const { tasks, reminders } = useTaskReminder();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<CalendarView>('month');
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [showEntryDialog, setShowEntryDialog] = useState(false);
-  const queryClient = useQueryClient();
-  const { language } = useTheme();
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
+  const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
+  const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
+  const [view, setView] = useState<CalendarView>('month');
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<CalendarEntry | null>(null);
+  const [gestureStartY, setGestureStartY] = useState<number | null>(null);
+  const [pinchStartDistance, setPinchStartDistance] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const doubleTapTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTapRef = useRef<number>(0);
+  
+  // Get the appropriate locale based on the selected language
+  const locale = language === 'ar' ? arSA : enUS;
 
-  // Fetch tasks
-  const { data: tasks = [] } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('due_date', { ascending: true });
-      
-      if (error) throw error;
-      return data || [];
-    }
+  // Generate month options for the select
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const date = new Date();
+    date.setMonth(i);
+    return {
+      value: i.toString(),
+      label: format(date, 'MMMM', { locale }),
+    };
   });
 
-  // Fetch reminders
-  const { data: reminders = [] } = useQuery({
-    queryKey: ['reminders'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reminders')
-        .select('*')
-        .order('due_date', { ascending: true });
-      
-      if (error) throw error;
-      return data || [];
-    }
+  // Generate year options (past 2 years, current year, future 5 years)
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 8 }, (_, i) => {
+    const year = currentYear - 2 + i;
+    return {
+      value: year.toString(),
+      label: year.toString(),
+    };
   });
 
-  // Convert data to calendar entries
-  const calendarEntries = useMemo(() => {
-    const entries: CalendarEntry[] = [];
+  // Load manual entries from local storage
+  useEffect(() => {
+    const savedEntries = localStorage.getItem('calendarManualEntries');
+    if (savedEntries) {
+      setManualEntries(JSON.parse(savedEntries));
+    }
+  }, []);
 
-    // Add tasks
-    tasks.forEach(task => {
-      if (task.due_date) {
-        entries.push({
-          id: task.id,
-          title: task.title,
-          date: task.due_date,
-          type: EntryType.TASK,
-          priority: task.priority
-        });
+  // Save manual entries to local storage whenever they change
+  useEffect(() => {
+    localStorage.setItem('calendarManualEntries', JSON.stringify(manualEntries));
+  }, [manualEntries]);
+
+  // Calculate all calendar entries from tasks, reminders, events and manual entries
+  useEffect(() => {
+    const entries = getCalendarEntries(tasks, reminders, manualEntries);
+    setCalendarEntries(entries);
+  }, [tasks, reminders, manualEntries]);
+
+  // Handle navigation between dates
+  const navigatePrevious = () => {
+    if (view === 'month') {
+      setCurrentDate(subMonths(currentDate, 1));
+    } else if (view === 'week') {
+      setCurrentDate(subWeeks(currentDate, 1));
+    } else if (view === 'year') {
+      setCurrentDate(subYears(currentDate, 1));
+    }
+  };
+
+  const navigateNext = () => {
+    if (view === 'month') {
+      setCurrentDate(addMonths(currentDate, 1));
+    } else if (view === 'week') {
+      setCurrentDate(addWeeks(currentDate, 1));
+    } else if (view === 'year') {
+      setCurrentDate(addYears(currentDate, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+    setSelectedDate(new Date());
+  };
+
+  // Handle month change from dropdown
+  const handleMonthChange = (value: string) => {
+    const newMonth = parseInt(value, 10);
+    const newDate = setMonth(currentDate, newMonth);
+    setCurrentDate(newDate);
+  };
+
+  // Handle year change from dropdown
+  const handleYearChange = (value: string) => {
+    const newYear = parseInt(value, 10);
+    const newDate = setYear(currentDate, newYear);
+    setCurrentDate(newDate);
+  };
+
+  // Handle touch gestures for view switching
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      // Single touch - track for double tap
+      const now = Date.now();
+      const timeSinceLastTap = now - lastTapRef.current;
+      
+      if (timeSinceLastTap < 300) {
+        // Double tap detected - switch view
+        cycleView();
+        
+        // Clear any existing timeout to prevent multiple actions
+        if (doubleTapTimeoutRef.current) {
+          clearTimeout(doubleTapTimeoutRef.current);
+          doubleTapTimeoutRef.current = null;
+        }
+      } else {
+        // Set up potential double tap
+        lastTapRef.current = now;
       }
-    });
-
-    // Add reminders
-    reminders.forEach(reminder => {
-      entries.push({
-        id: reminder.id,
-        title: reminder.title,
-        date: reminder.due_date,
-        type: EntryType.REMINDER
-      });
-    });
-
-    return entries;
-  }, [tasks, reminders]);
-
-  // Generate calendar days
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(currentDate);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-
-    const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    const today = new Date();
-
-    return days.map(date => {
-      const dayEntries = calendarEntries.filter(entry => isSameDay(new Date(entry.date), date));
       
-      return {
-        date,
-        isCurrentMonth: isSameMonth(date, currentDate),
-        isToday: isSameDay(date, today),
-        entries: dayEntries,
-        hasEntries: dayEntries.length > 0
-      };
+      setGestureStartY(e.touches[0].clientY);
+    } else if (e.touches.length === 2) {
+      // Pinch gesture - calculate distance for pinch-to-zoom
+      const distance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      setPinchStartDistance(distance);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDistance !== null) {
+      const currentDistance = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      
+      // If pinching out (zoom in)
+      if (currentDistance - pinchStartDistance > 50) {
+        if (view === 'year') {
+          setView('month');
+        } else if (view === 'month') {
+          setView('week');
+        }
+        setPinchStartDistance(null);
+      }
+      // If pinching in (zoom out)
+      else if (pinchStartDistance - currentDistance > 50) {
+        if (view === 'week') {
+          setView('month');
+        } else if (view === 'month') {
+          setView('year');
+        }
+        setPinchStartDistance(null);
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setGestureStartY(null);
+    setPinchStartDistance(null);
+  };
+
+  // Cycle through calendar views
+  const cycleView = useCallback(() => {
+    setView(prev => {
+      if (prev === 'month') return 'week';
+      if (prev === 'week') return 'year';
+      return 'month';
     });
-  }, [currentDate, calendarEntries]);
+  }, []);
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => 
-      direction === 'prev' ? subMonths(prev, 1) : addMonths(prev, 1)
-    );
-  };
-
-  const handleDateClick = (date: Date) => {
+  // Handle day selection
+  const handleDayClick = (date: Date) => {
     setSelectedDate(date);
-    setShowEntryDialog(true);
+    setCurrentDate(date); // Update current date when clicking a day
+    setAgendaOpen(true);
   };
 
-  const handleEntryCreated = () => {
-    queryClient.invalidateQueries({ queryKey: ['tasks'] });
-    queryClient.invalidateQueries({ queryKey: ['reminders'] });
-    setShowEntryDialog(false);
+  // Add a new manual calendar entry
+  const addManualEntry = (entry: Omit<CalendarEntry, 'id'>) => {
+    const newEntry: CalendarEntry = {
+      ...entry,
+      id: `manual-${Date.now()}`,
+      type: EntryType.MANUAL_NOTE,
+    };
+    setManualEntries(prev => [...prev, newEntry]);
+    setEntryDialogOpen(false);
   };
 
-  const handleCloseAgenda = () => {
-    setViewMode('month');
+  // Edit a manual calendar entry
+  const updateManualEntry = (entry: CalendarEntry) => {
+    setManualEntries(prev => 
+      prev.map(e => e.id === entry.id ? entry : e)
+    );
+    setEditEntry(null);
+    setEntryDialogOpen(false);
   };
 
+  // Delete a manual calendar entry
+  const deleteManualEntry = (entryId: string) => {
+    setManualEntries(prev => prev.filter(entry => entry.id !== entryId));
+    setEditEntry(null);
+    setEntryDialogOpen(false);
+  };
+
+  // Open dialog to edit an entry
   const handleEditEntry = (entry: CalendarEntry) => {
-    // Handle editing entry
-    console.log('Edit entry:', entry);
+    if (entry.type === EntryType.MANUAL_NOTE) {
+      setEditEntry(entry);
+      setEntryDialogOpen(true);
+    }
   };
 
-  if (viewMode === 'agenda') {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">{t("calendar", language)}</h2>
-          <div className="flex items-center gap-2">
-            <CalendarViewSwitcher view={viewMode} onViewChange={setViewMode} />
-            <Button onClick={() => setShowEntryDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t("add", language)}
+  return (
+    <div 
+      className="flex flex-col h-full w-full overflow-hidden" 
+      ref={containerRef}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div className="flex flex-col space-y-2 p-3">
+        {/* Date selector with dropdowns */}
+        <div className="flex items-center justify-center w-full">
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={navigatePrevious}
+              className={cn(language === 'ar' ? 'order-2' : 'order-1')}
+            >
+              <ChevronLeft className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
+            </Button>
+            
+            <div className={cn("flex items-center space-x-1", 
+              language === 'ar' ? 'order-1 flex-row-reverse' : 'order-2')}>
+              <Select 
+                value={getMonth(currentDate).toString()}
+                onValueChange={handleMonthChange}
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue>
+                    {format(currentDate, 'MMMM', { locale })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {months.map(month => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              <Select 
+                value={getYear(currentDate).toString()}
+                onValueChange={handleYearChange}
+              >
+                <SelectTrigger className="w-[90px]">
+                  <SelectValue>
+                    {format(currentDate, 'yyyy', { locale })}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(year => (
+                    <SelectItem key={year.value} value={year.value}>
+                      {year.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={navigateNext}
+              className={cn(language === 'ar' ? 'order-1' : 'order-3')}
+            >
+              <ChevronRight className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
             </Button>
           </div>
         </div>
-        <CalendarAgenda 
-          date={selectedDate || new Date()}
-          entries={calendarEntries} 
-          onClose={handleCloseAgenda}
-          onEditEntry={handleEditEntry}
-        />
-        <CalendarEntryDialog
-          open={showEntryDialog}
-          onOpenChange={setShowEntryDialog}
-          selectedDate={selectedDate}
-          entry={null}
-          onSave={handleEntryCreated}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">{t("calendar", language)}</h2>
-        <div className="flex items-center gap-2">
-          <CalendarViewSwitcher view={viewMode} onViewChange={setViewMode} />
-          <Button onClick={() => setShowEntryDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            {t("add", language)}
-          </Button>
+        
+        {/* View switcher and action buttons */}
+        <div className="flex items-center justify-between">
+          <CalendarViewSwitcher 
+            view={view} 
+            onViewChange={setView}
+          />
+          
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={goToToday}
+            >
+              {t("today", language)}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={() => {
+                setEditEntry(null);
+                setEntryDialogOpen(true);
+              }}
+              title={t("create", language)}
+              className="fixed bottom-24 right-4 z-10 rounded-full shadow-lg h-12 w-12 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <Plus className="h-6 w-6" />
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Calendar */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">
-              {format(currentDate, 'MMMM yyyy')}
-            </CardTitle>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigateMonth('prev')}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentDate(new Date())}
-              >
-                {t("today", language)}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigateMonth('next')}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-              <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
-                {day}
-              </div>
-            ))}
-          </div>
+      <CalendarGrid
+        currentDate={currentDate}
+        selectedDate={selectedDate}
+        calendarEntries={calendarEntries}
+        view={view}
+        onDayClick={handleDayClick}
+        language={language}
+        locale={locale}
+      />
 
-          {/* Calendar grid */}
-          <div className="grid grid-cols-7 gap-1">
-            {calendarDays.map((day, index) => (
-              <button
-                key={index}
-                onClick={() => handleDateClick(day.date)}
-                className={`
-                  p-2 text-sm min-h-[80px] border rounded-md flex flex-col items-start justify-start
-                  hover:bg-accent hover:text-accent-foreground transition-colors
-                  ${day.isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'}
-                  ${day.isToday ? 'bg-primary text-primary-foreground font-bold' : 'bg-background'}
-                  ${day.hasEntries ? 'border-primary' : 'border-border'}
-                `}
-              >
-                <span className={day.isToday ? 'text-primary-foreground' : ''}>
-                  {format(day.date, 'd')}
-                </span>
-                
-                {/* Entry indicators */}
-                <div className="flex flex-col gap-1 mt-1 w-full">
-                  {day.entries.slice(0, 2).map((entry) => (
-                    <div
-                      key={entry.id}
-                      className={`
-                        text-xs px-1 py-0.5 rounded truncate w-full text-left
-                        ${entry.type === EntryType.TASK 
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                        }
-                      `}
-                    >
-                      {entry.title}
-                    </div>
-                  ))}
-                  {day.entries.length > 2 && (
-                    <div className="text-xs text-muted-foreground">
-                      +{day.entries.length - 2} more
-                    </div>
-                  )}
-                </div>
-              </button>
-            ))}
+      <Drawer open={agendaOpen} onOpenChange={setAgendaOpen}>
+        <DrawerTrigger asChild>
+          <div />
+        </DrawerTrigger>
+        <DrawerContent className="max-h-[85vh]">
+          <div className="p-4">
+            {selectedDate && (
+              <CalendarAgenda 
+                date={selectedDate}
+                entries={calendarEntries}
+                onClose={() => setAgendaOpen(false)}
+                onEditEntry={handleEditEntry}
+              />
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </DrawerContent>
+      </Drawer>
 
       <CalendarEntryDialog
-        open={showEntryDialog}
-        onOpenChange={setShowEntryDialog}
-        selectedDate={selectedDate}
-        entry={null}
-        onSave={handleEntryCreated}
+        isOpen={entryDialogOpen}
+        onClose={() => {
+          setEntryDialogOpen(false);
+          setEditEntry(null);
+        }}
+        onSave={editEntry ? updateManualEntry : addManualEntry}
+        onDelete={editEntry ? deleteManualEntry : undefined}
+        initialDate={selectedDate || new Date()}
+        entry={editEntry}
       />
     </div>
   );
-}
+};
+
