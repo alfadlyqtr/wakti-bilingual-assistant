@@ -55,14 +55,26 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
 
       if (error) throw error;
 
-      const contactsData: Contact[] = data?.map(item => ({
-        id: item.profiles?.id || '',
-        username: item.profiles?.username || '',
-        display_name: item.profiles?.display_name || '',
-        avatar_url: item.profiles?.avatar_url
-      })).filter(contact => contact.id) || [];
+      // Transform the data properly
+      const transformedContacts: Contact[] = [];
+      
+      if (data) {
+        for (const item of data) {
+          if (item.profiles && typeof item.profiles === 'object') {
+            const profile = item.profiles as any;
+            if (profile.id) {
+              transformedContacts.push({
+                id: profile.id,
+                username: profile.username || '',
+                display_name: profile.display_name || '',
+                avatar_url: profile.avatar_url
+              });
+            }
+          }
+        }
+      }
 
-      setContacts(contactsData);
+      setContacts(transformedContacts);
     } catch (error) {
       console.error('Error fetching contacts:', error);
     } finally {
