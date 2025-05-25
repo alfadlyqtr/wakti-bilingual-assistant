@@ -36,12 +36,20 @@ export default function Maw3dEvents() {
   };
 
   const handleShare = async (event: Maw3dEvent) => {
+    console.log('Share button clicked for event:', event.id, 'short_id:', event.short_id);
+    
     if (!event.short_id) {
+      console.error('No short_id found for event:', event.id);
       toast.error('Cannot generate link for this event');
       return;
     }
     
-    await ShareService.shareEvent(event.id, event.short_id);
+    try {
+      await ShareService.shareEvent(event.id, event.short_id);
+    } catch (error) {
+      console.error('Error in handleShare:', error);
+      toast.error('Failed to share event');
+    }
   };
 
   const handleDelete = async (eventId: string) => {
@@ -95,8 +103,8 @@ export default function Maw3dEvents() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-4">
-        <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-8">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/4"></div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -111,8 +119,8 @@ export default function Maw3dEvents() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
