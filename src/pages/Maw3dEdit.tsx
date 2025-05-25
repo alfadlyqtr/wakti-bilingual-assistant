@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Users, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
@@ -27,6 +26,7 @@ export default function Maw3dEdit() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [showContactsSelector, setShowContactsSelector] = useState(false);
   const [invitedContacts, setInvitedContacts] = useState<string[]>([]);
+  const [originalInvitedContacts, setOriginalInvitedContacts] = useState<string[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
 
   useEffect(() => {
@@ -52,14 +52,13 @@ export default function Maw3dEdit() {
         return;
       }
 
-      // The field should now always exist due to database default
       setEvent(eventData);
 
       // Fetch current invitations
-      if (!eventData.is_public) {
-        const invitations = await Maw3dService.getEventInvitations(eventData.id);
-        setInvitedContacts(invitations.map(inv => inv.invited_user_id));
-      }
+      const invitations = await Maw3dService.getEventInvitations(eventData.id);
+      const invitedContactIds = invitations.map(inv => inv.invited_user_id);
+      setInvitedContacts(invitedContactIds);
+      setOriginalInvitedContacts(invitedContactIds);
     } catch (error) {
       console.error('Error fetching event:', error);
       toast.error('Failed to load event');
@@ -122,14 +121,24 @@ export default function Maw3dEdit() {
     try {
       console.log('Saving event with show_attending_count:', event.show_attending_count);
       
-      // Update the event - no need for fallback logic since field is now required
+      // Update the event
       const updatedEvent = await Maw3dService.updateEvent(event.id, event);
       console.log('Event updated with show_attending_count:', updatedEvent.show_attending_count);
 
-      // Update invitations if it's a private event
-      if (!event.is_public) {
-        // This would require additional API methods to handle invitation updates
-        // For now, we'll skip this complex logic
+      // Handle invitation changes
+      const newInvites = invitedContacts.filter(id => !originalInvitedContacts.includes(id));
+      const removedInvites = originalInvitedContacts.filter(id => !invitedContacts.includes(id));
+
+      // Create new invitations
+      if (newInvites.length > 0) {
+        await Maw3dService.createInvitations(event.id, newInvites);
+        console.log(`Created ${newInvites.length} new invitations`);
+      }
+
+      // Delete removed invitations
+      if (removedInvites.length > 0) {
+        await Maw3dService.deleteInvitations(event.id, removedInvites);
+        console.log(`Deleted ${removedInvites.length} invitations`);
       }
 
       toast.success('Event updated successfully!');
@@ -153,6 +162,11 @@ export default function Maw3dEdit() {
       </div>
     );
   }
+
+  const invitationChanges = {
+    new: invitedContacts.filter(id => !originalInvitedContacts.includes(id)).length,
+    removed: originalInvitedContacts.filter(id => !invitedContacts.includes(id)).length
+  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
@@ -214,6 +228,7 @@ export default function Maw3dEdit() {
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
+                    
                     <div>
                       <Label htmlFor="title">Event Title *</Label>
                       <Input
@@ -348,11 +363,11 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - At the bottom */}
+            {/* Privacy & Invitations Section - Updated */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🔒 Privacy Settings</h2>
+                  <h2 className="text-lg font-semibold">🔒 Privacy & Invitations</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
@@ -362,7 +377,7 @@ export default function Maw3dEdit() {
                         checked={event.is_public}
                         onCheckedChange={(checked) => handleInputChange('is_public', checked)}
                       />
-                      <Label htmlFor="is_public">Public Event (Anyone with link can view)</Label>
+                      <Label htmlFor="is_public">Enable shareable link (Anyone with link can view and RSVP)</Label>
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -376,6 +391,45 @@ export default function Maw3dEdit() {
                       />
                       <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
                     </div>
+
+                    {/* Send to Contacts Section */}
+                    <div className="border-t pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <Label className="text-base font-medium">Send to Contacts</Label>
+                          <p className="text-sm text-muted-foreground">Invite your Wakti contacts to this event</p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowContactsSelector(true)}
+                          className="gap-2"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Edit Invitations
+                        </Button>
+                      </div>
+                      
+                      {invitedContacts.length > 0 && (
+                        <div className="bg-muted/50 p-3 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            <span className="text-sm font-medium">
+                              {invitedContacts.length} contact{invitedContacts.length !== 1 ? 's' : ''} invited
+                            </span>
+                          </div>
+                          {(invitationChanges.new > 0 || invitationChanges.removed > 0) && (
+                            <div className="text-xs space-y-1">
+                              {invitationChanges.new > 0 && (
+                                <div className="text-primary">+{invitationChanges.new} new invitation{invitationChanges.new !== 1 ? 's' : ''}</div>
+                              )}
+                              {invitationChanges.removed > 0 && (
+                                <div className="text-destructive">-{invitationChanges.removed} invitation{invitationChanges.removed !== 1 ? 's' : ''}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </AccordionContent>
               </Card>
@@ -383,6 +437,16 @@ export default function Maw3dEdit() {
 
           </Accordion>
         </div>
+
+        {/* Enhanced ContactsSelector */}
+        <ContactsSelector
+          isOpen={showContactsSelector}
+          onClose={() => setShowContactsSelector(false)}
+          selectedContacts={invitedContacts}
+          onContactsChange={setInvitedContacts}
+          previouslyInvitedContacts={originalInvitedContacts}
+          isEditMode={true}
+        />
       </div>
     </div>
   );

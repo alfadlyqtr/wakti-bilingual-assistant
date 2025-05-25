@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Users } from 'lucide-react';
+import { Search, Users, Info } from 'lucide-react';
 import { getContacts } from '@/services/contactsService';
 
 // Use the exact type that matches what getContacts() returns
@@ -25,13 +25,17 @@ interface ContactsSelectorProps {
   onClose: () => void;
   selectedContacts: string[];
   onContactsChange: (contacts: string[]) => void;
+  previouslyInvitedContacts?: string[]; // List of contact IDs that were previously invited
+  isEditMode?: boolean; // Whether this is for editing an existing event
 }
 
 export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
   isOpen,
   onClose,
   selectedContacts,
-  onContactsChange
+  onContactsChange,
+  previouslyInvitedContacts = [],
+  isEditMode = false
 }) => {
   const [contacts, setContacts] = useState<ContactFromService[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -96,17 +100,62 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
     return contact.profile?.username || '';
   };
 
+  const isContactPreviouslyInvited = (contactId: string) => {
+    return previouslyInvitedContacts.includes(contactId);
+  };
+
+  const isContactSelected = (contactId: string) => {
+    return selectedContacts.includes(contactId);
+  };
+
+  const getCheckboxColor = (contactId: string) => {
+    if (!isEditMode) {
+      // For new events, all contacts use primary color
+      return isContactSelected(contactId) ? 'text-primary' : 'text-muted-foreground';
+    }
+    
+    // For edit mode, show different colors based on invitation status
+    if (isContactPreviouslyInvited(contactId)) {
+      return isContactSelected(contactId) ? 'text-muted-foreground' : 'text-muted-foreground';
+    } else {
+      return isContactSelected(contactId) ? 'text-primary' : 'text-muted-foreground';
+    }
+  };
+
+  const newInviteCount = selectedContacts.filter(id => !previouslyInvitedContacts.includes(id)).length;
+  const removedInviteCount = previouslyInvitedContacts.filter(id => !selectedContacts.includes(id)).length;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5" />
-            Select Contacts to Invite
+            {isEditMode ? 'Edit Event Invitations' : 'Select Contacts to Invite'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 flex flex-col space-y-4 min-h-0">
+          {/* Legend for edit mode */}
+          {isEditMode && (
+            <div className="bg-muted/50 p-3 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium">Color Legend</span>
+              </div>
+              <div className="space-y-1 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-primary rounded-sm bg-primary"></div>
+                  <span>New invite</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-muted-foreground rounded-sm bg-muted-foreground"></div>
+                  <span>Already invited</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <Input
@@ -117,7 +166,7 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
             />
           </div>
 
-          <div className="max-h-60 overflow-y-auto space-y-2">
+          <div className="flex-1 overflow-y-auto space-y-2 min-h-0">
             {isLoading ? (
               <div className="text-center py-4 text-gray-500">Loading contacts...</div>
             ) : filteredContacts.length === 0 ? (
@@ -128,13 +177,25 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
               filteredContacts.map((contact) => {
                 const displayName = getContactDisplayName(contact);
                 const username = getContactUsername(contact);
+                const isPreviouslyInvited = isContactPreviouslyInvited(contact.contact_id);
+                const isSelected = isContactSelected(contact.contact_id);
                 
                 return (
-                  <div key={contact.contact_id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50">
+                  <div 
+                    key={contact.contact_id} 
+                    className={`flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 ${
+                      isPreviouslyInvited && isEditMode ? 'bg-muted/30' : ''
+                    }`}
+                  >
                     <Checkbox
                       id={contact.contact_id}
-                      checked={selectedContacts.includes(contact.contact_id)}
+                      checked={isSelected}
                       onCheckedChange={() => handleContactToggle(contact.contact_id)}
+                      className={`${
+                        isPreviouslyInvited && isEditMode 
+                          ? 'data-[state=checked]:bg-muted-foreground data-[state=checked]:border-muted-foreground' 
+                          : 'data-[state=checked]:bg-primary data-[state=checked]:border-primary'
+                      }`}
                     />
                     <div className="flex items-center space-x-2 flex-1">
                       {contact.profile?.avatar_url ? (
@@ -150,10 +211,13 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
                           </span>
                         </div>
                       )}
-                      <Label htmlFor={contact.contact_id} className="cursor-pointer">
+                      <Label htmlFor={contact.contact_id} className="cursor-pointer flex-1">
                         <div className="font-medium">{displayName}</div>
                         {username && (
                           <div className="text-xs text-gray-500">@{username}</div>
+                        )}
+                        {isPreviouslyInvited && isEditMode && (
+                          <div className="text-xs text-muted-foreground">Previously invited</div>
                         )}
                       </Label>
                     </div>
@@ -163,11 +227,23 @@ export const ContactsSelector: React.FC<ContactsSelectorProps> = ({
             )}
           </div>
 
-          <div className="flex justify-between">
-            <span className="text-sm text-gray-500">
-              {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
-            </span>
-            <Button onClick={onClose}>Done</Button>
+          <div className="border-t pt-4 space-y-2">
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>
+                {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
+              </span>
+              {isEditMode && (
+                <div className="space-x-2">
+                  {newInviteCount > 0 && (
+                    <span className="text-primary">+{newInviteCount} new</span>
+                  )}
+                  {removedInviteCount > 0 && (
+                    <span className="text-destructive">-{removedInviteCount} removed</span>
+                  )}
+                </div>
+              )}
+            </div>
+            <Button onClick={onClose} className="w-full">Done</Button>
           </div>
         </div>
       </DialogContent>

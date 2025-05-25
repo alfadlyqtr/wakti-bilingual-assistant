@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, Maw3dInvitation, CreateEventFormData } from "@/types/maw3d";
 
@@ -81,9 +82,9 @@ export class Maw3dService {
 
     // The RLS policies will automatically handle access control
     // This will return events where:
-    // 1. User is the creator (maw3d_view_own_events)
-    // 2. Event is public (maw3d_view_public_events) 
-    // 3. User is invited (maw3d_view_invited_events)
+    // 1. User is the creator (own events)
+    // 2. User is invited (invited events)
+    // Public events are no longer automatically visible to all users
     const { data: events, error } = await supabase
       .from('maw3d_events')
       .select('*')
@@ -301,6 +302,22 @@ export class Maw3dService {
     }
     console.log('Fetched invitations:', data?.length || 0);
     return data || [];
+  }
+
+  static async deleteInvitations(eventId: string, userIds: string[]): Promise<void> {
+    console.log('Deleting invitations:', { eventId, userIds });
+    
+    const { error } = await supabase
+      .from('maw3d_invitations')
+      .delete()
+      .eq('event_id', eventId)
+      .in('invited_user_id', userIds);
+
+    if (error) {
+      console.error('Error deleting invitations:', error);
+      throw error;
+    }
+    console.log('Invitations deleted successfully:', userIds.length);
   }
 
   // Generate AI background using Runware
