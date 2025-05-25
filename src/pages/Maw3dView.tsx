@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,8 +12,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
+import CalendarDropdown from '@/components/events/CalendarDropdown';
 
-// Force cache refresh - clean public event view
 export default function Maw3dView() {
   const { shortId } = useParams();
   const navigate = useNavigate();
@@ -36,36 +37,27 @@ export default function Maw3dView() {
     try {
       if (!shortId) return;
       
-      console.log('=== FETCHING EVENT BY SHORT ID ===');
-      console.log('Short ID:', shortId);
-      
       const eventData = await Maw3dService.getEventByShortId(shortId);
       if (!eventData) {
-        console.error('Event not found by short ID');
         setEventNotFound(true);
         return;
       }
 
-      console.log('Event data found:', eventData);
       setEvent(eventData);
       
       // Fetch RSVPs
-      console.log('Fetching RSVPs for event:', eventData.id);
       const eventRsvps = await Maw3dService.getRsvps(eventData.id);
-      console.log('Fetched RSVPs:', eventRsvps);
       setRsvps(eventRsvps);
       
       // Find user's RSVP if logged in
       if (user) {
         const userResponse = eventRsvps.find(rsvp => rsvp.user_id === user.id);
-        console.log('User RSVP found:', userResponse);
         setUserRsvp(userResponse || null);
         if (userResponse) {
           setHasSubmittedResponse(true);
         }
       }
     } catch (error) {
-      console.error('Error fetching event:', error);
       setEventNotFound(true);
     } finally {
       setIsLoading(false);
@@ -75,29 +67,19 @@ export default function Maw3dView() {
   const handleRsvp = async (response: 'accepted' | 'declined') => {
     if (!event) return;
     
-    console.log('=== HANDLE RSVP START ===');
-    console.log('Response:', response);
-    console.log('Guest name:', guestName);
-    console.log('User:', user);
-    console.log('Is submitting:', isSubmitting);
-    console.log('Has submitted:', hasSubmittedResponse);
-    
     // Prevent multiple submissions
     if (isSubmitting || hasSubmittedResponse) {
-      console.log('Submission blocked - already submitting or submitted');
       return;
     }
     
     const trimmedName = guestName.trim();
     if (!trimmedName) {
-      console.log('No name provided');
       toast.error('Please enter your name');
       return;
     }
 
     // Additional check for logged-in users
     if (user && userRsvp) {
-      console.log('User already has RSVP');
       toast.error('You have already responded to this invitation');
       return;
     }
@@ -105,25 +87,18 @@ export default function Maw3dView() {
     setIsSubmitting(true);
 
     try {
-      console.log('Submitting RSVP to service...');
-      
       if (user) {
         // User is logged in - use createRsvp which handles upsert
-        console.log('Creating RSVP for authenticated user');
         await Maw3dService.createRsvp(event.id, response);
       } else {
         // Guest RSVP - createRsvp will handle duplicate checking
-        console.log('Creating RSVP for guest with name:', trimmedName);
         await Maw3dService.createRsvp(event.id, response, trimmedName);
       }
-
-      console.log('RSVP submitted successfully');
       
       // Mark as submitted immediately to prevent further attempts
       setHasSubmittedResponse(true);
       
       // Refresh data
-      console.log('Refreshing event data...');
       await fetchEvent();
       
       // Show personalized message with slight delay to ensure state is updated
@@ -137,8 +112,6 @@ export default function Maw3dView() {
       }, 200);
       
     } catch (error: any) {
-      console.error('Error submitting RSVP:', error);
-      
       // Handle specific error messages
       if (error.message?.includes('already responded')) {
         toast.error('Someone with this name has already responded to this event');
@@ -149,7 +122,6 @@ export default function Maw3dView() {
       }
     } finally {
       setIsSubmitting(false);
-      console.log('=== HANDLE RSVP END ===');
     }
   };
 
@@ -167,6 +139,39 @@ export default function Maw3dView() {
     rsvp.guest_name && 
     rsvp.guest_name.toLowerCase() === guestName.trim().toLowerCase()
   );
+
+  // Prepare event data for calendar integration
+  const getCalendarEvent = () => {
+    if (!event) return null;
+    
+    const eventDate = new Date(event.event_date);
+    let startTime: Date;
+    let endTime: Date;
+    
+    if (event.is_all_day) {
+      startTime = new Date(eventDate);
+      endTime = new Date(eventDate);
+      endTime.setDate(endTime.getDate() + 1);
+    } else {
+      const [startHours, startMinutes] = (event.start_time || '09:00').split(':');
+      const [endHours, endMinutes] = (event.end_time || '17:00').split(':');
+      
+      startTime = new Date(eventDate);
+      startTime.setHours(parseInt(startHours), parseInt(startMinutes));
+      
+      endTime = new Date(eventDate);
+      endTime.setHours(parseInt(endHours), parseInt(endMinutes));
+    }
+    
+    return {
+      title: event.title,
+      description: event.description || '',
+      location: event.location || '',
+      start_time: startTime.toISOString(),
+      end_time: endTime.toISOString(),
+      is_all_day: event.is_all_day
+    };
+  };
 
   if (isLoading) {
     return (
@@ -196,6 +201,7 @@ export default function Maw3dView() {
   }
 
   const rsvpCounts = getRsvpCounts();
+  const calendarEvent = getCalendarEvent();
 
   return (
     <div className="min-h-screen bg-background">
@@ -222,10 +228,7 @@ export default function Maw3dView() {
               <Input
                 type="text"
                 value={guestName}
-                onChange={(e) => {
-                  console.log('Name input changed:', e.target.value);
-                  setGuestName(e.target.value);
-                }}
+                onChange={(e) => setGuestName(e.target.value)}
                 placeholder="Enter your name"
                 className="w-full"
                 disabled={hasResponded || isSubmitting}
@@ -271,6 +274,18 @@ export default function Maw3dView() {
             )}
           </CardContent>
         </Card>
+
+        {/* Add to Calendar Section */}
+        {calendarEvent && (
+          <Card className="mb-6">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Add to Calendar</h3>
+              <div className="flex justify-center">
+                <CalendarDropdown event={calendarEvent} />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Event Details */}
         <Card className="mb-8">
