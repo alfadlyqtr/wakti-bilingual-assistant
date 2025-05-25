@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -140,17 +141,16 @@ export default function Maw3dView() {
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold mb-4">Are you attending?</h3>
             
-            {!user && (
-              <div className="mb-4">
-                <Input
-                  type="text"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full"
-                />
-              </div>
-            )}
+            {/* Name input field for ALL users */}
+            <div className="mb-4">
+              <Input
+                type="text"
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full"
+              />
+            </div>
 
             <div className="flex gap-3">
               <Button
@@ -232,11 +232,21 @@ export default function Maw3dView() {
           </CardContent>
         </Card>
 
-        {/* Powered by WAKTI */}
-        <div className="text-center">
-          <p className="text-sm text-muted-foreground">
-            Powered by <span className="font-semibold text-primary">WAKTI</span>
-          </p>
+        {/* Styled Powered by WAKTI */}
+        <div className="flex justify-center">
+          <div className="bg-primary/10 dark:bg-primary/20 px-4 py-2 rounded-lg border border-primary/20">
+            <span className="text-sm text-muted-foreground">
+              Powered by{' '}
+              <a 
+                href="https://wakti.qa" 
+                className="text-primary hover:text-primary/80 transition-colors underline decoration-2 underline-offset-2 font-semibold"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                WAKTI
+              </a>
+            </span>
+          </div>
         </div>
       </div>
     </div>
