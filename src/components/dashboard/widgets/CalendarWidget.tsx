@@ -8,11 +8,12 @@ import { t } from "@/utils/translations";
 
 interface CalendarWidgetProps {
   isLoading: boolean;
+  events: any[];
   tasks: any[];
   language: 'en' | 'ar';
 }
 
-export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, tasks, language }) => {
+export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, tasks, language }) => {
   const navigate = useNavigate();
 
   return (
@@ -43,6 +44,13 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, tasks
             <div className="font-bold text-center">{format(new Date(), "d")}</div>
             <div className="text-xs text-center">{t("today", language)}</div>
             <div className="mt-1 text-xs">
+              {isLoading ? (
+                <Skeleton className="h-3 w-full" />
+              ) : events && events.length > 0 ? (
+                <div className="truncate">{events.length} {events.length === 1 ? t("event", language) : t("events", language)}</div>
+              ) : (
+                <div className="truncate">{t("noEvents", language)}</div>
+              )}
               {isLoading ? (
                 <Skeleton className="h-3 w-4/5 mt-1" />
               ) : tasks && tasks.length > 0 ? (

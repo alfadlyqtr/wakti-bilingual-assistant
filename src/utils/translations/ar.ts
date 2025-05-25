@@ -114,6 +114,7 @@ export const ar: Record<TranslationKey, string> = {
   contactCreated: "تم إنشاء جهة الاتصال بنجاح",
   contactUpdated: "تم تحديث جهة الاتصال بنجاح",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
+  // Error messages
   errorCreatingTask: "خطأ في إنشاء المهمة",
   errorUpdatingTask: "خطأ في تحديث المهمة",
   errorDeletingTask: "خطأ في حذف المهمة",
@@ -323,6 +324,8 @@ export const ar: Record<TranslationKey, string> = {
   justNow: "الآن",
   minsAgo: "د",
   activeNow: "نشط الآن",
+  
+  // Event form translations
   eventDetails: "تفاصيل الحدث",
   locationLink: "رابط الموقع",
   dateTime: "التاريخ والوقت",
@@ -331,10 +334,16 @@ export const ar: Record<TranslationKey, string> = {
   endTime: "وقت النهاية",
   publicEvent: "حدث عام",
   publicEventDescription: "يمكن لأي شخص مشاهدة هذا الحدث والرد عليه",
+  
+  // Notification translations
   rsvpNotificationAccepted: "{name} قبل دعوة حدثك",
   rsvpNotificationDeclined: "{name} رفض دعوة حدثك",
   newRsvpResponse: "رد جديد على الدعوة",
+  
+  // MISSING TRANSLATION THAT CAUSED THE ERROR
   privateEvent: "حدث خاص",
+  
+  // NEW RSVP AND CALENDAR TRANSLATIONS
   enableRsvp: "تفعيل تأكيد الحضور",
   rsvpDeadline: "موعد نهائي لتأكيد الحضور",
   rsvpSettings: "إعدادات تأكيد الحضور",
@@ -363,8 +372,7 @@ export const ar: Record<TranslationKey, string> = {
   rsvpResponses: "ردود تأكيد الحضور",
   noRsvpsYet: "لا توجد ردود تأكيد حضور بعد",
   rsvpDeadlineLabel: "تأكيد الحضور قبل",
+  // NEW MISSING KEYS
   pleaseEnterYourName: "يرجى إدخال اسمك",
   responseSubmitted: "تم إرسال الرد بنجاح",
-  reminder: "تذكير",
-  noItemsForDate: "لا توجد عناصر لهذا التاريخ",
 } as const;

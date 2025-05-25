@@ -1,51 +1,75 @@
 
-import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
-import { 
-  CheckSquare, 
-  Calendar, 
-  Bell, 
-  MessageCircle, 
-  LayoutDashboard
-} from "lucide-react";
+import React from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
-import { t } from "@/utils/translations";
+import { cn } from "@/lib/utils";
+import { Calendar, CheckSquare, CalendarClock, Sparkles, Mic } from "lucide-react";
 
-export default function MobileNav() {
+export function MobileNav() {
+  const { pathname } = useLocation();
   const navigate = useNavigate();
-  const location = useLocation();
   const { language } = useTheme();
-
+  
+  // Navigation items - updated to combine Tasks & Reminders
   const navItems = [
-    { icon: LayoutDashboard, label: t("dashboard", language), path: "/dashboard" },
-    { icon: CheckSquare, label: t("tasks", language), path: "/tasks" },
-    { icon: Calendar, label: t("calendar", language), path: "/calendar" },
-    { icon: Bell, label: t("reminders", language), path: "/reminders" },
-    { icon: MessageCircle, label: t("messages", language), path: "/messages" },
+    {
+      name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
+      path: '/tasks-reminders',
+      icon: 'check-square',
+    },
+    {
+      name: language === 'ar' ? 'التقويم' : 'Calendar',
+      path: '/calendar',
+      icon: 'calendar',
+    },
+    {
+      name: language === 'ar' ? 'الأحداث' : 'Events',
+      path: '/events',
+      icon: 'calendar-clock',
+    },
+    {
+      name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
+      path: '/wakti-ai',
+      icon: 'sparkles',
+    },
+    {
+      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
+      path: '/tasjeel',
+      icon: 'mic',
+    }
   ];
-
+  
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    calendar: Calendar,
+    'check-square': CheckSquare,
+    'calendar-clock': CalendarClock,
+    sparkles: Sparkles,
+    mic: Mic,
+  };
+  
   return (
-    <nav className="mobile-nav">
-      {navItems.map((item) => {
-        const Icon = item.icon;
-        const isActive = location.pathname === item.path;
-        
-        return (
-          <Button
-            key={item.path}
-            variant={isActive ? "default" : "ghost"}
-            size="sm"
-            onClick={() => navigate(item.path)}
-            className={`flex flex-col items-center gap-1 h-auto py-2 ${
-              isActive ? 'text-primary-foreground' : 'text-muted-foreground'
-            }`}
-          >
-            <Icon size={18} />
-            <span className="text-xs">{item.label}</span>
-          </Button>
-        );
-      })}
+    <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
+      <ul className="flex justify-around items-center h-16">
+        {navItems.map((item) => {
+          const IconComponent = iconMap[item.icon] || CheckSquare;
+          const isActive = pathname === item.path;
+          
+          return (
+            <li key={item.path} className="flex-1 flex justify-center">
+              <button
+                onClick={() => navigate(item.path)}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 p-2 rounded-md w-full",
+                  isActive ? "text-primary" : "text-muted-foreground hover:text-primary"
+                )}
+              >
+                <IconComponent className="h-5 w-5" />
+                <span className="text-xs">{item.name}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </nav>
   );
 }

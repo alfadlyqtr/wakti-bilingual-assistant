@@ -21,7 +21,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
     const widgetVisibility = getUserPreferences();
     
     // Import components dynamically to avoid circular dependencies
-    import("@/components/dashboard/widgets").then(({ TasksWidget, CalendarWidget, RemindersWidget }) => {
+    import("@/components/dashboard/widgets").then(({ TasksWidget, CalendarWidget, EventsWidget, RemindersWidget }) => {
       import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
         const defaultWidgets = {
           tasks: {
@@ -34,7 +34,13 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
             id: "calendar",
             title: "calendar" as TranslationKey,
             visible: widgetVisibility.calendar,
-            component: React.createElement(CalendarWidget, { isLoading, tasks, language }),
+            component: React.createElement(CalendarWidget, { isLoading, events, tasks, language }),
+          },
+          events: {
+            id: "events",
+            title: "events" as TranslationKey,
+            visible: widgetVisibility.events,
+            component: React.createElement(EventsWidget, { isLoading, events, language }),
           },
           reminders: {
             id: "reminders",
