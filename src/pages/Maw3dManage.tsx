@@ -121,6 +121,24 @@ export default function Maw3dManage() {
     return 'Anonymous User';
   };
 
+  const getBackgroundStyle = (event: Maw3dEvent) => {
+    switch (event.background_type) {
+      case 'color':
+        return { backgroundColor: event.background_value };
+      case 'gradient':
+        return { background: event.background_value };
+      case 'image':
+      case 'ai':
+        return { 
+          backgroundImage: `url(${event.background_value})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        };
+      default:
+        return { backgroundColor: '#3b82f6' };
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-y-auto bg-background flex items-center justify-center">
@@ -176,18 +194,12 @@ export default function Maw3dManage() {
           </div>
         </div>
 
-        {/* Simplified Event Preview - Title and Background Only */}
+        {/* Event Preview - Title and Background Only */}
         <div className="mb-8">
           <div className="w-full max-w-md mx-auto">
             <div 
               className="relative rounded-lg overflow-hidden shadow-lg h-32 flex items-center justify-center"
-              style={{
-                backgroundColor: event?.background_type === 'color' ? event.background_value : undefined,
-                background: event?.background_type === 'gradient' ? event.background_value : undefined,
-                backgroundImage: (event?.background_type === 'image' || event?.background_type === 'ai') ? `url(${event.background_value})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center'
-              }}
+              style={getBackgroundStyle(event)}
             >
               <div className="absolute inset-0 bg-black/20" />
               <h1 
