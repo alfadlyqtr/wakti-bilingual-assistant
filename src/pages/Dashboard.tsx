@@ -32,7 +32,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95">
+    <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
       <div className="max-w-md mx-auto space-y-4">
         <TrialBanner trialDaysLeft={trialDaysLeft} language={language} />
         
