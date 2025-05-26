@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -25,6 +24,7 @@ import StandaloneEvent from "@/pages/StandaloneEvent";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
+import WaktiAI from "@/pages/WaktiAI";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
@@ -94,22 +94,6 @@ function TasjeelLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Create a proper WAKTI AI page that uses the AppLayout
-function WaktiAIPage() {
-  // Dynamically import AIAssistant to ensure ToastProvider is mounted first
-  const AIAssistantInner = React.lazy(() => import('@/components/ai-assistant/AIAssistant').then(module => ({ 
-    default: module.AIAssistant 
-  })));
-  
-  return (
-    <div className="flex-1 overflow-hidden relative">
-      <React.Suspense fallback={<div>Loading AI Assistant...</div>}>
-        <AIAssistantInner />
-      </React.Suspense>
-    </div>
-  );
-}
-
 function App() {
   console.log("App: Initializing application");
   
@@ -138,10 +122,10 @@ function App() {
                 {/* Public Maw3d event routes - Now wrapped in AppLayout to show toasts */}
                 <Route path="/maw3d/:shortId" element={<AppLayout><Maw3dView /></AppLayout>} />
 
-                {/* WAKTI AI route - now using AppLayout */}
+                {/* WAKTI AI route - now using the proper WaktiAI page */}
                 <Route path="/wakti-ai" element={
                   <AppLayout>
-                    <WaktiAIPage />
+                    <WaktiAI />
                   </AppLayout>
                 } />
                 
