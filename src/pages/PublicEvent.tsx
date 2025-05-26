@@ -24,8 +24,8 @@ export default function PublicEvent() {
   const [submittedName, setSubmittedName] = useState('');
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
 
-  // Use event's language for all translations - fallback to 'en'
-  const eventLanguage = event?.language || 'en';
+  // Use event's language for all translations - fallback to 'en' and ensure type safety
+  const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
 
   const addDebugInfo = (info: string) => {
     console.log('PublicEvent DEBUG:', info);

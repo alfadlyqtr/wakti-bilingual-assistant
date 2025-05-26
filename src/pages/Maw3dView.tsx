@@ -23,8 +23,8 @@ export default function Maw3dView() {
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
 
-  // Use event's language for all translations
-  const eventLanguage = event?.language || 'en';
+  // Use event's language for all translations and ensure type safety
+  const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
 
   useEffect(() => {
     if (shortId) {

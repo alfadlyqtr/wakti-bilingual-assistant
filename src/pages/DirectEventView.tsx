@@ -22,8 +22,8 @@ export default function DirectEventView() {
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
 
-  // Use event's language for all translations - fallback to 'en'
-  const eventLanguage = event?.language || 'en';
+  // Use event's language for all translations - fallback to 'en' and ensure type safety
+  const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
 
   // Check if eventId is a valid UUID format
   const isValidUUID = (uuid: string) => {
@@ -295,7 +295,7 @@ export default function DirectEventView() {
 
           {/* Action Buttons */}
           <div className="flex gap-3 justify-center">
-            <CalendarDropdown event={calendarEvent} />
+            <CalendarDropdown event={calendarEvent} language={eventLanguage} />
             
             {event.google_maps_link && (
               <Button
