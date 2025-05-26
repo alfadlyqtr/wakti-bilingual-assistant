@@ -26,7 +26,11 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Plus,
-  ChevronDown
+  ChevronDown,
+  CheckSquare,
+  Bell,
+  PinIcon,
+  Heart
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -397,6 +401,32 @@ export const UnifiedCalendar: React.FC = () => {
             >
               <ChevronRight className={cn("h-5 w-5", language === 'ar' && "rotate-180")} />
             </Button>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center justify-center">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>{t("tasks", language)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+              <span>{t("events", language)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+              <span>Maw3d</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <span>{t("reminders", language)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <span>{t("notesLabel", language)}</span>
+            </div>
           </div>
         </div>
         
