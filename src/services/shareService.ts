@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 
 export class ShareService {
   static generateEventLink(shortId: string): string {
-    const link = `https://wakti.qa/maw3d/${shortId}`;
+    const link = `https://wakti.qa/w/${shortId}`;
     console.log('Generated event link:', link);
     return link;
   }
