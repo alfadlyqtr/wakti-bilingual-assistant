@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -37,9 +36,8 @@ import Maw3dCreate from "@/pages/Maw3dCreate";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEdit from "@/pages/Maw3dEdit";
 import Maw3dManage from "@/pages/Maw3dManage";
-// Public event imports
+// Public event import
 import PublicEvent from "@/pages/PublicEvent";
-import DirectEventView from "@/pages/DirectEventView";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -142,9 +140,6 @@ function App() {
                     <Tasjeel />
                   </TasjeelLayout>
                 } />
-
-                {/* NEW: Direct UUID-based event route - moved higher for proper precedence */}
-                <Route path="/:eventId" element={<DirectEventView />} />
 
                 {/* Protected routes - but now without redirect */}
                 <Route element={<ProtectedRoute />}>

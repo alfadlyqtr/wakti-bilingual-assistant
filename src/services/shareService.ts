@@ -3,19 +3,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export class ShareService {
-  static generateEventLink(eventId: string): string {
-    const link = `https://wakti.qa/${eventId}`;
+  static generateEventLink(shortId: string): string {
+    const link = `https://wakti.qa/w/${shortId}`;
     console.log('Generated event link:', link);
     return link;
   }
 
-  static async shareEvent(eventId: string, shortId?: string) {
+  static async shareEvent(eventId: string, shortId: string) {
     console.log('=== ShareService.shareEvent START ===');
-    console.log('Called with eventId:', eventId, 'shortId (deprecated):', shortId);
+    console.log('Called with eventId:', eventId, 'shortId:', shortId);
     
     try {
-      // Use the eventId (UUID) directly instead of shortId
-      const link = this.generateEventLink(eventId);
+      const link = this.generateEventLink(shortId);
       console.log('Generated link for sharing:', link);
       
       // Check if we can use the native share API
@@ -57,7 +56,7 @@ export class ShareService {
       
       // Fallback to clipboard
       try {
-        const link = this.generateEventLink(eventId);
+        const link = this.generateEventLink(shortId);
         console.log('Attempting clipboard copy with link:', link);
         
         if (!navigator.clipboard) {
