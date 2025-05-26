@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -15,6 +15,12 @@ import {
   Heart
 } from "lucide-react";
 import { DrawerClose } from "@/components/ui/drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface CalendarAgendaProps {
   date: Date;
@@ -30,6 +36,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   onEditEntry
 }) => {
   const { language } = useTheme();
+  const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   
   console.log('CalendarAgenda - Selected date:', date);
   console.log('CalendarAgenda - All entries:', entries);
@@ -77,15 +84,15 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const renderIcon = (type: EntryType) => {
     switch (type) {
       case EntryType.TASK:
-        return <CheckSquare className="h-5 w-5 text-green-500" />;
+        return <CheckSquare className="h-4 w-4 text-green-500" />;
       case EntryType.EVENT:
-        return <CalendarIcon className="h-5 w-5 text-blue-500" />;
+        return <CalendarIcon className="h-4 w-4 text-blue-500" />;
       case EntryType.MAW3D_EVENT:
-        return <Heart className="h-5 w-5 text-purple-500" />;
+        return <Heart className="h-4 w-4 text-purple-500" />;
       case EntryType.REMINDER:
-        return <Bell className="h-5 w-5 text-red-500" />;
+        return <Bell className="h-4 w-4 text-red-500" />;
       case EntryType.MANUAL_NOTE:
-        return <PinIcon className="h-5 w-5 text-yellow-500" />;
+        return <PinIcon className="h-4 w-4 text-yellow-500" />;
     }
   };
 
@@ -114,7 +121,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
           {t("noEvents", language)}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Tasks section */}
           {tasks.length > 0 && (
             <div>
@@ -122,13 +129,12 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <CheckSquare className="h-4 w-4 text-green-500" />
                 {t("tasks", language)} ({tasks.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {tasks.sort(sortEntries).map(task => (
-                  <AgendaItem 
+                  <CompactAgendaItem 
                     key={task.id}
                     entry={task}
-                    onClick={() => {}}
-                    colorClass="border-green-500"
+                    onClick={() => setSelectedEntry(task)}
                   />
                 ))}
               </div>
@@ -142,13 +148,12 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <Heart className="h-4 w-4 text-purple-500" />
                 Maw3d Events ({maw3dEvents.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {maw3dEvents.sort(sortEntries).map(event => (
-                  <AgendaItem 
+                  <CompactAgendaItem 
                     key={event.id}
                     entry={event}
-                    onClick={() => {}}
-                    colorClass="border-purple-500"
+                    onClick={() => setSelectedEntry(event)}
                   />
                 ))}
               </div>
@@ -162,13 +167,12 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <CalendarIcon className="h-4 w-4 text-blue-500" />
                 {t("events", language)} ({events.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {events.sort(sortEntries).map(event => (
-                  <AgendaItem 
+                  <CompactAgendaItem 
                     key={event.id}
                     entry={event}
-                    onClick={() => {}}
-                    colorClass="border-blue-500"
+                    onClick={() => setSelectedEntry(event)}
                   />
                 ))}
               </div>
@@ -182,13 +186,12 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <Bell className="h-4 w-4 text-red-500" />
                 {t("reminders", language)} ({reminders.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {reminders.sort(sortEntries).map(reminder => (
-                  <AgendaItem 
+                  <CompactAgendaItem 
                     key={reminder.id}
                     entry={reminder}
-                    onClick={() => {}}
-                    colorClass="border-red-500"
+                    onClick={() => setSelectedEntry(reminder)}
                   />
                 ))}
               </div>
@@ -202,13 +205,12 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <PinIcon className="h-4 w-4 text-yellow-500" />
                 {t("notesLabel", language)} ({notes.length})
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-1">
                 {notes.sort(sortEntries).map(note => (
-                  <AgendaItem 
+                  <CompactAgendaItem 
                     key={note.id}
                     entry={note}
-                    onClick={() => onEditEntry(note)}
-                    colorClass="border-yellow-500"
+                    onClick={() => setSelectedEntry(note)}
                   />
                 ))}
               </div>
@@ -216,54 +218,121 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
           )}
         </div>
       )}
+
+      {/* Entry Details Dialog */}
+      <Dialog open={!!selectedEntry} onOpenChange={() => setSelectedEntry(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedEntry && renderIcon(selectedEntry.type)}
+              {selectedEntry?.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {selectedEntry?.description && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Description</p>
+                <p className="text-sm">{selectedEntry.description}</p>
+              </div>
+            )}
+            {selectedEntry?.time && !selectedEntry?.isAllDay && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Time</p>
+                <p className="text-sm">{selectedEntry.time}</p>
+              </div>
+            )}
+            {selectedEntry?.location && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Location</p>
+                <p className="text-sm">📍 {selectedEntry.location}</p>
+              </div>
+            )}
+            {selectedEntry?.isAllDay && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Duration</p>
+                <p className="text-sm">All Day</p>
+              </div>
+            )}
+            {selectedEntry?.priority && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Priority</p>
+                <p className="text-sm capitalize">{selectedEntry.priority}</p>
+              </div>
+            )}
+            {selectedEntry?.type === EntryType.MANUAL_NOTE && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  onEditEntry(selectedEntry);
+                  setSelectedEntry(null);
+                }}
+                className="w-full"
+              >
+                Edit Note
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-// Component for individual agenda items
-interface AgendaItemProps {
+// Compact component for individual agenda items
+interface CompactAgendaItemProps {
   entry: CalendarEntry;
   onClick: () => void;
-  colorClass: string;
 }
 
-const AgendaItem: React.FC<AgendaItemProps> = ({ entry, onClick, colorClass }) => {
-  const icon = 
-    entry.type === EntryType.TASK ? <CheckSquare className="h-5 w-5 text-green-500" /> :
-    entry.type === EntryType.EVENT ? <CalendarIcon className="h-5 w-5 text-blue-500" /> :
-    entry.type === EntryType.MAW3D_EVENT ? <Heart className="h-5 w-5 text-purple-500" /> :
-    entry.type === EntryType.REMINDER ? <Bell className="h-5 w-5 text-red-500" /> :
-    <PinIcon className="h-5 w-5 text-yellow-500" />;
+const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick }) => {
+  const getColorClass = (type: EntryType) => {
+    switch (type) {
+      case EntryType.TASK:
+        return "border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950/20";
+      case EntryType.EVENT:
+        return "border-l-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20";
+      case EntryType.MAW3D_EVENT:
+        return "border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/20";
+      case EntryType.REMINDER:
+        return "border-l-red-500 hover:bg-red-50 dark:hover:bg-red-950/20";
+      case EntryType.MANUAL_NOTE:
+        return "border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/20";
+      default:
+        return "border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20";
+    }
+  };
+
+  const renderIcon = (type: EntryType) => {
+    switch (type) {
+      case EntryType.TASK:
+        return <CheckSquare className="h-4 w-4 text-green-500" />;
+      case EntryType.EVENT:
+        return <CalendarIcon className="h-4 w-4 text-blue-500" />;
+      case EntryType.MAW3D_EVENT:
+        return <Heart className="h-4 w-4 text-purple-500" />;
+      case EntryType.REMINDER:
+        return <Bell className="h-4 w-4 text-red-500" />;
+      case EntryType.MANUAL_NOTE:
+        return <PinIcon className="h-4 w-4 text-yellow-500" />;
+    }
+  };
   
   return (
     <motion.div
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`p-3 rounded-md border-l-4 ${colorClass} bg-card hover:bg-accent/10 cursor-pointer`}
+      className={`p-2 rounded-md border-l-4 bg-card cursor-pointer transition-colors ${getColorClass(entry.type)}`}
     >
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5">{icon}</div>
-        <div className="flex-1">
-          <div className="font-medium">{entry.title}</div>
-          {entry.description && (
-            <div className="text-sm text-muted-foreground line-clamp-2">
-              {entry.description}
-            </div>
-          )}
+      <div className="flex items-center gap-2">
+        {renderIcon(entry.type)}
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-sm truncate">{entry.title}</div>
           {entry.time && !entry.isAllDay && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {entry.time}
-            </div>
-          )}
-          {entry.location && (
-            <div className="text-xs text-muted-foreground mt-1">
-              📍 {entry.location}
-            </div>
+            <div className="text-xs text-muted-foreground">{entry.time}</div>
           )}
           {entry.isAllDay && (
-            <div className="text-xs text-muted-foreground mt-1">
-              All Day
-            </div>
+            <div className="text-xs text-muted-foreground">All Day</div>
           )}
         </div>
       </div>
