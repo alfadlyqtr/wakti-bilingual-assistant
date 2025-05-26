@@ -79,14 +79,23 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
+    
+    console.log('EventPreview formatDate - dateString:', dateString, 'language:', language);
+    
     const date = new Date(dateString);
     const locale = language === 'ar' ? ar : enUS;
     
+    console.log('EventPreview formatDate - using locale:', locale, 'for language:', language);
+    
     if (language === 'ar') {
       // Use Arabic date format with proper Arabic day and month names
-      return format(date, 'EEEE، d MMMM yyyy', { locale });
+      const formattedDate = format(date, 'EEEE، d MMMM yyyy', { locale: ar });
+      console.log('EventPreview formatDate - Arabic formatted date:', formattedDate);
+      return formattedDate;
     } else {
-      return format(date, 'EEEE, MMMM d, yyyy', { locale });
+      const formattedDate = format(date, 'EEEE, MMMM d, yyyy', { locale: enUS });
+      console.log('EventPreview formatDate - English formatted date:', formattedDate);
+      return formattedDate;
     }
   };
 
@@ -100,6 +109,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     };
     return translations[key as keyof typeof translations] || key;
   };
+
+  console.log('EventPreview render - event:', event, 'language:', language);
 
   return (
     <div className="w-full max-w-md mx-auto" dir={language === 'ar' ? 'rtl' : 'ltr'}>
