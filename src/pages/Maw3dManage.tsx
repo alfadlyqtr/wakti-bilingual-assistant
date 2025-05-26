@@ -275,7 +275,7 @@ export default function Maw3dManage() {
         {/* Vertical RSVP Lists - Thinner Cards */}
         <div className="space-y-6">
           {/* Attending Section */}
-          <Card>
+          <Card className="shadow-md border-green-200">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -291,20 +291,20 @@ export default function Maw3dManage() {
               {acceptedRsvps.length > 0 ? (
                 <div className="space-y-2">
                   {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                      <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-green-800 dark:text-green-200 truncate">
+                        <h3 className="font-medium text-green-800 dark:text-green-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
                         <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                          {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
                       </div>
                       
@@ -323,7 +323,7 @@ export default function Maw3dManage() {
           </Card>
 
           {/* Declined Section */}
-          <Card>
+          <Card className="shadow-md border-red-200">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -339,20 +339,20 @@ export default function Maw3dManage() {
               {declinedRsvps.length > 0 ? (
                 <div className="space-y-2">
                   {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-red-800 dark:text-red-200 truncate">
+                        <h3 className="font-medium text-red-800 dark:text-red-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
                         <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
                           <Clock className="w-3 h-3" />
-                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                          {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
                       </div>
                       
