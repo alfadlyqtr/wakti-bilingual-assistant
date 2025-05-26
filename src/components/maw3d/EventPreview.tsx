@@ -10,6 +10,7 @@ interface EventPreviewProps {
   textStyle: TextStyle;
   backgroundType: string;
   backgroundValue: string;
+  rsvpCount: { accepted: number; declined: number; };
   showAttendingCount: boolean;
   language: 'en' | 'ar';
   imageBlur?: number;
@@ -20,6 +21,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   textStyle,
   backgroundType,
   backgroundValue,
+  rsvpCount,
   showAttendingCount,
   language,
   imageBlur = 0
@@ -169,7 +171,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
           {showAttendingCount && (
             <div className="flex items-center mt-auto" style={getTextStyle()}>
               <Users className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
-              <span>0 {getLocalizedText('attending')}</span>
+              <span>{rsvpCount.accepted} {getLocalizedText('attending')}</span>
             </div>
           )}
         </div>
