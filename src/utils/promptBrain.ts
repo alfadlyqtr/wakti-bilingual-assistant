@@ -97,6 +97,34 @@ export const isReferringToPrevious = (text: string): boolean => {
          arabicPatterns.some(pattern => lowerText.includes(pattern));
 };
 
+// Enhanced image prompt function
+export const enhanceImagePrompt = (originalPrompt: string): string => {
+  if (!originalPrompt) return "beautiful abstract artwork";
+  
+  // Add enhancement details to make image generation more successful
+  const enhancementPhrases = [
+    "high quality, detailed",
+    "professional photography style",
+    "vibrant colors",
+    "8K resolution",
+    "masterpiece"
+  ];
+  
+  // Check if prompt already has enhancement words
+  const hasEnhancement = enhancementPhrases.some(phrase => 
+    originalPrompt.toLowerCase().includes(phrase.toLowerCase())
+  );
+  
+  if (hasEnhancement) {
+    return originalPrompt;
+  }
+  
+  // Add random enhancement
+  const randomEnhancement = enhancementPhrases[Math.floor(Math.random() * enhancementPhrases.length)];
+  
+  return `${originalPrompt}, ${randomEnhancement}`;
+};
+
 // Unified intent detection
 export const detectIntent = (text: string): IntentDetection => {
   if (!text) {
@@ -223,7 +251,8 @@ export const promptBrain = {
   isReferringToPrevious,
   getMemory,
   updateMemory,
-  processPromptForMode
+  processPromptForMode,
+  enhanceImagePrompt
 };
 
 export default promptBrain;
