@@ -1,4 +1,6 @@
 
+export type AIMode = 'general' | 'creative' | 'writer' | 'assistant';
+
 export interface ActionButton {
   id: string;
   text: string;
