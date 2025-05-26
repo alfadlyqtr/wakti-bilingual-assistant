@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Processing unified AI brain request");
+    console.log("Processing unified WAKTI AI brain request");
     const { message, userId, language, context } = await req.json();
 
     if (!message) {
@@ -25,7 +25,7 @@ serve(async (req) => {
       );
     }
 
-    // Advanced intent detection and command parsing
+    // Enhanced intent detection and command parsing
     const intent = detectUnifiedIntent(message, language);
     console.log("Detected intent:", intent);
 
@@ -46,10 +46,12 @@ serve(async (req) => {
       intent: intent.type,
       actions: actions,
       autoActions: autoActions,
-      confidence: intent.confidence
+      confidence: intent.confidence,
+      type: 'text',
+      provider: 'deepseek'
     };
 
-    console.log("Unified AI response:", response);
+    console.log("Unified WAKTI AI response:", response);
 
     return new Response(
       JSON.stringify(response),
@@ -68,47 +70,55 @@ serve(async (req) => {
   }
 });
 
-// Unified intent detection system
+// Enhanced unified intent detection system
 function detectUnifiedIntent(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Task creation patterns
+  // Task creation patterns (enhanced)
   const taskPatterns = [
-    'create task', 'add task', 'new task', 'make task', 'todo',
-    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة'
+    'create task', 'add task', 'new task', 'make task', 'todo', 'task for',
+    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة', 'مهمة لـ'
   ];
   
-  // Event/Calendar patterns
+  // Event/Calendar patterns (enhanced)
   const eventPatterns = [
     'schedule', 'create event', 'add event', 'appointment', 'meeting', 'calendar',
-    'جدول', 'أنشئ حدث', 'أضف حدث', 'موعد', 'اجتماع', 'تقويم'
+    'event for', 'plan event', 'organize event',
+    'جدول', 'أنشئ حدث', 'أضف حدث', 'موعد', 'اجتماع', 'تقويم', 'حدث لـ'
   ];
   
-  // Reminder patterns
+  // Reminder patterns (enhanced)
   const reminderPatterns = [
-    'remind me', 'reminder', 'don\'t forget', 'set reminder',
-    'ذكرني', 'تذكير', 'لا تنس', 'ضع تذكير'
+    'remind me', 'reminder', 'don\'t forget', 'set reminder', 'remember to',
+    'ذكرني', 'تذكير', 'لا تنس', 'ضع تذكير', 'تذكر أن'
   ];
   
-  // Contact patterns
+  // Contact patterns (enhanced)
   const contactPatterns = [
-    'add contact', 'new contact', 'save contact', 'contact info',
+    'add contact', 'new contact', 'save contact', 'contact info', 'add person',
     'أضف جهة اتصال', 'جهة اتصال جديدة', 'احفظ جهة اتصال', 'معلومات الاتصال'
   ];
   
-  // Image generation patterns
+  // Image generation patterns (enhanced)
   const imagePatterns = [
-    'generate image', 'create image', 'draw', 'picture', 'visualize',
-    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'تصور'
+    'generate image', 'create image', 'draw', 'picture', 'visualize', 'make image',
+    'paint', 'illustration', 'artwork', 'design',
+    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'تصور', 'لوحة'
   ];
   
-  // Writing patterns
+  // Writing patterns (enhanced)
   const writingPatterns = [
-    'write', 'compose', 'draft', 'email', 'letter', 'text',
-    'اكتب', 'أنشئ', 'مسودة', 'بريد إلكتروني', 'رسالة', 'نص'
+    'write', 'compose', 'draft', 'email', 'letter', 'text', 'document',
+    'اكتب', 'أنشئ', 'مسودة', 'بريد إلكتروني', 'رسالة', 'نص', 'وثيقة'
   ];
 
-  // Check patterns and return intent
+  // Data analysis patterns
+  const analysisPatterns = [
+    'analyze', 'chart', 'graph', 'statistics', 'data', 'report',
+    'حلل', 'رسم بياني', 'إحصائيات', 'بيانات', 'تقرير'
+  ];
+
+  // Check patterns and return enhanced intent
   if (taskPatterns.some(pattern => lowerMessage.includes(pattern))) {
     return { 
       type: 'task_creation', 
@@ -156,6 +166,14 @@ function detectUnifiedIntent(message: string, language: string) {
       data: { content: message }
     };
   }
+
+  if (analysisPatterns.some(pattern => lowerMessage.includes(pattern))) {
+    return { 
+      type: 'data_analysis', 
+      confidence: 0.85,
+      data: { query: message }
+    };
+  }
   
   // Default to general chat
   return { 
@@ -165,44 +183,46 @@ function detectUnifiedIntent(message: string, language: string) {
   };
 }
 
-// Create unified system prompt
+// Enhanced system prompt creation
 function createUnifiedSystemPrompt(intent: any, language: string, context: any) {
   const basePrompt = language === 'ar' 
-    ? `أنت WAKTI AI، الدماغ الذكي لتطبيق وكتي. أنت مساعد قوي وودود يساعد في إدارة المهام والأحداث وجهات الاتصال والتذكيرات والمزيد.`
-    : `You are WAKTI AI, the intelligent brain of the Wakti app. You are a powerful and friendly assistant that helps manage tasks, events, contacts, reminders, and much more.`;
+    ? `أنت WAKTI AI، الدماغ الذكي المتطور لتطبيق وكتي. أنت مساعد قوي وودود يساعد في إدارة المهام والأحداث وجهات الاتصال والتذكيرات وإنشاء الصور والمحتوى والمزيد. كن مفيدًا ومباشرًا وقم بتنفيذ الطلبات بفعالية.`
+    : `You are WAKTI AI, the advanced intelligent brain of the Wakti app. You are a powerful and friendly assistant that helps manage tasks, events, contacts, reminders, image generation, content creation, and much more. Be helpful, direct, and execute requests efficiently.`;
 
-  const intentSpecificPrompt = getIntentSpecificPrompt(intent.type, language);
+  const intentSpecificPrompt = getEnhancedIntentPrompt(intent.type, language);
   
   return `${basePrompt}\n\n${intentSpecificPrompt}\n\nUser Context: ${JSON.stringify(context)}\n\nDetected Intent: ${intent.type} (confidence: ${intent.confidence})`;
 }
 
-// Get intent-specific prompts
-function getIntentSpecificPrompt(intentType: string, language: string) {
+// Enhanced intent-specific prompts
+function getEnhancedIntentPrompt(intentType: string, language: string) {
   const prompts = {
     en: {
-      task_creation: "The user wants to create a task. Extract task details like title, description, priority, and due date. Be helpful and confirm what you understand.",
-      event_creation: "The user wants to create an event or appointment. Extract event details like title, date, time, location, and description.",
-      reminder_creation: "The user wants to set a reminder. Extract the reminder text and when they want to be reminded.",
-      contact_management: "The user wants to manage contacts. Help them add, update, or organize contact information.",
-      image_generation: "The user wants to generate an image. Extract the image description and create a detailed prompt.",
-      writing_assistance: "The user needs help with writing. Assist with composition, editing, or content creation.",
-      general_chat: "Provide helpful, conversational responses. If the user's request could be better served by a specific app feature, guide them appropriately."
+      task_creation: "The user wants to create a task. Extract task details like title, description, priority, due date, and subtasks. Be helpful and confirm what you understand.",
+      event_creation: "The user wants to create an event or appointment. Extract event details like title, date, time, location, description, and attendees.",
+      reminder_creation: "The user wants to set a reminder. Extract the reminder text, date, time, and recurrence pattern if specified.",
+      contact_management: "The user wants to manage contacts. Help them add, update, organize, or search contact information.",
+      image_generation: "The user wants to generate an image. Extract and enhance the image description to create a detailed, creative prompt.",
+      writing_assistance: "The user needs help with writing. Assist with composition, editing, content creation, or document formatting.",
+      data_analysis: "The user wants to analyze data or create visualizations. Help with charts, graphs, statistics, or data interpretation.",
+      general_chat: "Provide helpful, conversational responses. If the user's request could be better served by a specific app feature, guide them appropriately and offer actionable suggestions."
     },
     ar: {
-      task_creation: "يريد المستخدم إنشاء مهمة. استخرج تفاصيل المهمة مثل العنوان والوصف والأولوية وتاريخ الاستحقاق. كن مفيدًا وأكد ما تفهمه.",
-      event_creation: "يريد المستخدم إنشاء حدث أو موعد. استخرج تفاصيل الحدث مثل العنوان والتاريخ والوقت والموقع والوصف.",
-      reminder_creation: "يريد المستخدم وضع تذكير. استخرج نص التذكير ومتى يريد أن يتم تذكيره.",
-      contact_management: "يريد المستخدم إدارة جهات الاتصال. ساعده في إضافة أو تحديث أو تنظيم معلومات الاتصال.",
-      image_generation: "يريد المستخدم إنشاء صورة. استخرج وصف الصورة وأنشئ موجه مفصل.",
-      writing_assistance: "يحتاج المستخدم مساعدة في الكتابة. ساعده في التأليف أو التحرير أو إنشاء المحتوى.",
-      general_chat: "قدم ردود مفيدة ومحادثة. إذا كان بإمكان خدمة طلب المستخدم بشكل أفضل من خلال ميزة تطبيق معينة، اقده بشكل مناسب."
+      task_creation: "يريد المستخدم إنشاء مهمة. استخرج تفاصيل المهمة مثل العنوان والوصف والأولوية وتاريخ الاستحقاق والمهام الفرعية. كن مفيدًا وأكد ما تفهمه.",
+      event_creation: "يريد المستخدم إنشاء حدث أو موعد. استخرج تفاصيل الحدث مثل العنوان والتاريخ والوقت والموقع والوصف والحضور.",
+      reminder_creation: "يريد المستخدم وضع تذكير. استخرج نص التذكير والتاريخ والوقت ونمط التكرار إذا تم تحديده.",
+      contact_management: "يريد المستخدم إدارة جهات الاتصال. ساعده في إضافة أو تحديث أو تنظيم أو البحث في معلومات الاتصال.",
+      image_generation: "يريد المستخدم إنشاء صورة. استخرج وحسن وصف الصورة لإنشاء موجه مفصل وإبداعي.",
+      writing_assistance: "يحتاج المستخدم مساعدة في الكتابة. ساعده في التأليف أو التحرير أو إنشاء المحتوى أو تنسيق الوثائق.",
+      data_analysis: "يريد المستخدم تحليل البيانات أو إنشاء مرئيات. ساعد في الرسوم البيانية أو الإحصائيات أو تفسير البيانات.",
+      general_chat: "قدم ردود مفيدة ومحادثة. إذا كان بإمكان خدمة طلب المستخدم بشكل أفضل من خلال ميزة تطبيق معينة، اقده بشكل مناسب واقترح إجراءات قابلة للتنفيذ."
     }
   };
   
   return prompts[language][intentType] || prompts[language].general_chat;
 }
 
-// Call AI service with fallback
+// Enhanced AI service calling with fallback
 async function callAIService(systemPrompt: string, message: string, intent: any) {
   try {
     // Try DeepSeek first
@@ -220,6 +240,7 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
             { role: "user", content: message }
           ],
           temperature: 0.7,
+          max_tokens: 1000,
         }),
       });
 
@@ -244,6 +265,7 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
             { role: "user", content: message }
           ],
           temperature: 0.7,
+          max_tokens: 1000,
         }),
       });
 
@@ -259,7 +281,7 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
   }
 }
 
-// Generate action buttons
+// Enhanced action generation
 function generateActions(intent: any, aiResponse: string, language: string) {
   const actions = [];
   
@@ -308,17 +330,35 @@ function generateActions(intent: any, aiResponse: string, language: string) {
         data: intent.data
       });
       break;
+
+    case 'writing_assistance':
+      actions.push({
+        text: language === 'ar' ? 'مساعدة في الكتابة' : 'Writing Help',
+        id: 'writing_help',
+        variant: 'secondary',
+        data: intent.data
+      });
+      break;
+
+    case 'data_analysis':
+      actions.push({
+        text: language === 'ar' ? 'تحليل البيانات' : 'Analyze Data',
+        id: 'analyze_data',
+        variant: 'secondary',
+        data: intent.data
+      });
+      break;
   }
   
   return actions;
 }
 
-// Generate automatic actions
+// Enhanced automatic action generation
 function generateAutoActions(intent: any, aiResponse: string) {
   const autoActions = [];
   
   // For high-confidence intents, auto-execute certain actions
-  if (intent.confidence > 0.8) {
+  if (intent.confidence > 0.9) {
     switch (intent.type) {
       case 'image_generation':
         autoActions.push({
@@ -332,15 +372,15 @@ function generateAutoActions(intent: any, aiResponse: string) {
   return autoActions;
 }
 
-// Data extraction functions
+// Enhanced data extraction functions
 function extractTaskData(message: string) {
-  // Simple extraction - in production, this would be more sophisticated
-  const title = message.replace(/create task|add task|new task|أنشئ مهمة|أضف مهمة/gi, '').trim();
+  const title = message.replace(/create task|add task|new task|make task|أنشئ مهمة|أضف مهمة/gi, '').trim();
   return {
     title: title || 'New Task',
     description: '',
     priority: 'medium',
-    dueDate: null
+    dueDate: null,
+    subtasks: []
   };
 }
 
@@ -351,7 +391,8 @@ function extractEventData(message: string) {
     description: '',
     startTime: null,
     endTime: null,
-    location: ''
+    location: '',
+    attendees: []
   };
 }
 
@@ -359,7 +400,8 @@ function extractReminderData(message: string) {
   const title = message.replace(/remind me|reminder|ذكرني|تذكير/gi, '').trim();
   return {
     title: title || 'New Reminder',
-    dueDate: null
+    dueDate: null,
+    isRecurring: false
   };
 }
 
@@ -368,10 +410,12 @@ function extractContactData(message: string) {
   return {
     name: name || 'New Contact',
     email: '',
-    phone: ''
+    phone: '',
+    notes: ''
   };
 }
 
 function extractImagePrompt(message: string) {
-  return message.replace(/generate image|create image|draw|أنشئ صورة|ارسم/gi, '').trim() || 'beautiful artwork';
+  const prompt = message.replace(/generate image|create image|draw|make image|أنشئ صورة|ارسم/gi, '').trim();
+  return prompt || 'beautiful artwork';
 }

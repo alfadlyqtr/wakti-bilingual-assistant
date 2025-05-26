@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -47,8 +48,8 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         id: uuidv4(),
         role: "assistant",
         content: language === 'ar' 
-          ? "مرحبًا! أنا WAKTI AI 🚀 - دماغ تطبيقك الذكي والمتطور. يمكنني مساعدتك في إنشاء المهام، جدولة الأحداث، إضافة جهات الاتصال، إنشاء الصور، والكثير أكثر. أخبرني، ماذا تريد أن نفعل معًا اليوم؟"
-          : "Hello! I'm WAKTI AI 🚀 - your intelligent app brain. I can help you create tasks, schedule events, add contacts, generate images, and so much more. What would you like to accomplish together today?",
+          ? "مرحبًا! أنا WAKTI AI 🚀 - دماغ تطبيقك الذكي والمتطور. يمكنني مساعدتك في إنشاء المهام، جدولة الأحداث، إضافة جهات الاتصال، إنشاء الصور، الكتابة، تحليل البيانات، والكثير أكثر. أخبرني، ماذا تريد أن نفعل معًا اليوم؟"
+          : "Hello! I'm WAKTI AI 🚀 - your advanced intelligent app brain. I can help you create tasks, schedule events, add contacts, generate images, assist with writing, analyze data, and so much more. What would you like to accomplish together today?",
         timestamp: new Date(),
         type: 'text',
         metadata: {
@@ -83,7 +84,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     }
   }, [user]);
 
-  // Enhanced AI processing with smart intent detection
+  // Unified AI processing with smart intent detection
   const processMessage = async (message: string) => {
     if (!user || !message.trim()) return;
 
@@ -101,7 +102,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      // Call enhanced unified AI brain
+      // Call the unified AI brain function
       const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
           message: message,
