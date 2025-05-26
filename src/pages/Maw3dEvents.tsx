@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -46,16 +45,11 @@ export default function Maw3dEvents() {
 
   const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click
-    console.log('Share button clicked for event:', event.id, 'short_id:', event.short_id);
-    
-    if (!event.short_id) {
-      console.error('No short_id found for event:', event.id);
-      toast.error('Cannot generate link for this event');
-      return;
-    }
+    console.log('Share button clicked for event:', event.id);
     
     try {
-      await ShareService.shareEvent(event.id, event.short_id);
+      // Use the event UUID directly instead of short_id
+      await ShareService.shareEvent(event.id);
     } catch (error) {
       console.error('Error in handleShare:', error);
       toast.error('Failed to share event');
