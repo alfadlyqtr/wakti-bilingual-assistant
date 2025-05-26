@@ -388,4 +388,16 @@ export const ar: Record<TranslationKey, string> = {
   createAndManageEvents: "أنشئ وأدر فعالياتك",
   yourEvent: "فعاليتك",
   confirmDeleteEvent: "هل أنت متأكد أنك تريد حذف هذا الحدث؟",
+  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
+  eventTemplates: "قوالب الفعاليات",
+  organizer: "المنظم",
+  enterOrganizerName: "أدخل اسم المنظم",
+  optional: "اختياري",
+  googleMapsLink: "رابط خرائط جوجل",
+  textStyling: "تنسيق النص",
+  backgroundCustomization: "تخصيص الخلفية",
+  privacySettings: "إعدادات الخصوصية",
+  enableShareableLink: "تفعيل الرابط القابل للمشاركة",
+  showAttendingCount: "إظهار عدد الحاضرين",
+  shareableLinkDescription: "عند التفعيل، يمكن لأي شخص لديه الرابط مشاهدة الفعالية وتأكيد الحضور",
 } as const;

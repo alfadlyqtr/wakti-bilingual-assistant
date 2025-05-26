@@ -390,4 +390,16 @@ export type TranslationKey =
   | "maw3dEvents"
   | "createAndManageEvents"
   | "yourEvent"
-  | "confirmDeleteEvent";
+  | "confirmDeleteEvent"
+  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
+  | "eventTemplates"
+  | "organizer"
+  | "enterOrganizerName"
+  | "optional"
+  | "googleMapsLink"
+  | "textStyling"
+  | "backgroundCustomization"
+  | "privacySettings"
+  | "enableShareableLink"
+  | "showAttendingCount"
+  | "shareableLinkDescription";

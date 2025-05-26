@@ -393,4 +393,16 @@ export const en: Record<TranslationKey, string> = {
   createAndManageEvents: "Create and manage your events",
   yourEvent: "Your Event",
   confirmDeleteEvent: "Are you sure you want to delete this event?",
+  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
+  eventTemplates: "Event Templates",
+  organizer: "Organizer",
+  enterOrganizerName: "Enter organizer name",
+  optional: "Optional",
+  googleMapsLink: "Google Maps Link",
+  textStyling: "Text Styling",
+  backgroundCustomization: "Background Customization",
+  privacySettings: "Privacy Settings",
+  enableShareableLink: "Enable Shareable Link",
+  showAttendingCount: "Show Attending Count",
+  shareableLinkDescription: "When enabled, anyone with the link can view and RSVP to this event",
 } as const;
