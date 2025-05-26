@@ -11,6 +11,24 @@ interface EventTemplatesProps {
   language: string;
 }
 
+const getTemplateTranslations = (language: string) => ({
+  birthday: {
+    name: language === 'ar' ? 'عيد ميلاد' : 'Birthday',
+    title: language === 'ar' ? 'عيد ميلاد سعيد!' : 'Happy Birthday!',
+    description: language === 'ar' ? 'انضم إلينا للاحتفال بعيد الميلاد' : 'Join us for a birthday celebration'
+  },
+  meeting: {
+    name: language === 'ar' ? 'اجتماع' : 'Meeting',
+    title: language === 'ar' ? 'اجتماع الفريق' : 'Team Meeting',
+    description: language === 'ar' ? 'مناقشة مهمة للفريق' : 'Important team discussion'
+  },
+  gathering: {
+    name: language === 'ar' ? 'تجمع' : 'Gathering',
+    title: language === 'ar' ? 'تجمع الأصدقاء' : 'Friends Gathering',
+    description: language === 'ar' ? 'تعال وانضم إلينا لقضاء وقت ممتع' : 'Come and join us for a fun time'
+  }
+});
+
 const templates: EventTemplate[] = [
   {
     id: 'birthday',
@@ -76,6 +94,22 @@ export const EventTemplates: React.FC<EventTemplatesProps> = ({
   selectedTemplate,
   language
 }) => {
+  const templateTranslations = getTemplateTranslations(language);
+
+  const handleTemplateSelect = (template: EventTemplate | null) => {
+    if (template) {
+      // Apply language-specific translations to the template
+      const translatedTemplate = {
+        ...template,
+        title: templateTranslations[template.id as keyof typeof templateTranslations]?.title || template.title,
+        description: templateTranslations[template.id as keyof typeof templateTranslations]?.description || template.description
+      };
+      onSelectTemplate(translatedTemplate);
+    } else {
+      onSelectTemplate(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">{t('chooseTemplate', language)} ({t('optional', language)})</h3>
@@ -93,34 +127,37 @@ export const EventTemplates: React.FC<EventTemplatesProps> = ({
           </CardContent>
         </Card>
 
-        {templates.map((template) => (
-          <Card 
-            key={template.id}
-            className={`cursor-pointer border-2 ${selectedTemplate?.id === template.id ? 'border-primary' : 'border-border'}`}
-            onClick={() => onSelectTemplate(template)}
-          >
-            <CardContent className="p-4 text-center">
-              <div 
-                className="w-full h-24 rounded-md mb-2 flex items-center justify-center"
-                style={{
-                  background: template.background_type === 'gradient' 
-                    ? template.background_value 
-                    : template.background_value,
-                  color: template.text_style.color,
-                  fontSize: `${Math.max(template.text_style.fontSize - 8, 12)}px`,
-                  fontWeight: template.text_style.isBold ? 'bold' : 'normal',
-                  fontStyle: template.text_style.isItalic ? 'italic' : 'normal',
-                  textDecoration: template.text_style.isUnderline ? 'underline' : 'none',
-                  textShadow: template.text_style.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
-                  textAlign: template.text_style.alignment
-                }}
-              >
-                {template.title}
-              </div>
-              <h4 className="font-medium">{template.name}</h4>
-            </CardContent>
-          </Card>
-        ))}
+        {templates.map((template) => {
+          const translation = templateTranslations[template.id as keyof typeof templateTranslations];
+          return (
+            <Card 
+              key={template.id}
+              className={`cursor-pointer border-2 ${selectedTemplate?.id === template.id ? 'border-primary' : 'border-border'}`}
+              onClick={() => handleTemplateSelect(template)}
+            >
+              <CardContent className="p-4 text-center">
+                <div 
+                  className="w-full h-24 rounded-md mb-2 flex items-center justify-center"
+                  style={{
+                    background: template.background_type === 'gradient' 
+                      ? template.background_value 
+                      : template.background_value,
+                    color: template.text_style.color,
+                    fontSize: `${Math.max(template.text_style.fontSize - 8, 12)}px`,
+                    fontWeight: template.text_style.isBold ? 'bold' : 'normal',
+                    fontStyle: template.text_style.isItalic ? 'italic' : 'normal',
+                    textDecoration: template.text_style.isUnderline ? 'underline' : 'none',
+                    textShadow: template.text_style.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+                    textAlign: template.text_style.alignment
+                  }}
+                >
+                  {translation?.title || template.title}
+                </div>
+                <h4 className="font-medium">{translation?.name || template.name}</h4>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

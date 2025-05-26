@@ -51,22 +51,22 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
       <h2 className="text-lg font-semibold">🖼️ {t('backgroundCustomization', language)}</h2>
       
       <Tabs value={backgroundType} onValueChange={(value) => onBackgroundChange(value as any, backgroundValue)}>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className={`grid w-full grid-cols-4 ${language === 'ar' ? 'rtl' : ''}`}>
           <TabsTrigger value="color" className="flex items-center gap-2">
             <Palette className="w-4 h-4" />
-            {t('color', language)}
+            <span className="hidden sm:inline">{t('color', language)}</span>
           </TabsTrigger>
           <TabsTrigger value="gradient" className="flex items-center gap-2">
             <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-purple-500 rounded" />
-            {t('gradient', language)}
+            <span className="hidden sm:inline">{t('gradient', language)}</span>
           </TabsTrigger>
           <TabsTrigger value="image" className="flex items-center gap-2">
             <Image className="w-4 h-4" />
-            {t('image', language)}
+            <span className="hidden sm:inline">{t('image', language)}</span>
           </TabsTrigger>
           <TabsTrigger value="ai" className="flex items-center gap-2">
             <Wand2 className="w-4 h-4" />
-            {t('aiGenerated', language)}
+            <span className="hidden sm:inline">{t('aiGenerated', language)}</span>
           </TabsTrigger>
         </TabsList>
 
@@ -88,10 +88,10 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
               {colorPresets.map((color) => (
                 <button
                   key={color}
-                  className={`w-full h-12 rounded-md border-2 ${
+                  className={`w-full h-12 rounded-md border-2 transition-all ${
                     backgroundType === 'color' && backgroundValue === color
-                      ? 'border-primary'
-                      : 'border-transparent'
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-transparent hover:border-muted-foreground/20'
                   }`}
                   style={{ backgroundColor: color }}
                   onClick={() => onBackgroundChange('color', color)}
@@ -108,10 +108,10 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
               {gradientPresets.map((gradient, index) => (
                 <button
                   key={index}
-                  className={`w-full h-16 rounded-md border-2 ${
+                  className={`w-full h-16 rounded-md border-2 transition-all ${
                     backgroundType === 'gradient' && backgroundValue === gradient
-                      ? 'border-primary'
-                      : 'border-transparent'
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-transparent hover:border-muted-foreground/20'
                   }`}
                   style={{ background: gradient }}
                   onClick={() => onBackgroundChange('gradient', gradient)}
@@ -122,12 +122,13 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
 
           <div>
             <Label htmlFor="custom-gradient">{t('customGradient', language)}</Label>
-            <div className="flex gap-2">
+            <div className={`flex gap-2 ${language === 'ar' ? 'flex-row-reverse' : ''}`}>
               <Input
                 id="custom-gradient"
                 value={customGradient}
                 onChange={(e) => setCustomGradient(e.target.value)}
                 placeholder="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                className="flex-1"
               />
               <Button onClick={handleGradientSubmit}>{t('apply', language)}</Button>
             </div>

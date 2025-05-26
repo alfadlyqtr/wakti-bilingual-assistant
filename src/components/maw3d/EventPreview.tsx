@@ -3,6 +3,7 @@ import React from 'react';
 import { Maw3dEvent, TextStyle } from '@/types/maw3d';
 import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { ar, enUS } from 'date-fns/locale';
 
 interface EventPreviewProps {
   event: Partial<Maw3dEvent>;
@@ -11,6 +12,7 @@ interface EventPreviewProps {
   backgroundValue: string;
   rsvpCount?: { accepted: number; declined: number };
   showAttendingCount?: boolean;
+  language?: string;
 }
 
 export const EventPreview: React.FC<EventPreviewProps> = ({
@@ -19,7 +21,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   backgroundType,
   backgroundValue,
   rsvpCount,
-  showAttendingCount = true
+  showAttendingCount = true,
+  language = 'en'
 }) => {
   const getBackgroundStyle = () => {
     // For transparent background, return empty object
@@ -60,14 +63,39 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     const [hours, minutes] = time.split(':');
     const hour = parseInt(hours);
     const minute = parseInt(minutes);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+    
+    if (language === 'ar') {
+      const ampm = hour >= 12 ? 'م' : 'ص';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+    } else {
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+    }
   };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
-    return format(new Date(dateString), 'EEEE, MMMM d, yyyy');
+    const date = new Date(dateString);
+    const locale = language === 'ar' ? ar : enUS;
+    
+    if (language === 'ar') {
+      return format(date, 'EEEE، d MMMM yyyy', { locale });
+    } else {
+      return format(date, 'EEEE, MMMM d, yyyy', { locale });
+    }
+  };
+
+  const getLocalizedText = (key: string) => {
+    const translations = {
+      organizedBy: language === 'ar' ? 'نظمه' : 'Organized by',
+      selectDate: language === 'ar' ? 'اختر التاريخ' : 'Select Date',
+      allDay: language === 'ar' ? 'طوال اليوم' : 'All Day',
+      attending: language === 'ar' ? 'حاضر' : 'attending',
+      declined: language === 'ar' ? 'رفض' : 'declined'
+    };
+    return translations[key as keyof typeof translations] || key;
   };
 
   return (
@@ -85,7 +113,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
           {/* Title and Description with custom text styling */}
           <div style={getTextStyle()}>
             <h1 className="font-bold mb-1" style={{ fontSize: `${textStyle.fontSize + 6}px` }}>
-              {event.title || 'Event Title'}
+              {event.title || (language === 'ar' ? 'عنوان الحدث' : 'Event Title')}
             </h1>
             {(event.description && event.description.trim()) && (
               <p className="opacity-90 mb-2" style={{ fontSize: `${textStyle.fontSize - 2}px` }}>
@@ -97,7 +125,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
           {/* Organizer */}
           {(event.organizer && event.organizer.trim()) && (
             <div className="text-sm opacity-90" style={{ color: textStyle.color, fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-              Organized by {event.organizer}
+              {getLocalizedText('organizedBy')} {event.organizer}
             </div>
           )}
 
@@ -106,7 +134,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
               <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                {event.event_date ? formatDate(event.event_date) : 'Select Date'}
+                {event.event_date ? formatDate(event.event_date) : getLocalizedText('selectDate')}
               </span>
             </div>
 
@@ -114,7 +142,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
               <Clock className="w-4 h-4" />
               <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
                 {event.is_all_day 
-                  ? 'All Day' 
+                  ? getLocalizedText('allDay')
                   : `${formatTime(event.start_time || '')} - ${formatTime(event.end_time || '')}`
                 }
               </span>
@@ -133,7 +161,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                  {rsvpCount.accepted} attending, {rsvpCount.declined} declined
+                  {rsvpCount.accepted} {getLocalizedText('attending')}, {rsvpCount.declined} {getLocalizedText('declined')}
                 </span>
               </div>
             )}

@@ -168,6 +168,7 @@ export default function Maw3dEdit() {
                 backgroundType={event.background_type}
                 backgroundValue={event.background_value}
                 showAttendingCount={event.show_attending_count}
+                language={language}
               />
             </CardContent>
           </Card>
