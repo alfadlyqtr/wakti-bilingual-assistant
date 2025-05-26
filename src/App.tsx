@@ -117,11 +117,14 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* NEW: Public event route - completely standalone, no auth wrapper */}
+                {/* NEW: Clean public event route - accessible without authentication */}
+                <Route path="/event/:eventId" element={<DirectEventView />} />
+
+                {/* Public short ID route - completely standalone, no auth wrapper */}
                 <Route path="/w/:shortId" element={<PublicEvent />} />
 
                 {/* Public legacy event detail routes - accessible without authentication */}
-                <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
+                <Route path="/legacy-event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
                 
                 {/* Standalone legacy event routes with pretty URLs */}
                 <Route path="/wakti/:id" element={<StandaloneEvent />} />
@@ -143,10 +146,7 @@ function App() {
                   </TasjeelLayout>
                 } />
 
-                {/* NEW: Direct UUID-based event route - moved higher for proper precedence */}
-                <Route path="/:eventId" element={<DirectEventView />} />
-
-                {/* Protected routes - but now without redirect */}
+                {/* Protected routes */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                   <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
