@@ -175,6 +175,7 @@ export default function Maw3dEdit() {
                 textStyle={event.text_style}
                 backgroundType={event.background_type}
                 backgroundValue={event.background_value}
+                rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={event.show_attending_count}
                 language={language}
                 imageBlur={backgroundImageBlur}

@@ -205,6 +205,7 @@ export default function Maw3dCreate() {
                 textStyle={formData.text_style}
                 backgroundType={formData.background_type}
                 backgroundValue={formData.background_value}
+                rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={formData.show_attending_count}
                 language={language}
               />
