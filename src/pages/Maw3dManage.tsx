@@ -209,32 +209,38 @@ export default function Maw3dManage() {
 
         {/* Management Actions */}
         <Card className="mb-8">
-          <CardHeader className="pb-4">
-            <CardTitle>{t("eventManagement", language)}</CardTitle>
+          <CardHeader className="pb-6">
+            <CardTitle className="text-lg font-semibold">{t("eventManagement", language)}</CardTitle>
           </CardHeader>
-          <CardContent className="pt-2">
-            <div className="flex gap-4">
+          <CardContent className="space-y-4">
+            {/* Primary Actions */}
+            <div className="space-y-3">
               <Button
                 onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
-                className="flex-1 gap-2"
+                className="w-full gap-2 h-12"
+                size="lg"
               >
-                <Edit className="w-4 h-4" />
+                <Edit className="w-5 h-5" />
                 {t("editEvent", language)}
               </Button>
               
               <Button
                 variant="outline"
                 onClick={handleShare}
-                className="flex-1 gap-2"
+                className="w-full gap-2 h-12"
+                size="lg"
               >
-                <Share2 className="w-4 h-4" />
+                <Share2 className="w-5 h-5" />
                 {t("shareEvent", language)}
               </Button>
-              
+            </div>
+            
+            {/* Destructive Action */}
+            <div className="pt-2 border-t border-border">
               <Button
                 variant="destructive"
                 onClick={handleDelete}
-                className="gap-2"
+                className="w-full gap-2 h-10"
               >
                 <Trash2 className="w-4 h-4" />
                 {t("delete", language)}
