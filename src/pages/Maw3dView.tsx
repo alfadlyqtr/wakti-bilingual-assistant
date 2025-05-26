@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -143,12 +144,16 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
         <Toaster />
-        <div className="animate-pulse text-center">
-          <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
-          <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
-          <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <div className="animate-pulse">
+              <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
+              <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -156,11 +161,13 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
         <Toaster />
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
-          <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
+            <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
+          </div>
         </div>
       </div>
     );
@@ -181,7 +188,7 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
       <Toaster />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
@@ -271,6 +278,9 @@ export default function Maw3dView() {
               </CardContent>
             </Card>
           )}
+
+          {/* Bottom padding to ensure content is accessible */}
+          <div className="h-20"></div>
 
         </div>
       </div>
