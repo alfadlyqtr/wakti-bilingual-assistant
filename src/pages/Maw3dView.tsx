@@ -81,9 +81,9 @@ export default function Maw3dView() {
       // Show personalized message
       setTimeout(() => {
         if (response === 'accepted') {
-          toast.success(`Thank you for accepting, ${trimmedName}!`);
+          toast.success(`Thank you for accepting ${trimmedName}, see you soon!`);
         } else {
-          toast.success(`It's okay, ${trimmedName}, we would have liked your presence`);
+          toast.success(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
         }
       }, 200);
       
