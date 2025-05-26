@@ -1,8 +1,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Brain, Wand2, Zap, TrendingUp, BarChart3, Target } from "lucide-react";
+import { Brain, Wand2, Zap, TrendingUp, BarChart3, Target, X } from "lucide-react";
 
 interface SmartActionsDrawerProps {
   isOpen: boolean;
@@ -52,17 +51,31 @@ export function SmartActionsDrawer({
     }
   ];
 
+  if (!isOpen) return null;
+
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-80 h-full">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-purple-500" />
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center gap-2">
+          <Zap className="w-5 h-5 text-purple-500" />
+          <h2 className="text-lg font-semibold">
             {language === 'ar' ? 'إجراءات ذكية' : 'Smart Actions'}
-          </SheetTitle>
-        </SheetHeader>
-        
-        <div className="mt-6 space-y-3">
+          </h2>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="h-8 w-8"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      
+      {/* Content */}
+      <div className="flex-1 p-4">
+        <div className="space-y-3">
           {smartActions.map((action, index) => (
             <Button
               key={index}
@@ -76,7 +89,7 @@ export function SmartActionsDrawer({
             </Button>
           ))}
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   );
 }

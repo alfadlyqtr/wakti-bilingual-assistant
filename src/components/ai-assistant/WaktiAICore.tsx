@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -289,7 +290,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
   };
 
   return (
-    <div className={`flex flex-col h-full bg-background ${className}`}>
+    <div className={`flex flex-col h-full bg-background relative ${className}`}>
       {/* Top Navigation */}
       <div className="flex justify-between items-center p-4 border-b bg-card/50 backdrop-blur-sm flex-shrink-0">
         <Button
@@ -333,8 +334,8 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 sticky bottom-0">
+      {/* Input Area - Fixed at bottom */}
+      <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 sticky bottom-0 z-20">
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <Input
@@ -383,28 +384,54 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         )}
       </div>
 
-      {/* Side Drawers - Full Width */}
-      <QuickActionsDrawer
-        isOpen={showQuickActions}
-        onClose={() => setShowQuickActions(false)}
-        onActionClick={(prompt) => {
-          processMessage(prompt);
-          setShowQuickActions(false);
-        }}
-        isProcessing={isProcessing}
-        language={language as "en" | "ar"}
-      />
+      {/* Side Drawers - Contained within chat interface */}
+      {showQuickActions && (
+        <div className="absolute inset-0 z-30 flex">
+          <div 
+            className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out"
+            style={{ transform: 'translateX(0)' }}
+          >
+            <QuickActionsDrawer
+              isOpen={showQuickActions}
+              onClose={() => setShowQuickActions(false)}
+              onActionClick={(prompt) => {
+                processMessage(prompt);
+                setShowQuickActions(false);
+              }}
+              isProcessing={isProcessing}
+              language={language as "en" | "ar"}
+            />
+          </div>
+          <div 
+            className="flex-1 bg-black/20"
+            onClick={() => setShowQuickActions(false)}
+          />
+        </div>
+      )}
 
-      <SmartActionsDrawer
-        isOpen={showSmartActions}
-        onClose={() => setShowSmartActions(false)}
-        onActionClick={(prompt) => {
-          processMessage(prompt);
-          setShowSmartActions(false);
-        }}
-        isProcessing={isProcessing}
-        language={language as "en" | "ar"}
-      />
+      {showSmartActions && (
+        <div className="absolute inset-0 z-30 flex">
+          <div 
+            className="flex-1 bg-black/20"
+            onClick={() => setShowSmartActions(false)}
+          />
+          <div 
+            className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out"
+            style={{ transform: 'translateX(0)' }}
+          >
+            <SmartActionsDrawer
+              isOpen={showSmartActions}
+              onClose={() => setShowSmartActions(false)}
+              onActionClick={(prompt) => {
+                processMessage(prompt);
+                setShowSmartActions(false);
+              }}
+              isProcessing={isProcessing}
+              language={language as "en" | "ar"}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

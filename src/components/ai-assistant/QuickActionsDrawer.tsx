@@ -1,8 +1,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { CheckSquare, Calendar, Users, Image, Sparkles } from "lucide-react";
+import { CheckSquare, Calendar, Users, Image, Sparkles, X } from "lucide-react";
 
 interface QuickActionsDrawerProps {
   isOpen: boolean;
@@ -46,17 +45,31 @@ export function QuickActionsDrawer({
     }
   ];
 
+  if (!isOpen) return null;
+
   return (
-    <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="left" className="w-80 h-full">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-blue-500" />
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-blue-500" />
+          <h2 className="text-lg font-semibold">
             {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
-          </SheetTitle>
-        </SheetHeader>
-        
-        <div className="mt-6 space-y-3">
+          </h2>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="h-8 w-8"
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+      
+      {/* Content */}
+      <div className="flex-1 p-4">
+        <div className="space-y-3">
           {quickActions.map((action, index) => (
             <Button
               key={index}
@@ -70,7 +83,7 @@ export function QuickActionsDrawer({
             </Button>
           ))}
         </div>
-      </SheetContent>
-    </Sheet>
+      </div>
+    </div>
   );
 }
