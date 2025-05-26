@@ -1,88 +1,47 @@
-export type AIMode = "general" | "writer" | "creative" | "assistant";
 
-export const ASSISTANT_MODES = [
-  {
-    id: "general",
-    label: {
-      en: "General",
-      ar: "عام",
-    },
-    color: {
-      light: "#78716c",
-      dark: "#a8a29e",
-    },
-  },
-  {
-    id: "writer",
-    label: {
-      en: "Writer",
-      ar: "كاتب",
-    },
-    color: {
-      light: "#eab308",
-      dark: "#fde047",
-    },
-  },
-  {
-    id: "creative",
-    label: {
-      en: "Creative",
-      ar: "مبدع",
-    },
-    color: {
-      light: "#db2777",
-      dark: "#f472b6",
-    },
-  },
-  {
-    id: "assistant",
-    label: {
-      en: "Assistant",
-      ar: "مساعد",
-    },
-    color: {
-      light: "#10b981",
-      dark: "#6ee7b7",
-    },
-  },
-];
+export type AIMode = 'general' | 'creative' | 'writer' | 'assistant';
 
-export interface ActionButton {
-  text: string;
-  action: string;
-}
-
-export interface ActionButtons {
-  primary?: ActionButton;
-  secondary?: ActionButton;
-}
-
-export interface ModeSwitchAction {
-  targetMode: AIMode;
-  action: string;
-  autoTrigger?: boolean;
-  prompt?: string;
-}
-
-// Update modal actions to include the directGeneration property
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: Date;
-  mode: AIMode;
-  metadata?: any;
-  isLoading?: boolean;
-  actionButtons?: ActionButtons;
-  originalPrompt?: string;
-  modeSwitchAction?: ModeSwitchAction;
+  mode?: AIMode;
+  type?: 'text' | 'image' | 'action' | 'system';
+  imageUrl?: string;
+  actions?: ActionButton[];
+  autoExecuted?: boolean;
+  metadata?: {
+    intent?: string;
+    confidence?: number;
+    executionTime?: number;
+    provider?: 'deepseek' | 'openai';
+  };
 }
 
-export interface ImageMetadata {
-  imageUrl?: string;
-  hasMedia?: boolean;
-  intentData?: {
-    directGeneration?: boolean;
-    [key: string]: any;
-  };
+export interface ActionButton {
+  id: string;
+  text: string;
+  variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+  action: string;
+  data?: any;
+  autoTrigger?: boolean;
+}
+
+export interface AIContext {
+  currentPage?: string;
+  recentActions?: string[];
+  userPreferences?: Record<string, any>;
+  taskCount?: number;
+  eventCount?: number;
+  reminderCount?: number;
+  lastInteraction?: Date;
+}
+
+export interface IntentResult {
+  intent: string;
+  confidence: number;
+  data?: any;
+  autoExecute?: boolean;
+  suggestedActions?: ActionButton[];
 }
