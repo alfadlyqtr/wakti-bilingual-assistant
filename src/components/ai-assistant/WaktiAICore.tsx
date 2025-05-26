@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -290,7 +289,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
   };
 
   return (
-    <div className={`flex flex-col h-full bg-background relative ${className}`}>
+    <div className={`flex flex-col h-full bg-background ${className}`}>
       {/* Top Navigation */}
       <div className="flex justify-between items-center p-4 border-b bg-card/50 backdrop-blur-sm flex-shrink-0">
         <Button
@@ -314,10 +313,10 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         </Button>
       </div>
 
-      {/* Chat Area with Relative Positioning for Drawers */}
-      <div className="flex-1 relative overflow-hidden">
-        {/* Messages Area */}
-        <div className="h-full overflow-y-auto p-4 space-y-4 pb-24">
+      {/* Chat Container - Fixed height calculation */}
+      <div className="flex-1 relative flex flex-col min-h-0">
+        {/* Messages Area - Takes remaining space above input */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           {messages.map((message) => (
             <AIMessageBubble
               key={message.id}
@@ -328,7 +327,6 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
             />
           ))}
 
-          {/* Enhanced Typing Indicator */}
           {isTyping && (
             <AITypingIndicator language={language as "en" | "ar"} />
           )}
@@ -336,12 +334,10 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Side Drawers - Positioned within chat area only */}
+        {/* Drawer Overlays - Only within chat container */}
         {showQuickActions && (
           <div className="absolute inset-0 z-30 flex">
-            <div 
-              className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-left"
-            >
+            <div className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-left">
               <QuickActionsDrawer
                 isOpen={showQuickActions}
                 onClose={() => setShowQuickActions(false)}
@@ -354,7 +350,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
               />
             </div>
             <div 
-              className="flex-1 bg-black/20 backdrop-blur-sm"
+              className="flex-1 bg-black/35 backdrop-blur-sm"
               onClick={() => setShowQuickActions(false)}
             />
           </div>
@@ -363,12 +359,11 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         {showSmartActions && (
           <div className="absolute inset-0 z-30 flex">
             <div 
-              className="flex-1 bg-black/20 backdrop-blur-sm"
+              className="flex-1 bg-black/35 backdrop-blur-sm"
               onClick={() => setShowSmartActions(false)}
             />
             <div 
-              className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right"
-            >
+              className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right">
               <SmartActionsDrawer
                 isOpen={showSmartActions}
                 onClose={() => setShowSmartActions(false)}
@@ -384,8 +379,8 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         )}
       </div>
 
-      {/* Input Area - Always visible at bottom */}
-      <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 sticky bottom-0 z-20">
+      {/* Input Area - Fixed at bottom, always visible */}
+      <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 z-40">
         <div className="flex gap-2">
           <div className="flex-1 relative">
             <Input
