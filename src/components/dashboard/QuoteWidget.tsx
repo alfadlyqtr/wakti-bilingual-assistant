@@ -10,7 +10,7 @@ import {
   forceNewQuote
 } from '@/utils/quoteService';
 import { Button } from '@/components/ui/button';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Hand } from 'lucide-react';
 import { toast } from "sonner";
 
 interface QuoteWidgetProps {
@@ -81,8 +81,13 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
         }}
       />
       
+      {/* Drag handle inside the container */}
+      <div className="absolute top-2 left-2 z-20 p-1 rounded-md bg-muted/60 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-grab active:cursor-grabbing">
+        <Hand className="h-4 w-4" />
+      </div>
+      
       {/* Header */}
-      <div className="flex justify-between items-center mb-3 relative z-10">
+      <div className="flex justify-between items-center mb-3 relative z-10 ml-10">
         <h3 className="text-lg text-blue-900 font-semibold">
           {t("dailyQuote", language)}
         </h3>
