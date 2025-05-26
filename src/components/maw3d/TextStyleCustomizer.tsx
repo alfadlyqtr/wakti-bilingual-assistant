@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
-import { Bold, Italic, Underline, Palette, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Bold, Italic, Underline, Palette, AlignLeft, AlignCenter, AlignRight, Minus, Plus } from 'lucide-react';
 import { t } from '@/utils/translations';
 
 interface TextStyleCustomizerProps {
@@ -25,25 +26,20 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
   onTextStyleChange,
   language
 }) => {
-  const handleFontSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Allow empty string temporarily for better UX while typing
-    if (value === '') {
-      return;
-    }
-    
-    const numValue = parseInt(value);
-    // Only update if it's a valid number within reasonable bounds
-    if (!isNaN(numValue) && numValue >= 8 && numValue <= 72) {
-      onTextStyleChange({ fontSize: numValue });
-    }
+  const handleFontSizeChange = (value: number[]) => {
+    onTextStyleChange({ fontSize: value[0] });
+  };
+
+  const adjustFontSize = (delta: number) => {
+    const newSize = Math.max(8, Math.min(72, textStyle.fontSize + delta));
+    onTextStyleChange({ fontSize: newSize });
   };
 
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-semibold">🎨 {t('textStyling', language)}</h2>
       
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
           <Label htmlFor="font-family">{t('fontFamily', language)}</Label>
           <Select 
@@ -61,25 +57,43 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
           </Select>
         </div>
 
+        {/* Mobile-friendly font size control */}
         <div>
-          <Label htmlFor="font-size">{t('fontSize', language)}</Label>
-          <Input
-            id="font-size"
-            type="number"
-            min="8"
-            max="72"
-            value={textStyle.fontSize}
-            onChange={handleFontSizeChange}
-            onBlur={(e) => {
-              // Ensure we have a valid value on blur
-              const value = parseInt(e.target.value);
-              if (isNaN(value) || value < 8) {
-                onTextStyleChange({ fontSize: 8 });
-              } else if (value > 72) {
-                onTextStyleChange({ fontSize: 72 });
-              }
-            }}
-          />
+          <Label htmlFor="font-size">{t('fontSize', language)}: {textStyle.fontSize}px</Label>
+          <div className="space-y-3 mt-2">
+            {/* Slider for smooth control */}
+            <Slider
+              value={[textStyle.fontSize]}
+              onValueChange={handleFontSizeChange}
+              min={8}
+              max={72}
+              step={1}
+              className="w-full"
+            />
+            
+            {/* Button controls for precise adjustment */}
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => adjustFontSize(-2)}
+                className="h-8 w-8 p-0"
+              >
+                <Minus className="w-3 h-3" />
+              </Button>
+              <div className="min-w-[60px] text-center text-sm font-medium">
+                {textStyle.fontSize}px
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => adjustFontSize(2)}
+                className="h-8 w-8 p-0"
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -93,7 +107,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         <div className="space-y-2">
           <Label>{t('textFormatting', language)}</Label>
           <div className="flex gap-2">
