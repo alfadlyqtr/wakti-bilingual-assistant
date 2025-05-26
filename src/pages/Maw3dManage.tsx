@@ -4,7 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Users, Edit, Share2, Trash2, CheckCircle, XCircle, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -242,100 +242,156 @@ export default function Maw3dManage() {
 
         {/* RSVP Statistics */}
         <div className="grid gap-6 md:grid-cols-3 mb-8">
-          <Card>
+          <Card className="border-2 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-6 text-center">
-              <Users className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-              <div className="text-2xl font-bold">{rsvps.length}</div>
-              <div className="text-sm text-muted-foreground">Total Responses</div>
+              <div className="relative">
+                <Users className="w-10 h-10 mx-auto mb-3 text-blue-600" />
+                <div className="text-3xl font-bold text-blue-600">{rsvps.length}</div>
+                <div className="text-sm font-medium text-muted-foreground">Total Responses</div>
+              </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-2 border-green-200 bg-green-50/50 dark:bg-green-950/20 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-6 text-center">
-              <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-600" />
-              <div className="text-2xl font-bold text-green-600">{rsvpCounts.accepted}</div>
-              <div className="text-sm text-muted-foreground">Accepted</div>
+              <div className="relative">
+                <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-600" />
+                <div className="text-3xl font-bold text-green-600">{rsvpCounts.accepted}</div>
+                <div className="text-sm font-medium text-green-700 dark:text-green-300">Attending</div>
+              </div>
             </CardContent>
           </Card>
           
-          <Card>
+          <Card className="border-2 border-red-200 bg-red-50/50 dark:bg-red-950/20 hover:shadow-lg transition-all duration-200">
             <CardContent className="p-6 text-center">
-              <XCircle className="w-8 h-8 mx-auto mb-2 text-red-600" />
-              <div className="text-2xl font-bold text-red-600">{rsvpCounts.declined}</div>
-              <div className="text-sm text-muted-foreground">Declined</div>
+              <div className="relative">
+                <XCircle className="w-10 h-10 mx-auto mb-3 text-red-600" />
+                <div className="text-3xl font-bold text-red-600">{rsvpCounts.declined}</div>
+                <div className="text-sm font-medium text-red-700 dark:text-red-300">Declined</div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* RSVP Lists - Simplified Guest Names */}
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* Enhanced RSVP Lists */}
+        <div className="grid gap-8 lg:grid-cols-2">
           {/* Accepted RSVPs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600">
-                <CheckCircle className="w-5 h-5" />
-                Attending ({acceptedRsvps.length})
+          <Card className="border-2 border-green-200 bg-gradient-to-br from-green-50/80 to-green-100/30 dark:from-green-950/20 dark:to-green-900/10">
+            <CardHeader className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-t-lg">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-6 h-6" />
+                  <span>Attending</span>
+                </div>
+                <Badge className="bg-white/20 text-white border-white/30 text-lg px-3 py-1">
+                  {acceptedRsvps.length}
+                </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               {acceptedRsvps.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border">
-                      <div className="flex-1">
-                        <div className="font-medium text-green-800 dark:text-green-200">
-                          {rsvp.guest_name}
+                    <div key={rsvp.id} className="group relative">
+                      <div className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-green-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-200">
+                        {/* Avatar */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                            {rsvp.guest_name.charAt(0).toUpperCase()}
+                          </div>
                         </div>
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                        
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold text-lg text-green-800 dark:text-green-200 truncate">
+                                {rsvp.guest_name}
+                              </h3>
+                              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                                <Clock className="w-3 h-3" />
+                                {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-green-300">
+                                ✓ Confirmed
+                              </Badge>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                        Accepted
-                      </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No one has accepted yet</p>
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-10 h-10 text-green-500 opacity-50" />
+                  </div>
+                  <h3 className="text-lg font-medium text-green-700 dark:text-green-300 mb-2">No attendees yet</h3>
+                  <p className="text-green-600 dark:text-green-400">Invitees who accept will appear here</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
           {/* Declined RSVPs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <XCircle className="w-5 h-5" />
-                Declined ({declinedRsvps.length})
+          <Card className="border-2 border-red-200 bg-gradient-to-br from-red-50/80 to-red-100/30 dark:from-red-950/20 dark:to-red-900/10">
+            <CardHeader className="bg-gradient-to-r from-red-500 to-red-600 text-white rounded-t-lg">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <XCircle className="w-6 h-6" />
+                  <span>Declined</span>
+                </div>
+                <Badge className="bg-white/20 text-white border-white/30 text-lg px-3 py-1">
+                  {declinedRsvps.length}
+                </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               {declinedRsvps.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border">
-                      <div className="flex-1">
-                        <div className="font-medium text-red-800 dark:text-red-200">
-                          {rsvp.guest_name}
+                    <div key={rsvp.id} className="group relative">
+                      <div className="flex items-center gap-4 p-4 bg-white dark:bg-gray-800 rounded-xl border-2 border-red-200 shadow-sm hover:shadow-md hover:border-red-300 transition-all duration-200">
+                        {/* Avatar */}
+                        <div className="flex-shrink-0">
+                          <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                            {rsvp.guest_name.charAt(0).toUpperCase()}
+                          </div>
                         </div>
-                        <div className="text-xs text-red-600 dark:text-red-400">
-                          {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                        
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-semibold text-lg text-red-800 dark:text-red-200 truncate">
+                                {rsvp.guest_name}
+                              </h3>
+                              <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                                <Clock className="w-3 h-3" />
+                                {format(new Date(rsvp.created_at), 'MMM d, h:mm a')}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 border-red-300">
+                                ✕ Declined
+                              </Badge>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
-                        Declined
-                      </Badge>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  <XCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                  <p>No one has declined yet</p>
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <XCircle className="w-10 h-10 text-red-500 opacity-50" />
+                  </div>
+                  <h3 className="text-lg font-medium text-red-700 dark:text-red-300 mb-2">No declines yet</h3>
+                  <p className="text-red-600 dark:text-red-400">Invitees who decline will appear here</p>
                 </div>
               )}
             </CardContent>
