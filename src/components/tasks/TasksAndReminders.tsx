@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Task, Reminder, Subtask, useTaskReminder } from '@/contexts/TaskReminderContext';
@@ -10,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import TaskItem from './TaskItem';
 import ReminderItem from './ReminderItem';
 import TaskForm from './TaskForm';
@@ -23,7 +23,9 @@ import {
   Check,
   AlertTriangle,
   Clock,
-  Sparkle
+  Sparkle,
+  RefreshCw,
+  AlertCircle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,10 +41,11 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
   const { language } = useTheme();
   const navigate = useNavigate();
   const { 
-    tasks, reminders, loading,
+    tasks, reminders, loading, error,
     createTask, updateTask, deleteTask,
     createSubtask, updateSubtask,
-    createReminder, updateReminder, deleteReminder
+    createReminder, updateReminder, deleteReminder,
+    fetchTasks, fetchReminders, clearError
   } = useTaskReminder();
   
   const [activeTab, setActiveTab] = useState<string>(showTasks ? 'tasks' : 'reminders');
@@ -54,6 +57,16 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
   const [currentReminder, setCurrentReminder] = useState<Reminder | null>(null);
   const [shareDialogOpen, setShareDialogOpen] = useState<boolean>(false);
   const [taskToShare, setTaskToShare] = useState<Task | null>(null);
+
+  // Handle retry functionality
+  const handleRetry = async () => {
+    clearError();
+    if (activeTab === 'tasks') {
+      await fetchTasks();
+    } else {
+      await fetchReminders();
+    }
+  };
 
   // Filter tasks based on status and search query
   const filteredTasks = tasks
@@ -122,9 +135,6 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
     if (currentTask) {
       // Update existing task
       await updateTask(currentTask.id, taskData);
-      
-      // Handle subtasks - we would need more logic here for updating/deleting subtasks
-      // For now, we're keeping it simple
     } else {
       // Create new task
       await createTask(taskData, subtasks);
@@ -168,6 +178,25 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
               {showReminders && <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>}
             </TabsList>
           </div>
+
+          {/* Error Alert */}
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between w-full">
+                <span>{error}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRetry}
+                  className="ml-2"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1" />
+                  {t('retry', language)}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
           
           <div className="mb-4">
             <div className="flex gap-2 mb-2">
@@ -242,6 +271,16 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
                 <div className="flex-1 flex items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
+              ) : error ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                  <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
+                  <p className="text-lg font-medium mb-2">{t('somethingWentWrong', language)}</p>
+                  <p className="text-sm text-muted-foreground mb-4">{error}</p>
+                  <Button onClick={handleRetry}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {t('tryAgain', language)}
+                  </Button>
+                </div>
               ) : filteredTasks.length > 0 ? (
                 <div className="overflow-y-auto pb-20">
                   <AnimatePresence>
@@ -284,6 +323,16 @@ const TasksAndReminders: React.FC<TasksAndRemindersProps> = ({
               {loading ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : error ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+                  <AlertCircle className="h-12 w-12 mb-4 text-destructive" />
+                  <p className="text-lg font-medium mb-2">{t('somethingWentWrong', language)}</p>
+                  <p className="text-sm text-muted-foreground mb-4">{error}</p>
+                  <Button onClick={handleRetry}>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    {t('tryAgain', language)}
+                  </Button>
                 </div>
               ) : filteredReminders.length > 0 ? (
                 <div className="overflow-y-auto pb-20">

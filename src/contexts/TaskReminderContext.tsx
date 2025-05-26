@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast as sonnerToast } from "sonner";
@@ -49,6 +48,7 @@ interface TaskReminderContextType {
   tasks: Task[];
   reminders: Reminder[];
   loading: boolean;
+  error: string | null;
   fetchTasks: () => Promise<void>;
   fetchReminders: () => Promise<void>;
   createTask: (task: Omit<Task, 'id' | 'created_by' | 'created_at' | 'updated_at'>, subtasks?: Omit<Subtask, 'id' | 'task_id'>[]) => Promise<string | null>;
@@ -63,6 +63,7 @@ interface TaskReminderContextType {
   shareTask: (taskId: string, userId: string) => Promise<boolean>;
   unshareTask: (taskId: string, userId: string) => Promise<boolean>;
   fetchSharedUsers: (taskId: string) => Promise<string[]>;
+  clearError: () => void;
 }
 
 const TaskReminderContext = createContext<TaskReminderContextType | undefined>(undefined);
@@ -71,39 +72,43 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { language } = useTheme();
 
-  // Fetch tasks on component mount
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      await Promise.all([fetchTasks(), fetchReminders()]);
-      setLoading(false);
-    };
-    
-    fetchInitialData();
-    
-    // Subscribe to changes in tasks and subtasks
-    const tasksSubscription = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'tasks' }, 
-        () => fetchTasks())
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'subtasks' }, 
-        () => fetchTasks())
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'reminders' }, 
-        () => fetchReminders())
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(tasksSubscription);
-    };
-  }, []);
+  // Clear error function
+  const clearError = () => {
+    setError(null);
+  };
 
-  // Fetch tasks with their subtasks
+  // Check authentication status
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError('Authentication required');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Auth check error:', error);
+      setError('Authentication error');
+      return false;
+    }
+  };
+
+  // Fetch tasks with error handling and authentication check
   const fetchTasks = async () => {
     try {
+      setError(null);
+      
+      // Check authentication first
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) {
+        setTasks([]);
+        return;
+      }
+
+      console.log('Fetching tasks...');
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
@@ -111,62 +116,80 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (tasksError) {
         console.error('Error fetching tasks:', tasksError);
+        setError(`Failed to load tasks: ${tasksError.message}`);
         return;
       }
 
-      const tasksWithSubtasks = await Promise.all(tasksData.map(async (task) => {
-        const { data: subtasks, error: subtasksError } = await supabase
-          .from('subtasks')
-          .select('*')
-          .eq('task_id', task.id)
-          .order('created_at');
+      console.log('Tasks fetched successfully:', tasksData?.length || 0);
 
-        if (subtasksError) {
-          console.error('Error fetching subtasks:', subtasksError);
-          return { ...task, subtasks: [] };
+      const tasksWithSubtasks = await Promise.all((tasksData || []).map(async (task) => {
+        try {
+          const { data: subtasks, error: subtasksError } = await supabase
+            .from('subtasks')
+            .select('*')
+            .eq('task_id', task.id)
+            .order('created_at');
+
+          if (subtasksError) {
+            console.error('Error fetching subtasks for task', task.id, ':', subtasksError);
+          }
+
+          // Check if task is shared
+          const { data: sharedData } = await supabase
+            .from('shared_tasks')
+            .select('id')
+            .eq('task_id', task.id);
+
+          return { 
+            ...task, 
+            subtasks: subtasks || [],
+            is_shared: sharedData && sharedData.length > 0,
+            priority: task.priority as TaskPriority,
+            status: task.status as TaskStatus,
+            recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
+          };
+        } catch (error) {
+          console.error('Error processing task:', task.id, error);
+          return { 
+            ...task, 
+            subtasks: [],
+            is_shared: false,
+            priority: task.priority as TaskPriority,
+            status: task.status as TaskStatus,
+            recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
+          };
         }
-
-        // Check if task is shared
-        const { data: sharedData } = await supabase
-          .from('shared_tasks')
-          .select('id')
-          .eq('task_id', task.id);
-
-        return { 
-          ...task, 
-          subtasks: subtasks || [],
-          is_shared: sharedData && sharedData.length > 0
-        };
       }));
 
       // Update overdue tasks
       const now = new Date();
       const updatedTasks = tasksWithSubtasks.map(task => {
         if (task.status !== 'completed' && task.due_date && new Date(task.due_date) < now) {
-          return { 
-            ...task, 
-            status: 'overdue' as TaskStatus,
-            priority: task.priority as TaskPriority,
-            recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
-          };
+          return { ...task, status: 'overdue' as TaskStatus };
         }
-        return { 
-          ...task,
-          priority: task.priority as TaskPriority,
-          status: task.status as TaskStatus,
-          recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
-        };
+        return task;
       });
 
       setTasks(updatedTasks);
     } catch (error) {
       console.error('Error in fetchTasks:', error);
+      setError('Failed to load tasks. Please try again.');
     }
   };
 
-  // Fetch reminders
+  // Fetch reminders with error handling and authentication check
   const fetchReminders = async () => {
     try {
+      setError(null);
+      
+      // Check authentication first
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) {
+        setReminders([]);
+        return;
+      }
+
+      console.log('Fetching reminders...');
       const { data, error } = await supabase
         .from('reminders')
         .select('*')
@@ -174,10 +197,13 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error fetching reminders:', error);
+        setError(`Failed to load reminders: ${error.message}`);
         return;
       }
 
-      const typedReminders = data.map(reminder => ({
+      console.log('Reminders fetched successfully:', data?.length || 0);
+
+      const typedReminders = (data || []).map(reminder => ({
         ...reminder,
         recurrence_pattern: reminder.recurrence_pattern as RecurrencePattern | undefined
       }));
@@ -185,8 +211,62 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       setReminders(typedReminders);
     } catch (error) {
       console.error('Error in fetchReminders:', error);
+      setError('Failed to load reminders. Please try again.');
     }
   };
+
+  // Initialize data with retry mechanism
+  useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    const fetchInitialData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        await Promise.all([fetchTasks(), fetchReminders()]);
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+        
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying data fetch (${retryCount}/${maxRetries})...`);
+          setTimeout(fetchInitialData, 2000 * retryCount); // Exponential backoff
+        } else {
+          setError('Failed to load data after multiple attempts. Please refresh the page.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchInitialData();
+    
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth state changed:', event, session ? 'authenticated' : 'not authenticated');
+        
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Refresh data when user signs in or token refreshes
+          setTimeout(() => {
+            fetchTasks();
+            fetchReminders();
+          }, 100);
+        } else if (event === 'SIGNED_OUT') {
+          // Clear data when user signs out
+          setTasks([]);
+          setReminders([]);
+          setError(null);
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Create a new task
   const createTask = async (
@@ -194,10 +274,18 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     subtasks?: Omit<Subtask, 'id' | 'task_id'>[]
   ) => {
     try {
-      const user = supabase.auth.getUser();
-      const userId = (await user).data.user?.id;
+      setError(null);
+      
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) {
+        return null;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
       
       if (!userId) {
+        setError("Authentication required to create tasks");
         sonnerToast.error("Authentication Error", {
           description: "You must be logged in to create tasks"
         });
@@ -216,6 +304,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error creating task:', error);
+        setError(`Failed to create task: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -249,6 +338,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return taskId;
     } catch (error) {
       console.error('Error in createTask:', error);
+      setError('Failed to create task. Please try again.');
       return null;
     }
   };
@@ -259,6 +349,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     taskData: Partial<Omit<Task, 'id' | 'created_by' | 'created_at' | 'updated_at'>>
   ) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('tasks')
         .update(taskData)
@@ -266,6 +358,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error updating task:', error);
+        setError(`Failed to update task: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -278,6 +371,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in updateTask:', error);
+      setError('Failed to update task. Please try again.');
       return false;
     }
   };
@@ -285,7 +379,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Delete a task
   const deleteTask = async (taskId: string) => {
     try {
-      // Delete subtasks will cascade automatically due to foreign key constraint
+      setError(null);
+      
       const { error } = await supabase
         .from('tasks')
         .delete()
@@ -293,6 +388,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error deleting task:', error);
+        setError(`Failed to delete task: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -305,6 +401,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in deleteTask:', error);
+      setError('Failed to delete task. Please try again.');
       return false;
     }
   };
@@ -314,10 +411,18 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     reminderData: Omit<Reminder, 'id' | 'created_by' | 'created_at' | 'updated_at'>
   ) => {
     try {
-      const user = supabase.auth.getUser();
-      const userId = (await user).data.user?.id;
+      setError(null);
+      
+      const isAuthenticated = await checkAuth();
+      if (!isAuthenticated) {
+        return null;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
       
       if (!userId) {
+        setError("Authentication required to create reminders");
         sonnerToast.error("Authentication Error", {
           description: "You must be logged in to create reminders"
         });
@@ -335,6 +440,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error creating reminder:', error);
+        setError(`Failed to create reminder: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -347,6 +453,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return data.id;
     } catch (error) {
       console.error('Error in createReminder:', error);
+      setError('Failed to create reminder. Please try again.');
       return null;
     }
   };
@@ -357,6 +464,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     reminderData: Partial<Omit<Reminder, 'id' | 'created_by' | 'created_at' | 'updated_at'>>
   ) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('reminders')
         .update(reminderData)
@@ -364,6 +473,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error updating reminder:', error);
+        setError(`Failed to update reminder: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -376,6 +486,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in updateReminder:', error);
+      setError('Failed to update reminder. Please try again.');
       return false;
     }
   };
@@ -383,6 +494,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Delete a reminder
   const deleteReminder = async (reminderId: string) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('reminders')
         .delete()
@@ -390,6 +503,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error deleting reminder:', error);
+        setError(`Failed to delete reminder: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -402,6 +516,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in deleteReminder:', error);
+      setError('Failed to delete reminder. Please try again.');
       return false;
     }
   };
@@ -409,6 +524,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Create a new subtask
   const createSubtask = async (taskId: string, title: string) => {
     try {
+      setError(null);
+      
       const { data, error } = await supabase
         .from('subtasks')
         .insert({
@@ -421,6 +538,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error creating subtask:', error);
+        setError(`Failed to create subtask: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -431,6 +549,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return data.id;
     } catch (error) {
       console.error('Error in createSubtask:', error);
+      setError('Failed to create subtask. Please try again.');
       return null;
     }
   };
@@ -438,6 +557,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Update subtask completion status
   const updateSubtask = async (subtaskId: string, isCompleted: boolean) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('subtasks')
         .update({ is_completed: isCompleted })
@@ -445,6 +566,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error updating subtask:', error);
+        setError(`Failed to update subtask: ${error.message}`);
         return false;
       }
 
@@ -452,6 +574,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in updateSubtask:', error);
+      setError('Failed to update subtask. Please try again.');
       return false;
     }
   };
@@ -459,6 +582,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Delete a subtask
   const deleteSubtask = async (subtaskId: string) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('subtasks')
         .delete()
@@ -466,6 +591,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error deleting subtask:', error);
+        setError(`Failed to delete subtask: ${error.message}`);
         return false;
       }
 
@@ -473,6 +599,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in deleteSubtask:', error);
+      setError('Failed to delete subtask. Please try again.');
       return false;
     }
   };
@@ -480,6 +607,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Share a task with a user
   const shareTask = async (taskId: string, userId: string) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('shared_tasks')
         .insert({
@@ -489,6 +618,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error sharing task:', error);
+        setError(`Failed to share task: ${error.message}`);
         sonnerToast.error("Error", {
           description: error.message
         });
@@ -501,6 +631,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in shareTask:', error);
+      setError('Failed to share task. Please try again.');
       return false;
     }
   };
@@ -508,6 +639,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Unshare a task with a user
   const unshareTask = async (taskId: string, userId: string) => {
     try {
+      setError(null);
+      
       const { error } = await supabase
         .from('shared_tasks')
         .delete()
@@ -516,6 +649,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error unsharing task:', error);
+        setError(`Failed to unshare task: ${error.message}`);
         return false;
       }
 
@@ -523,6 +657,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return true;
     } catch (error) {
       console.error('Error in unshareTask:', error);
+      setError('Failed to unshare task. Please try again.');
       return false;
     }
   };
@@ -530,6 +665,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
   // Fetch users who have access to a shared task
   const fetchSharedUsers = async (taskId: string) => {
     try {
+      setError(null);
+      
       const { data, error } = await supabase
         .from('shared_tasks')
         .select('shared_with')
@@ -537,12 +674,14 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       if (error) {
         console.error('Error fetching shared users:', error);
+        setError(`Failed to fetch shared users: ${error.message}`);
         return [];
       }
 
       return data.map(item => item.shared_with);
     } catch (error) {
       console.error('Error in fetchSharedUsers:', error);
+      setError('Failed to fetch shared users. Please try again.');
       return [];
     }
   };
@@ -551,6 +690,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     tasks,
     reminders,
     loading,
+    error,
     fetchTasks,
     fetchReminders,
     createTask,
@@ -564,7 +704,8 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     deleteSubtask,
     shareTask,
     unshareTask,
-    fetchSharedUsers
+    fetchSharedUsers,
+    clearError
   };
 
   return (
