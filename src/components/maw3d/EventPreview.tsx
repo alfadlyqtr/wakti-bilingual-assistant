@@ -83,6 +83,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     const locale = language === 'ar' ? ar : enUS;
     
     if (language === 'ar') {
+      // Use Arabic date format with proper Arabic day and month names
       return format(date, 'EEEE، d MMMM yyyy', { locale });
     } else {
       return format(date, 'EEEE, MMMM d, yyyy', { locale });
