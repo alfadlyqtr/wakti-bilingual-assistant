@@ -435,4 +435,17 @@ export const en: Record<TranslationKey, string> = {
   
   // NEW KEYS FOR EVENT PREVIEW
   eventPreview: "Event Preview",
+  
+  // NEW KEYS FOR CLEAN EVENT VIEWING
+  eventNotFound: "Event not found",
+  eventMayHaveExpired: "This event may have expired or been removed",
+  areYouAttending: "Are you attending this event?",
+  enterYourName: "Enter your name",
+  accept: "Accept",
+  decline: "Decline",
+  thankYou: "Thank you!",
+  yourResponseAccepted: "Your acceptance has been recorded",
+  yourResponseDeclined: "Your decline has been recorded",
+  errorLoadingEvent: "Error loading event",
+  errorSubmittingRsvp: "Error submitting RSVP",
 } as const;

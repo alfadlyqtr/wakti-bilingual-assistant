@@ -25,7 +25,6 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   language = 'en'
 }) => {
   const getBackgroundStyle = () => {
-    // For transparent background, return empty object
     if (backgroundType === 'transparent') {
       return {};
     }
@@ -99,12 +98,11 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-md mx-auto" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div 
         className="relative rounded-lg overflow-hidden shadow-lg"
         style={getBackgroundStyle()}
       >
-        {/* Only add overlay if not transparent */}
         {backgroundType !== 'transparent' && (
           <div className="absolute inset-0 bg-black/20" />
         )}

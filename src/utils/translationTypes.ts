@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey =
@@ -429,4 +428,16 @@ export type TranslationKey =
   | "generateImage"
   | "aiImageDescription"
   // NEW KEY FOR EVENT PREVIEW
-  | "eventPreview";
+  | "eventPreview"
+  // NEW KEYS FOR CLEAN EVENT VIEWING
+  | "eventNotFound"
+  | "eventMayHaveExpired"
+  | "areYouAttending"
+  | "enterYourName"
+  | "accept"
+  | "decline"
+  | "thankYou"
+  | "yourResponseAccepted"
+  | "yourResponseDeclined"
+  | "errorLoadingEvent"
+  | "errorSubmittingRsvp";

@@ -115,8 +115,14 @@ export default function Maw3dEdit() {
     try {
       console.log('Saving event with show_attending_count:', event.show_attending_count);
       
+      // Ensure the event language is set to current UI language
+      const updatedEventData = {
+        ...event,
+        language: language // Save the current language setting
+      };
+      
       // Update the event
-      const updatedEvent = await Maw3dService.updateEvent(event.id, event);
+      const updatedEvent = await Maw3dService.updateEvent(event.id, updatedEventData);
       console.log('Event updated with show_attending_count:', updatedEvent.show_attending_count);
 
       toast.success('Event updated successfully!');

@@ -4,7 +4,7 @@ import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
 export class Maw3dService {
   // Events
-  static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string }): Promise<Maw3dEvent> {
+  static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string, language?: string }): Promise<Maw3dEvent> {
     console.log('=== CREATING MAW3D EVENT ===');
     console.log('Raw event data received:', eventData);
     
@@ -19,19 +19,21 @@ export class Maw3dService {
       return trimmed;
     };
 
-    // Prepare the data for database insertion with enhanced time handling
+    // Prepare the data for database insertion with enhanced time handling and language
     const dbEventData = {
       ...eventData,
       // Critical fix: Ensure time fields are properly handled for PostgreSQL
       start_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.start_time),
       end_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.end_time),
+      language: eventData.language || 'en' // Default to English if not specified
     };
     
     console.log('Prepared DB event data:', {
       ...dbEventData,
       start_time: dbEventData.start_time,
       end_time: dbEventData.end_time,
-      is_all_day: dbEventData.is_all_day
+      is_all_day: dbEventData.is_all_day,
+      language: dbEventData.language
     });
     
     // Remove any fields that don't belong in the database

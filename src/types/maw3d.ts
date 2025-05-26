@@ -18,7 +18,8 @@ export interface Maw3dEvent {
   updated_at: string;
   short_id?: string;
   template_type?: string;
-  show_attending_count: boolean; // Now required since it has a database default
+  show_attending_count: boolean;
+  language: string;
 }
 
 export interface CreateEventFormData {
@@ -37,7 +38,7 @@ export interface CreateEventFormData {
   text_style: TextStyle;
   invited_contacts: string[];
   template_type?: string;
-  show_attending_count?: boolean; // Optional in form data, will use database default
+  show_attending_count?: boolean;
 }
 
 export interface TextStyle {

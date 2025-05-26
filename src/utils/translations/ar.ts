@@ -430,4 +430,17 @@ export const ar: Record<TranslationKey, string> = {
   
   // NEW KEYS FOR EVENT PREVIEW
   eventPreview: "معاينة الحدث",
+  
+  // NEW KEYS FOR CLEAN EVENT VIEWING
+  eventNotFound: "الحدث غير موجود",
+  eventMayHaveExpired: "قد يكون هذا الحدث قد انتهى أو تم حذفه",
+  areYouAttending: "هل ستحضر هذا الحدث؟",
+  enterYourName: "أدخل اسمك",
+  accept: "أقبل",
+  decline: "أرفض",
+  thankYou: "شكراً لك!",
+  yourResponseAccepted: "تم تسجيل قبولك",
+  yourResponseDeclined: "تم تسجيل رفضك",
+  errorLoadingEvent: "خطأ في تحميل الحدث",
+  errorSubmittingRsvp: "خطأ في إرسال الرد",
 } as const;

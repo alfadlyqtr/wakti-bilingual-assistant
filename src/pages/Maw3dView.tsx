@@ -1,32 +1,30 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar, Clock, MapPin, Users, ArrowLeft, X } from 'lucide-react';
-import { format } from 'date-fns';
-import { EventPreview } from '@/components/maw3d/EventPreview';
+import { Calendar, MapPin } from 'lucide-react';
+import { toast } from 'sonner';
 import { Maw3dService } from '@/services/maw3dService';
+import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
-import CalendarDropdown from '@/components/events/CalendarDropdown';
+import { t } from '@/utils/translations';
+import { format } from 'date-fns';
+import { ar, enUS } from 'date-fns/locale';
 
 export default function Maw3dView() {
   const { shortId } = useParams();
-  const navigate = useNavigate();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [eventNotFound, setEventNotFound] = useState(false);
-  const [guestName, setGuestName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasSubmittedResponse, setHasSubmittedResponse] = useState(false);
-  
-  // Simplified popup state
-  const [showPopup, setShowPopup] = useState(false);
-  const [popupMessage, setPopupMessage] = useState('');
-  const [popupIsError, setPopupIsError] = useState(false);
+  const [guestName, setGuestName] = useState('');
+  const [hasResponded, setHasResponded] = useState(false);
+  const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
+
+  // Use event's language for all translations
+  const eventLanguage = event?.language || 'en';
 
   useEffect(() => {
     if (shortId) {
@@ -34,193 +32,80 @@ export default function Maw3dView() {
     }
   }, [shortId]);
 
-  // Auto-dismiss popup after 4 seconds
-  useEffect(() => {
-    if (showPopup) {
-      console.log('Popup is showing, setting timer to hide it');
-      const timer = setTimeout(() => {
-        console.log('Timer triggered, hiding popup');
-        setShowPopup(false);
-      }, 4000);
-      return () => {
-        console.log('Cleaning up popup timer');
-        clearTimeout(timer);
-      };
-    }
-  }, [showPopup]);
-
-  const displayPopup = (message: string, isError: boolean = false) => {
-    console.log('=== DISPLAYING POPUP ===');
-    console.log('Message:', message);
-    console.log('Is Error:', isError);
-    
-    setPopupMessage(message);
-    setPopupIsError(isError);
-    setShowPopup(true);
-    
-    console.log('Popup state set to true');
-  };
-
   const fetchEvent = async () => {
     try {
+      setIsLoading(true);
       if (!shortId) return;
-      
+
       const eventData = await Maw3dService.getEventByShortId(shortId);
       if (!eventData) {
-        setEventNotFound(true);
+        toast.error(t('eventNotFound', eventLanguage));
         return;
       }
 
       setEvent(eventData);
       
-      // Fetch RSVPs
-      const eventRsvps = await Maw3dService.getRsvps(eventData.id);
-      setRsvps(eventRsvps);
-      
+      if (eventData.is_public) {
+        const rsvpData = await Maw3dService.getRsvps(eventData.id);
+        setRsvps(rsvpData);
+      }
     } catch (error) {
-      setEventNotFound(true);
+      console.error('Error fetching event:', error);
+      toast.error(t('errorLoadingEvent', eventLanguage));
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleRsvp = async (response: 'accepted' | 'declined') => {
-    console.log('=== RSVP BUTTON CLICKED ===');
-    console.log('Response:', response);
-    console.log('Guest Name:', guestName);
-    console.log('Is Submitting:', isSubmitting);
-    console.log('Has Submitted:', hasSubmittedResponse);
-    
-    if (!event) {
-      console.log('No event found, aborting');
-      return;
-    }
-    
-    // Prevent multiple submissions
-    if (isSubmitting || hasSubmittedResponse) {
-      console.log('Preventing duplicate submission');
-      return;
-    }
-    
-    const trimmedName = guestName.trim();
-    if (!trimmedName) {
-      console.log('No name provided, showing error popup');
-      displayPopup('Please enter your name', true);
+    if (!event || !guestName.trim()) {
+      toast.error(t('pleaseEnterYourName', eventLanguage));
       return;
     }
 
     setIsSubmitting(true);
-    console.log('Starting RSVP submission...');
-
     try {
-      // Create guest RSVP
-      await Maw3dService.createRsvp(event.id, response, trimmedName);
+      await Maw3dService.createRsvp(event.id, response, guestName.trim());
+      setHasResponded(true);
+      setUserResponse(response);
+      toast.success(t('responseSubmitted', eventLanguage));
       
-      // Mark as submitted immediately to prevent further attempts
-      setHasSubmittedResponse(true);
-      console.log('RSVP submitted successfully, refreshing data...');
-      
-      // Refresh data
-      await fetchEvent();
-      
-      // Show personalized success message
-      if (response === 'accepted') {
-        console.log('Showing acceptance popup');
-        displayPopup(`Thank you for accepting ${trimmedName}, see you soon!`);
-      } else {
-        console.log('Showing decline popup');
-        displayPopup(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
-      }
-      
-    } catch (error: any) {
-      console.log('RSVP submission error:', error);
-      // Handle specific error messages
-      if (error.message?.includes('already responded')) {
-        displayPopup('Someone with this name has already responded to this event', true);
-        setHasSubmittedResponse(true); // Prevent further attempts
-      } else {
-        displayPopup('Failed to submit RSVP. Please try again.', true);
-        setHasSubmittedResponse(false); // Allow retry on other errors
-      }
+      // Refresh RSVPs
+      const updatedRsvps = await Maw3dService.getRsvps(event.id);
+      setRsvps(updatedRsvps);
+    } catch (error) {
+      console.error('Error submitting RSVP:', error);
+      toast.error(error instanceof Error ? error.message : t('errorSubmittingRsvp', eventLanguage));
     } finally {
       setIsSubmitting(false);
-      console.log('RSVP submission completed');
     }
   };
 
   const getRsvpCounts = () => {
-    const accepted = rsvps.filter(rsvp => rsvp.response === 'accepted').length;
-    const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
+    const accepted = rsvps.filter(r => r.response === 'accepted').length;
+    const declined = rsvps.filter(r => r.response === 'declined').length;
     return { accepted, declined };
   };
 
-  // Prepare event data for calendar integration
-  const getCalendarEvent = () => {
-    if (!event) return null;
+  const getCalendarUrl = () => {
+    if (!event) return '';
     
-    const eventDate = new Date(event.event_date);
-    let startTime: Date;
-    let endTime: Date;
-    
-    if (event.is_all_day) {
-      startTime = new Date(eventDate);
-      endTime = new Date(eventDate);
-      endTime.setDate(endTime.getDate() + 1);
-    } else {
-      const [startHours, startMinutes] = (event.start_time || '09:00').split(':');
-      const [endHours, endMinutes] = (event.end_time || '17:00').split(':');
-      
-      startTime = new Date(eventDate);
-      startTime.setHours(parseInt(startHours), parseInt(startMinutes));
-      
-      endTime = new Date(eventDate);
-      endTime.setHours(parseInt(endHours), parseInt(endMinutes));
-    }
-    
-    return {
-      title: event.title,
-      description: event.description || '',
-      location: event.location || '',
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
-      is_all_day: event.is_all_day
-    };
-  };
+    const startDate = new Date(`${event.event_date}T${event.start_time || '00:00'}`);
+    const endDate = event.end_time 
+      ? new Date(`${event.event_date}T${event.end_time}`)
+      : new Date(startDate.getTime() + (event.is_all_day ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000));
 
-  // Get background and text style from event
-  const getBackgroundStyle = () => {
-    if (!event) return {};
+    const formatDate = (date: Date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
     
-    switch (event.background_type) {
-      case 'color':
-        return { backgroundColor: event.background_value };
-      case 'gradient':
-        return { background: event.background_value };
-      case 'image':
-      case 'ai':
-        return { 
-          backgroundImage: `url(${event.background_value})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        };
-      default:
-        return { backgroundColor: '#3b82f6' };
-    }
-  };
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: event.title,
+      dates: `${formatDate(startDate)}/${formatDate(endDate)}`,
+      details: event.description || '',
+      location: event.location || ''
+    });
 
-  const getTextStyle = () => {
-    if (!event?.text_style) return { color: '#ffffff' };
-    
-    const textStyle = event.text_style;
-    return {
-      fontSize: `${textStyle.fontSize}px`,
-      fontFamily: textStyle.fontFamily,
-      fontWeight: textStyle.isBold ? 'bold' : 'normal',
-      fontStyle: textStyle.isItalic ? 'italic' : 'normal',
-      textDecoration: textStyle.isUnderline ? 'underline' : 'none',
-      textShadow: textStyle.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
-      color: textStyle.color
-    };
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
   };
 
   if (isLoading) {
@@ -235,211 +120,116 @@ export default function Maw3dView() {
     );
   }
 
-  if (eventNotFound || !event) {
+  if (!event) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold">Event not found</h1>
-          <p className="text-muted-foreground">This event link may be invalid or the event may have been deleted.</p>
-          <Button onClick={() => navigate('/')} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Go to Home
-          </Button>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
+          <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
         </div>
       </div>
     );
   }
 
   const rsvpCounts = getRsvpCounts();
-  const calendarEvent = getCalendarEvent();
-  const backgroundStyle = getBackgroundStyle();
-  const textStyle = getTextStyle();
-
-  console.log('=== RENDER DEBUG ===');
-  console.log('Show Popup:', showPopup);
-  console.log('Popup Message:', popupMessage);
 
   return (
-    <div className="min-h-screen bg-background overflow-y-auto">
-      <div className="container mx-auto px-4 py-8 max-w-2xl">
-        <div 
-          className="border border-border rounded-lg shadow-md overflow-hidden"
-          style={backgroundStyle}
-        >
-          {/* Overlay for better readability */}
-          <div className="bg-black/20">
-            <div className="p-6 space-y-8" style={textStyle}>
-              
-              {/* Event Preview Section with same background as footer */}
-              <div className="space-y-6">
-                <div className="backdrop-blur-sm bg-white/20 p-4 rounded-lg border border-white/30">
-                  <EventPreview
-                    event={event}
-                    textStyle={event.text_style}
-                    backgroundType="transparent"
-                    backgroundValue=""
-                    rsvpCount={rsvpCounts}
-                    showAttendingCount={event.show_attending_count}
-                  />
-                </div>
-              </div>
-
-              {/* Add to Calendar and Location Section */}
-              {(calendarEvent || event.location || event.google_maps_link) && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold">Add to Calendar & Location</h3>
-                  
-                  <div className="flex flex-col gap-4">
-                    {calendarEvent && (
-                      <div className="flex justify-center">
-                        <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30">
-                          <div className="[&_button]:bg-white [&_button]:text-black [&_button]:hover:bg-white [&_button]:hover:text-black">
-                            <CalendarDropdown event={calendarEvent} />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {(event.location || event.google_maps_link) && (
-                      <div className="flex items-center justify-center gap-3">
-                        <MapPin className="w-5 h-5" />
-                        <span>{event.location || 'View Location'}</span>
-                        {event.google_maps_link && (
-                          <a 
-                            href={event.google_maps_link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline ml-2"
-                          >
-                            View on Maps
-                          </a>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* RSVP Section - Simplified Guest Only */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Are you attending?</h3>
-                
-                {/* Name input field */}
-                <div className="mb-4">
-                  <Input
-                    type="text"
-                    value={guestName}
-                    onChange={(e) => setGuestName(e.target.value)}
-                    placeholder="Enter your name"
-                    className="w-full bg-white/90 text-black"
-                    disabled={hasSubmittedResponse || isSubmitting}
-                  />
-                </div>
-
-                <div className="flex gap-3">
-                  <Button
-                    onClick={() => handleRsvp('accepted')}
-                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim()}
-                    className="flex-1 h-12 text-base font-medium bg-green-600 text-white hover:bg-green-700 border-2 border-green-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  >
-                    {isSubmitting ? 'Processing...' : 'Accept'}
-                  </Button>
-                  <Button
-                    onClick={() => handleRsvp('declined')}
-                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim()}
-                    className="flex-1 h-12 text-base font-medium bg-red-600 text-white hover:bg-red-700 border-2 border-red-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  >
-                    {isSubmitting ? 'Processing...' : 'Decline'}
-                  </Button>
-                </div>
-
-                {hasSubmittedResponse && (
-                  <div className="mt-3 text-sm text-center opacity-90">
-                    You have already responded to this invitation
-                  </div>
-                )}
-
-                {!guestName.trim() && !hasSubmittedResponse && (
-                  <div className="mt-3 text-sm text-center opacity-90">
-                    Please enter your name to respond
-                  </div>
-                )}
-
-                {event.show_attending_count && (
-                  <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-white/20">
-                    <Users className="w-5 h-5" />
-                    <span className="text-sm">
-                      {rsvpCounts.accepted} attending, {rsvpCounts.declined} declined
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Styled Powered by WAKTI */}
-              <div className="flex justify-center pt-4">
-                <div className="bg-white/20 px-4 py-2 rounded-lg border border-white/30">
-                  <span className="text-sm">
-                    Powered by{' '}
-                    <a 
-                      href="https://wakti.qa" 
-                      className="underline decoration-2 underline-offset-2 font-semibold"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      WAKTI
-                    </a>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Simplified Custom Popup - Always rendered, visibility controlled by showPopup */}
-      <div 
-        className={`fixed inset-0 flex items-center justify-center p-4 transition-all duration-300 ${
-          showPopup ? 'visible opacity-100' : 'invisible opacity-0'
-        }`}
-        style={{ zIndex: 9999 }}
-      >
-        {/* Backdrop */}
-        <div 
-          className="absolute inset-0 bg-black/60"
-          onClick={() => {
-            console.log('Backdrop clicked, hiding popup');
-            setShowPopup(false);
-          }}
-        />
-        
-        {/* Popup Content */}
-        <div className="relative bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl border-2 border-gray-200">
-          <button
-            onClick={() => {
-              console.log('Close button clicked, hiding popup');
-              setShowPopup(false);
-            }}
-            className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto space-y-6">
           
-          <div className="text-center space-y-4">
-            <div className="text-4xl">
-              {popupIsError ? '😔' : '🎉'}
-            </div>
-            
-            <p 
-              className={`text-lg font-medium ${
-                popupIsError ? 'text-red-600' : 'text-green-600'
-              }`}
-              style={{ 
-                fontFamily: event?.text_style?.fontFamily || 'inherit'
-              }}
+          {/* Event Preview */}
+          <EventPreview
+            event={event}
+            textStyle={event.text_style}
+            backgroundType={event.background_type}
+            backgroundValue={event.background_value}
+            rsvpCount={rsvpCounts}
+            showAttendingCount={event.show_attending_count}
+            language={eventLanguage}
+          />
+
+          {/* Action Buttons */}
+          <div className="flex gap-2 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => window.open(getCalendarUrl(), '_blank')}
+              className="flex items-center gap-2"
             >
-              {popupMessage}
-            </p>
+              <Calendar className="w-4 h-4" />
+              {t('addToCalendar', eventLanguage)}
+            </Button>
+            
+            {event.google_maps_link && (
+              <Button
+                variant="outline"
+                onClick={() => window.open(event.google_maps_link, '_blank')}
+                className="flex items-center gap-2"
+              >
+                <MapPin className="w-4 h-4" />
+                {event.location || t('getDirections', eventLanguage)}
+              </Button>
+            )}
           </div>
+
+          {/* RSVP Section */}
+          {event.is_public && !hasResponded && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold mb-4">
+                  {t('areYouAttending', eventLanguage)}
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Input
+                      placeholder={t('enterYourName', eventLanguage)}
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      className={eventLanguage === 'ar' ? 'text-right' : ''}
+                      dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleRsvp('accepted')}
+                      disabled={isSubmitting || !guestName.trim()}
+                      className="flex-1"
+                    >
+                      {t('accept', eventLanguage)}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleRsvp('declined')}
+                      disabled={isSubmitting || !guestName.trim()}
+                      className="flex-1"
+                    >
+                      {t('decline', eventLanguage)}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Response Confirmation */}
+          {hasResponded && (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <h3 className="text-lg font-semibold mb-2">
+                  {t('thankYou', eventLanguage)}
+                </h3>
+                <p className="text-muted-foreground">
+                  {userResponse === 'accepted' 
+                    ? t('yourResponseAccepted', eventLanguage)
+                    : t('yourResponseDeclined', eventLanguage)
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
         </div>
       </div>
     </div>
