@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -119,8 +120,8 @@ function App() {
                 {/* Standalone legacy event routes with pretty URLs */}
                 <Route path="/wakti/:id" element={<StandaloneEvent />} />
 
-                {/* Public Maw3d event routes - Now wrapped in AppLayout to show toasts */}
-                <Route path="/maw3d/:shortId" element={<AppLayout><Maw3dView /></AppLayout>} />
+                {/* Public Maw3d event routes - NO AppLayout wrapper for clean standalone view */}
+                <Route path="/maw3d/:shortId" element={<Maw3dView />} />
 
                 {/* WAKTI AI route - now using the proper WaktiAI page */}
                 <Route path="/wakti-ai" element={

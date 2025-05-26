@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Calendar, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
+import { Toaster } from "@/components/ui/toaster";
 import { Maw3dService } from '@/services/maw3dService';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
@@ -111,6 +112,7 @@ export default function Maw3dView() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
+        <Toaster />
         <div className="animate-pulse text-center">
           <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
           <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
@@ -123,6 +125,7 @@ export default function Maw3dView() {
   if (!event) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
+        <Toaster />
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
           <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
@@ -135,6 +138,7 @@ export default function Maw3dView() {
 
   return (
     <div className="min-h-screen bg-background">
+      <Toaster />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
           
@@ -149,8 +153,8 @@ export default function Maw3dView() {
             language={eventLanguage}
           />
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 justify-center">
+          {/* Action Buttons - Fixed to be on same line */}
+          <div className="flex gap-3 justify-center">
             <Button
               variant="outline"
               onClick={() => window.open(getCalendarUrl(), '_blank')}
@@ -167,7 +171,7 @@ export default function Maw3dView() {
                 className="flex items-center gap-2"
               >
                 <MapPin className="w-4 h-4" />
-                {event.location || t('getDirections', eventLanguage)}
+                {t('getDirections', eventLanguage)}
               </Button>
             )}
           </div>
@@ -197,7 +201,7 @@ export default function Maw3dView() {
                       disabled={isSubmitting || !guestName.trim()}
                       className="flex-1"
                     >
-                      {t('accept', eventLanguage)}
+                      {t('going', eventLanguage)}
                     </Button>
                     <Button
                       variant="outline"
@@ -205,7 +209,7 @@ export default function Maw3dView() {
                       disabled={isSubmitting || !guestName.trim()}
                       className="flex-1"
                     >
-                      {t('decline', eventLanguage)}
+                      {t('notGoing', eventLanguage)}
                     </Button>
                   </div>
                 </div>
