@@ -70,12 +70,16 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   
   // Get entries for a specific date
   const getEntriesForDate = (date: Date) => {
-    return calendarEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
+    const dateString = format(date, 'yyyy-MM-dd');
+    const entries = calendarEntries.filter(entry => {
+      const entryDate = entry.date.split('T')[0]; // Handle both date and datetime formats
       return view === 'year'
-        ? getMonth(entryDate) === getMonth(date) && getYear(entryDate) === getYear(date)
-        : isSameDay(entryDate, date);
+        ? getMonth(new Date(entry.date)) === getMonth(date) && getYear(new Date(entry.date)) === getYear(date)
+        : entryDate === dateString;
     });
+    
+    console.log(`Entries for ${dateString}:`, entries);
+    return entries;
   };
   
   // Count entries by type for a given date
@@ -85,7 +89,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
       [EntryType.TASK]: 0,
       [EntryType.EVENT]: 0,
       [EntryType.REMINDER]: 0,
-      [EntryType.MANUAL_NOTE]: 0
+      [EntryType.MANUAL_NOTE]: 0,
+      [EntryType.MAW3D_EVENT]: 0
     };
     
     entries.forEach(entry => {
@@ -131,28 +136,34 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               <div className="font-medium">{format(month, 'MMM', { locale })}</div>
               
               {hasEntries && (
-                <div className="flex justify-center gap-2 mt-2">
+                <div className="flex justify-center gap-1 mt-2 flex-wrap">
                   {entryCounts[EntryType.TASK] > 0 && (
                     <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                      <Circle className="h-2 w-2 fill-green-500 text-green-500" />
                       {entryCounts[EntryType.TASK] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.TASK]}</span>}
                     </div>
                   )}
                   {entryCounts[EntryType.EVENT] > 0 && (
                     <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
+                      <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
                       {entryCounts[EntryType.EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.EVENT]}</span>}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.MAW3D_EVENT] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-2 w-2 fill-purple-500 text-purple-500" />
+                      {entryCounts[EntryType.MAW3D_EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MAW3D_EVENT]}</span>}
                     </div>
                   )}
                   {entryCounts[EntryType.REMINDER] > 0 && (
                     <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-red-500 text-red-500" />
+                      <Circle className="h-2 w-2 fill-red-500 text-red-500" />
                       {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
                     </div>
                   )}
                   {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
                     <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                      <Circle className="h-2 w-2 fill-yellow-500 text-yellow-500" />
                       {entryCounts[EntryType.MANUAL_NOTE] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MANUAL_NOTE]}</span>}
                     </div>
                   )}
@@ -195,6 +206,7 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
           const isCurrentMonth = isSameMonth(day, currentDate);
           const entryCounts = getEntryCountByType(day);
           const dayNumber = format(day, 'd');
+          const hasAnyEntries = Object.values(entryCounts).some(count => count > 0);
           
           return (
             <motion.div
@@ -225,40 +237,50 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                 )}
               </div>
               
-              <div className="flex flex-wrap justify-center gap-2 mt-1">
-                {entryCounts[EntryType.TASK] > 0 && (
-                  <div className="flex items-center">
-                    <Circle className="h-3 w-3 fill-green-500 text-green-500" />
-                    {entryCounts[EntryType.TASK] > 1 && 
-                      <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
-                    }
-                  </div>
-                )}
-                {entryCounts[EntryType.EVENT] > 0 && (
-                  <div className="flex items-center">
-                    <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
-                    {entryCounts[EntryType.EVENT] > 1 && 
-                      <span className="text-xs ml-0.5">{entryCounts[EntryType.EVENT]}</span>
-                    }
-                  </div>
-                )}
-                {entryCounts[EntryType.REMINDER] > 0 && (
-                  <div className="flex items-center">
-                    <Circle className="h-3 w-3 fill-red-500 text-red-500" />
-                    {entryCounts[EntryType.REMINDER] > 1 && 
-                      <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
-                    }
-                  </div>
-                )}
-                {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
-                  <div className="flex items-center">
-                    <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                    {entryCounts[EntryType.MANUAL_NOTE] > 1 && 
-                      <span className="text-xs ml-0.5">{entryCounts[EntryType.MANUAL_NOTE]}</span>
-                    }
-                  </div>
-                )}
-              </div>
+              {hasAnyEntries && (
+                <div className="flex flex-wrap justify-center gap-1 mt-1">
+                  {entryCounts[EntryType.TASK] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                      {entryCounts[EntryType.TASK] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.MAW3D_EVENT] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-purple-500 text-purple-500" />
+                      {entryCounts[EntryType.MAW3D_EVENT] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.MAW3D_EVENT]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.EVENT] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
+                      {entryCounts[EntryType.EVENT] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.EVENT]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.REMINDER] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-red-500 text-red-500" />
+                      {entryCounts[EntryType.REMINDER] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                      {entryCounts[EntryType.MANUAL_NOTE] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.MANUAL_NOTE]}</span>
+                      }
+                    </div>
+                  )}
+                </div>
+              )}
             </motion.div>
           );
         })}

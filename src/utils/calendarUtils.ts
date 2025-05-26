@@ -69,9 +69,11 @@ const eventsToCalendarEntries = (events: any[]): CalendarEntry[] => {
     id: event.id,
     title: event.title,
     description: event.description,
-    date: event.date || event.start_date || new Date().toISOString().split('T')[0],
+    date: event.date || event.start_date || event.event_date || new Date().toISOString().split('T')[0],
     type: EntryType.EVENT,
-    due: event.time || event.start_time
+    time: event.time || event.start_time,
+    location: event.location,
+    isAllDay: event.is_all_day
   }));
 };
 
@@ -83,11 +85,22 @@ export const getCalendarEntries = (
   events: any[] = [],
   maw3dEvents: Maw3dEvent[] = []
 ): CalendarEntry[] => {
-  return [
+  console.log('Combining calendar entries:', {
+    tasks: tasks.length,
+    reminders: reminders.length,
+    manualEntries: manualEntries.length,
+    events: events.length,
+    maw3dEvents: maw3dEvents.length
+  });
+
+  const allEntries = [
     ...tasksToCalendarEntries(tasks),
     ...remindersToCalendarEntries(reminders),
     ...eventsToCalendarEntries(events),
     ...maw3dEventsToCalendarEntries(maw3dEvents),
     ...manualEntries
   ];
+
+  console.log('Total combined entries:', allEntries.length);
+  return allEntries;
 };
