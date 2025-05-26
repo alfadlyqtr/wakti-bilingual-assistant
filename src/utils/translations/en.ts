@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -441,8 +442,6 @@ export const en: Record<TranslationKey, string> = {
   eventMayHaveExpired: "This event may have expired or been removed",
   areYouAttending: "Are you attending this event?",
   enterYourName: "Enter your name",
-  accept: "Accept",
-  decline: "Decline",
   thankYou: "Thank you!",
   yourResponseAccepted: "Your acceptance has been recorded",
   yourResponseDeclined: "Your decline has been recorded",
