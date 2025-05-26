@@ -4,7 +4,7 @@ import { WaktiAICore } from '@/components/ai-assistant/WaktiAICore';
 
 export default function WaktiAI() {
   return (
-    <div className="flex-1 overflow-hidden">
+    <div className="flex-1 overflow-hidden h-full">
       <WaktiAICore className="h-full" />
     </div>
   );

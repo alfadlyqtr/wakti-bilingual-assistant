@@ -6,16 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, Loader2, Sparkles, Mic, Zap, Bot } from "lucide-react";
+import { Send, Loader2, Mic, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
-import { ChatMessage, ActionButton, AIContext, IntentResult } from "./types";
+import { ChatMessage, AIContext } from "./types";
 import { AIMessageBubble } from "./AIMessageBubble";
-import { QuickActionsDrawer } from "./QuickActionsDrawer";
-import { SmartActionsDrawer } from "./SmartActionsDrawer";
-import { AITypingIndicator } from "./AITypingIndicator";
 
 interface WaktiAICoreProps {
   className?: string;
@@ -28,8 +25,6 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [context, setContext] = useState<AIContext>({});
-  const [showQuickActions, setShowQuickActions] = useState(false);
-  const [showSmartActions, setShowSmartActions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -91,7 +86,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     setIsProcessing(true);
     setIsTyping(true);
 
-    // Add user message with enhanced metadata
+    // Add user message
     const userMessage: ChatMessage = {
       id: uuidv4(),
       role: "user",
@@ -289,31 +284,33 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     }
   };
 
+  // Simple typing indicator component
+  const TypingIndicator = () => (
+    <div className="flex gap-3 justify-start mb-4">
+      <Avatar className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-600 flex-shrink-0">
+        <AvatarFallback className="bg-transparent text-white text-xs font-bold">
+          <Bot className="w-4 h-4" />
+        </AvatarFallback>
+      </Avatar>
+      <Card className="bg-muted/50 backdrop-blur-sm border-2">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-1">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+            <span className="text-xs text-muted-foreground ml-2">
+              {language === 'ar' ? 'جاري الكتابة...' : 'Typing...'}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col h-full bg-background ${className}`}>
-      {/* Top Navigation */}
-      <div className="flex justify-between items-center p-4 border-b bg-card/50 backdrop-blur-sm flex-shrink-0">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowQuickActions(true)}
-          className="flex items-center gap-2"
-        >
-          <Sparkles className="w-4 h-4" />
-          {language === 'ar' ? 'إجراءات سريعة' : 'Quick actions'}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowSmartActions(true)}
-          className="flex items-center gap-2"
-        >
-          <Zap className="w-4 h-4" />
-          {language === 'ar' ? 'إجراءات ذكية' : 'Smart actions'}
-        </Button>
-      </div>
-
       {/* Chat Container - Fixed height calculation */}
       <div className="flex-1 relative flex flex-col min-h-0">
         {/* Messages Area - Takes remaining space above input */}
@@ -328,56 +325,10 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
             />
           ))}
 
-          {isTyping && (
-            <AITypingIndicator language={language as "en" | "ar"} />
-          )}
+          {isTyping && <TypingIndicator />}
 
           <div ref={messagesEndRef} />
         </div>
-
-        {/* Drawer Overlays - Only within chat container */}
-        {showQuickActions && (
-          <div className="absolute inset-0 z-30 flex">
-            <div className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-left">
-              <QuickActionsDrawer
-                isOpen={showQuickActions}
-                onClose={() => setShowQuickActions(false)}
-                onActionClick={(prompt) => {
-                  processMessage(prompt);
-                  setShowQuickActions(false);
-                }}
-                isProcessing={isProcessing}
-                language={language as "en" | "ar"}
-              />
-            </div>
-            <div 
-              className="flex-1 bg-black/35 backdrop-blur-sm"
-              onClick={() => setShowQuickActions(false)}
-            />
-          </div>
-        )}
-
-        {showSmartActions && (
-          <div className="absolute inset-0 z-30 flex">
-            <div 
-              className="flex-1 bg-black/35 backdrop-blur-sm"
-              onClick={() => setShowSmartActions(false)}
-            />
-            <div 
-              className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right">
-              <SmartActionsDrawer
-                isOpen={showSmartActions}
-                onClose={() => setShowSmartActions(false)}
-                onActionClick={(prompt) => {
-                  processMessage(prompt);
-                  setShowSmartActions(false);
-                }}
-                isProcessing={isProcessing}
-                language={language as "en" | "ar"}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Input Area - Fixed at bottom, always visible */}
