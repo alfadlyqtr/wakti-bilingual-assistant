@@ -1,3 +1,6 @@
+
+export type SupportedLanguage = "en" | "ar";
+
 export type TranslationKey =
   | "dashboard"
   | "tasks"
