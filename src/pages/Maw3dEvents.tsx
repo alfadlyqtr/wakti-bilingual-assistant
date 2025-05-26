@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,10 +10,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Maw3dService } from '@/services/maw3dService';
 import { ShareService } from '@/services/shareService';
 import { Maw3dEvent } from '@/types/maw3d';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 export default function Maw3dEvents() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { language } = useTheme();
   const [events, setEvents] = useState<Maw3dEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -67,12 +69,12 @@ export default function Maw3dEvents() {
   const handleDelete = async (eventId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click
     
-    if (!confirm('Are you sure you want to delete this event?')) return;
+    if (!confirm(t("confirmDeleteEvent", language))) return;
     
     try {
       await Maw3dService.deleteEvent(eventId);
       setEvents(events.filter(event => event.id !== eventId));
-      toast.success('Event deleted successfully');
+      toast.success(t("eventDeleted", language));
     } catch (error) {
       console.error('Error deleting event:', error);
       toast.error('Failed to delete event');
@@ -81,7 +83,7 @@ export default function Maw3dEvents() {
 
   const formatEventTime = (event: Maw3dEvent) => {
     if (event.is_all_day) {
-      return 'All Day';
+      return t("allDay", language);
     }
     
     const formatTime = (time: string) => {
@@ -136,12 +138,12 @@ export default function Maw3dEvents() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold">Maw3d Events</h1>
-            <p className="text-muted-foreground mt-2">Create and manage your events</p>
+            <h1 className="text-3xl font-bold">{t("maw3dEvents", language)}</h1>
+            <p className="text-muted-foreground mt-2">{t("createAndManageEvents", language)}</p>
           </div>
           <Button onClick={() => navigate('/maw3d/create')} className="gap-2">
             <Plus className="w-4 h-4" />
-            Create Event
+            {t("createEvent", language)}
           </Button>
         </div>
 
@@ -149,13 +151,13 @@ export default function Maw3dEvents() {
         {events.length === 0 ? (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-xl font-semibold mb-2">No events yet</h3>
+            <h3 className="text-xl font-semibold mb-2">{t("noEventsYet", language)}</h3>
             <p className="text-muted-foreground mb-6">
-              Create your first event to get started
+              {t("createFirstEvent", language)}
             </p>
             <Button onClick={() => navigate('/maw3d/create')}>
               <Plus className="w-4 h-4 mr-2" />
-              Create Event
+              {t("createEvent", language)}
             </Button>
           </div>
         ) : (
@@ -201,10 +203,10 @@ export default function Maw3dEvents() {
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
                       <Badge variant="default" className="text-sm px-3 py-1">
-                        Your Event
+                        {t("yourEvent", language)}
                       </Badge>
                       {event.is_public && (
-                        <Badge variant="outline" className="text-sm px-3 py-1">Public</Badge>
+                        <Badge variant="outline" className="text-sm px-3 py-1">{t("publicEvent", language)}</Badge>
                       )}
                     </div>
                   </div>
@@ -217,7 +219,7 @@ export default function Maw3dEvents() {
                       className="flex items-center justify-center gap-2"
                     >
                       <Edit className="w-4 h-4" />
-                      Edit
+                      {t("edit", language)}
                     </Button>
                     
                     <Button
@@ -226,7 +228,7 @@ export default function Maw3dEvents() {
                       className="flex items-center justify-center gap-2"
                     >
                       <Share2 className="w-4 h-4" />
-                      Share
+                      {t("share", language)}
                     </Button>
                     
                     <Button
@@ -235,7 +237,7 @@ export default function Maw3dEvents() {
                       className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="w-4 h-4" />
-                      Delete
+                      {t("delete", language)}
                     </Button>
                   </div>
                 </CardContent>

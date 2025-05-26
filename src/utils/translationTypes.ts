@@ -385,5 +385,9 @@ export type TranslationKey =
   | "eventManagement"
   | "shareEvent"
   | "totalResponses"
-  | "declined";
-
+  | "declined"
+  // NEW KEYS FOR MAW3D EVENTS PAGE
+  | "maw3dEvents"
+  | "createAndManageEvents"
+  | "yourEvent"
+  | "confirmDeleteEvent";

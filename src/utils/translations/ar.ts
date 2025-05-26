@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -224,7 +223,7 @@ export const ar: Record<TranslationKey, string> = {
   security: "الأمان",
   currentPasswordRequired: "كلمة المرور الحالية مطلوبة",
   signOut: "تسجيل الخروج",
-  createFirstEvent: "إنشاء أول حدث",
+  createFirstEvent: "إنشاء أول حدث لك للبدء",
   decline: "رفض",
   noLocation: "لم يتم تحديد موقع",
   attendee: "الحاضر",
@@ -384,5 +383,9 @@ export const ar: Record<TranslationKey, string> = {
   shareEvent: "مشاركة الحدث",
   totalResponses: "إجمالي الردود",
   declined: "رفض",
+  // NEW KEYS FOR MAW3D EVENTS PAGE
+  maw3dEvents: "فعاليات موعد",
+  createAndManageEvents: "أنشئ وأدر فعالياتك",
+  yourEvent: "فعاليتك",
+  confirmDeleteEvent: "هل أنت متأكد أنك تريد حذف هذا الحدث؟",
 } as const;
-

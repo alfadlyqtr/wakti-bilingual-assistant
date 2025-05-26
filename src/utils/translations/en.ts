@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -224,7 +223,7 @@ export const en: Record<TranslationKey, string> = {
   security: "Security",
   currentPasswordRequired: "Current password is required",
   signOut: "Sign Out",
-  createFirstEvent: "Create First Event",
+  createFirstEvent: "Create your first event to get started",
   decline: "Decline",
   noLocation: "No location specified",
   attendee: "Attendee",
@@ -389,5 +388,9 @@ export const en: Record<TranslationKey, string> = {
   shareEvent: "Share Event",
   totalResponses: "Total Responses",
   declined: "Declined",
+  // NEW KEYS FOR MAW3D EVENTS PAGE
+  maw3dEvents: "Maw3d Events",
+  createAndManageEvents: "Create and manage your events",
+  yourEvent: "Your Event",
+  confirmDeleteEvent: "Are you sure you want to delete this event?",
 } as const;
-
