@@ -13,6 +13,7 @@ interface EventPreviewProps {
   rsvpCount?: { accepted: number; declined: number };
   showAttendingCount?: boolean;
   language?: string;
+  imageBlur?: number;
 }
 
 export const EventPreview: React.FC<EventPreviewProps> = ({
@@ -22,7 +23,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   backgroundValue,
   rsvpCount,
   showAttendingCount = true,
-  language = 'en'
+  language = 'en',
+  imageBlur = 0
 }) => {
   const getBackgroundStyle = () => {
     if (backgroundType === 'transparent') {
@@ -39,7 +41,8 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         return { 
           backgroundImage: `url(${backgroundValue})`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center'
+          backgroundPosition: 'center',
+          filter: imageBlur > 0 ? `blur(${imageBlur}px)` : 'none'
         };
       default:
         return { backgroundColor: '#3b82f6' };
