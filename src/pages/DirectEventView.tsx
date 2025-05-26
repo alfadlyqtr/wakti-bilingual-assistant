@@ -277,7 +277,7 @@ export default function DirectEventView() {
   const rsvpCounts = getRsvpCounts();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
       <Toaster />
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">

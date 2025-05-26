@@ -78,7 +78,6 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     const locale = language === 'ar' ? ar : enUS;
     
     if (language === 'ar') {
-      // Use Arabic date format with proper Arabic day and month names
       return format(date, 'EEEE، d MMMM yyyy', { locale: ar });
     } else {
       return format(date, 'EEEE, MMMM d, yyyy', { locale: enUS });
@@ -97,6 +96,23 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     return translations[key as keyof typeof translations] || key;
   };
 
+  // Format date and time on one line
+  const getDateTimeString = () => {
+    const dateStr = formatDate(event.event_date);
+    if (event.is_all_day) {
+      return `${dateStr} - ${getLocalizedText('allDay')}`;
+    }
+    
+    let timeStr = '';
+    if (event.start_time && event.end_time) {
+      timeStr = `${formatTime(event.start_time)} - ${formatTime(event.end_time)}`;
+    } else if (event.start_time) {
+      timeStr = formatTime(event.start_time);
+    }
+    
+    return timeStr ? `${dateStr} - ${timeStr}` : dateStr;
+  };
+
   return (
     <div className="w-full max-w-md mx-auto" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div 
@@ -113,32 +129,6 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
           <h1 className="text-2xl font-bold mb-4 break-words" style={getTextStyle()}>
             {event.title}
           </h1>
-
-          {/* Event Date */}
-          <div className="mb-4">
-            <p className="text-lg" style={getTextStyle()}>
-              {formatDate(event.event_date)}
-            </p>
-          </div>
-
-          {/* Event Time */}
-          {!event.is_all_day && (event.start_time || event.end_time) && (
-            <div className="flex items-center mb-4" style={getTextStyle()}>
-              <Clock className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
-              <span>
-                {event.start_time && formatTime(event.start_time)}
-                {event.start_time && event.end_time && ' - '}
-                {event.end_time && formatTime(event.end_time)}
-              </span>
-            </div>
-          )}
-
-          {event.is_all_day && (
-            <div className="flex items-center mb-4" style={getTextStyle()}>
-              <Clock className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
-              <span>{getLocalizedText('allDay')}</span>
-            </div>
-          )}
 
           {/* Event Description */}
           {event.description && (
@@ -159,13 +149,19 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
 
           {/* Organizer */}
           {event.organizer && (
-            <div className="mb-4">
+            <div className="mb-2">
               <p style={getTextStyle()}>
                 <span className="font-semibold">{getLocalizedText('organizer')}: </span>
                 {event.organizer}
               </p>
             </div>
           )}
+
+          {/* Date and Time on one line under organizer */}
+          <div className="flex items-center mb-4" style={getTextStyle()}>
+            <Clock className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
+            <span className="break-words">{getDateTimeString()}</span>
+          </div>
 
           {/* Attending Count (if enabled) */}
           {showAttendingCount && (
