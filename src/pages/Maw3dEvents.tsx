@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -135,12 +136,8 @@ export default function Maw3dEvents() {
   return (
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="p-4 pb-24">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">{t("maw3dEvents", language)}</h1>
-            <p className="text-muted-foreground mt-2">{t("createAndManageEvents", language)}</p>
-          </div>
+        {/* Create Event Button */}
+        <div className="flex justify-end mb-6">
           <Button onClick={() => navigate('/maw3d/create')} className="gap-2">
             <Plus className="w-4 h-4" />
             {t("createEvent", language)}

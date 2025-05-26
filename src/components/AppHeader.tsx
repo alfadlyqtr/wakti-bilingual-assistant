@@ -62,11 +62,23 @@ export function AppHeader() {
       '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
       '/tasjeel': language === 'ar' ? 'تسجيل' : 'Tasjeel',
       '/event/create': language === 'ar' ? 'إنشاء حدث' : 'Create Event',
+      // Maw3d routes
+      '/maw3d': t("maw3dEvents", language),
+      '/maw3d/create': t("createEvent", language),
     };
     
     // Check if path starts with '/event/' and is not '/event/create'
     if (path.startsWith('/event/') && path !== '/event/create') {
       return language === 'ar' ? 'تفاصيل الحدث' : 'Event Details';
+    }
+    
+    // Check for Maw3d edit and manage routes
+    if (path.startsWith('/maw3d/edit/')) {
+      return t("editEvent", language);
+    }
+    
+    if (path.startsWith('/maw3d/manage/')) {
+      return t("manageEvent", language);
     }
     
     return routes[path] || '';
