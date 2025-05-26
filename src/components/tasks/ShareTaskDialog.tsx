@@ -42,13 +42,10 @@ const ShareTaskDialog: React.FC<ShareTaskDialogProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [sharedUsers, setSharedUsers] = useState<string[]>([]);
 
-  // Fetch contacts
   useEffect(() => {
     const fetchContacts = async () => {
       setLoading(true);
       try {
-        // In a real application, you would fetch contacts from your database
-        // For now, we'll use dummy data
         const mockContacts = [
           { id: '1', name: 'John Doe', email: 'john@example.com' },
           { id: '2', name: 'Jane Smith', email: 'jane@example.com' },
@@ -56,10 +53,9 @@ const ShareTaskDialog: React.FC<ShareTaskDialogProps> = ({
         ];
         setContacts(mockContacts);
         
-        // If the task is already shared, fetch the users it's shared with
         if (task) {
           const { data } = await supabase
-            .from('shared_tasks')
+            .from('task_shares')
             .select('shared_with')
             .eq('task_id', task.id);
             
