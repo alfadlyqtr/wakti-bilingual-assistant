@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,11 +11,14 @@ import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
 import { ShareService } from '@/services/shareService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 export default function Maw3dManage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { language } = useTheme();
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [rsvps, setRsvps] = useState<Maw3dRsvp[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -140,7 +142,7 @@ export default function Maw3dManage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Event not found</h1>
           <Button onClick={() => navigate('/maw3d')}>
-            Back to Events
+            {t("backToEvents", language)}
           </Button>
         </div>
       </div>
@@ -169,11 +171,11 @@ export default function Maw3dManage() {
             className="gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Events
+            {t("backToEvents", language)}
           </Button>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold">Manage Event</h1>
-            <p className="text-muted-foreground">View RSVPs and manage your event</p>
+            <h1 className="text-2xl font-bold">{t("manageEvent", language)}</h1>
+            <p className="text-muted-foreground">{t("viewRsvpsAndManage", language)}</p>
           </div>
         </div>
 
@@ -207,7 +209,7 @@ export default function Maw3dManage() {
         {/* Management Actions */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle>Event Management</CardTitle>
+            <CardTitle>{t("eventManagement", language)}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-3">
@@ -216,7 +218,7 @@ export default function Maw3dManage() {
                 className="flex-1 gap-2"
               >
                 <Edit className="w-4 h-4" />
-                Edit Event
+                {t("editEvent", language)}
               </Button>
               
               <Button
@@ -225,7 +227,7 @@ export default function Maw3dManage() {
                 className="flex-1 gap-2"
               >
                 <Share2 className="w-4 h-4" />
-                Share Event
+                {t("shareEvent", language)}
               </Button>
               
               <Button
@@ -234,7 +236,7 @@ export default function Maw3dManage() {
                 className="gap-2"
               >
                 <Trash2 className="w-4 h-4" />
-                Delete
+                {t("delete", language)}
               </Button>
             </div>
           </CardContent>
@@ -247,7 +249,7 @@ export default function Maw3dManage() {
               <div className="relative">
                 <Users className="w-6 h-6 mx-auto mb-2 text-blue-600" />
                 <div className="text-2xl font-bold text-blue-600">{rsvps.length}</div>
-                <div className="text-xs font-medium text-muted-foreground">Total Responses</div>
+                <div className="text-xs font-medium text-muted-foreground">{t("totalResponses", language)}</div>
               </div>
             </CardContent>
           </Card>
@@ -257,7 +259,7 @@ export default function Maw3dManage() {
               <div className="relative">
                 <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-600" />
                 <div className="text-2xl font-bold text-green-600">{rsvpCounts.accepted}</div>
-                <div className="text-xs font-medium text-green-700 dark:text-green-300">Attending</div>
+                <div className="text-xs font-medium text-green-700 dark:text-green-300">{t("going", language)}</div>
               </div>
             </CardContent>
           </Card>
@@ -267,7 +269,7 @@ export default function Maw3dManage() {
               <div className="relative">
                 <XCircle className="w-6 h-6 mx-auto mb-2 text-red-600" />
                 <div className="text-2xl font-bold text-red-600">{rsvpCounts.declined}</div>
-                <div className="text-xs font-medium text-red-700 dark:text-red-300">Declined</div>
+                <div className="text-xs font-medium text-red-700 dark:text-red-300">{t("declined", language)}</div>
               </div>
             </CardContent>
           </Card>
@@ -281,7 +283,7 @@ export default function Maw3dManage() {
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span>Attending</span>
+                  <span>{t("going", language)}</span>
                 </div>
                 <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                   {acceptedRsvps.length}
@@ -317,7 +319,7 @@ export default function Maw3dManage() {
               ) : (
                 <div className="text-center py-6 text-muted-foreground">
                   <CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No attendees yet</p>
+                  <p className="text-sm">{t("noRsvpsYet", language)}</p>
                 </div>
               )}
             </CardContent>
@@ -329,7 +331,7 @@ export default function Maw3dManage() {
               <CardTitle className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <XCircle className="w-5 h-5 text-red-600" />
-                  <span>Declined</span>
+                  <span>{t("declined", language)}</span>
                 </div>
                 <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
                   {declinedRsvps.length}
@@ -365,7 +367,7 @@ export default function Maw3dManage() {
               ) : (
                 <div className="text-center py-6 text-muted-foreground">
                   <XCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No declines yet</p>
+                  <p className="text-sm">{t("noRsvpsYet", language)}</p>
                 </div>
               )}
             </CardContent>

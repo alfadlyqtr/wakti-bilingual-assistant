@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -375,4 +376,13 @@ export const ar: Record<TranslationKey, string> = {
   // NEW MISSING KEYS
   pleaseEnterYourName: "يرجى إدخال اسمك",
   responseSubmitted: "تم إرسال الرد بنجاح",
+  // NEW KEYS FOR MAW3D MANAGE PAGE
+  manageEvent: "إدارة الحدث",
+  backToEvents: "العودة إلى الفعاليات",
+  viewRsvpsAndManage: "عرض ردود تأكيد الحضور وإدارة الحدث",
+  eventManagement: "إدارة الحدث",
+  shareEvent: "مشاركة الحدث",
+  totalResponses: "إجمالي الردود",
+  declined: "رفض",
 } as const;
+

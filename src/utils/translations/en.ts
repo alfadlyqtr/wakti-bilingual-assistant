@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -380,4 +381,13 @@ export const en: Record<TranslationKey, string> = {
   // NEW MISSING KEYS
   pleaseEnterYourName: "Please enter your name",
   responseSubmitted: "Response submitted successfully",
+  // NEW KEYS FOR MAW3D MANAGE PAGE
+  manageEvent: "Manage Event",
+  backToEvents: "Back to Events",
+  viewRsvpsAndManage: "View RSVPs and manage your event",
+  eventManagement: "Event Management",
+  shareEvent: "Share Event",
+  totalResponses: "Total Responses",
+  declined: "Declined",
 } as const;
+

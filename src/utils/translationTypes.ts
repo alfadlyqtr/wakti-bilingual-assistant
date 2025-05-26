@@ -377,4 +377,13 @@ export type TranslationKey =
   | "rsvpDeadlineLabel"
   // MISSING KEYS CAUSING THE CURRENT ERRORS
   | "pleaseEnterYourName"
-  | "responseSubmitted";
+  | "responseSubmitted"
+  // NEW KEYS FOR MAW3D MANAGE PAGE
+  | "manageEvent"
+  | "backToEvents"
+  | "viewRsvpsAndManage"
+  | "eventManagement"
+  | "shareEvent"
+  | "totalResponses"
+  | "declined";
+
