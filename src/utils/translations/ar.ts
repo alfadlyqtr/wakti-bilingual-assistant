@@ -430,7 +430,10 @@ export const ar: Record<TranslationKey, string> = {
   aiImagePrompt: "موجه صورة الذكاء الاصطناعي",
   describeBackground: "صف الخلفية التي تريدها...",
   generating: "جاري التوليد",
-  generateAIBackground: "توليد خلفية بالذكاء الاصطناعي",
+  generateAIBackground: "إنشاء خلفية بالذكاء الاصطناعي",
   preview: "معاينة",
   yourEventTitle: "عنوان فعاليتك",
-} as const;
+  retry: "إعادة المحاولة",
+  somethingWentWrong: "حدث خطأ ما",
+  tryAgain: "حاول مرة أخرى"
+};

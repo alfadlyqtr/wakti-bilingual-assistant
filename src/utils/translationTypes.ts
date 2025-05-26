@@ -1,3 +1,4 @@
+
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey =
@@ -430,4 +431,7 @@ export type TranslationKey =
   | "generating"
   | "generateAIBackground"
   | "preview"
-  | "yourEventTitle";
+  | "yourEventTitle"
+  | "retry"
+  | "somethingWentWrong"
+  | "tryAgain";

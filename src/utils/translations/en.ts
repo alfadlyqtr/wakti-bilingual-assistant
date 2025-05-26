@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -432,7 +431,7 @@ export const en = {
   generateAIBackground: "Generate AI Background",
   preview: "Preview",
   yourEventTitle: "Your Event Title",
-  autoDeleteAfterCompletion: "Auto-delete after completion",
-  autoDeleteDescription: "Event will be automatically deleted 24 hours after completion",
-  autoDeleteEnabled: "Enabled - Auto-deletion active",
-} as const;
+  retry: "Retry",
+  somethingWentWrong: "Something went wrong",
+  tryAgain: "Try Again"
+};
