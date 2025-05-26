@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -273,51 +272,51 @@ export default function Maw3dManage() {
           </Card>
         </div>
 
-        {/* Vertical RSVP Lists - Smaller Cards */}
-        <div className="space-y-4">
+        {/* Vertical RSVP Lists - Thinner Cards */}
+        <div className="space-y-6">
           {/* Attending Section */}
           <Card className="shadow-md border-green-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="w-5 h-5 text-green-600" />
                   <span>Attending</span>
                 </div>
-                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 text-xs">
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                   {acceptedRsvps.length}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent>
               {acceptedRsvps.length > 0 ? (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {acceptedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-2.5 p-1.5 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
+                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-green-50/70 dark:bg-green-950/10 rounded-md border border-green-100 dark:border-green-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-5 h-5 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                      <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-green-800 dark:text-green-200 truncate text-xs">
+                        <h3 className="font-medium text-green-800 dark:text-green-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
                         <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                          <Clock className="w-2.5 h-2.5" />
+                          <Clock className="w-3 h-3" />
                           {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
                       </div>
                       
                       {/* Status */}
-                      <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  <CheckCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">No attendees yet</p>
+                <div className="text-center py-6 text-muted-foreground">
+                  <CheckCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No attendees yet</p>
                 </div>
               )}
             </CardContent>
@@ -325,47 +324,47 @@ export default function Maw3dManage() {
 
           {/* Declined Section */}
           <Card className="shadow-md border-red-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center justify-between text-base">
-                <div className="flex items-center gap-2">
-                  <XCircle className="w-4 h-4 text-red-600" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <XCircle className="w-5 h-5 text-red-600" />
                   <span>Declined</span>
                 </div>
-                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300 text-xs">
+                <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
                   {declinedRsvps.length}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent>
               {declinedRsvps.length > 0 ? (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {declinedRsvps.map((rsvp) => (
-                    <div key={rsvp.id} className="flex items-center gap-2.5 p-1.5 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
+                    <div key={rsvp.id} className="flex items-center gap-3 p-2 bg-red-50/70 dark:bg-red-950/10 rounded-md border border-red-100 dark:border-red-800/30 hover:shadow-sm transition-shadow">
                       {/* Avatar */}
-                      <div className="w-5 h-5 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
+                      <div className="w-6 h-6 bg-red-600 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                         {rsvp.guest_name.charAt(0).toUpperCase()}
                       </div>
                       
                       {/* Content */}
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-red-800 dark:text-red-200 truncate text-xs">
+                        <h3 className="font-medium text-red-800 dark:text-red-200 truncate text-sm">
                           {rsvp.guest_name}
                         </h3>
                         <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-                          <Clock className="w-2.5 h-2.5" />
+                          <Clock className="w-3 h-3" />
                           {format(new Date(rsvp.created_at), 'MMM d, yyyy • h:mm a')}
                         </div>
                       </div>
                       
                       {/* Status */}
-                      <XCircle className="w-3.5 h-3.5 text-red-600 flex-shrink-0" />
+                      <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground">
-                  <XCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">No declines yet</p>
+                <div className="text-center py-6 text-muted-foreground">
+                  <XCircle className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No declines yet</p>
                 </div>
               )}
             </CardContent>
