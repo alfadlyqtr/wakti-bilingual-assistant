@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, Loader2, Sparkles, Mic, Wand2, Bot, Zap, Menu } from "lucide-react";
+import { Send, Loader2, Sparkles, Mic, Zap, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -314,27 +314,77 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         </Button>
       </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message) => (
-          <AIMessageBubble
-            key={message.id}
-            message={message}
-            onActionClick={(action) => executeAction(action)}
-            language={language as "en" | "ar"}
-            user={user}
-          />
-        ))}
+      {/* Chat Area with Relative Positioning for Drawers */}
+      <div className="flex-1 relative overflow-hidden">
+        {/* Messages Area */}
+        <div className="h-full overflow-y-auto p-4 space-y-4 pb-24">
+          {messages.map((message) => (
+            <AIMessageBubble
+              key={message.id}
+              message={message}
+              onActionClick={(action) => executeAction(action)}
+              language={language as "en" | "ar"}
+              user={user}
+            />
+          ))}
 
-        {/* Enhanced Typing Indicator */}
-        {isTyping && (
-          <AITypingIndicator language={language as "en" | "ar"} />
+          {/* Enhanced Typing Indicator */}
+          {isTyping && (
+            <AITypingIndicator language={language as "en" | "ar"} />
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Side Drawers - Positioned within chat area only */}
+        {showQuickActions && (
+          <div className="absolute inset-0 z-30 flex">
+            <div 
+              className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-left"
+            >
+              <QuickActionsDrawer
+                isOpen={showQuickActions}
+                onClose={() => setShowQuickActions(false)}
+                onActionClick={(prompt) => {
+                  processMessage(prompt);
+                  setShowQuickActions(false);
+                }}
+                isProcessing={isProcessing}
+                language={language as "en" | "ar"}
+              />
+            </div>
+            <div 
+              className="flex-1 bg-black/20 backdrop-blur-sm"
+              onClick={() => setShowQuickActions(false)}
+            />
+          </div>
         )}
 
-        <div ref={messagesEndRef} />
+        {showSmartActions && (
+          <div className="absolute inset-0 z-30 flex">
+            <div 
+              className="flex-1 bg-black/20 backdrop-blur-sm"
+              onClick={() => setShowSmartActions(false)}
+            />
+            <div 
+              className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out animate-in slide-in-from-right"
+            >
+              <SmartActionsDrawer
+                isOpen={showSmartActions}
+                onClose={() => setShowSmartActions(false)}
+                onActionClick={(prompt) => {
+                  processMessage(prompt);
+                  setShowSmartActions(false);
+                }}
+                isProcessing={isProcessing}
+                language={language as "en" | "ar"}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Input Area - Fixed at bottom */}
+      {/* Input Area - Always visible at bottom */}
       <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 sticky bottom-0 z-20">
         <div className="flex gap-2">
           <div className="flex-1 relative">
@@ -383,55 +433,6 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
           </p>
         )}
       </div>
-
-      {/* Side Drawers - Contained within chat interface */}
-      {showQuickActions && (
-        <div className="absolute inset-0 z-30 flex">
-          <div 
-            className="w-80 h-full bg-background border-r shadow-lg transform transition-transform duration-300 ease-in-out"
-            style={{ transform: 'translateX(0)' }}
-          >
-            <QuickActionsDrawer
-              isOpen={showQuickActions}
-              onClose={() => setShowQuickActions(false)}
-              onActionClick={(prompt) => {
-                processMessage(prompt);
-                setShowQuickActions(false);
-              }}
-              isProcessing={isProcessing}
-              language={language as "en" | "ar"}
-            />
-          </div>
-          <div 
-            className="flex-1 bg-black/20"
-            onClick={() => setShowQuickActions(false)}
-          />
-        </div>
-      )}
-
-      {showSmartActions && (
-        <div className="absolute inset-0 z-30 flex">
-          <div 
-            className="flex-1 bg-black/20"
-            onClick={() => setShowSmartActions(false)}
-          />
-          <div 
-            className="w-80 h-full bg-background border-l shadow-lg transform transition-transform duration-300 ease-in-out"
-            style={{ transform: 'translateX(0)' }}
-          >
-            <SmartActionsDrawer
-              isOpen={showSmartActions}
-              onClose={() => setShowSmartActions(false)}
-              onActionClick={(prompt) => {
-                processMessage(prompt);
-                setShowSmartActions(false);
-              }}
-              isProcessing={isProcessing}
-              language={language as "en" | "ar"}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
