@@ -74,7 +74,10 @@ export default function Maw3dView() {
     );
 
     if (existingRsvp) {
-      toast.error(`Someone with the name "${trimmedName}" has already responded to this event.`);
+      const duplicateMessage = eventLanguage === 'ar' 
+        ? `شخص بالاسم "${trimmedName}" قد استجاب بالفعل لهذا الحدث.`
+        : `Someone with the name "${trimmedName}" has already responded to this event.`;
+      toast.error(duplicateMessage);
       return;
     }
 
@@ -85,8 +88,15 @@ export default function Maw3dView() {
       setUserResponse(response);
       setSubmittedName(trimmedName);
       
-      // Show success message with name
-      const message = `Thank you, ${trimmedName}! Your ${response === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`;
+      // Show success message with name in the event's language
+      const responseText = response === 'accepted' 
+        ? (eventLanguage === 'ar' ? 'قبولك' : 'acceptance')
+        : (eventLanguage === 'ar' ? 'رفضك' : 'decline');
+      
+      const thankYouText = eventLanguage === 'ar' ? 'شكراً لك' : 'Thank you';
+      const recordedText = eventLanguage === 'ar' ? 'تم تسجيل' : 'has been recorded';
+      
+      const message = `${thankYouText}, ${trimmedName}! ${eventLanguage === 'ar' ? `${recordedText} ${responseText}.` : `Your ${responseText} ${recordedText}.`}`;
       toast.success(message);
       
       // Refresh RSVPs
@@ -95,7 +105,10 @@ export default function Maw3dView() {
     } catch (error) {
       console.error('Error submitting RSVP:', error);
       if (error instanceof Error && error.message.includes('already responded')) {
-        toast.error(`Someone with the name "${trimmedName}" has already responded to this event.`);
+        const duplicateMessage = eventLanguage === 'ar' 
+          ? `شخص بالاسم "${trimmedName}" قد استجاب بالفعل لهذا الحدث.`
+          : `Someone with the name "${trimmedName}" has already responded to this event.`;
+        toast.error(duplicateMessage);
       } else {
         toast.error(error instanceof Error ? error.message : t('errorSubmittingRsvp', eventLanguage));
       }
@@ -224,7 +237,7 @@ export default function Maw3dView() {
                       className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
                       variant="outline"
                     >
-                      Accept
+                      {eventLanguage === 'ar' ? 'قبول' : 'Accept'}
                     </Button>
                     <Button
                       onClick={() => handleRsvp('declined')}
@@ -232,7 +245,7 @@ export default function Maw3dView() {
                       className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
                       variant="outline"
                     >
-                      Decline
+                      {eventLanguage === 'ar' ? 'رفض' : 'Decline'}
                     </Button>
                   </div>
                 </div>
@@ -245,10 +258,13 @@ export default function Maw3dView() {
             <Card>
               <CardContent className="p-6 text-center">
                 <h3 className="text-lg font-semibold mb-2">
-                  Thank you, {submittedName}!
+                  {eventLanguage === 'ar' ? `شكراً لك، ${submittedName}!` : `Thank you, ${submittedName}!`}
                 </h3>
                 <p className="text-muted-foreground">
-                  Your {userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.
+                  {eventLanguage === 'ar' 
+                    ? `تم تسجيل ${userResponse === 'accepted' ? 'قبولك' : 'رفضك'}.`
+                    : `Your ${userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
+                  }
                 </p>
               </CardContent>
             </Card>
