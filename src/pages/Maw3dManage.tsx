@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -208,11 +209,11 @@ export default function Maw3dManage() {
 
         {/* Management Actions */}
         <Card className="mb-8">
-          <CardHeader>
+          <CardHeader className="pb-4">
             <CardTitle>{t("eventManagement", language)}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex gap-3">
+          <CardContent className="pt-2">
+            <div className="flex gap-4">
               <Button
                 onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
                 className="flex-1 gap-2"
