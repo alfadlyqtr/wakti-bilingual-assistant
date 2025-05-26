@@ -28,6 +28,7 @@ export default function Maw3dEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
+  const [backgroundImageBlur, setBackgroundImageBlur] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -176,6 +177,7 @@ export default function Maw3dEdit() {
                 backgroundValue={event.background_value}
                 showAttendingCount={event.show_attending_count}
                 language={language}
+                imageBlur={backgroundImageBlur}
               />
             </CardContent>
           </Card>

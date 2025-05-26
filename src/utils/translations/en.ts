@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -167,7 +166,6 @@ export const en: Record<TranslationKey, string> = {
   uploading: "Uploading",
   blockedByContact: "You have been blocked by this contact.",
   errorUploadingImage: "Error uploading image",
-  // Previously added translation keys
   profileImageUpdated: "Profile image updated successfully",
   error: "Error",
   profileImage: "Profile Image",
@@ -256,7 +254,6 @@ export const en: Record<TranslationKey, string> = {
   overdueItems: "Overdue Items",
   createYourFirst: "Create your first",
   edit: "Edit",
-  // Added translations for TaskReminderContext
   taskCreatedSuccessfully: "Task created successfully",
   taskUpdatedSuccessfully: "Task updated successfully",
   taskDeletedSuccessfully: "Task deleted successfully",
@@ -264,7 +261,6 @@ export const en: Record<TranslationKey, string> = {
   reminderUpdatedSuccessfully: "Reminder updated successfully",
   reminderDeletedSuccessfully: "Reminder deleted successfully",
   taskSharedSuccessfully: "Task shared successfully",
-  // Added translations for Account.tsx
   errorUpdatingEmail: "Error updating email",
   emailUpdated: "Email updated successfully",
   passwordsDoNotMatch: "Passwords do not match",
@@ -280,7 +276,6 @@ export const en: Record<TranslationKey, string> = {
   accountOptions: "Account Options",
   deleteAccountDescription: "This will permanently delete your account and all associated data",
   deleteMyAccount: "Delete My Account",
-  // Added translations for Dashboard.tsx
   tasks_view_all: "View All Tasks",
   noTasksYet: "No tasks yet",
   event: "Event",
@@ -293,7 +288,6 @@ export const en: Record<TranslationKey, string> = {
   reminders_view_all: "View All Reminders",
   noRemindersYet: "No reminders yet",
   freeTrialDays: "Free trial days",
-  // Added translations for Settings.tsx
   settingsUpdated: "Settings updated",
   contactSettingsUpdated: "Contact settings updated",
   errorUpdatingSettings: "Error updating settings",
@@ -326,12 +320,9 @@ export const en: Record<TranslationKey, string> = {
   profileVisibility: "Profile Visibility",
   activityStatus: "Activity Status",
   saveAllSettings: "Save All Settings",
-  // Added translations for ChatPopup.tsx
   justNow: "Just now",
   minsAgo: "m ago",
   activeNow: "Active now",
-  
-  // Event form translations
   eventDetails: "Event Details",
   locationLink: "Location Link",
   dateTime: "Date & Time",
@@ -340,16 +331,10 @@ export const en: Record<TranslationKey, string> = {
   endTime: "End Time",
   publicEvent: "Public Event",
   publicEventDescription: "Anyone can view and RSVP to this event",
-  
-  // Notification translations
   rsvpNotificationAccepted: "{name} accepted your event invitation",
   rsvpNotificationDeclined: "{name} declined your event invitation",
   newRsvpResponse: "New RSVP Response",
-  
-  // MISSING TRANSLATION THAT CAUSED THE ERROR
   privateEvent: "Private Event",
-  
-  // NEW RSVP AND CALENDAR TRANSLATIONS
   enableRsvp: "Enable RSVP",
   rsvpDeadline: "RSVP Deadline",
   rsvpSettings: "RSVP Settings",
@@ -378,10 +363,8 @@ export const en: Record<TranslationKey, string> = {
   rsvpResponses: "RSVP Responses",
   noRsvpsYet: "No RSVPs yet",
   rsvpDeadlineLabel: "RSVP by",
-  // NEW MISSING KEYS
   pleaseEnterYourName: "Please enter your name",
   responseSubmitted: "Response submitted successfully",
-  // NEW KEYS FOR MAW3D MANAGE PAGE
   manageEvent: "Manage Event",
   backToEvents: "Back to Events",
   viewRsvpsAndManage: "View RSVPs and manage your event",
@@ -389,12 +372,10 @@ export const en: Record<TranslationKey, string> = {
   shareEvent: "Share Event",
   totalResponses: "Total Responses",
   declined: "Declined",
-  // NEW KEYS FOR MAW3D EVENTS PAGE
   maw3dEvents: "Maw3d Events",
   createAndManageEvents: "Create and manage your events",
   yourEvent: "Your Event",
   confirmDeleteEvent: "Are you sure you want to delete this event?",
-  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
   eventTemplates: "Event Templates",
   organizer: "Organizer",
   enterOrganizerName: "Enter organizer name",
@@ -406,8 +387,6 @@ export const en: Record<TranslationKey, string> = {
   enableShareableLink: "Enable Shareable Link",
   showAttendingCount: "Show Attending Count",
   shareableLinkDescription: "When enabled, anyone with the link can view and RSVP to this event",
-  
-  // NEW KEYS FOR TEXT STYLING AND EVENT TEMPLATES
   fontFamily: "Font Family",
   fontSize: "Font Size",
   textColor: "Text Color",
@@ -416,8 +395,6 @@ export const en: Record<TranslationKey, string> = {
   chooseTemplate: "Choose a Template",
   startFromScratch: "Start from Scratch",
   blankTemplate: "Blank Template",
-  
-  // NEW KEYS FOR BACKGROUND CUSTOMIZER
   color: "Color",
   gradient: "Gradient",
   image: "Image",
@@ -433,11 +410,7 @@ export const en: Record<TranslationKey, string> = {
   aiPromptPlaceholder: "Describe the background you want...",
   generateImage: "Generate Image",
   aiImageDescription: "Describe what you want and AI will generate a background image",
-  
-  // NEW KEYS FOR EVENT PREVIEW
   eventPreview: "Event Preview",
-  
-  // NEW KEYS FOR CLEAN EVENT VIEWING
   eventNotFound: "Event not found",
   eventMayHaveExpired: "This event may have expired or been removed",
   areYouAttending: "Are you attending this event?",
@@ -447,4 +420,15 @@ export const en: Record<TranslationKey, string> = {
   yourResponseDeclined: "Your decline has been recorded",
   errorLoadingEvent: "Error loading event",
   errorSubmittingRsvp: "Error submitting RSVP",
+  backgroundColor: "Background Color",
+  uploadImage: "Upload Image",
+  chooseImage: "Choose Image",
+  imageBlur: "Image Blur",
+  adjustBlurForReadability: "Adjust blur for better text readability",
+  aiImagePrompt: "AI Image Prompt",
+  describeBackground: "Describe the background you want...",
+  generating: "Generating",
+  generateAIBackground: "Generate AI Background",
+  preview: "Preview",
+  yourEventTitle: "Your Event Title",
 } as const;

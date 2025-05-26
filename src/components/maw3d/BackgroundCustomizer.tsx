@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Palette, Image, Sparkles, Upload, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { Maw3dService } from '@/services/maw3dService';
 import { t } from '@/utils/translations';
 
 interface BackgroundCustomizerProps {
@@ -118,6 +119,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         style.backgroundImage = `url(${backgroundValue})`;
         style.backgroundSize = 'cover';
         style.backgroundPosition = 'center';
+        // Apply blur if set
         if (imageBlur > 0) {
           style.filter = `blur(${imageBlur}px)`;
         }
@@ -137,7 +139,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="color">{t('color', language)}</TabsTrigger>
           <TabsTrigger value="gradient">{t('gradient', language)}</TabsTrigger>
-          <TabsTrigger value="image">{t('upload', language)}</TabsTrigger>
+          <TabsTrigger value="image">{t('image', language)}</TabsTrigger>
           <TabsTrigger value="ai">AI</TabsTrigger>
         </TabsList>
         

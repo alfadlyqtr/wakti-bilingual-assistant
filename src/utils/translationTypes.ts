@@ -166,7 +166,6 @@ export type TranslationKey =
   | "uploading"
   | "blockedByContact"
   | "errorUploadingImage"
-  // Previously added translation keys
   | "profileImageUpdated"
   | "error"
   | "profileImage"
@@ -255,7 +254,6 @@ export type TranslationKey =
   | "overdueItems"
   | "createYourFirst"
   | "edit"
-  // Added keys from TaskReminderContext
   | "taskCreatedSuccessfully"
   | "taskUpdatedSuccessfully"
   | "taskDeletedSuccessfully"
@@ -263,7 +261,6 @@ export type TranslationKey =
   | "reminderUpdatedSuccessfully"
   | "reminderDeletedSuccessfully"
   | "taskSharedSuccessfully"
-  // Added keys from Account.tsx
   | "errorUpdatingEmail"
   | "emailUpdated"
   | "passwordsDoNotMatch"
@@ -279,7 +276,6 @@ export type TranslationKey =
   | "accountOptions"
   | "deleteAccountDescription"
   | "deleteMyAccount"
-  // Added keys from Dashboard.tsx
   | "tasks_view_all"
   | "noTasksYet"
   | "event"
@@ -292,7 +288,6 @@ export type TranslationKey =
   | "reminders_view_all"
   | "noRemindersYet"
   | "freeTrialDays"
-  // Added keys from Settings.tsx
   | "settingsUpdated"
   | "contactSettingsUpdated"
   | "errorUpdatingSettings"
@@ -307,7 +302,6 @@ export type TranslationKey =
   | "autoApproveRequests"
   | "autoApproveExplanation"
   | "dailyQuoteSettings"
-  // Adding the missing keys from current errors
   | "quoteCategory"
   | "quoteChangeFrequency"
   | "twiceDaily"
@@ -326,11 +320,9 @@ export type TranslationKey =
   | "profileVisibility"
   | "activityStatus"
   | "saveAllSettings"
-  // Missing keys from ChatPopup.tsx
   | "justNow"
   | "minsAgo"
   | "activeNow"
-  // Event form translations - NEW KEYS ADDED
   | "eventDetails"
   | "locationLink"
   | "dateTime"
@@ -339,13 +331,10 @@ export type TranslationKey =
   | "endTime"
   | "publicEvent"
   | "publicEventDescription"
-  // Notification translations - NEW KEYS ADDED
   | "rsvpNotificationAccepted"
   | "rsvpNotificationDeclined"
   | "newRsvpResponse"
-  // MISSING KEY THAT CAUSED THE ERROR
   | "privateEvent"
-  // NEW RSVP AND CALENDAR KEYS
   | "enableRsvp"
   | "rsvpDeadline"
   | "rsvpSettings"
@@ -374,10 +363,8 @@ export type TranslationKey =
   | "rsvpResponses"
   | "noRsvpsYet"
   | "rsvpDeadlineLabel"
-  // MISSING KEYS CAUSING THE CURRENT ERRORS
   | "pleaseEnterYourName"
   | "responseSubmitted"
-  // NEW KEYS FOR MAW3D MANAGE PAGE
   | "manageEvent"
   | "backToEvents"
   | "viewRsvpsAndManage"
@@ -385,12 +372,10 @@ export type TranslationKey =
   | "shareEvent"
   | "totalResponses"
   | "declined"
-  // NEW KEYS FOR MAW3D EVENTS PAGE
   | "maw3dEvents"
   | "createAndManageEvents"
   | "yourEvent"
   | "confirmDeleteEvent"
-  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
   | "eventTemplates"
   | "organizer"
   | "enterOrganizerName"
@@ -402,7 +387,6 @@ export type TranslationKey =
   | "enableShareableLink"
   | "showAttendingCount"
   | "shareableLinkDescription"
-  // NEW KEYS FOR TEXT STYLING AND EVENT TEMPLATES
   | "fontFamily"
   | "fontSize"
   | "textColor"
@@ -411,7 +395,6 @@ export type TranslationKey =
   | "chooseTemplate"
   | "startFromScratch"
   | "blankTemplate"
-  // NEW KEYS FOR BACKGROUND CUSTOMIZER
   | "color"
   | "gradient"
   | "image"
@@ -427,17 +410,24 @@ export type TranslationKey =
   | "aiPromptPlaceholder"
   | "generateImage"
   | "aiImageDescription"
-  // NEW KEY FOR EVENT PREVIEW
   | "eventPreview"
-  // NEW KEYS FOR CLEAN EVENT VIEWING
   | "eventNotFound"
   | "eventMayHaveExpired"
   | "areYouAttending"
   | "enterYourName"
-  | "accept"
-  | "decline"
   | "thankYou"
   | "yourResponseAccepted"
   | "yourResponseDeclined"
   | "errorLoadingEvent"
-  | "errorSubmittingRsvp";
+  | "errorSubmittingRsvp"
+  | "backgroundColor"
+  | "uploadImage"
+  | "chooseImage"
+  | "imageBlur"
+  | "adjustBlurForReadability"
+  | "aiImagePrompt"
+  | "describeBackground"
+  | "generating"
+  | "generateAIBackground"
+  | "preview"
+  | "yourEventTitle";

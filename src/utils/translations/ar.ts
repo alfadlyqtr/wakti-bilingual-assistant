@@ -1,5 +1,3 @@
-
-
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -116,7 +114,6 @@ export const ar: Record<TranslationKey, string> = {
   contactCreated: "تم إنشاء جهة الاتصال بنجاح",
   contactUpdated: "تم تحديث جهة الاتصال بنجاح",
   contactDeleted: "تم حذف جهة الاتصال بنجاح",
-  // Error messages
   errorCreatingTask: "خطأ في إنشاء المهمة",
   errorUpdatingTask: "خطأ في تحديث المهمة",
   errorDeletingTask: "خطأ في حذف المهمة",
@@ -326,8 +323,6 @@ export const ar: Record<TranslationKey, string> = {
   justNow: "الآن",
   minsAgo: "د",
   activeNow: "نشط الآن",
-  
-  // Event form translations
   eventDetails: "تفاصيل الحدث",
   locationLink: "رابط الموقع",
   dateTime: "التاريخ والوقت",
@@ -336,16 +331,10 @@ export const ar: Record<TranslationKey, string> = {
   endTime: "وقت النهاية",
   publicEvent: "حدث عام",
   publicEventDescription: "يمكن لأي شخص مشاهدة هذا الحدث والرد عليه",
-  
-  // Notification translations
   rsvpNotificationAccepted: "{name} قبل دعوة حدثك",
   rsvpNotificationDeclined: "{name} رفض دعوة حدثك",
   newRsvpResponse: "رد جديد على الدعوة",
-  
-  // MISSING TRANSLATION THAT CAUSED THE ERROR
   privateEvent: "حدث خاص",
-  
-  // NEW RSVP AND CALENDAR TRANSLATIONS
   enableRsvp: "تفعيل تأكيد الحضور",
   rsvpDeadline: "موعد نهائي لتأكيد الحضور",
   rsvpSettings: "إعدادات تأكيد الحضور",
@@ -374,10 +363,8 @@ export const ar: Record<TranslationKey, string> = {
   rsvpResponses: "ردود تأكيد الحضور",
   noRsvpsYet: "لا توجد ردود تأكيد حضور بعد",
   rsvpDeadlineLabel: "تأكيد الحضور قبل",
-  // NEW MISSING KEYS
   pleaseEnterYourName: "يرجى إدخال اسمك",
   responseSubmitted: "تم إرسال الرد بنجاح",
-  // NEW KEYS FOR MAW3D MANAGE PAGE
   manageEvent: "إدارة الحدث",
   backToEvents: "العودة إلى الفعاليات",
   viewRsvpsAndManage: "عرض ردود تأكيد الحضور وإدارة الحدث",
@@ -385,12 +372,10 @@ export const ar: Record<TranslationKey, string> = {
   shareEvent: "مشاركة الحدث",
   totalResponses: "إجمالي الردود",
   declined: "رفض",
-  // NEW KEYS FOR MAW3D EVENTS PAGE
   maw3dEvents: "فعاليات موعد",
   createAndManageEvents: "أنشئ وأدر فعالياتك",
   yourEvent: "فعاليتك",
   confirmDeleteEvent: "هل أنت متأكد أنك تريد حذف هذا الحدث؟",
-  // NEW MISSING KEYS FOR MAW3D CREATE PAGE
   eventTemplates: "قوالب الفعاليات",
   organizer: "المنظم",
   enterOrganizerName: "أدخل اسم المنظم",
@@ -402,8 +387,6 @@ export const ar: Record<TranslationKey, string> = {
   enableShareableLink: "تفعيل الرابط القابل للمشاركة",
   showAttendingCount: "إظهار عدد الحاضرين",
   shareableLinkDescription: "عند التفعيل، يمكن لأي شخص لديه الرابط مشاهدة الفعالية وتأكيد الحضور",
-  
-  // NEW KEYS FOR TEXT STYLING AND EVENT TEMPLATES
   fontFamily: "عائلة الخط",
   fontSize: "حجم الخط",
   textColor: "لون النص",
@@ -412,8 +395,6 @@ export const ar: Record<TranslationKey, string> = {
   chooseTemplate: "اختر قالباً",
   startFromScratch: "ابدأ من الصفر",
   blankTemplate: "قالب فارغ",
-  
-  // NEW KEYS FOR BACKGROUND CUSTOMIZER
   color: "لون",
   gradient: "تدرج",
   image: "صورة",
@@ -429,11 +410,7 @@ export const ar: Record<TranslationKey, string> = {
   aiPromptPlaceholder: "صف الخلفية التي تريدها...",
   generateImage: "توليد صورة",
   aiImageDescription: "صف ما تريده وسيقوم الذكاء الاصطناعي بتوليد صورة خلفية",
-  
-  // NEW KEYS FOR EVENT PREVIEW
   eventPreview: "معاينة الحدث",
-  
-  // NEW KEYS FOR CLEAN EVENT VIEWING
   eventNotFound: "الحدث غير موجود",
   eventMayHaveExpired: "قد يكون هذا الحدث قد انتهى أو تم حذفه",
   areYouAttending: "هل ستحضر هذا الحدث؟",
@@ -443,5 +420,17 @@ export const ar: Record<TranslationKey, string> = {
   yourResponseDeclined: "تم تسجيل رفضك",
   errorLoadingEvent: "خطأ في تحميل الحدث",
   errorSubmittingRsvp: "خطأ في إرسال الرد",
+  
+  // NEW MISSING KEYS FOR BACKGROUND CUSTOMIZER
+  backgroundColor: "لون الخلفية",
+  uploadImage: "رفع صورة",
+  chooseImage: "اختر صورة",
+  imageBlur: "ضبابية الصورة",
+  adjustBlurForReadability: "اضبط الضبابية لتحسين قراءة النص",
+  aiImagePrompt: "موجه صورة الذكاء الاصطناعي",
+  describeBackground: "صف الخلفية التي تريدها...",
+  generating: "جاري التوليد",
+  generateAIBackground: "توليد خلفية بالذكاء الاصطناعي",
+  preview: "معاينة",
+  yourEventTitle: "عنوان فعاليتك",
 } as const;
-
