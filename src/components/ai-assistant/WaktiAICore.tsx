@@ -6,13 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, Loader2, Mic, Bot } from "lucide-react";
+import { Send, Loader2, Mic, Bot, Menu, Settings, History } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
 import { ChatMessage, AIContext } from "./types";
 import { AIMessageBubble } from "./AIMessageBubble";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
 
 interface WaktiAICoreProps {
   className?: string;
@@ -25,6 +43,8 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [context, setContext] = useState<AIContext>({});
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -309,12 +329,101 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     </div>
   );
 
+  // History Drawer Content
+  const HistoryContent = () => (
+    <div className="p-4">
+      <h3 className="text-lg font-semibold mb-4">
+        {language === 'ar' ? 'سجل المحادثات' : 'Chat History'}
+      </h3>
+      <div className="space-y-2">
+        {messages.slice(-5).map((msg) => (
+          <div key={msg.id} className="p-2 bg-muted rounded text-sm">
+            <strong>{msg.role === 'user' ? (language === 'ar' ? 'أنت' : 'You') : 'AI'}:</strong>
+            <p className="truncate">{msg.content.substring(0, 50)}...</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // Settings Drawer Content
+  const SettingsContent = () => (
+    <div className="p-4">
+      <h3 className="text-lg font-semibold mb-4">
+        {language === 'ar' ? 'الإعدادات' : 'Settings'}
+      </h3>
+      <div className="space-y-4">
+        <div>
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'اللغة' : 'Language'}
+          </label>
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'العربية' : 'English'}
+          </p>
+        </div>
+        <div>
+          <label className="text-sm font-medium">
+            {language === 'ar' ? 'المظهر' : 'Theme'}
+          </label>
+          <p className="text-sm text-muted-foreground">
+            {theme === 'dark' ? (language === 'ar' ? 'داكن' : 'Dark') : (language === 'ar' ? 'فاتح' : 'Light')}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className={`flex flex-col h-full bg-background ${className}`}>
+    <div className={`flex flex-col h-screen bg-background ${className}`}>
+      {/* Header with Side Drawers */}
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b bg-card/50 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <Sheet open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <History className="w-5 h-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80">
+              <SheetHeader>
+                <SheetTitle>
+                  {language === 'ar' ? 'سجل المحادثات' : 'Chat History'}
+                </SheetTitle>
+                <SheetDescription>
+                  {language === 'ar' ? 'المحادثات الأخيرة' : 'Recent conversations'}
+                </SheetDescription>
+              </SheetHeader>
+              <HistoryContent />
+            </SheetContent>
+          </Sheet>
+
+          <h1 className="text-xl font-bold">WAKTI AI</h1>
+        </div>
+
+        <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <Settings className="w-5 h-5" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-80">
+            <SheetHeader>
+              <SheetTitle>
+                {language === 'ar' ? 'الإعدادات' : 'Settings'}
+              </SheetTitle>
+              <SheetDescription>
+                {language === 'ar' ? 'إعدادات المحادثة' : 'Chat settings'}
+              </SheetDescription>
+            </SheetHeader>
+            <SettingsContent />
+          </SheetContent>
+        </Sheet>
+      </div>
+
       {/* Chat Container - Fixed height calculation */}
       <div className="flex-1 relative flex flex-col min-h-0">
         {/* Messages Area - Takes remaining space above input */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 pb-20">
           {messages.map((message) => (
             <AIMessageBubble
               key={message.id}
@@ -332,53 +441,55 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
       </div>
 
       {/* Input Area - Fixed at bottom, always visible */}
-      <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 z-40">
-        <div className="flex gap-2">
-          <div className="flex-1 relative">
-            <Input
-              ref={inputRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder={language === 'ar' 
-                ? 'اكتب رسالتك هنا... (أو اضغط لاستخدام الصوت)'
-                : 'Type your message here... (or press for voice)'
-              }
-              disabled={isProcessing || !user}
-              className="bg-background h-12 text-base pr-12 border-2 focus:border-blue-500 transition-colors"
-            />
+      <div className="fixed bottom-0 left-0 right-0 p-4 border-t bg-card/95 backdrop-blur-sm flex-shrink-0 z-50">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex gap-2">
+            <div className="flex-1 relative">
+              <Input
+                ref={inputRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyPress}
+                placeholder={language === 'ar' 
+                  ? 'اكتب رسالتك هنا... (أو اضغط لاستخدام الصوت)'
+                  : 'Type your message here... (or press for voice)'
+                }
+                disabled={isProcessing || !user}
+                className="bg-background h-12 text-base pr-12 border-2 focus:border-blue-500 transition-colors"
+              />
+              <Button
+                onClick={startVoiceInput}
+                disabled={isProcessing || isListening}
+                variant="ghost"
+                size="icon"
+                className="absolute right-1 top-1 h-10 w-10 text-muted-foreground hover:text-blue-500"
+              >
+                <Mic className={`w-4 h-4 ${isListening ? 'animate-pulse text-red-500' : ''}`} />
+              </Button>
+            </div>
             <Button
-              onClick={startVoiceInput}
-              disabled={isProcessing || isListening}
-              variant="ghost"
+              onClick={handleSendMessage}
+              disabled={!inputValue.trim() || isProcessing || !user}
               size="icon"
-              className="absolute right-1 top-1 h-10 w-10 text-muted-foreground hover:text-blue-500"
+              className="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 h-12 w-12 shadow-lg transition-all duration-200"
             >
-              <Mic className={`w-4 h-4 ${isListening ? 'animate-pulse text-red-500' : ''}`} />
+              {isProcessing ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Send className="w-5 h-5" />
+              )}
             </Button>
           </div>
-          <Button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isProcessing || !user}
-            size="icon"
-            className="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 h-12 w-12 shadow-lg transition-all duration-200"
-          >
-            {isProcessing ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <Send className="w-5 h-5" />
-            )}
-          </Button>
+          
+          {!user && (
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              {language === 'ar' 
+                ? 'يرجى تسجيل الدخول للمتابعة'
+                : 'Please login to continue'
+              }
+            </p>
+          )}
         </div>
-        
-        {!user && (
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            {language === 'ar' 
-              ? 'يرجى تسجيل الدخول للمتابعة'
-              : 'Please login to continue'
-            }
-          </p>
-        )}
       </div>
     </div>
   );
