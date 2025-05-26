@@ -11,6 +11,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { ArrowLeft, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
@@ -32,6 +34,7 @@ const defaultTextStyle: TextStyle = {
 export default function Maw3dCreate() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
 
@@ -92,17 +95,17 @@ export default function Maw3dCreate() {
 
   const handleSubmit = async () => {
     if (!user) {
-      toast.error('Please log in to create an event');
+      toast.error(t('pleaseCompleteAllRequiredFields', language));
       return;
     }
 
     if (!formData.title.trim()) {
-      toast.error('Please enter an event title');
+      toast.error(t('enterEventTitle', language));
       return;
     }
 
     if (!formData.event_date) {
-      toast.error('Please select an event date');
+      toast.error(t('selectDate', language));
       return;
     }
 
@@ -124,11 +127,11 @@ export default function Maw3dCreate() {
       const newEvent = await Maw3dService.createEvent(dbEventData);
       console.log('Event created successfully:', newEvent);
 
-      toast.success('Event created successfully!');
+      toast.success(t('eventCreatedSuccessfully', language));
       navigate('/maw3d');
     } catch (error) {
       console.error('Error creating event:', error);
-      toast.error('Failed to create event. Please try again.');
+      toast.error(t('errorCreatingEvent', language));
     } finally {
       setIsLoading(false);
     }
@@ -141,12 +144,12 @@ export default function Maw3dCreate() {
         <div className="flex items-center justify-between mb-8">
           <Button variant="ghost" size="sm" onClick={() => navigate('/maw3d')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            {t('backToEvents', language)}
           </Button>
-          <h1 className="text-lg font-semibold">Create Event</h1>
+          <h1 className="text-lg font-semibold">{t('createEvent', language)}</h1>
           <Button onClick={handleSubmit} disabled={isLoading}>
             <Plus className="w-4 h-4 mr-2" />
-            {isLoading ? 'Creating...' : 'Create'}
+            {isLoading ? t('creating', language) : t('create', language)}
           </Button>
         </div>
 
@@ -155,11 +158,11 @@ export default function Maw3dCreate() {
           {/* Preview */}
           <Card>
             <CardContent className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Preview</h2>
+              <h2 className="text-lg font-semibold mb-4">{t('eventDetails', language)}</h2>
               <EventPreview
                 event={{
                   id: '',
-                  title: formData.title || 'Event Title',
+                  title: formData.title || t('eventTitle', language),
                   description: formData.description,
                   location: formData.location,
                   google_maps_link: formData.google_maps_link,
@@ -194,7 +197,7 @@ export default function Maw3dCreate() {
             <AccordionItem value="templates" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">📂 Choose Template</h2>
+                  <h2 className="text-lg font-semibold">📂 {t('eventTemplates', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -211,44 +214,44 @@ export default function Maw3dCreate() {
             <AccordionItem value="details" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">📝 Event Details</h2>
+                  <h2 className="text-lg font-semibold">📝 {t('eventDetails', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
                     <div>
-                      <Label htmlFor="title">Event Title *</Label>
+                      <Label htmlFor="title">{t('eventTitle', language)} *</Label>
                       <Input
                         id="title"
                         value={formData.title}
                         onChange={(e) => handleInputChange('title', e.target.value)}
-                        placeholder="Enter event title"
+                        placeholder={t('enterEventTitle', language)}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="description">{t('description', language)}</Label>
                       <Textarea
                         id="description"
                         value={formData.description || ''}
                         onChange={(e) => handleInputChange('description', e.target.value)}
-                        placeholder="Tell people about your event"
+                        placeholder={t('enterEventDescription', language)}
                         rows={3}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="organizer">Organizer</Label>
+                      <Label htmlFor="organizer">{t('organizer', language)}</Label>
                       <Input
                         id="organizer"
                         value={formData.organizer || ''}
                         onChange={(e) => handleInputChange('organizer', e.target.value)}
-                        placeholder="Enter organizer name"
+                        placeholder={t('enterOrganizerName', language)}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="event_date">Date *</Label>
+                        <Label htmlFor="event_date">{t('date', language)} *</Label>
                         <Input
                           id="event_date"
                           type="date"
@@ -263,14 +266,14 @@ export default function Maw3dCreate() {
                           checked={formData.is_all_day}
                           onCheckedChange={(checked) => handleInputChange('is_all_day', checked)}
                         />
-                        <Label htmlFor="all_day">All Day Event</Label>
+                        <Label htmlFor="all_day">{t('allDay', language)}</Label>
                       </div>
                     </div>
 
                     {!formData.is_all_day && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="start_time">Start Time</Label>
+                          <Label htmlFor="start_time">{t('startTime', language)}</Label>
                           <Input
                             id="start_time"
                             type="time"
@@ -279,7 +282,7 @@ export default function Maw3dCreate() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="end_time">End Time</Label>
+                          <Label htmlFor="end_time">{t('endTime', language)}</Label>
                           <Input
                             id="end_time"
                             type="time"
@@ -291,17 +294,17 @@ export default function Maw3dCreate() {
                     )}
 
                     <div>
-                      <Label htmlFor="location">Location (Optional)</Label>
+                      <Label htmlFor="location">{t('location', language)} ({t('optional', language)})</Label>
                       <Input
                         id="location"
                         value={formData.location || ''}
                         onChange={(e) => handleInputChange('location', e.target.value)}
-                        placeholder="Enter event location"
+                        placeholder={t('enterLocation', language)}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="google_maps_link">Google Maps Link (Optional)</Label>
+                      <Label htmlFor="google_maps_link">{t('googleMapsLink', language)} ({t('optional', language)})</Label>
                       <Input
                         id="google_maps_link"
                         value={formData.google_maps_link || ''}
@@ -318,7 +321,7 @@ export default function Maw3dCreate() {
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
+                  <h2 className="text-lg font-semibold">🎨 {t('textStyling', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -335,7 +338,7 @@ export default function Maw3dCreate() {
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🖼️ Background Customization</h2>
+                  <h2 className="text-lg font-semibold">🖼️ {t('backgroundCustomization', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -353,7 +356,7 @@ export default function Maw3dCreate() {
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🔒 Privacy Settings</h2>
+                  <h2 className="text-lg font-semibold">🔒 {t('privacySettings', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
@@ -363,7 +366,7 @@ export default function Maw3dCreate() {
                         checked={formData.is_public}
                         onCheckedChange={(checked) => handleInputChange('is_public', checked)}
                       />
-                      <Label htmlFor="is_public">Enable shareable link (Anyone with link can view and RSVP)</Label>
+                      <Label htmlFor="is_public">{t('enableShareableLink', language)}</Label>
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -372,13 +375,12 @@ export default function Maw3dCreate() {
                         checked={formData.show_attending_count}
                         onCheckedChange={(checked) => handleInputChange('show_attending_count', checked)}
                       />
-                      <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
+                      <Label htmlFor="show_attending_count">{t('showAttendingCount', language)}</Label>
                     </div>
 
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-sm text-muted-foreground">
-                        After creating your event, you can share it with others using the shareable link. 
-                        Anyone with the link will be able to view the event details and RSVP.
+                        {t('shareableLinkDescription', language)}
                       </p>
                     </div>
                   </CardContent>
