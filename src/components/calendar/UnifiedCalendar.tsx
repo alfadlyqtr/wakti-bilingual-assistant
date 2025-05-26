@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
@@ -418,6 +419,10 @@ export const UnifiedCalendar: React.FC = () => {
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-red-500"></div>
               <span>{t("reminders", language)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+              <span>Manual Entry</span>
             </div>
           </div>
         </div>
