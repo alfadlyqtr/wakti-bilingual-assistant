@@ -54,7 +54,7 @@ export function SmartActionsDrawer({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-80">
+      <SheetContent side="right" className="w-full max-w-none h-full">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-purple-500" />

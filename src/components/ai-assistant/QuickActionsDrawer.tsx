@@ -48,7 +48,7 @@ export function QuickActionsDrawer({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="left" className="w-80">
+      <SheetContent side="left" className="w-full max-w-none h-full">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-blue-500" />

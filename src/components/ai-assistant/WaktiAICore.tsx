@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -315,7 +314,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => (
           <AIMessageBubble
             key={message.id}
@@ -384,7 +383,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         )}
       </div>
 
-      {/* Side Drawers */}
+      {/* Side Drawers - Full Width */}
       <QuickActionsDrawer
         isOpen={showQuickActions}
         onClose={() => setShowQuickActions(false)}
