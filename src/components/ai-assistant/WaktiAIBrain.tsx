@@ -209,7 +209,7 @@ export function WaktiAIBrain({ className }: WaktiAIBrainProps) {
   return (
     <div className={`flex flex-col h-full bg-background ${className}`}>
       {/* Header */}
-      <div className="border-b bg-card p-4">
+      <div className="border-b bg-card p-4 flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="relative">
             <Avatar className="h-10 w-10 bg-gradient-to-br from-blue-500 to-purple-600">
@@ -228,8 +228,8 @@ export function WaktiAIBrain({ className }: WaktiAIBrainProps) {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Messages - takes remaining space but allows for input at bottom */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
         {messages.map((message) => (
           <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {message.role === 'assistant' && (
@@ -316,9 +316,9 @@ export function WaktiAIBrain({ className }: WaktiAIBrainProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - only show when few messages */}
       {messages.length <= 1 && (
-        <div className="p-4 border-t bg-card/50">
+        <div className="p-4 border-t bg-card/50 flex-shrink-0">
           <p className="text-sm text-muted-foreground mb-3">
             {language === 'ar' ? 'إجراءات سريعة:' : 'Quick actions:'}
           </p>
@@ -340,8 +340,8 @@ export function WaktiAIBrain({ className }: WaktiAIBrainProps) {
         </div>
       )}
 
-      {/* Input */}
-      <div className="p-4 border-t bg-card">
+      {/* Input - Fixed at bottom */}
+      <div className="p-4 border-t bg-card flex-shrink-0 sticky bottom-0">
         <div className="flex gap-2">
           <div className="flex-1">
             <Input
@@ -353,19 +353,19 @@ export function WaktiAIBrain({ className }: WaktiAIBrainProps) {
                 : 'Type your message here...'
               }
               disabled={isProcessing || !user}
-              className="bg-background"
+              className="bg-background h-12 text-base"
             />
           </div>
           <Button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || isProcessing || !user}
             size="icon"
-            className="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
+            className="bg-gradient-to-br from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 h-12 w-12"
           >
             {isProcessing ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Send className="w-4 h-4" />
+              <Send className="w-5 h-5" />
             )}
           </Button>
         </div>
