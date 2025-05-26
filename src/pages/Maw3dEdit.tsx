@@ -11,6 +11,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/providers/ThemeProvider';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
@@ -22,6 +23,7 @@ export default function Maw3dEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
@@ -184,6 +186,7 @@ export default function Maw3dEdit() {
                     <EventTemplates
                       onSelectTemplate={handleTemplateSelect}
                       selectedTemplate={selectedTemplate}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>
@@ -309,6 +312,7 @@ export default function Maw3dEdit() {
                     <TextStyleCustomizer
                       textStyle={event.text_style}
                       onTextStyleChange={handleTextStyleChange}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>
@@ -327,6 +331,7 @@ export default function Maw3dEdit() {
                       backgroundType={event.background_type}
                       backgroundValue={event.background_value}
                       onBackgroundChange={handleBackgroundChange}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>
