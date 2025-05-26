@@ -1,4 +1,5 @@
 
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -437,11 +438,10 @@ export const ar: Record<TranslationKey, string> = {
   eventMayHaveExpired: "قد يكون هذا الحدث قد انتهى أو تم حذفه",
   areYouAttending: "هل ستحضر هذا الحدث؟",
   enterYourName: "أدخل اسمك",
-  accept: "أقبل",
-  decline: "أرفض",
   thankYou: "شكراً لك!",
   yourResponseAccepted: "تم تسجيل قبولك",
   yourResponseDeclined: "تم تسجيل رفضك",
   errorLoadingEvent: "خطأ في تحميل الحدث",
   errorSubmittingRsvp: "خطأ في إرسال الرد",
 } as const;
+
