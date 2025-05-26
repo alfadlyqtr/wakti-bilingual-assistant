@@ -17,14 +17,16 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
   const hasTasks = tasks && tasks.length > 0;
 
   return (
-    <div className={`relative ${hasTasks ? 'p-4' : 'p-3'}`}>
+    <div className={`relative ${hasTasks ? 'p-4' : 'p-2'}`}>
       {/* Drag handle */}
-      <div className="absolute top-2 left-2 z-20 p-1 rounded-md bg-muted/60 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-grab active:cursor-grabbing">
-        <Hand className="h-4 w-4" />
+      <div className="absolute top-1 left-1 z-20 p-1 rounded-md bg-muted/60 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-grab active:cursor-grabbing">
+        <Hand className="h-3 w-3" />
       </div>
       
-      <div className="ml-10">
-        <h3 className="font-medium mb-3">{t("tasks", language)}</h3>
+      <div className={hasTasks ? "ml-10" : "ml-8"}>
+        <h3 className={`font-medium ${hasTasks ? 'mb-3' : 'mb-1'} ${hasTasks ? 'text-base' : 'text-sm'}`}>
+          {t("tasks", language)}
+        </h3>
         {isLoading ? (
           <div className="space-y-2">
             <Skeleton className="h-4 w-full" />
@@ -47,10 +49,10 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
             </Button>
           </div>
         ) : (
-          <div className="text-center py-2">
-            <CheckCircle className="mx-auto h-6 w-6 text-muted-foreground opacity-50 mb-1" />
-            <p className="text-xs text-muted-foreground mb-2">{t("noTasksYet", language)}</p>
-            <Button variant="outline" size="sm" onClick={() => navigate('/tasks-reminders')}>
+          <div className="text-center py-1">
+            <CheckCircle className="mx-auto h-4 w-4 text-muted-foreground opacity-50 mb-1" />
+            <p className="text-xs text-muted-foreground mb-1">{t("noTasksYet", language)}</p>
+            <Button variant="outline" size="sm" className="text-xs px-2 py-1 h-auto" onClick={() => navigate('/tasks-reminders')}>
               {t("createTask", language)}
             </Button>
           </div>
