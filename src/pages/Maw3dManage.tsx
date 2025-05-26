@@ -213,11 +213,11 @@ export default function Maw3dManage() {
             <CardTitle className="text-lg font-semibold">{t("eventManagement", language)}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Primary Actions */}
-            <div className="space-y-3">
+            {/* Primary Actions - Horizontal Layout */}
+            <div className="grid grid-cols-2 gap-3">
               <Button
                 onClick={() => navigate(`/maw3d/edit/${event?.id}`)}
-                className="w-full gap-2 h-12"
+                className="gap-2 h-12"
                 size="lg"
               >
                 <Edit className="w-5 h-5" />
@@ -227,7 +227,7 @@ export default function Maw3dManage() {
               <Button
                 variant="outline"
                 onClick={handleShare}
-                className="w-full gap-2 h-12"
+                className="gap-2 h-12"
                 size="lg"
               >
                 <Share2 className="w-5 h-5" />
