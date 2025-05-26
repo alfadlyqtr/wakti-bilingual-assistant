@@ -85,7 +85,7 @@ export const getCalendarEntries = (
   events: any[] = [],
   maw3dEvents: Maw3dEvent[] = []
 ): CalendarEntry[] => {
-  console.log('Combining calendar entries:', {
+  console.log('getCalendarEntries called with:', {
     tasks: tasks.length,
     reminders: reminders.length,
     manualEntries: manualEntries.length,
@@ -93,14 +93,35 @@ export const getCalendarEntries = (
     maw3dEvents: maw3dEvents.length
   });
 
+  // Log manual entries being processed
+  console.log('Manual entries being processed:', manualEntries);
+
+  const taskEntries = tasksToCalendarEntries(tasks);
+  const reminderEntries = remindersToCalendarEntries(reminders);
+  const eventEntries = eventsToCalendarEntries(events);
+  const maw3dEntries = maw3dEventsToCalendarEntries(maw3dEvents);
+
+  console.log('Converted entries:', {
+    taskEntries: taskEntries.length,
+    reminderEntries: reminderEntries.length,
+    eventEntries: eventEntries.length,
+    maw3dEntries: maw3dEntries.length,
+    manualEntries: manualEntries.length
+  });
+
   const allEntries = [
-    ...tasksToCalendarEntries(tasks),
-    ...remindersToCalendarEntries(reminders),
-    ...eventsToCalendarEntries(events),
-    ...maw3dEventsToCalendarEntries(maw3dEvents),
-    ...manualEntries
+    ...taskEntries,
+    ...reminderEntries,
+    ...eventEntries,
+    ...maw3dEntries,
+    ...manualEntries // Make sure manual entries are included
   ];
 
   console.log('Total combined entries:', allEntries.length);
+  
+  // Log a sample of entries including manual ones
+  const manualSample = allEntries.filter(e => e.type === EntryType.MANUAL_NOTE);
+  console.log('Manual entries in final result:', manualSample);
+
   return allEntries;
 };

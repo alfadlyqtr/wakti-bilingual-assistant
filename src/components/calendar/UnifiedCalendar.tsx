@@ -87,9 +87,20 @@ export const UnifiedCalendar: React.FC = () => {
 
   // Load manual entries from local storage
   useEffect(() => {
+    console.log('Loading manual entries from localStorage...');
     const savedEntries = localStorage.getItem('calendarManualEntries');
     if (savedEntries) {
-      setManualEntries(JSON.parse(savedEntries));
+      try {
+        const parsed = JSON.parse(savedEntries);
+        console.log('Loaded manual entries from localStorage:', parsed);
+        setManualEntries(parsed);
+      } catch (error) {
+        console.error('Error parsing manual entries from localStorage:', error);
+        setManualEntries([]);
+      }
+    } else {
+      console.log('No manual entries found in localStorage');
+      setManualEntries([]);
     }
   }, []);
 
@@ -112,6 +123,7 @@ export const UnifiedCalendar: React.FC = () => {
 
   // Save manual entries to local storage whenever they change
   useEffect(() => {
+    console.log('Saving manual entries to localStorage:', manualEntries);
     localStorage.setItem('calendarManualEntries', JSON.stringify(manualEntries));
   }, [manualEntries]);
 
@@ -124,8 +136,27 @@ export const UnifiedCalendar: React.FC = () => {
       manualEntries: manualEntries.length
     });
     
+    // Log manual entries for debugging
+    manualEntries.forEach((entry, index) => {
+      console.log(`Manual entry ${index}:`, entry);
+    });
+    
     const entries = getCalendarEntries(tasks, reminders, manualEntries, [], maw3dEvents);
-    console.log('Total calendar entries:', entries.length);
+    console.log('Total calendar entries after combination:', entries.length);
+    
+    // Log entries by type for debugging
+    const taskEntries = entries.filter(e => e.type === EntryType.TASK);
+    const reminderEntries = entries.filter(e => e.type === EntryType.REMINDER);
+    const manualEntriesFiltered = entries.filter(e => e.type === EntryType.MANUAL_NOTE);
+    const maw3dEntriesFiltered = entries.filter(e => e.type === EntryType.MAW3D_EVENT);
+    
+    console.log('Entries breakdown:', {
+      tasks: taskEntries.length,
+      reminders: reminderEntries.length,
+      manual: manualEntriesFiltered.length,
+      maw3d: maw3dEntriesFiltered.length
+    });
+    
     setCalendarEntries(entries);
   }, [tasks, reminders, manualEntries, maw3dEvents]);
 
@@ -257,22 +288,35 @@ export const UnifiedCalendar: React.FC = () => {
       id: `manual-${Date.now()}`,
       type: EntryType.MANUAL_NOTE,
     };
-    setManualEntries(prev => [...prev, newEntry]);
+    console.log('Adding new manual entry:', newEntry);
+    setManualEntries(prev => {
+      const updated = [...prev, newEntry];
+      console.log('Updated manual entries array:', updated);
+      return updated;
+    });
     setEntryDialogOpen(false);
   };
 
   // Edit a manual calendar entry
   const updateManualEntry = (entry: CalendarEntry) => {
-    setManualEntries(prev => 
-      prev.map(e => e.id === entry.id ? entry : e)
-    );
+    console.log('Updating manual entry:', entry);
+    setManualEntries(prev => {
+      const updated = prev.map(e => e.id === entry.id ? entry : e);
+      console.log('Updated manual entries after edit:', updated);
+      return updated;
+    });
     setEditEntry(null);
     setEntryDialogOpen(false);
   };
 
   // Delete a manual calendar entry
   const deleteManualEntry = (entryId: string) => {
-    setManualEntries(prev => prev.filter(entry => entry.id !== entryId));
+    console.log('Deleting manual entry with ID:', entryId);
+    setManualEntries(prev => {
+      const updated = prev.filter(entry => entry.id !== entryId);
+      console.log('Updated manual entries after delete:', updated);
+      return updated;
+    });
     setEditEntry(null);
     setEntryDialogOpen(false);
   };
