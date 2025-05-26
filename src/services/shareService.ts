@@ -1,9 +1,16 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export class ShareService {
-  static generateEventLink(eventId: string): string {
+  static generateEventLink(eventId: string, shortId?: string): string {
+    // If shortId is provided, it's a Maw3d event - use the Maw3d URL format
+    if (shortId) {
+      const link = `https://wakti.qa/maw3d/${shortId}`;
+      console.log('Generated Maw3d event link:', link);
+      return link;
+    }
+    
+    // Otherwise, use the regular events URL format
     const link = `https://wakti.qa/event/${eventId}`;
     console.log('Generated event link:', link);
     return link;
@@ -11,11 +18,11 @@ export class ShareService {
 
   static async shareEvent(eventId: string, shortId?: string) {
     console.log('=== ShareService.shareEvent START ===');
-    console.log('Called with eventId:', eventId, 'shortId (deprecated):', shortId);
+    console.log('Called with eventId:', eventId, 'shortId:', shortId);
     
     try {
-      // Use the eventId (UUID) directly instead of shortId
-      const link = this.generateEventLink(eventId);
+      // Generate the appropriate link based on whether it's a Maw3d event
+      const link = this.generateEventLink(eventId, shortId);
       console.log('Generated link for sharing:', link);
       
       // Check if we can use the native share API
@@ -57,7 +64,7 @@ export class ShareService {
       
       // Fallback to clipboard
       try {
-        const link = this.generateEventLink(eventId);
+        const link = this.generateEventLink(eventId, shortId);
         console.log('Attempting clipboard copy with link:', link);
         
         if (!navigator.clipboard) {

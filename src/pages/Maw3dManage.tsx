@@ -80,6 +80,7 @@ export default function Maw3dManage() {
     }
     
     try {
+      // Pass both eventId and shortId to ShareService
       await ShareService.shareEvent(event.id, event.short_id);
     } catch (error) {
       console.error('Error sharing event:', error);

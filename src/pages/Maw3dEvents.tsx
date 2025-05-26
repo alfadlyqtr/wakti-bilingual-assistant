@@ -45,11 +45,11 @@ export default function Maw3dEvents() {
 
   const handleShare = async (event: Maw3dEvent, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent event click
-    console.log('Share button clicked for event:', event.id);
+    console.log('Share button clicked for event:', event.id, 'shortId:', event.short_id);
     
     try {
-      // Use the event UUID directly instead of short_id
-      await ShareService.shareEvent(event.id);
+      // Pass both eventId and shortId to ShareService
+      await ShareService.shareEvent(event.id, event.short_id);
     } catch (error) {
       console.error('Error in handleShare:', error);
       toast.error('Failed to share event');
