@@ -40,45 +40,44 @@ export default function PublicEvent() {
 
       console.log('PublicEvent: Fetching event by short_id:', shortId);
 
-      // Fetch event by short_id without auth context
+      // Fetch event by short_id for public events only
       const { data: eventData, error: eventError } = await supabase
         .from('maw3d_events')
         .select('*')
         .eq('short_id', shortId)
+        .eq('is_public', true)
         .single();
 
       if (eventError) {
         console.error('PublicEvent: Error fetching event:', eventError);
         if (eventError.code === 'PGRST116') {
-          // Event not found
+          // Event not found or not public
           return;
         }
         throw eventError;
       }
 
       if (!eventData) {
-        console.log('PublicEvent: No event found for short_id:', shortId);
+        console.log('PublicEvent: No public event found for short_id:', shortId);
         return;
       }
 
       console.log('PublicEvent: Event found:', eventData);
       setEvent(eventData);
       
-      // Fetch RSVPs if event is public
-      if (eventData.is_public) {
-        console.log('PublicEvent: Fetching RSVPs for event:', eventData.id);
-        const { data: rsvpData, error: rsvpError } = await supabase
-          .from('maw3d_rsvps')
-          .select('*')
-          .eq('event_id', eventData.id)
-          .order('created_at', { ascending: true });
+      // Fetch RSVPs for the public event
+      console.log('PublicEvent: Fetching RSVPs for event:', eventData.id);
+      const { data: rsvpData, error: rsvpError } = await supabase
+        .from('maw3d_rsvps')
+        .select('*')
+        .eq('event_id', eventData.id)
+        .order('created_at', { ascending: true });
 
-        if (rsvpError) {
-          console.error('PublicEvent: Error fetching RSVPs:', rsvpError);
-        } else {
-          console.log('PublicEvent: RSVPs fetched:', rsvpData?.length || 0);
-          setRsvps(rsvpData || []);
-        }
+      if (rsvpError) {
+        console.error('PublicEvent: Error fetching RSVPs:', rsvpError);
+      } else {
+        console.log('PublicEvent: RSVPs fetched:', rsvpData?.length || 0);
+        setRsvps(rsvpData || []);
       }
     } catch (error) {
       console.error('PublicEvent: Unexpected error:', error);
@@ -299,7 +298,7 @@ export default function PublicEvent() {
           </div>
 
           {/* RSVP Section */}
-          {event.is_public && !hasResponded && (
+          {!hasResponded && (
             <Card>
               <CardContent className="p-6">
                 <h3 className="text-lg font-semibold mb-4">
