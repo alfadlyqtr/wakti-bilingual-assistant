@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -299,26 +298,28 @@ export default function PublicEvent() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center overflow-y-auto scrollbar-hide">
+      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
         <Toaster />
-        <div className="text-center space-y-4 p-4">
-          <div className="animate-pulse">
-            <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Loading event: {shortId}
-          </div>
-          {/* Debug information */}
-          <details className="text-left text-xs bg-gray-100 p-2 rounded mt-4 max-w-lg mx-auto">
-            <summary className="cursor-pointer font-semibold">Debug Info ({debugInfo.length} entries)</summary>
-            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-              {debugInfo.map((info, index) => (
-                <div key={index} className="font-mono text-xs">{info}</div>
-              ))}
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <div className="animate-pulse">
+              <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
+              <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
             </div>
-          </details>
+            <div className="text-sm text-muted-foreground">
+              Loading event: {shortId}
+            </div>
+            {/* Debug information */}
+            <details className="text-left text-xs bg-gray-100 p-2 rounded mt-4 max-w-lg mx-auto">
+              <summary className="cursor-pointer font-semibold">Debug Info ({debugInfo.length} entries)</summary>
+              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono text-xs">{info}</div>
+                ))}
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     );
@@ -326,23 +327,25 @@ export default function PublicEvent() {
 
   if (!event) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center overflow-y-auto scrollbar-hide">
+      <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
         <Toaster />
-        <div className="text-center space-y-4 p-4">
-          <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
-          <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
-          <div className="text-sm text-red-600">
-            Short ID: {shortId}
-          </div>
-          {/* Debug information for failed load */}
-          <details className="text-left text-xs bg-red-50 p-2 rounded mt-4 max-w-lg mx-auto">
-            <summary className="cursor-pointer font-semibold">Debug Info ({debugInfo.length} entries)</summary>
-            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-              {debugInfo.map((info, index) => (
-                <div key={index} className="font-mono text-xs">{info}</div>
-              ))}
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
+            <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
+            <div className="text-sm text-red-600">
+              Short ID: {shortId}
             </div>
-          </details>
+            {/* Debug information for failed load */}
+            <details className="text-left text-xs bg-red-50 p-2 rounded mt-4 max-w-lg mx-auto">
+              <summary className="cursor-pointer font-semibold">Debug Info ({debugInfo.length} entries)</summary>
+              <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono text-xs">{info}</div>
+                ))}
+              </div>
+            </details>
+          </div>
         </div>
       </div>
     );
@@ -351,121 +354,119 @@ export default function PublicEvent() {
   const rsvpCounts = getRsvpCounts();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-y-auto scrollbar-hide">
       <Toaster />
-      <div className="h-screen overflow-y-auto scrollbar-hide">
-        <div className="container mx-auto px-4 py-8">
-          <div className="max-w-2xl mx-auto space-y-6">
-            
-            {/* Event Preview */}
-            <EventPreview
-              event={event}
-              textStyle={event.text_style}
-              backgroundType={event.background_type}
-              backgroundValue={event.background_value}
-              rsvpCount={rsvpCounts}
-              showAttendingCount={event.show_attending_count}
-              language={eventLanguage}
-            />
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto space-y-6">
+          
+          {/* Event Preview */}
+          <EventPreview
+            event={event}
+            textStyle={event.text_style}
+            backgroundType={event.background_type}
+            backgroundValue={event.background_value}
+            rsvpCount={rsvpCounts}
+            showAttendingCount={event.show_attending_count}
+            language={eventLanguage}
+          />
 
-            {/* Action Buttons */}
-            <div className="flex gap-3 justify-center">
+          {/* Action Buttons */}
+          <div className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => window.open(getCalendarUrl(), '_blank')}
+              className="flex items-center gap-2"
+            >
+              <Calendar className="w-4 h-4" />
+              {t('addToCalendar', eventLanguage)}
+            </Button>
+            
+            {event.google_maps_link && (
               <Button
                 variant="outline"
-                onClick={() => window.open(getCalendarUrl(), '_blank')}
+                onClick={() => window.open(event.google_maps_link, '_blank')}
                 className="flex items-center gap-2"
               >
-                <Calendar className="w-4 h-4" />
-                {t('addToCalendar', eventLanguage)}
+                <MapPin className="w-4 h-4" />
+                {t('getDirections', eventLanguage)}
               </Button>
-              
-              {event.google_maps_link && (
-                <Button
-                  variant="outline"
-                  onClick={() => window.open(event.google_maps_link, '_blank')}
-                  className="flex items-center gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  {t('getDirections', eventLanguage)}
-                </Button>
-              )}
-            </div>
-
-            {/* RSVP Section */}
-            {!hasResponded && (
-              <Card>
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold mb-4">
-                    {t('areYouAttending', eventLanguage)}
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <Input
-                        placeholder={t('enterYourName', eventLanguage)}
-                        value={guestName}
-                        onChange={(e) => setGuestName(e.target.value)}
-                        className={eventLanguage === 'ar' ? 'text-right' : ''}
-                        dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
-                      />
-                    </div>
-                    
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={() => handleRsvp('accepted')}
-                        disabled={isSubmitting || !guestName.trim()}
-                        className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
-                        variant="outline"
-                      >
-                        {t('accept', eventLanguage)}
-                      </Button>
-                      <Button
-                        onClick={() => handleRsvp('declined')}
-                        disabled={isSubmitting || !guestName.trim()}
-                        className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
-                        variant="outline"
-                      >
-                        {t('decline', eventLanguage)}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             )}
-
-            {/* Response Confirmation */}
-            {hasResponded && (
-              <Card>
-                <CardContent className="p-6 text-center">
-                  <h3 className="text-lg font-semibold mb-2">
-                    {eventLanguage === 'ar' ? `شكراً لك، ${submittedName}!` : `Thank you, ${submittedName}!`}
-                  </h3>
-                  <p className="text-muted-foreground">
-                    {eventLanguage === 'ar' 
-                      ? `تم تسجيل ${userResponse === 'accepted' ? 'قبولك' : 'رفضك'}.`
-                      : `Your ${userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
-                    }
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Debug Panel - Only show if there were issues */}
-            {debugInfo.length > 10 && (
-              <details className="text-left text-xs bg-gray-50 p-4 rounded mb-8">
-                <summary className="cursor-pointer font-semibold">Full Debug Log ({debugInfo.length} entries)</summary>
-                <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
-                  {debugInfo.map((info, index) => (
-                    <div key={index} className="font-mono text-xs">{info}</div>
-                  ))}
-                </div>
-              </details>
-            )}
-
-            {/* Bottom padding to ensure content is accessible */}
-            <div className="h-20"></div>
-
           </div>
+
+          {/* RSVP Section */}
+          {!hasResponded && (
+            <Card>
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold mb-4">
+                  {t('areYouAttending', eventLanguage)}
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Input
+                      placeholder={t('enterYourName', eventLanguage)}
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      className={eventLanguage === 'ar' ? 'text-right' : ''}
+                      dir={eventLanguage === 'ar' ? 'rtl' : 'ltr'}
+                    />
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={() => handleRsvp('accepted')}
+                      disabled={isSubmitting || !guestName.trim()}
+                      className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
+                      variant="outline"
+                    >
+                      {t('accept', eventLanguage)}
+                    </Button>
+                    <Button
+                      onClick={() => handleRsvp('declined')}
+                      disabled={isSubmitting || !guestName.trim()}
+                      className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
+                      variant="outline"
+                    >
+                      {t('decline', eventLanguage)}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Response Confirmation */}
+          {hasResponded && (
+            <Card>
+              <CardContent className="p-6 text-center">
+                <h3 className="text-lg font-semibold mb-2">
+                  {eventLanguage === 'ar' ? `شكراً لك، ${submittedName}!` : `Thank you, ${submittedName}!`}
+                </h3>
+                <p className="text-muted-foreground">
+                  {eventLanguage === 'ar' 
+                    ? `تم تسجيل ${userResponse === 'accepted' ? 'قبولك' : 'رفضك'}.`
+                    : `Your ${userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
+                  }
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Debug Panel - Only show if there were issues */}
+          {debugInfo.length > 10 && (
+            <details className="text-left text-xs bg-gray-50 p-4 rounded mb-8">
+              <summary className="cursor-pointer font-semibold">Full Debug Log ({debugInfo.length} entries)</summary>
+              <div className="mt-2 space-y-1 max-h-60 overflow-y-auto">
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="font-mono text-xs">{info}</div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Bottom padding to ensure content is accessible */}
+          <div className="h-20"></div>
+
         </div>
       </div>
     </div>
