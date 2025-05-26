@@ -4,13 +4,67 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Calendar, Clock, MapPin, Users, ArrowLeft } from 'lucide-react';
+import { Calendar, Clock, MapPin, Users, ArrowLeft, X } from 'lucide-react';
 import { format } from 'date-fns';
-import { toast } from 'sonner';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
+
+// Custom Popup Component
+interface CustomPopupProps {
+  isVisible: boolean;
+  message: string;
+  isError?: boolean;
+  onClose: () => void;
+  textStyle?: any;
+}
+
+const CustomPopup: React.FC<CustomPopupProps> = ({ 
+  isVisible, 
+  message, 
+  isError = false, 
+  onClose, 
+  textStyle 
+}) => {
+  if (!isVisible) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      
+      {/* Popup */}
+      <div className="relative bg-white/95 backdrop-blur-sm border border-white/30 rounded-lg p-6 max-w-sm w-full mx-4 animate-fade-in">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        
+        <div className="text-center space-y-4">
+          <div className={`text-4xl ${isError ? '😔' : '🎉'}`}>
+            {isError ? '😔' : '🎉'}
+          </div>
+          
+          <p 
+            className="text-lg font-medium"
+            style={{ 
+              color: textStyle?.color || '#374151',
+              fontFamily: textStyle?.fontFamily || 'inherit'
+            }}
+          >
+            {message}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export default function Maw3dView() {
   const { shortId } = useParams();
@@ -22,12 +76,33 @@ export default function Maw3dView() {
   const [guestName, setGuestName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmittedResponse, setHasSubmittedResponse] = useState(false);
+  
+  // Custom popup state
+  const [popupVisible, setPopupVisible] = useState(false);
+  const [popupMessage, setPopupMessage] = useState('');
+  const [popupIsError, setPopupIsError] = useState(false);
 
   useEffect(() => {
     if (shortId) {
       fetchEvent();
     }
   }, [shortId]);
+
+  // Auto-dismiss popup after 4 seconds
+  useEffect(() => {
+    if (popupVisible) {
+      const timer = setTimeout(() => {
+        setPopupVisible(false);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [popupVisible]);
+
+  const showPopup = (message: string, isError: boolean = false) => {
+    setPopupMessage(message);
+    setPopupIsError(isError);
+    setPopupVisible(true);
+  };
 
   const fetchEvent = async () => {
     try {
@@ -62,7 +137,7 @@ export default function Maw3dView() {
     
     const trimmedName = guestName.trim();
     if (!trimmedName) {
-      toast.error('Please enter your name');
+      showPopup('Please enter your name', true);
       return;
     }
 
@@ -78,22 +153,20 @@ export default function Maw3dView() {
       // Refresh data
       await fetchEvent();
       
-      // Show personalized message
-      setTimeout(() => {
-        if (response === 'accepted') {
-          toast.success(`Thank you for accepting ${trimmedName}, see you soon!`);
-        } else {
-          toast.success(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
-        }
-      }, 200);
+      // Show personalized success message
+      if (response === 'accepted') {
+        showPopup(`Thank you for accepting ${trimmedName}, see you soon!`);
+      } else {
+        showPopup(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
+      }
       
     } catch (error: any) {
       // Handle specific error messages
       if (error.message?.includes('already responded')) {
-        toast.error('Someone with this name has already responded to this event');
+        showPopup('Someone with this name has already responded to this event', true);
         setHasSubmittedResponse(true); // Prevent further attempts
       } else {
-        toast.error('Failed to submit RSVP. Please try again.');
+        showPopup('Failed to submit RSVP. Please try again.', true);
         setHasSubmittedResponse(false); // Allow retry on other errors
       }
     } finally {
@@ -106,9 +179,6 @@ export default function Maw3dView() {
     const declined = rsvps.filter(rsvp => rsvp.response === 'declined').length;
     return { accepted, declined };
   };
-  
-  // Remove the incorrect conflict checking - let the database handle uniqueness
-  // The conflict will only be detected when the user actually tries to submit
 
   // Prepare event data for calendar integration
   const getCalendarEvent = () => {
@@ -347,6 +417,15 @@ export default function Maw3dView() {
           </div>
         </div>
       </div>
+
+      {/* Custom Popup */}
+      <CustomPopup
+        isVisible={popupVisible}
+        message={popupMessage}
+        isError={popupIsError}
+        onClose={() => setPopupVisible(false)}
+        textStyle={textStyle}
+      />
     </div>
   );
 }
