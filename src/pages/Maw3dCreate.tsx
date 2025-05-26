@@ -110,15 +110,31 @@ export default function Maw3dCreate() {
 
     setIsLoading(true);
     try {
-      console.log('Creating event with data:', formData);
+      console.log('Creating event with form data:', formData);
       
-      // Create the event
+      // Sanitize time fields - convert empty strings to null
+      const sanitizeTimeField = (timeValue: string | null): string | null => {
+        if (!timeValue || timeValue.trim() === '') {
+          return null;
+        }
+        return timeValue.trim();
+      };
+
+      // Create the event with proper time field handling
       const eventData = {
         ...formData,
         created_by: user.id,
-        start_time: formData.is_all_day ? null : formData.start_time,
-        end_time: formData.is_all_day ? null : formData.end_time,
+        // Critical fix: Convert empty time strings to null for PostgreSQL compatibility
+        start_time: formData.is_all_day ? null : sanitizeTimeField(formData.start_time),
+        end_time: formData.is_all_day ? null : sanitizeTimeField(formData.end_time),
       };
+
+      console.log('Sanitized event data before DB insert:', {
+        ...eventData,
+        start_time: eventData.start_time,
+        end_time: eventData.end_time,
+        is_all_day: eventData.is_all_day
+      });
 
       // Remove invited_contacts from the event data as it's not used anymore
       const { invited_contacts, ...dbEventData } = eventData;
@@ -185,6 +201,7 @@ export default function Maw3dCreate() {
                 backgroundType={formData.background_type}
                 backgroundValue={formData.background_value}
                 showAttendingCount={formData.show_attending_count}
+                language={language}
               />
             </CardContent>
           </Card>

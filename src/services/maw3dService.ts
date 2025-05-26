@@ -5,15 +5,34 @@ import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 export class Maw3dService {
   // Events
   static async createEvent(eventData: Omit<CreateEventFormData, 'invited_contacts'> & { created_by: string }): Promise<Maw3dEvent> {
-    console.log('Creating Maw3d event:', eventData);
+    console.log('=== CREATING MAW3D EVENT ===');
+    console.log('Raw event data received:', eventData);
     
-    // Prepare the data for database insertion - exclude invited_contacts and fix time fields
+    // Additional time field sanitization for database compatibility
+    const sanitizeTimeForDB = (timeValue: string | null): string | null => {
+      if (!timeValue || timeValue.trim() === '' || timeValue === 'null' || timeValue === 'undefined') {
+        console.log('Time value is empty/null, returning null');
+        return null;
+      }
+      const trimmed = timeValue.trim();
+      console.log('Time value sanitized:', trimmed);
+      return trimmed;
+    };
+
+    // Prepare the data for database insertion with enhanced time handling
     const dbEventData = {
       ...eventData,
-      // Convert time fields to null for all-day events
-      start_time: eventData.is_all_day ? null : eventData.start_time,
-      end_time: eventData.is_all_day ? null : eventData.end_time,
+      // Critical fix: Ensure time fields are properly handled for PostgreSQL
+      start_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.start_time),
+      end_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.end_time),
     };
+    
+    console.log('Prepared DB event data:', {
+      ...dbEventData,
+      start_time: dbEventData.start_time,
+      end_time: dbEventData.end_time,
+      is_all_day: dbEventData.is_all_day
+    });
     
     // Remove any fields that don't belong in the database
     delete (dbEventData as any).invited_contacts;
@@ -25,9 +44,18 @@ export class Maw3dService {
       .single();
 
     if (error) {
+      console.error('=== DATABASE INSERT ERROR ===');
       console.error('Error creating event:', error);
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
+    
+    console.log('=== EVENT CREATED SUCCESSFULLY ===');
     console.log('Event created successfully:', data);
     return data;
   }
