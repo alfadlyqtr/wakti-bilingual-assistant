@@ -199,7 +199,7 @@ export default function Maw3dView() {
 
           {/* Action Buttons - Fixed to be on same line */}
           <div className="flex gap-3 justify-center">
-            <CalendarDropdown event={calendarEvent} />
+            <CalendarDropdown event={calendarEvent} language={eventLanguage} />
             
             {event.google_maps_link && (
               <Button

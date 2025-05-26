@@ -8,7 +8,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Calendar, Download, ExternalLink } from 'lucide-react';
-import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 
 interface Event {
@@ -22,11 +21,10 @@ interface Event {
 
 interface CalendarDropdownProps {
   event: Event;
+  language?: string;
 }
 
-export default function CalendarDropdown({ event }: CalendarDropdownProps) {
-  const { language } = useTheme();
-
+export default function CalendarDropdown({ event, language = 'en' }: CalendarDropdownProps) {
   const formatDateForCalendar = (date: string) => {
     return new Date(date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   };
