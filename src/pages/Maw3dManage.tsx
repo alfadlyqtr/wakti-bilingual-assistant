@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -239,34 +240,34 @@ export default function Maw3dManage() {
           </CardContent>
         </Card>
 
-        {/* RSVP Statistics */}
-        <div className="grid gap-6 md:grid-cols-3 mb-8">
+        {/* RSVP Statistics - Smaller Cards */}
+        <div className="grid gap-4 md:grid-cols-3 mb-8">
           <Card className="border-2 hover:shadow-lg transition-all duration-200">
-            <CardContent className="p-6 text-center">
+            <CardContent className="p-4 text-center">
               <div className="relative">
-                <Users className="w-10 h-10 mx-auto mb-3 text-blue-600" />
-                <div className="text-3xl font-bold text-blue-600">{rsvps.length}</div>
-                <div className="text-sm font-medium text-muted-foreground">Total Responses</div>
+                <Users className="w-6 h-6 mx-auto mb-2 text-blue-600" />
+                <div className="text-2xl font-bold text-blue-600">{rsvps.length}</div>
+                <div className="text-xs font-medium text-muted-foreground">Total Responses</div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="border-2 border-green-200 bg-green-50/50 dark:bg-green-950/20 hover:shadow-lg transition-all duration-200">
-            <CardContent className="p-6 text-center">
+            <CardContent className="p-4 text-center">
               <div className="relative">
-                <CheckCircle className="w-10 h-10 mx-auto mb-3 text-green-600" />
-                <div className="text-3xl font-bold text-green-600">{rsvpCounts.accepted}</div>
-                <div className="text-sm font-medium text-green-700 dark:text-green-300">Attending</div>
+                <CheckCircle className="w-6 h-6 mx-auto mb-2 text-green-600" />
+                <div className="text-2xl font-bold text-green-600">{rsvpCounts.accepted}</div>
+                <div className="text-xs font-medium text-green-700 dark:text-green-300">Attending</div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="border-2 border-red-200 bg-red-50/50 dark:bg-red-950/20 hover:shadow-lg transition-all duration-200">
-            <CardContent className="p-6 text-center">
+            <CardContent className="p-4 text-center">
               <div className="relative">
-                <XCircle className="w-10 h-10 mx-auto mb-3 text-red-600" />
-                <div className="text-3xl font-bold text-red-600">{rsvpCounts.declined}</div>
-                <div className="text-sm font-medium text-red-700 dark:text-red-300">Declined</div>
+                <XCircle className="w-6 h-6 mx-auto mb-2 text-red-600" />
+                <div className="text-2xl font-bold text-red-600">{rsvpCounts.declined}</div>
+                <div className="text-xs font-medium text-red-700 dark:text-red-300">Declined</div>
               </div>
             </CardContent>
           </Card>
