@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -59,7 +58,7 @@ export default function PublicEvent() {
       }
 
       addDebugInfo(`Attempting to fetch event with short_id: "${shortId}"`);
-      addDebugInfo(`Supabase URL: ${supabase.supabaseUrl}`);
+      addDebugInfo(`Supabase project: hxauxozopvpzpdygoqwf`);
 
       // Test basic Supabase connectivity first
       addDebugInfo('Testing Supabase connectivity...');
