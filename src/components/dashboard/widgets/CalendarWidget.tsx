@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Maw3dService } from "@/services/maw3dService";
 import { Maw3dEvent } from "@/types/maw3d";
+import { getCalendarEntries, CalendarEntry } from "@/utils/calendarUtils";
 
 interface CalendarWidgetProps {
   isLoading: boolean;
@@ -18,6 +19,7 @@ interface CalendarWidgetProps {
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, tasks, language }) => {
   const navigate = useNavigate();
   const [maw3dEvents, setMaw3dEvents] = useState<Maw3dEvent[]>([]);
+  const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
   const [maw3dLoading, setMaw3dLoading] = useState(true);
 
   useEffect(() => {
@@ -34,22 +36,103 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
       }
     };
 
+    // Load manual entries from localStorage
+    const loadManualEntries = () => {
+      try {
+        const savedEntries = localStorage.getItem('calendarManualEntries');
+        if (savedEntries) {
+          const parsed = JSON.parse(savedEntries);
+          console.log('Dashboard widget loaded manual entries:', parsed.length);
+          setManualEntries(parsed);
+        } else {
+          setManualEntries([]);
+        }
+      } catch (error) {
+        console.error('Error loading manual entries for widget:', error);
+        setManualEntries([]);
+      }
+    };
+
     fetchMaw3dEvents();
+    loadManualEntries();
   }, []);
 
   const today = new Date().toISOString().split('T')[0];
-  const todayMaw3dEvents = maw3dEvents.filter(event => event.event_date === today);
-  const todayEvents = events?.filter(event => {
-    const eventDate = event.date || event.start_date || event.event_date;
-    return eventDate?.split('T')[0] === today;
-  }) || [];
-  
-  const todayTasks = tasks?.filter(task => {
-    const taskDate = task.due_date?.split('T')[0];
-    return taskDate === today;
-  }) || [];
+  const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
 
-  const totalTodayItems = todayEvents.length + todayTasks.length + todayMaw3dEvents.length;
+  // Get all calendar entries
+  const allEntries = getCalendarEntries(tasks, [], manualEntries, events, maw3dEvents);
+  
+  // Filter entries for today and tomorrow
+  const todayEntries = allEntries.filter(entry => entry.date === today);
+  const tomorrowEntries = allEntries.filter(entry => entry.date === tomorrow);
+
+  console.log('Dashboard widget - Today entries:', todayEntries.length);
+  console.log('Dashboard widget - Tomorrow entries:', tomorrowEntries.length);
+  console.log('Dashboard widget - Manual entries for today:', manualEntries.filter(e => e.date === today).length);
+  console.log('Dashboard widget - Manual entries for tomorrow:', manualEntries.filter(e => e.date === tomorrow).length);
+
+  const getTodayItemsText = () => {
+    if (todayEntries.length === 0) {
+      return t("nothingScheduled", language);
+    }
+    
+    const itemTypes = [];
+    const tasks = todayEntries.filter(e => e.type === 'task');
+    const events = todayEntries.filter(e => e.type === 'event');
+    const maw3d = todayEntries.filter(e => e.type === 'maw3d_event');
+    const manual = todayEntries.filter(e => e.type === 'manual_note');
+    const reminders = todayEntries.filter(e => e.type === 'reminder');
+    
+    if (tasks.length > 0) {
+      itemTypes.push(`${tasks.length} ${tasks.length === 1 ? t("task", language) : t("tasks", language)}`);
+    }
+    if (events.length > 0) {
+      itemTypes.push(`${events.length} ${events.length === 1 ? t("event", language) : t("events", language)}`);
+    }
+    if (maw3d.length > 0) {
+      itemTypes.push(`${maw3d.length} Maw3d`);
+    }
+    if (manual.length > 0) {
+      itemTypes.push(`${manual.length} Manual`);
+    }
+    if (reminders.length > 0) {
+      itemTypes.push(`${reminders.length} ${reminders.length === 1 ? 'Reminder' : 'Reminders'}`);
+    }
+    
+    return itemTypes.join(', ');
+  };
+
+  const getTomorrowItemsText = () => {
+    if (tomorrowEntries.length === 0) {
+      return t("nothingScheduled", language);
+    }
+    
+    const itemTypes = [];
+    const tasks = tomorrowEntries.filter(e => e.type === 'task');
+    const events = tomorrowEntries.filter(e => e.type === 'event');
+    const maw3d = tomorrowEntries.filter(e => e.type === 'maw3d_event');
+    const manual = tomorrowEntries.filter(e => e.type === 'manual_note');
+    const reminders = tomorrowEntries.filter(e => e.type === 'reminder');
+    
+    if (tasks.length > 0) {
+      itemTypes.push(`${tasks.length} ${tasks.length === 1 ? t("task", language) : t("tasks", language)}`);
+    }
+    if (events.length > 0) {
+      itemTypes.push(`${events.length} ${events.length === 1 ? t("event", language) : t("events", language)}`);
+    }
+    if (maw3d.length > 0) {
+      itemTypes.push(`${maw3d.length} Maw3d`);
+    }
+    if (manual.length > 0) {
+      itemTypes.push(`${manual.length} Manual`);
+    }
+    if (reminders.length > 0) {
+      itemTypes.push(`${reminders.length} ${reminders.length === 1 ? 'Reminder' : 'Reminders'}`);
+    }
+    
+    return itemTypes.join(', ');
+  };
 
   return (
     <div className="p-4">
@@ -82,20 +165,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
               {isLoading || maw3dLoading ? (
                 <Skeleton className="h-3 w-full" />
               ) : (
-                <>
-                  {todayEvents.length > 0 && (
-                    <div className="truncate">{todayEvents.length} {todayEvents.length === 1 ? t("event", language) : t("events", language)}</div>
-                  )}
-                  {todayMaw3dEvents.length > 0 && (
-                    <div className="truncate">{todayMaw3dEvents.length} Maw3d {todayMaw3dEvents.length === 1 ? t("event", language) : t("events", language)}</div>
-                  )}
-                  {todayTasks.length > 0 && (
-                    <div className="truncate">{todayTasks.length} {todayTasks.length === 1 ? t("task", language) : t("tasks", language)}</div>
-                  )}
-                  {totalTodayItems === 0 && (
-                    <div className="truncate">{t("nothingScheduled", language)}</div>
-                  )}
-                </>
+                <div className="truncate">{getTodayItemsText()}</div>
               )}
             </div>
           </div>
@@ -105,7 +175,11 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
             <div className="font-bold text-center">{format(addDays(new Date(), 1), "d")}</div>
             <div className="text-xs text-center">{t("tomorrow", language)}</div>
             <div className="mt-1 text-xs">
-              <div className="truncate">{t("nothingScheduled", language)}</div>
+              {isLoading || maw3dLoading ? (
+                <Skeleton className="h-3 w-full" />
+              ) : (
+                <div className="truncate">{getTomorrowItemsText()}</div>
+              )}
             </div>
           </div>
         </div>
