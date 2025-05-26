@@ -1,19 +1,16 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Calendar, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { Toaster } from "@/components/ui/toaster";
 import { Maw3dService } from '@/services/maw3dService';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import { t } from '@/utils/translations';
-import { format } from 'date-fns';
-import { ar, enUS } from 'date-fns/locale';
+import CalendarDropdown from '@/components/events/CalendarDropdown';
 
 export default function Maw3dView() {
   const { shortId } = useParams();
@@ -171,6 +168,18 @@ export default function Maw3dView() {
 
   const rsvpCounts = getRsvpCounts();
 
+  // Convert event to CalendarDropdown format
+  const calendarEvent = {
+    title: event.title,
+    description: event.description || '',
+    location: event.location || '',
+    start_time: `${event.event_date}T${event.start_time || '00:00'}`,
+    end_time: event.end_time 
+      ? `${event.event_date}T${event.end_time}`
+      : `${event.event_date}T${event.start_time || '00:00'}`,
+    is_all_day: event.is_all_day
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Toaster />
@@ -190,14 +199,7 @@ export default function Maw3dView() {
 
           {/* Action Buttons - Fixed to be on same line */}
           <div className="flex gap-3 justify-center">
-            <Button
-              variant="outline"
-              onClick={() => window.open(getCalendarUrl(), '_blank')}
-              className="flex items-center gap-2"
-            >
-              <Calendar className="w-4 h-4" />
-              {t('addToCalendar', eventLanguage)}
-            </Button>
+            <CalendarDropdown event={calendarEvent} />
             
             {event.google_maps_link && (
               <Button
@@ -275,4 +277,3 @@ export default function Maw3dView() {
     </div>
   );
 }
-
