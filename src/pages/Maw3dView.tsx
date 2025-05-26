@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,6 +24,7 @@ export default function Maw3dView() {
   const [guestName, setGuestName] = useState('');
   const [hasResponded, setHasResponded] = useState(false);
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
+  const [submittedName, setSubmittedName] = useState('');
 
   // Use event's language for all translations
   const eventLanguage = event?.language || 'en';
@@ -64,19 +66,39 @@ export default function Maw3dView() {
       return;
     }
 
+    const trimmedName = guestName.trim();
+
+    // Check for duplicate names
+    const existingRsvp = rsvps.find(rsvp => 
+      rsvp.guest_name?.toLowerCase() === trimmedName.toLowerCase()
+    );
+
+    if (existingRsvp) {
+      toast.error(`Someone with the name "${trimmedName}" has already responded to this event.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await Maw3dService.createRsvp(event.id, response, guestName.trim());
+      await Maw3dService.createRsvp(event.id, response, trimmedName);
       setHasResponded(true);
       setUserResponse(response);
-      toast.success(t('responseSubmitted', eventLanguage));
+      setSubmittedName(trimmedName);
+      
+      // Show success message with name
+      const message = `Thank you, ${trimmedName}! Your ${response === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`;
+      toast.success(message);
       
       // Refresh RSVPs
       const updatedRsvps = await Maw3dService.getRsvps(event.id);
       setRsvps(updatedRsvps);
     } catch (error) {
       console.error('Error submitting RSVP:', error);
-      toast.error(error instanceof Error ? error.message : t('errorSubmittingRsvp', eventLanguage));
+      if (error instanceof Error && error.message.includes('already responded')) {
+        toast.error(`Someone with the name "${trimmedName}" has already responded to this event.`);
+      } else {
+        toast.error(error instanceof Error ? error.message : t('errorSubmittingRsvp', eventLanguage));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -199,17 +221,18 @@ export default function Maw3dView() {
                     <Button
                       onClick={() => handleRsvp('accepted')}
                       disabled={isSubmitting || !guestName.trim()}
-                      className="flex-1"
+                      className="flex-1 bg-green-500/20 border-green-500 text-green-700 hover:bg-green-500/30 hover:text-green-800"
+                      variant="outline"
                     >
-                      {t('going', eventLanguage)}
+                      Accept
                     </Button>
                     <Button
-                      variant="outline"
                       onClick={() => handleRsvp('declined')}
                       disabled={isSubmitting || !guestName.trim()}
-                      className="flex-1"
+                      className="flex-1 bg-red-500/20 border-red-500 text-red-700 hover:bg-red-500/30 hover:text-red-800"
+                      variant="outline"
                     >
-                      {t('notGoing', eventLanguage)}
+                      Decline
                     </Button>
                   </div>
                 </div>
@@ -222,13 +245,10 @@ export default function Maw3dView() {
             <Card>
               <CardContent className="p-6 text-center">
                 <h3 className="text-lg font-semibold mb-2">
-                  {t('thankYou', eventLanguage)}
+                  Thank you, {submittedName}!
                 </h3>
                 <p className="text-muted-foreground">
-                  {userResponse === 'accepted' 
-                    ? t('yourResponseAccepted', eventLanguage)
-                    : t('yourResponseDeclined', eventLanguage)
-                  }
+                  Your {userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.
                 </p>
               </CardContent>
             </Card>
@@ -239,3 +259,4 @@ export default function Maw3dView() {
     </div>
   );
 }
+
