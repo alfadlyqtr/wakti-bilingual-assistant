@@ -85,45 +85,53 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setError('Authentication required');
+        console.log('No active session found');
         return false;
       }
+      console.log('User authenticated:', session.user.id);
       return true;
     } catch (error) {
       console.error('Auth check error:', error);
-      setError('Authentication error');
       return false;
     }
   };
 
-  // Fetch tasks with error handling and authentication check
+  // Fetch tasks with better error handling
   const fetchTasks = async () => {
     try {
       setError(null);
+      console.log('Starting fetchTasks...');
       
       // Check authentication first
       const isAuthenticated = await checkAuth();
       if (!isAuthenticated) {
+        console.log('Not authenticated, setting empty tasks array');
         setTasks([]);
         return;
       }
 
-      console.log('Fetching tasks...');
+      console.log('Fetching tasks from database...');
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select('*')
         .order('due_date', { ascending: true });
 
       if (tasksError) {
-        console.error('Error fetching tasks:', tasksError);
-        setError(`Failed to load tasks: ${tasksError.message}`);
-        return;
+        console.error('Database error fetching tasks:', tasksError);
+        // Only set error for actual database errors, not empty results
+        if (tasksError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          setError(`Database error: ${tasksError.message}`);
+          return;
+        }
       }
 
-      console.log('Tasks fetched successfully:', tasksData?.length || 0);
+      const tasksList = tasksData || [];
+      console.log(`Successfully fetched ${tasksList.length} tasks`);
 
-      const tasksWithSubtasks = await Promise.all((tasksData || []).map(async (task) => {
+      // Process tasks with subtasks and sharing info
+      const tasksWithSubtasks = await Promise.all(tasksList.map(async (task) => {
         try {
+          // Fetch subtasks
           const { data: subtasks, error: subtasksError } = await supabase
             .from('subtasks')
             .select('*')
@@ -131,14 +139,18 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
             .order('created_at');
 
           if (subtasksError) {
-            console.error('Error fetching subtasks for task', task.id, ':', subtasksError);
+            console.warn('Error fetching subtasks for task', task.id, ':', subtasksError);
           }
 
           // Check if task is shared
-          const { data: sharedData } = await supabase
+          const { data: sharedData, error: sharedError } = await supabase
             .from('shared_tasks')
             .select('id')
             .eq('task_id', task.id);
+
+          if (sharedError) {
+            console.warn('Error checking shared status for task', task.id, ':', sharedError);
+          }
 
           return { 
             ...task, 
@@ -149,7 +161,7 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
             recurrence_pattern: task.recurrence_pattern as RecurrencePattern | undefined
           };
         } catch (error) {
-          console.error('Error processing task:', task.id, error);
+          console.warn('Error processing task:', task.id, error);
           return { 
             ...task, 
             subtasks: [],
@@ -171,71 +183,73 @@ export const TaskReminderProvider: React.FC<{ children: React.ReactNode }> = ({ 
       });
 
       setTasks(updatedTasks);
+      console.log('Tasks state updated successfully');
     } catch (error) {
-      console.error('Error in fetchTasks:', error);
-      setError('Failed to load tasks. Please try again.');
+      console.error('Unexpected error in fetchTasks:', error);
+      setError('An unexpected error occurred while loading tasks. Please try again.');
     }
   };
 
-  // Fetch reminders with error handling and authentication check
+  // Fetch reminders with better error handling
   const fetchReminders = async () => {
     try {
       setError(null);
+      console.log('Starting fetchReminders...');
       
       // Check authentication first
       const isAuthenticated = await checkAuth();
       if (!isAuthenticated) {
+        console.log('Not authenticated, setting empty reminders array');
         setReminders([]);
         return;
       }
 
-      console.log('Fetching reminders...');
+      console.log('Fetching reminders from database...');
       const { data, error } = await supabase
         .from('reminders')
         .select('*')
         .order('due_date', { ascending: true });
 
       if (error) {
-        console.error('Error fetching reminders:', error);
-        setError(`Failed to load reminders: ${error.message}`);
-        return;
+        console.error('Database error fetching reminders:', error);
+        // Only set error for actual database errors, not empty results
+        if (error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          setError(`Database error: ${error.message}`);
+          return;
+        }
       }
 
-      console.log('Reminders fetched successfully:', data?.length || 0);
+      const remindersList = data || [];
+      console.log(`Successfully fetched ${remindersList.length} reminders`);
 
-      const typedReminders = (data || []).map(reminder => ({
+      const typedReminders = remindersList.map(reminder => ({
         ...reminder,
         recurrence_pattern: reminder.recurrence_pattern as RecurrencePattern | undefined
       }));
 
       setReminders(typedReminders);
+      console.log('Reminders state updated successfully');
     } catch (error) {
-      console.error('Error in fetchReminders:', error);
-      setError('Failed to load reminders. Please try again.');
+      console.error('Unexpected error in fetchReminders:', error);
+      setError('An unexpected error occurred while loading reminders. Please try again.');
     }
   };
 
-  // Initialize data with retry mechanism
+  // Initialize data with better error handling
   useEffect(() => {
-    let retryCount = 0;
-    const maxRetries = 3;
-    
     const fetchInitialData = async () => {
       try {
         setLoading(true);
         setError(null);
+        console.log('Initializing TaskReminderProvider...');
         
-        await Promise.all([fetchTasks(), fetchReminders()]);
+        // Run both fetches concurrently
+        await Promise.allSettled([fetchTasks(), fetchReminders()]);
+        
+        console.log('Initial data fetch completed');
       } catch (error) {
-        console.error('Error fetching initial data:', error);
-        
-        if (retryCount < maxRetries) {
-          retryCount++;
-          console.log(`Retrying data fetch (${retryCount}/${maxRetries})...`);
-          setTimeout(fetchInitialData, 2000 * retryCount); // Exponential backoff
-        } else {
-          setError('Failed to load data after multiple attempts. Please refresh the page.');
-        }
+        console.error('Error during initialization:', error);
+        setError('Failed to initialize. Please refresh the page.');
       } finally {
         setLoading(false);
       }
