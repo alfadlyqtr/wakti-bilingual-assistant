@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -110,10 +109,11 @@ export class Maw3dService {
 
     console.log('Fetching events for user:', userData.user.id);
 
-    // The RLS policy now only returns events the user created
+    // CRITICAL FIX: Only fetch events created by the current user
     const { data: events, error } = await supabase
       .from('maw3d_events')
       .select('*')
+      .eq('created_by', userData.user.id)  // Filter by current user's ID
       .order('event_date', { ascending: true });
 
     if (error) {
@@ -121,7 +121,7 @@ export class Maw3dService {
       throw error;
     }
 
-    console.log('Fetched Maw3d events:', events?.length || 0);
+    console.log('Fetched Maw3d events for user:', events?.length || 0);
     return events || [];
   }
 
