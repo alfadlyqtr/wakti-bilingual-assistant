@@ -20,6 +20,7 @@ export interface Maw3dEvent {
   template_type?: string;
   show_attending_count: boolean;
   language: string;
+  auto_delete_enabled: boolean;
 }
 
 export interface CreateEventFormData {
@@ -39,6 +40,7 @@ export interface CreateEventFormData {
   invited_contacts: string[];
   template_type?: string;
   show_attending_count?: boolean;
+  auto_delete_enabled?: boolean;
 }
 
 export interface TextStyle {

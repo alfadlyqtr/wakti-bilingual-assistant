@@ -311,6 +311,7 @@ export type Database = {
       }
       maw3d_events: {
         Row: {
+          auto_delete_enabled: boolean
           background_type: string
           background_value: string
           created_at: string
@@ -334,6 +335,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_delete_enabled?: boolean
           background_type?: string
           background_value?: string
           created_at?: string
@@ -357,6 +359,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_delete_enabled?: boolean
           background_type?: string
           background_value?: string
           created_at?: string
