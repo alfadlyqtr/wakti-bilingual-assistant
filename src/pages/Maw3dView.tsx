@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -11,61 +12,6 @@ import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, Maw3dRsvp } from '@/types/maw3d';
 import CalendarDropdown from '@/components/events/CalendarDropdown';
 
-// Custom Popup Component
-interface CustomPopupProps {
-  isVisible: boolean;
-  message: string;
-  isError?: boolean;
-  onClose: () => void;
-  textStyle?: any;
-}
-
-const CustomPopup: React.FC<CustomPopupProps> = ({ 
-  isVisible, 
-  message, 
-  isError = false, 
-  onClose, 
-  textStyle 
-}) => {
-  if (!isVisible) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      {/* Popup */}
-      <div className="relative bg-white/95 backdrop-blur-sm border border-white/30 rounded-lg p-6 max-w-sm w-full mx-4 animate-fade-in">
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
-        >
-          <X className="w-5 h-5" />
-        </button>
-        
-        <div className="text-center space-y-4">
-          <div className={`text-4xl ${isError ? '😔' : '🎉'}`}>
-            {isError ? '😔' : '🎉'}
-          </div>
-          
-          <p 
-            className="text-lg font-medium"
-            style={{ 
-              color: textStyle?.color || '#374151',
-              fontFamily: textStyle?.fontFamily || 'inherit'
-            }}
-          >
-            {message}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function Maw3dView() {
   const { shortId } = useParams();
   const navigate = useNavigate();
@@ -77,8 +23,8 @@ export default function Maw3dView() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmittedResponse, setHasSubmittedResponse] = useState(false);
   
-  // Custom popup state
-  const [popupVisible, setPopupVisible] = useState(false);
+  // Simplified popup state
+  const [showPopup, setShowPopup] = useState(false);
   const [popupMessage, setPopupMessage] = useState('');
   const [popupIsError, setPopupIsError] = useState(false);
 
@@ -90,18 +36,29 @@ export default function Maw3dView() {
 
   // Auto-dismiss popup after 4 seconds
   useEffect(() => {
-    if (popupVisible) {
+    if (showPopup) {
+      console.log('Popup is showing, setting timer to hide it');
       const timer = setTimeout(() => {
-        setPopupVisible(false);
+        console.log('Timer triggered, hiding popup');
+        setShowPopup(false);
       }, 4000);
-      return () => clearTimeout(timer);
+      return () => {
+        console.log('Cleaning up popup timer');
+        clearTimeout(timer);
+      };
     }
-  }, [popupVisible]);
+  }, [showPopup]);
 
-  const showPopup = (message: string, isError: boolean = false) => {
+  const displayPopup = (message: string, isError: boolean = false) => {
+    console.log('=== DISPLAYING POPUP ===');
+    console.log('Message:', message);
+    console.log('Is Error:', isError);
+    
     setPopupMessage(message);
     setPopupIsError(isError);
-    setPopupVisible(true);
+    setShowPopup(true);
+    
+    console.log('Popup state set to true');
   };
 
   const fetchEvent = async () => {
@@ -128,20 +85,32 @@ export default function Maw3dView() {
   };
 
   const handleRsvp = async (response: 'accepted' | 'declined') => {
-    if (!event) return;
+    console.log('=== RSVP BUTTON CLICKED ===');
+    console.log('Response:', response);
+    console.log('Guest Name:', guestName);
+    console.log('Is Submitting:', isSubmitting);
+    console.log('Has Submitted:', hasSubmittedResponse);
+    
+    if (!event) {
+      console.log('No event found, aborting');
+      return;
+    }
     
     // Prevent multiple submissions
     if (isSubmitting || hasSubmittedResponse) {
+      console.log('Preventing duplicate submission');
       return;
     }
     
     const trimmedName = guestName.trim();
     if (!trimmedName) {
-      showPopup('Please enter your name', true);
+      console.log('No name provided, showing error popup');
+      displayPopup('Please enter your name', true);
       return;
     }
 
     setIsSubmitting(true);
+    console.log('Starting RSVP submission...');
 
     try {
       // Create guest RSVP
@@ -149,28 +118,33 @@ export default function Maw3dView() {
       
       // Mark as submitted immediately to prevent further attempts
       setHasSubmittedResponse(true);
+      console.log('RSVP submitted successfully, refreshing data...');
       
       // Refresh data
       await fetchEvent();
       
       // Show personalized success message
       if (response === 'accepted') {
-        showPopup(`Thank you for accepting ${trimmedName}, see you soon!`);
+        console.log('Showing acceptance popup');
+        displayPopup(`Thank you for accepting ${trimmedName}, see you soon!`);
       } else {
-        showPopup(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
+        console.log('Showing decline popup');
+        displayPopup(`Sorry you couldn't make it ${trimmedName}, have a great day!`);
       }
       
     } catch (error: any) {
+      console.log('RSVP submission error:', error);
       // Handle specific error messages
       if (error.message?.includes('already responded')) {
-        showPopup('Someone with this name has already responded to this event', true);
+        displayPopup('Someone with this name has already responded to this event', true);
         setHasSubmittedResponse(true); // Prevent further attempts
       } else {
-        showPopup('Failed to submit RSVP. Please try again.', true);
+        displayPopup('Failed to submit RSVP. Please try again.', true);
         setHasSubmittedResponse(false); // Allow retry on other errors
       }
     } finally {
       setIsSubmitting(false);
+      console.log('RSVP submission completed');
     }
   };
 
@@ -280,6 +254,10 @@ export default function Maw3dView() {
   const calendarEvent = getCalendarEvent();
   const backgroundStyle = getBackgroundStyle();
   const textStyle = getTextStyle();
+
+  console.log('=== RENDER DEBUG ===');
+  console.log('Show Popup:', showPopup);
+  console.log('Popup Message:', popupMessage);
 
   return (
     <div className="min-h-screen bg-background overflow-y-auto">
@@ -418,14 +396,52 @@ export default function Maw3dView() {
         </div>
       </div>
 
-      {/* Custom Popup */}
-      <CustomPopup
-        isVisible={popupVisible}
-        message={popupMessage}
-        isError={popupIsError}
-        onClose={() => setPopupVisible(false)}
-        textStyle={textStyle}
-      />
+      {/* Simplified Custom Popup - Always rendered, visibility controlled by showPopup */}
+      <div 
+        className={`fixed inset-0 flex items-center justify-center p-4 transition-all duration-300 ${
+          showPopup ? 'visible opacity-100' : 'invisible opacity-0'
+        }`}
+        style={{ zIndex: 9999 }}
+      >
+        {/* Backdrop */}
+        <div 
+          className="absolute inset-0 bg-black/60"
+          onClick={() => {
+            console.log('Backdrop clicked, hiding popup');
+            setShowPopup(false);
+          }}
+        />
+        
+        {/* Popup Content */}
+        <div className="relative bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-2xl border-2 border-gray-200">
+          <button
+            onClick={() => {
+              console.log('Close button clicked, hiding popup');
+              setShowPopup(false);
+            }}
+            className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+          
+          <div className="text-center space-y-4">
+            <div className="text-4xl">
+              {popupIsError ? '😔' : '🎉'}
+            </div>
+            
+            <p 
+              className={`text-lg font-medium ${
+                popupIsError ? 'text-red-600' : 'text-green-600'
+              }`}
+              style={{ 
+                fontFamily: event?.text_style?.fontFamily || 'inherit'
+              }}
+            >
+              {popupMessage}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
