@@ -412,20 +412,12 @@ export const UnifiedCalendar: React.FC = () => {
               <span>{t("tasks", language)}</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-              <span>{t("events", language)}</span>
-            </div>
-            <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-purple-500"></div>
               <span>Maw3d</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-red-500"></div>
               <span>{t("reminders", language)}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <span>{t("notesLabel", language)}</span>
             </div>
           </div>
         </div>
