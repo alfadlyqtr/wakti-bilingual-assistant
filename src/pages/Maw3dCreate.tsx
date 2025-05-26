@@ -16,6 +16,7 @@ import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
+import AutoDeleteToggle from '@/components/maw3d/AutoDeleteToggle';
 import { Maw3dService } from '@/services/maw3dService';
 import { CreateEventFormData, TextStyle, EventTemplate } from '@/types/maw3d';
 
@@ -49,6 +50,7 @@ export default function Maw3dCreate() {
     is_all_day: false,
     is_public: false,
     show_attending_count: true,
+    auto_delete_enabled: true,
     background_type: 'color',
     background_value: '#3b82f6',
     text_style: defaultTextStyle,
@@ -133,7 +135,8 @@ export default function Maw3dCreate() {
         ...eventData,
         start_time: eventData.start_time,
         end_time: eventData.end_time,
-        is_all_day: eventData.is_all_day
+        is_all_day: eventData.is_all_day,
+        auto_delete_enabled: eventData.auto_delete_enabled
       });
 
       // Remove invited_contacts from the event data as it's not used anymore
@@ -195,7 +198,9 @@ export default function Maw3dCreate() {
                   created_by: user?.id || '',
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
-                  short_id: null
+                  short_id: null,
+                  language: language,
+                  auto_delete_enabled: formData.auto_delete_enabled
                 }}
                 textStyle={formData.text_style}
                 backgroundType={formData.background_type}
@@ -371,14 +376,14 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Simplified */}
+            {/* Privacy Settings Section - Updated with AutoDeleteToggle */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
                   <h2 className="text-lg font-semibold">🔒 {t('privacySettings', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <CardContent className="px-6 pb-6 space-y-4">
+                  <CardContent className="px-6 pb-6 space-y-6">
                     <div className="flex items-center space-x-2">
                       <Switch
                         id="is_public"
@@ -396,6 +401,13 @@ export default function Maw3dCreate() {
                       />
                       <Label htmlFor="show_attending_count">{t('showAttendingCount', language)}</Label>
                     </div>
+
+                    {/* Auto Delete Toggle Component */}
+                    <AutoDeleteToggle
+                      enabled={formData.auto_delete_enabled}
+                      onChange={(enabled) => handleInputChange('auto_delete_enabled', enabled)}
+                      language={language}
+                    />
 
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-sm text-muted-foreground">

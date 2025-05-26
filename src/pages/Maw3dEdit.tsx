@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -17,6 +16,7 @@ import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
+import AutoDeleteToggle from '@/components/maw3d/AutoDeleteToggle';
 import { Maw3dService } from '@/services/maw3dService';
 import { Maw3dEvent, TextStyle, EventTemplate } from '@/types/maw3d';
 
@@ -114,7 +114,7 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
-      console.log('Saving event with show_attending_count:', event.show_attending_count);
+      console.log('Saving event with auto_delete_enabled:', event.auto_delete_enabled);
       
       // Ensure the event language is set to current UI language
       const updatedEventData = {
@@ -124,7 +124,7 @@ export default function Maw3dEdit() {
       
       // Update the event
       const updatedEvent = await Maw3dService.updateEvent(event.id, updatedEventData);
-      console.log('Event updated with show_attending_count:', updatedEvent.show_attending_count);
+      console.log('Event updated with auto_delete_enabled:', updatedEvent.auto_delete_enabled);
 
       toast.success('Event updated successfully!');
       navigate('/maw3d');
@@ -348,14 +348,14 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Simplified */}
+            {/* Privacy Settings Section - Updated with AutoDeleteToggle */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
                   <h2 className="text-lg font-semibold">🔒 {t('privacySettings', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <CardContent className="px-6 pb-6 space-y-4">
+                  <CardContent className="px-6 pb-6 space-y-6">
                     <div className="flex items-center space-x-2">
                       <Switch
                         id="is_public"
@@ -376,6 +376,13 @@ export default function Maw3dEdit() {
                       />
                       <Label htmlFor="show_attending_count">{t('showAttendingCount', language)}</Label>
                     </div>
+
+                    {/* Auto Delete Toggle Component */}
+                    <AutoDeleteToggle
+                      enabled={event.auto_delete_enabled}
+                      onChange={(enabled) => handleInputChange('auto_delete_enabled', enabled)}
+                      language={language}
+                    />
 
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-sm text-muted-foreground">
