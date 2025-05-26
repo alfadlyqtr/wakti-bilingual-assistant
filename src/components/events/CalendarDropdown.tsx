@@ -121,7 +121,7 @@ export default function CalendarDropdown({ event }: CalendarDropdownProps) {
           className="flex items-center gap-2"
         >
           <Download className="h-4 w-4" />
-          {t("downloadIcs", language)}
+          {t("appleCalendar", language)}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

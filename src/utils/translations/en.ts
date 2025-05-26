@@ -1,7 +1,7 @@
 import { TranslationKey } from "../translationTypes";
 
 // English translations
-export const en: Record<TranslationKey, string> = {
+export const en = {
   dashboard: "Dashboard",
   tasks: "Tasks",
   reminders: "Reminders",
