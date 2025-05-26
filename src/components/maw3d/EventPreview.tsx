@@ -1,18 +1,17 @@
 
 import React from 'react';
-import { Maw3dEvent, TextStyle } from '@/types/maw3d';
-import { Calendar, Clock, MapPin, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
+import { Clock, MapPin, Users } from 'lucide-react';
+import { Maw3dEvent, TextStyle } from '@/types/maw3d';
 
 interface EventPreviewProps {
-  event: Partial<Maw3dEvent>;
+  event: Maw3dEvent;
   textStyle: TextStyle;
   backgroundType: string;
   backgroundValue: string;
-  rsvpCount?: { accepted: number; declined: number };
-  showAttendingCount?: boolean;
-  language?: string;
+  showAttendingCount: boolean;
+  language: 'en' | 'ar';
   imageBlur?: number;
 }
 
@@ -21,16 +20,11 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
   textStyle,
   backgroundType,
   backgroundValue,
-  rsvpCount,
-  showAttendingCount = true,
-  language = 'en',
+  showAttendingCount,
+  language,
   imageBlur = 0
 }) => {
   const getBackgroundStyle = () => {
-    if (backgroundType === 'transparent') {
-      return {};
-    }
-    
     switch (backgroundType) {
       case 'color':
         return { backgroundColor: backgroundValue };
@@ -38,7 +32,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         return { background: backgroundValue };
       case 'image':
       case 'ai':
-        return { 
+        return {
           backgroundImage: `url(${backgroundValue})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
@@ -49,136 +43,135 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
     }
   };
 
-  const getTextStyle = () => ({
-    fontSize: `${textStyle.fontSize}px`,
-    fontFamily: textStyle.fontFamily,
-    fontWeight: textStyle.isBold ? 'bold' : 'normal',
-    fontStyle: textStyle.isItalic ? 'italic' : 'normal',
-    textDecoration: textStyle.isUnderline ? 'underline' : 'none',
-    textShadow: textStyle.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
-    textAlign: textStyle.alignment as any,
-    color: textStyle.color
-  });
+  const getTextStyle = () => {
+    return {
+      color: textStyle.color,
+      fontSize: `${textStyle.fontSize}px`,
+      fontFamily: textStyle.fontFamily,
+      fontWeight: textStyle.isBold ? 'bold' : 'normal',
+      fontStyle: textStyle.isItalic ? 'italic' : 'normal',
+      textDecoration: textStyle.isUnderline ? 'underline' : 'none',
+      textAlign: textStyle.alignment as 'left' | 'center' | 'right',
+      textShadow: textStyle.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
+    };
+  };
 
   const formatTime = (time: string) => {
     if (!time) return '';
     const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const minute = parseInt(minutes);
+    const timeObj = new Date();
+    timeObj.setHours(parseInt(hours), parseInt(minutes));
     
     if (language === 'ar') {
-      const ampm = hour >= 12 ? 'م' : 'ص';
-      const hour12 = hour % 12 || 12;
-      return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+      return format(timeObj, 'h:mm a', { locale: ar });
     } else {
-      const ampm = hour >= 12 ? 'PM' : 'AM';
-      const hour12 = hour % 12 || 12;
-      return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+      return format(timeObj, 'h:mm a', { locale: enUS });
     }
   };
 
   const formatDate = (dateString: string) => {
     if (!dateString) return '';
     
-    console.log('EventPreview formatDate - dateString:', dateString, 'language:', language);
-    
     const date = new Date(dateString);
     const locale = language === 'ar' ? ar : enUS;
     
-    console.log('EventPreview formatDate - using locale:', locale, 'for language:', language);
-    
     if (language === 'ar') {
       // Use Arabic date format with proper Arabic day and month names
-      const formattedDate = format(date, 'EEEE، d MMMM yyyy', { locale: ar });
-      console.log('EventPreview formatDate - Arabic formatted date:', formattedDate);
-      return formattedDate;
+      return format(date, 'EEEE، d MMMM yyyy', { locale: ar });
     } else {
-      const formattedDate = format(date, 'EEEE, MMMM d, yyyy', { locale: enUS });
-      console.log('EventPreview formatDate - English formatted date:', formattedDate);
-      return formattedDate;
+      return format(date, 'EEEE, MMMM d, yyyy', { locale: enUS });
     }
   };
 
   const getLocalizedText = (key: string) => {
     const translations = {
-      organizedBy: language === 'ar' ? 'نظمه' : 'Organized by',
-      selectDate: language === 'ar' ? 'اختر التاريخ' : 'Select Date',
-      allDay: language === 'ar' ? 'طوال اليوم' : 'All Day',
-      attending: language === 'ar' ? 'حاضر' : 'attending',
-      declined: language === 'ar' ? 'رفض' : 'declined'
+      'startTime': language === 'ar' ? 'وقت البداية' : 'Start Time',
+      'endTime': language === 'ar' ? 'وقت النهاية' : 'End Time',
+      'location': language === 'ar' ? 'الموقع' : 'Location',
+      'organizer': language === 'ar' ? 'المنظم' : 'Organizer',
+      'allDay': language === 'ar' ? 'طوال اليوم' : 'All Day',
+      'attending': language === 'ar' ? 'حضور' : 'attending'
     };
     return translations[key as keyof typeof translations] || key;
   };
 
-  console.log('EventPreview render - event:', event, 'language:', language);
-
   return (
     <div className="w-full max-w-md mx-auto" dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <div 
-        className="relative rounded-lg overflow-hidden shadow-lg"
+        className="relative rounded-lg overflow-hidden shadow-lg min-h-[400px] p-6 flex flex-col"
         style={getBackgroundStyle()}
       >
-        {backgroundType !== 'transparent' && (
-          <div className="absolute inset-0 bg-black/20" />
+        {/* Overlay for better text readability when using images */}
+        {(backgroundType === 'image' || backgroundType === 'ai') && (
+          <div className="absolute inset-0 bg-black bg-opacity-30 rounded-lg"></div>
         )}
         
-        <div className="relative p-4 space-y-3">
-          {/* Title and Description with custom text styling */}
-          <div style={getTextStyle()}>
-            <h1 className="font-bold mb-1" style={{ fontSize: `${textStyle.fontSize + 6}px` }}>
-              {event.title || (language === 'ar' ? 'عنوان الحدث' : 'Event Title')}
-            </h1>
-            {(event.description && event.description.trim()) && (
-              <p className="opacity-90 mb-2" style={{ fontSize: `${textStyle.fontSize - 2}px` }}>
-                {event.description}
-              </p>
-            )}
+        <div className="relative z-10 flex flex-col h-full">
+          {/* Event Title */}
+          <h1 className="text-2xl font-bold mb-4 break-words" style={getTextStyle()}>
+            {event.title}
+          </h1>
+
+          {/* Event Date */}
+          <div className="mb-4">
+            <p className="text-lg" style={getTextStyle()}>
+              {formatDate(event.event_date)}
+            </p>
           </div>
 
-          {/* Organizer */}
-          {(event.organizer && event.organizer.trim()) && (
-            <div className="text-sm opacity-90" style={{ color: textStyle.color, fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-              {getLocalizedText('organizedBy')} {event.organizer}
+          {/* Event Time */}
+          {!event.is_all_day && (event.start_time || event.end_time) && (
+            <div className="flex items-center mb-4" style={getTextStyle()}>
+              <Clock className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
+              <span>
+                {event.start_time && formatTime(event.start_time)}
+                {event.start_time && event.end_time && ' - '}
+                {event.end_time && formatTime(event.end_time)}
+              </span>
             </div>
           )}
 
-          {/* Event details with consistent styling */}
-          <div className="space-y-2" style={{ color: textStyle.color }}>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                {event.event_date ? formatDate(event.event_date) : getLocalizedText('selectDate')}
-              </span>
+          {event.is_all_day && (
+            <div className="flex items-center mb-4" style={getTextStyle()}>
+              <Clock className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
+              <span>{getLocalizedText('allDay')}</span>
             </div>
+          )}
 
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                {event.is_all_day 
-                  ? getLocalizedText('allDay')
-                  : `${formatTime(event.start_time || '')} - ${formatTime(event.end_time || '')}`
-                }
-              </span>
+          {/* Event Description */}
+          {event.description && (
+            <div className="mb-4">
+              <p className="break-words" style={getTextStyle()}>
+                {event.description}
+              </p>
             </div>
+          )}
 
-            {event.location && (
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                  {event.location}
-                </span>
-              </div>
-            )}
+          {/* Event Location */}
+          {event.location && (
+            <div className="flex items-center mb-4" style={getTextStyle()}>
+              <MapPin className="w-4 h-4 mr-2 flex-shrink-0" style={{ color: textStyle.color }} />
+              <span className="break-words">{event.location}</span>
+            </div>
+          )}
 
-            {rsvpCount && showAttendingCount && (
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                <span style={{ fontSize: `${Math.max(textStyle.fontSize - 4, 12)}px` }}>
-                  {rsvpCount.accepted} {getLocalizedText('attending')}, {rsvpCount.declined} {getLocalizedText('declined')}
-                </span>
-              </div>
-            )}
-          </div>
+          {/* Organizer */}
+          {event.organizer && (
+            <div className="mb-4">
+              <p style={getTextStyle()}>
+                <span className="font-semibold">{getLocalizedText('organizer')}: </span>
+                {event.organizer}
+              </p>
+            </div>
+          )}
+
+          {/* Attending Count (if enabled) */}
+          {showAttendingCount && (
+            <div className="flex items-center mt-auto" style={getTextStyle()}>
+              <Users className="w-4 h-4 mr-2" style={{ color: textStyle.color }} />
+              <span>0 {getLocalizedText('attending')}</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

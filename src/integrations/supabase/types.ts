@@ -799,6 +799,10 @@ export type Database = {
         Args: { "": string }
         Returns: string[]
       }
+      user_can_access_task: {
+        Args: { task_id: string }
+        Returns: boolean
+      }
       user_is_conversation_participant: {
         Args: { conversation_id: string }
         Returns: boolean
