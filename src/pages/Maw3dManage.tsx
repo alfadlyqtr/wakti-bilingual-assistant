@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -163,21 +162,18 @@ export default function Maw3dManage() {
   return (
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="p-4 pb-24">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
+        {/* Header with Back Button and Description */}
+        <div className="mb-6">
           <Button 
             variant="ghost" 
             size="sm" 
             onClick={() => navigate('/maw3d')}
-            className="gap-2"
+            className="gap-2 mb-3 text-sm px-2 py-1"
           >
-            <ArrowLeft className="w-4 h-4" />
+            <ArrowLeft className="w-3 h-3" />
             {t("backToEvents", language)}
           </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold">{t("manageEvent", language)}</h1>
-            <p className="text-muted-foreground">{t("viewRsvpsAndManage", language)}</p>
-          </div>
+          <p className="text-muted-foreground text-sm">{t("viewRsvpsAndManage", language)}</p>
         </div>
 
         {/* Event Preview - Title and Background Only */}
