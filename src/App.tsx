@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -142,6 +143,9 @@ function App() {
                   </TasjeelLayout>
                 } />
 
+                {/* NEW: Direct UUID-based event route - moved higher for proper precedence */}
+                <Route path="/:eventId" element={<DirectEventView />} />
+
                 {/* Protected routes - but now without redirect */}
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
@@ -166,9 +170,6 @@ function App() {
                   <Route path="/contacts" element={<AppLayout><PageContainer title="Contacts"><Contacts /></PageContainer></AppLayout>} />
                   <Route path="/account" element={<AppLayout><PageContainer title="Account"><Account /></PageContainer></AppLayout>} />
                 </Route>
-
-                {/* NEW: Direct UUID-based event route - must be before catch-all */}
-                <Route path="/:eventId" element={<DirectEventView />} />
 
                 {/* Catch all route for 404 */}
                 <Route path="*" element={<NotFound />} />
