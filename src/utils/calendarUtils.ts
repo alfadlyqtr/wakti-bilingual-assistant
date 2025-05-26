@@ -1,11 +1,13 @@
 
 import { Task, Reminder } from "@/contexts/TaskReminderContext";
+import { Maw3dEvent } from "@/types/maw3d";
 
 export enum EntryType {
   TASK = "task",
   EVENT = "event",
   REMINDER = "reminder",
-  MANUAL_NOTE = "manual_note"
+  MANUAL_NOTE = "manual_note",
+  MAW3D_EVENT = "maw3d_event"
 }
 
 export interface CalendarEntry {
@@ -16,6 +18,9 @@ export interface CalendarEntry {
   type: EntryType;
   priority?: "urgent" | "high" | "medium" | "low";
   due?: string;
+  time?: string;
+  location?: string;
+  isAllDay?: boolean;
 }
 
 export type CalendarView = "day" | "week" | "month" | "year";
@@ -29,8 +34,7 @@ const tasksToCalendarEntries = (tasks: Task[]): CalendarEntry[] => {
     date: task.due_date || new Date().toISOString().split('T')[0],
     type: EntryType.TASK,
     priority: task.priority,
-    // Due time is optional, check if it exists
-    due: task.due_date 
+    due: task.due_date
   }));
 };
 
@@ -41,8 +45,21 @@ const remindersToCalendarEntries = (reminders: Reminder[]): CalendarEntry[] => {
     title: reminder.title,
     date: reminder.due_date || new Date().toISOString().split('T')[0],
     type: EntryType.REMINDER,
-    // No separate time field in reminders, use due_date
     due: reminder.due_date
+  }));
+};
+
+// Convert Maw3d events to calendar entries
+const maw3dEventsToCalendarEntries = (events: Maw3dEvent[]): CalendarEntry[] => {
+  return events.map(event => ({
+    id: event.id,
+    title: event.title,
+    description: event.description,
+    date: event.event_date,
+    type: EntryType.MAW3D_EVENT,
+    time: event.is_all_day ? undefined : event.start_time,
+    location: event.location,
+    isAllDay: event.is_all_day
   }));
 };
 
@@ -63,12 +80,14 @@ export const getCalendarEntries = (
   tasks: Task[], 
   reminders: Reminder[], 
   manualEntries: CalendarEntry[] = [],
-  events: any[] = []
+  events: any[] = [],
+  maw3dEvents: Maw3dEvent[] = []
 ): CalendarEntry[] => {
   return [
     ...tasksToCalendarEntries(tasks),
     ...remindersToCalendarEntries(reminders),
     ...eventsToCalendarEntries(events),
+    ...maw3dEventsToCalendarEntries(maw3dEvents),
     ...manualEntries
   ];
 };

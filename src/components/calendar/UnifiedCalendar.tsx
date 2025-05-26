@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
@@ -14,6 +13,8 @@ import { CalendarAgenda } from "./CalendarAgenda";
 import { CalendarEntryDialog } from "./CalendarEntryDialog";
 import { CalendarViewSwitcher } from "./CalendarViewSwitcher";
 import { getCalendarEntries, CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
+import { Maw3dService } from "@/services/maw3dService";
+import { Maw3dEvent } from "@/types/maw3d";
 import { 
   Drawer, 
   DrawerContent, 
@@ -50,6 +51,7 @@ export const UnifiedCalendar: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
   const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
+  const [maw3dEvents, setMaw3dEvents] = useState<Maw3dEvent[]>([]);
   const [view, setView] = useState<CalendarView>('month');
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
@@ -91,16 +93,41 @@ export const UnifiedCalendar: React.FC = () => {
     }
   }, []);
 
+  // Fetch Maw3d events
+  useEffect(() => {
+    const fetchMaw3dEvents = async () => {
+      try {
+        console.log('Fetching Maw3d events for calendar...');
+        const events = await Maw3dService.getUserEvents();
+        console.log('Fetched Maw3d events:', events.length);
+        setMaw3dEvents(events);
+      } catch (error) {
+        console.error('Error fetching Maw3d events:', error);
+        setMaw3dEvents([]);
+      }
+    };
+
+    fetchMaw3dEvents();
+  }, []);
+
   // Save manual entries to local storage whenever they change
   useEffect(() => {
     localStorage.setItem('calendarManualEntries', JSON.stringify(manualEntries));
   }, [manualEntries]);
 
-  // Calculate all calendar entries from tasks, reminders, events and manual entries
+  // Calculate all calendar entries from tasks, reminders, events, maw3d events and manual entries
   useEffect(() => {
-    const entries = getCalendarEntries(tasks, reminders, manualEntries);
+    console.log('Calculating calendar entries with:', {
+      tasks: tasks.length,
+      reminders: reminders.length,
+      maw3dEvents: maw3dEvents.length,
+      manualEntries: manualEntries.length
+    });
+    
+    const entries = getCalendarEntries(tasks, reminders, manualEntries, [], maw3dEvents);
+    console.log('Total calendar entries:', entries.length);
     setCalendarEntries(entries);
-  }, [tasks, reminders, manualEntries]);
+  }, [tasks, reminders, manualEntries, maw3dEvents]);
 
   // Handle navigation between dates
   const navigatePrevious = () => {
@@ -402,4 +429,3 @@ export const UnifiedCalendar: React.FC = () => {
     </div>
   );
 };
-
