@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -37,6 +36,8 @@ import Maw3dCreate from "@/pages/Maw3dCreate";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEdit from "@/pages/Maw3dEdit";
 import Maw3dManage from "@/pages/Maw3dManage";
+// Public event import
+import PublicEvent from "@/pages/PublicEvent";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -113,6 +114,9 @@ function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+
+                {/* NEW: Public event route - completely standalone, no auth wrapper */}
+                <Route path="/w/:shortId" element={<PublicEvent />} />
 
                 {/* Public legacy event detail routes - accessible without authentication */}
                 <Route path="/event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
