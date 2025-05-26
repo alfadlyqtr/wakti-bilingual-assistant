@@ -36,8 +36,9 @@ import Maw3dCreate from "@/pages/Maw3dCreate";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEdit from "@/pages/Maw3dEdit";
 import Maw3dManage from "@/pages/Maw3dManage";
-// Public event import
+// Public event imports
 import PublicEvent from "@/pages/PublicEvent";
+import DirectEventView from "@/pages/DirectEventView";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -165,6 +166,9 @@ function App() {
                   <Route path="/contacts" element={<AppLayout><PageContainer title="Contacts"><Contacts /></PageContainer></AppLayout>} />
                   <Route path="/account" element={<AppLayout><PageContainer title="Account"><Account /></PageContainer></AppLayout>} />
                 </Route>
+
+                {/* NEW: Direct UUID-based event route - must be before catch-all */}
+                <Route path="/:eventId" element={<DirectEventView />} />
 
                 {/* Catch all route for 404 */}
                 <Route path="*" element={<NotFound />} />
