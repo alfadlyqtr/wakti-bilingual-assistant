@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -204,6 +203,7 @@ export default function Maw3dCreate() {
                     <EventTemplates
                       onSelectTemplate={handleTemplateSelect}
                       selectedTemplate={selectedTemplate}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>
@@ -328,6 +328,7 @@ export default function Maw3dCreate() {
                     <TextStyleCustomizer
                       textStyle={formData.text_style}
                       onTextStyleChange={handleTextStyleChange}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>
@@ -346,6 +347,7 @@ export default function Maw3dCreate() {
                       backgroundType={formData.background_type}
                       backgroundValue={formData.background_value}
                       onBackgroundChange={handleBackgroundChange}
+                      language={language}
                     />
                   </CardContent>
                 </AccordionContent>

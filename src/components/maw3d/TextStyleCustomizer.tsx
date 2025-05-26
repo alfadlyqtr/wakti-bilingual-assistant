@@ -7,10 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { Bold, Italic, Underline, Palette, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { t } from '@/utils/translations';
 
 interface TextStyleCustomizerProps {
   textStyle: TextStyle;
   onTextStyleChange: (updates: Partial<TextStyle>) => void;
+  language: string;
 }
 
 const fontFamilies = [
@@ -20,7 +22,8 @@ const fontFamilies = [
 
 export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
   textStyle,
-  onTextStyleChange
+  onTextStyleChange,
+  language
 }) => {
   const handleFontSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -38,11 +41,11 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
+      <h2 className="text-lg font-semibold">🎨 {t('textStyling', language)}</h2>
       
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <Label htmlFor="font-family">Font Family</Label>
+          <Label htmlFor="font-family">{t('fontFamily', language)}</Label>
           <Select 
             value={textStyle.fontFamily} 
             onValueChange={(value) => onTextStyleChange({ fontFamily: value })}
@@ -59,7 +62,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         </div>
 
         <div>
-          <Label htmlFor="font-size">Font Size</Label>
+          <Label htmlFor="font-size">{t('fontSize', language)}</Label>
           <Input
             id="font-size"
             type="number"
@@ -81,7 +84,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
       </div>
 
       <div>
-        <Label htmlFor="text-color">Text Color</Label>
+        <Label htmlFor="text-color">{t('textColor', language)}</Label>
         <Input
           id="text-color"
           type="color"
@@ -92,7 +95,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
 
       <div className="grid grid-cols-2 gap-6">
         <div className="space-y-2">
-          <Label>Text Formatting</Label>
+          <Label>{t('textFormatting', language)}</Label>
           <div className="flex gap-2">
             <Toggle
               pressed={textStyle.isBold}
@@ -127,7 +130,7 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         </div>
 
         <div className="space-y-2">
-          <Label>Text Alignment</Label>
+          <Label>{t('textAlignment', language)}</Label>
           <div className="flex gap-2">
             <Toggle
               pressed={textStyle.alignment === 'left'}

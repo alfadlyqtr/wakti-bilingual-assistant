@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -405,4 +406,31 @@ export const en: Record<TranslationKey, string> = {
   enableShareableLink: "Enable Shareable Link",
   showAttendingCount: "Show Attending Count",
   shareableLinkDescription: "When enabled, anyone with the link can view and RSVP to this event",
+  
+  // NEW KEYS FOR TEXT STYLING AND EVENT TEMPLATES
+  fontFamily: "Font Family",
+  fontSize: "Font Size",
+  textColor: "Text Color",
+  textFormatting: "Text Formatting",
+  textAlignment: "Text Alignment",
+  chooseTemplate: "Choose a Template",
+  startFromScratch: "Start from Scratch",
+  blankTemplate: "Blank Template",
+  
+  // NEW KEYS FOR BACKGROUND CUSTOMIZER
+  color: "Color",
+  gradient: "Gradient",
+  image: "Image",
+  aiGenerated: "AI Generated",
+  customColor: "Custom Color",
+  colorPresets: "Color Presets",
+  gradientPresets: "Gradient Presets",
+  customGradient: "Custom Gradient",
+  apply: "Apply",
+  imageUrl: "Image URL",
+  imageUrlDescription: "Enter a direct link to an image",
+  aiPrompt: "AI Prompt",
+  aiPromptPlaceholder: "Describe the background you want...",
+  generateImage: "Generate Image",
+  aiImageDescription: "Describe what you want and AI will generate a background image",
 } as const;

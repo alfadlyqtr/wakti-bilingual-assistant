@@ -3,10 +3,12 @@ import React from 'react';
 import { EventTemplate } from '@/types/maw3d';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { t } from '@/utils/translations';
 
 interface EventTemplatesProps {
   onSelectTemplate: (template: EventTemplate | null) => void;
   selectedTemplate: EventTemplate | null;
+  language: string;
 }
 
 const templates: EventTemplate[] = [
@@ -71,11 +73,12 @@ const templates: EventTemplate[] = [
 
 export const EventTemplates: React.FC<EventTemplatesProps> = ({
   onSelectTemplate,
-  selectedTemplate
+  selectedTemplate,
+  language
 }) => {
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Choose a Template (Optional)</h3>
+      <h3 className="text-lg font-semibold">{t('chooseTemplate', language)} ({t('optional', language)})</h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card 
@@ -84,9 +87,9 @@ export const EventTemplates: React.FC<EventTemplatesProps> = ({
         >
           <CardContent className="p-4 text-center">
             <div className="w-full h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-md mb-2 flex items-center justify-center">
-              <span className="text-gray-500">Start from Scratch</span>
+              <span className="text-gray-500">{t('startFromScratch', language)}</span>
             </div>
-            <h4 className="font-medium">Blank Template</h4>
+            <h4 className="font-medium">{t('blankTemplate', language)}</h4>
           </CardContent>
         </Card>
 

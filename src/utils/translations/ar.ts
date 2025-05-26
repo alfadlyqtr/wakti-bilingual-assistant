@@ -1,3 +1,4 @@
+
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -400,4 +401,31 @@ export const ar: Record<TranslationKey, string> = {
   enableShareableLink: "تفعيل الرابط القابل للمشاركة",
   showAttendingCount: "إظهار عدد الحاضرين",
   shareableLinkDescription: "عند التفعيل، يمكن لأي شخص لديه الرابط مشاهدة الفعالية وتأكيد الحضور",
+  
+  // NEW KEYS FOR TEXT STYLING AND EVENT TEMPLATES
+  fontFamily: "عائلة الخط",
+  fontSize: "حجم الخط",
+  textColor: "لون النص",
+  textFormatting: "تنسيق النص",
+  textAlignment: "محاذاة النص",
+  chooseTemplate: "اختر قالباً",
+  startFromScratch: "ابدأ من الصفر",
+  blankTemplate: "قالب فارغ",
+  
+  // NEW KEYS FOR BACKGROUND CUSTOMIZER
+  color: "لون",
+  gradient: "تدرج",
+  image: "صورة",
+  aiGenerated: "مولد بالذكاء الاصطناعي",
+  customColor: "لون مخصص",
+  colorPresets: "ألوان جاهزة",
+  gradientPresets: "تدرجات جاهزة",
+  customGradient: "تدرج مخصص",
+  apply: "تطبيق",
+  imageUrl: "رابط الصورة",
+  imageUrlDescription: "أدخل رابطاً مباشراً للصورة",
+  aiPrompt: "موجه الذكاء الاصطناعي",
+  aiPromptPlaceholder: "صف الخلفية التي تريدها...",
+  generateImage: "توليد صورة",
+  aiImageDescription: "صف ما تريده وسيقوم الذكاء الاصطناعي بتوليد صورة خلفية",
 } as const;
