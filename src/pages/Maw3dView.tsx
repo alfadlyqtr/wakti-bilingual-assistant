@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -108,11 +107,8 @@ export default function Maw3dView() {
     return { accepted, declined };
   };
   
-  // Check if current guest name conflicts with existing RSVPs (case-insensitive)
-  const guestNameConflict = guestName.trim() && rsvps.some(rsvp => 
-    rsvp.guest_name && 
-    rsvp.guest_name.toLowerCase() === guestName.trim().toLowerCase()
-  );
+  // Remove the incorrect conflict checking - let the database handle uniqueness
+  // The conflict will only be detected when the user actually tries to submit
 
   // Prepare event data for calendar integration
   const getCalendarEvent = () => {
@@ -290,24 +286,19 @@ export default function Maw3dView() {
                     className="w-full bg-white/90 text-black"
                     disabled={hasSubmittedResponse || isSubmitting}
                   />
-                  {guestNameConflict && (
-                    <p className="text-sm mt-1">
-                      Someone with this name has already responded
-                    </p>
-                  )}
                 </div>
 
                 <div className="flex gap-3">
                   <Button
                     onClick={() => handleRsvp('accepted')}
-                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim() || guestNameConflict}
+                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim()}
                     className="flex-1 h-12 text-base font-medium bg-green-600 text-white hover:bg-green-700 border-2 border-green-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {isSubmitting ? 'Processing...' : 'Accept'}
                   </Button>
                   <Button
                     onClick={() => handleRsvp('declined')}
-                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim() || guestNameConflict}
+                    disabled={hasSubmittedResponse || isSubmitting || !guestName.trim()}
                     className="flex-1 h-12 text-base font-medium bg-red-600 text-white hover:bg-red-700 border-2 border-red-600 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                   >
                     {isSubmitting ? 'Processing...' : 'Decline'}
