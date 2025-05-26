@@ -17,6 +17,12 @@ interface UnifiedAIBrainProps {
   className?: string;
 }
 
+interface ActionButton {
+  text: string;
+  action: string;
+  variant?: string;
+}
+
 export function UnifiedAIBrain({ className }: UnifiedAIBrainProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -82,18 +88,16 @@ export function UnifiedAIBrain({ className }: UnifiedAIBrainProps) {
 
       if (error) throw error;
 
-      // Add AI response
+      // Add AI response with proper action buttons structure
       const aiMessage: ChatMessage = {
         id: uuidv4(),
         role: "assistant",
         content: data.response,
         timestamp: new Date(),
         mode: "general",
-        actionButtons: data.actions ? data.actions.map((action: any) => ({
-          text: action.text,
-          action: action.id,
-          variant: action.variant || "default"
-        })) : undefined
+        metadata: {
+          actionButtons: data.actions || []
+        }
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -127,7 +131,7 @@ export function UnifiedAIBrain({ className }: UnifiedAIBrainProps) {
   // Handle action buttons and automatic actions
   const handleAction = async (action: any) => {
     try {
-      switch (action.type) {
+      switch (action.type || action.id) {
         case 'create_task':
           // Integration with task system
           toast.success(language === 'ar' ? 'تم إنشاء المهمة' : 'Task created');
@@ -146,10 +150,10 @@ export function UnifiedAIBrain({ className }: UnifiedAIBrainProps) {
           break;
         case 'generate_image':
           // Integration with image generation
-          await processImageGeneration(action.prompt);
+          await processImageGeneration(action.prompt || action.data?.prompt);
           break;
         default:
-          console.log('Unknown action type:', action.type);
+          console.log('Unknown action type:', action.type || action.id);
       }
     } catch (error) {
       console.error('Error handling action:', error);
@@ -291,13 +295,13 @@ export function UnifiedAIBrain({ className }: UnifiedAIBrainProps) {
                   )}
                   
                   {/* Action buttons */}
-                  {message.actionButtons && (
+                  {message.metadata?.actionButtons && Array.isArray(message.metadata.actionButtons) && (
                     <div className="flex flex-wrap gap-2 mt-3">
-                      {message.actionButtons.map((button, index) => (
+                      {message.metadata.actionButtons.map((button: ActionButton, index: number) => (
                         <Button
                           key={index}
                           size="sm"
-                          variant={button.variant || "secondary"}
+                          variant={button.variant as any || "secondary"}
                           onClick={() => handleAction({ type: button.action })}
                           className="text-xs"
                         >
