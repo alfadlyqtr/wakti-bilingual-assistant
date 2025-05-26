@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // English translations
@@ -433,4 +432,7 @@ export const en: Record<TranslationKey, string> = {
   aiPromptPlaceholder: "Describe the background you want...",
   generateImage: "Generate Image",
   aiImageDescription: "Describe what you want and AI will generate a background image",
+  
+  // NEW KEYS FOR EVENT PREVIEW
+  eventPreview: "Event Preview",
 } as const;

@@ -1,6 +1,3 @@
-
-export type SupportedLanguage = 'en' | 'ar';
-
 export type TranslationKey =
   | "dashboard"
   | "tasks"
@@ -427,4 +424,6 @@ export type TranslationKey =
   | "aiPrompt"
   | "aiPromptPlaceholder"
   | "generateImage"
-  | "aiImageDescription";
+  | "aiImageDescription"
+  // NEW KEY FOR EVENT PREVIEW
+  | "eventPreview";

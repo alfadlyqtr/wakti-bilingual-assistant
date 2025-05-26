@@ -12,6 +12,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
 import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
@@ -147,12 +148,12 @@ export default function Maw3dEdit() {
         <div className="flex items-center justify-between mb-8">
           <Button variant="ghost" size="sm" onClick={() => navigate('/maw3d')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            {t('backToEvents', language)}
           </Button>
-          <h1 className="text-lg font-semibold">Edit Event</h1>
+          <h1 className="text-lg font-semibold">{t('editEvent', language)}</h1>
           <Button onClick={handleSubmit} disabled={isLoading}>
             <Save className="w-4 h-4 mr-2" />
-            {isLoading ? 'Saving...' : 'Save'}
+            {isLoading ? t('updating', language) : t('save', language)}
           </Button>
         </div>
 
@@ -161,7 +162,7 @@ export default function Maw3dEdit() {
           {/* Preview */}
           <Card>
             <CardContent className="p-6">
-              <h2 className="text-lg font-semibold mb-4">Preview</h2>
+              <h2 className="text-lg font-semibold mb-4">{t('eventPreview', language)}</h2>
               <EventPreview
                 event={event}
                 textStyle={event.text_style}
@@ -180,7 +181,7 @@ export default function Maw3dEdit() {
             <AccordionItem value="templates" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">📂 Choose Template</h2>
+                  <h2 className="text-lg font-semibold">📂 {t('chooseTemplate', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -198,45 +199,45 @@ export default function Maw3dEdit() {
             <AccordionItem value="details" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">📝 Event Details</h2>
+                  <h2 className="text-lg font-semibold">📝 {t('eventDetails', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
                     
                     <div>
-                      <Label htmlFor="title">Event Title *</Label>
+                      <Label htmlFor="title">{t('eventTitle', language)} *</Label>
                       <Input
                         id="title"
                         value={event.title}
                         onChange={(e) => handleInputChange('title', e.target.value)}
-                        placeholder="Enter event title"
+                        placeholder={t('enterEventTitle', language)}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="description">Description</Label>
+                      <Label htmlFor="description">{t('description', language)}</Label>
                       <Textarea
                         id="description"
                         value={event.description || ''}
                         onChange={(e) => handleInputChange('description', e.target.value)}
-                        placeholder="Tell people about your event"
+                        placeholder={t('enterEventDescription', language)}
                         rows={3}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="organizer">Organizer</Label>
+                      <Label htmlFor="organizer">{t('organizer', language)}</Label>
                       <Input
                         id="organizer"
                         value={event.organizer || ''}
                         onChange={(e) => handleInputChange('organizer', e.target.value)}
-                        placeholder="Enter organizer name"
+                        placeholder={t('enterOrganizerName', language)}
                       />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="event_date">Date *</Label>
+                        <Label htmlFor="event_date">{t('date', language)} *</Label>
                         <Input
                           id="event_date"
                           type="date"
@@ -251,14 +252,14 @@ export default function Maw3dEdit() {
                           checked={event.is_all_day}
                           onCheckedChange={(checked) => handleInputChange('is_all_day', checked)}
                         />
-                        <Label htmlFor="all_day">All Day Event</Label>
+                        <Label htmlFor="all_day">{t('allDay', language)}</Label>
                       </div>
                     </div>
 
                     {!event.is_all_day && (
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <Label htmlFor="start_time">Start Time</Label>
+                          <Label htmlFor="start_time">{t('startTime', language)}</Label>
                           <Input
                             id="start_time"
                             type="time"
@@ -267,7 +268,7 @@ export default function Maw3dEdit() {
                           />
                         </div>
                         <div>
-                          <Label htmlFor="end_time">End Time</Label>
+                          <Label htmlFor="end_time">{t('endTime', language)}</Label>
                           <Input
                             id="end_time"
                             type="time"
@@ -279,17 +280,17 @@ export default function Maw3dEdit() {
                     )}
 
                     <div>
-                      <Label htmlFor="location">Location (Optional)</Label>
+                      <Label htmlFor="location">{t('location', language)} ({t('optional', language)})</Label>
                       <Input
                         id="location"
                         value={event.location || ''}
                         onChange={(e) => handleInputChange('location', e.target.value)}
-                        placeholder="Enter event location"
+                        placeholder={t('enterLocation', language)}
                       />
                     </div>
 
                     <div>
-                      <Label htmlFor="google_maps_link">Google Maps Link (Optional)</Label>
+                      <Label htmlFor="google_maps_link">{t('googleMapsLink', language)} ({t('optional', language)})</Label>
                       <Input
                         id="google_maps_link"
                         value={event.google_maps_link || ''}
@@ -306,7 +307,7 @@ export default function Maw3dEdit() {
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🎨 Text Styling</h2>
+                  <h2 className="text-lg font-semibold">🎨 {t('textStyling', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -324,7 +325,7 @@ export default function Maw3dEdit() {
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🖼️ Background Customization</h2>
+                  <h2 className="text-lg font-semibold">🖼️ {t('backgroundCustomization', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
@@ -343,7 +344,7 @@ export default function Maw3dEdit() {
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
-                  <h2 className="text-lg font-semibold">🔒 Privacy Settings</h2>
+                  <h2 className="text-lg font-semibold">🔒 {t('privacySettings', language)}</h2>
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6 space-y-4">
@@ -353,7 +354,7 @@ export default function Maw3dEdit() {
                         checked={event.is_public}
                         onCheckedChange={(checked) => handleInputChange('is_public', checked)}
                       />
-                      <Label htmlFor="is_public">Enable shareable link (Anyone with link can view and RSVP)</Label>
+                      <Label htmlFor="is_public">{t('enableShareableLink', language)}</Label>
                     </div>
 
                     <div className="flex items-center space-x-2">
@@ -365,13 +366,12 @@ export default function Maw3dEdit() {
                           handleInputChange('show_attending_count', checked);
                         }}
                       />
-                      <Label htmlFor="show_attending_count">Show attending count to invitees</Label>
+                      <Label htmlFor="show_attending_count">{t('showAttendingCount', language)}</Label>
                     </div>
 
                     <div className="bg-muted/50 p-4 rounded-lg">
                       <p className="text-sm text-muted-foreground">
-                        Share your event with others using the shareable link. 
-                        Anyone with the link will be able to view the event details and RSVP.
+                        {t('shareableLinkDescription', language)}
                       </p>
                     </div>
                   </CardContent>

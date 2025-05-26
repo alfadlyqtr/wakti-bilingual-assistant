@@ -1,4 +1,3 @@
-
 import { TranslationKey } from "../translationTypes";
 
 // Arabic translations
@@ -428,4 +427,7 @@ export const ar: Record<TranslationKey, string> = {
   aiPromptPlaceholder: "صف الخلفية التي تريدها...",
   generateImage: "توليد صورة",
   aiImageDescription: "صف ما تريده وسيقوم الذكاء الاصطناعي بتوليد صورة خلفية",
+  
+  // NEW KEYS FOR EVENT PREVIEW
+  eventPreview: "معاينة الحدث",
 } as const;
