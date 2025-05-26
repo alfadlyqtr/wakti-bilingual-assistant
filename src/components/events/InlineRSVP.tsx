@@ -20,7 +20,7 @@ interface InlineRSVPProps {
 
 interface RSVPResponse {
   id: string;
-  response: 'going' | 'not_going' | 'maybe';
+  response: 'accepted' | 'declined' | 'maybe';
   guest_name?: string;
   guest_email?: string;
   user_id?: string;
@@ -31,7 +31,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
   const { language } = useTheme();
   const [userRsvp, setUserRsvp] = useState<RSVPResponse | null>(null);
   const [guestName, setGuestName] = useState('');
-  const [selectedResponse, setSelectedResponse] = useState<'going' | 'not_going' | 'maybe' | null>(null);
+  const [selectedResponse, setSelectedResponse] = useState<'accepted' | 'declined' | 'maybe' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [user, setUser] = useState<any>(null);
 
@@ -93,6 +93,7 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
         user_id: user?.id || null,
         guest_name: user ? null : guestName.trim(),
         guest_email: user ? null : null, // Remove email requirement
+        is_wakti_user: !!user
       };
 
       let result;
@@ -164,8 +165,8 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-4">
               <Button
-                variant={selectedResponse === 'going' ? 'default' : 'outline'}
-                onClick={() => setSelectedResponse('going')}
+                variant={selectedResponse === 'accepted' ? 'default' : 'outline'}
+                onClick={() => setSelectedResponse('accepted')}
                 className="flex items-center gap-2 py-4 text-base font-bold bg-green-600 hover:bg-green-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
                 style={{ 
                   boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',
@@ -176,8 +177,8 @@ export default function InlineRSVP({ eventId, rsvpEnabled, rsvpDeadline, isPubli
                 Accept
               </Button>
               <Button
-                variant={selectedResponse === 'not_going' ? 'default' : 'outline'}
-                onClick={() => setSelectedResponse('not_going')}
+                variant={selectedResponse === 'declined' ? 'default' : 'outline'}
+                onClick={() => setSelectedResponse('declined')}
                 className="flex items-center gap-2 py-4 text-base font-bold bg-red-600 hover:bg-red-500 border-3 border-white text-white shadow-2xl backdrop-blur-sm transition-all duration-200 hover:scale-105"
                 style={{ 
                   boxShadow: '0 8px 25px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.8)',

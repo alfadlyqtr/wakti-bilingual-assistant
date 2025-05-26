@@ -19,15 +19,16 @@ interface Event {
   description?: string;
   start_time: string;
   end_time: string;
-  created_by: string;
+  organizer_id: string;
   is_public: boolean;
   background_color?: string;
   text_color?: string;
-  font_style?: any;
+  font_size?: number;
   location?: string;
   short_id?: string;
   created_at: string;
   updated_at: string;
+  is_all_day: boolean;
 }
 
 export default function Events() {
@@ -53,11 +54,11 @@ export default function Events() {
       
     console.log(`Fetching ${type} events for user:`, userData.user.id);
     
-    // Query the events table from the existing system, not maw3d_events
+    // Query the events table from the newly created system
     const { data, error } = await supabase
       .from("events")
       .select("*")
-      .or(`created_by.eq.${userData.user.id},is_public.eq.true`)
+      .or(`organizer_id.eq.${userData.user.id},is_public.eq.true`)
       .filter(queryConstraint.column, queryConstraint.operator as any, queryConstraint.value)
       .order(type === "upcoming" ? "start_time" : "end_time", { ascending: type === "upcoming" });
       
@@ -114,7 +115,7 @@ export default function Events() {
           <h1 className="text-2xl font-bold sr-only">{t("events", language)}</h1>
           <div className="flex-1"></div>
           <Button 
-            onClick={() => navigate("/event/create")} 
+            onClick={() => navigate("/legacy-event/create")} 
             className="flex items-center gap-1"
           >
             <Plus size={18} />

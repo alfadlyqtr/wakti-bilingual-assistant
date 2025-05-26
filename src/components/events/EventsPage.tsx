@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Users, Clock, MapPin } from 'lucide-react';
+import { Plus, Calendar, Clock, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +21,7 @@ interface Event {
   is_public: boolean;
   created_at: string;
   short_id?: string;
+  organizer_id?: string;
 }
 
 export default function EventsPage() {
@@ -35,9 +36,19 @@ export default function EventsPage() {
 
   const fetchEvents = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.log('No authenticated user found');
+        setEvents([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .eq('organizer_id', user.id)
         .order('start_time', { ascending: true });
 
       if (error) {
@@ -56,13 +67,13 @@ export default function EventsPage() {
   };
 
   const handleCreateEvent = () => {
-    console.log('Navigating to event creation');
-    navigate('/event/create');
+    console.log('Navigating to legacy event creation');
+    navigate('/legacy-event/create');
   };
 
   const handleEventClick = (event: Event) => {
-    console.log('Navigating to event:', event.id);
-    navigate(`/event/${event.id}`);
+    console.log('Navigating to legacy event:', event.id);
+    navigate(`/legacy-event/${event.id}`);
   };
 
   const formatDateTime = (dateTime: string, isAllDay: boolean) => {

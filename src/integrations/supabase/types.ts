@@ -169,6 +169,119 @@ export type Database = {
         }
         Relationships: []
       }
+      event_rsvps: {
+        Row: {
+          created_at: string | null
+          event_id: string | null
+          guest_email: string | null
+          guest_ip: string | null
+          guest_name: string | null
+          id: string
+          is_wakti_user: boolean | null
+          response: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_id?: string | null
+          guest_email?: string | null
+          guest_ip?: string | null
+          guest_name?: string | null
+          id?: string
+          is_wakti_user?: boolean | null
+          response: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string | null
+          guest_email?: string | null
+          guest_ip?: string | null
+          guest_name?: string | null
+          id?: string
+          is_wakti_user?: boolean | null
+          response?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_rsvps_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          background_color: string | null
+          background_gradient: string | null
+          background_image: string | null
+          button_style: string | null
+          created_at: string | null
+          description: string | null
+          end_time: string
+          font_size: number | null
+          id: string
+          is_all_day: boolean | null
+          is_public: boolean | null
+          location: string | null
+          location_link: string | null
+          organizer_id: string | null
+          short_id: string | null
+          start_time: string
+          text_color: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          background_color?: string | null
+          background_gradient?: string | null
+          background_image?: string | null
+          button_style?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time: string
+          font_size?: number | null
+          id?: string
+          is_all_day?: boolean | null
+          is_public?: boolean | null
+          location?: string | null
+          location_link?: string | null
+          organizer_id?: string | null
+          short_id?: string | null
+          start_time: string
+          text_color?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          background_color?: string | null
+          background_gradient?: string | null
+          background_image?: string | null
+          button_style?: string | null
+          created_at?: string | null
+          description?: string | null
+          end_time?: string
+          font_size?: number | null
+          id?: string
+          is_all_day?: boolean | null
+          is_public?: boolean | null
+          location?: string | null
+          location_link?: string | null
+          organizer_id?: string | null
+          short_id?: string | null
+          start_time?: string
+          text_color?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       images: {
         Row: {
           created_at: string
