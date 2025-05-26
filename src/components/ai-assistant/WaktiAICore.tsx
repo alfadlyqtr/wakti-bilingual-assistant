@@ -6,14 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, Loader2, Sparkles, Mic, Wand2, Bot, Zap } from "lucide-react";
+import { Send, Loader2, Sparkles, Mic, Wand2, Bot, Zap, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { v4 as uuidv4 } from "uuid";
 import { ChatMessage, ActionButton, AIContext, IntentResult } from "./types";
 import { AIMessageBubble } from "./AIMessageBubble";
-import { QuickActions } from "./QuickActions";
+import { QuickActionsDrawer } from "./QuickActionsDrawer";
+import { SmartActionsDrawer } from "./SmartActionsDrawer";
 import { AITypingIndicator } from "./AITypingIndicator";
 
 interface WaktiAICoreProps {
@@ -27,6 +28,8 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [context, setContext] = useState<AIContext>({});
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [showSmartActions, setShowSmartActions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -63,17 +66,15 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
     if (!user) return;
 
     try {
-      // Get current app state for context
       const currentPage = window.location.pathname;
       
-      // This would fetch actual counts in a real implementation
       const newContext: AIContext = {
         currentPage,
-        recentActions: [], // Would be populated from recent user actions
+        recentActions: [],
         userPreferences: user.user_metadata || {},
-        taskCount: 0, // Would fetch from database
-        eventCount: 0, // Would fetch from database
-        reminderCount: 0, // Would fetch from database
+        taskCount: 0,
+        eventCount: 0,
+        reminderCount: 0,
         lastInteraction: new Date()
       };
 
@@ -109,7 +110,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
           language: language,
           context: {
             ...context,
-            previousMessages: messages.slice(-5), // Last 5 messages for context
+            previousMessages: messages.slice(-5),
             userProfile: user.user_metadata,
             timestamp: new Date().toISOString()
           }
@@ -290,32 +291,30 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
 
   return (
     <div className={`flex flex-col h-full bg-background ${className}`}>
-      {/* Enhanced Header */}
-      <div className="border-b bg-gradient-to-r from-blue-500/10 to-purple-500/10 p-4 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Avatar className="h-12 w-12 bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-              <AvatarFallback className="bg-transparent text-white font-bold">
-                <Bot className="w-6 h-6" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-background animate-pulse flex items-center justify-center">
-              <Sparkles className="w-2 h-2 text-white" />
-            </div>
-          </div>
-          <div>
-            <h1 className="font-bold text-lg bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              WAKTI AI 2.0
-            </h1>
-            <p className="text-sm text-muted-foreground flex items-center gap-1">
-              <Zap className="w-3 h-3" />
-              {language === 'ar' ? 'دماغ تطبيقك الذكي' : 'Your intelligent app brain'}
-            </p>
-          </div>
-        </div>
+      {/* Top Navigation */}
+      <div className="flex justify-between items-center p-4 border-b bg-card/50 backdrop-blur-sm flex-shrink-0">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowQuickActions(true)}
+          className="flex items-center gap-2"
+        >
+          <Sparkles className="w-4 h-4" />
+          {language === 'ar' ? 'إجراءات سريعة' : 'Quick actions'}
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowSmartActions(true)}
+          className="flex items-center gap-2"
+        >
+          <Zap className="w-4 h-4" />
+          {language === 'ar' ? 'إجراءات ذكية' : 'Smart actions'}
+        </Button>
       </div>
 
-      {/* Enhanced Messages Area */}
+      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
         {messages.map((message) => (
           <AIMessageBubble
@@ -335,16 +334,7 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Actions - Enhanced Design */}
-      {messages.length <= 1 && (
-        <QuickActions
-          onActionClick={(prompt) => processMessage(prompt)}
-          isProcessing={isProcessing}
-          language={language as "en" | "ar"}
-        />
-      )}
-
-      {/* Enhanced Input Area */}
+      {/* Input Area */}
       <div className="p-4 border-t bg-card/50 backdrop-blur-sm flex-shrink-0 sticky bottom-0">
         <div className="flex gap-2">
           <div className="flex-1 relative">
@@ -393,6 +383,29 @@ export function WaktiAICore({ className }: WaktiAICoreProps) {
           </p>
         )}
       </div>
+
+      {/* Side Drawers */}
+      <QuickActionsDrawer
+        isOpen={showQuickActions}
+        onClose={() => setShowQuickActions(false)}
+        onActionClick={(prompt) => {
+          processMessage(prompt);
+          setShowQuickActions(false);
+        }}
+        isProcessing={isProcessing}
+        language={language as "en" | "ar"}
+      />
+
+      <SmartActionsDrawer
+        isOpen={showSmartActions}
+        onClose={() => setShowSmartActions(false)}
+        onActionClick={(prompt) => {
+          processMessage(prompt);
+          setShowSmartActions(false);
+        }}
+        isProcessing={isProcessing}
+        language={language as "en" | "ar"}
+      />
     </div>
   );
 }
