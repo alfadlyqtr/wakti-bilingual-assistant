@@ -1,4 +1,3 @@
-
 import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -57,11 +56,18 @@ export class WaktiAIV2Service {
 
       console.log('WAKTI AI V2.1 CLIENT: Received response from brain:', response);
       
-      // Enhanced response handling for image generation
+      // Enhanced response handling for image generation with translation support
       if (response.actionTaken === 'generate_image' && response.actionResult) {
         if (response.actionResult.imageUrl) {
-          // Update the response to include image information
-          response.response += `\n\n🎨 ${language === 'ar' ? 'تم إنشاء الصورة بنجاح!' : 'Image generated successfully!'}`;
+          // Include translation information in the response if available
+          const translationInfo = response.actionResult.wasTranslated 
+            ? `\n\n${language === 'ar' 
+                ? `📝 تمت ترجمة الطلب إلى: "${response.actionResult.translatedPrompt}"`
+                : `📝 Request was translated to: "${response.actionResult.translatedPrompt}"`
+              }`
+            : '';
+          
+          response.response += `\n\n🎨 ${language === 'ar' ? 'تم إنشاء الصورة بنجاح!' : 'Image generated successfully!'}${translationInfo}`;
         } else if (response.actionResult.error) {
           response.response += `\n\n❌ ${language === 'ar' 
             ? 'فشل في إنشاء الصورة: ' + response.actionResult.error
