@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -322,7 +323,7 @@ export default function Maw3dView() {
           {hasAlreadyRsvped && localStorageData && (
             <Card>
               <CardContent className="p-6 text-center">
-                <h3 className={`text-lg font-semibold mb-2 ${
+                <h3 className={`text-lg font-bold mb-2 ${
                   localStorageData.response === 'accepted' 
                     ? 'text-green-700' 
                     : 'text-red-700'
@@ -332,10 +333,10 @@ export default function Maw3dView() {
                     : `Sorry, ${localStorageData.name}, you couldn't make it.`
                   }
                 </h3>
-                <p className={`text-muted-foreground ${
+                <p className={`font-medium ${
                   localStorageData.response === 'accepted' 
-                    ? 'font-medium' 
-                    : 'font-medium'
+                    ? 'text-green-600' 
+                    : 'text-red-600'
                 }`}>
                   {eventLanguage === 'ar' 
                     ? `تم تسجيل ${localStorageData.response === 'accepted' ? 'قبولك' : 'رفضك'}.`
