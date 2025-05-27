@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -19,6 +20,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
+import WaktiAI from "@/pages/WaktiAI";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
@@ -124,6 +126,9 @@ function App() {
                   
                   {/* New combined tasks and reminders route */}
                   <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
+                  
+                  {/* WAKTI AI route */}
+                  <Route path="/wakti-ai" element={<AppLayout><WaktiAI /></AppLayout>} />
                   
                   {/* Maw3d system routes - protected */}
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />

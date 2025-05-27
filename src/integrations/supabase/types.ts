@@ -9,6 +9,89 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      ai_chat_history: {
+        Row: {
+          action_result: Json | null
+          action_taken: string | null
+          confidence_level: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          input_type: string
+          intent: string | null
+          language: string
+          metadata: Json | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          action_result?: Json | null
+          action_taken?: string | null
+          confidence_level?: string | null
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          input_type?: string
+          intent?: string | null
+          language?: string
+          metadata?: Json | null
+          role: string
+          user_id: string
+        }
+        Update: {
+          action_result?: Json | null
+          action_taken?: string | null
+          confidence_level?: string | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          input_type?: string
+          intent?: string | null
+          language?: string
+          metadata?: Json | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_chat_history_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -706,6 +789,10 @@ export type Database = {
         Returns: undefined
       }
       cleanup_expired_maw3d_events: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      cleanup_old_conversations: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
