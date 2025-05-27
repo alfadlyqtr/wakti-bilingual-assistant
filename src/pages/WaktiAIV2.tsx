@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,7 +35,7 @@ export default function WaktiAIV2() {
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [systemReady, setSystemReady] = useState(false);
+  const [systemReady, setSystemReady] = useState(true); // Force ready for debugging
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -84,6 +83,7 @@ export default function WaktiAIV2() {
       };
       
       setMessages([errorMessage]);
+      setSystemReady(true); // Keep input available even with errors
     }
   };
 
@@ -174,7 +174,7 @@ export default function WaktiAIV2() {
   };
 
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
-    if (!content.trim() || isLoading || !systemReady) return;
+    if (!content.trim() || isLoading) return;
 
     const userMessage: AIMessage = {
       id: Date.now().toString(),
@@ -456,8 +456,8 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Enhanced Input Area */}
-      <div className="p-4 border-t bg-background/80 backdrop-blur-sm">
+      {/* FIXED: Enhanced Input Area - Always Visible */}
+      <div className="border-t bg-background/80 backdrop-blur-sm p-4">
         <div className="flex gap-2 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <Input
@@ -470,18 +470,12 @@ export default function WaktiAIV2() {
                   sendMessage(inputMessage);
                 }
               }}
-              disabled={isLoading || !systemReady}
+              disabled={isLoading}
               className={cn(
                 "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20",
-                language === 'ar' ? 'text-right' : '',
-                !systemReady && "opacity-50"
+                language === 'ar' ? 'text-right' : ''
               )}
             />
-            {!systemReady && (
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              </div>
-            )}
           </div>
           
           <Button
@@ -491,7 +485,7 @@ export default function WaktiAIV2() {
             onMouseUp={stopRecording}
             onTouchStart={startRecording}
             onTouchEnd={stopRecording}
-            disabled={isLoading || !systemReady}
+            disabled={isLoading}
             className={cn(
               "transition-all duration-200 hover:scale-110",
               isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
@@ -502,7 +496,7 @@ export default function WaktiAIV2() {
           
           <Button
             onClick={() => sendMessage(inputMessage)}
-            disabled={!inputMessage.trim() || isLoading || !systemReady}
+            disabled={!inputMessage.trim() || isLoading}
             size="icon"
             className="hover:scale-110 transition-transform"
           >
@@ -513,14 +507,6 @@ export default function WaktiAIV2() {
             )}
           </Button>
         </div>
-        
-        {!systemReady && (
-          <div className="text-center mt-2">
-            <p className="text-xs text-muted-foreground">
-              {language === 'ar' ? 'جاري تحميل النظام...' : 'Loading AI system...'}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
