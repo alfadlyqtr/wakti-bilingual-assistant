@@ -346,13 +346,7 @@ export default function WaktiAIV2() {
     }
   };
 
-  // Debug: Log render
-  console.log('🔍 WAKTI AI V2.1: Rendering component', {
-    messagesCount: messages.length,
-    isLoading,
-    systemReady,
-    inputMessage
-  });
+  console.log('🔍 DEBUG: About to render input area');
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20">
@@ -446,8 +440,19 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Clean Professional Input Area */}
-      <div className="sticky bottom-0 z-50 border-t bg-background/90 backdrop-blur-md p-4">
+      {/* DEBUG INPUT AREA - BRIGHT RED TO MAKE IT VISIBLE */}
+      <div 
+        className="fixed bottom-0 left-0 right-0 z-50"
+        style={{ 
+          backgroundColor: '#ff0000', 
+          border: '5px solid #00ff00',
+          minHeight: '80px',
+          padding: '16px'
+        }}
+      >
+        <div className="text-white font-bold text-center mb-2">
+          🚨 DEBUG INPUT AREA - CAN YOU SEE THIS? 🚨
+        </div>
         <div className="flex gap-2 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <Input
@@ -496,6 +501,9 @@ export default function WaktiAIV2() {
               <Send className="h-6 w-6" />
             )}
           </Button>
+        </div>
+        <div className="text-white text-sm mt-2">
+          Input value: "{inputMessage}" | Loading: {isLoading ? 'YES' : 'NO'}
         </div>
       </div>
     </div>
