@@ -64,8 +64,6 @@ export default function WaktiAIV2() {
   }, [user, language]);
 
   const initializeSystem = async () => {
-    console.log('WAKTI AI V2.1: Initializing system...');
-    
     try {
       await loadConversations();
       
@@ -74,7 +72,6 @@ export default function WaktiAIV2() {
       }
       
       setSystemReady(true);
-      console.log('WAKTI AI V2.1: System initialized successfully');
     } catch (error) {
       console.error('WAKTI AI V2.1: System initialization failed:', error);
       
@@ -124,7 +121,6 @@ export default function WaktiAIV2() {
     try {
       const data = await WaktiAIV2Service.getConversations();
       setConversations(data);
-      console.log('WAKTI AI V2.1: Loaded conversations:', data.length);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -194,15 +190,11 @@ export default function WaktiAIV2() {
     setIsTyping(true);
 
     try {
-      console.log('WAKTI AI V2.1: Sending message:', { content, inputType, language });
-      
       const response = await WaktiAIV2Service.sendMessage(
         content.trim(),
         currentConversationId || undefined,
         language
       );
-
-      console.log('WAKTI AI V2.1: Received response:', response);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
@@ -297,8 +289,6 @@ export default function WaktiAIV2() {
 
       mediaRecorder.start();
       setIsRecording(true);
-      
-      console.log('WAKTI AI V2.1: Voice recording started');
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
@@ -313,15 +303,12 @@ export default function WaktiAIV2() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      console.log('WAKTI AI V2.1: Voice recording stopped');
     }
   };
 
   const processVoiceInput = async (audioBlob: Blob) => {
     try {
       setIsLoading(true);
-      
-      console.log('WAKTI AI V2.1: Processing voice input:', { size: audioBlob.size, type: audioBlob.type });
       
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -332,8 +319,6 @@ export default function WaktiAIV2() {
         base64Audio,
         language
       );
-
-      console.log('WAKTI AI V2.1: Voice transcription result:', transcription);
 
       if (transcription.text && transcription.text.trim()) {
         await sendMessage(transcription.text, 'voice');
@@ -461,104 +446,56 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* DEBUG: Bright visible input area container */}
-      <div 
-        className="sticky bottom-0 z-50 w-full border-t-4 border-red-500 bg-yellow-100 dark:bg-yellow-900 p-4"
-        style={{ 
-          minHeight: '80px',
-          backgroundColor: '#ff0000',
-          border: '5px solid #00ff00',
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0
-        }}
-      >
-        {/* Debug indicator */}
-        <div className="text-center mb-2">
-          <span className="text-black font-bold bg-white px-2 py-1 rounded">
-            🔍 INPUT AREA DEBUG - CAN YOU SEE THIS?
-          </span>
-        </div>
-        
+      {/* Clean Professional Input Area */}
+      <div className="sticky bottom-0 z-50 border-t bg-background/90 backdrop-blur-md p-4">
         <div className="flex gap-2 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <Input
               value={inputMessage}
-              onChange={(e) => {
-                console.log('🔍 Input changed:', e.target.value);
-                setInputMessage(e.target.value);
-              }}
+              onChange={(e) => setInputMessage(e.target.value)}
               placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  console.log('🔍 Enter pressed, sending message:', inputMessage);
                   sendMessage(inputMessage);
                 }
               }}
               disabled={isLoading}
               className={cn(
-                "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-lg",
+                "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-lg border-border/50 bg-background/80",
                 language === 'ar' ? 'text-right' : ''
               )}
-              style={{ 
-                backgroundColor: '#ffffff',
-                border: '2px solid #ff0000',
-                color: '#000000'
-              }}
             />
           </div>
           
           <Button
             variant="ghost"
             size="icon"
-            onMouseDown={(e) => {
-              console.log('🔍 Mic button pressed');
-              startRecording();
-            }}
+            onMouseDown={startRecording}
             onMouseUp={stopRecording}
             onTouchStart={startRecording}
             onTouchEnd={stopRecording}
             disabled={isLoading}
             className={cn(
-              "transition-all duration-200 hover:scale-110 h-12 w-12",
+              "transition-all duration-200 hover:scale-110 h-12 w-12 border-border/50",
               isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
             )}
-            style={{ 
-              backgroundColor: isRecording ? '#ff0000' : '#00ff00',
-              border: '2px solid #000000'
-            }}
           >
             {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
           </Button>
           
           <Button
-            onClick={() => {
-              console.log('🔍 Send button clicked:', inputMessage);
-              sendMessage(inputMessage);
-            }}
+            onClick={() => sendMessage(inputMessage)}
             disabled={!inputMessage.trim() || isLoading}
             size="icon"
             className="hover:scale-110 transition-transform h-12 w-12"
-            style={{ 
-              backgroundColor: '#0000ff',
-              border: '2px solid #000000'
-            }}
           >
             {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-white" />
+              <Loader2 className="h-6 w-6 animate-spin" />
             ) : (
-              <Send className="h-6 w-6 text-white" />
+              <Send className="h-6 w-6" />
             )}
           </Button>
-        </div>
-        
-        {/* Debug info */}
-        <div className="text-center mt-2">
-          <p className="text-black text-xs bg-white px-2 py-1 rounded inline-block">
-            Input Value: "{inputMessage}" | Loading: {isLoading.toString()} | System Ready: {systemReady.toString()}
-          </p>
         </div>
       </div>
     </div>
