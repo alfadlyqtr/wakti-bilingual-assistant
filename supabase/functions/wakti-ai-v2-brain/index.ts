@@ -76,7 +76,7 @@ serve(async (req) => {
       conversation = newConversation;
     }
 
-    // Get recent context
+    // Get recent context (last 5 messages)
     const { data: recentMessages } = await supabaseClient
       .from('ai_chat_history')
       .select('role, content, intent')
@@ -107,7 +107,7 @@ serve(async (req) => {
       recentMessages || []
     );
 
-    // Execute actions if high confidence
+    // Execute actions based on confidence
     let actionResult = null;
     let actionTaken = null;
     
@@ -137,6 +137,12 @@ serve(async (req) => {
         action_result: actionResult,
       });
 
+    // Update conversation timestamp
+    await supabaseClient
+      .from('ai_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', conversation.id);
+
     return new Response(
       JSON.stringify({
         response: aiResponse,
@@ -163,23 +169,23 @@ serve(async (req) => {
 function analyzeMessage(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Enhanced intent patterns
+  // Enhanced intent patterns for both languages
   const patterns = {
     task: language === 'ar' 
-      ? ['أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة', 'أريد مهمة']
-      : ['create task', 'add task', 'new task', 'make task', 'todo', 'need to do', 'task for'],
+      ? ['أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة', 'أريد مهمة', 'اعمل مهمة']
+      : ['create task', 'add task', 'new task', 'make task', 'todo', 'need to do', 'task for', 'remind me to'],
     
     event: language === 'ar'
-      ? ['أنشئ حدث', 'أضف حدث', 'موعد جديد', 'اجتماع', 'حفلة', 'مناسبة']
-      : ['create event', 'add event', 'schedule', 'meeting', 'appointment', 'plan event'],
+      ? ['أنشئ حدث', 'أضف حدث', 'موعد جديد', 'اجتماع', 'حفلة', 'مناسبة', 'احجز موعد']
+      : ['create event', 'add event', 'schedule', 'meeting', 'appointment', 'plan event', 'book appointment'],
     
     reminder: language === 'ar'
-      ? ['ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'أذكرني']
-      : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification'],
+      ? ['ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'أذكرني', 'انبهني']
+      : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification', 'set reminder'],
       
     image: language === 'ar'
-      ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة']
-      : ['generate image', 'create image', 'draw', 'make picture', 'image of']
+      ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة']
+      : ['generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of']
   };
 
   // Check for high confidence matches
@@ -189,15 +195,15 @@ function analyzeMessage(message: string, language: string) {
         return {
           intent,
           confidence: 'high' as const,
-          actionData: extractActionData(message, intent)
+          actionData: extractActionData(message, intent, language)
         };
       }
     }
   }
 
   // Medium confidence - partial matches
-  if (lowerMessage.includes('create') || lowerMessage.includes('add') || 
-      lowerMessage.includes('أنشئ') || lowerMessage.includes('أضف')) {
+  const createWords = language === 'ar' ? ['أنشئ', 'أضف', 'اصنع'] : ['create', 'add', 'make'];
+  if (createWords.some(word => lowerMessage.includes(word))) {
     return {
       intent: 'general_create',
       confidence: 'medium' as const,
@@ -212,30 +218,36 @@ function analyzeMessage(message: string, language: string) {
   };
 }
 
-function extractActionData(message: string, intent: string) {
-  const title = message
-    .replace(/create task|add task|new task|أنشئ مهمة|أضف مهمة|create event|add event|أنشئ حدث|أضف حدث|remind me|ذكرني/gi, '')
-    .trim();
+function extractActionData(message: string, intent: string, language: string) {
+  // Remove command words to get the actual content
+  const removePatterns = language === 'ar' 
+    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة']
+    : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image'];
+  
+  let title = message;
+  for (const pattern of removePatterns) {
+    title = title.replace(new RegExp(pattern, 'gi'), '').trim();
+  }
 
   switch (intent) {
     case 'task':
       return {
         type: 'create_task',
-        title: title || 'New Task',
+        title: title || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
         description: '',
         priority: 'medium'
       };
     case 'event':
       return {
         type: 'create_event',
-        title: title || 'New Event',
+        title: title || (language === 'ar' ? 'حدث جديد' : 'New Event'),
         description: '',
         is_all_day: false
       };
     case 'reminder':
       return {
         type: 'create_reminder',
-        title: title || 'New Reminder'
+        title: title || (language === 'ar' ? 'تذكير جديد' : 'New Reminder')
       };
     case 'image':
       return {
@@ -249,8 +261,8 @@ function extractActionData(message: string, intent: string) {
 
 async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
   const systemPrompt = language === 'ar' 
-    ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب.`
-    : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, and reminders in a natural, conversational way. Use emojis appropriately.`;
+    ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
+    : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, and reminders in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
