@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -54,7 +53,9 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
       fontStyle: textStyle.isItalic ? 'italic' : 'normal',
       textDecoration: textStyle.isUnderline ? 'underline' : 'none',
       textAlign: textStyle.alignment as 'left' | 'center' | 'right',
-      textShadow: textStyle.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none'
+      textShadow: textStyle.hasShadow && textStyle.shadowIntensity && textStyle.shadowIntensity > 0 
+        ? `2px 2px 4px rgba(0,0,0,${textStyle.shadowIntensity / 10})` 
+        : 'none'
     };
   };
 

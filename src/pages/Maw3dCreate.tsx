@@ -18,7 +18,7 @@ import { EventPreview } from '@/components/maw3d/EventPreview';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
 import AutoDeleteToggle from '@/components/maw3d/AutoDeleteToggle';
 import { Maw3dService } from '@/services/maw3dService';
-import { CreateEventFormData, TextStyle, EventTemplate } from '@/types/maw3d';
+import { EventFormData, TextStyle, EventTemplate } from '@/types/maw3d';
 
 const defaultTextStyle: TextStyle = {
   fontSize: 16,
@@ -38,8 +38,9 @@ export default function Maw3dCreate() {
   const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
+  const [imageBlur, setImageBlur] = useState(0);
 
-  const [formData, setFormData] = useState<CreateEventFormData>({
+  const [formData, setFormData] = useState<EventFormData>({
     title: '',
     description: '',
     location: '',
@@ -59,7 +60,7 @@ export default function Maw3dCreate() {
     invited_contacts: []
   });
 
-  const handleInputChange = (field: keyof CreateEventFormData, value: any) => {
+  const handleInputChange = (field: keyof EventFormData, value: any) => {
     console.log(`Updating field ${String(field)} with value:`, value);
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -80,9 +81,7 @@ export default function Maw3dCreate() {
   };
 
   const handleImageBlurChange = (blur: number) => {
-    // Note: We're not storing imageBlur in the form data as it's not part of the database schema
-    // This would need to be added to the database schema if blur needs to be persisted
-    console.log('Image blur changed to:', blur);
+    setImageBlur(blur);
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -93,9 +92,9 @@ export default function Maw3dCreate() {
         title: template.title,
         description: template.description,
         organizer: template.organizer || prev.organizer,
-        background_type: template.background_type,
-        background_value: template.background_value,
-        text_style: template.text_style,
+        background_type: template.backgroundStyle.type,
+        background_value: template.backgroundStyle.backgroundColor || template.backgroundStyle.backgroundGradient || template.backgroundStyle.backgroundImage || '#3b82f6',
+        text_style: template.textStyle,
         template_type: template.id
       }));
     }
@@ -215,6 +214,7 @@ export default function Maw3dCreate() {
                 rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={formData.show_attending_count}
                 language={language}
+                imageBlur={imageBlur}
               />
             </CardContent>
           </Card>
@@ -376,7 +376,7 @@ export default function Maw3dCreate() {
                     <BackgroundCustomizer
                       backgroundType={formData.background_type}
                       backgroundValue={formData.background_value}
-                      imageBlur={0}
+                      imageBlur={imageBlur}
                       onBackgroundChange={handleBackgroundChange}
                       onImageBlurChange={handleImageBlurChange}
                       language={language}

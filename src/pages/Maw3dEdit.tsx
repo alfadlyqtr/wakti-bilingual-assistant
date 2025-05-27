@@ -28,6 +28,7 @@ export default function Maw3dEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
+  const [imageBlur, setImageBlur] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -91,9 +92,7 @@ export default function Maw3dEdit() {
   };
 
   const handleImageBlurChange = (blur: number) => {
-    // Note: We're not storing imageBlur in the event data as it's not part of the database schema
-    // This would need to be added to the database schema if blur needs to be persisted
-    console.log('Image blur changed to:', blur);
+    setImageBlur(blur);
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -104,9 +103,9 @@ export default function Maw3dEdit() {
         title: template.title,
         description: template.description,
         organizer: template.organizer || prev.organizer,
-        background_type: template.background_type,
-        background_value: template.background_value,
-        text_style: template.text_style
+        background_type: template.backgroundStyle.type,
+        background_value: template.backgroundStyle.backgroundColor || template.backgroundStyle.backgroundGradient || template.backgroundStyle.backgroundImage || '#3b82f6',
+        text_style: template.textStyle
       } : null);
     }
   };
@@ -190,6 +189,7 @@ export default function Maw3dEdit() {
                 rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={event.show_attending_count}
                 language={language}
+                imageBlur={imageBlur}
               />
             </CardContent>
           </Card>
@@ -352,7 +352,7 @@ export default function Maw3dEdit() {
                     <BackgroundCustomizer
                       backgroundType={event.background_type}
                       backgroundValue={event.background_value}
-                      imageBlur={0}
+                      imageBlur={imageBlur}
                       onBackgroundChange={handleBackgroundChange}
                       onImageBlurChange={handleImageBlurChange}
                       language={language}
