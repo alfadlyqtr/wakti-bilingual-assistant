@@ -1,9 +1,8 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { corsHeaders } from "../_shared/cors.ts";
 
-const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
+const RUNWARE_API_KEY = "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -187,65 +186,88 @@ async function addContact(supabase: any, data: any, userId: string, language: st
   }
 }
 
-// Generate image
+// Generate image with Runware
 async function generateImage(prompt: string, userId: string, language: string) {
   try {
-    if (!RUNWARE_API_KEY) {
-      return {
-        success: false,
-        message: language === 'ar' ? 'خدمة إنشاء الصور غير متوفرة' : 'Image generation service not available'
-      };
-    }
+    console.log("Generating image with Runware for prompt:", prompt);
 
-    const response = await fetch("https://api.runware.ai/v1/image/generate", {
+    const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${RUNWARE_API_KEY}`,
       },
-      body: JSON.stringify({
-        prompt: prompt,
-        model: "runware:100@1",
-        width: 512,
-        height: 512,
-        steps: 20,
-        cfg_scale: 7,
-      }),
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: prompt,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
+          numberResults: 1,
+          outputFormat: "WEBP",
+          CFGScale: 1,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          steps: 4,
+        },
+      ]),
     });
+
+    console.log("Runware response status:", response.status);
 
     if (response.ok) {
       const result = await response.json();
+      console.log("Runware response data:", result);
       
-      // Create Supabase client to save image
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
+      // Find the image inference result
+      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+      
+      if (imageResult && imageResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
 
-      // Save image to database
-      await supabase
-        .from('images')
-        .insert({
-          user_id: userId,
-          prompt: prompt,
-          image_url: result.data[0].imageURL,
-          metadata: { provider: 'runware' }
-        });
+        // Save image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: imageResult.imageURL,
+              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
+            });
+        } catch (dbError) {
+          console.log("Could not save image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
 
-      return {
-        success: true,
-        message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
-        imageUrl: result.data[0].imageURL
-      };
+        return {
+          success: true,
+          message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
+          imageUrl: imageResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("Runware API error:", response.status, errorText);
+      throw new Error(`Runware API failed: ${response.status}`);
     }
-
-    throw new Error('Image generation failed');
     
   } catch (error) {
-    console.error('Error generating image:', error);
+    console.error('Error generating image with Runware:', error);
     return {
       success: false,
-      message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image'
+      message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',
+      error: error.message
     };
   }
 }
