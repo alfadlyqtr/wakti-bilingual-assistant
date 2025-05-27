@@ -29,6 +29,10 @@ export default function Maw3dEvents() {
     try {
       setIsLoading(true);
       const userEvents = await Maw3dService.getUserEvents();
+      console.log('=== MAW3D EVENTS: Events loaded ===');
+      userEvents.forEach((event, index) => {
+        console.log(`Event ${index + 1} image_blur:`, event.image_blur, `(type: ${typeof event.image_blur})`);
+      });
       setEvents(userEvents);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -96,6 +100,10 @@ export default function Maw3dEvents() {
   };
 
   const getBackgroundStyle = (event: Maw3dEvent) => {
+    console.log('=== MAW3D EVENTS: Getting background style ===');
+    console.log('Event background_type:', event.background_type);
+    console.log('Event image_blur:', event.image_blur, `(type: ${typeof event.image_blur})`);
+
     switch (event.background_type) {
       case 'color':
         return { backgroundColor: event.background_value };
@@ -103,11 +111,19 @@ export default function Maw3dEvents() {
         return { background: event.background_value };
       case 'image':
       case 'ai':
-        return { 
+        const style: React.CSSProperties = { 
           backgroundImage: `url(${event.background_value})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         };
+        
+        // Apply blur if image_blur is set and greater than 0
+        if (event.image_blur && Number(event.image_blur) > 0) {
+          console.log('Applying blur filter:', `blur(${event.image_blur}px)`);
+          style.filter = `blur(${event.image_blur}px)`;
+        }
+        
+        return style;
       default:
         return { backgroundColor: '#3b82f6' };
     }

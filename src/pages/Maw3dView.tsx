@@ -43,6 +43,10 @@ export default function Maw3dView() {
         return;
       }
 
+      console.log('=== MAW3D VIEW: Event loaded ===');
+      console.log('Event image_blur value:', eventData.image_blur);
+      console.log('Event image_blur type:', typeof eventData.image_blur);
+
       setEvent(eventData);
       
       if (eventData.is_public) {
@@ -192,7 +196,7 @@ export default function Maw3dView() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto space-y-6">
           
-          {/* Event Preview */}
+          {/* Event Preview with Image Blur */}
           <EventPreview
             event={event}
             textStyle={event.text_style}
@@ -201,6 +205,7 @@ export default function Maw3dView() {
             rsvpCount={rsvpCounts}
             showAttendingCount={event.show_attending_count}
             language={eventLanguage}
+            imageBlur={event.image_blur}
           />
 
           {/* Action Buttons - Fixed to be on same line */}
