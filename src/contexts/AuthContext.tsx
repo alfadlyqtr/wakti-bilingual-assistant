@@ -56,6 +56,8 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       hasSession: !!session,
       isLoading: loading,
       currentPath: location.pathname,
+      userEmail: user?.email,
+      userId: user?.id,
       ...(details || {})
     });
   };
@@ -66,11 +68,22 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, currentSession) => {
-        logAuthState(`Auth state change event: ${event}`, { hasNewSession: !!currentSession });
+        logAuthState(`Auth state change event: ${event}`, { 
+          hasNewSession: !!currentSession,
+          newUserEmail: currentSession?.user?.email,
+          newUserId: currentSession?.user?.id
+        });
         
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
+
+        // Additional debug for user state
+        console.log('AuthContext: User state updated:', {
+          user: currentSession?.user ?? null,
+          userEmail: currentSession?.user?.email,
+          userId: currentSession?.user?.id
+        });
 
         // Only redirect on signout if explicitly required and we're not already navigating
         if (event === 'SIGNED_OUT' && requireAuth && !navigationInProgress.current) {
@@ -90,12 +103,23 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       try {
         logAuthState('Checking for existing session');
         const { data: { session: currentSession } } = await supabase.auth.getSession();
-        logAuthState('Initial session check complete', { hasSession: !!currentSession });
+        logAuthState('Initial session check complete', { 
+          hasSession: !!currentSession,
+          sessionUserEmail: currentSession?.user?.email,
+          sessionUserId: currentSession?.user?.id
+        });
         
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         setLoading(false);
         setInitialized(true);
+        
+        // Additional debug for initial user state
+        console.log('AuthContext: Initial user state set:', {
+          user: currentSession?.user ?? null,
+          userEmail: currentSession?.user?.email,
+          userId: currentSession?.user?.id
+        });
         
         // Only redirect if authentication is required but user is not logged in
         // Remove the automatic redirect to dashboard - let the router handle where the user should go
@@ -132,6 +156,10 @@ export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProp
       if (currentSession) {
         setSession(currentSession);
         setUser(currentSession.user);
+        console.log('AuthContext: Session refreshed:', {
+          userEmail: currentSession.user?.email,
+          userId: currentSession.user?.id
+        });
       }
     } catch (error) {
       console.error("Error refreshing session:", error);

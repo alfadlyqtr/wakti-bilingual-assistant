@@ -33,17 +33,36 @@ export default function CalendarDropdown({ event, eventId, language = 'en' }: Ca
   const [isInCalendar, setIsInCalendar] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('CalendarDropdown Debug Info:', {
+      hasUser: !!user,
+      userEmail: user?.email,
+      eventId: eventId,
+      eventTitle: event.title,
+      shouldShowWaktiOption: !!(user && eventId)
+    });
+  }, [user, eventId, event.title]);
+
   useEffect(() => {
     if (user && eventId) {
+      console.log('Checking if event is in calendar for eventId:', eventId);
       checkIfEventInCalendar();
+    } else {
+      console.log('Skipping calendar check - user or eventId missing:', { user: !!user, eventId });
     }
   }, [user, eventId]);
 
   const checkIfEventInCalendar = async () => {
-    if (!eventId) return;
+    if (!eventId) {
+      console.log('No eventId provided for calendar check');
+      return;
+    }
     
     try {
+      console.log('Calling UserEventLinksService.isEventInUserCalendar with eventId:', eventId);
       const inCalendar = await UserEventLinksService.isEventInUserCalendar(eventId);
+      console.log('Event in calendar result:', inCalendar);
       setIsInCalendar(inCalendar);
     } catch (error) {
       console.error('Error checking event status:', error);
@@ -51,12 +70,16 @@ export default function CalendarDropdown({ event, eventId, language = 'en' }: Ca
   };
 
   const handleAddToWaktiCalendar = async () => {
+    console.log('handleAddToWaktiCalendar called');
+    
     if (!user) {
+      console.log('No user found when trying to add to calendar');
       toast.error('Please log in to add events to your WAKTI calendar');
       return;
     }
 
     if (!eventId) {
+      console.log('No eventId found when trying to add to calendar');
       toast.error('Event ID is required');
       return;
     }
@@ -64,10 +87,12 @@ export default function CalendarDropdown({ event, eventId, language = 'en' }: Ca
     setIsLoading(true);
     try {
       if (isInCalendar) {
+        console.log('Removing event from calendar:', eventId);
         await UserEventLinksService.removeEventFromCalendar(eventId);
         setIsInCalendar(false);
         toast.success('Event removed from your WAKTI calendar');
       } else {
+        console.log('Adding event to calendar:', eventId);
         await UserEventLinksService.addEventToCalendar(eventId);
         setIsInCalendar(true);
         toast.success('Event added to your WAKTI calendar');
@@ -149,6 +174,14 @@ export default function CalendarDropdown({ event, eventId, language = 'en' }: Ca
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  console.log('Rendering CalendarDropdown with conditions:', {
+    hasUser: !!user,
+    hasEventId: !!eventId,
+    shouldShowWaktiOption: !!(user && eventId),
+    isInCalendar,
+    isLoading
+  });
 
   return (
     <DropdownMenu>
