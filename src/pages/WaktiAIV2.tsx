@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +19,8 @@ import {
   Loader2,
   Trash2,
   Upload,
-  Camera
+  Camera,
+  X
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -40,7 +42,7 @@ export default function WaktiAIV2() {
   const [isTyping, setIsTyping] = useState(false);
   const [systemReady, setSystemReady] = useState(true);
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
-  const [rightSheetOpen, setRightSheetOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -491,24 +493,14 @@ export default function WaktiAIV2() {
         </div>
         
         <div className="flex items-center">
-          <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent 
-              side="right" 
-              className="w-80 bg-background/75 backdrop-blur-md border-l border-border/50 p-4"
-            >
-              <div className="h-full overflow-hidden">
-                <QuickActionsPanel onSendMessage={(message) => {
-                  sendMessage(message);
-                  setRightSheetOpen(false);
-                }} />
-              </div>
-            </SheetContent>
-          </Sheet>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setRightDrawerOpen(true)}
+            className="hover:scale-110 transition-transform"
+          >
+            <MessageSquare className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
@@ -529,8 +521,8 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Blur overlay when sheets are open */}
-      {(leftSheetOpen || rightSheetOpen) && (
+      {/* Blur overlay when left sheet is open */}
+      {leftSheetOpen && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30" />
       )}
 
@@ -546,6 +538,45 @@ export default function WaktiAIV2() {
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
+
+      {/* Floating Quick Actions Drawer */}
+      <div className={cn(
+        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-50 transition-all duration-300 ease-in-out",
+        rightDrawerOpen ? "translate-x-0" : "translate-x-full"
+      )}>
+        <div className="h-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-lg border-l border-border/50 flex flex-col">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border/30">
+            <h3 className="font-semibold text-lg">
+              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+            </h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setRightDrawerOpen(false)}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* Drawer Content */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            <QuickActionsPanel onSendMessage={(message) => {
+              sendMessage(message);
+              setRightDrawerOpen(false);
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Overlay for Quick Actions Drawer */}
+      {rightDrawerOpen && (
+        <div 
+          className="fixed inset-0 bg-black/10 z-40" 
+          onClick={() => setRightDrawerOpen(false)}
+        />
+      )}
 
       {/* Enhanced Fixed Input Area */}
       <div className="fixed bottom-20 left-0 right-0 z-[65] p-4">
