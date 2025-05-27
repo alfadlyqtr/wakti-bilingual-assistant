@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -496,8 +497,8 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Enhanced Fixed Input Area - adjusted positioning */}
-      <div className="fixed bottom-15 left-0 right-0 z-[65] p-4">
+      {/* Enhanced Fixed Input Area - brought down closer to mobile nav */}
+      <div className="fixed bottom-10 left-0 right-0 z-[65] p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
             <div className="flex gap-2 items-end">
