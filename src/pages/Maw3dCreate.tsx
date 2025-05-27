@@ -48,8 +48,8 @@ export default function Maw3dCreate() {
     start_time: '',
     end_time: '',
     is_all_day: false,
-    is_public: false,
-    show_attending_count: true,
+    is_public: true, // Changed default to true
+    show_attending_count: false, // Changed default to false
     auto_delete_enabled: true,
     background_type: 'color',
     background_value: '#3b82f6',
@@ -340,7 +340,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Text Styling Section */}
+            {/* Text Styling Section - Updated */}
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -358,7 +358,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Background Customization Section */}
+            {/* Background Customization Section - Updated */}
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -377,7 +377,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Updated with AutoDeleteToggle */}
+            {/* Privacy Settings Section - Updated defaults */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">

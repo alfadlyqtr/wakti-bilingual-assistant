@@ -28,7 +28,6 @@ export default function Maw3dEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
-  const [backgroundImageBlur, setBackgroundImageBlur] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -53,7 +52,14 @@ export default function Maw3dEdit() {
         return;
       }
 
-      setEvent(eventData);
+      // Set defaults for events that don't have these values set
+      const eventWithDefaults = {
+        ...eventData,
+        is_public: eventData.is_public !== undefined ? eventData.is_public : true,
+        show_attending_count: eventData.show_attending_count !== undefined ? eventData.show_attending_count : false
+      };
+
+      setEvent(eventWithDefaults);
     } catch (error) {
       console.error('Error fetching event:', error);
       toast.error('Failed to load event');
@@ -178,7 +184,6 @@ export default function Maw3dEdit() {
                 rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={event.show_attending_count}
                 language={language}
-                imageBlur={backgroundImageBlur}
               />
             </CardContent>
           </Card>
@@ -312,7 +317,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Text Styling Section */}
+            {/* Text Styling Section - Updated */}
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -330,7 +335,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Background Customization Section */}
+            {/* Background Customization Section - Updated */}
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -349,7 +354,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Updated with AutoDeleteToggle */}
+            {/* Privacy Settings Section - Updated defaults */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">

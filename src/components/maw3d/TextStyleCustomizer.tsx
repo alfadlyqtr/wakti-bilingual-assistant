@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Toggle } from '@/components/ui/toggle';
 import { Slider } from '@/components/ui/slider';
-import { Bold, Italic, Underline, Palette, AlignLeft, AlignCenter, AlignRight, Minus, Plus } from 'lucide-react';
+import { Bold, Italic, Underline, Minus, Plus, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { t } from '@/utils/translations';
 
 interface TextStyleCustomizerProps {
@@ -35,10 +35,12 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
     onTextStyleChange({ fontSize: newSize });
   };
 
+  const handleShadowChange = (value: number[]) => {
+    onTextStyleChange({ hasShadow: value[0] > 0 });
+  };
+
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold">🎨 {t('textStyling', language)}</h2>
-      
       <div className="grid grid-cols-1 gap-4">
         <div>
           <Label htmlFor="font-family">{t('fontFamily', language)}</Label>
@@ -107,7 +109,24 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
+      {/* Shadow slider placed under text color */}
+      <div>
+        <Label>{t('textShadow', language)}</Label>
+        <Slider
+          value={[textStyle.hasShadow ? 5 : 0]}
+          onValueChange={handleShadowChange}
+          min={0}
+          max={10}
+          step={1}
+          className="w-full mt-2"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          {textStyle.hasShadow ? t('shadowEnabled', language) : t('shadowDisabled', language)}
+        </p>
+      </div>
+
+      {/* Text Formatting and Text Alignment side by side */}
+      <div className="grid grid-cols-2 gap-6">
         <div className="space-y-2">
           <Label>{t('textFormatting', language)}</Label>
           <div className="flex gap-2">
@@ -128,17 +147,6 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
               onPressedChange={(pressed) => onTextStyleChange({ isUnderline: pressed })}
             >
               <Underline className="w-4 h-4" />
-            </Toggle>
-            <Toggle
-              pressed={textStyle.hasShadow}
-              onPressedChange={(pressed) => onTextStyleChange({ hasShadow: pressed })}
-              className={`transition-all duration-200 ${
-                textStyle.hasShadow 
-                  ? 'shadow-lg shadow-black/25 bg-slate-100 dark:bg-slate-800' 
-                  : 'hover:shadow-md hover:shadow-black/15'
-              }`}
-            >
-              <Palette className="w-4 h-4" />
             </Toggle>
           </div>
         </div>
