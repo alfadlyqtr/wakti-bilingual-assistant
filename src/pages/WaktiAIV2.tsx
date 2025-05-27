@@ -16,8 +16,9 @@ import {
   MessageSquare, 
   Plus,
   Loader2,
-  Sparkles,
-  RefreshCw
+  Trash2,
+  Upload,
+  Camera
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -42,6 +43,8 @@ export default function WaktiAIV2() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Debug: Log component mount
   useEffect(() => {
@@ -152,6 +155,16 @@ export default function WaktiAIV2() {
     initializeGreeting();
   };
 
+  const clearCurrentConversation = () => {
+    setMessages([]);
+    setCurrentConversationId(null);
+    initializeGreeting();
+    toast({
+      title: language === 'ar' ? 'تم المسح' : 'Cleared',
+      description: language === 'ar' ? 'تم مسح المحادثة الحالية' : 'Current conversation cleared'
+    });
+  };
+
   const deleteConversation = async (conversationId: string) => {
     try {
       await WaktiAIV2Service.deleteConversation(conversationId);
@@ -173,6 +186,27 @@ export default function WaktiAIV2() {
         variant: 'destructive'
       });
     }
+  };
+
+  const handleFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleCameraCapture = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const processFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    toast({
+      title: language === 'ar' ? 'جاري الرفع' : 'Uploading',
+      description: language === 'ar' ? `جاري رفع ${file.name}` : `Uploading ${file.name}`
+    });
+
+    // Reset the input
+    event.target.value = '';
   };
 
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
@@ -379,11 +413,11 @@ export default function WaktiAIV2() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={retryLastMessage}
-            disabled={isLoading || messages.length < 2}
+            onClick={clearCurrentConversation}
             className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'مسح المحادثة' : 'Clear conversation'}
           >
-            <RefreshCw className="h-5 w-5" />
+            <Trash2 className="h-5 w-5" />
           </Button>
           
           <Button
@@ -391,8 +425,29 @@ export default function WaktiAIV2() {
             size="icon"
             onClick={startNewConversation}
             className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
           >
             <Plus className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleFileUpload}
+            className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'رفع ملف' : 'Upload file'}
+          >
+            <Upload className="h-5 w-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleCameraCapture}
+            className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'التقاط صورة' : 'Take photo'}
+          >
+            <Camera className="h-5 w-5" />
           </Button>
           
           <Sheet>
@@ -408,8 +463,25 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
+      {/* Hidden file inputs */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={processFileUpload}
+        className="hidden"
+        accept="*/*"
+      />
+      <input
+        type="file"
+        ref={cameraInputRef}
+        onChange={processFileUpload}
+        className="hidden"
+        accept="image/*"
+        capture="environment"
+      />
+
       {/* Enhanced Messages Area with bottom padding for fixed input */}
-      <ScrollArea className="flex-1 p-4 pb-40">
+      <ScrollArea className="flex-1 p-4 pb-44">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatBubble key={message.id} message={message} />
@@ -421,57 +493,61 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Professional Fixed Input Area - Higher z-index than MobileNav */}
-      <div className="fixed bottom-16 left-0 right-0 z-[65] border-t bg-background/95 backdrop-blur-md shadow-lg">
-        <div className="p-4">
-          <div className="flex gap-2 max-w-4xl mx-auto">
-            <div className="flex-1 relative">
-              <Input
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage(inputMessage);
-                  }
-                }}
+      {/* Enhanced Fixed Input Area */}
+      <div className="fixed bottom-20 left-0 right-0 z-[65] p-4">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 relative">
+                <Input
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      sendMessage(inputMessage);
+                    }
+                  }}
+                  disabled={isLoading}
+                  className={cn(
+                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-32",
+                    language === 'ar' ? 'text-right' : ''
+                  )}
+                />
+              </div>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+                onTouchStart={startRecording}
+                onTouchEnd={stopRecording}
                 disabled={isLoading}
                 className={cn(
-                  "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-base border-border/50 bg-background/80",
-                  language === 'ar' ? 'text-right' : ''
+                  "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
+                  isRecording 
+                    ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-105" 
+                    : "hover:bg-muted"
                 )}
-              />
+              >
+                {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </Button>
+              
+              <Button
+                onClick={() => sendMessage(inputMessage)}
+                disabled={!inputMessage.trim() || isLoading}
+                size="icon"
+                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
             </div>
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              onMouseDown={startRecording}
-              onMouseUp={stopRecording}
-              onTouchStart={startRecording}
-              onTouchEnd={stopRecording}
-              disabled={isLoading}
-              className={cn(
-                "transition-all duration-200 hover:scale-110 h-12 w-12 border border-border/50",
-                isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
-              )}
-            >
-              {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-            </Button>
-            
-            <Button
-              onClick={() => sendMessage(inputMessage)}
-              disabled={!inputMessage.trim() || isLoading}
-              size="icon"
-              className="hover:scale-110 transition-transform h-12 w-12"
-            >
-              {isLoading ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
-              ) : (
-                <Send className="h-6 w-6" />
-              )}
-            </Button>
           </div>
         </div>
       </div>
