@@ -16,7 +16,9 @@ import { t } from '@/utils/translations';
 interface BackgroundCustomizerProps {
   backgroundType: 'color' | 'gradient' | 'image' | 'ai';
   backgroundValue: string;
+  imageBlur?: number;
   onBackgroundChange: (type: 'color' | 'gradient' | 'image' | 'ai', value: string) => void;
+  onImageBlurChange?: (blur: number) => void;
   language: string;
 }
 
@@ -32,13 +34,14 @@ const gradientPresets = [
 export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
   backgroundType,
   backgroundValue,
+  imageBlur = 0,
   onBackgroundChange,
+  onImageBlurChange,
   language
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [imageBlur, setImageBlur] = useState(0);
 
   const handleColorChange = (color: string) => {
     onBackgroundChange('color', color);
@@ -101,6 +104,13 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
       toast.error('Failed to generate AI background');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleBlurChange = (value: number[]) => {
+    const blurValue = value[0];
+    if (onImageBlurChange) {
+      onImageBlurChange(blurValue);
     }
   };
 
@@ -223,7 +233,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
                 <Label>{t('imageBlur', language)}: {imageBlur}px</Label>
                 <Slider
                   value={[imageBlur]}
-                  onValueChange={(value) => setImageBlur(value[0])}
+                  onValueChange={handleBlurChange}
                   min={0}
                   max={10}
                   step={0.5}
@@ -272,7 +282,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
               <Label>{t('imageBlur', language)}: {imageBlur}px</Label>
               <Slider
                 value={[imageBlur]}
-                onValueChange={(value) => setImageBlur(value[0])}
+                onValueChange={handleBlurChange}
                 min={0}
                 max={10}
                 step={0.5}

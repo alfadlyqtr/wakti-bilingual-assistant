@@ -35,8 +35,12 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
     onTextStyleChange({ fontSize: newSize });
   };
 
-  const handleShadowChange = (value: number[]) => {
-    onTextStyleChange({ hasShadow: value[0] > 0 });
+  const handleShadowIntensityChange = (value: number[]) => {
+    const intensity = value[0];
+    onTextStyleChange({ 
+      hasShadow: intensity > 0,
+      shadowIntensity: intensity 
+    });
   };
 
   return (
@@ -109,19 +113,19 @@ export const TextStyleCustomizer: React.FC<TextStyleCustomizerProps> = ({
         />
       </div>
 
-      {/* Shadow slider placed under text color */}
+      {/* Shadow intensity slider placed under text color */}
       <div>
-        <Label>{t('textShadow', language)}</Label>
+        <Label>{t('textShadow', language)}: {textStyle.shadowIntensity || 0}</Label>
         <Slider
-          value={[textStyle.hasShadow ? 5 : 0]}
-          onValueChange={handleShadowChange}
+          value={[textStyle.shadowIntensity || 0]}
+          onValueChange={handleShadowIntensityChange}
           min={0}
           max={10}
-          step={1}
+          step={0.5}
           className="w-full mt-2"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          {textStyle.hasShadow ? t('shadowEnabled', language) : t('shadowDisabled', language)}
+          {(textStyle.shadowIntensity || 0) > 0 ? t('shadowEnabled', language) : t('shadowDisabled', language)}
         </p>
       </div>
 
