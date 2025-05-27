@@ -117,16 +117,25 @@ export default function Maw3dEvents() {
           backgroundPosition: 'center'
         };
         
-        // Apply blur if image_blur is set and greater than 0
-        if (event.image_blur && Number(event.image_blur) > 0) {
-          console.log('Applying blur filter:', `blur(${event.image_blur}px)`);
-          style.filter = `blur(${event.image_blur}px)`;
-        }
-        
+        // DO NOT apply blur here - it will be applied to a separate pseudo-element
         return style;
       default:
         return { backgroundColor: '#3b82f6' };
     }
+  };
+
+  const getBlurredBackgroundStyle = (event: Maw3dEvent) => {
+    if ((event.background_type === 'image' || event.background_type === 'ai') && 
+        event.image_blur && Number(event.image_blur) > 0) {
+      console.log('Creating blurred background with blur:', `${event.image_blur}px`);
+      return {
+        backgroundImage: `url(${event.background_value})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: `blur(${event.image_blur}px)`,
+      };
+    }
+    return null;
   };
 
   if (isLoading) {
@@ -170,87 +179,100 @@ export default function Maw3dEvents() {
           </div>
         ) : (
           <div className="space-y-6">
-            {events.map((event) => (
-              <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
-                <div 
-                  className="relative h-56 flex items-end p-6"
-                  style={getBackgroundStyle(event)}
-                  onClick={() => handleEventClick(event)}
-                >
-                  {/* Overlay for better text readability */}
-                  <div className="absolute inset-0 bg-black/30" />
-                  
-                  <div className="relative text-white w-full">
-                    <h3 className="font-bold text-2xl mb-2">{event.title}</h3>
-                    {event.description && (
-                      <p className="text-lg opacity-90 line-clamp-2">{event.description}</p>
+            {events.map((event) => {
+              const blurredBgStyle = getBlurredBackgroundStyle(event);
+              
+              return (
+                <Card key={event.id} className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow">
+                  <div 
+                    className="relative h-56 flex items-end p-6"
+                    style={getBackgroundStyle(event)}
+                    onClick={() => handleEventClick(event)}
+                  >
+                    {/* Blurred background layer (only for images with blur) */}
+                    {blurredBgStyle && (
+                      <div 
+                        className="absolute inset-0"
+                        style={blurredBgStyle}
+                      />
                     )}
-                  </div>
-                </div>
-                
-                <CardContent className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <Calendar className="w-5 h-5" />
-                      <span className="text-base">{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
-                    </div>
                     
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <Clock className="w-5 h-5" />
-                      <span className="text-base">{formatEventTime(event)}</span>
-                    </div>
-
-                    {event.location && (
-                      <div className="flex items-center gap-3 text-muted-foreground sm:col-span-2">
-                        <MapPin className="w-5 h-5" />
-                        <span className="text-base">{event.location}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="default" className="text-sm px-3 py-1">
-                        {t("yourEvent", language)}
-                      </Badge>
-                      {event.is_public && (
-                        <Badge variant="outline" className="text-sm px-3 py-1">{t("publicEvent", language)}</Badge>
+                    {/* Dark overlay for better text readability */}
+                    <div className="absolute inset-0 bg-black/30" />
+                    
+                    {/* Text content - positioned above blur and overlay */}
+                    <div className="relative text-white w-full z-10">
+                      <h3 className="font-bold text-2xl mb-2">{event.title}</h3>
+                      {event.description && (
+                        <p className="text-lg opacity-90 line-clamp-2">{event.description}</p>
                       )}
                     </div>
                   </div>
+                  
+                  <CardContent className="p-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <Calendar className="w-5 h-5" />
+                        <span className="text-base">{format(new Date(event.event_date), 'EEEE, MMMM d, yyyy')}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 text-muted-foreground">
+                        <Clock className="w-5 h-5" />
+                        <span className="text-base">{formatEventTime(event)}</span>
+                      </div>
 
-                  {/* Action buttons */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={(e) => handleEdit(event.id, e)}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      <Edit className="w-4 h-4" />
-                      {t("edit", language)}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      onClick={(e) => handleShare(event, e)}
-                      className="flex items-center justify-center gap-2"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      {t("share", language)}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      onClick={(e) => handleDelete(event.id, e)}
-                      className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      {t("delete", language)}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      {event.location && (
+                        <div className="flex items-center gap-3 text-muted-foreground sm:col-span-2">
+                          <MapPin className="w-5 h-5" />
+                          <span className="text-base">{event.location}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="default" className="text-sm px-3 py-1">
+                          {t("yourEvent", language)}
+                        </Badge>
+                        {event.is_public && (
+                          <Badge variant="outline" className="text-sm px-3 py-1">{t("publicEvent", language)}</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <Button
+                        variant="outline"
+                        onClick={(e) => handleEdit(event.id, e)}
+                        className="flex items-center justify-center gap-2"
+                      >
+                        <Edit className="w-4 h-4" />
+                        {t("edit", language)}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={(e) => handleShare(event, e)}
+                        className="flex items-center justify-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        {t("share", language)}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        onClick={(e) => handleDelete(event.id, e)}
+                        className="flex items-center justify-center gap-2 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {t("delete", language)}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
