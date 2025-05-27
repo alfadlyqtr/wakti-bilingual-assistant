@@ -1,3 +1,4 @@
+
 import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -34,6 +35,11 @@ export interface AIResponse {
   needsClarification: boolean;
 }
 
+export interface TranscriptionResponse {
+  text: string;
+  language: string;
+}
+
 export class WaktiAIService {
   // Send message to AI and get response
   static async sendMessage(
@@ -56,8 +62,8 @@ export class WaktiAIService {
   static async transcribeVoice(
     audioData: string,
     language: 'en' | 'ar' = 'en'
-  ): Promise<{ text: string; language: string }> {
-    return await callEdgeFunctionWithRetry('wakti-voice-transcription', {
+  ): Promise<TranscriptionResponse> {
+    return await callEdgeFunctionWithRetry<TranscriptionResponse>('wakti-voice-transcription', {
       body: {
         audioData,
         language
@@ -110,7 +116,7 @@ export class WaktiAIService {
   }
 
   // Get recent chat history for context (last 5 messages)
-  static async getRecentContext(conversationId?: string): Promise<AIMessage[]> {
+  static async getRecentContext(conversationId?: string): Promise<Partial<AIMessage>[]> {
     if (!conversationId) return [];
 
     const { data, error } = await supabase
@@ -133,8 +139,7 @@ export class WaktiAIService {
   // Check if AI services are available
   static async checkAIAvailability(): Promise<{ deepseek: boolean; openai: boolean }> {
     try {
-      // This would be implemented in an edge function
-      const response = await callEdgeFunctionWithRetry('check-ai-availability', {});
+      const response = await callEdgeFunctionWithRetry<{ deepseek: boolean; openai: boolean }>('check-ai-availability', {});
       return response;
     } catch (error) {
       console.error('Error checking AI availability:', error);
@@ -144,7 +149,7 @@ export class WaktiAIService {
 
   // Generate image using AI
   static async generateImage(prompt: string): Promise<{ imageUrl: string; prompt: string }> {
-    return await callEdgeFunctionWithRetry('generate-image', {
+    return await callEdgeFunctionWithRetry<{ imageUrl: string; prompt: string }>('generate-image', {
       body: { prompt }
     });
   }

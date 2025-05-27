@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
+import { WaktiAIService, type AIResponse, type TranscriptionResponse } from '@/services/waktiAIService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -85,14 +85,8 @@ export default function WaktiAI() {
 
   const loadConversations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('ai_conversations')
-        .select('*')
-        .order('last_message_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      setConversations(data || []);
+      const data = await WaktiAIService.getConversations();
+      setConversations(data);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -101,15 +95,9 @@ export default function WaktiAI() {
   const loadConversation = async (conversationId: string) => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
-        .from('ai_chat_history')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
+      const data = await WaktiAIService.getConversationMessages(conversationId);
 
-      if (error) throw error;
-
-      const loadedMessages: Message[] = data?.map(msg => ({
+      const loadedMessages: Message[] = data.map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
@@ -118,7 +106,7 @@ export default function WaktiAI() {
         confidence: msg.confidence_level,
         actionTaken: msg.action_taken,
         inputType: msg.input_type as 'text' | 'voice'
-      })) || [];
+      }));
 
       setMessages(loadedMessages);
       setCurrentConversationId(conversationId);
@@ -148,13 +136,7 @@ export default function WaktiAI() {
 
   const deleteConversation = async (conversationId: string) => {
     try {
-      const { error } = await supabase
-        .from('ai_conversations')
-        .delete()
-        .eq('id', conversationId);
-
-      if (error) throw error;
-
+      await WaktiAIService.deleteConversation(conversationId);
       setConversations(prev => prev.filter(c => c.id !== conversationId));
       
       if (currentConversationId === conversationId) {
@@ -192,14 +174,12 @@ export default function WaktiAI() {
     setIsTyping(true);
 
     try {
-      const response = await callEdgeFunctionWithRetry('wakti-ai-brain', {
-        body: {
-          message: content.trim(),
-          conversationId: currentConversationId,
-          language,
-          inputType
-        }
-      });
+      const response = await WaktiAIService.sendMessage(
+        content.trim(),
+        currentConversationId || undefined,
+        language,
+        inputType
+      ) as AIResponse;
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -299,12 +279,10 @@ export default function WaktiAI() {
       const base64Audio = btoa(binaryString);
 
       // Transcribe audio
-      const transcription = await callEdgeFunctionWithRetry('wakti-voice-transcription', {
-        body: {
-          audioData: base64Audio,
-          language
-        }
-      });
+      const transcription = await WaktiAIService.transcribeVoice(
+        base64Audio,
+        language
+      ) as TranscriptionResponse;
 
       if (transcription.text) {
         await sendMessage(transcription.text, 'voice');
@@ -449,7 +427,7 @@ export default function WaktiAI() {
       {/* Messages */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
-          {messages.map((message, index) => (
+          {messages.map((message) => (
             <div
               key={message.id}
               className={cn(
