@@ -88,17 +88,17 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
       
       {/* Header */}
       <div className="flex justify-between items-center mb-3 relative z-10 ml-10">
-        <h3 className="text-lg text-blue-900 font-semibold">
+        <h3 className="text-lg text-foreground font-semibold">
           {t("dailyQuote", language)}
         </h3>
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-8 w-8 hover:bg-blue-900/10" 
+          className="h-8 w-8 hover:bg-muted/50" 
           onClick={handleRefresh}
           disabled={isLoading}
         >
-          <RefreshCw className={`h-4 w-4 text-blue-900 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 text-foreground ${isLoading ? 'animate-spin' : ''}`} />
           <span className="sr-only">
             {language === 'ar' ? "تحديث الاقتباس" : "Refresh quote"}
           </span>
@@ -107,10 +107,10 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
 
       {/* Quote Content */}
       <div className={`relative z-10 ${language === 'ar' ? 'text-right' : ''}`}>
-        <p className="text-sm italic text-blue-900 font-medium leading-relaxed mb-2">
+        <p className="text-sm italic text-foreground font-medium leading-relaxed mb-2">
           "{quoteText}"
         </p>
-        <p className="text-xs text-blue-800/80 font-medium">
+        <p className="text-xs text-muted-foreground font-medium">
           — {quoteAuthor}
         </p>
       </div>
