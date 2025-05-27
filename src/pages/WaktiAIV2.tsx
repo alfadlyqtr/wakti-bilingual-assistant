@@ -267,6 +267,11 @@ export default function WaktiAIV2() {
         actionTaken: response.actionTaken
       };
 
+      // Add image URL if image was generated
+      if (response.actionTaken === 'generate_image' && response.actionResult?.imageUrl) {
+        assistantMessage.imageUrl = response.actionResult.imageUrl;
+      }
+
       setMessages(prev => [...prev, assistantMessage]);
       
       // Only update conversation ID if we got a valid response

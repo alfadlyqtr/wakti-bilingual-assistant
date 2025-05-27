@@ -79,6 +79,18 @@ export function ChatBubble({ message }: ChatBubbleProps) {
             {message.content}
           </div>
           
+          {/* Display generated image if available */}
+          {message.imageUrl && (
+            <div className="mt-3">
+              <img 
+                src={message.imageUrl} 
+                alt="Generated image"
+                className="rounded-lg max-w-full h-auto shadow-md"
+                loading="lazy"
+              />
+            </div>
+          )}
+          
           {/* Message metadata */}
           <div className={cn(
             "flex items-center gap-2 mt-2 text-xs opacity-70",

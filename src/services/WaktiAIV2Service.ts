@@ -10,6 +10,7 @@ export interface AIMessage {
   confidence?: 'high' | 'medium' | 'low';
   actionTaken?: string;
   inputType?: 'text' | 'voice';
+  imageUrl?: string; // Add image URL field
 }
 
 export interface AIConversation {
@@ -55,6 +56,19 @@ export class WaktiAIV2Service {
       });
 
       console.log('WAKTI AI V2.1 CLIENT: Received response from brain:', response);
+      
+      // Enhanced response handling for image generation
+      if (response.actionTaken === 'generate_image' && response.actionResult) {
+        if (response.actionResult.imageUrl) {
+          // Update the response to include image information
+          response.response += `\n\n🎨 ${language === 'ar' ? 'تم إنشاء الصورة بنجاح!' : 'Image generated successfully!'}`;
+        } else if (response.actionResult.error) {
+          response.response += `\n\n❌ ${language === 'ar' 
+            ? 'فشل في إنشاء الصورة: ' + response.actionResult.error
+            : 'Image generation failed: ' + response.actionResult.error}`;
+        }
+      }
+      
       return response;
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in sendMessage:', error);

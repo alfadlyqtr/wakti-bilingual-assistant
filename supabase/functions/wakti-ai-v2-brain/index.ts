@@ -86,14 +86,22 @@ serve(async (req) => {
 
     console.log("WAKTI AI V2.1: Generated response successfully");
 
-    // Execute actions based on confidence (simplified for now)
+    // Execute actions based on confidence
     let actionResult = null;
     let actionTaken = null;
     
-    if (analysis.confidence === 'high' && analysis.actionData && user) {
+    if (analysis.confidence === 'high' && analysis.actionData) {
       try {
-        actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
-        actionTaken = analysis.actionData.type;
+        if (analysis.actionData.type === 'generate_image') {
+          // Call the generate-image function
+          console.log("WAKTI AI V2.1: Calling image generation function");
+          actionResult = await callImageGenerationFunction(analysis.actionData.prompt, req.headers.get("Authorization"));
+          actionTaken = 'generate_image';
+        } else if (user) {
+          // Handle other actions that require authentication
+          actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
+          actionTaken = analysis.actionData.type;
+        }
         console.log("WAKTI AI V2.1: Action executed:", actionTaken);
       } catch (error) {
         console.error("WAKTI AI V2.1: Action execution failed:", error);
@@ -128,6 +136,33 @@ serve(async (req) => {
   }
 });
 
+// New function to call the generate-image edge function
+async function callImageGenerationFunction(prompt: string, authHeader: string | null) {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const response = await fetch(`${supabaseUrl}/functions/v1/generate-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader || '',
+      },
+      body: JSON.stringify({ prompt })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Image generation failed: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log("WAKTI AI V2.1: Image generation result:", result);
+    return result;
+  } catch (error) {
+    console.error("WAKTI AI V2.1: Image generation error:", error);
+    throw error;
+  }
+}
+
 function analyzeMessage(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
@@ -147,7 +182,7 @@ function analyzeMessage(message: string, language: string) {
       
     image: language === 'ar'
       ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة']
-      : ['generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of']
+      : ['generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 'create an image']
   };
 
   // Check for high confidence matches
@@ -184,7 +219,7 @@ function extractActionData(message: string, intent: string, language: string) {
   // Remove command words to get the actual content
   const removePatterns = language === 'ar' 
     ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة']
-    : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image'];
+    : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
   for (const pattern of removePatterns) {
@@ -214,7 +249,7 @@ function extractActionData(message: string, intent: string, language: string) {
     case 'image':
       return {
         type: 'generate_image',
-        prompt: title
+        prompt: title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork')
       };
     default:
       return null;
@@ -222,6 +257,13 @@ function extractActionData(message: string, intent: string, language: string) {
 }
 
 async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
+  // Special handling for image generation
+  if (analysis.intent === 'image' && analysis.confidence === 'high') {
+    return language === 'ar'
+      ? `سأقوم بإنشاء صورة لك الآن! 🎨\n\nوصف الصورة: "${analysis.actionData.prompt}"\n\nيرجى الانتظار قليلاً...`
+      : `I'll create an image for you now! 🎨\n\nImage description: "${analysis.actionData.prompt}"\n\nPlease wait a moment...`;
+  }
+
   const systemPrompt = language === 'ar' 
     ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
     : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, and reminders in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
