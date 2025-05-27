@@ -58,10 +58,12 @@ export default function Maw3dEdit() {
       const eventWithDefaults = {
         ...eventData,
         is_public: eventData.is_public !== undefined ? eventData.is_public : true,
-        show_attending_count: eventData.show_attending_count !== undefined ? eventData.show_attending_count : false
+        show_attending_count: eventData.show_attending_count !== undefined ? eventData.show_attending_count : false,
+        image_blur: eventData.image_blur !== undefined ? eventData.image_blur : 0
       };
 
       setEvent(eventWithDefaults);
+      setImageBlur(eventWithDefaults.image_blur);
     } catch (error) {
       console.error('Error fetching event:', error);
       toast.error('Failed to load event');
@@ -94,6 +96,11 @@ export default function Maw3dEdit() {
 
   const handleImageBlurChange = (blur: number) => {
     setImageBlur(blur);
+    if (!event) return;
+    setEvent(prev => prev ? {
+      ...prev,
+      image_blur: blur
+    } : null);
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -126,7 +133,7 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
-      console.log('Saving event with auto_delete_enabled:', event.auto_delete_enabled);
+      console.log('Saving event with image_blur:', event.image_blur);
       
       // Ensure the event language is set to current UI language
       const updatedEventData = {
@@ -136,7 +143,7 @@ export default function Maw3dEdit() {
       
       // Update the event
       const updatedEvent = await Maw3dService.updateEvent(event.id, updatedEventData);
-      console.log('Event updated with auto_delete_enabled:', updatedEvent.auto_delete_enabled);
+      console.log('Event updated with image_blur:', updatedEvent.image_blur);
 
       toast.success('Event updated successfully!');
       navigate('/maw3d');

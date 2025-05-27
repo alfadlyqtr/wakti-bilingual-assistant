@@ -58,7 +58,8 @@ export default function Maw3dCreate() {
     background_value: '#3b82f6',
     text_style: defaultTextStyle,
     template_type: null,
-    invited_contacts: []
+    invited_contacts: [],
+    image_blur: 0
   });
 
   const handleInputChange = (field: keyof EventFormData, value: any) => {
@@ -83,6 +84,10 @@ export default function Maw3dCreate() {
 
   const handleImageBlurChange = (blur: number) => {
     setImageBlur(blur);
+    setFormData(prev => ({
+      ...prev,
+      image_blur: blur
+    }));
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -144,7 +149,8 @@ export default function Maw3dCreate() {
         start_time: eventData.start_time,
         end_time: eventData.end_time,
         is_all_day: eventData.is_all_day,
-        auto_delete_enabled: eventData.auto_delete_enabled
+        auto_delete_enabled: eventData.auto_delete_enabled,
+        image_blur: eventData.image_blur
       });
 
       // Remove invited_contacts from the event data as it's not used anymore
@@ -208,7 +214,8 @@ export default function Maw3dCreate() {
                   updated_at: new Date().toISOString(),
                   short_id: null,
                   language: language,
-                  auto_delete_enabled: formData.auto_delete_enabled
+                  auto_delete_enabled: formData.auto_delete_enabled,
+                  image_blur: formData.image_blur
                 }}
                 textStyle={formData.text_style}
                 backgroundType={formData.background_type}

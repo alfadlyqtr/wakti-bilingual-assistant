@@ -321,6 +321,7 @@ export type Database = {
           event_date: string
           google_maps_link: string | null
           id: string
+          image_blur: number
           is_all_day: boolean
           is_public: boolean
           language: string
@@ -345,6 +346,7 @@ export type Database = {
           event_date: string
           google_maps_link?: string | null
           id?: string
+          image_blur?: number
           is_all_day?: boolean
           is_public?: boolean
           language?: string
@@ -369,6 +371,7 @@ export type Database = {
           event_date?: string
           google_maps_link?: string | null
           id?: string
+          image_blur?: number
           is_all_day?: boolean
           is_public?: boolean
           language?: string

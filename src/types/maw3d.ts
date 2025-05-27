@@ -38,6 +38,7 @@ export interface EventFormData {
   text_style: TextStyle;
   template_type?: string | null;
   invited_contacts: string[];
+  image_blur: number;
 }
 
 export interface CreateEventFormData {
@@ -58,6 +59,7 @@ export interface CreateEventFormData {
   text_style: TextStyle;
   template_type?: string | null;
   invited_contacts: string[];
+  image_blur: number;
 }
 
 export interface Maw3dEvent {
@@ -83,6 +85,7 @@ export interface Maw3dEvent {
   updated_at: string;
   short_id?: string | null;
   language?: string;
+  image_blur: number;
 }
 
 export interface Maw3dRsvp {

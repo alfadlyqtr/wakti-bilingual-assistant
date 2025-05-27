@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -18,14 +19,15 @@ export class Maw3dService {
       return trimmed;
     };
 
-    // Prepare the data for database insertion with enhanced time handling, language, and auto_delete_enabled
+    // Prepare the data for database insertion with enhanced time handling, language, auto_delete_enabled, and image_blur
     const dbEventData = {
       ...eventData,
       // Critical fix: Ensure time fields are properly handled for PostgreSQL
       start_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.start_time),
       end_time: eventData.is_all_day ? null : sanitizeTimeForDB(eventData.end_time),
       language: eventData.language || 'en', // Default to English if not specified
-      auto_delete_enabled: eventData.auto_delete_enabled !== undefined ? eventData.auto_delete_enabled : true // Default to true
+      auto_delete_enabled: eventData.auto_delete_enabled !== undefined ? eventData.auto_delete_enabled : true, // Default to true
+      image_blur: eventData.image_blur !== undefined ? eventData.image_blur : 0 // Default to 0
     };
     
     console.log('Prepared DB event data:', {
@@ -34,7 +36,8 @@ export class Maw3dService {
       end_time: dbEventData.end_time,
       is_all_day: dbEventData.is_all_day,
       language: dbEventData.language,
-      auto_delete_enabled: dbEventData.auto_delete_enabled
+      auto_delete_enabled: dbEventData.auto_delete_enabled,
+      image_blur: dbEventData.image_blur
     });
     
     // Remove any fields that don't belong in the database
