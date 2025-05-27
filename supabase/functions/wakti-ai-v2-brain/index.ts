@@ -136,7 +136,7 @@ serve(async (req) => {
   }
 });
 
-// New function to call the generate-image edge function
+// Call the generate-image edge function
 async function callImageGenerationFunction(prompt: string, authHeader: string | null) {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
