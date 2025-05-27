@@ -394,7 +394,6 @@ export default function WaktiAIV2() {
 
   const startRecording = async () => {
     try {
-      // Close keyboard if open
       if (textareaRef.current) {
         textareaRef.current.blur();
       }
@@ -420,10 +419,9 @@ export default function WaktiAIV2() {
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start(100); // Collect data every 100ms for better responsiveness
+      mediaRecorder.start(100);
       setIsRecording(true);
 
-      // Start timer
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => {
           if (prev >= MAX_RECORDING_TIME - 1) {
@@ -460,28 +458,43 @@ export default function WaktiAIV2() {
     try {
       setIsTranscribing(true);
       
-      console.log('🎤 Processing voice input, blob size:', audioBlob.size);
+      console.log('🎤 WAKTI AI V2.1: Processing voice input, blob size:', audioBlob.size);
+
+      // Get the current session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('No active session found');
+      }
 
       // Create FormData for file upload
       const formData = new FormData();
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('language', language);
 
-      console.log('🎤 Uploading audio blob to wakti-voice-v2...');
+      console.log('🎤 WAKTI AI V2.1: Uploading audio blob to wakti-voice-v2...');
 
-      // Send FormData to edge function
-      const response = await supabase.functions.invoke('wakti-voice-v2', {
+      // Use direct fetch instead of supabase.functions.invoke() for FormData
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-voice-v2', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: formData
       });
 
-      console.log('🎤 Voice transcription response:', response);
+      console.log('🎤 WAKTI AI V2.1: Voice transcription response status:', response.status);
 
-      if (response.error) {
-        console.error('🎤 Voice transcription error:', response.error);
-        throw new Error(response.error.message || 'Voice transcription failed');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🎤 WAKTI AI V2.1: Voice transcription error:', errorText);
+        throw new Error(`Voice transcription failed: ${errorText}`);
       }
 
-      const { text } = response.data;
+      const result = await response.json();
+      console.log('🎤 WAKTI AI V2.1: Voice transcription result:', result);
+
+      const { text } = result;
       
       if (text && text.trim()) {
         // Insert transcription into input field instead of auto-sending
@@ -507,7 +520,7 @@ export default function WaktiAIV2() {
         throw new Error('No transcription received');
       }
     } catch (error) {
-      console.error('Error processing voice input:', error);
+      console.error('🎤 WAKTI AI V2.1: Error processing voice input:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
         description: language === 'ar' ? 'فشل في معالجة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to process voice input - please try again',
