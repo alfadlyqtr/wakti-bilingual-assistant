@@ -427,8 +427,8 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
-      {/* Enhanced Messages Area */}
-      <ScrollArea className="flex-1 p-4">
+      {/* Enhanced Messages Area with bottom padding for fixed input */}
+      <ScrollArea className="flex-1 p-4 pb-32">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatBubble key={message.id} message={message} />
@@ -440,70 +440,58 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* DEBUG INPUT AREA - BRIGHT RED TO MAKE IT VISIBLE */}
-      <div 
-        className="fixed bottom-0 left-0 right-0 z-50"
-        style={{ 
-          backgroundColor: '#ff0000', 
-          border: '5px solid #00ff00',
-          minHeight: '80px',
-          padding: '16px'
-        }}
-      >
-        <div className="text-white font-bold text-center mb-2">
-          🚨 DEBUG INPUT AREA - CAN YOU SEE THIS? 🚨
-        </div>
-        <div className="flex gap-2 max-w-4xl mx-auto">
-          <div className="flex-1 relative">
-            <Input
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage(inputMessage);
-                }
-              }}
+      {/* Professional Fixed Input Area */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-md shadow-lg">
+        <div className="p-4">
+          <div className="flex gap-2 max-w-4xl mx-auto">
+            <div className="flex-1 relative">
+              <Input
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage(inputMessage);
+                  }
+                }}
+                disabled={isLoading}
+                className={cn(
+                  "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-base border-border/50 bg-background/80",
+                  language === 'ar' ? 'text-right' : ''
+                )}
+              />
+            </div>
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onTouchStart={startRecording}
+              onTouchEnd={stopRecording}
               disabled={isLoading}
               className={cn(
-                "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-lg border-border/50 bg-background/80",
-                language === 'ar' ? 'text-right' : ''
+                "transition-all duration-200 hover:scale-110 h-12 w-12 border border-border/50",
+                isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
               )}
-            />
+            >
+              {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+            </Button>
+            
+            <Button
+              onClick={() => sendMessage(inputMessage)}
+              disabled={!inputMessage.trim() || isLoading}
+              size="icon"
+              className="hover:scale-110 transition-transform h-12 w-12"
+            >
+              {isLoading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <Send className="h-6 w-6" />
+              )}
+            </Button>
           </div>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={startRecording}
-            onTouchEnd={stopRecording}
-            disabled={isLoading}
-            className={cn(
-              "transition-all duration-200 hover:scale-110 h-12 w-12 border-border/50",
-              isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
-            )}
-          >
-            {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
-          </Button>
-          
-          <Button
-            onClick={() => sendMessage(inputMessage)}
-            disabled={!inputMessage.trim() || isLoading}
-            size="icon"
-            className="hover:scale-110 transition-transform h-12 w-12"
-          >
-            {isLoading ? (
-              <Loader2 className="h-6 w-6 animate-spin" />
-            ) : (
-              <Send className="h-6 w-6" />
-            )}
-          </Button>
-        </div>
-        <div className="text-white text-sm mt-2">
-          Input value: "{inputMessage}" | Loading: {isLoading ? 'YES' : 'NO'}
         </div>
       </div>
     </div>
