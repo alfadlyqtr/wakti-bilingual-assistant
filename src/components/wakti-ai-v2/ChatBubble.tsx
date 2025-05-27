@@ -63,8 +63,8 @@ export function ChatBubble({ message }: ChatBubbleProps) {
   };
 
   const handleCopyTranslatedText = async () => {
-    // Extract translated text from the message content
-    const translatedTextMatch = message.content.match(/\*\*.*?:\*\*\n(.+)/);
+    // Extract translated text from the message content - look for the pattern after "النص المترجم:**"
+    const translatedTextMatch = message.content.match(/\*\*النص المترجم:\*\*\s*\n(.+)/);
     if (translatedTextMatch && translatedTextMatch[1]) {
       try {
         await navigator.clipboard.writeText(translatedTextMatch[1].trim());
@@ -77,9 +77,9 @@ export function ChatBubble({ message }: ChatBubbleProps) {
     }
   };
 
-  // Check if message contains translated text
-  const hasTranslatedText = message.content.includes('📝 **') && 
-    (message.content.includes('النص المترجم') || message.content.includes('Translated Text'));
+  // Check if message contains translated text for Arabic image requests
+  const hasTranslatedText = message.content.includes('**النص المترجم:**') && 
+    message.actionTaken === 'translate_for_image';
 
   if (isSystem) {
     return (
@@ -119,7 +119,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
             {message.content}
           </div>
           
-          {/* Copy button for translated text */}
+          {/* Copy button for translated Arabic text */}
           {hasTranslatedText && !isUser && (
             <div className="mt-3 flex justify-end">
               <Button

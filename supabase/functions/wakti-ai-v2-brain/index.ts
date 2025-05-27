@@ -74,7 +74,61 @@ serve(async (req) => {
     // Handle conversation (simplified for now)
     let conversationIdToUse = conversationId || 'temp-' + Date.now();
 
-    // Generate AI response
+    // Special handling for Arabic image requests - return explanation with translated prompt
+    if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar') {
+      console.log("WAKTI AI V2.1: Handling Arabic image request with translation");
+      
+      try {
+        const translationResult = await translateImagePrompt(analysis.actionData.prompt, language);
+        
+        if (translationResult.translatedPrompt && !translationResult.error) {
+          const arabicResponse = `واكتي AI يُولّد الصور باللغة الإنجليزية فقط.
+لا تقلق — لقد قمت بترجمة نصك أدناه.
+انسخه وألصقه، وسأقوم بإنشاء الصورة لك:
+
+**النص المترجم:**
+${translationResult.translatedPrompt}`;
+
+          return new Response(
+            JSON.stringify({
+              response: arabicResponse,
+              conversationId: conversationIdToUse,
+              intent: analysis.intent,
+              confidence: analysis.confidence,
+              actionTaken: 'translate_for_image',
+              actionResult: {
+                translatedPrompt: translationResult.translatedPrompt,
+                originalPrompt: analysis.actionData.prompt
+              },
+              needsConfirmation: false,
+              needsClarification: false,
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          throw new Error(translationResult.error || "Translation failed");
+        }
+      } catch (error) {
+        console.error("WAKTI AI V2.1: Arabic image translation failed:", error);
+        const errorResponse = `عذراً، فشل في ترجمة طلب الصورة. يرجى المحاولة مرة أخرى أو كتابة الطلب باللغة الإنجليزية.
+
+خطأ: ${error.message}`;
+        
+        return new Response(
+          JSON.stringify({
+            response: errorResponse,
+            conversationId: conversationIdToUse,
+            intent: 'error',
+            confidence: 'low',
+            needsConfirmation: false,
+            needsClarification: true,
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Generate AI response for non-Arabic image requests
     const aiResponse = await generateResponse(
       message,
       analysis,
@@ -96,22 +150,6 @@ serve(async (req) => {
           console.log("WAKTI AI V2.1: Calling image generation function");
           actionResult = await callImageGenerationFunction(analysis.actionData.prompt, req.headers.get("Authorization"));
           actionTaken = 'generate_image';
-        } else if (analysis.actionData.type === 'translate_for_image') {
-          // Translate Arabic prompt to English and then generate image
-          console.log("WAKTI AI V2.1: Translating Arabic image prompt and generating image");
-          const translationResult = await translateImagePrompt(analysis.actionData.prompt, language);
-          
-          if (translationResult.translatedPrompt && !translationResult.error) {
-            // Use the translated prompt to generate the image
-            actionResult = await callImageGenerationFunction(translationResult.translatedPrompt, req.headers.get("Authorization"));
-            actionTaken = 'generate_image';
-            // Add translation info to the result
-            actionResult.translatedFrom = analysis.actionData.prompt;
-            actionResult.translatedTo = translationResult.translatedPrompt;
-          } else {
-            actionResult = translationResult;
-            actionTaken = 'translate_for_image';
-          }
         } else if (user) {
           // Handle other actions that require authentication
           actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
@@ -381,14 +419,6 @@ Translate this Arabic image request into a detailed English image prompt that fo
 }
 
 async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
-  // Special handling for Arabic image generation - now will actually generate the image
-  if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar') {
-    return `تم فهم طلبك لإنشاء صورة! 🎨
-
-سأقوم بترجمة وصفك إلى الإنجليزية ثم إنشاء الصورة لك.
-يرجى الانتظار لحظة...`;
-  }
-
   // Special handling for English image generation
   if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'en') {
     return `I'll create an image for you now! 🎨\n\nImage description: "${analysis.actionData.prompt}"\n\nPlease wait a moment...`;
