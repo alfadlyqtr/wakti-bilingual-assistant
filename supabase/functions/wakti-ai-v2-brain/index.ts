@@ -36,7 +36,7 @@ serve(async (req) => {
       }
     );
 
-    const { message, conversationId, language = 'en' } = await req.json();
+    const { message, conversationId, language = 'en', inputType = 'text' } = await req.json();
 
     if (!message) {
       return new Response(
@@ -67,16 +67,16 @@ serve(async (req) => {
       }
     }
 
-    // Analyze intent and confidence
-    const analysis = analyzeMessage(message, language);
+    // Analyze intent and confidence - with special handling for Arabic voice vs image
+    const analysis = analyzeMessage(message, language, inputType);
     console.log("WAKTI AI V2.1: Intent analysis:", analysis);
 
     // Handle conversation (simplified for now)
     let conversationIdToUse = conversationId || 'temp-' + Date.now();
 
-    // Special handling for Arabic image requests - return explanation with translated prompt
-    if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar') {
-      console.log("WAKTI AI V2.1: Handling Arabic image request with translation");
+    // SPECIAL CASE: Arabic image requests ONLY (not Arabic voice input)
+    if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar' && inputType === 'text') {
+      console.log("WAKTI AI V2.1: Handling Arabic TEXT image request with translation");
       
       try {
         const translationResult = await translateImagePrompt(analysis.actionData.prompt, language);
@@ -128,7 +128,7 @@ ${translationResult.translatedPrompt}`;
       }
     }
 
-    // Generate AI response for non-Arabic image requests
+    // For ALL OTHER cases (including Arabic voice input), generate normal AI response
     const aiResponse = await generateResponse(
       message,
       analysis,
@@ -139,19 +139,19 @@ ${translationResult.translatedPrompt}`;
 
     console.log("WAKTI AI V2.1: Generated response successfully");
 
-    // Execute actions based on confidence
+    // Execute actions based on confidence (for non-Arabic image requests)
     let actionResult = null;
     let actionTaken = null;
     
     if (analysis.confidence === 'high' && analysis.actionData) {
       try {
-        if (analysis.actionData.type === 'generate_image') {
-          // Call the generate-image function for English prompts
-          console.log("WAKTI AI V2.1: Calling image generation function");
+        if (analysis.actionData.type === 'generate_image' && language === 'en') {
+          // Call the generate-image function for English prompts only
+          console.log("WAKTI AI V2.1: Calling image generation function for English");
           actionResult = await callImageGenerationFunction(analysis.actionData.prompt, req.headers.get("Authorization"));
           actionTaken = 'generate_image';
-        } else if (user) {
-          // Handle other actions that require authentication
+        } else if (user && analysis.actionData.type !== 'generate_image') {
+          // Handle other actions that require authentication (but not Arabic image generation)
           actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
           actionTaken = analysis.actionData.type;
         }
@@ -216,10 +216,10 @@ async function callImageGenerationFunction(prompt: string, authHeader: string | 
   }
 }
 
-function analyzeMessage(message: string, language: string) {
+function analyzeMessage(message: string, language: string, inputType: string = 'text') {
   const lowerMessage = message.toLowerCase();
   
-  // Enhanced Arabic image patterns - more comprehensive detection
+  // Enhanced Arabic image patterns - but ONLY for TEXT input (not voice)
   const arabicImagePatterns = [
     'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة',
     'أريد صورة', 'صورة لـ', 'صورة ل', 'اعطني صورة', 'اصنعلي صورة', 'اعملي صورة',
@@ -248,7 +248,9 @@ function analyzeMessage(message: string, language: string) {
       ? ['ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'أذكرني', 'انبهني']
       : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification', 'set reminder'],
       
-    image: language === 'ar' ? arabicImagePatterns : englishImagePatterns
+    // CRITICAL: Only detect Arabic image patterns for TEXT input, not voice
+    image: language === 'ar' && inputType === 'text' ? arabicImagePatterns : 
+           language === 'en' ? englishImagePatterns : []
   };
 
   // Check for high confidence matches
@@ -258,7 +260,7 @@ function analyzeMessage(message: string, language: string) {
         return {
           intent,
           confidence: 'high' as const,
-          actionData: extractActionData(message, intent, language)
+          actionData: extractActionData(message, intent, language, inputType)
         };
       }
     }
@@ -281,15 +283,16 @@ function analyzeMessage(message: string, language: string) {
   };
 }
 
-function extractActionData(message: string, intent: string, language: string) {
-  // For Arabic image prompts, keep the full message for proper translation context
+function extractActionData(message: string, intent: string, language: string, inputType: string = 'text') {
+  // For Arabic image prompts from TEXT input, keep the full message for proper translation context
   // For English, clean up command words
+  // For Arabic VOICE input, do NOT treat as image generation
   const removePatterns = language === 'ar' 
     ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني']
     : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
-  if (intent !== 'image' || language !== 'ar') {
+  if (intent !== 'image' || (language === 'ar' && inputType !== 'text')) {
     for (const pattern of removePatterns) {
       title = title.replace(new RegExp(pattern, 'gi'), '').trim();
     }
@@ -317,9 +320,9 @@ function extractActionData(message: string, intent: string, language: string) {
       };
     case 'image':
       return {
-        type: language === 'ar' ? 'translate_for_image' : 'generate_image',
-        // For Arabic, keep the full message for proper translation context
-        prompt: language === 'ar' ? message : (title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork'))
+        type: language === 'ar' && inputType === 'text' ? 'translate_for_image' : 'generate_image',
+        // For Arabic TEXT, keep the full message for proper translation context
+        prompt: language === 'ar' && inputType === 'text' ? message : (title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork'))
       };
     default:
       return null;
