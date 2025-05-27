@@ -41,7 +41,7 @@ export default function WaktiAIV2() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [systemReady, setSystemReady] = useState(true);
-  const [leftSheetOpen, setLeftSheetOpen] = useState(false);
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -159,7 +159,7 @@ export default function WaktiAIV2() {
       const data = await WaktiAIV2Service.getConversationMessages(conversationId);
       setMessages(data);
       setCurrentConversationId(conversationId);
-      setLeftSheetOpen(false);
+      setLeftDrawerOpen(false);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
@@ -427,26 +427,14 @@ export default function WaktiAIV2() {
       {/* Centered Header with Actions */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-40">
         <div className="flex items-center">
-          <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent 
-              side="left" 
-              className="w-80 bg-background/75 backdrop-blur-md border-r border-border/50 p-4"
-            >
-              <div className="h-full overflow-hidden">
-                <ConversationsList
-                  conversations={conversations}
-                  currentConversationId={currentConversationId}
-                  onSelectConversation={loadConversation}
-                  onDeleteConversation={deleteConversation}
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => setLeftDrawerOpen(true)}
+            className="hover:scale-110 transition-transform"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
         </div>
         
         {/* Centered Action Icons */}
@@ -521,11 +509,6 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Blur overlay when left sheet is open */}
-      {leftSheetOpen && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30" />
-      )}
-
       {/* Enhanced Messages Area */}
       <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
@@ -539,12 +522,45 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Floating Quick Actions Drawer */}
+      {/* Left Drawer - Chat Archive */}
+      <div className={cn(
+        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-50 transition-all duration-300 ease-in-out",
+        leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
+          {/* Drawer Header */}
+          <div className="flex items-center justify-between p-4 border-b border-border/30">
+            <h3 className="font-semibold text-lg">
+              {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
+            </h3>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setLeftDrawerOpen(false)}
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          
+          {/* Drawer Content */}
+          <div className="flex-1 p-4 overflow-y-auto">
+            <ConversationsList
+              conversations={conversations}
+              currentConversationId={currentConversationId}
+              onSelectConversation={loadConversation}
+              onDeleteConversation={deleteConversation}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Right Drawer - Quick Actions */}
       <div className={cn(
         "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-50 transition-all duration-300 ease-in-out",
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
       )}>
-        <div className="h-full bg-white/70 dark:bg-gray-900/70 backdrop-blur-md shadow-lg border-l border-border/50 flex flex-col">
+        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
           {/* Drawer Header */}
           <div className="flex items-center justify-between p-4 border-b border-border/30">
             <h3 className="font-semibold text-lg">
@@ -570,11 +586,14 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
-      {/* Overlay for Quick Actions Drawer */}
-      {rightDrawerOpen && (
+      {/* Overlay for both drawers */}
+      {(leftDrawerOpen || rightDrawerOpen) && (
         <div 
           className="fixed inset-0 bg-black/10 z-40" 
-          onClick={() => setRightDrawerOpen(false)}
+          onClick={() => {
+            setLeftDrawerOpen(false);
+            setRightDrawerOpen(false);
+          }}
         />
       )}
 
