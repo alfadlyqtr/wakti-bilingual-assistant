@@ -217,8 +217,6 @@ async function callImageGenerationFunction(prompt: string, authHeader: string | 
 }
 
 function analyzeMessage(message: string, language: string, inputType: string = 'text') {
-  const lowerMessage = message.toLowerCase();
-  
   // CRITICAL: If input is from voice, skip image detection entirely
   if (inputType === 'voice') {
     console.log("WAKTI AI V2.1: Voice input detected, skipping image analysis");
@@ -229,11 +227,17 @@ function analyzeMessage(message: string, language: string, inputType: string = '
     };
   }
   
-  // Enhanced Arabic image patterns - ONLY for TEXT input
+  // Updated Arabic image patterns - expanded list
   const arabicImagePatterns = [
-    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة',
-    'أريد صورة', 'صورة لـ', 'صورة ل', 'اعطني صورة', 'اصنعلي صورة', 'اعملي صورة',
-    'ارسملي', 'ارسم لي', 'أنشئلي صورة', 'كون صورة', 'اخلق صورة', 'اخلقلي صورة'
+    "ارسم", 
+    "أنشئ صورة", 
+    "صورة جديدة", 
+    "أعطني صورة", 
+    "أريد صورة", 
+    "أنشئ لي", 
+    "أود رؤية صورة", 
+    "ارني صورة", 
+    "عرض صورة"
   ];
   
   // Enhanced English image patterns
@@ -262,10 +266,14 @@ function analyzeMessage(message: string, language: string, inputType: string = '
     image: language === 'ar' ? arabicImagePatterns : englishImagePatterns
   };
 
+  // For Arabic, do NOT use toLowerCase() - compare raw message directly
+  const messageToCompare = language === 'ar' ? message : message.toLowerCase();
+
   // Check for high confidence matches
   for (const [intent, intentPatterns] of Object.entries(patterns)) {
     for (const pattern of intentPatterns) {
-      if (lowerMessage.includes(pattern)) {
+      const patternToCompare = language === 'ar' ? pattern : pattern.toLowerCase();
+      if (messageToCompare.includes(patternToCompare)) {
         return {
           intent,
           confidence: 'high' as const,
@@ -277,7 +285,10 @@ function analyzeMessage(message: string, language: string, inputType: string = '
 
   // Medium confidence - partial matches
   const createWords = language === 'ar' ? ['أنشئ', 'أضف', 'اصنع'] : ['create', 'add', 'make'];
-  if (createWords.some(word => lowerMessage.includes(word))) {
+  const createWordsToCheck = language === 'ar' ? createWords : createWords.map(w => w.toLowerCase());
+  const hasCreateWord = createWordsToCheck.some(word => messageToCompare.includes(word));
+  
+  if (hasCreateWord) {
     return {
       intent: 'general_create',
       confidence: 'medium' as const,
