@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -30,6 +29,7 @@ export default function Maw3dEdit() {
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -75,6 +75,7 @@ export default function Maw3dEdit() {
     if (!event) return;
     console.log(`Updating field ${String(field)} with value:`, value);
     setEvent(prev => prev ? { ...prev, [field]: value } : null);
+    setIsSaved(false); // Mark as unsaved when changes are made
   };
 
   const handleTextStyleChange = (updates: Partial<TextStyle>) => {
@@ -83,6 +84,7 @@ export default function Maw3dEdit() {
       ...prev,
       text_style: { ...prev.text_style, ...updates }
     } : null);
+    setIsSaved(false);
   };
 
   const handleBackgroundChange = (type: 'color' | 'gradient' | 'image' | 'ai', value: string) => {
@@ -93,6 +95,7 @@ export default function Maw3dEdit() {
       background_type: type,
       background_value: value
     } : null);
+    setIsSaved(false);
   };
 
   const handleImageBlurChange = (blur: number) => {
@@ -111,6 +114,13 @@ export default function Maw3dEdit() {
       console.log('Event state updated with image_blur:', updatedEvent.image_blur);
       return updatedEvent;
     });
+    setIsSaved(false);
+    
+    // Show real-time feedback
+    toast(`Image blur set to ${blur}px`, { 
+      duration: 1500,
+      description: 'Changes will be saved when you click Save'
+    });
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -125,6 +135,7 @@ export default function Maw3dEdit() {
         background_value: template.background_value,
         text_style: template.text_style
       } : null);
+      setIsSaved(false);
     }
   };
 
@@ -143,7 +154,7 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
-      console.log('=== SAVING EVENT WITH IMPROVED LOGGING ===');
+      console.log('=== SAVING EVENT WITH DETAILED LOGGING ===');
       console.log('Event image_blur before save:', event.image_blur);
       console.log('Event image_blur type:', typeof event.image_blur);
       console.log('Full event object:', {
@@ -173,23 +184,28 @@ export default function Maw3dEdit() {
       console.log('Returned event image_blur:', updatedEvent.image_blur);
       console.log('Returned event image_blur type:', typeof updatedEvent.image_blur);
 
-      // Show success message with specific mention of settings saved
+      // Set success states
+      setIsSaved(true);
       setShowSuccessMessage(true);
-      toast.success(`Event updated successfully! All settings including image blur (${updatedEvent.image_blur}px) have been saved.`, {
-        duration: 4000
+      
+      // Show comprehensive success message
+      toast.success(`Event updated successfully! Image blur: ${updatedEvent.image_blur}px`, {
+        duration: 4000,
+        description: 'All settings have been saved to the database.'
       });
 
       // Update local state with the returned data to ensure sync
       setEvent(updatedEvent);
 
-      // Delay navigation to allow user to see the success state
+      // Delay navigation to show success state
       setTimeout(() => {
         navigate('/maw3d');
-      }, 2000);
+      }, 3000);
     } catch (error) {
       console.error('=== ERROR SAVING EVENT ===');
       console.error('Error details:', error);
       toast.error('Failed to update event. Please try again.');
+      setIsSaved(false);
     } finally {
       setIsLoading(false);
     }
@@ -218,10 +234,10 @@ export default function Maw3dEdit() {
           </Button>
           <h1 className="text-lg font-semibold">{t('editEvent', language)}</h1>
           <Button onClick={handleSubmit} disabled={isLoading}>
-            {showSuccessMessage ? (
+            {isSaved ? (
               <>
                 <Check className="w-4 h-4 mr-2 text-green-600" />
-                {t('saved', language)}
+                {t('save', language) + 'd'}
               </>
             ) : (
               <>
@@ -254,7 +270,7 @@ export default function Maw3dEdit() {
             <CardContent className="p-6">
               <h2 className="text-lg font-semibold mb-4">{t('eventPreview', language)}</h2>
               <div className="mb-2 text-sm text-muted-foreground">
-                Current image blur: {event.image_blur}px
+                Current image blur: {event.image_blur}px {!isSaved && '(unsaved)'}
               </div>
               <EventPreview
                 event={event}
@@ -428,6 +444,7 @@ export default function Maw3dEdit() {
                       <div className="flex items-center">
                         <div className="text-blue-600 text-sm">
                           💡 Current image blur setting: <strong>{event.image_blur}px</strong>
+                          {!isSaved && <span className="text-orange-600 ml-2">(unsaved)</span>}
                         </div>
                       </div>
                     </div>
