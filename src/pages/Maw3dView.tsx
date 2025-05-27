@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,6 +23,13 @@ export default function Maw3dView() {
   const [hasResponded, setHasResponded] = useState(false);
   const [userResponse, setUserResponse] = useState<'accepted' | 'declined' | null>(null);
   const [submittedName, setSubmittedName] = useState('');
+  
+  // LocalStorage-based RSVP tracking
+  const [hasAlreadyRsvped, setHasAlreadyRsvped] = useState(false);
+  const [localStorageData, setLocalStorageData] = useState<{
+    name: string;
+    response: 'accepted' | 'declined';
+  } | null>(null);
 
   // Use event's language for all translations and ensure type safety
   const eventLanguage: 'en' | 'ar' = (event?.language === 'ar' ? 'ar' : 'en');
@@ -31,6 +39,35 @@ export default function Maw3dView() {
       fetchEvent();
     }
   }, [shortId]);
+
+  useEffect(() => {
+    // Check localStorage for previous RSVP when event is loaded
+    if (event?.short_id) {
+      checkLocalStorageRsvp();
+    }
+  }, [event?.short_id]);
+
+  const checkLocalStorageRsvp = () => {
+    if (!event?.short_id) return;
+    
+    const localKey = `rsvp_submitted_${event.short_id}`;
+    const hasSubmitted = localStorage.getItem(localKey) === 'true';
+    
+    if (hasSubmitted) {
+      const name = localStorage.getItem(`${localKey}_name`) || '';
+      const response = localStorage.getItem(`${localKey}_response`) as 'accepted' | 'declined' | null;
+      
+      if (name && response) {
+        setHasAlreadyRsvped(true);
+        setLocalStorageData({ name, response });
+        setHasResponded(true);
+        setUserResponse(response);
+        setSubmittedName(name);
+        
+        console.log('Found existing localStorage RSVP:', { name, response });
+      }
+    }
+  };
 
   const fetchEvent = async () => {
     try {
@@ -69,7 +106,7 @@ export default function Maw3dView() {
 
     const trimmedName = guestName.trim();
 
-    // Check for duplicate names
+    // Check for duplicate names in database
     const existingRsvp = rsvps.find(rsvp => 
       rsvp.guest_name?.toLowerCase() === trimmedName.toLowerCase()
     );
@@ -85,9 +122,19 @@ export default function Maw3dView() {
     setIsSubmitting(true);
     try {
       await Maw3dService.createRsvp(event.id, response, trimmedName);
+      
+      // Store in localStorage immediately after successful submission
+      const localKey = `rsvp_submitted_${event.short_id}`;
+      localStorage.setItem(localKey, 'true');
+      localStorage.setItem(`${localKey}_name`, trimmedName);
+      localStorage.setItem(`${localKey}_response`, response);
+      
+      // Update state
       setHasResponded(true);
       setUserResponse(response);
       setSubmittedName(trimmedName);
+      setHasAlreadyRsvped(true);
+      setLocalStorageData({ name: trimmedName, response });
       
       // Show success message with name in the event's language
       const responseText = response === 'accepted' 
@@ -103,6 +150,8 @@ export default function Maw3dView() {
       // Refresh RSVPs
       const updatedRsvps = await Maw3dService.getRsvps(event.id);
       setRsvps(updatedRsvps);
+      
+      console.log('RSVP saved to localStorage:', { localKey, name: trimmedName, response });
     } catch (error) {
       console.error('Error submitting RSVP:', error);
       if (error instanceof Error && error.message.includes('already responded')) {
@@ -229,7 +278,7 @@ export default function Maw3dView() {
           </div>
 
           {/* RSVP Section */}
-          {event.is_public && !hasResponded && (
+          {event.is_public && !hasAlreadyRsvped && (
             <Card>
               <CardContent className="p-6">
                 <h3 className="text-lg font-semibold mb-4">
@@ -270,17 +319,17 @@ export default function Maw3dView() {
             </Card>
           )}
 
-          {/* Response Confirmation */}
-          {hasResponded && (
+          {/* Response Confirmation - Show for localStorage data */}
+          {hasAlreadyRsvped && localStorageData && (
             <Card>
               <CardContent className="p-6 text-center">
                 <h3 className="text-lg font-semibold mb-2">
-                  {eventLanguage === 'ar' ? `شكراً لك، ${submittedName}!` : `Thank you, ${submittedName}!`}
+                  {eventLanguage === 'ar' ? `شكراً لك، ${localStorageData.name}!` : `Thank you, ${localStorageData.name}!`}
                 </h3>
                 <p className="text-muted-foreground">
                   {eventLanguage === 'ar' 
-                    ? `تم تسجيل ${userResponse === 'accepted' ? 'قبولك' : 'رفضك'}.`
-                    : `Your ${userResponse === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
+                    ? `تم تسجيل ${localStorageData.response === 'accepted' ? 'قبولك' : 'رفضك'}.`
+                    : `Your ${localStorageData.response === 'accepted' ? 'acceptance' : 'decline'} has been recorded.`
                   }
                 </p>
               </CardContent>
