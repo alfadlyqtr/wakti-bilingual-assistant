@@ -1,3 +1,4 @@
+
 import { UserEventLinksService } from '@/services/userEventLinksService';
 
 export interface CalendarEntry {
@@ -9,7 +10,20 @@ export interface CalendarEntry {
   priority?: 'low' | 'medium' | 'high';
   status?: 'open' | 'in progress' | 'done' | 'canceled';
   location?: string;
+  description?: string;
+  isAllDay?: boolean;
 }
+
+export enum EntryType {
+  TASK = 'task',
+  EVENT = 'event',
+  MANUAL_NOTE = 'manual_note',
+  MAW3D_EVENT = 'maw3d_event',
+  REMINDER = 'reminder',
+  LINKED_EVENT = 'linked_event'
+}
+
+export type CalendarView = 'month' | 'week' | 'year';
 
 export const sortCalendarEntries = (entries: CalendarEntry[]): CalendarEntry[] => {
   return entries.sort((a, b) => {
@@ -43,7 +57,9 @@ export const getCalendarEntries = async (
         type: 'task',
         date,
         priority: task.priority,
-        status: task.status
+        status: task.status,
+        description: task.description,
+        isAllDay: false
       });
     }
   });
@@ -58,7 +74,9 @@ export const getCalendarEntries = async (
         time: reminder.due_date.includes('T') ? new Date(reminder.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
         type: 'reminder',
         date,
-        priority: reminder.priority
+        priority: reminder.priority,
+        description: reminder.description,
+        isAllDay: false
       });
     }
   });
@@ -77,7 +95,9 @@ export const getCalendarEntries = async (
       time: event.is_all_day ? 'All day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       type: 'event',
       date,
-      location: event.location
+      location: event.location,
+      description: event.description,
+      isAllDay: event.is_all_day
     });
   });
 
@@ -95,7 +115,9 @@ export const getCalendarEntries = async (
       time,
       type: 'maw3d_event',
       date: event.event_date,
-      location: event.location
+      location: event.location,
+      description: event.description,
+      isAllDay: event.is_all_day
     });
   });
 
@@ -117,7 +139,9 @@ export const getCalendarEntries = async (
           time,
           type: 'linked_event',
           date: event.event_date,
-          location: event.location
+          location: event.location,
+          description: event.description,
+          isAllDay: event.is_all_day
         });
       }
     });

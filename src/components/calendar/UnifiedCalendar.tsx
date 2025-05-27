@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
@@ -134,35 +133,44 @@ export const UnifiedCalendar: React.FC = () => {
 
   // Calculate all calendar entries from tasks, reminders, events, maw3d events and manual entries
   useEffect(() => {
-    console.log('Calculating calendar entries with:', {
-      tasks: tasks.length,
-      reminders: reminders.length,
-      maw3dEvents: maw3dEvents.length,
-      manualEntries: manualEntries.length
-    });
-    
-    // Log manual entries for debugging
-    manualEntries.forEach((entry, index) => {
-      console.log(`Manual entry ${index}:`, entry);
-    });
-    
-    const entries = getCalendarEntries(tasks, reminders, manualEntries, [], maw3dEvents);
-    console.log('Total calendar entries after combination:', entries.length);
-    
-    // Log entries by type for debugging
-    const taskEntries = entries.filter(e => e.type === EntryType.TASK);
-    const reminderEntries = entries.filter(e => e.type === EntryType.REMINDER);
-    const manualEntriesFiltered = entries.filter(e => e.type === EntryType.MANUAL_NOTE);
-    const maw3dEntriesFiltered = entries.filter(e => e.type === EntryType.MAW3D_EVENT);
-    
-    console.log('Entries breakdown:', {
-      tasks: taskEntries.length,
-      reminders: reminderEntries.length,
-      manual: manualEntriesFiltered.length,
-      maw3d: maw3dEntriesFiltered.length
-    });
-    
-    setCalendarEntries(entries);
+    const fetchEntries = async () => {
+      console.log('Calculating calendar entries with:', {
+        tasks: tasks.length,
+        reminders: reminders.length,
+        maw3dEvents: maw3dEvents.length,
+        manualEntries: manualEntries.length
+      });
+      
+      // Log manual entries for debugging
+      manualEntries.forEach((entry, index) => {
+        console.log(`Manual entry ${index}:`, entry);
+      });
+      
+      try {
+        const entries = await getCalendarEntries(tasks, reminders, manualEntries, [], maw3dEvents);
+        console.log('Total calendar entries after combination:', entries.length);
+        
+        // Log entries by type for debugging
+        const taskEntries = entries.filter(e => e.type === EntryType.TASK);
+        const reminderEntries = entries.filter(e => e.type === EntryType.REMINDER);
+        const manualEntriesFiltered = entries.filter(e => e.type === EntryType.MANUAL_NOTE);
+        const maw3dEntriesFiltered = entries.filter(e => e.type === EntryType.MAW3D_EVENT);
+        
+        console.log('Entries breakdown:', {
+          tasks: taskEntries.length,
+          reminders: reminderEntries.length,
+          manual: manualEntriesFiltered.length,
+          maw3d: maw3dEntriesFiltered.length
+        });
+        
+        setCalendarEntries(entries);
+      } catch (error) {
+        console.error('Error fetching calendar entries:', error);
+        setCalendarEntries([]);
+      }
+    };
+
+    fetchEntries();
   }, [tasks, reminders, manualEntries, maw3dEvents]);
 
   // Handle navigation between dates
