@@ -68,6 +68,18 @@ export class WaktiAIV2Service {
             : 'Image generation failed: ' + response.actionResult.error}`;
         }
       }
+
+      // Handle Arabic image translation response
+      if (response.actionTaken === 'translate_for_image' && response.actionResult) {
+        if (response.actionResult.translatedPrompt) {
+          // Add the translated prompt to the response for display
+          response.response += `\n\n📝 **${language === 'ar' ? 'النص المترجم' : 'Translated Text'}:**\n${response.actionResult.translatedPrompt}`;
+        } else if (response.actionResult.error) {
+          response.response += `\n\n❌ ${language === 'ar' 
+            ? 'فشل في الترجمة: ' + response.actionResult.error
+            : 'Translation failed: ' + response.actionResult.error}`;
+        }
+      }
       
       return response;
     } catch (error) {

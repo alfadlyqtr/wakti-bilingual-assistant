@@ -5,8 +5,9 @@ import { AIMessage } from '@/services/WaktiAIV2Service';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Download, Expand } from 'lucide-react';
+import { Download, Expand, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -14,6 +15,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message }: ChatBubbleProps) {
   const { theme, language } = useTheme();
+  const [copied, setCopied] = React.useState(false);
   
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -60,6 +62,25 @@ export function ChatBubble({ message }: ChatBubbleProps) {
     }
   };
 
+  const handleCopyTranslatedText = async () => {
+    // Extract translated text from the message content
+    const translatedTextMatch = message.content.match(/\*\*.*?:\*\*\n(.+)/);
+    if (translatedTextMatch && translatedTextMatch[1]) {
+      try {
+        await navigator.clipboard.writeText(translatedTextMatch[1].trim());
+        setCopied(true);
+        toast.success(language === 'ar' ? 'تم نسخ النص المترجم' : 'Translated text copied');
+        setTimeout(() => setCopied(false), 2000);
+      } catch (error) {
+        toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
+      }
+    }
+  };
+
+  // Check if message contains translated text
+  const hasTranslatedText = message.content.includes('📝 **') && 
+    (message.content.includes('النص المترجم') || message.content.includes('Translated Text'));
+
   if (isSystem) {
     return (
       <div className="flex justify-center my-4">
@@ -89,7 +110,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         isUser ? "order-1" : "order-2"
       )}>
         <div className={cn(
-          "backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3",
+          "backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3 relative",
           isUser 
             ? "bg-primary text-primary-foreground ml-auto" 
             : "bg-background/90"
@@ -97,6 +118,25 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           <div className="whitespace-pre-wrap text-sm leading-relaxed">
             {message.content}
           </div>
+          
+          {/* Copy button for translated text */}
+          {hasTranslatedText && !isUser && (
+            <div className="mt-3 flex justify-end">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCopyTranslatedText}
+                className="text-xs flex items-center gap-1"
+              >
+                {copied ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <Copy className="h-3 w-3" />
+                )}
+                {language === 'ar' ? 'نسخ النص المترجم' : 'Copy translated text'}
+              </Button>
+            </div>
+          )}
           
           {/* Display generated image if available */}
           {message.imageUrl && (

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -97,6 +96,11 @@ serve(async (req) => {
           console.log("WAKTI AI V2.1: Calling image generation function");
           actionResult = await callImageGenerationFunction(analysis.actionData.prompt, req.headers.get("Authorization"));
           actionTaken = 'generate_image';
+        } else if (analysis.actionData.type === 'translate_for_image') {
+          // Translate Arabic prompt to English
+          console.log("WAKTI AI V2.1: Translating Arabic image prompt");
+          actionResult = await translateImagePrompt(analysis.actionData.prompt, language);
+          actionTaken = 'translate_for_image';
         } else if (user) {
           // Handle other actions that require authentication
           actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
@@ -252,7 +256,7 @@ function extractActionData(message: string, intent: string, language: string) {
       };
     case 'image':
       return {
-        type: 'generate_image',
+        type: language === 'ar' ? 'translate_for_image' : 'generate_image',
         prompt: title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork')
       };
     default:
@@ -260,12 +264,87 @@ function extractActionData(message: string, intent: string, language: string) {
   }
 }
 
+// New function to translate Arabic image prompts
+async function translateImagePrompt(arabicPrompt: string, language: string) {
+  try {
+    console.log("WAKTI AI V2.1: Translating Arabic prompt:", arabicPrompt);
+    
+    const systemPrompt = "You are a translator. Translate the following Arabic text to English. Only return the English translation, nothing else.";
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: arabicPrompt }
+    ];
+
+    // Try DeepSeek first
+    if (DEEPSEEK_API_KEY) {
+      try {
+        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: messages,
+            temperature: 0.3,
+            max_tokens: 200,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          const translatedText = result.choices[0].message?.content || "";
+          console.log("WAKTI AI V2.1: Translation successful:", translatedText);
+          return { translatedPrompt: translatedText.trim() };
+        }
+      } catch (error) {
+        console.log("WAKTI AI V2.1: DeepSeek translation failed, trying OpenAI");
+      }
+    }
+
+    // Fallback to OpenAI
+    if (OPENAI_API_KEY) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: messages,
+          temperature: 0.3,
+          max_tokens: 200,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const translatedText = result.choices[0].message?.content || "";
+        console.log("WAKTI AI V2.1: OpenAI translation successful:", translatedText);
+        return { translatedPrompt: translatedText.trim() };
+      }
+    }
+
+    throw new Error("Translation failed - no AI service available");
+  } catch (error) {
+    console.error("WAKTI AI V2.1: Translation error:", error);
+    return { error: error.message, translatedPrompt: arabicPrompt };
+  }
+}
+
 async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
-  // Special handling for image generation
-  if (analysis.intent === 'image' && analysis.confidence === 'high') {
-    return language === 'ar'
-      ? `سأقوم بإنشاء صورة لك الآن! 🎨\n\nوصف الصورة: "${analysis.actionData.prompt}"\n\nيرجى الانتظار قليلاً...`
-      : `I'll create an image for you now! 🎨\n\nImage description: "${analysis.actionData.prompt}"\n\nPlease wait a moment...`;
+  // Special handling for Arabic image translation
+  if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar') {
+    return `واكتي AI يُولّد الصور باللغة الإنجليزية فقط.
+لا تقلق — لقد قمت بترجمة نصك أدناه.
+انسخه وألصقه، وسأقوم بإنشاء الصورة لك 📋✨`;
+  }
+
+  // Special handling for English image generation
+  if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'en') {
+    return `I'll create an image for you now! 🎨\n\nImage description: "${analysis.actionData.prompt}"\n\nPlease wait a moment...`;
   }
 
   const systemPrompt = language === 'ar' 
