@@ -24,6 +24,7 @@ import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
+import { MobileNav } from '@/components/MobileNav';
 
 export default function WaktiAIV2() {
   const { user } = useAuth();
@@ -428,7 +429,7 @@ export default function WaktiAIV2() {
       </div>
 
       {/* Enhanced Messages Area with bottom padding for fixed input */}
-      <ScrollArea className="flex-1 p-4 pb-32">
+      <ScrollArea className="flex-1 p-4 pb-40">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatBubble key={message.id} message={message} />
@@ -440,8 +441,8 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Professional Fixed Input Area */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur-md shadow-lg">
+      {/* Professional Fixed Input Area - Higher z-index than MobileNav */}
+      <div className="fixed bottom-16 left-0 right-0 z-[60] border-t bg-background/95 backdrop-blur-md shadow-lg">
         <div className="p-4">
           <div className="flex gap-2 max-w-4xl mx-auto">
             <div className="flex-1 relative">
@@ -494,6 +495,9 @@ export default function WaktiAIV2() {
           </div>
         </div>
       </div>
+
+      {/* Mobile Navigation */}
+      <MobileNav />
     </div>
   );
 }
