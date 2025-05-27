@@ -67,14 +67,14 @@ serve(async (req) => {
       }
     }
 
-    // Analyze intent and confidence - with special handling for Arabic voice vs image
+    // Analyze intent and confidence - with proper inputType handling
     const analysis = analyzeMessage(message, language, inputType);
     console.log("WAKTI AI V2.1: Intent analysis:", analysis);
 
     // Handle conversation (simplified for now)
     let conversationIdToUse = conversationId || 'temp-' + Date.now();
 
-    // SPECIAL CASE: Arabic image requests ONLY (not Arabic voice input)
+    // SPECIAL CASE: Arabic TEXT image requests ONLY (not voice input)
     if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar' && inputType === 'text') {
       console.log("WAKTI AI V2.1: Handling Arabic TEXT image request with translation");
       
@@ -219,7 +219,17 @@ async function callImageGenerationFunction(prompt: string, authHeader: string | 
 function analyzeMessage(message: string, language: string, inputType: string = 'text') {
   const lowerMessage = message.toLowerCase();
   
-  // Enhanced Arabic image patterns - but ONLY for TEXT input (not voice)
+  // CRITICAL: If input is from voice, skip image detection entirely
+  if (inputType === 'voice') {
+    console.log("WAKTI AI V2.1: Voice input detected, skipping image analysis");
+    return {
+      intent: 'general_chat',
+      confidence: 'low' as const,
+      actionData: null
+    };
+  }
+  
+  // Enhanced Arabic image patterns - ONLY for TEXT input
   const arabicImagePatterns = [
     'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة',
     'أريد صورة', 'صورة لـ', 'صورة ل', 'اعطني صورة', 'اصنعلي صورة', 'اعملي صورة',
@@ -248,9 +258,8 @@ function analyzeMessage(message: string, language: string, inputType: string = '
       ? ['ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'أذكرني', 'انبهني']
       : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification', 'set reminder'],
       
-    // CRITICAL: Only detect Arabic image patterns for TEXT input, not voice
-    image: language === 'ar' && inputType === 'text' ? arabicImagePatterns : 
-           language === 'en' ? englishImagePatterns : []
+    // Image patterns - only for TEXT input
+    image: language === 'ar' ? arabicImagePatterns : englishImagePatterns
   };
 
   // Check for high confidence matches
@@ -286,13 +295,12 @@ function analyzeMessage(message: string, language: string, inputType: string = '
 function extractActionData(message: string, intent: string, language: string, inputType: string = 'text') {
   // For Arabic image prompts from TEXT input, keep the full message for proper translation context
   // For English, clean up command words
-  // For Arabic VOICE input, do NOT treat as image generation
   const removePatterns = language === 'ar' 
     ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني']
     : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
-  if (intent !== 'image' || (language === 'ar' && inputType !== 'text')) {
+  if (intent !== 'image') {
     for (const pattern of removePatterns) {
       title = title.replace(new RegExp(pattern, 'gi'), '').trim();
     }
@@ -329,33 +337,23 @@ function extractActionData(message: string, intent: string, language: string, in
   }
 }
 
-// Enhanced function to translate Arabic image prompts with better visual focus
+// Enhanced function to translate Arabic image prompts with preserved keywords
 async function translateImagePrompt(arabicPrompt: string, language: string) {
   try {
     console.log("WAKTI AI V2.1: Translating Arabic prompt for image generation:", arabicPrompt);
     
-    // Enhanced system prompt focusing on visual elements and image generation context
-    const systemPrompt = `You are an expert translator specializing in converting Arabic image generation requests to detailed English image prompts for AI art generation. Your task is to:
+    // Improved system prompt for better translation preservation
+    const systemPrompt = `You are a precise translator for AI image generation. Translate this Arabic image request to English while preserving all keywords and formatting exactly.
 
-1. Focus on VISUAL ELEMENTS - extract what the user wants to SEE in the image
-2. Think like an artist - what visual elements, composition, style, mood does the user want?
-3. Convert the Arabic request into a detailed, descriptive English image prompt
-4. Include artistic details like lighting, composition, style when implied
-5. Make the prompt suitable for AI image generation tools
+Rules:
+- Translate this as an image generation prompt — keep all keywords and formatting
+- Do not rewrite or summarize 
+- Preserve visual descriptions exactly
+- Maintain any artistic style requests
+- Keep composition and lighting details
+- Output only the translated English prompt, nothing else
 
-Key principles:
-- Focus on visual description rather than literal translation
-- Extract the essence of what should be pictured
-- Add artistic detail when the Arabic suggests it
-- Think: "What does the user want to see in this image?"
-
-Examples of good translations:
-- "أنشئ صورة لقطة تجلس تحت الشجرة" → "a peaceful cat sitting gracefully under a large tree, natural lighting, serene outdoor setting"
-- "ارسم منزل جميل" → "a beautiful house with elegant architecture, well-maintained garden, warm lighting"
-- "صورة طائر يطير في السماء" → "a bird soaring through a bright blue sky, wings spread wide, freedom and movement"
-- "اصنع صورة لوردة حمراء" → "a stunning red rose in full bloom, detailed petals, soft natural lighting, elegant composition"
-
-Translate this Arabic image request into a detailed English image prompt that focuses on visual elements:`;
+Translate this Arabic image request:`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -374,7 +372,7 @@ Translate this Arabic image request into a detailed English image prompt that fo
           body: JSON.stringify({
             model: "deepseek-chat",
             messages: messages,
-            temperature: 0.3, // Lower temperature for more consistent translations
+            temperature: 0.1, // Very low temperature for consistent translations
             max_tokens: 200,
           }),
         });
@@ -401,7 +399,7 @@ Translate this Arabic image request into a detailed English image prompt that fo
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: messages,
-          temperature: 0.3, // Lower temperature for more consistent translations
+          temperature: 0.1, // Very low temperature for consistent translations
           max_tokens: 200,
         }),
       });

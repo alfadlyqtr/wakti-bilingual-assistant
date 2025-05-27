@@ -1,3 +1,4 @@
+
 import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -41,16 +42,18 @@ export class WaktiAIV2Service {
   static async sendMessage(
     message: string,
     conversationId?: string,
-    language: 'en' | 'ar' = 'en'
+    language: 'en' | 'ar' = 'en',
+    inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('WAKTI AI V2.1 CLIENT: Sending message to brain:', { message, conversationId, language });
+      console.log('WAKTI AI V2.1 CLIENT: Sending message to brain:', { message, conversationId, language, inputType });
       
       const response = await callEdgeFunctionWithRetry<AIResponse>('wakti-ai-v2-brain', {
         body: {
           message,
           conversationId,
-          language
+          language,
+          inputType
         }
       });
 
