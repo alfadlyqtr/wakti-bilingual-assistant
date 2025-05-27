@@ -19,7 +19,8 @@ import {
   Trash2,
   Upload,
   Camera,
-  X
+  X,
+  Square
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -36,6 +37,7 @@ export default function WaktiAIV2() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -43,6 +45,7 @@ export default function WaktiAIV2() {
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -50,6 +53,9 @@ export default function WaktiAIV2() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const MAX_RECORDING_TIME = 45; // 45 seconds
 
   // Debug: Log component mount
   useEffect(() => {
@@ -82,17 +88,24 @@ export default function WaktiAIV2() {
     }
   }, [inputMessage]);
 
+  // Cleanup recording timer on unmount
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
+
   const initializeSystem = async () => {
     try {
       console.log('🔍 WAKTI AI V2.1: Initializing system...');
       
-      // Test connection first
       const connectionTest = await WaktiAIV2Service.testConnection();
       console.log('🔍 WAKTI AI V2.1: Connection test result:', connectionTest);
       
       if (!connectionTest.success) {
         console.warn('🔍 WAKTI AI V2.1: Connection test failed:', connectionTest.error);
-        // Continue anyway, but show a warning in the greeting
       }
       
       await loadConversations();
@@ -139,7 +152,6 @@ export default function WaktiAIV2() {
       ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
       : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
     
-    // Add connection warning if needed
     if (!connectionOk) {
       greeting += language === 'ar' 
         ? '\n\n⚠️ ملاحظة: قد تكون هناك مشاكل في الاتصال. إذا واجهت صعوبات، يرجى إعادة المحاولة لاحقاً.'
@@ -250,7 +262,6 @@ export default function WaktiAIV2() {
       });
     }
 
-    // Reset the input
     event.target.value = '';
   };
 
@@ -303,14 +314,12 @@ export default function WaktiAIV2() {
         actionTaken: response.actionTaken
       };
 
-      // Add image URL if image was generated
       if (response.actionTaken === 'generate_image' && response.actionResult?.imageUrl) {
         assistantMessage.imageUrl = response.actionResult.imageUrl;
       }
 
       setMessages(prev => [...prev, assistantMessage]);
       
-      // Only update conversation ID if we got a valid response
       if (response.conversationId && !response.conversationId.includes('error')) {
         setCurrentConversationId(response.conversationId);
         loadConversations();
@@ -375,15 +384,34 @@ export default function WaktiAIV2() {
     }
   };
 
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
   const startRecording = async () => {
     try {
+      // Close keyboard if open
+      if (textareaRef.current) {
+        textareaRef.current.blur();
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
+      
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      setRecordingTime(0);
 
       mediaRecorder.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
       mediaRecorder.onstop = async () => {
@@ -392,8 +420,20 @@ export default function WaktiAIV2() {
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(100); // Collect data every 100ms for better responsiveness
       setIsRecording(true);
+
+      // Start timer
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= MAX_RECORDING_TIME - 1) {
+            stopRecording();
+            return MAX_RECORDING_TIME;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
@@ -408,25 +448,54 @@ export default function WaktiAIV2() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
     }
   };
 
   const processVoiceInput = async (audioBlob: Blob) => {
     try {
-      setIsLoading(true);
+      setIsTranscribing(true);
       
-      const arrayBuffer = await audioBlob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
-      const base64Audio = btoa(binaryString);
+      console.log('🎤 Processing voice input, blob size:', audioBlob.size);
 
-      const transcription = await WaktiAIV2Service.transcribeVoice(
-        base64Audio,
-        language
-      );
+      // Send raw WebM blob to edge function
+      const response = await supabase.functions.invoke('wakti-voice-v2', {
+        body: {
+          audioBlob: audioBlob,
+          language: language
+        }
+      });
 
-      if (transcription.text && transcription.text.trim()) {
-        await sendMessage(transcription.text, 'voice');
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      const { text } = response.data;
+      
+      if (text && text.trim()) {
+        // Insert transcription into input field instead of auto-sending
+        setInputMessage(text.trim());
+        
+        // Focus back on textarea and expand it
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            // Move cursor to end
+            const length = text.trim().length;
+            textareaRef.current.setSelectionRange(length, length);
+          }
+        }, 100);
+
+        // Show subtle feedback
+        toast({
+          title: language === 'ar' ? '✅ تم النسخ' : '✅ Transcribed',
+          description: language === 'ar' ? 'تم إضافة النص - اضغط إرسال أو قم بالتعديل' : 'Text added — tap send or edit',
+          duration: 3000
+        });
       } else {
         throw new Error('No transcription received');
       }
@@ -438,7 +507,8 @@ export default function WaktiAIV2() {
         variant: 'destructive'
       });
     } finally {
-      setIsLoading(false);
+      setIsTranscribing(false);
+      setRecordingTime(0);
     }
   };
 
@@ -449,6 +519,13 @@ export default function WaktiAIV2() {
         sendMessage(lastUserMessage.content, lastUserMessage.inputType);
       }
     }
+  };
+
+  const formatRecordingTime = (seconds: number) => {
+    const remainingTime = MAX_RECORDING_TIME - seconds;
+    const mins = Math.floor(remainingTime / 60);
+    const secs = remainingTime % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   console.log('🔍 DEBUG: About to render input area');
@@ -562,7 +639,6 @@ export default function WaktiAIV2() {
         leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
-          {/* Drawer Header */}
           <div className="flex items-center justify-between p-4 border-b border-border/30">
             <h3 className="font-semibold text-lg">
               {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
@@ -577,7 +653,6 @@ export default function WaktiAIV2() {
             </Button>
           </div>
           
-          {/* Drawer Content */}
           <div className="flex-1 p-4 overflow-y-auto">
             <ConversationsList
               conversations={conversations}
@@ -595,7 +670,6 @@ export default function WaktiAIV2() {
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
-          {/* Drawer Header */}
           <div className="flex items-center justify-between p-4 border-b border-border/30">
             <h3 className="font-semibold text-lg">
               {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
@@ -610,7 +684,6 @@ export default function WaktiAIV2() {
             </Button>
           </div>
           
-          {/* Drawer Content */}
           <div className="flex-1 p-4 overflow-y-auto">
             <QuickActionsPanel onSendMessage={(message) => {
               sendMessage(message);
@@ -631,9 +704,29 @@ export default function WaktiAIV2() {
         />
       )}
 
-      {/* Enhanced Fixed Input Area - Mobile Optimized */}
+      {/* Enhanced Fixed Input Area with Voice Recording */}
       <div className="fixed bottom-[72px] left-0 right-0 z-[65] p-4">
         <div className="max-w-4xl mx-auto">
+          {/* Recording Timer Display */}
+          {isRecording && (
+            <div className="mb-3 flex items-center justify-center">
+              <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                  <span className="text-red-600 dark:text-red-400 font-mono text-sm">
+                    {language === 'ar' ? 'تسجيل' : 'Recording'} {formatRecordingTime(recordingTime)}
+                  </span>
+                </div>
+                <div className="flex-1 bg-red-200 dark:bg-red-800 rounded-full h-1">
+                  <div 
+                    className="bg-red-500 h-1 rounded-full transition-all duration-1000"
+                    style={{ width: `${(recordingTime / MAX_RECORDING_TIME) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Image Attachments Preview */}
           {attachedImages.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -667,7 +760,7 @@ export default function WaktiAIV2() {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleTextareaKeyPress}
                   placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-                  disabled={isLoading}
+                  disabled={isLoading || isRecording || isTranscribing}
                   className={cn(
                     "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
                     language === 'ar' ? 'text-right' : ''
@@ -679,24 +772,28 @@ export default function WaktiAIV2() {
               <Button
                 variant="ghost"
                 size="icon"
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onTouchStart={startRecording}
-                onTouchEnd={stopRecording}
-                disabled={isLoading}
+                onClick={toggleRecording}
+                disabled={isLoading || isTranscribing}
                 className={cn(
                   "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
                   isRecording 
                     ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-105" 
-                    : "hover:bg-muted"
+                    : "hover:bg-muted",
+                  isTranscribing && "opacity-50"
                 )}
               >
-                {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                {isTranscribing ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : isRecording ? (
+                  <Square className="h-5 w-5" />
+                ) : (
+                  <Mic className="h-5 w-5" />
+                )}
               </Button>
               
               <Button
                 onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading}
+                disabled={!inputMessage.trim() || isLoading || isRecording || isTranscribing}
                 size="icon"
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
               >

@@ -11,13 +11,42 @@ serve(async (req) => {
   }
 
   try {
-    const { audioData, language = 'en' } = await req.json();
+    const contentType = req.headers.get('content-type') || '';
+    let audioBlob: Blob;
+    let language = 'en';
 
-    if (!audioData) {
-      return new Response(
-        JSON.stringify({ error: "Audio data is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (contentType.includes('multipart/form-data')) {
+      // Handle FormData (raw WebM blob upload)
+      const formData = await req.formData();
+      const audioFile = formData.get('audioBlob') as File;
+      language = (formData.get('language') as string) || 'en';
+      
+      if (!audioFile) {
+        return new Response(
+          JSON.stringify({ error: "Audio blob is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      audioBlob = audioFile;
+    } else {
+      // Handle JSON (for backwards compatibility)
+      const body = await req.json();
+      const { audioData, audioBlob: audioFile, language: lang = 'en' } = body;
+      language = lang;
+
+      if (audioFile instanceof Blob) {
+        audioBlob = audioFile;
+      } else if (audioData) {
+        // Legacy base64 support
+        const audioBuffer = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
+        audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+      } else {
+        return new Response(
+          JSON.stringify({ error: "Audio data is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     if (!OPENAI_API_KEY) {
@@ -27,11 +56,9 @@ serve(async (req) => {
       );
     }
 
-    // Convert base64 audio to blob
-    const audioBuffer = Uint8Array.from(atob(audioData), c => c.charCodeAt(0));
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+    console.log('Processing audio blob, size:', audioBlob.size, 'language:', language);
 
-    // Prepare form data
+    // Prepare form data for OpenAI Whisper
     const formData = new FormData();
     formData.append('file', audioBlob, 'audio.webm');
     formData.append('model', 'whisper-1');
@@ -48,10 +75,13 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Transcription failed: ${await response.text()}`);
+      const errorText = await response.text();
+      console.error('OpenAI Whisper error:', errorText);
+      throw new Error(`Transcription failed: ${errorText}`);
     }
 
     const result = await response.json();
+    console.log('Transcription successful, text length:', result.text?.length || 0);
 
     return new Response(
       JSON.stringify({ 
