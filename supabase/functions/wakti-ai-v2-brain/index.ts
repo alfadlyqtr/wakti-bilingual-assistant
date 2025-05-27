@@ -92,15 +92,26 @@ serve(async (req) => {
     if (analysis.confidence === 'high' && analysis.actionData) {
       try {
         if (analysis.actionData.type === 'generate_image') {
-          // Call the generate-image function
+          // Call the generate-image function for English prompts
           console.log("WAKTI AI V2.1: Calling image generation function");
           actionResult = await callImageGenerationFunction(analysis.actionData.prompt, req.headers.get("Authorization"));
           actionTaken = 'generate_image';
         } else if (analysis.actionData.type === 'translate_for_image') {
-          // Translate Arabic prompt to English
-          console.log("WAKTI AI V2.1: Translating Arabic image prompt");
-          actionResult = await translateImagePrompt(analysis.actionData.prompt, language);
-          actionTaken = 'translate_for_image';
+          // Translate Arabic prompt to English and then generate image
+          console.log("WAKTI AI V2.1: Translating Arabic image prompt and generating image");
+          const translationResult = await translateImagePrompt(analysis.actionData.prompt, language);
+          
+          if (translationResult.translatedPrompt && !translationResult.error) {
+            // Use the translated prompt to generate the image
+            actionResult = await callImageGenerationFunction(translationResult.translatedPrompt, req.headers.get("Authorization"));
+            actionTaken = 'generate_image';
+            // Add translation info to the result
+            actionResult.translatedFrom = analysis.actionData.prompt;
+            actionResult.translatedTo = translationResult.translatedPrompt;
+          } else {
+            actionResult = translationResult;
+            actionTaken = 'translate_for_image';
+          }
         } else if (user) {
           // Handle other actions that require authentication
           actionResult = await executeAction(analysis.actionData, supabaseClient, user.id, language);
@@ -170,6 +181,21 @@ async function callImageGenerationFunction(prompt: string, authHeader: string | 
 function analyzeMessage(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
+  // Enhanced Arabic image patterns - more comprehensive detection
+  const arabicImagePatterns = [
+    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة',
+    'أريد صورة', 'صورة لـ', 'صورة ل', 'اعطني صورة', 'اصنعلي صورة', 'اعملي صورة',
+    'ارسملي', 'ارسم لي', 'أنشئلي صورة', 'كون صورة', 'اخلق صورة', 'اخلقلي صورة'
+  ];
+  
+  // Enhanced English image patterns
+  const englishImagePatterns = [
+    'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 
+    'create an image', 'pic of', 'create a pic', 'make a pic', 'generate a pic', 
+    'photo of', 'create photo', 'draw me', 'make me a', 'create me a', 'generate me a', 
+    'pic', 'picture', 'photo', 'show me', 'visualize', 'illustrate'
+  ];
+  
   // Enhanced intent patterns for both languages
   const patterns = {
     task: language === 'ar' 
@@ -184,13 +210,7 @@ function analyzeMessage(message: string, language: string) {
       ? ['ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'أذكرني', 'انبهني']
       : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification', 'set reminder'],
       
-    image: language === 'ar'
-      ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة']
-      : [
-          'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 'create an image',
-          'pic of', 'create a pic', 'make a pic', 'generate a pic', 'photo of', 'create photo',
-          'draw me', 'make me a', 'create me a', 'generate me a', 'pic', 'picture', 'photo'
-        ]
+    image: language === 'ar' ? arabicImagePatterns : englishImagePatterns
   };
 
   // Check for high confidence matches
@@ -224,15 +244,17 @@ function analyzeMessage(message: string, language: string) {
 }
 
 function extractActionData(message: string, intent: string, language: string) {
-  // Remove command words to get the actual content
-  // For Arabic image prompts, don't strip words - let translation handle the full context
+  // For Arabic image prompts, keep the full message for proper translation context
+  // For English, clean up command words
   const removePatterns = language === 'ar' 
     ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني']
     : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
-  for (const pattern of removePatterns) {
-    title = title.replace(new RegExp(pattern, 'gi'), '').trim();
+  if (intent !== 'image' || language !== 'ar') {
+    for (const pattern of removePatterns) {
+      title = title.replace(new RegExp(pattern, 'gi'), '').trim();
+    }
   }
 
   switch (intent) {
@@ -266,26 +288,33 @@ function extractActionData(message: string, intent: string, language: string) {
   }
 }
 
-// Enhanced function to translate Arabic image prompts with better accuracy
+// Enhanced function to translate Arabic image prompts with better visual focus
 async function translateImagePrompt(arabicPrompt: string, language: string) {
   try {
-    console.log("WAKTI AI V2.1: Translating Arabic prompt:", arabicPrompt);
+    console.log("WAKTI AI V2.1: Translating Arabic prompt for image generation:", arabicPrompt);
     
-    // Updated system prompt to handle full Arabic image requests including command words
-    const systemPrompt = `You are a professional translator specializing in converting Arabic image generation requests to English image prompts. Your task is to:
+    // Enhanced system prompt focusing on visual elements and image generation context
+    const systemPrompt = `You are an expert translator specializing in converting Arabic image generation requests to detailed English image prompts for AI art generation. Your task is to:
 
-1. Translate the FULL Arabic request to English, maintaining the intent to create/generate an image
-2. Convert it to a clear, descriptive image prompt suitable for AI image generation
-3. Include the creation intent (like "create", "generate", "draw") in your translation
-4. Focus on translating the complete meaning, not stripping words
+1. Focus on VISUAL ELEMENTS - extract what the user wants to SEE in the image
+2. Think like an artist - what visual elements, composition, style, mood does the user want?
+3. Convert the Arabic request into a detailed, descriptive English image prompt
+4. Include artistic details like lighting, composition, style when implied
+5. Make the prompt suitable for AI image generation tools
 
-Examples:
-- "أنشئ صورة لقطة تجلس تحت الشجرة" should become "create an image of a cat sitting under a tree"
-- "ارسم كلب يشرب ماء" should become "draw a dog drinking water"
-- "اصنع صورة منزل جميل" should become "make an image of a beautiful house"
-- "صورة طائر يطير في السماء" should become "image of a bird flying in the sky"
+Key principles:
+- Focus on visual description rather than literal translation
+- Extract the essence of what should be pictured
+- Add artistic detail when the Arabic suggests it
+- Think: "What does the user want to see in this image?"
 
-Translate the complete Arabic request to English. Keep the creation intent and visual description together.`;
+Examples of good translations:
+- "أنشئ صورة لقطة تجلس تحت الشجرة" → "a peaceful cat sitting gracefully under a large tree, natural lighting, serene outdoor setting"
+- "ارسم منزل جميل" → "a beautiful house with elegant architecture, well-maintained garden, warm lighting"
+- "صورة طائر يطير في السماء" → "a bird soaring through a bright blue sky, wings spread wide, freedom and movement"
+- "اصنع صورة لوردة حمراء" → "a stunning red rose in full bloom, detailed petals, soft natural lighting, elegant composition"
+
+Translate this Arabic image request into a detailed English image prompt that focuses on visual elements:`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -304,8 +333,8 @@ Translate the complete Arabic request to English. Keep the creation intent and v
           body: JSON.stringify({
             model: "deepseek-chat",
             messages: messages,
-            temperature: 0.1, // Lower temperature for more consistent translations
-            max_tokens: 150,
+            temperature: 0.3, // Lower temperature for more consistent translations
+            max_tokens: 200,
           }),
         });
 
@@ -331,8 +360,8 @@ Translate the complete Arabic request to English. Keep the creation intent and v
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: messages,
-          temperature: 0.1, // Lower temperature for more consistent translations
-          max_tokens: 150,
+          temperature: 0.3, // Lower temperature for more consistent translations
+          max_tokens: 200,
         }),
       });
 
@@ -352,11 +381,12 @@ Translate the complete Arabic request to English. Keep the creation intent and v
 }
 
 async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
-  // Special handling for Arabic image translation
+  // Special handling for Arabic image generation - now will actually generate the image
   if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar') {
-    return `واكتي AI يُولّد الصور باللغة الإنجليزية فقط.
-لا تقلق — لقد قمت بترجمة نصك أدناه.
-انسخه وألصقه، وسأقوم بإنشاء الصورة لك 📋✨`;
+    return `تم فهم طلبك لإنشاء صورة! 🎨
+
+سأقوم بترجمة وصفك إلى الإنجليزية ثم إنشاء الصورة لك.
+يرجى الانتظار لحظة...`;
   }
 
   // Special handling for English image generation
@@ -365,8 +395,8 @@ async function generateResponse(message: string, analysis: any, language: string
   }
 
   const systemPrompt = language === 'ar' 
-    ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
-    : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, and reminders in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
+    ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات وإنشاء الصور بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
+    : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, reminders, and image generation in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
