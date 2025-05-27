@@ -35,11 +35,19 @@ export default function WaktiAIV2() {
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [systemReady, setSystemReady] = useState(true); // Force ready for debugging
+  const [systemReady, setSystemReady] = useState(true);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log('🔍 WAKTI AI V2.1: Component mounted');
+    console.log('🔍 User:', user?.id);
+    console.log('🔍 Language:', language);
+    console.log('🔍 System Ready:', systemReady);
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,10 +67,8 @@ export default function WaktiAIV2() {
     console.log('WAKTI AI V2.1: Initializing system...');
     
     try {
-      // Load conversations and check system readiness
       await loadConversations();
       
-      // Enhanced greeting with user's actual name
       if (messages.length === 0) {
         await initializeGreeting();
       }
@@ -72,7 +78,6 @@ export default function WaktiAIV2() {
     } catch (error) {
       console.error('WAKTI AI V2.1: System initialization failed:', error);
       
-      // Show system status
       const errorMessage: AIMessage = {
         id: 'system-error',
         role: 'assistant',
@@ -83,12 +88,11 @@ export default function WaktiAIV2() {
       };
       
       setMessages([errorMessage]);
-      setSystemReady(true); // Keep input available even with errors
+      setSystemReady(true);
     }
   };
 
   const initializeGreeting = async () => {
-    // Get user's actual name from profile
     let userName = 'there';
     try {
       const { data: profile } = await supabase
@@ -213,10 +217,8 @@ export default function WaktiAIV2() {
       setMessages(prev => [...prev, assistantMessage]);
       setCurrentConversationId(response.conversationId);
       
-      // Reload conversations to update the list
       loadConversations();
 
-      // Enhanced action feedback with confidence levels
       if (response.actionTaken) {
         const actionLabels = {
           create_task: language === 'ar' ? 'تم إنشاء المهمة' : 'Task Created',
@@ -237,7 +239,6 @@ export default function WaktiAIV2() {
         });
       }
 
-      // Show confirmation request for medium confidence actions
       if (response.needsConfirmation) {
         toast({
           title: language === 'ar' ? '⏳ تأكيد مطلوب' : '⏳ Confirmation Required',
@@ -245,7 +246,6 @@ export default function WaktiAIV2() {
         });
       }
 
-      // Show clarification request for low confidence
       if (response.needsClarification) {
         toast({
           title: language === 'ar' ? '❓ توضيح مطلوب' : '❓ Clarification Needed',
@@ -278,7 +278,6 @@ export default function WaktiAIV2() {
     }
   };
 
-  // Enhanced voice recording logic
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -324,13 +323,11 @@ export default function WaktiAIV2() {
       
       console.log('WAKTI AI V2.1: Processing voice input:', { size: audioBlob.size, type: audioBlob.type });
       
-      // Convert to base64
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
       const base64Audio = btoa(binaryString);
 
-      // Enhanced transcription with language detection
       const transcription = await WaktiAIV2Service.transcribeVoice(
         base64Audio,
         language
@@ -363,6 +360,14 @@ export default function WaktiAIV2() {
       }
     }
   };
+
+  // Debug: Log render
+  console.log('🔍 WAKTI AI V2.1: Rendering component', {
+    messagesCount: messages.length,
+    isLoading,
+    systemReady,
+    inputMessage
+  });
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20">
@@ -456,56 +461,104 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* FIXED: Enhanced Input Area - Always Visible */}
-      <div className="border-t bg-background/80 backdrop-blur-sm p-4">
+      {/* DEBUG: Bright visible input area container */}
+      <div 
+        className="sticky bottom-0 z-50 w-full border-t-4 border-red-500 bg-yellow-100 dark:bg-yellow-900 p-4"
+        style={{ 
+          minHeight: '80px',
+          backgroundColor: '#ff0000',
+          border: '5px solid #00ff00',
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0
+        }}
+      >
+        {/* Debug indicator */}
+        <div className="text-center mb-2">
+          <span className="text-black font-bold bg-white px-2 py-1 rounded">
+            🔍 INPUT AREA DEBUG - CAN YOU SEE THIS?
+          </span>
+        </div>
+        
         <div className="flex gap-2 max-w-4xl mx-auto">
           <div className="flex-1 relative">
             <Input
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={(e) => {
+                console.log('🔍 Input changed:', e.target.value);
+                setInputMessage(e.target.value);
+              }}
               placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
+                  console.log('🔍 Enter pressed, sending message:', inputMessage);
                   sendMessage(inputMessage);
                 }
               }}
               disabled={isLoading}
               className={cn(
-                "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20",
+                "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20 h-12 text-lg",
                 language === 'ar' ? 'text-right' : ''
               )}
+              style={{ 
+                backgroundColor: '#ffffff',
+                border: '2px solid #ff0000',
+                color: '#000000'
+              }}
             />
           </div>
           
           <Button
             variant="ghost"
             size="icon"
-            onMouseDown={startRecording}
+            onMouseDown={(e) => {
+              console.log('🔍 Mic button pressed');
+              startRecording();
+            }}
             onMouseUp={stopRecording}
             onTouchStart={startRecording}
             onTouchEnd={stopRecording}
             disabled={isLoading}
             className={cn(
-              "transition-all duration-200 hover:scale-110",
+              "transition-all duration-200 hover:scale-110 h-12 w-12",
               isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
             )}
+            style={{ 
+              backgroundColor: isRecording ? '#ff0000' : '#00ff00',
+              border: '2px solid #000000'
+            }}
           >
-            {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+            {isRecording ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
           </Button>
           
           <Button
-            onClick={() => sendMessage(inputMessage)}
+            onClick={() => {
+              console.log('🔍 Send button clicked:', inputMessage);
+              sendMessage(inputMessage);
+            }}
             disabled={!inputMessage.trim() || isLoading}
             size="icon"
-            className="hover:scale-110 transition-transform"
+            className="hover:scale-110 transition-transform h-12 w-12"
+            style={{ 
+              backgroundColor: '#0000ff',
+              border: '2px solid #000000'
+            }}
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-6 w-6 animate-spin text-white" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="h-6 w-6 text-white" />
             )}
           </Button>
+        </div>
+        
+        {/* Debug info */}
+        <div className="text-center mt-2">
+          <p className="text-black text-xs bg-white px-2 py-1 rounded inline-block">
+            Input Value: "{inputMessage}" | Loading: {isLoading.toString()} | System Ready: {systemReady.toString()}
+          </p>
         </div>
       </div>
     </div>
