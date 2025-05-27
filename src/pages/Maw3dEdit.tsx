@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -29,6 +29,7 @@ export default function Maw3dEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -96,11 +97,20 @@ export default function Maw3dEdit() {
 
   const handleImageBlurChange = (blur: number) => {
     if (!event) return;
-    console.log('Image blur change in Maw3dEdit:', blur);
-    setEvent(prev => prev ? {
-      ...prev,
-      image_blur: blur
-    } : null);
+    console.log('=== IMAGE BLUR CHANGE ===');
+    console.log('Previous blur value:', event.image_blur);
+    console.log('New blur value:', blur);
+    console.log('Blur value type:', typeof blur);
+    
+    setEvent(prev => {
+      if (!prev) return null;
+      const updatedEvent = {
+        ...prev,
+        image_blur: blur
+      };
+      console.log('Event state updated with image_blur:', updatedEvent.image_blur);
+      return updatedEvent;
+    });
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -133,9 +143,16 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
-      console.log('=== SAVING EVENT ===');
+      console.log('=== SAVING EVENT WITH IMPROVED LOGGING ===');
       console.log('Event image_blur before save:', event.image_blur);
       console.log('Event image_blur type:', typeof event.image_blur);
+      console.log('Full event object:', {
+        id: event.id,
+        title: event.title,
+        image_blur: event.image_blur,
+        background_type: event.background_type,
+        background_value: event.background_value
+      });
       
       // Ensure the event language is set to current UI language and image_blur is a number
       const updatedEventData = {
@@ -152,12 +169,26 @@ export default function Maw3dEdit() {
       
       // Update the event
       const updatedEvent = await Maw3dService.updateEvent(event.id, updatedEventData);
-      console.log('Event updated successfully. Returned image_blur:', updatedEvent.image_blur);
+      console.log('=== EVENT SAVED SUCCESSFULLY ===');
+      console.log('Returned event image_blur:', updatedEvent.image_blur);
+      console.log('Returned event image_blur type:', typeof updatedEvent.image_blur);
 
-      toast.success('Event updated successfully!');
-      navigate('/maw3d');
+      // Show success message with specific mention of settings saved
+      setShowSuccessMessage(true);
+      toast.success(`Event updated successfully! All settings including image blur (${updatedEvent.image_blur}px) have been saved.`, {
+        duration: 4000
+      });
+
+      // Update local state with the returned data to ensure sync
+      setEvent(updatedEvent);
+
+      // Delay navigation to allow user to see the success state
+      setTimeout(() => {
+        navigate('/maw3d');
+      }, 2000);
     } catch (error) {
-      console.error('Error updating event:', error);
+      console.error('=== ERROR SAVING EVENT ===');
+      console.error('Error details:', error);
       toast.error('Failed to update event. Please try again.');
     } finally {
       setIsLoading(false);
@@ -187,10 +218,34 @@ export default function Maw3dEdit() {
           </Button>
           <h1 className="text-lg font-semibold">{t('editEvent', language)}</h1>
           <Button onClick={handleSubmit} disabled={isLoading}>
-            <Save className="w-4 h-4 mr-2" />
-            {isLoading ? t('updating', language) : t('save', language)}
+            {showSuccessMessage ? (
+              <>
+                <Check className="w-4 h-4 mr-2 text-green-600" />
+                {t('saved', language)}
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                {isLoading ? t('updating', language) : t('save', language)}
+              </>
+            )}
           </Button>
         </div>
+
+        {/* Success Banner */}
+        {showSuccessMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <div className="flex items-center">
+              <Check className="w-5 h-5 text-green-600 mr-2" />
+              <div>
+                <p className="text-green-800 font-medium">Event saved successfully!</p>
+                <p className="text-green-600 text-sm">
+                  All settings including image blur ({event.image_blur}px) have been saved to the database.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="max-w-4xl mx-auto space-y-6">
@@ -198,6 +253,9 @@ export default function Maw3dEdit() {
           <Card>
             <CardContent className="p-6">
               <h2 className="text-lg font-semibold mb-4">{t('eventPreview', language)}</h2>
+              <div className="mb-2 text-sm text-muted-foreground">
+                Current image blur: {event.image_blur}px
+              </div>
               <EventPreview
                 event={event}
                 textStyle={event.text_style}
@@ -340,7 +398,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Text Styling Section - Updated */}
+            {/* Text Styling Section */}
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -366,6 +424,13 @@ export default function Maw3dEdit() {
                 </AccordionTrigger>
                 <AccordionContent>
                   <CardContent className="px-6 pb-6">
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center">
+                        <div className="text-blue-600 text-sm">
+                          💡 Current image blur setting: <strong>{event.image_blur}px</strong>
+                        </div>
+                      </div>
+                    </div>
                     <BackgroundCustomizer
                       backgroundType={event.background_type}
                       backgroundValue={event.background_value}
@@ -379,7 +444,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Updated defaults */}
+            {/* Privacy Settings Section */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">

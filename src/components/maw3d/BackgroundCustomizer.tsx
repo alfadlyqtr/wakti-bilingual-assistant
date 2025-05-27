@@ -109,19 +109,38 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
 
   const handleBlurChange = (value: number[]) => {
     const blurValue = value[0];
-    console.log('BackgroundCustomizer: Blur change triggered with value:', blurValue);
-    console.log('BackgroundCustomizer: onImageBlurChange exists:', !!onImageBlurChange);
+    console.log('=== BACKGROUND CUSTOMIZER BLUR CHANGE ===');
+    console.log('Slider value array received:', value);
+    console.log('Blur value extracted:', blurValue);
+    console.log('Blur value type:', typeof blurValue);
+    console.log('onImageBlurChange callback exists:', !!onImageBlurChange);
+    console.log('Current imageBlur prop:', imageBlur);
     
     if (onImageBlurChange) {
-      console.log('BackgroundCustomizer: Calling onImageBlurChange with:', blurValue);
+      console.log('Calling onImageBlurChange with:', blurValue);
+      
+      // Add a small delay to demonstrate real-time feedback
       onImageBlurChange(blurValue);
+      
+      // Show immediate feedback to user
+      toast(`Image blur set to ${blurValue}px`, { 
+        duration: 1000,
+        description: 'Setting will be saved when you save the event'
+      });
     } else {
-      console.warn('BackgroundCustomizer: onImageBlurChange callback not provided');
+      console.error('BackgroundCustomizer: onImageBlurChange callback not provided');
+      toast.error('Unable to update blur setting - callback missing');
     }
   };
 
   const getBackgroundStyle = () => {
     let style: React.CSSProperties = {};
+    
+    console.log('=== GETTING BACKGROUND STYLE ===');
+    console.log('Background type:', backgroundType);
+    console.log('Background value:', backgroundValue);
+    console.log('Image blur value:', imageBlur);
+    console.log('Image blur type:', typeof imageBlur);
     
     switch (backgroundType) {
       case 'color':
@@ -138,16 +157,21 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         // Apply blur if set
         if (imageBlur > 0) {
           style.filter = `blur(${imageBlur}px)`;
+          console.log('Applied blur filter:', `blur(${imageBlur}px)`);
         }
         break;
       default:
         style.backgroundColor = '#3b82f6';
     }
     
+    console.log('Final background style:', style);
     return style;
   };
 
-  console.log('BackgroundCustomizer render - imageBlur:', imageBlur, 'type:', typeof imageBlur);
+  console.log('=== BACKGROUND CUSTOMIZER RENDER ===');
+  console.log('Props received - imageBlur:', imageBlur, 'type:', typeof imageBlur);
+  console.log('Props received - backgroundType:', backgroundType);
+  console.log('Props received - backgroundValue:', backgroundValue);
 
   return (
     <div className="space-y-6">
@@ -235,20 +259,27 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
               </Button>
             </div>
             
-            {/* Blur control for images */}
+            {/* Enhanced blur control for images */}
             {(backgroundType === 'image' || backgroundType === 'ai') && backgroundValue && (
-              <div className="mt-4">
-                <Label>{t('imageBlur', language)}: {imageBlur}px</Label>
-                <Slider
-                  value={[imageBlur]}
-                  onValueChange={handleBlurChange}
-                  min={0}
-                  max={10}
-                  step={0.5}
-                  className="w-full mt-2"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('adjustBlurForReadability', language)}
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <Label className="font-medium">{t('imageBlur', language)}: {imageBlur}px</Label>
+                <div className="mt-2 mb-3">
+                  <Slider
+                    value={[imageBlur]}
+                    onValueChange={handleBlurChange}
+                    min={0}
+                    max={10}
+                    step={0.5}
+                    className="w-full"
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-blue-600">
+                  <span>0px (No blur)</span>
+                  <span>Current: {imageBlur}px</span>
+                  <span>10px (Max blur)</span>
+                </div>
+                <p className="text-xs text-blue-700 mt-2 font-medium">
+                  💡 {t('adjustBlurForReadability', language)}
                 </p>
               </div>
             )}
@@ -284,29 +315,39 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
             )}
           </Button>
           
-          {/* Blur control for AI images */}
+          {/* Enhanced blur control for AI images */}
           {backgroundType === 'ai' && backgroundValue && (
-            <div className="mt-4">
-              <Label>{t('imageBlur', language)}: {imageBlur}px</Label>
-              <Slider
-                value={[imageBlur]}
-                onValueChange={handleBlurChange}
-                min={0}
-                max={10}
-                step={0.5}
-                className="w-full mt-2"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {t('adjustBlurForReadability', language)}
+            <div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+              <Label className="font-medium">{t('imageBlur', language)}: {imageBlur}px</Label>
+              <div className="mt-2 mb-3">
+                <Slider
+                  value={[imageBlur]}
+                  onValueChange={handleBlurChange}
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  className="w-full"
+                />
+              </div>
+              <div className="flex justify-between text-xs text-purple-600">
+                <span>0px (No blur)</span>
+                <span>Current: {imageBlur}px</span>
+                <span>10px (Max blur)</span>
+              </div>
+              <p className="text-xs text-purple-700 mt-2 font-medium">
+                💡 {t('adjustBlurForReadability', language)}
               </p>
             </div>
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Preview */}
+      {/* Enhanced Preview */}
       <div className="mt-6">
         <Label>{t('preview', language)}</Label>
+        <div className="text-xs text-muted-foreground mb-2">
+          Preview with current blur setting: {imageBlur}px
+        </div>
         <div 
           className="mt-2 h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 flex items-center justify-center text-white font-bold relative overflow-hidden"
         >
