@@ -127,8 +127,8 @@ function App() {
                   {/* New combined tasks and reminders route */}
                   <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
                   
-                  {/* WAKTI AI V2.1 route - completely new system */}
-                  <Route path="/wakti-ai" element={<AppLayout><WaktiAIV2 /></AppLayout>} />
+                  {/* WAKTI AI V2.1 route - standalone without AppLayout wrapper */}
+                  <Route path="/wakti-ai" element={<WaktiAIV2 />} />
                   
                   {/* Maw3d system routes - protected */}
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />
