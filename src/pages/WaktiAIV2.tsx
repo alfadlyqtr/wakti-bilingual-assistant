@@ -6,7 +6,7 @@ import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIM
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from '@/hooks/use-toast';
 import { 
   Mic, 
@@ -39,8 +39,8 @@ export default function WaktiAIV2() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [systemReady, setSystemReady] = useState(true);
-  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [leftSheetOpen, setLeftSheetOpen] = useState(false);
+  const [rightSheetOpen, setRightSheetOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -157,7 +157,7 @@ export default function WaktiAIV2() {
       const data = await WaktiAIV2Service.getConversationMessages(conversationId);
       setMessages(data);
       setCurrentConversationId(conversationId);
-      setLeftDrawerOpen(false);
+      setLeftSheetOpen(false);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
@@ -420,14 +420,17 @@ export default function WaktiAIV2() {
       {/* Centered Header with Actions */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-40">
         <div className="flex items-center">
-          <Drawer open={leftDrawerOpen} onOpenChange={setLeftDrawerOpen}>
-            <DrawerTrigger asChild>
+          <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
+            <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
                 <Menu className="h-5 w-5" />
               </Button>
-            </DrawerTrigger>
-            <DrawerContent className="h-[80vh] bg-background/75 backdrop-blur-md border border-border/50 rounded-t-2xl">
-              <div className="p-4 h-full overflow-hidden">
+            </SheetTrigger>
+            <SheetContent 
+              side="left" 
+              className="w-80 bg-background/75 backdrop-blur-md border-r border-border/50 p-4"
+            >
+              <div className="h-full overflow-hidden">
                 <ConversationsList
                   conversations={conversations}
                   currentConversationId={currentConversationId}
@@ -435,12 +438,22 @@ export default function WaktiAIV2() {
                   onDeleteConversation={deleteConversation}
                 />
               </div>
-            </DrawerContent>
-          </Drawer>
+            </SheetContent>
+          </Sheet>
         </div>
         
         {/* Centered Action Icons */}
-        <div className="flex items-center justify-center gap-3 flex-1">
+        <div className="flex items-center justify-center gap-2 flex-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={startNewConversation}
+            className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+          
           <Button
             variant="ghost"
             size="icon"
@@ -472,32 +485,25 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={startNewConversation}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-          
-          <Drawer open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
-            <DrawerTrigger asChild>
+        <div className="flex items-center">
+          <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
+            <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
                 <MessageSquare className="h-5 w-5" />
               </Button>
-            </DrawerTrigger>
-            <DrawerContent className="h-[80vh] bg-background/75 backdrop-blur-md border border-border/50 rounded-t-2xl">
-              <div className="p-4 h-full overflow-hidden">
+            </SheetTrigger>
+            <SheetContent 
+              side="right" 
+              className="w-80 bg-background/75 backdrop-blur-md border-l border-border/50 p-4"
+            >
+              <div className="h-full overflow-hidden">
                 <QuickActionsPanel onSendMessage={(message) => {
                   sendMessage(message);
-                  setRightDrawerOpen(false);
+                  setRightSheetOpen(false);
                 }} />
               </div>
-            </DrawerContent>
-          </Drawer>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 
@@ -518,8 +524,8 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Blur overlay when drawers are open */}
-      {(leftDrawerOpen || rightDrawerOpen) && (
+      {/* Blur overlay when sheets are open */}
+      {(leftSheetOpen || rightSheetOpen) && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30" />
       )}
 
