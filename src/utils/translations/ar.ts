@@ -390,8 +390,11 @@ export const ar: Record<TranslationKey, string> = {
   fontFamily: "عائلة الخط",
   fontSize: "حجم الخط",
   textColor: "لون النص",
+  textShadow: "ظل النص",
   textFormatting: "تنسيق النص",
   textAlignment: "محاذاة النص",
+  shadowEnabled: "تم تفعيل الظل",
+  shadowDisabled: "تم إيقاف الظل",
   chooseTemplate: "اختر قالباً",
   startFromScratch: "ابدأ من الصفر",
   blankTemplate: "قالب فارغ",
@@ -420,8 +423,6 @@ export const ar: Record<TranslationKey, string> = {
   yourResponseDeclined: "تم تسجيل رفضك",
   errorLoadingEvent: "خطأ في تحميل الحدث",
   errorSubmittingRsvp: "خطأ في إرسال الرد",
-  
-  // NEW MISSING KEYS FOR BACKGROUND CUSTOMIZER
   backgroundColor: "لون الخلفية",
   uploadImage: "رفع صورة",
   chooseImage: "اختر صورة",

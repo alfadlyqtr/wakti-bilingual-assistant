@@ -1,7 +1,7 @@
 import { TranslationKey } from "../translationTypes";
 
 // English translations
-export const en = {
+export const en: Record<TranslationKey, string> = {
   dashboard: "Dashboard",
   tasks: "Tasks",
   reminders: "Reminders",
@@ -390,8 +390,11 @@ export const en = {
   fontFamily: "Font Family",
   fontSize: "Font Size",
   textColor: "Text Color",
+  textShadow: "Text Shadow",
   textFormatting: "Text Formatting",
   textAlignment: "Text Alignment",
+  shadowEnabled: "Shadow Enabled",
+  shadowDisabled: "Shadow Disabled",
   chooseTemplate: "Choose a Template",
   startFromScratch: "Start from Scratch",
   blankTemplate: "Blank Template",
