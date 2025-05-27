@@ -181,7 +181,7 @@ function analyzeMessage(message: string, language: string) {
       : ['remind me', 'reminder', 'don\'t forget', 'alert me', 'notification', 'set reminder'],
       
     image: language === 'ar'
-      ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة', 'ارسملي']
+      ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة']
       : ['generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 'create an image']
   };
 
@@ -218,8 +218,8 @@ function analyzeMessage(message: string, language: string) {
 function extractActionData(message: string, intent: string, language: string) {
   // Remove command words to get the actual content
   const removePatterns = language === 'ar' 
-    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة', 'ارسملي صورة', 'ارسم', 'اصنع صورة']
-    : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image', 'draw'];
+    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة']
+    : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
   for (const pattern of removePatterns) {
