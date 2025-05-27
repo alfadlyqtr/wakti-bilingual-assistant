@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -10,7 +9,6 @@ import Calendar from "@/pages/Calendar";
 import Tasks from "@/pages/Tasks";
 import Reminders from "@/pages/Reminders";
 import TasksReminders from "@/pages/TasksReminders";
-import Events from "@/pages/Events";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -18,10 +16,6 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "@/pages/NotFound";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import EventCreate from "@/pages/EventCreate";
-import EventDetail from "@/pages/EventDetail";
-import EventEdit from "@/pages/EventEdit";
-import StandaloneEvent from "@/pages/StandaloneEvent";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
@@ -37,9 +31,6 @@ import Maw3dCreate from "@/pages/Maw3dCreate";
 import Maw3dView from "@/pages/Maw3dView";
 import Maw3dEdit from "@/pages/Maw3dEdit";
 import Maw3dManage from "@/pages/Maw3dManage";
-// Public event imports
-import PublicEvent from "@/pages/PublicEvent";
-import DirectEventView from "@/pages/DirectEventView";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -117,18 +108,6 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* NEW: Clean public event route - accessible without authentication */}
-                <Route path="/event/:eventId" element={<DirectEventView />} />
-
-                {/* Public short ID route - completely standalone, no auth wrapper */}
-                <Route path="/w/:shortId" element={<PublicEvent />} />
-
-                {/* Public legacy event detail routes - accessible without authentication */}
-                <Route path="/legacy-event/:id" element={<AppLayout><EventDetail /></AppLayout>} />
-                
-                {/* Standalone legacy event routes with pretty URLs */}
-                <Route path="/wakti/:id" element={<StandaloneEvent />} />
-
                 {/* Public Maw3d event routes - NO AppLayout wrapper for clean standalone view */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
 
@@ -153,11 +132,6 @@ function App() {
                   
                   {/* New combined tasks and reminders route */}
                   <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
-                  
-                  {/* Legacy events system routes - keep separate from Maw3d */}
-                  <Route path="/legacy-events" element={<AppLayout><Events /></AppLayout>} />
-                  <Route path="/legacy-event/create" element={<AppLayout><EventCreate /></AppLayout>} />
-                  <Route path="/legacy-event/:id/edit" element={<AppLayout><EventEdit /></AppLayout>} />
                   
                   {/* Maw3d system routes - protected */}
                   <Route path="/maw3d" element={<AppLayout><Maw3dEvents /></AppLayout>} />

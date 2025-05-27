@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -280,5 +279,10 @@ export class Maw3dService {
       console.error('Error generating AI background:', error);
       throw error;
     }
+  }
+
+  // Helper method to generate share URL for Maw3d events
+  static getShareUrl(shortId: string): string {
+    return `${window.location.origin}/maw3d/${shortId}`;
   }
 }
