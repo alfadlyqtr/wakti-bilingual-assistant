@@ -10,7 +10,7 @@ export default function TasksReminders() {
 
   return (
     <TaskReminderProvider>
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden scrollbar-hide">
         <TasksAndReminders showTasks={true} showReminders={true} />
       </div>
     </TaskReminderProvider>

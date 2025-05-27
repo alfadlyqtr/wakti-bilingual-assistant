@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -110,7 +109,7 @@ export default function Events() {
         <UserMenu />
       </header>
       
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide p-4">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold sr-only">{t("events", language)}</h1>
           <div className="flex-1"></div>

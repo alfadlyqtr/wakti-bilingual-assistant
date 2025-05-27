@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -114,7 +115,7 @@ export default function Maw3dEvents() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-y-auto bg-background p-4">
+      <div className="flex-1 overflow-y-auto scrollbar-hide bg-background p-4">
         <div className="animate-pulse space-y-4">
           <div className="h-8 bg-gray-200 rounded w-1/4"></div>
           <div className="space-y-4">
@@ -128,7 +129,7 @@ export default function Maw3dEvents() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto scrollbar-hide bg-background">
       <div className="p-4 pb-24">
         {/* Create Event Button */}
         <div className="flex justify-end mb-6">

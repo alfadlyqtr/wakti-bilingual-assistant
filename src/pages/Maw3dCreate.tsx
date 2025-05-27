@@ -164,7 +164,7 @@ export default function Maw3dCreate() {
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto scrollbar-hide bg-background">
       <div className="p-4 pb-24">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">

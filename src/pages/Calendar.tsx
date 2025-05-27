@@ -10,7 +10,7 @@ export default function Calendar() {
 
   return (
     <TaskReminderProvider>
-      <div className="flex-1 overflow-hidden pb-16">
+      <div className="flex-1 overflow-hidden scrollbar-hide pb-16">
         <UnifiedCalendar />
       </div>
     </TaskReminderProvider>
