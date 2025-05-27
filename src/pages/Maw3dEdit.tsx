@@ -29,7 +29,6 @@ export default function Maw3dEdit() {
   const [isLoading, setIsLoading] = useState(false);
   const [event, setEvent] = useState<Maw3dEvent | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
-  const [imageBlur, setImageBlur] = useState(0);
 
   useEffect(() => {
     if (id) {
@@ -62,8 +61,8 @@ export default function Maw3dEdit() {
         image_blur: eventData.image_blur !== undefined ? eventData.image_blur : 0
       };
 
+      console.log('Event loaded with image_blur:', eventWithDefaults.image_blur);
       setEvent(eventWithDefaults);
-      setImageBlur(eventWithDefaults.image_blur);
     } catch (error) {
       console.error('Error fetching event:', error);
       toast.error('Failed to load event');
@@ -87,6 +86,7 @@ export default function Maw3dEdit() {
 
   const handleBackgroundChange = (type: 'color' | 'gradient' | 'image' | 'ai', value: string) => {
     if (!event) return;
+    console.log('Background change:', { type, value });
     setEvent(prev => prev ? {
       ...prev,
       background_type: type,
@@ -95,8 +95,8 @@ export default function Maw3dEdit() {
   };
 
   const handleImageBlurChange = (blur: number) => {
-    setImageBlur(blur);
     if (!event) return;
+    console.log('Image blur change in Maw3dEdit:', blur);
     setEvent(prev => prev ? {
       ...prev,
       image_blur: blur
@@ -133,17 +133,26 @@ export default function Maw3dEdit() {
 
     setIsLoading(true);
     try {
-      console.log('Saving event with image_blur:', event.image_blur);
+      console.log('=== SAVING EVENT ===');
+      console.log('Event image_blur before save:', event.image_blur);
+      console.log('Event image_blur type:', typeof event.image_blur);
       
-      // Ensure the event language is set to current UI language
+      // Ensure the event language is set to current UI language and image_blur is a number
       const updatedEventData = {
         ...event,
-        language: language // Save the current language setting
+        language: language, // Save the current language setting
+        image_blur: Number(event.image_blur) // Ensure it's saved as a number
       };
+      
+      console.log('Final event data being saved:', {
+        id: updatedEventData.id,
+        image_blur: updatedEventData.image_blur,
+        image_blur_type: typeof updatedEventData.image_blur
+      });
       
       // Update the event
       const updatedEvent = await Maw3dService.updateEvent(event.id, updatedEventData);
-      console.log('Event updated with image_blur:', updatedEvent.image_blur);
+      console.log('Event updated successfully. Returned image_blur:', updatedEvent.image_blur);
 
       toast.success('Event updated successfully!');
       navigate('/maw3d');
@@ -197,7 +206,7 @@ export default function Maw3dEdit() {
                 rsvpCount={{ accepted: 0, declined: 0 }}
                 showAttendingCount={event.show_attending_count}
                 language={language}
-                imageBlur={imageBlur}
+                imageBlur={event.image_blur}
               />
             </CardContent>
           </Card>
@@ -360,7 +369,7 @@ export default function Maw3dEdit() {
                     <BackgroundCustomizer
                       backgroundType={event.background_type}
                       backgroundValue={event.background_value}
-                      imageBlur={imageBlur}
+                      imageBlur={event.image_blur}
                       onBackgroundChange={handleBackgroundChange}
                       onImageBlurChange={handleImageBlurChange}
                       language={language}

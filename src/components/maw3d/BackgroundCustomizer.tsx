@@ -109,8 +109,14 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
 
   const handleBlurChange = (value: number[]) => {
     const blurValue = value[0];
+    console.log('BackgroundCustomizer: Blur change triggered with value:', blurValue);
+    console.log('BackgroundCustomizer: onImageBlurChange exists:', !!onImageBlurChange);
+    
     if (onImageBlurChange) {
+      console.log('BackgroundCustomizer: Calling onImageBlurChange with:', blurValue);
       onImageBlurChange(blurValue);
+    } else {
+      console.warn('BackgroundCustomizer: onImageBlurChange callback not provided');
     }
   };
 
@@ -140,6 +146,8 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
     
     return style;
   };
+
+  console.log('BackgroundCustomizer render - imageBlur:', imageBlur, 'type:', typeof imageBlur);
 
   return (
     <div className="space-y-6">
