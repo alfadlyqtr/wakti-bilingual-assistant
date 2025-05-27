@@ -5,7 +5,7 @@ export interface CalendarEntry {
   id: string;
   title: string;
   time?: string;
-  type: 'task' | 'event' | 'manual_note' | 'maw3d_event' | 'reminder' | 'linked_event';
+  type: EntryType;
   date: string;
   priority?: 'low' | 'medium' | 'high';
   status?: 'open' | 'in progress' | 'done' | 'canceled';
@@ -54,7 +54,7 @@ export const getCalendarEntries = async (
         id: task.id,
         title: task.title,
         time: task.due_date.includes('T') ? new Date(task.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-        type: 'task',
+        type: EntryType.TASK,
         date,
         priority: task.priority,
         status: task.status,
@@ -72,7 +72,7 @@ export const getCalendarEntries = async (
         id: reminder.id,
         title: reminder.title,
         time: reminder.due_date.includes('T') ? new Date(reminder.due_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
-        type: 'reminder',
+        type: EntryType.REMINDER,
         date,
         priority: reminder.priority,
         description: reminder.description,
@@ -93,7 +93,7 @@ export const getCalendarEntries = async (
       id: event.id,
       title: event.title,
       time: event.is_all_day ? 'All day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      type: 'event',
+      type: EntryType.EVENT,
       date,
       location: event.location,
       description: event.description,
@@ -113,7 +113,7 @@ export const getCalendarEntries = async (
       id: event.id,
       title: event.title,
       time,
-      type: 'maw3d_event',
+      type: EntryType.MAW3D_EVENT,
       date: event.event_date,
       location: event.location,
       description: event.description,
@@ -137,7 +137,7 @@ export const getCalendarEntries = async (
           id: `linked_${event.id}`,
           title: `📅 ${event.title}`, // Add icon to distinguish linked events
           time,
-          type: 'linked_event',
+          type: EntryType.LINKED_EVENT,
           date: event.event_date,
           location: event.location,
           description: event.description,
