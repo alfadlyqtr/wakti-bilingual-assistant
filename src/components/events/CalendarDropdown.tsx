@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,8 +7,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Calendar, Download, ExternalLink } from 'lucide-react';
+import { Calendar, Download, ExternalLink, Plus, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { t } from '@/utils/translations';
+import { useAuth } from '@/contexts/AuthContext';
+import { UserEventLinksService } from '@/services/userEventLinksService';
 
 interface Event {
   title: string;
@@ -21,10 +24,66 @@ interface Event {
 
 interface CalendarDropdownProps {
   event: Event;
+  eventId?: string;
   language?: string;
 }
 
-export default function CalendarDropdown({ event, language = 'en' }: CalendarDropdownProps) {
+export default function CalendarDropdown({ event, eventId, language = 'en' }: CalendarDropdownProps) {
+  const { user } = useAuth();
+  const [isInCalendar, setIsInCalendar] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && eventId) {
+      checkIfEventInCalendar();
+    }
+  }, [user, eventId]);
+
+  const checkIfEventInCalendar = async () => {
+    if (!eventId) return;
+    
+    try {
+      const inCalendar = await UserEventLinksService.isEventInUserCalendar(eventId);
+      setIsInCalendar(inCalendar);
+    } catch (error) {
+      console.error('Error checking event status:', error);
+    }
+  };
+
+  const handleAddToWaktiCalendar = async () => {
+    if (!user) {
+      toast.error('Please log in to add events to your WAKTI calendar');
+      return;
+    }
+
+    if (!eventId) {
+      toast.error('Event ID is required');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (isInCalendar) {
+        await UserEventLinksService.removeEventFromCalendar(eventId);
+        setIsInCalendar(false);
+        toast.success('Event removed from your WAKTI calendar');
+      } else {
+        await UserEventLinksService.addEventToCalendar(eventId);
+        setIsInCalendar(true);
+        toast.success('Event added to your WAKTI calendar');
+      }
+    } catch (error) {
+      console.error('Error updating calendar:', error);
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error('Failed to update calendar');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const formatDateForCalendar = (date: string) => {
     return new Date(date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   };
@@ -100,6 +159,22 @@ export default function CalendarDropdown({ event, language = 'en' }: CalendarDro
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
+        {/* WAKTI Calendar option - only show if user is logged in and eventId is provided */}
+        {user && eventId && (
+          <DropdownMenuItem 
+            onClick={handleAddToWaktiCalendar}
+            disabled={isLoading}
+            className="flex items-center gap-2"
+          >
+            {isInCalendar ? (
+              <Check className="h-4 w-4 text-green-600" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {isInCalendar ? 'Remove from WAKTI Calendar' : 'Add to WAKTI Calendar'}
+          </DropdownMenuItem>
+        )}
+        
         <DropdownMenuItem 
           onClick={() => window.open(createGoogleCalendarUrl(), '_blank')}
           className="flex items-center gap-2"

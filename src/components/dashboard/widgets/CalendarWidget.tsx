@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,8 +59,24 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
 
-  // Get all calendar entries
-  const allEntries = getCalendarEntries(tasks, [], manualEntries, events, maw3dEvents);
+  // Get all calendar entries (now async)
+  const [allEntries, setAllEntries] = useState<CalendarEntry[]>([]);
+  
+  useEffect(() => {
+    const fetchEntries = async () => {
+      try {
+        const entries = await getCalendarEntries(tasks, [], manualEntries, events, maw3dEvents);
+        setAllEntries(entries);
+      } catch (error) {
+        console.error('Error fetching calendar entries:', error);
+        setAllEntries([]);
+      }
+    };
+
+    if (!isLoading && !maw3dLoading) {
+      fetchEntries();
+    }
+  }, [tasks, events, maw3dEvents, manualEntries, isLoading, maw3dLoading]);
   
   // Filter entries for today and tomorrow
   const todayEntries = allEntries.filter(entry => entry.date === today);
@@ -69,8 +84,6 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
 
   console.log('Dashboard widget - Today entries:', todayEntries.length);
   console.log('Dashboard widget - Tomorrow entries:', tomorrowEntries.length);
-  console.log('Dashboard widget - Manual entries for today:', manualEntries.filter(e => e.date === today).length);
-  console.log('Dashboard widget - Manual entries for tomorrow:', manualEntries.filter(e => e.date === tomorrow).length);
 
   const getTodayItemsText = () => {
     if (todayEntries.length === 0) {
@@ -81,6 +94,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     const tasks = todayEntries.filter(e => e.type === 'task');
     const events = todayEntries.filter(e => e.type === 'event');
     const maw3d = todayEntries.filter(e => e.type === 'maw3d_event');
+    const linked = todayEntries.filter(e => e.type === 'linked_event');
     const manual = todayEntries.filter(e => e.type === 'manual_note');
     const reminders = todayEntries.filter(e => e.type === 'reminder');
     
@@ -92,6 +106,9 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     }
     if (maw3d.length > 0) {
       itemTypes.push(`${maw3d.length} Maw3d`);
+    }
+    if (linked.length > 0) {
+      itemTypes.push(`${linked.length} Linked`);
     }
     if (manual.length > 0) {
       itemTypes.push(`${manual.length} Manual`);
@@ -112,6 +129,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     const tasks = tomorrowEntries.filter(e => e.type === 'task');
     const events = tomorrowEntries.filter(e => e.type === 'event');
     const maw3d = tomorrowEntries.filter(e => e.type === 'maw3d_event');
+    const linked = tomorrowEntries.filter(e => e.type === 'linked_event');
     const manual = tomorrowEntries.filter(e => e.type === 'manual_note');
     const reminders = tomorrowEntries.filter(e => e.type === 'reminder');
     
@@ -123,6 +141,9 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     }
     if (maw3d.length > 0) {
       itemTypes.push(`${maw3d.length} Maw3d`);
+    }
+    if (linked.length > 0) {
+      itemTypes.push(`${linked.length} Linked`);
     }
     if (manual.length > 0) {
       itemTypes.push(`${manual.length} Manual`);
