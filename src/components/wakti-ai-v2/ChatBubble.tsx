@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
@@ -39,7 +38,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
       isUser ? 'justify-end' : 'justify-start'
     )}>
       <div className={cn(
-        "max-w-[80%] rounded-2xl shadow-xl p-3 break-words animate-fade-in",
+        "max-w-[80%] rounded-2xl shadow-xl p-2.5 break-words animate-fade-in",
         isUser
           ? "bg-primary text-primary-foreground ml-12"
           : "bg-muted mr-12"
