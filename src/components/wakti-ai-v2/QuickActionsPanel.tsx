@@ -3,6 +3,7 @@ import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { CheckSquare, Calendar, Bell, Image, Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;

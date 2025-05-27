@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIMessage, type AIConversation } from '@/services/WaktiAIV2Service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,12 +76,14 @@ export default function WaktiAIV2() {
       ? `مرحباً ${userName}! أنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات\n• إدارة جدولك اليومي\n• الإجابة على أسئلتك\n• تنفيذ الأوامر تلقائياً\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
       : `Hello ${userName}! I'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders\n• Managing your daily schedule\n• Answering your questions\n• Executing commands automatically\n\nHow can I assist you today? ✨`;
     
-    setMessages([{
+    const greetingMessage: AIMessage = {
       id: 'greeting-v2',
       role: 'assistant',
       content: greeting,
       timestamp: new Date()
-    }]);
+    };
+    
+    setMessages([greetingMessage]);
   };
 
   const loadConversations = async () => {
