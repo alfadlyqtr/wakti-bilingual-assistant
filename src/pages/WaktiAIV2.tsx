@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -356,9 +355,9 @@ export default function WaktiAIV2() {
       {/* App Header */}
       <AppHeader />
 
-      {/* Enhanced Header with System Status */}
-      <div className="flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
+      {/* Simplified Header with Actions Only */}
+      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm">
+        <div className="flex items-center">
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="hover:scale-110 transition-transform">
@@ -374,30 +373,6 @@ export default function WaktiAIV2() {
               />
             </SheetContent>
           </Sheet>
-          
-          <div className="flex items-center gap-2">
-            <div className={cn(
-              "p-2 rounded-lg bg-gradient-to-r transition-all duration-300",
-              systemReady ? "from-blue-500 to-purple-600" : "from-gray-400 to-gray-500"
-            )}>
-              <Sparkles className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  WAKTI AI V2.1
-                </h1>
-                <div className={cn(
-                  "w-2 h-2 rounded-full",
-                  systemReady ? "bg-green-500" : "bg-red-500"
-                )} />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {language === 'ar' ? 'المساعد الذكي المطور' : 'Enhanced Smart Assistant'}
-                {!systemReady && (language === 'ar' ? ' • غير متصل' : ' • Offline')}
-              </p>
-            </div>
-          </div>
         </div>
         
         <div className="flex items-center gap-2">
@@ -447,7 +422,7 @@ export default function WaktiAIV2() {
       </ScrollArea>
 
       {/* Professional Fixed Input Area - Higher z-index than MobileNav */}
-      <div className="fixed bottom-16 left-0 right-0 z-[60] border-t bg-background/95 backdrop-blur-md shadow-lg">
+      <div className="fixed bottom-16 left-0 right-0 z-[65] border-t bg-background/95 backdrop-blur-md shadow-lg">
         <div className="p-4">
           <div className="flex gap-2 max-w-4xl mx-auto">
             <div className="flex-1 relative">
