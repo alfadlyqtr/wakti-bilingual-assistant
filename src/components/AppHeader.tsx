@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Globe, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
@@ -23,6 +24,9 @@ export function AppHeader() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Check if we're on the Wakti AI V2 page
+  const isWaktiAIPage = location.pathname === '/wakti-ai';
   
   const handleLogout = async () => {
     await signOut();
@@ -97,27 +101,57 @@ export function AppHeader() {
         </div>
         <div className="flex items-center space-x-4">
           {/* Language Toggle Button */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleLanguage}
-            className="rounded-full"
-            aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
-          >
-            <Globe className="h-[1.2rem] w-[1.2rem]" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={isWaktiAIPage ? undefined : toggleLanguage}
+                  className={cn(
+                    "rounded-full",
+                    isWaktiAIPage && "opacity-50 cursor-not-allowed"
+                  )}
+                  disabled={isWaktiAIPage}
+                  aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
+                >
+                  <Globe className="h-[1.2rem] w-[1.2rem]" />
+                </Button>
+              </TooltipTrigger>
+              {isWaktiAIPage && (
+                <TooltipContent>
+                  <p>{language === 'ar' ? 'تغيير اللغة معطل في صفحة WAKTI AI' : 'Language toggle disabled on WAKTI AI page'}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           
           {/* Theme Toggle Button */}
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-            className="rounded-full"
-          >
-            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span className="sr-only">Toggle theme</span>
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon" 
+                  onClick={isWaktiAIPage ? undefined : () => setTheme(theme === "light" ? "dark" : "light")}
+                  className={cn(
+                    "rounded-full",
+                    isWaktiAIPage && "opacity-50 cursor-not-allowed"
+                  )}
+                  disabled={isWaktiAIPage}
+                >
+                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+              </TooltipTrigger>
+              {isWaktiAIPage && (
+                <TooltipContent>
+                  <p>{language === 'ar' ? 'تغيير المظهر معطل في صفحة WAKTI AI' : 'Theme toggle disabled on WAKTI AI page'}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           
           {/* User Menu */}
           <DropdownMenu>

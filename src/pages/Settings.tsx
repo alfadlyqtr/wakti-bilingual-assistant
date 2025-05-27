@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useLocation } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { PageContainer } from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
@@ -7,23 +8,31 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { toast } from "sonner";
 import { useToast } from "@/hooks/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
-import { Check, Save, Settings as SettingsIcon } from "lucide-react";
+import { Check, Save, Settings as SettingsIcon, Info } from "lucide-react";
 import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TranslationKey } from "@/utils/translationTypes";
+import { cn } from "@/lib/utils";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
+  const location = useLocation();
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
   const { confirm } = useToast();
   const queryClient = useQueryClient();
+
+  // Check if we came from Wakti AI page or are currently on it
+  const isFromWaktiAI = location.pathname === '/wakti-ai' || 
+                       (location.state as any)?.from === '/wakti-ai' ||
+                       document.referrer.includes('/wakti-ai');
 
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -108,6 +117,22 @@ export default function Settings() {
     <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
       <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
       
+      {/* Notice for Wakti AI restrictions */}
+      {isFromWaktiAI && (
+        <Card className="mb-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+              <Info className="h-4 w-4" />
+              <p className="text-sm">
+                {language === 'ar' 
+                  ? 'تغيير اللغة والمظهر معطل أثناء استخدام WAKTI AI لضمان الاستقرار'
+                  : 'Language and theme changes are disabled while using WAKTI AI for stability'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      
       {/* Appearance Card */}
       <Card className="mb-4">
         <CardHeader>
@@ -118,29 +143,59 @@ export default function Settings() {
           {/* Language & Theme Settings */}
           <div className="flex justify-between items-center">
             <span>{t("language", language)}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleLanguage}
-              className="h-9 px-3 rounded-full text-sm"
-            >
-              {language === "en" ? t("arabic", language) : t("english", language)}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={isFromWaktiAI ? undefined : toggleLanguage}
+                    className={cn(
+                      "h-9 px-3 rounded-full text-sm",
+                      isFromWaktiAI && "opacity-50 cursor-not-allowed"
+                    )}
+                    disabled={isFromWaktiAI}
+                  >
+                    {language === "en" ? t("arabic", language) : t("english", language)}
+                  </Button>
+                </TooltipTrigger>
+                {isFromWaktiAI && (
+                  <TooltipContent>
+                    <p>{language === 'ar' ? 'معطل أثناء استخدام WAKTI AI' : 'Disabled while using WAKTI AI'}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
           {/* Theme Toggle */}
           <div className="flex justify-between items-center">
             <span>{t("theme", language)}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleTheme}
-              className="h-9 px-3 rounded-full text-sm"
-            >
-              {theme === "dark"
-                ? t("lightMode", language)
-                : t("darkMode", language)}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={isFromWaktiAI ? undefined : toggleTheme}
+                    className={cn(
+                      "h-9 px-3 rounded-full text-sm",
+                      isFromWaktiAI && "opacity-50 cursor-not-allowed"
+                    )}
+                    disabled={isFromWaktiAI}
+                  >
+                    {theme === "dark"
+                      ? t("lightMode", language)
+                      : t("darkMode", language)}
+                  </Button>
+                </TooltipTrigger>
+                {isFromWaktiAI && (
+                  <TooltipContent>
+                    <p>{language === 'ar' ? 'معطل أثناء استخدام WAKTI AI' : 'Disabled while using WAKTI AI'}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardContent>
       </Card>
