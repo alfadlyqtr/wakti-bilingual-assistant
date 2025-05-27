@@ -11,26 +11,43 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🎤 WAKTI VOICE V2: Processing request...');
+    
+    if (!OPENAI_API_KEY) {
+      console.error('🎤 WAKTI VOICE V2: OpenAI API key not configured');
+      return new Response(
+        JSON.stringify({ error: "OpenAI API key not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const contentType = req.headers.get('content-type') || '';
     let audioBlob: Blob;
     let language = 'en';
 
     if (contentType.includes('multipart/form-data')) {
-      // Handle FormData (raw WebM blob upload)
+      // Handle FormData (new method)
+      console.log('🎤 WAKTI VOICE V2: Processing FormData upload');
+      
       const formData = await req.formData();
       const audioFile = formData.get('audioBlob') as File;
       language = (formData.get('language') as string) || 'en';
       
+      console.log('🎤 WAKTI VOICE V2: Audio file size:', audioFile?.size, 'Language:', language);
+      
       if (!audioFile) {
+        console.error('🎤 WAKTI VOICE V2: No audio file found in FormData');
         return new Response(
-          JSON.stringify({ error: "Audio blob is required" }),
+          JSON.stringify({ error: "Audio file is required" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
       audioBlob = audioFile;
     } else {
-      // Handle JSON (for backwards compatibility)
+      // Handle JSON (legacy method for backwards compatibility)
+      console.log('🎤 WAKTI VOICE V2: Processing JSON upload (legacy)');
+      
       const body = await req.json();
       const { audioData, audioBlob: audioFile, language: lang = 'en' } = body;
       language = lang;
@@ -49,21 +66,16 @@ serve(async (req) => {
       }
     }
 
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({ error: "OpenAI API key not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    console.log('Processing audio blob, size:', audioBlob.size, 'language:', language);
+    console.log('🎤 WAKTI VOICE V2: Processing audio blob, size:', audioBlob.size, 'language:', language);
 
     // Prepare form data for OpenAI Whisper
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.webm');
-    formData.append('model', 'whisper-1');
-    formData.append('language', language === 'ar' ? 'ar' : 'en');
-    formData.append('response_format', 'json');
+    const whisperFormData = new FormData();
+    whisperFormData.append('file', audioBlob, 'audio.webm');
+    whisperFormData.append('model', 'whisper-1');
+    whisperFormData.append('language', language === 'ar' ? 'ar' : 'en');
+    whisperFormData.append('response_format', 'json');
+
+    console.log('🎤 WAKTI VOICE V2: Sending to OpenAI Whisper...');
 
     // Send to OpenAI Whisper
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -71,17 +83,20 @@ serve(async (req) => {
       headers: {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
-      body: formData,
+      body: whisperFormData,
     });
+
+    console.log('🎤 WAKTI VOICE V2: OpenAI response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI Whisper error:', errorText);
+      console.error('🎤 WAKTI VOICE V2: OpenAI Whisper error:', errorText);
       throw new Error(`Transcription failed: ${errorText}`);
     }
 
     const result = await response.json();
-    console.log('Transcription successful, text length:', result.text?.length || 0);
+    console.log('🎤 WAKTI VOICE V2: Transcription successful, text length:', result.text?.length || 0);
+    console.log('🎤 WAKTI VOICE V2: Transcribed text:', result.text);
 
     return new Response(
       JSON.stringify({ 
@@ -93,7 +108,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error("Voice transcription V2 error:", error);
+    console.error("🎤 WAKTI VOICE V2: Error:", error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

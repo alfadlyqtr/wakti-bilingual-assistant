@@ -462,16 +462,23 @@ export default function WaktiAIV2() {
       
       console.log('🎤 Processing voice input, blob size:', audioBlob.size);
 
-      // Send raw WebM blob to edge function
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('audioBlob', audioBlob, 'audio.webm');
+      formData.append('language', language);
+
+      console.log('🎤 Uploading audio blob to wakti-voice-v2...');
+
+      // Send FormData to edge function
       const response = await supabase.functions.invoke('wakti-voice-v2', {
-        body: {
-          audioBlob: audioBlob,
-          language: language
-        }
+        body: formData
       });
 
+      console.log('🎤 Voice transcription response:', response);
+
       if (response.error) {
-        throw new Error(response.error.message);
+        console.error('🎤 Voice transcription error:', response.error);
+        throw new Error(response.error.message || 'Voice transcription failed');
       }
 
       const { text } = response.data;
@@ -503,7 +510,7 @@ export default function WaktiAIV2() {
       console.error('Error processing voice input:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
-        description: language === 'ar' ? 'فشل في معالجة الصوت' : 'Failed to process voice input',
+        description: language === 'ar' ? 'فشل في معالجة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to process voice input - please try again',
         variant: 'destructive'
       });
     } finally {
