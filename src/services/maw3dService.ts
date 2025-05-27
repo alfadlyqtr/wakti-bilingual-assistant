@@ -87,17 +87,34 @@ export class Maw3dService {
   static async getEventByShortId(shortId: string): Promise<Maw3dEvent | null> {
     console.log('Fetching Maw3d event by short ID:', shortId);
     
-    const { data, error } = await supabase
+    // First try with the exact shortId as provided
+    let { data, error } = await supabase
       .from('maw3d_events')
       .select('*')
       .eq('short_id', shortId)
       .single();
+
+    if (error && error.code === 'PGRST116') {
+      // If not found, try with the maw3d_ prefix
+      const prefixedShortId = shortId.startsWith('maw3d_') ? shortId : `maw3d_${shortId}`;
+      console.log('Event not found with original shortId, trying with prefix:', prefixedShortId);
+      
+      const result = await supabase
+        .from('maw3d_events')
+        .select('*')
+        .eq('short_id', prefixedShortId)
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Error fetching event by short ID:', error);
       if (error.code === 'PGRST116') return null;
       throw error;
     }
+    
     console.log('Event fetched by short ID:', data);
     return data;
   }
