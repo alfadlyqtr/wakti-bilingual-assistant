@@ -33,6 +33,7 @@ const templates: EventTemplate[] = [
   {
     id: 'birthday',
     name: 'Birthday',
+    preview: 'Birthday Party',
     title: 'Happy Birthday!',
     description: 'Join us for a birthday celebration',
     organizer: '',
@@ -45,6 +46,7 @@ const templates: EventTemplate[] = [
       isItalic: false,
       isUnderline: false,
       hasShadow: true,
+      shadowIntensity: 5,
       alignment: 'center',
       color: '#ffffff'
     }
@@ -52,6 +54,7 @@ const templates: EventTemplate[] = [
   {
     id: 'meeting',
     name: 'Meeting',
+    preview: 'Business Meeting',
     title: 'Team Meeting',
     description: 'Important team discussion',
     organizer: '',
@@ -64,6 +67,7 @@ const templates: EventTemplate[] = [
       isItalic: false,
       isUnderline: false,
       hasShadow: false,
+      shadowIntensity: 0,
       alignment: 'left',
       color: '#ffffff'
     }
@@ -71,6 +75,7 @@ const templates: EventTemplate[] = [
   {
     id: 'gathering',
     name: 'Gathering',
+    preview: 'Social Gathering',
     title: 'Friends Gathering',
     description: 'Come and join us for a fun time',
     organizer: '',
@@ -83,6 +88,7 @@ const templates: EventTemplate[] = [
       isItalic: false,
       isUnderline: false,
       hasShadow: true,
+      shadowIntensity: 3,
       alignment: 'center',
       color: '#ffffff'
     }
@@ -147,7 +153,7 @@ export const EventTemplates: React.FC<EventTemplatesProps> = ({
                     fontWeight: template.text_style.isBold ? 'bold' : 'normal',
                     fontStyle: template.text_style.isItalic ? 'italic' : 'normal',
                     textDecoration: template.text_style.isUnderline ? 'underline' : 'none',
-                    textShadow: template.text_style.hasShadow ? '2px 2px 4px rgba(0,0,0,0.5)' : 'none',
+                    textShadow: template.text_style.hasShadow ? `2px 2px 4px rgba(0,0,0,${(template.text_style.shadowIntensity || 5) / 10})` : 'none',
                     textAlign: template.text_style.alignment
                   }}
                 >

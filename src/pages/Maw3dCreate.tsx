@@ -28,6 +28,7 @@ const defaultTextStyle: TextStyle = {
   isItalic: false,
   isUnderline: false,
   hasShadow: false,
+  shadowIntensity: 0,
   alignment: 'center'
 };
 
@@ -48,8 +49,8 @@ export default function Maw3dCreate() {
     start_time: '',
     end_time: '',
     is_all_day: false,
-    is_public: true, // Changed default to true
-    show_attending_count: false, // Changed default to false
+    is_public: true,
+    show_attending_count: false,
     auto_delete_enabled: true,
     background_type: 'color',
     background_value: '#3b82f6',
@@ -59,7 +60,7 @@ export default function Maw3dCreate() {
   });
 
   const handleInputChange = (field: keyof CreateEventFormData, value: any) => {
-    console.log(`Updating field ${field} with value:`, value);
+    console.log(`Updating field ${String(field)} with value:`, value);
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -76,6 +77,12 @@ export default function Maw3dCreate() {
       background_type: type,
       background_value: value
     }));
+  };
+
+  const handleImageBlurChange = (blur: number) => {
+    // Note: We're not storing imageBlur in the form data as it's not part of the database schema
+    // This would need to be added to the database schema if blur needs to be persisted
+    console.log('Image blur changed to:', blur);
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -340,7 +347,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Text Styling Section - Updated */}
+            {/* Text Styling Section */}
             <AccordionItem value="text-styling" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -358,7 +365,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Background Customization Section - Updated */}
+            {/* Background Customization Section */}
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -369,7 +376,9 @@ export default function Maw3dCreate() {
                     <BackgroundCustomizer
                       backgroundType={formData.background_type}
                       backgroundValue={formData.background_value}
+                      imageBlur={0}
                       onBackgroundChange={handleBackgroundChange}
+                      onImageBlurChange={handleImageBlurChange}
                       language={language}
                     />
                   </CardContent>
@@ -377,7 +386,7 @@ export default function Maw3dCreate() {
               </Card>
             </AccordionItem>
 
-            {/* Privacy Settings Section - Updated defaults */}
+            {/* Privacy Settings Section */}
             <AccordionItem value="privacy" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">

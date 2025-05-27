@@ -69,7 +69,7 @@ export default function Maw3dEdit() {
 
   const handleInputChange = (field: keyof Maw3dEvent, value: any) => {
     if (!event) return;
-    console.log(`Updating field ${field} with value:`, value);
+    console.log(`Updating field ${String(field)} with value:`, value);
     setEvent(prev => prev ? { ...prev, [field]: value } : null);
   };
 
@@ -88,6 +88,12 @@ export default function Maw3dEdit() {
       background_type: type,
       background_value: value
     } : null);
+  };
+
+  const handleImageBlurChange = (blur: number) => {
+    // Note: We're not storing imageBlur in the event data as it's not part of the database schema
+    // This would need to be added to the database schema if blur needs to be persisted
+    console.log('Image blur changed to:', blur);
   };
 
   const handleTemplateSelect = (template: EventTemplate | null) => {
@@ -335,7 +341,7 @@ export default function Maw3dEdit() {
               </Card>
             </AccordionItem>
 
-            {/* Background Customization Section - Updated */}
+            {/* Background Customization Section */}
             <AccordionItem value="background" className="border rounded-lg">
               <Card>
                 <AccordionTrigger className="px-6 pt-6 pb-2 hover:no-underline">
@@ -346,7 +352,9 @@ export default function Maw3dEdit() {
                     <BackgroundCustomizer
                       backgroundType={event.background_type}
                       backgroundValue={event.background_value}
+                      imageBlur={0}
                       onBackgroundChange={handleBackgroundChange}
+                      onImageBlurChange={handleImageBlurChange}
                       language={language}
                     />
                   </CardContent>
