@@ -4,6 +4,8 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Download, Expand } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ChatBubbleProps {
@@ -38,6 +40,23 @@ export function ChatBubble({ message }: ChatBubbleProps) {
       case 'voice': return '🎤';
       case 'text': return '💬';
       default: return '';
+    }
+  };
+
+  const handleDownloadImage = () => {
+    if (message.imageUrl) {
+      const link = document.createElement('a');
+      link.href = message.imageUrl;
+      link.download = `wakti-generated-image-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const handleExpandImage = () => {
+    if (message.imageUrl) {
+      window.open(message.imageUrl, '_blank');
     }
   };
 
@@ -81,13 +100,35 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           
           {/* Display generated image if available */}
           {message.imageUrl && (
-            <div className="mt-3">
+            <div className="mt-3 relative group">
               <img 
                 src={message.imageUrl} 
                 alt="Generated image"
                 className="rounded-lg max-w-full h-auto shadow-md"
                 loading="lazy"
               />
+              
+              {/* Image action buttons */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-0"
+                  onClick={handleDownloadImage}
+                  title={language === 'ar' ? 'تحميل الصورة' : 'Download image'}
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-0"
+                  onClick={handleExpandImage}
+                  title={language === 'ar' ? 'فتح في نافذة جديدة' : 'Open in new tab'}
+                >
+                  <Expand className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
           
