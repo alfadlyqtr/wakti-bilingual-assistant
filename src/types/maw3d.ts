@@ -19,25 +19,25 @@ export interface BackgroundStyle {
   imageBlur?: number;
 }
 
+// Updated EventFormData to match database structure
 export interface EventFormData {
   title: string;
   description?: string;
   location?: string;
-  locationLink?: string;
-  startTime: string;
-  endTime: string;
-  isAllDay: boolean;
-  isPublic: boolean;
-  rsvpEnabled: boolean;
-  rsvpDeadline?: string;
+  google_maps_link?: string;
   organizer?: string;
-  textStyle: TextStyle;
-  backgroundStyle: BackgroundStyle;
-  enableShareableLink: boolean;
-  showAttendingCount: boolean;
-  autoDelete: boolean;
-  autoDeleteHours: number;
-  invitedContacts: string[];
+  event_date: string;
+  start_time?: string;
+  end_time?: string;
+  is_all_day: boolean;
+  is_public: boolean;
+  show_attending_count: boolean;
+  auto_delete_enabled: boolean;
+  background_type: 'color' | 'gradient' | 'image' | 'ai';
+  background_value: string;
+  text_style: TextStyle;
+  template_type?: string | null;
+  invited_contacts: string[];
 }
 
 export interface CreateEventFormData {

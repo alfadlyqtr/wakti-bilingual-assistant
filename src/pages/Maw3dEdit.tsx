@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -103,9 +104,9 @@ export default function Maw3dEdit() {
         title: template.title,
         description: template.description,
         organizer: template.organizer || prev.organizer,
-        background_type: template.backgroundStyle.type,
-        background_value: template.backgroundStyle.backgroundColor || template.backgroundStyle.backgroundGradient || template.backgroundStyle.backgroundImage || '#3b82f6',
-        text_style: template.textStyle
+        background_type: template.background_type,
+        background_value: template.background_value,
+        text_style: template.text_style
       } : null);
     }
   };
