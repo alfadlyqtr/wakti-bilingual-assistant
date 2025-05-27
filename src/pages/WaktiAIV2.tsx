@@ -57,6 +57,13 @@ export default function WaktiAIV2() {
 
   const MAX_RECORDING_TIME = 45; // 45 seconds
 
+  // Helper function to detect language from text input
+  const detectLanguage = (text: string): 'en' | 'ar' => {
+    // Check for Arabic characters using Unicode range
+    const hasArabicChars = /[\u0600-\u06FF]/.test(text);
+    return hasArabicChars ? 'ar' : 'en';
+  };
+
   // Debug: Log component mount
   useEffect(() => {
     console.log('🔍 WAKTI AI V2.1: Component mounted');
@@ -279,6 +286,15 @@ export default function WaktiAIV2() {
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
     if (!content.trim() || isLoading) return;
 
+    // Detect language from user input content
+    const detectedLanguage = detectLanguage(content.trim());
+    
+    console.log('🔍 WAKTI AI V2.1: Language detection:', {
+      originalContent: content.trim(),
+      detectedLanguage,
+      themeLanguage: language
+    });
+
     const userMessage: AIMessage = {
       id: Date.now().toString(),
       role: 'user',
@@ -299,7 +315,8 @@ export default function WaktiAIV2() {
       const response = await WaktiAIV2Service.sendMessage(
         content.trim(),
         currentConversationId || undefined,
-        language
+        detectedLanguage, // Use detected language instead of theme language
+        inputType
       );
 
       console.log('🔍 WAKTI AI V2.1: Received response:', response);
