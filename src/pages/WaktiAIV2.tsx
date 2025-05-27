@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -16,7 +17,8 @@ import {
   MessageSquare, 
   Plus,
   Loader2,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -34,6 +36,7 @@ export default function WaktiAIV2() {
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [systemReady, setSystemReady] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -49,13 +52,40 @@ export default function WaktiAIV2() {
 
   useEffect(() => {
     if (user) {
-      loadConversations();
-      // Enhanced greeting with user's actual name
-      if (messages.length === 0) {
-        initializeGreeting();
-      }
+      initializeSystem();
     }
   }, [user, language]);
+
+  const initializeSystem = async () => {
+    console.log('WAKTI AI V2.1: Initializing system...');
+    
+    try {
+      // Load conversations and check system readiness
+      await loadConversations();
+      
+      // Enhanced greeting with user's actual name
+      if (messages.length === 0) {
+        await initializeGreeting();
+      }
+      
+      setSystemReady(true);
+      console.log('WAKTI AI V2.1: System initialized successfully');
+    } catch (error) {
+      console.error('WAKTI AI V2.1: System initialization failed:', error);
+      
+      // Show system status
+      const errorMessage: AIMessage = {
+        id: 'system-error',
+        role: 'assistant',
+        content: language === 'ar' 
+          ? '⚠️ نظام الذكاء الاصطناعي غير متاح حالياً. يرجى المحاولة مرة أخرى.'
+          : '⚠️ AI system is currently unavailable. Please try again.',
+        timestamp: new Date()
+      };
+      
+      setMessages([errorMessage]);
+    }
+  };
 
   const initializeGreeting = async () => {
     // Get user's actual name from profile
@@ -73,11 +103,11 @@ export default function WaktiAIV2() {
     }
 
     const greeting = language === 'ar' 
-      ? `مرحباً ${userName}! أنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات\n• إدارة جدولك اليومي\n• الإجابة على أسئلتك\n• تنفيذ الأوامر تلقائياً\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
-      : `Hello ${userName}! I'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders\n• Managing your daily schedule\n• Answering your questions\n• Executing commands automatically\n\nHow can I assist you today? ✨`;
+      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
+      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
     
     const greetingMessage: AIMessage = {
-      id: 'greeting-v2',
+      id: 'greeting-v2-1',
       role: 'assistant',
       content: greeting,
       timestamp: new Date()
@@ -90,6 +120,7 @@ export default function WaktiAIV2() {
     try {
       const data = await WaktiAIV2Service.getConversations();
       setConversations(data);
+      console.log('WAKTI AI V2.1: Loaded conversations:', data.length);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -143,7 +174,7 @@ export default function WaktiAIV2() {
   };
 
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
-    if (!content.trim() || isLoading) return;
+    if (!content.trim() || isLoading || !systemReady) return;
 
     const userMessage: AIMessage = {
       id: Date.now().toString(),
@@ -159,11 +190,15 @@ export default function WaktiAIV2() {
     setIsTyping(true);
 
     try {
+      console.log('WAKTI AI V2.1: Sending message:', { content, inputType, language });
+      
       const response = await WaktiAIV2Service.sendMessage(
         content.trim(),
         currentConversationId || undefined,
         language
       );
+
+      console.log('WAKTI AI V2.1: Received response:', response);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
@@ -181,17 +216,40 @@ export default function WaktiAIV2() {
       // Reload conversations to update the list
       loadConversations();
 
-      // Enhanced action feedback
+      // Enhanced action feedback with confidence levels
       if (response.actionTaken) {
         const actionLabels = {
           create_task: language === 'ar' ? 'تم إنشاء المهمة' : 'Task Created',
           create_event: language === 'ar' ? 'تم إنشاء الحدث' : 'Event Created',
-          create_reminder: language === 'ar' ? 'تم إنشاء التذكير' : 'Reminder Created'
+          create_reminder: language === 'ar' ? 'تم إنشاء التذكير' : 'Reminder Created',
+          generate_image: language === 'ar' ? 'تم إنشاء الصورة' : 'Image Generated'
+        };
+        
+        const confidenceIcons = {
+          high: '⚡',
+          medium: '⏳',
+          low: '❓'
         };
         
         toast({
           title: language === 'ar' ? '✅ تم التنفيذ' : '✅ Action Completed',
-          description: actionLabels[response.actionTaken as keyof typeof actionLabels] || response.actionTaken
+          description: `${confidenceIcons[response.confidence]} ${actionLabels[response.actionTaken as keyof typeof actionLabels] || response.actionTaken}`
+        });
+      }
+
+      // Show confirmation request for medium confidence actions
+      if (response.needsConfirmation) {
+        toast({
+          title: language === 'ar' ? '⏳ تأكيد مطلوب' : '⏳ Confirmation Required',
+          description: language === 'ar' ? 'يرجى تأكيد الإجراء' : 'Please confirm the action'
+        });
+      }
+
+      // Show clarification request for low confidence
+      if (response.needsClarification) {
+        toast({
+          title: language === 'ar' ? '❓ توضيح مطلوب' : '❓ Clarification Needed',
+          description: language === 'ar' ? 'يرجى توضيح طلبك' : 'Please clarify your request'
         });
       }
 
@@ -220,7 +278,7 @@ export default function WaktiAIV2() {
     }
   };
 
-  // Voice recording logic (enhanced)
+  // Enhanced voice recording logic
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -240,6 +298,8 @@ export default function WaktiAIV2() {
 
       mediaRecorder.start();
       setIsRecording(true);
+      
+      console.log('WAKTI AI V2.1: Voice recording started');
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
@@ -254,6 +314,7 @@ export default function WaktiAIV2() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      console.log('WAKTI AI V2.1: Voice recording stopped');
     }
   };
 
@@ -261,19 +322,23 @@ export default function WaktiAIV2() {
     try {
       setIsLoading(true);
       
+      console.log('WAKTI AI V2.1: Processing voice input:', { size: audioBlob.size, type: audioBlob.type });
+      
       // Convert to base64
       const arrayBuffer = await audioBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
       const binaryString = Array.from(uint8Array, byte => String.fromCharCode(byte)).join('');
       const base64Audio = btoa(binaryString);
 
-      // Enhanced transcription
+      // Enhanced transcription with language detection
       const transcription = await WaktiAIV2Service.transcribeVoice(
         base64Audio,
         language
       );
 
-      if (transcription.text) {
+      console.log('WAKTI AI V2.1: Voice transcription result:', transcription);
+
+      if (transcription.text && transcription.text.trim()) {
         await sendMessage(transcription.text, 'voice');
       } else {
         throw new Error('No transcription received');
@@ -281,7 +346,7 @@ export default function WaktiAIV2() {
     } catch (error) {
       console.error('Error processing voice input:', error);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
         description: language === 'ar' ? 'فشل في معالجة الصوت' : 'Failed to process voice input',
         variant: 'destructive'
       });
@@ -290,9 +355,18 @@ export default function WaktiAIV2() {
     }
   };
 
+  const retryLastMessage = () => {
+    if (messages.length >= 2) {
+      const lastUserMessage = messages[messages.length - 2];
+      if (lastUserMessage.role === 'user') {
+        sendMessage(lastUserMessage.content, lastUserMessage.inputType);
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20">
-      {/* Enhanced Header */}
+      {/* Enhanced Header with System Status */}
       <div className="flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <Sheet>
@@ -312,21 +386,41 @@ export default function WaktiAIV2() {
           </Sheet>
           
           <div className="flex items-center gap-2">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600">
+            <div className={cn(
+              "p-2 rounded-lg bg-gradient-to-r transition-all duration-300",
+              systemReady ? "from-blue-500 to-purple-600" : "from-gray-400 to-gray-500"
+            )}>
               <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                WAKTI AI V2.1
-              </h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  WAKTI AI V2.1
+                </h1>
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  systemReady ? "bg-green-500" : "bg-red-500"
+                )} />
+              </div>
               <p className="text-xs text-muted-foreground">
                 {language === 'ar' ? 'المساعد الذكي المطور' : 'Enhanced Smart Assistant'}
+                {!systemReady && (language === 'ar' ? ' • غير متصل' : ' • Offline')}
               </p>
             </div>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={retryLastMessage}
+            disabled={isLoading || messages.length < 2}
+            className="hover:scale-110 transition-transform"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </Button>
+          
           <Button
             variant="ghost"
             size="icon"
@@ -376,12 +470,18 @@ export default function WaktiAIV2() {
                   sendMessage(inputMessage);
                 }
               }}
-              disabled={isLoading}
+              disabled={isLoading || !systemReady}
               className={cn(
                 "pr-4 transition-all duration-200 focus:ring-2 focus:ring-primary/20",
-                language === 'ar' ? 'text-right' : ''
+                language === 'ar' ? 'text-right' : '',
+                !systemReady && "opacity-50"
               )}
             />
+            {!systemReady && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            )}
           </div>
           
           <Button
@@ -391,7 +491,7 @@ export default function WaktiAIV2() {
             onMouseUp={stopRecording}
             onTouchStart={startRecording}
             onTouchEnd={stopRecording}
-            disabled={isLoading}
+            disabled={isLoading || !systemReady}
             className={cn(
               "transition-all duration-200 hover:scale-110",
               isRecording && "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-110"
@@ -402,7 +502,7 @@ export default function WaktiAIV2() {
           
           <Button
             onClick={() => sendMessage(inputMessage)}
-            disabled={!inputMessage.trim() || isLoading}
+            disabled={!inputMessage.trim() || isLoading || !systemReady}
             size="icon"
             className="hover:scale-110 transition-transform"
           >
@@ -413,6 +513,14 @@ export default function WaktiAIV2() {
             )}
           </Button>
         </div>
+        
+        {!systemReady && (
+          <div className="text-center mt-2">
+            <p className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'جاري تحميل النظام...' : 'Loading AI system...'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

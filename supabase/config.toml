@@ -24,3 +24,9 @@ enabled = true
 [edge_functions]
 [edge_functions.transcribe-audio]
 verify_jwt = false
+
+[edge_functions.wakti-ai-v2-brain]
+verify_jwt = true
+
+[edge_functions.wakti-voice-v2]
+verify_jwt = true
