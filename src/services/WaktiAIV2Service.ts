@@ -44,7 +44,7 @@ export class WaktiAIV2Service {
     language: 'en' | 'ar' = 'en'
   ): Promise<AIResponse> {
     try {
-      console.log('WAKTI AI V2.1: Sending message to brain:', { message, conversationId, language });
+      console.log('WAKTI AI V2.1 CLIENT: Sending message to brain:', { message, conversationId, language });
       
       const response = await callEdgeFunctionWithRetry<AIResponse>('wakti-ai-v2-brain', {
         body: {
@@ -54,16 +54,34 @@ export class WaktiAIV2Service {
         }
       });
 
-      console.log('WAKTI AI V2.1: Received response from brain:', response);
+      console.log('WAKTI AI V2.1 CLIENT: Received response from brain:', response);
       return response;
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in sendMessage:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in sendMessage:', error);
+      
+      // Check if it's a specific error type
+      let errorMessage = language === 'ar' 
+        ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
+        : 'Sorry, there was a system error. Please try again. 🔧';
+      
+      // Provide more specific error messages based on error type
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        errorMessage = language === 'ar' 
+          ? 'خطأ في المصادقة. يرجى إعادة تسجيل الدخول وإعادة المحاولة. 🔑'
+          : 'Authentication error. Please log in again and try. 🔑';
+      } else if (error.message?.includes('API key') || error.message?.includes('configuration')) {
+        errorMessage = language === 'ar' 
+          ? 'خطأ في إعدادات النظام. يرجى التواصل مع الدعم الفني. ⚙️'
+          : 'System configuration error. Please contact support. ⚙️';
+      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+        errorMessage = language === 'ar' 
+          ? 'خطأ في الاتصال. يرجى التحقق من الإنترنت والمحاولة مرة أخرى. 🌐'
+          : 'Connection error. Please check your internet and try again. 🌐';
+      }
       
       // Enhanced error handling with fallback response
       const fallbackResponse: AIResponse = {
-        response: language === 'ar' 
-          ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
-          : 'Sorry, there was a system error. Please try again. 🔧',
+        response: errorMessage,
         conversationId: conversationId || 'error',
         intent: 'error',
         confidence: 'low',
@@ -81,7 +99,7 @@ export class WaktiAIV2Service {
     language: 'en' | 'ar' = 'en'
   ): Promise<TranscriptionResponse> {
     try {
-      console.log('WAKTI AI V2.1: Transcribing voice input:', { language, audioDataLength: audioData.length });
+      console.log('WAKTI AI V2.1 CLIENT: Transcribing voice input:', { language, audioDataLength: audioData.length });
       
       const response = await callEdgeFunctionWithRetry<TranscriptionResponse>('wakti-voice-v2', {
         body: {
@@ -90,10 +108,10 @@ export class WaktiAIV2Service {
         }
       });
 
-      console.log('WAKTI AI V2.1: Voice transcription result:', response);
+      console.log('WAKTI AI V2.1 CLIENT: Voice transcription result:', response);
       return response;
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in transcribeVoice:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in transcribeVoice:', error);
       
       // Return fallback response
       return {
@@ -114,13 +132,13 @@ export class WaktiAIV2Service {
         .limit(20);
 
       if (error) {
-        console.error('WAKTI AI V2.1: Error fetching conversations:', error);
+        console.error('WAKTI AI V2.1 CLIENT: Error fetching conversations:', error);
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in getConversations:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in getConversations:', error);
       return [];
     }
   }
@@ -135,7 +153,7 @@ export class WaktiAIV2Service {
         .order('created_at', { ascending: true });
 
       if (error) {
-        console.error('WAKTI AI V2.1: Error fetching conversation messages:', error);
+        console.error('WAKTI AI V2.1 CLIENT: Error fetching conversation messages:', error);
         return [];
       }
       
@@ -150,7 +168,7 @@ export class WaktiAIV2Service {
         inputType: msg.input_type as 'text' | 'voice'
       }));
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in getConversationMessages:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in getConversationMessages:', error);
       return [];
     }
   }
@@ -164,11 +182,11 @@ export class WaktiAIV2Service {
         .eq('id', conversationId);
 
       if (error) {
-        console.error('WAKTI AI V2.1: Error deleting conversation:', error);
+        console.error('WAKTI AI V2.1 CLIENT: Error deleting conversation:', error);
         throw error;
       }
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in deleteConversation:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in deleteConversation:', error);
       throw error;
     }
   }
@@ -182,12 +200,28 @@ export class WaktiAIV2Service {
         .eq('id', conversationId);
 
       if (error) {
-        console.error('WAKTI AI V2.1: Error updating conversation title:', error);
+        console.error('WAKTI AI V2.1 CLIENT: Error updating conversation title:', error);
         throw error;
       }
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error in updateConversationTitle:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in updateConversationTitle:', error);
       throw error;
+    }
+  }
+
+  // Test API connectivity (new method for debugging)
+  static async testConnection(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const testMessage = "Hello, are you working?";
+      const response = await this.sendMessage(testMessage);
+      
+      if (response.response && !response.response.includes('system error')) {
+        return { success: true };
+      } else {
+        return { success: false, error: 'AI service returned error response' };
+      }
+    } catch (error) {
+      return { success: false, error: error.message };
     }
   }
 }

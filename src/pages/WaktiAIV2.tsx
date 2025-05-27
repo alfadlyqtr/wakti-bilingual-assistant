@@ -63,17 +63,26 @@ export default function WaktiAIV2() {
   }, [messages, isTyping]);
 
   useEffect(() => {
-    if (user) {
-      initializeSystem();
-    }
-  }, [user, language]);
+    initializeSystem();
+  }, [language]);
 
   const initializeSystem = async () => {
     try {
+      console.log('🔍 WAKTI AI V2.1: Initializing system...');
+      
+      // Test connection first
+      const connectionTest = await WaktiAIV2Service.testConnection();
+      console.log('🔍 WAKTI AI V2.1: Connection test result:', connectionTest);
+      
+      if (!connectionTest.success) {
+        console.warn('🔍 WAKTI AI V2.1: Connection test failed:', connectionTest.error);
+        // Continue anyway, but show a warning in the greeting
+      }
+      
       await loadConversations();
       
       if (messages.length === 0) {
-        await initializeGreeting();
+        await initializeGreeting(connectionTest.success);
       }
       
       setSystemReady(true);
@@ -84,8 +93,8 @@ export default function WaktiAIV2() {
         id: 'system-error',
         role: 'assistant',
         content: language === 'ar' 
-          ? '⚠️ نظام الذكاء الاصطناعي غير متاح حالياً. يرجى المحاولة مرة أخرى.'
-          : '⚠️ AI system is currently unavailable. Please try again.',
+          ? '⚠️ نظام الذكاء الاصطناعي غير متاح حالياً. يرجى المحاولة مرة أخرى.\n\nإذا استمرت المشكلة، يرجى التحقق من إعدادات API أو التواصل مع الدعم الفني.'
+          : '⚠️ AI system is currently unavailable. Please try again.\n\nIf the issue persists, please check API settings or contact support.',
         timestamp: new Date()
       };
       
@@ -94,23 +103,32 @@ export default function WaktiAIV2() {
     }
   };
 
-  const initializeGreeting = async () => {
+  const initializeGreeting = async (connectionOk: boolean = true) => {
     let userName = 'there';
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name, username')
-        .eq('id', user?.id)
-        .single();
-      
-      userName = profile?.display_name || profile?.username || 'there';
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name, username')
+          .eq('id', user.id)
+          .single();
+        
+        userName = profile?.display_name || profile?.username || 'there';
+      }
     } catch (error) {
       console.log('Could not fetch user profile for greeting');
     }
 
-    const greeting = language === 'ar' 
+    let greeting = language === 'ar' 
       ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
       : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
+    
+    // Add connection warning if needed
+    if (!connectionOk) {
+      greeting += language === 'ar' 
+        ? '\n\n⚠️ ملاحظة: قد تكون هناك مشاكل في الاتصال. إذا واجهت صعوبات، يرجى إعادة المحاولة لاحقاً.'
+        : '\n\n⚠️ Note: There may be connection issues. If you experience difficulties, please try again later.';
+    }
     
     const greetingMessage: AIMessage = {
       id: 'greeting-v2-1',
@@ -226,11 +244,15 @@ export default function WaktiAIV2() {
     setIsTyping(true);
 
     try {
+      console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
+      
       const response = await WaktiAIV2Service.sendMessage(
         content.trim(),
         currentConversationId || undefined,
         language
       );
+
+      console.log('🔍 WAKTI AI V2.1: Received response:', response);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
@@ -243,9 +265,12 @@ export default function WaktiAIV2() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
-      setCurrentConversationId(response.conversationId);
       
-      loadConversations();
+      // Only update conversation ID if we got a valid response
+      if (response.conversationId && !response.conversationId.includes('error')) {
+        setCurrentConversationId(response.conversationId);
+        loadConversations();
+      }
 
       if (response.actionTaken) {
         const actionLabels = {
@@ -282,14 +307,14 @@ export default function WaktiAIV2() {
       }
 
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('WAKTI AI V2.1: Error sending message:', error);
       
       const errorMessage: AIMessage = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
         content: language === 'ar' 
-          ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
-          : 'Sorry, there was a system error. Please try again. 🔧',
+          ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧\n\nإذا استمرت المشكلة، يرجى التحقق من الاتصال أو إعدادات النظام.'
+          : 'Sorry, there was a system error. Please try again. 🔧\n\nIf the issue persists, please check your connection or system settings.',
         timestamp: new Date()
       };
 
@@ -297,7 +322,7 @@ export default function WaktiAIV2() {
       
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message',
+        description: language === 'ar' ? 'فشل في إرسال الرسالة - يرجى المحاولة مرة أخرى' : 'Failed to send message - please try again',
         variant: 'destructive'
       });
     } finally {
