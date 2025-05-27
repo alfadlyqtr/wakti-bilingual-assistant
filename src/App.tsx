@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -108,7 +109,7 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Public Maw3d event routes - NO AppLayout wrapper for clean standalone view */}
+                {/* Public Maw3d event routes - now wrapped with AuthProvider but still publicly accessible */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
 
                 {/* WAKTI AI route - now using the proper WaktiAI page */}
