@@ -9,42 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      ai_chat_history: {
-        Row: {
-          content: string
-          created_at: string
-          expires_at: string
-          has_media: boolean | null
-          id: string
-          metadata: Json | null
-          mode: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string
-          expires_at: string
-          has_media?: boolean | null
-          id?: string
-          metadata?: Json | null
-          mode: string
-          role: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string
-          expires_at?: string
-          has_media?: boolean | null
-          id?: string
-          metadata?: Json | null
-          mode?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       audit_logs: {
         Row: {
           action: string

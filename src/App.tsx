@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -20,7 +19,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Contacts from "@/pages/Contacts";
 import Account from "@/pages/Account";
 import Home from "@/pages/Home";
-import WaktiAI from "@/pages/WaktiAI";
 import { Toaster } from "@/components/ui/toaster";
 import { AppHeader } from "@/components/AppHeader";
 import { MobileNav } from "@/components/MobileNav";
@@ -111,13 +109,6 @@ function App() {
 
                 {/* Public Maw3d event routes - now wrapped with AuthProvider but still publicly accessible */}
                 <Route path="/maw3d/:shortId" element={<Maw3dView />} />
-
-                {/* WAKTI AI route - now using the proper WaktiAI page */}
-                <Route path="/wakti-ai" element={
-                  <AppLayout>
-                    <WaktiAI />
-                  </AppLayout>
-                } />
                 
                 {/* Tasjeel route with special layout (no page title or back button) */}
                 <Route path="/tasjeel" element={

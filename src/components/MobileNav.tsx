@@ -3,14 +3,14 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CheckSquare, CalendarClock, Sparkles, Mic } from "lucide-react";
+import { Calendar, CheckSquare, CalendarClock, Mic } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - updated to include Maw3d
+  // Navigation items - updated to remove WAKTI AI
   const navItems = [
     {
       name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
@@ -28,11 +28,6 @@ export function MobileNav() {
       icon: 'calendar-clock',
     },
     {
-      name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
-      path: '/wakti-ai',
-      icon: 'sparkles',
-    },
-    {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
       path: '/tasjeel',
       icon: 'mic',
@@ -43,7 +38,6 @@ export function MobileNav() {
     calendar: Calendar,
     'check-square': CheckSquare,
     'calendar-clock': CalendarClock,
-    sparkles: Sparkles,
     mic: Mic,
   };
   
