@@ -4,18 +4,10 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
 import { Mic, CheckSquare, Calendar, Bell, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatBubbleProps {
-  message: {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-    intent?: string;
-    confidence?: 'high' | 'medium' | 'low';
-    actionTaken?: string;
-    inputType?: 'text' | 'voice';
-  };
+  message: AIMessage;
 }
 
 export function ChatBubble({ message }: ChatBubbleProps) {
