@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +26,7 @@ import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
+import { AppHeader } from '@/components/AppHeader';
 
 export default function WaktiAIV2() {
   const { user } = useAuth();
@@ -351,6 +353,9 @@ export default function WaktiAIV2() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20">
+      {/* App Header */}
+      <AppHeader />
+
       {/* Enhanced Header with System Status */}
       <div className="flex items-center justify-between p-4 border-b bg-background/80 backdrop-blur-sm">
         <div className="flex items-center gap-3">
