@@ -225,8 +225,9 @@ function analyzeMessage(message: string, language: string) {
 
 function extractActionData(message: string, intent: string, language: string) {
   // Remove command words to get the actual content
+  // For Arabic image prompts, don't strip words - let translation handle the full context
   const removePatterns = language === 'ar' 
-    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة', 'اصنع صورة', 'ارسم']
+    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني']
     : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
@@ -257,7 +258,8 @@ function extractActionData(message: string, intent: string, language: string) {
     case 'image':
       return {
         type: language === 'ar' ? 'translate_for_image' : 'generate_image',
-        prompt: title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork')
+        // For Arabic, keep the full message for proper translation context
+        prompt: language === 'ar' ? message : (title || (language === 'ar' ? 'صورة جميلة' : 'beautiful artwork'))
       };
     default:
       return null;
@@ -269,19 +271,21 @@ async function translateImagePrompt(arabicPrompt: string, language: string) {
   try {
     console.log("WAKTI AI V2.1: Translating Arabic prompt:", arabicPrompt);
     
-    // Enhanced system prompt for better image description extraction and translation
-    const systemPrompt = `You are a professional translator specializing in image generation prompts. Your task is to:
-1. Extract the visual description from the Arabic text
-2. Translate it to English as a clear, descriptive image prompt
-3. Remove any command words like "create", "generate", "draw" etc.
-4. Focus only on the visual elements and objects described
+    // Updated system prompt to handle full Arabic image requests including command words
+    const systemPrompt = `You are a professional translator specializing in converting Arabic image generation requests to English image prompts. Your task is to:
 
-For example:
-- "أنشئ صورة لقطة تجلس تحت الشجرة" should become "a cat sitting under a tree"
-- "ارسم كلب يشرب ماء" should become "a dog drinking water"
-- "اصنع صورة منزل جميل" should become "a beautiful house"
+1. Translate the FULL Arabic request to English, maintaining the intent to create/generate an image
+2. Convert it to a clear, descriptive image prompt suitable for AI image generation
+3. Include the creation intent (like "create", "generate", "draw") in your translation
+4. Focus on translating the complete meaning, not stripping words
 
-Only return the English description, nothing else. Make it suitable for AI image generation.`;
+Examples:
+- "أنشئ صورة لقطة تجلس تحت الشجرة" should become "create an image of a cat sitting under a tree"
+- "ارسم كلب يشرب ماء" should become "draw a dog drinking water"
+- "اصنع صورة منزل جميل" should become "make an image of a beautiful house"
+- "صورة طائر يطير في السماء" should become "image of a bird flying in the sky"
+
+Translate the complete Arabic request to English. Keep the creation intent and visual description together.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
