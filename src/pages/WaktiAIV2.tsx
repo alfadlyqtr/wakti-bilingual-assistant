@@ -389,7 +389,7 @@ export default function WaktiAIV2() {
       {/* App Header */}
       <AppHeader />
 
-      {/* Simplified Header with Actions Only */}
+      {/* Centered Header with Actions */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm">
         <div className="flex items-center">
           <Sheet>
@@ -409,7 +409,8 @@ export default function WaktiAIV2() {
           </Sheet>
         </div>
         
-        <div className="flex items-center gap-2">
+        {/* Centered Action Icons */}
+        <div className="flex items-center justify-center gap-3 flex-1">
           <Button
             variant="ghost"
             size="icon"
@@ -420,16 +421,6 @@ export default function WaktiAIV2() {
             <Trash2 className="h-5 w-5" />
           </Button>
           
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={startNewConversation}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-
           <Button
             variant="ghost"
             size="icon"
@@ -448,6 +439,18 @@ export default function WaktiAIV2() {
             title={language === 'ar' ? 'التقاط صورة' : 'Take photo'}
           >
             <Camera className="h-5 w-5" />
+          </Button>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={startNewConversation}
+            className="hover:scale-110 transition-transform"
+            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
+          >
+            <Plus className="h-5 w-5" />
           </Button>
           
           <Sheet>
@@ -480,9 +483,9 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Enhanced Messages Area with bottom padding for fixed input */}
-      <ScrollArea className="flex-1 p-4 pb-44">
-        <div className="space-y-4 max-w-4xl mx-auto">
+      {/* Enhanced Messages Area with z-20 for chat bubbles */}
+      <ScrollArea className="flex-1 p-4 pb-40">
+        <div className="space-y-4 max-w-4xl mx-auto z-[20] relative">
           {messages.map((message) => (
             <ChatBubble key={message.id} message={message} />
           ))}
@@ -493,8 +496,8 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Enhanced Fixed Input Area */}
-      <div className="fixed bottom-20 left-0 right-0 z-[65] p-4">
+      {/* Enhanced Fixed Input Area - moved down slightly */}
+      <div className="fixed bottom-24 left-0 right-0 z-[65] p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
             <div className="flex gap-2 items-end">
