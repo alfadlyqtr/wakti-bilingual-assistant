@@ -226,7 +226,7 @@ function analyzeMessage(message: string, language: string) {
 function extractActionData(message: string, intent: string, language: string) {
   // Remove command words to get the actual content
   const removePatterns = language === 'ar' 
-    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة']
+    ? ['أنشئ مهمة', 'أضف مهمة', 'أنشئ حدث', 'أضف حدث', 'ذكرني', 'أنشئ صورة', 'اصنع صورة', 'ارسم']
     : ['create task', 'add task', 'new task', 'create event', 'add event', 'remind me', 'generate image', 'create image', 'create an image'];
   
   let title = message;
@@ -264,12 +264,25 @@ function extractActionData(message: string, intent: string, language: string) {
   }
 }
 
-// New function to translate Arabic image prompts
+// Enhanced function to translate Arabic image prompts with better accuracy
 async function translateImagePrompt(arabicPrompt: string, language: string) {
   try {
     console.log("WAKTI AI V2.1: Translating Arabic prompt:", arabicPrompt);
     
-    const systemPrompt = "You are a translator. Translate the following Arabic text to English. Only return the English translation, nothing else.";
+    // Enhanced system prompt for better image description extraction and translation
+    const systemPrompt = `You are a professional translator specializing in image generation prompts. Your task is to:
+1. Extract the visual description from the Arabic text
+2. Translate it to English as a clear, descriptive image prompt
+3. Remove any command words like "create", "generate", "draw" etc.
+4. Focus only on the visual elements and objects described
+
+For example:
+- "أنشئ صورة لقطة تجلس تحت الشجرة" should become "a cat sitting under a tree"
+- "ارسم كلب يشرب ماء" should become "a dog drinking water"
+- "اصنع صورة منزل جميل" should become "a beautiful house"
+
+Only return the English description, nothing else. Make it suitable for AI image generation.`;
+
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: arabicPrompt }
@@ -287,8 +300,8 @@ async function translateImagePrompt(arabicPrompt: string, language: string) {
           body: JSON.stringify({
             model: "deepseek-chat",
             messages: messages,
-            temperature: 0.3,
-            max_tokens: 200,
+            temperature: 0.1, // Lower temperature for more consistent translations
+            max_tokens: 150,
           }),
         });
 
@@ -314,8 +327,8 @@ async function translateImagePrompt(arabicPrompt: string, language: string) {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: messages,
-          temperature: 0.3,
-          max_tokens: 200,
+          temperature: 0.1, // Lower temperature for more consistent translations
+          max_tokens: 150,
         }),
       });
 
