@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIMessage, type AIConversation } from '@/services/WaktiAIV2Service';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { toast } from '@/hooks/use-toast';
@@ -43,12 +42,14 @@ export default function WaktiAIV2() {
   const [systemReady, setSystemReady] = useState(true);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [attachedImages, setAttachedImages] = useState<File[]>([]);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Debug: Log component mount
   useEffect(() => {
@@ -69,6 +70,17 @@ export default function WaktiAIV2() {
   useEffect(() => {
     initializeSystem();
   }, [language]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 140; // 5 lines max
+      textarea.style.height = Math.min(scrollHeight, maxHeight) + 'px';
+    }
+  }, [inputMessage]);
 
   const initializeSystem = async () => {
     try {
@@ -175,12 +187,14 @@ export default function WaktiAIV2() {
   const startNewConversation = () => {
     setMessages([]);
     setCurrentConversationId(null);
+    setAttachedImages([]);
     initializeGreeting();
   };
 
   const clearCurrentConversation = () => {
     setMessages([]);
     setCurrentConversationId(null);
+    setAttachedImages([]);
     initializeGreeting();
     toast({
       title: language === 'ar' ? 'تم المسح' : 'Cleared',
@@ -223,13 +237,32 @@ export default function WaktiAIV2() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    toast({
-      title: language === 'ar' ? 'جاري الرفع' : 'Uploading',
-      description: language === 'ar' ? `جاري رفع ${file.name}` : `Uploading ${file.name}`
-    });
+    if (file.type.startsWith('image/')) {
+      setAttachedImages(prev => [...prev, file]);
+      toast({
+        title: language === 'ar' ? 'تم إرفاق الصورة' : 'Image Attached',
+        description: file.name
+      });
+    } else {
+      toast({
+        title: language === 'ar' ? 'جاري الرفع' : 'Uploading',
+        description: language === 'ar' ? `جاري رفع ${file.name}` : `Uploading ${file.name}`
+      });
+    }
 
     // Reset the input
     event.target.value = '';
+  };
+
+  const removeAttachedImage = (index: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleTextareaKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(inputMessage);
+    }
   };
 
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
@@ -245,6 +278,7 @@ export default function WaktiAIV2() {
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+    setAttachedImages([]);
     setIsLoading(true);
     setIsTyping(true);
 
@@ -597,27 +631,48 @@ export default function WaktiAIV2() {
         />
       )}
 
-      {/* Enhanced Fixed Input Area */}
-      <div className="fixed bottom-20 left-0 right-0 z-[65] p-4">
+      {/* Enhanced Fixed Input Area - Mobile Optimized */}
+      <div className="fixed bottom-[72px] left-0 right-0 z-[65] p-4">
         <div className="max-w-4xl mx-auto">
+          {/* Image Attachments Preview */}
+          {attachedImages.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachedImages.map((image, index) => (
+                <div key={index} className="relative">
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt={`Attachment ${index + 1}`}
+                    className="w-16 h-16 object-cover rounded-lg border-2 border-border"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => removeAttachedImage(index)}
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Input Container */}
           <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
             <div className="flex gap-2 items-end">
               <div className="flex-1 relative">
-                <Input
+                <Textarea
+                  ref={textareaRef}
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleTextareaKeyPress}
                   placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage(inputMessage);
-                    }
-                  }}
                   disabled={isLoading}
                   className={cn(
-                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-32",
+                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
                     language === 'ar' ? 'text-right' : ''
                   )}
+                  rows={1}
                 />
               </div>
               
