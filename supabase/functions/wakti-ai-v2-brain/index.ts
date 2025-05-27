@@ -182,7 +182,11 @@ function analyzeMessage(message: string, language: string) {
       
     image: language === 'ar'
       ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة جديدة', 'توليد صورة', 'اعمل صورة']
-      : ['generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 'create an image']
+      : [
+          'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of', 'create an image',
+          'pic of', 'create a pic', 'make a pic', 'generate a pic', 'photo of', 'create photo',
+          'draw me', 'make me a', 'create me a', 'generate me a', 'pic', 'picture', 'photo'
+        ]
   };
 
   // Check for high confidence matches
