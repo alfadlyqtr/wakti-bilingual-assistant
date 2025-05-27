@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -100,7 +99,7 @@ export function AppHeader() {
           )}
         </div>
         <div className="flex items-center space-x-4">
-          {/* Language Toggle Button */}
+          {/* Language Toggle Button - disabled on Wakti AI page */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -126,32 +125,17 @@ export function AppHeader() {
             </Tooltip>
           </TooltipProvider>
           
-          {/* Theme Toggle Button */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={isWaktiAIPage ? undefined : () => setTheme(theme === "light" ? "dark" : "light")}
-                  className={cn(
-                    "rounded-full",
-                    isWaktiAIPage && "opacity-50 cursor-not-allowed"
-                  )}
-                  disabled={isWaktiAIPage}
-                >
-                  <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                  <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                  <span className="sr-only">Toggle theme</span>
-                </Button>
-              </TooltipTrigger>
-              {isWaktiAIPage && (
-                <TooltipContent>
-                  <p>{language === 'ar' ? 'تغيير المظهر معطل في صفحة WAKTI AI' : 'Theme toggle disabled on WAKTI AI page'}</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
+          {/* Theme Toggle Button - always functional */}
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+            className="rounded-full"
+          >
+            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            <span className="sr-only">Toggle theme</span>
+          </Button>
           
           {/* User Menu */}
           <DropdownMenu>

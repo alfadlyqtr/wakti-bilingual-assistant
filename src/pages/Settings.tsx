@@ -117,7 +117,7 @@ export default function Settings() {
     <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
       <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
       
-      {/* Notice for Wakti AI restrictions */}
+      {/* Notice for Wakti AI restrictions - only for language */}
       {isFromWaktiAI && (
         <Card className="mb-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
           <CardContent className="pt-4">
@@ -125,8 +125,8 @@ export default function Settings() {
               <Info className="h-4 w-4" />
               <p className="text-sm">
                 {language === 'ar' 
-                  ? 'تغيير اللغة والمظهر معطل أثناء استخدام WAKTI AI لضمان الاستقرار'
-                  : 'Language and theme changes are disabled while using WAKTI AI for stability'}
+                  ? 'تغيير اللغة معطل أثناء استخدام WAKTI AI لضمان الاستقرار'
+                  : 'Language changes are disabled while using WAKTI AI for stability'}
               </p>
             </div>
           </CardContent>
@@ -140,7 +140,7 @@ export default function Settings() {
           <CardDescription>{t("appearanceSettings", language)}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Language & Theme Settings */}
+          {/* Language Settings - disabled on Wakti AI page */}
           <div className="flex justify-between items-center">
             <span>{t("language", language)}</span>
             <TooltipProvider>
@@ -168,34 +168,19 @@ export default function Settings() {
             </TooltipProvider>
           </div>
           
-          {/* Theme Toggle */}
+          {/* Theme Toggle - always functional */}
           <div className="flex justify-between items-center">
             <span>{t("theme", language)}</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={isFromWaktiAI ? undefined : toggleTheme}
-                    className={cn(
-                      "h-9 px-3 rounded-full text-sm",
-                      isFromWaktiAI && "opacity-50 cursor-not-allowed"
-                    )}
-                    disabled={isFromWaktiAI}
-                  >
-                    {theme === "dark"
-                      ? t("lightMode", language)
-                      : t("darkMode", language)}
-                  </Button>
-                </TooltipTrigger>
-                {isFromWaktiAI && (
-                  <TooltipContent>
-                    <p>{language === 'ar' ? 'معطل أثناء استخدام WAKTI AI' : 'Disabled while using WAKTI AI'}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleTheme}
+              className="h-9 px-3 rounded-full text-sm"
+            >
+              {theme === "dark"
+                ? t("lightMode", language)
+                : t("darkMode", language)}
+            </Button>
           </div>
         </CardContent>
       </Card>
