@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { format } from 'date-fns';
 import { ar, enUS } from 'date-fns/locale';
@@ -36,12 +37,23 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         return {
           backgroundImage: `url(${backgroundValue})`,
           backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          filter: imageBlur > 0 ? `blur(${imageBlur}px)` : 'none'
+          backgroundPosition: 'center'
         };
       default:
         return { backgroundColor: '#3b82f6' };
     }
+  };
+
+  const getBlurredBackgroundStyle = () => {
+    if ((backgroundType === 'image' || backgroundType === 'ai') && imageBlur > 0) {
+      return {
+        backgroundImage: `url(${backgroundValue})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        filter: `blur(${imageBlur}px)`
+      };
+    }
+    return {};
   };
 
   const getTextStyle = () => {
@@ -53,7 +65,7 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
       fontStyle: textStyle.isItalic ? 'italic' : 'normal',
       textDecoration: textStyle.isUnderline ? 'underline' : 'none',
       textAlign: textStyle.alignment as 'left' | 'center' | 'right',
-      textShadow: textStyle.hasShadow && textStyle.shadowIntensity && textStyle.shadowIntensity > 0 
+      textShadow: textStyle.shadowIntensity && textStyle.shadowIntensity > 0 
         ? `2px 2px 4px rgba(0,0,0,${textStyle.shadowIntensity / 10})` 
         : 'none'
     };
@@ -120,6 +132,14 @@ export const EventPreview: React.FC<EventPreviewProps> = ({
         className="relative rounded-lg overflow-hidden shadow-lg min-h-[400px] p-6 flex flex-col"
         style={getBackgroundStyle()}
       >
+        {/* Blurred background layer for images only */}
+        {(backgroundType === 'image' || backgroundType === 'ai') && imageBlur > 0 && (
+          <div 
+            className="absolute inset-0 rounded-lg"
+            style={getBlurredBackgroundStyle()}
+          ></div>
+        )}
+        
         {/* Overlay for better text readability when using images */}
         {(backgroundType === 'image' || backgroundType === 'ai') && (
           <div className="absolute inset-0 bg-black bg-opacity-30 rounded-lg"></div>

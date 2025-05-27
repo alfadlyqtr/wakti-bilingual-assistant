@@ -136,6 +136,7 @@ export default function Maw3dCreate() {
         // Critical fix: Convert empty time strings to null for PostgreSQL compatibility
         start_time: formData.is_all_day ? null : sanitizeTimeField(formData.start_time),
         end_time: formData.is_all_day ? null : sanitizeTimeField(formData.end_time),
+        language: language // Set current language
       };
 
       console.log('Sanitized event data before DB insert:', {
