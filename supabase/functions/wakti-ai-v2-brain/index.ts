@@ -150,14 +150,23 @@ When users ask you to create something, execute it immediately if you're confide
     if (intentAnalysis.confidence === 'high' && intentAnalysis.action) {
       try {
         console.log('WAKTI AI V2.1: Executing action:', intentAnalysis.action);
-        actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language);
+        actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language, openaiApiKey);
         actionTaken = intentAnalysis.action;
         
-        // Update AI response to include action confirmation
+        // Update AI response to include action confirmation and translation if applicable
         if (actionResult.success) {
-          const actionConfirmation = language === 'ar' 
+          let actionConfirmation = language === 'ar' 
             ? `\n\n✅ تم تنفيذ العملية بنجاح!`
             : `\n\n✅ Action completed successfully!`;
+          
+          // Add translation information for Arabic image prompts
+          if (actionTaken === 'generate_image' && actionResult.translatedPrompt) {
+            const translationNote = language === 'ar'
+              ? `\n\n🌍 تم ترجمة النص إلى الإنجليزية: "${actionResult.translatedPrompt}"`
+              : `\n\n🌍 Translated prompt: "${actionResult.translatedPrompt}"`;
+            actionConfirmation += translationNote;
+          }
+          
           aiResponse += actionConfirmation;
         }
       } catch (error) {
@@ -293,13 +302,13 @@ function extractReminderParams(message: string) {
   };
 }
 
-async function executeAction(action: string, params: any, language: string) {
+async function executeAction(action: string, params: any, language: string, openaiApiKey: string) {
   try {
     console.log('WAKTI AI V2.1: Executing action:', action, 'with params:', params);
 
     switch (action) {
       case 'generate_image':
-        return await generateImage(params.prompt, language);
+        return await generateImage(params.prompt, language, openaiApiKey);
         
       case 'create_task':
       case 'create_event':
@@ -325,9 +334,61 @@ async function executeAction(action: string, params: any, language: string) {
   }
 }
 
-async function generateImage(prompt: string, language: string) {
+async function translateArabicToEnglish(arabicPrompt: string, openaiApiKey: string): Promise<string> {
   try {
-    console.log("WAKTI AI V2.1: Generating image with Runware for prompt:", prompt);
+    console.log("WAKTI AI V2.1: Translating Arabic prompt to English:", arabicPrompt);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          { 
+            role: 'system', 
+            content: 'You are a professional translator. Translate the following Arabic text to English, focusing on visual descriptions for image generation. Keep the translation natural and descriptive.' 
+          },
+          { role: 'user', content: arabicPrompt }
+        ],
+        model: 'gpt-4o-mini',
+        temperature: 0.3,
+        max_tokens: 200,
+      }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      const translatedPrompt = result.choices[0].message?.content || arabicPrompt;
+      console.log("WAKTI AI V2.1: Translation result:", translatedPrompt);
+      return translatedPrompt.trim();
+    } else {
+      console.error("WAKTI AI V2.1: Translation failed, using original prompt");
+      return arabicPrompt;
+    }
+  } catch (error) {
+    console.error('WAKTI AI V2.1: Error translating prompt:', error);
+    return arabicPrompt;
+  }
+}
+
+async function generateImage(prompt: string, language: string, openaiApiKey: string) {
+  try {
+    console.log("WAKTI AI V2.1: Generating image with prompt:", prompt);
+
+    let finalPrompt = prompt;
+    let translatedPrompt = null;
+
+    // If the prompt contains Arabic characters, translate it to English
+    const containsArabic = /[\u0600-\u06FF]/.test(prompt);
+    if (containsArabic && language === 'ar') {
+      console.log("WAKTI AI V2.1: Detected Arabic text, translating to English");
+      translatedPrompt = await translateArabicToEnglish(prompt, openaiApiKey);
+      finalPrompt = translatedPrompt;
+    }
+
+    console.log("WAKTI AI V2.1: Using final prompt for Runware:", finalPrompt);
 
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
@@ -342,7 +403,7 @@ async function generateImage(prompt: string, language: string) {
         {
           taskType: "imageInference",
           taskUUID: crypto.randomUUID(),
-          positivePrompt: prompt,
+          positivePrompt: finalPrompt,
           model: "runware:100@1",
           width: 512,
           height: 512,
@@ -367,7 +428,8 @@ async function generateImage(prompt: string, language: string) {
         return {
           success: true,
           message: language === 'ar' ? 'تم إنشاء الصورة بنجاح' : 'Image generated successfully',
-          imageUrl: imageResult.imageURL
+          imageUrl: imageResult.imageURL,
+          translatedPrompt: translatedPrompt // Include the translation if it was done
         };
       } else {
         throw new Error('No image URL in response');
