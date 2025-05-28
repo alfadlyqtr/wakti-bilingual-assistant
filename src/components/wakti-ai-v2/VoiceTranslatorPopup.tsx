@@ -6,13 +6,24 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Play, Plus, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+}
+
+interface TranslationHistory {
+  id: string;
+  originalText: string;
+  translatedText: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  timestamp: Date;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -33,30 +44,36 @@ const SUPPORTED_LANGUAGES = [
   { code: 'sv', name: 'Svenska (Swedish)' }
 ];
 
-const MAX_DAILY_TRANSLATIONS = 50;
-const SOFT_WARNING_THRESHOLD = 25;
+const MAX_DAILY_TRANSLATIONS = 25;
+const SOFT_WARNING_THRESHOLD = 20;
 const MAX_RECORDING_TIME = 15; // 15 seconds
 const COOLDOWN_TIME = 5000; // 5 seconds
+const EXTRA_TRANSLATIONS_PRICE = 10; // 10 QAR
+const EXTRA_TRANSLATIONS_COUNT = 100;
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [dailyCount, setDailyCount] = useState(0);
+  const [extraTranslations, setExtraTranslations] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [translatedText, setTranslatedText] = useState('');
   const [isOnCooldown, setIsOnCooldown] = useState(false);
+  const [playbackEnabled, setPlaybackEnabled] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [translationHistory, setTranslationHistory] = useState<TranslationHistory[]>([]);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load daily translation count on mount
+  // Load daily translation count and extras on mount
   useEffect(() => {
     if (open && user) {
-      loadDailyCount();
+      loadDailyData();
     }
   }, [open, user]);
 
@@ -69,48 +86,100 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     };
   }, []);
 
-  const loadDailyCount = async () => {
+  const loadDailyData = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
       
-      // Check if we have a count stored in localStorage for today
+      // Load daily count
       const storedData = localStorage.getItem('voice_translator_daily_count');
       if (storedData) {
         const parsed = JSON.parse(storedData);
         if (parsed.date === today) {
           setDailyCount(parsed.count);
-          return;
+        } else {
+          setDailyCount(0);
+          localStorage.setItem('voice_translator_daily_count', JSON.stringify({
+            date: today,
+            count: 0
+          }));
         }
+      } else {
+        setDailyCount(0);
+        localStorage.setItem('voice_translator_daily_count', JSON.stringify({
+          date: today,
+          count: 0
+        }));
       }
-      
-      // Reset count for new day
-      setDailyCount(0);
-      localStorage.setItem('voice_translator_daily_count', JSON.stringify({
-        date: today,
-        count: 0
-      }));
+
+      // Load extra translations (simulate from localStorage for now)
+      const extraData = localStorage.getItem('voice_translator_extras');
+      if (extraData) {
+        const parsed = JSON.parse(extraData);
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        
+        if (new Date(parsed.purchaseDate) > oneMonthAgo) {
+          setExtraTranslations(parsed.count);
+        } else {
+          setExtraTranslations(0);
+          localStorage.removeItem('voice_translator_extras');
+        }
+      } else {
+        setExtraTranslations(0);
+      }
     } catch (error) {
-      console.error('Error loading daily count:', error);
+      console.error('Error loading daily data:', error);
       setDailyCount(0);
+      setExtraTranslations(0);
     }
   };
 
-  const incrementDailyCount = () => {
-    const newCount = dailyCount + 1;
-    setDailyCount(newCount);
-    
+  const incrementTranslationCount = () => {
     const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem('voice_translator_daily_count', JSON.stringify({
-      date: today,
-      count: newCount
+    
+    if (dailyCount < MAX_DAILY_TRANSLATIONS) {
+      const newCount = dailyCount + 1;
+      setDailyCount(newCount);
+      localStorage.setItem('voice_translator_daily_count', JSON.stringify({
+        date: today,
+        count: newCount
+      }));
+    } else if (extraTranslations > 0) {
+      const newExtras = extraTranslations - 1;
+      setExtraTranslations(newExtras);
+      localStorage.setItem('voice_translator_extras', JSON.stringify({
+        count: newExtras,
+        purchaseDate: new Date().toISOString()
+      }));
+    }
+  };
+
+  const purchaseExtraTranslations = () => {
+    // Simulate purchase - in real implementation, integrate with payment system
+    const newExtras = extraTranslations + EXTRA_TRANSLATIONS_COUNT;
+    setExtraTranslations(newExtras);
+    localStorage.setItem('voice_translator_extras', JSON.stringify({
+      count: newExtras,
+      purchaseDate: new Date().toISOString()
     }));
+    
+    toast({
+      title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
+      description: language === 'ar' 
+        ? `تم إضافة ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية` 
+        : `Added ${EXTRA_TRANSLATIONS_COUNT} extra translations`,
+    });
   };
 
   const startRecording = async () => {
-    if (dailyCount >= MAX_DAILY_TRANSLATIONS) {
+    const canTranslate = dailyCount < MAX_DAILY_TRANSLATIONS || extraTranslations > 0;
+    
+    if (!canTranslate) {
       toast({
         title: language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached',
-        description: language === 'ar' ? 'لقد وصلت للحد الأقصى من الترجمات اليومية (50)' : "You've reached your daily translation limit (50).",
+        description: language === 'ar' 
+          ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+          : "You've reached your daily translation limit",
         variant: 'destructive'
       });
       return;
@@ -188,21 +257,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     try {
       setIsProcessing(true);
 
-      // Get the current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         throw new Error('No active session found');
       }
 
-      // Create FormData for file upload
       const formData = new FormData();
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
       console.log('🎤 Voice Translator: Processing translation...');
 
-      // Call the voice translator edge function
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator', {
         method: 'POST',
         headers: {
@@ -222,7 +288,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       if (result.translatedText) {
         setTranslatedText(result.translatedText);
-        incrementDailyCount();
+        incrementTranslationCount();
+        
+        // Add to session history
+        const newTranslation: TranslationHistory = {
+          id: Date.now().toString(),
+          originalText: result.originalText,
+          translatedText: result.translatedText,
+          sourceLanguage: result.sourceLanguage,
+          targetLanguage: result.targetLanguage,
+          timestamp: new Date()
+        };
+        setTranslationHistory(prev => [newTranslation, ...prev.slice(0, 9)]); // Keep last 10
         
         // Start cooldown
         setIsOnCooldown(true);
@@ -232,6 +309,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
           description: language === 'ar' ? 'تم إنجاز الترجمة بنجاح' : 'Translation completed successfully',
         });
+
+        // Auto-play if enabled
+        if (playbackEnabled) {
+          playTranslatedText(result.translatedText);
+        }
       } else {
         throw new Error('No translation received');
       }
@@ -248,9 +330,40 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   };
 
-  const copyToClipboard = async () => {
+  const playTranslatedText = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(translatedText);
+      setIsPlaying(true);
+      
+      // Call TTS edge function (would need to be implemented)
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-speech', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: text,
+          voice: 'alloy'
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const audio = new Audio(`data:audio/mp3;base64,${result.audioContent}`);
+        audio.onended = () => setIsPlaying(false);
+        await audio.play();
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      setIsPlaying(false);
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
       toast({
         title: language === 'ar' ? 'تم النسخ' : 'Copied',
         description: language === 'ar' ? 'تم نسخ النص المترجم' : 'Translated text copied to clipboard',
@@ -265,29 +378,35 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return `${remainingTime}s`;
   };
 
-  const remainingTranslations = MAX_DAILY_TRANSLATIONS - dailyCount;
+  const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - dailyCount;
   const isAtSoftLimit = dailyCount >= SOFT_WARNING_THRESHOLD;
-  const isAtHardLimit = dailyCount >= MAX_DAILY_TRANSLATIONS;
+  const isAtHardLimit = dailyCount >= MAX_DAILY_TRANSLATIONS && extraTranslations === 0;
+  const canTranslate = remainingFreeTranslations > 0 || extraTranslations > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             <span>
               {language === 'ar' ? '🎤 مترجم الصوت' : '🎤 Voice Translator'}
             </span>
-            <div className={cn(
-              "text-sm font-medium",
-              isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
-            )}>
-              {language === 'ar' ? 'ترجمات متبقية:' : 'Translations left:'} {remainingTranslations}/{MAX_DAILY_TRANSLATIONS}
+            <div className="flex items-center gap-2 text-sm">
+              <div className={cn(
+                "font-medium",
+                isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
+              )}>
+                {remainingFreeTranslations}/{MAX_DAILY_TRANSLATIONS}
+                {extraTranslations > 0 && (
+                  <span className="text-green-600"> + {extraTranslations} extra</span>
+                )}
+              </div>
             </div>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Hard limit warning */}
+          {/* Limit warnings */}
           {isAtHardLimit && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-red-600" />
@@ -297,21 +416,30 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                   : "You've reached your daily translation limit."
                 }
               </p>
+              <Button size="sm" onClick={purchaseExtraTranslations} className="ml-auto">
+                <Plus className="h-3 w-3 mr-1" />
+                {EXTRA_TRANSLATIONS_PRICE} QAR
+              </Button>
             </div>
           )}
 
-          {/* Soft limit warning */}
           {isAtSoftLimit && !isAtHardLimit && (
             <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-orange-600" />
               <p className="text-sm text-orange-600 dark:text-orange-400">
                 {language === 'ar' 
                   ? 'اقتربت من الحد الأقصى للترجمات اليومية.' 
-                  : 'You\'re approaching your daily translation limit.'
+                  : 'You\'re nearing your daily limit.'
                 }
               </p>
             </div>
           )}
+
+          {/* Daily reset info */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            {language === 'ar' ? 'الحصة المجانية تتجدد يومياً' : 'Free quota resets daily'}
+          </div>
 
           {/* Language Selector */}
           <div>
@@ -332,6 +460,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </Select>
           </div>
 
+          {/* Playback Toggle */}
+          <div className="flex items-center space-x-2">
+            <Switch 
+              id="playback" 
+              checked={playbackEnabled} 
+              onCheckedChange={setPlaybackEnabled}
+            />
+            <Label htmlFor="playback" className="text-sm">
+              {language === 'ar' ? 'تشغيل الترجمة صوتياً' : 'Play translated text'}
+            </Label>
+          </div>
+
           {/* Recording Section */}
           <div className="text-center space-y-4">
             {isRecording && (
@@ -345,7 +485,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
             <Button
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={isProcessing || isAtHardLimit}
+              disabled={isProcessing || !canTranslate}
               size="lg"
               className={cn(
                 "h-16 w-16 rounded-full transition-all duration-200",
@@ -374,22 +514,74 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           {/* Translation Results */}
           {translatedText && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {language === 'ar' ? 'الترجمة:' : 'Translation:'}
-              </label>
-              <div className="relative">
-                <div className="p-3 bg-muted rounded-lg text-sm">
-                  {translatedText}
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  {language === 'ar' ? 'الترجمة:' : 'Translation:'}
+                </label>
+                <div className="flex gap-2">
+                  {playbackEnabled && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => playTranslatedText(translatedText)}
+                      disabled={isPlaying}
+                      className="h-6 w-6"
+                    >
+                      {isPlaying ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Play className="h-3 w-3" />
+                      )}
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => copyToClipboard(translatedText)}
+                    className="h-6 w-6"
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={copyToClipboard}
-                  className="absolute top-2 right-2 h-6 w-6"
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
               </div>
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                {translatedText}
+              </div>
+            </div>
+          )}
+
+          {/* Translation History */}
+          {translationHistory.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                {language === 'ar' ? 'السجل:' : 'Session History:'}
+              </label>
+              <div className="max-h-32 overflow-y-auto space-y-2">
+                {translationHistory.map((translation) => (
+                  <div key={translation.id} className="p-2 bg-muted/50 rounded text-xs">
+                    <div className="font-medium truncate">{translation.translatedText}</div>
+                    <div className="text-muted-foreground truncate">{translation.originalText}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Extra translations purchase */}
+          {!isAtHardLimit && extraTranslations === 0 && (
+            <div className="pt-2 border-t">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={purchaseExtraTranslations}
+                className="w-full"
+              >
+                <Plus className="h-3 w-3 mr-2" />
+                {language === 'ar' 
+                  ? `شراء ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية (${EXTRA_TRANSLATIONS_PRICE} ريال)` 
+                  : `Buy ${EXTRA_TRANSLATIONS_COUNT} extra translations (${EXTRA_TRANSLATIONS_PRICE} QAR)`
+                }
+              </Button>
             </div>
           )}
         </div>
