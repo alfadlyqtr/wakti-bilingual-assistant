@@ -576,7 +576,7 @@ export default function WaktiAIV2() {
       <AppHeader />
 
       {/* Centered Header with Actions */}
-      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-40">
+      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
             variant="ghost" 
@@ -675,7 +675,7 @@ export default function WaktiAIV2() {
 
       {/* Left Drawer - Chat Archive */}
       <div className={cn(
-        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-50 transition-all duration-300 ease-in-out",
+        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
@@ -706,7 +706,7 @@ export default function WaktiAIV2() {
 
       {/* Right Drawer - Quick Actions */}
       <div className={cn(
-        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-50 transition-all duration-300 ease-in-out",
+        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
@@ -754,7 +754,7 @@ export default function WaktiAIV2() {
       {/* Overlay for both drawers */}
       {(leftDrawerOpen || rightDrawerOpen) && (
         <div 
-          className="fixed inset-0 bg-black/10 z-40" 
+          className="fixed inset-0 bg-black/10 z-35" 
           onClick={() => {
             setLeftDrawerOpen(false);
             setRightDrawerOpen(false);
@@ -763,7 +763,7 @@ export default function WaktiAIV2() {
       )}
 
       {/* Enhanced Fixed Input Area with Voice Recording */}
-      <div className="fixed bottom-[72px] left-0 right-0 z-[65] p-4">
+      <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
         <div className="max-w-4xl mx-auto">
           {/* Recording Timer Display */}
           {isRecording && (
