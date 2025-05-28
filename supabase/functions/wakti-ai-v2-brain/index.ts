@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -34,7 +33,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1: Processing request with FULL CAPABILITIES');
+    console.log('WAKTI AI V2.1: Processing request with FULL CAPABILITIES (DeepSeek + Arabic Processing)');
 
     const body: RequestBody = await req.json();
     const userMessage = body.message;
@@ -55,10 +54,12 @@ serve(async (req) => {
     const intentAnalysis = analyzeIntent(userMessage, language);
     console.log('WAKTI AI V2.1: Intent analysis:', intentAnalysis);
 
-    // Check if OpenAI API key is available
+    // Check if DeepSeek API key is available (primary), fallback to OpenAI
+    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      console.error('WAKTI AI V2.1: OpenAI API key not found');
+    
+    if (!deepseekApiKey && !openaiApiKey) {
+      console.error('WAKTI AI V2.1: No AI API keys found');
       return new Response(JSON.stringify({ 
         error: 'AI service not configured',
         response: language === 'ar' 
@@ -98,30 +99,100 @@ Your advanced capabilities:
 
 When users ask you to create something, execute it immediately if you're confident about the request.`;
 
-    console.log('WAKTI AI V2.1: Calling OpenAI API with enhanced capabilities');
+    console.log('WAKTI AI V2.1: Calling AI API with enhanced capabilities');
 
-    // Call OpenAI API
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: userMessage }
-        ],
-        model: 'gpt-4o-mini',
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
-    });
+    let aiResponse = '';
+    
+    // Try DeepSeek first, fallback to OpenAI
+    if (deepseekApiKey) {
+      try {
+        console.log('WAKTI AI V2.1: Using DeepSeek API for main chat');
+        const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${deepseekApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemMessage },
+              { role: 'user', content: userMessage }
+            ],
+            model: 'deepseek-chat',
+            temperature: 0.7,
+            max_tokens: 1000,
+          }),
+        });
 
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error('OpenAI API error:', openaiResponse.status, errorText);
-      
+        if (deepseekResponse.ok) {
+          const chatCompletion = await deepseekResponse.json();
+          aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
+          console.log('WAKTI AI V2.1: DeepSeek response successful');
+        } else {
+          throw new Error(`DeepSeek API failed: ${deepseekResponse.status}`);
+        }
+      } catch (error) {
+        console.error('WAKTI AI V2.1: DeepSeek failed, falling back to OpenAI:', error);
+        
+        if (openaiApiKey) {
+          const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${openaiApiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messages: [
+                { role: 'system', content: systemMessage },
+                { role: 'user', content: userMessage }
+              ],
+              model: 'gpt-4o-mini',
+              temperature: 0.7,
+              max_tokens: 1000,
+            }),
+          });
+
+          if (openaiResponse.ok) {
+            const chatCompletion = await openaiResponse.json();
+            aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
+            console.log('WAKTI AI V2.1: OpenAI fallback successful');
+          } else {
+            throw new Error('Both DeepSeek and OpenAI failed');
+          }
+        } else {
+          throw new Error('DeepSeek failed and no OpenAI key available');
+        }
+      }
+    } else if (openaiApiKey) {
+      console.log('WAKTI AI V2.1: Using OpenAI API (no DeepSeek key available)');
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage }
+          ],
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+      });
+
+      if (!openaiResponse.ok) {
+        const errorText = await openaiResponse.text();
+        console.error('OpenAI API error:', openaiResponse.status, errorText);
+        throw new Error(`OpenAI API failed: ${openaiResponse.status}`);
+      }
+
+      const chatCompletion = await openaiResponse.json();
+      aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
+    }
+
+    if (!aiResponse) {
       const fallbackResponse = language === 'ar' 
         ? 'عذراً، حدث خطأ في خدمة الذكاء الاصطناعي.'
         : 'Sorry, there was an error with the AI service.';
@@ -137,9 +208,6 @@ When users ask you to create something, execute it immediately if you're confide
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    const chatCompletion = await openaiResponse.json();
-    let aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
 
     console.log('WAKTI AI V2.1: Generated AI response');
 
