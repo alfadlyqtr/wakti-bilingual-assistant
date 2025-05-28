@@ -69,12 +69,40 @@ serve(async (req) => {
       });
     }
 
-    // System message
-    const systemMessage = language === 'ar' 
-      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة. كن مفيداً ومساعداً.`
-      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate. Be helpful and supportive.`;
+    // Get current date and time for accurate context
+    const now = new Date();
+    const currentDate = now.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const currentTime = now.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
 
-    console.log('WAKTI AI V2.1: Calling OpenAI API');
+    // Enhanced system message with current date context
+    const systemMessage = language === 'ar' 
+      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة. كن مفيداً ومساعداً.
+
+معلومات التاريخ والوقت الحالي:
+- التاريخ الحالي: ${currentDate}
+- الوقت الحالي: ${currentTime}
+- العام الحالي: ${now.getFullYear()}
+
+استخدم هذه المعلومات للإجابة على أي أسئلة متعلقة بالتاريخ أو الوقت أو العام الحالي.`
+      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate. Be helpful and supportive.
+
+Current date and time information:
+- Current date: ${currentDate}
+- Current time: ${currentTime}
+- Current year: ${now.getFullYear()}
+
+Use this information to answer any questions about the current date, time, or year.`;
+
+    console.log('WAKTI AI V2.1: Calling OpenAI API with current date context');
 
     // Call OpenAI API
     const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
