@@ -1,3 +1,4 @@
+
 import { serve } from '@supabase/functions-js';
 import OpenAI from 'openai';
 import { SupabaseClient, createClient } from '@supabase/supabase-js';
@@ -32,9 +33,9 @@ interface AIResponse {
   isNewConversation?: boolean;
 }
 
-const SYSTEM_MESSAGE_EN = `You are WAKTI AI V2.1, a personal assistant designed to help users manage their time and tasks effectively. You can create tasks, events, and reminders. You can also answer questions and provide information. You are integrated with WAKTI's systems to help the user stay organized. You should always respond in a clear, concise, and friendly manner. If you are unsure about something, ask for clarification. If you cannot fulfill a request, explain why. You should always be polite and respectful. You should never be rude or offensive. You should never ask for personal information. You should never ask for sensitive information. You should never ask for passwords or credit card numbers. You should never ask for anything that could be used to harm the user. You should always be helpful and friendly.`;
+const SYSTEM_MESSAGE_EN = `You are WAKTI AI V2.1, a personal assistant designed to help users manage their time and tasks effectively. You are an advanced AI assistant developed by TMW, a Qatari company based in Doha (tmw.qa). You can create tasks, events, and reminders. You can also answer questions and provide information. You are integrated with WAKTI's systems to help the user stay organized. You should always respond in a clear, concise, and friendly manner. If you are unsure about something, ask for clarification. If you cannot fulfill a request, explain why. You should always be polite and respectful. You should never be rude or offensive. You should never ask for personal information. You should never ask for sensitive information. You should never ask for passwords or credit card numbers. You should never ask for anything that could be used to harm the user. You should always be helpful and friendly.`;
 
-const SYSTEM_MESSAGE_AR = `أنت WAKTI AI V2.1، مساعد شخصي مصمم لمساعدة المستخدمين على إدارة وقتهم ومهامهم بفعالية. يمكنك إنشاء مهام وأحداث وتذكيرات. يمكنك أيضًا الإجابة على الأسئلة وتقديم المعلومات. أنت متكامل مع أنظمة WAKTI لمساعدة المستخدم على البقاء منظمًا. يجب أن تستجيب دائمًا بطريقة واضحة وموجزة وودية. إذا لم تكن متأكدًا من شيء ما، فاطلب توضيحًا. إذا لم تتمكن من تلبية طلب، فاشرح السبب. يجب أن تكون دائمًا مهذبًا ومحترمًا. يجب ألا تكون وقحًا أو مسيئًا أبدًا. يجب ألا تطلب معلومات شخصية أبدًا. يجب ألا تطلب معلومات حساسة أبدًا. يجب ألا تطلب كلمات مرور أو أرقام بطاقات ائتمان أبدًا. يجب ألا تطلب أي شيء يمكن استخدامه لإيذاء المستخدم. يجب أن تكون دائمًا متعاونًا وودودًا.`;
+const SYSTEM_MESSAGE_AR = `أنت WAKTI AI V2.1، مساعد شخصي مصمم لمساعدة المستخدمين على إدارة وقتهم ومهامهم بفعالية. أنت مساعد ذكي متقدم تم تطويره من قبل شركة TMW، شركة قطرية مقرها في الدوحة (tmw.qa). يمكنك إنشاء مهام وأحداث وتذكيرات. يمكنك أيضًا الإجابة على الأسئلة وتقديم المعلومات. أنت متكامل مع أنظمة WAKTI لمساعدة المستخدم على البقاء منظمًا. يجب أن تستجيب دائمًا بطريقة واضحة وموجزة وودية. إذا لم تكن متأكدًا من شيء ما، فاطلب توضيحًا. إذا لم تتمكن من تلبية طلب، فاشرح السبب. يجب أن تكون دائمًا مهذبًا ومحترمًا. يجب ألا تكون وقحًا أو مسيئًا أبدًا. يجب ألا تطلب معلومات شخصية أبدًا. يجب ألا تطلب معلومات حساسة أبدًا. يجب ألا تطلب كلمات مرور أو أرقام بطاقات ائتمان أبدًا. يجب ألا تطلب أي شيء يمكن استخدامه لإيذاء المستخدم. يجب أن تكون دائمًا متعاونًا وودودًا.`;
 
 serve(async (req) => {
   const corsHeaders = {
@@ -96,6 +97,8 @@ serve(async (req) => {
       });
     }
 
+    console.log('WAKTI AI V2.1: Processing message:', userMessage);
+
     const openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
@@ -129,11 +132,42 @@ serve(async (req) => {
       initialMessages.unshift({ role: 'system', content: language === 'ar' ? SYSTEM_MESSAGE_AR : SYSTEM_MESSAGE_EN });
     }
 
-    // Enhanced pattern detection for AI tools question
-    const aiToolsPattern = /(?:which|what)\s+(?:ai\s+)?tools?\s+(?:are\s+you\s+using|do\s+you\s+use)/i;
-    const aiCapabilitiesPattern = /(?:what\s+can\s+you\s+do|your\s+capabilities|what\s+are\s+you|who\s+are\s+you)/i;
+    // Enhanced pattern detection for AI tools question - MORE COMPREHENSIVE
+    const lowerMessage = userMessage.toLowerCase();
+    console.log('WAKTI AI V2.1: Checking message for AI tools patterns:', lowerMessage);
     
-    if (aiToolsPattern.test(userMessage) || aiCapabilitiesPattern.test(userMessage)) {
+    // Expanded patterns for AI tools questions
+    const aiToolsPatterns = [
+      // English patterns
+      /(?:which|what)\s+(?:ai\s+)?tools?\s+(?:are\s+you\s+using|do\s+you\s+use)/i,
+      /(?:what\s+)?(?:ai\s+)?(?:models?|technology|tools?)\s+(?:are\s+you\s+using|do\s+you\s+use|power\s+you)/i,
+      /(?:what\s+)?(?:kind\s+of\s+)?(?:ai|artificial\s+intelligence)\s+(?:are\s+you|do\s+you\s+use)/i,
+      /(?:how\s+)?(?:are\s+you\s+)?(?:built|made|created|developed)/i,
+      /(?:what\s+)?(?:technology|tech)\s+(?:do\s+you\s+use|are\s+you\s+using|powers?\s+you)/i,
+      /(?:what\s+)?(?:language\s+)?models?\s+(?:do\s+you\s+use|are\s+you\s+using)/i,
+      /(?:what\s+)?(?:ai\s+)?(?:system|platform)\s+(?:are\s+you|do\s+you\s+use)/i,
+      
+      // Arabic patterns
+      /(?:ما\s+)?(?:هي\s+)?(?:أدوات|تقنيات)\s+(?:الذكاء\s+الاصطناعي|الذكاء)\s+(?:التي\s+تستخدم|المستخدمة)/i,
+      /(?:أي\s+)?(?:نوع\s+من\s+)?(?:الذكاء\s+الاصطناعي|التقنية)\s+(?:تستخدم|أنت)/i,
+      /(?:كيف\s+)?(?:تم\s+)?(?:بناؤك|إنشاؤك|تطويرك)/i,
+      /(?:ما\s+)?(?:التقنية|النظام)\s+(?:المستخدم|الذي\s+تستخدم)/i
+    ];
+    
+    const aiCapabilitiesPatterns = [
+      /(?:what\s+can\s+you\s+do|your\s+capabilities|what\s+are\s+you|who\s+are\s+you)/i,
+      /(?:ما\s+)?(?:يمكنك\s+فعل|قدراتك|من\s+أنت)/i
+    ];
+    
+    // Check if any pattern matches
+    const isAiToolsQuestion = aiToolsPatterns.some(pattern => pattern.test(lowerMessage)) || 
+                             aiCapabilitiesPatterns.some(pattern => pattern.test(lowerMessage));
+    
+    console.log('WAKTI AI V2.1: AI tools question detected:', isAiToolsQuestion);
+    
+    if (isAiToolsQuestion) {
+      console.log('WAKTI AI V2.1: Returning custom TMW response');
+      
       const toolsResponse = language === 'ar' 
         ? `أنا مساعد ذكي متقدم تم تطويره من قبل شركة قطرية مقرها في الدوحة. شركة TMW، موقعهم الإلكتروني tmw.qa
 
@@ -183,6 +217,8 @@ I integrate with WAKTI's own systems to keep you organized and productive. Need 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('WAKTI AI V2.1: Processing with general AI model');
 
     const chatCompletion = await openai.chat.completions.create({
       messages: [...initialMessages, { role: 'user', content: userMessage }],
