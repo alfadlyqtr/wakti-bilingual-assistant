@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -394,13 +393,36 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   };
 
+  const getVoiceForLanguage = (langCode: string) => {
+    const voiceMap: { [key: string]: string } = {
+      'en': 'alloy',      // English
+      'ar': 'nova',       // Arabic - use female voice for better pronunciation
+      'es': 'alloy',      // Spanish
+      'fr': 'shimmer',    // French
+      'de': 'onyx',       // German
+      'it': 'alloy',      // Italian
+      'pt': 'echo',       // Portuguese
+      'ru': 'fable',      // Russian
+      'ja': 'nova',       // Japanese
+      'ko': 'alloy',      // Korean
+      'zh': 'shimmer',    // Chinese
+      'hi': 'nova',       // Hindi
+      'tr': 'alloy',      // Turkish
+      'nl': 'echo',       // Dutch
+      'sv': 'alloy'       // Swedish
+    };
+    
+    return voiceMap[langCode] || 'alloy';
+  };
+
   const playTranslatedText = async (text: string) => {
     try {
       setIsPlaying(true);
       
       // Check cache first
-      if (audioCache[text]) {
-        const audio = new Audio(`data:audio/mp3;base64,${audioCache[text]}`);
+      const cacheKey = `${text}_${selectedLanguage}`;
+      if (audioCache[cacheKey]) {
+        const audio = new Audio(`data:audio/mp3;base64,${audioCache[cacheKey]}`);
         audio.onended = () => setIsPlaying(false);
         await audio.play();
         return;
@@ -408,6 +430,15 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       
       // Call TTS edge function
       const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No session available for TTS');
+        setIsPlaying(false);
+        return;
+      }
+      
+      const selectedVoice = getVoiceForLanguage(selectedLanguage);
+      console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: ${selectedVoice}`);
       
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-speech', {
         method: 'POST',
@@ -417,7 +448,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         },
         body: JSON.stringify({
           text: text,
-          voice: 'alloy'
+          voice: selectedVoice
         })
       });
 
@@ -425,17 +456,33 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         const result = await response.json();
         const audioContent = result.audioContent;
         
-        // Cache the audio
-        const newCache = { ...audioCache, [text]: audioContent };
-        setAudioCache(newCache);
-        saveAudioCache(newCache);
-        
-        const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-        audio.onended = () => setIsPlaying(false);
-        await audio.play();
+        if (audioContent) {
+          // Cache the audio
+          const newCache = { ...audioCache, [cacheKey]: audioContent };
+          setAudioCache(newCache);
+          saveAudioCache(newCache);
+          
+          const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
+          audio.onended = () => setIsPlaying(false);
+          await audio.play();
+          
+          console.log('🔊 TTS playback successful');
+        } else {
+          throw new Error('No audio content received');
+        }
+      } else {
+        const errorText = await response.text();
+        console.error('🔊 TTS error:', errorText);
+        throw new Error(`TTS failed: ${errorText}`);
       }
     } catch (error) {
-      console.error('Error playing audio:', error);
+      console.error('🔊 Error playing TTS:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في التشغيل' : 'Playback Error',
+        description: language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio',
+        variant: 'destructive'
+      });
+    } finally {
       setIsPlaying(false);
     }
   };
