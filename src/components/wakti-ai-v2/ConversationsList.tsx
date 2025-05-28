@@ -35,7 +35,7 @@ export function ConversationsList({
         {language === 'ar' ? 'المحادثات' : 'Conversations'}
       </h2>
       
-      <ScrollArea className="h-[calc(100vh-200px)]">
+      <ScrollArea className="h-[calc(100vh-200px)] scrollbar-hide">
         <div className="space-y-2">
           {conversations.map((conversation) => (
             <div
