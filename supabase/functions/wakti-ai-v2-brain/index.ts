@@ -216,6 +216,15 @@ async function callImageGenerationFunction(prompt: string, authHeader: string | 
   }
 }
 
+// Helper function to normalize Arabic text for better pattern matching
+function normalizeArabic(text: string) {
+  return text
+    .replace(/[أإآ]/g, 'ا')           // Normalize different forms of Alif
+    .replace(/[ًٌٍَُِّْ]/g, '')         // Remove all diacritics
+    .replace(/\s+/g, ' ')             // Normalize spaces
+    .trim();                          // Remove leading/trailing spaces
+}
+
 function analyzeMessage(message: string, language: string, inputType: string = 'text') {
   // CRITICAL: If input is from voice, skip image detection entirely
   if (inputType === 'voice') {
@@ -266,14 +275,28 @@ function analyzeMessage(message: string, language: string, inputType: string = '
     image: language === 'ar' ? arabicImagePatterns : englishImagePatterns
   };
 
-  // For Arabic, do NOT use toLowerCase() - compare raw message directly
-  const messageToCompare = language === 'ar' ? message : message.toLowerCase();
+  // Apply normalization for Arabic text comparison
+  let messageToCompare;
+  if (language === 'ar') {
+    messageToCompare = normalizeArabic(message);
+    console.log("WAKTI AI V2.1: Normalized Arabic message:", messageToCompare);
+  } else {
+    messageToCompare = message.toLowerCase();
+  }
 
   // Check for high confidence matches
   for (const [intent, intentPatterns] of Object.entries(patterns)) {
     for (const pattern of intentPatterns) {
-      const patternToCompare = language === 'ar' ? pattern : pattern.toLowerCase();
+      let patternToCompare;
+      if (language === 'ar') {
+        patternToCompare = normalizeArabic(pattern);
+        console.log(`WAKTI AI V2.1: Checking normalized pattern "${patternToCompare}" against "${messageToCompare}"`);
+      } else {
+        patternToCompare = pattern.toLowerCase();
+      }
+      
       if (messageToCompare.includes(patternToCompare)) {
+        console.log(`WAKTI AI V2.1: Pattern match found for intent "${intent}": "${pattern}"`);
         return {
           intent,
           confidence: 'high' as const,
@@ -285,8 +308,15 @@ function analyzeMessage(message: string, language: string, inputType: string = '
 
   // Medium confidence - partial matches
   const createWords = language === 'ar' ? ['أنشئ', 'أضف', 'اصنع'] : ['create', 'add', 'make'];
-  const createWordsToCheck = language === 'ar' ? createWords : createWords.map(w => w.toLowerCase());
-  const hasCreateWord = createWordsToCheck.some(word => messageToCompare.includes(word));
+  
+  let hasCreateWord = false;
+  if (language === 'ar') {
+    const normalizedCreateWords = createWords.map(word => normalizeArabic(word));
+    hasCreateWord = normalizedCreateWords.some(word => messageToCompare.includes(word));
+  } else {
+    const createWordsToCheck = createWords.map(w => w.toLowerCase());
+    hasCreateWord = createWordsToCheck.some(word => messageToCompare.includes(word));
+  }
   
   if (hasCreateWord) {
     return {
