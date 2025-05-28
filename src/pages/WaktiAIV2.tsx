@@ -20,12 +20,14 @@ import {
   Upload,
   Camera,
   X,
-  Square
+  Square,
+  Brain
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
+import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
@@ -44,6 +46,7 @@ export default function WaktiAIV2() {
   const [systemReady, setSystemReady] = useState(true);
   const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
   
@@ -727,8 +730,26 @@ export default function WaktiAIV2() {
               setRightDrawerOpen(false);
             }} />
           </div>
+
+          {/* Knowledge Button */}
+          <div className="p-4 border-t border-border/30">
+            <Button
+              onClick={() => setKnowledgeModalOpen(true)}
+              className="w-full flex items-center gap-2"
+              variant="outline"
+            >
+              <Brain className="h-4 w-4" />
+              {language === 'ar' ? 'تحسين WAKTI AI الخاص بي' : 'Improve My Wakti AI'}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* Knowledge Modal */}
+      <KnowledgeModal 
+        open={knowledgeModalOpen} 
+        onOpenChange={setKnowledgeModalOpen} 
+      />
 
       {/* Overlay for both drawers */}
       {(leftDrawerOpen || rightDrawerOpen) && (
