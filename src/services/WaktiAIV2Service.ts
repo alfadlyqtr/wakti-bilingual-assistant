@@ -38,7 +38,7 @@ export interface TranscriptionResponse {
 }
 
 export class WaktiAIV2Service {
-  // Send message to AI V2.1 Brain with enhanced error handling
+  // Enhanced sendMessage with better user context handling
   static async sendMessage(
     message: string,
     conversationId?: string,
@@ -46,7 +46,12 @@ export class WaktiAIV2Service {
     inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('WAKTI AI V2.1 CLIENT: Sending message to brain:', { message, conversationId, language, inputType });
+      console.log('WAKTI AI V2.1 CLIENT: Sending enhanced message to brain:', { 
+        message, 
+        conversationId, 
+        language, 
+        inputType 
+      });
       
       const response = await callEdgeFunctionWithRetry<AIResponse>('wakti-ai-v2-brain', {
         body: {
@@ -57,7 +62,7 @@ export class WaktiAIV2Service {
         }
       });
 
-      console.log('WAKTI AI V2.1 CLIENT: Received response from brain:', response);
+      console.log('WAKTI AI V2.1 CLIENT: Received enhanced response from brain:', response);
       
       // Enhanced response handling for image generation (both English and Arabic)
       if (response.actionTaken === 'generate_image' && response.actionResult) {
@@ -76,9 +81,9 @@ export class WaktiAIV2Service {
 
       return response;
     } catch (error) {
-      console.error('WAKTI AI V2.1 CLIENT: Error in sendMessage:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in enhanced sendMessage:', error);
       
-      // Check if it's a specific error type
+      // Enhanced error handling with user-friendly messages
       let errorMessage = language === 'ar' 
         ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
         : 'Sorry, there was a system error. Please try again. 🔧';
@@ -112,13 +117,61 @@ export class WaktiAIV2Service {
     }
   }
 
+  // New method to get user knowledge for personalization
+  static async getUserKnowledge(): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('ai_user_knowledge')
+        .select('*')
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('WAKTI AI V2.1 CLIENT: Error fetching user knowledge:', error);
+        return null;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('WAKTI AI V2.1 CLIENT: Error in getUserKnowledge:', error);
+      return null;
+    }
+  }
+
+  // New method to save user knowledge
+  static async saveUserKnowledge(knowledge: {
+    interests: string[];
+    role?: string;
+    main_use?: string;
+    personal_note?: string;
+  }): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('ai_user_knowledge')
+        .upsert({
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          ...knowledge
+        });
+
+      if (error) {
+        console.error('WAKTI AI V2.1 CLIENT: Error saving user knowledge:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('WAKTI AI V2.1 CLIENT: Error in saveUserKnowledge:', error);
+      throw error;
+    }
+  }
+
   // Enhanced voice transcription with better error handling
   static async transcribeVoice(
     audioData: string,
     language: 'en' | 'ar' = 'en'
   ): Promise<TranscriptionResponse> {
     try {
-      console.log('WAKTI AI V2.1 CLIENT: Transcribing voice input:', { language, audioDataLength: audioData.length });
+      console.log('WAKTI AI V2.1 CLIENT: Transcribing voice input with enhanced processing:', { 
+        language, 
+        audioDataLength: audioData.length 
+      });
       
       const response = await callEdgeFunctionWithRetry<TranscriptionResponse>('wakti-voice-v2', {
         body: {
@@ -127,10 +180,10 @@ export class WaktiAIV2Service {
         }
       });
 
-      console.log('WAKTI AI V2.1 CLIENT: Voice transcription result:', response);
+      console.log('WAKTI AI V2.1 CLIENT: Enhanced voice transcription result:', response);
       return response;
     } catch (error) {
-      console.error('WAKTI AI V2.1 CLIENT: Error in transcribeVoice:', error);
+      console.error('WAKTI AI V2.1 CLIENT: Error in enhanced transcribeVoice:', error);
       
       // Return fallback response
       return {
@@ -141,14 +194,14 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Get all conversations with proper error handling - Updated to enforce 7 limit
+  // Enhanced conversation management - limit to 7 conversations
   static async getConversations(): Promise<AIConversation[]> {
     try {
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
         .order('last_message_at', { ascending: false })
-        .limit(7); // Only fetch the 7 most recent
+        .limit(7); // Strictly enforce 7 conversation limit
 
       if (error) {
         console.error('WAKTI AI V2.1 CLIENT: Error fetching conversations:', error);
@@ -243,7 +296,7 @@ export class WaktiAIV2Service {
   // Test API connectivity (new method for debugging)
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
-      const testMessage = "Hello, are you working?";
+      const testMessage = "Hello, are you working? Please respond naturally.";
       const response = await this.sendMessage(testMessage);
       
       if (response.response && !response.response.includes('system error')) {
