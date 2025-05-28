@@ -1,4 +1,5 @@
-import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
+
+import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
   id: string;
@@ -38,7 +39,7 @@ export interface TranscriptionResponse {
 }
 
 export class WaktiAIV2Service {
-  // Enhanced sendMessage with better user context handling
+  // Enhanced sendMessage with proper Supabase auth forwarding
   static async sendMessage(
     message: string,
     conversationId?: string,
@@ -53,7 +54,8 @@ export class WaktiAIV2Service {
         inputType 
       });
       
-      const response = await callEdgeFunctionWithRetry<AIResponse>('wakti-ai-v2-brain', {
+      // Use Supabase's built-in auth forwarding instead of manual token handling
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
           conversationId,
@@ -62,24 +64,29 @@ export class WaktiAIV2Service {
         }
       });
 
-      console.log('WAKTI AI V2.1 CLIENT: Received enhanced response from brain:', response);
+      if (error) {
+        console.error('WAKTI AI V2.1 CLIENT: Error from brain function:', error);
+        throw error;
+      }
+
+      console.log('WAKTI AI V2.1 CLIENT: Received enhanced response from brain:', data);
       
       // Enhanced response handling for image generation (both English and Arabic)
-      if (response.actionTaken === 'generate_image' && response.actionResult) {
-        if (response.actionResult.imageUrl) {
+      if (data.actionTaken === 'generate_image' && data.actionResult) {
+        if (data.actionResult.imageUrl) {
           // For English image generation, add success message
           if (language === 'en') {
-            response.response += `\n\n🎨 Image generated successfully!`;
+            data.response += `\n\n🎨 Image generated successfully!`;
           }
           // For Arabic, don't add anything since the backend already handles the translation message
-        } else if (response.actionResult.error) {
-          response.response += `\n\n❌ ${language === 'ar' 
-            ? 'فشل في إنشاء الصورة: ' + response.actionResult.error
-            : 'Image generation failed: ' + response.actionResult.error}`;
+        } else if (data.actionResult.error) {
+          data.response += `\n\n❌ ${language === 'ar' 
+            ? 'فشل في إنشاء الصورة: ' + data.actionResult.error
+            : 'Image generation failed: ' + data.actionResult.error}`;
         }
       }
 
-      return response;
+      return data;
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in enhanced sendMessage:', error);
       
@@ -162,7 +169,7 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Enhanced voice transcription with better error handling
+  // Enhanced voice transcription with proper Supabase auth forwarding
   static async transcribeVoice(
     audioData: string,
     language: 'en' | 'ar' = 'en'
@@ -173,15 +180,21 @@ export class WaktiAIV2Service {
         audioDataLength: audioData.length 
       });
       
-      const response = await callEdgeFunctionWithRetry<TranscriptionResponse>('wakti-voice-v2', {
+      // Use Supabase's built-in auth forwarding for voice transcription
+      const { data, error } = await supabase.functions.invoke('wakti-voice-v2', {
         body: {
           audioData,
           language
         }
       });
 
-      console.log('WAKTI AI V2.1 CLIENT: Enhanced voice transcription result:', response);
-      return response;
+      if (error) {
+        console.error('WAKTI AI V2.1 CLIENT: Error from voice function:', error);
+        throw error;
+      }
+
+      console.log('WAKTI AI V2.1 CLIENT: Enhanced voice transcription result:', data);
+      return data;
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in enhanced transcribeVoice:', error);
       
@@ -293,7 +306,7 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Test API connectivity (new method for debugging)
+  // Test API connectivity with proper auth forwarding
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
       const testMessage = "Hello, are you working? Please respond naturally.";
