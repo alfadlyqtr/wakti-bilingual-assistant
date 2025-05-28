@@ -267,40 +267,45 @@ serve(async (req) => {
 
   try {
     const authorizationHeader = req.headers.get('Authorization');
+    console.log('WAKTI AI V2.1: Auth header received:', authorizationHeader ? 'Present' : 'Missing');
+    
     if (!authorizationHeader) {
+      console.error('WAKTI AI V2.1: Missing authorization header');
       return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const token = authorizationHeader.split(' ')[1];
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Invalid authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
+    // Create Supabase client with proper configuration
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
       }
     );
 
-    const { data: { user } } = await supabaseAdmin.auth.getUser(token);
-    if (!user) {
+    // Extract token from Bearer header
+    const token = authorizationHeader.replace('Bearer ', '');
+    console.log('WAKTI AI V2.1: Token extracted, length:', token.length);
+
+    // Verify the user token using the service role key
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(token);
+    
+    if (userError || !userData.user) {
+      console.error('WAKTI AI V2.1: User verification failed:', userError?.message);
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const user = userData.user;
+    console.log('WAKTI AI V2.1: User authenticated successfully:', user.id);
 
     const body: RequestBody = await req.json();
     const userMessage = body.message;
@@ -317,22 +322,35 @@ serve(async (req) => {
 
     console.log('WAKTI AI V2.1: Processing enhanced message:', userMessage);
 
+    // Create a client for database operations using the user's token
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authorizationHeader,
+          },
+        },
+      }
+    );
+
     // Fetch user profile for personalization
-    const { data: userProfile } = await supabaseAdmin
+    const { data: userProfile } = await supabaseClient
       .from('profiles')
       .select('display_name, username')
       .eq('id', user.id)
       .single();
 
     // Fetch user knowledge for personalization
-    const { data: userKnowledge } = await supabaseAdmin
+    const { data: userKnowledge } = await supabaseClient
       .from('ai_user_knowledge')
       .select('interests, role, main_use, personal_note')
       .eq('user_id', user.id)
       .single();
 
     // Extract conversation context from recent conversations
-    const conversationContext = await extractConversationContext(supabaseAdmin, user.id);
+    const conversationContext = await extractConversationContext(supabaseClient, user.id);
 
     console.log('WAKTI AI V2.1: User context loaded:', {
       profile: userProfile,
@@ -349,7 +367,7 @@ serve(async (req) => {
       const systemMessage = createPersonalizedSystemMessage(language, userProfile, userKnowledge, conversationContext);
       initialMessages = [{ role: 'system', content: systemMessage }];
     } else {
-      const { data: chatHistory, error: dbError } = await supabaseAdmin
+      const { data: chatHistory, error: dbError } = await supabaseClient
         .from('ai_chat_history')
         .select('*')
         .eq('conversation_id', conversationId)
@@ -424,7 +442,7 @@ What makes me special ${userName}:
 How can I help you today ${userName}? 😊`;
 
       // Save user message
-      await supabaseAdmin
+      await supabaseClient
         .from('ai_chat_history')
         .insert({
           conversation_id: conversationId,
@@ -539,7 +557,7 @@ How can I help you today ${userName}? 😊`;
     }
 
     // Save conversation messages
-    const { error: saveError } = await supabaseAdmin
+    const { error: saveError } = await supabaseClient
       .from('ai_chat_history')
       .insert([
         {
@@ -573,7 +591,7 @@ How can I help you today ${userName}? 😊`;
       const userName = userProfile?.display_name || userProfile?.username || 'User';
       const conversationTitle = `Chat with ${userName} - ${userMessage.substring(0, 30)}`;
       
-      const { error: conversationError } = await supabaseAdmin
+      const { error: conversationError } = await supabaseClient
         .from('ai_conversations')
         .insert({
           id: conversationId,
@@ -586,7 +604,7 @@ How can I help you today ${userName}? 😊`;
         console.error('Error saving conversation:', conversationError);
       }
     } else if (!conversationId.startsWith('temp-')) {
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await supabaseClient
         .from('ai_conversations')
         .update({
           last_message_at: new Date().toISOString()
