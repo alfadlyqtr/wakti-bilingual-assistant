@@ -55,6 +55,8 @@ serve(async (req) => {
 
     // Get user profile for personalization (optional)
     let userName = 'there';
+    let userKnowledge = null;
+    
     if (user) {
       try {
         const { data: profile } = await supabaseClient
@@ -63,8 +65,25 @@ serve(async (req) => {
           .eq('id', user.id)
           .single();
         userName = profile?.display_name || profile?.username || 'there';
+
+        // NEW: Fetch user knowledge for AI personalization
+        console.log("WAKTI AI V2.1: Fetching user knowledge for personalization");
+        const { data: knowledge } = await supabaseClient
+          .from('ai_user_knowledge')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        if (knowledge) {
+          userKnowledge = knowledge;
+          console.log("WAKTI AI V2.1: User knowledge loaded:", {
+            hasMainUse: !!knowledge.main_use,
+            role: knowledge.role,
+            interestsCount: knowledge.interests?.length || 0
+          });
+        }
       } catch (error) {
-        console.log("Could not fetch user profile, using default name");
+        console.log("Could not fetch user profile/knowledge, using defaults");
       }
     }
 
@@ -135,6 +154,7 @@ ${translationResult.translatedPrompt}`;
       analysis,
       language,
       userName,
+      userKnowledge, // NEW: Pass user knowledge to AI
       [] // Empty context for now to simplify
     );
 
@@ -474,20 +494,64 @@ Translate this Arabic image request:`;
   }
 }
 
-async function generateResponse(message: string, analysis: any, language: string, userName: string, context: any[]) {
+// ENHANCED: Generate response with user knowledge personalization
+async function generateResponse(message: string, analysis: any, language: string, userName: string, userKnowledge: any, context: any[]) {
   // Special handling for English image generation
   if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'en') {
     return `I'll create an image for you now! 🎨\n\nImage description: "${analysis.actionData.prompt}"\n\nPlease wait a moment...`;
   }
 
-  const systemPrompt = language === 'ar' 
-    ? `أنت مساعد ذكي متطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات وإنشاء الصور بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
-    : `You are an advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, reminders, and image generation in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
+  // NEW: Build personalized system prompt with user knowledge
+  let systemPrompt = language === 'ar' 
+    ? `أنت مساعد ذكي متطور لتطبيق وكتي. اسم المستخدم هو ${userName}.`
+    : `You are an advanced smart assistant for the Wakti app. The user's name is ${userName}.`;
+
+  // Add personalization based on user knowledge
+  if (userKnowledge) {
+    console.log("WAKTI AI V2.1: Adding personalization from user knowledge");
+    
+    if (userKnowledge.role) {
+      const roleContext = language === 'ar' 
+        ? `المستخدم يعمل كـ ${userKnowledge.role}.`
+        : `The user works as a ${userKnowledge.role}.`;
+      systemPrompt += ` ${roleContext}`;
+    }
+
+    if (userKnowledge.main_use) {
+      const mainUseContext = language === 'ar'
+        ? `هدفهم الأساسي من استخدام التطبيق: ${userKnowledge.main_use}`
+        : `Their main goal with the app: ${userKnowledge.main_use}`;
+      systemPrompt += ` ${mainUseContext}`;
+    }
+
+    if (userKnowledge.interests && userKnowledge.interests.length > 0) {
+      const interestsContext = language === 'ar'
+        ? `اهتماماتهم تشمل: ${userKnowledge.interests.join('، ')}.`
+        : `Their interests include: ${userKnowledge.interests.join(', ')}.`;
+      systemPrompt += ` ${interestsContext}`;
+    }
+
+    if (userKnowledge.personal_note) {
+      const personalContext = language === 'ar'
+        ? `ملاحظة شخصية: ${userKnowledge.personal_note}`
+        : `Personal note: ${userKnowledge.personal_note}`;
+      systemPrompt += ` ${personalContext}`;
+    }
+  }
+
+  // Add general instructions
+  const generalInstructions = language === 'ar'
+    ? ` أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات وإنشاء الصور بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً وشخصياً في ردودك.`
+    : ` You are friendly, helpful, and intelligent, assisting with managing tasks, events, reminders, and image generation in a natural, conversational way. Use emojis appropriately. Be concise, helpful, and personalized in your responses.`;
+  
+  systemPrompt += generalInstructions;
 
   const messages = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: message }
   ];
+
+  console.log("WAKTI AI V2.1: Using personalized system prompt with user knowledge");
 
   // Try DeepSeek first
   try {
