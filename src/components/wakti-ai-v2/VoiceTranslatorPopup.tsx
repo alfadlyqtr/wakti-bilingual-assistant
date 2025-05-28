@@ -428,7 +428,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      // Call TTS edge function
+      // Call dedicated Voice Translator TTS edge function
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -440,7 +440,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       const selectedVoice = getVoiceForLanguage(selectedLanguage);
       console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: ${selectedVoice}`);
       
-      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-speech', {
+      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session?.access_token}`,

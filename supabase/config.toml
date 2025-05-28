@@ -30,3 +30,6 @@ verify_jwt = true
 
 [edge_functions.wakti-voice-v2]
 verify_jwt = true
+
+[edge_functions.voice-translator-tts]
+verify_jwt = true
