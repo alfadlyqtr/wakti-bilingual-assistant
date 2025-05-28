@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Play, Plus, Clock, PlayCircle } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Plus, Clock, PlayCircle, Volume2, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
@@ -16,13 +17,17 @@ interface VoiceTranslatorPopupProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface TranslationHistory {
+interface TranslationItem {
   id: string;
   originalText: string;
   translatedText: string;
   sourceLanguage: string;
   targetLanguage: string;
   timestamp: Date;
+}
+
+interface CachedAudio {
+  [text: string]: string; // base64 audio data
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -49,6 +54,7 @@ const MAX_RECORDING_TIME = 15; // 15 seconds
 const COOLDOWN_TIME = 5000; // 5 seconds
 const EXTRA_TRANSLATIONS_PRICE = 10; // 10 QAR
 const EXTRA_TRANSLATIONS_COUNT = 100;
+const MAX_HISTORY_ITEMS = 5;
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
@@ -63,16 +69,19 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isOnCooldown, setIsOnCooldown] = useState(false);
   const [playbackEnabled, setPlaybackEnabled] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [translationHistory, setTranslationHistory] = useState<TranslationHistory[]>([]);
+  const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
+  const [audioCache, setAudioCache] = useState<CachedAudio>({});
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load daily translation count and extras on mount
+  // Load data on mount
   useEffect(() => {
     if (open && user) {
       loadDailyData();
+      loadTranslationHistory();
+      loadAudioCache();
     }
   }, [open, user]);
 
@@ -110,7 +119,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         }));
       }
 
-      // Load extra translations (simulate from localStorage for now)
+      // Load extra translations
       const extraData = localStorage.getItem('voice_translator_extras');
       if (extraData) {
         const parsed = JSON.parse(extraData);
@@ -131,6 +140,64 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setDailyCount(0);
       setExtraTranslations(0);
     }
+  };
+
+  const loadTranslationHistory = () => {
+    try {
+      const stored = localStorage.getItem('voice_translator_history');
+      if (stored) {
+        const parsed = JSON.parse(stored).map((item: any) => ({
+          ...item,
+          timestamp: new Date(item.timestamp)
+        }));
+        setTranslationHistory(parsed);
+      }
+    } catch (error) {
+      console.error('Error loading translation history:', error);
+      setTranslationHistory([]);
+    }
+  };
+
+  const loadAudioCache = () => {
+    try {
+      const stored = localStorage.getItem('voice_translator_audio_cache');
+      if (stored) {
+        setAudioCache(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading audio cache:', error);
+      setAudioCache({});
+    }
+  };
+
+  const saveTranslationHistory = (history: TranslationItem[]) => {
+    try {
+      localStorage.setItem('voice_translator_history', JSON.stringify(history));
+    } catch (error) {
+      console.error('Error saving translation history:', error);
+    }
+  };
+
+  const saveAudioCache = (cache: CachedAudio) => {
+    try {
+      localStorage.setItem('voice_translator_audio_cache', JSON.stringify(cache));
+    } catch (error) {
+      console.error('Error saving audio cache:', error);
+    }
+  };
+
+  const addToHistory = (translation: TranslationItem) => {
+    const newHistory = [translation, ...translationHistory.slice(0, MAX_HISTORY_ITEMS - 1)];
+    setTranslationHistory(newHistory);
+    saveTranslationHistory(newHistory);
+  };
+
+  const selectFromHistory = (item: TranslationItem) => {
+    setTranslatedText(item.translatedText);
+  };
+
+  const getFirstWords = (text: string, wordCount: number = 3) => {
+    return text.split(' ').slice(0, wordCount).join(' ');
   };
 
   const incrementTranslationCount = () => {
@@ -154,7 +221,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   };
 
   const purchaseExtraTranslations = () => {
-    // Simulate purchase - in real implementation, integrate with payment system
     const newExtras = extraTranslations + EXTRA_TRANSLATIONS_COUNT;
     setExtraTranslations(newExtras);
     localStorage.setItem('voice_translator_extras', JSON.stringify({
@@ -219,7 +285,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       mediaRecorder.start(100);
       setIsRecording(true);
 
-      // Start timer
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => {
           if (prev >= MAX_RECORDING_TIME - 1) {
@@ -289,8 +354,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         setTranslatedText(result.translatedText);
         incrementTranslationCount();
         
-        // Add to session history
-        const newTranslation: TranslationHistory = {
+        // Add to history
+        const newTranslation: TranslationItem = {
           id: Date.now().toString(),
           originalText: result.originalText,
           translatedText: result.translatedText,
@@ -298,7 +363,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           targetLanguage: result.targetLanguage,
           timestamp: new Date()
         };
-        setTranslationHistory(prev => [newTranslation, ...prev.slice(0, 9)]); // Keep last 10
+        addToHistory(newTranslation);
         
         // Start cooldown
         setIsOnCooldown(true);
@@ -333,7 +398,15 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     try {
       setIsPlaying(true);
       
-      // Call TTS edge function (would need to be implemented)
+      // Check cache first
+      if (audioCache[text]) {
+        const audio = new Audio(`data:audio/mp3;base64,${audioCache[text]}`);
+        audio.onended = () => setIsPlaying(false);
+        await audio.play();
+        return;
+      }
+      
+      // Call TTS edge function
       const { data: { session } } = await supabase.auth.getSession();
       
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/generate-speech', {
@@ -350,7 +423,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       if (response.ok) {
         const result = await response.json();
-        const audio = new Audio(`data:audio/mp3;base64,${result.audioContent}`);
+        const audioContent = result.audioContent;
+        
+        // Cache the audio
+        const newCache = { ...audioCache, [text]: audioContent };
+        setAudioCache(newCache);
+        saveAudioCache(newCache);
+        
+        const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
         audio.onended = () => setIsPlaying(false);
         await audio.play();
       }
@@ -459,17 +539,42 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </Select>
           </div>
 
-          {/* Playback Toggle with PlayCircle Icon */}
-          <div className="flex items-center space-x-2">
-            <Switch 
-              id="playback" 
-              checked={playbackEnabled} 
-              onCheckedChange={setPlaybackEnabled}
-            />
-            <PlayCircle className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="playback" className="text-sm">
-              {language === 'ar' ? 'تشغيل الترجمة صوتياً' : 'Play translated text'}
-            </Label>
+          {/* Playback Toggle and Previous Translations Dropdown - Same Line */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-2">
+              <Switch 
+                id="playback" 
+                checked={playbackEnabled} 
+                onCheckedChange={setPlaybackEnabled}
+              />
+              <PlayCircle className="h-4 w-4 text-muted-foreground" />
+              <Label htmlFor="playback" className="text-sm">
+                {language === 'ar' ? 'تشغيل الترجمة صوتياً' : 'Play translated text'}
+              </Label>
+            </div>
+
+            {translationHistory.length > 0 && (
+              <Select onValueChange={(value) => {
+                const item = translationHistory.find(h => h.id === value);
+                if (item) selectFromHistory(item);
+              }}>
+                <SelectTrigger className="w-auto min-w-[140px]">
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm">
+                      {language === 'ar' ? 'الترجمات السابقة' : 'Previous translations'}
+                    </span>
+                    <ChevronDown className="h-3 w-3" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {translationHistory.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {getFirstWords(item.translatedText)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {/* Recording Section */}
@@ -513,56 +618,32 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
           {/* Translation Results */}
           {translatedText && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">
-                  {language === 'ar' ? 'الترجمة:' : 'Translation:'}
-                </label>
-                <div className="flex gap-2">
-                  {playbackEnabled && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => playTranslatedText(translatedText)}
-                      disabled={isPlaying}
-                      className="h-6 w-6"
-                    >
-                      {isPlaying ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Play className="h-3 w-3" />
-                      )}
-                    </Button>
-                  )}
+            <div className="space-y-3">
+              <div className="p-4 bg-muted rounded-lg text-center relative">
+                <div className="text-sm font-medium mb-2">{translatedText}</div>
+                <div className="flex justify-center gap-2">
                   <Button
                     variant="ghost"
-                    size="icon"
+                    size="sm"
                     onClick={() => copyToClipboard(translatedText)}
-                    className="h-6 w-6"
+                    className="h-8 w-8 p-0"
                   >
                     <Copy className="h-3 w-3" />
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => playTranslatedText(translatedText)}
+                    disabled={isPlaying}
+                    className="h-8 w-8 p-0"
+                  >
+                    {isPlaying ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Volume2 className="h-3 w-3" />
+                    )}
+                  </Button>
                 </div>
-              </div>
-              <div className="p-3 bg-muted rounded-lg text-sm">
-                {translatedText}
-              </div>
-            </div>
-          )}
-
-          {/* Translation History */}
-          {translationHistory.length > 0 && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {language === 'ar' ? 'السجل:' : 'Session History:'}
-              </label>
-              <div className="max-h-32 overflow-y-auto space-y-2">
-                {translationHistory.map((translation) => (
-                  <div key={translation.id} className="p-2 bg-muted/50 rounded text-xs">
-                    <div className="font-medium truncate">{translation.translatedText}</div>
-                    <div className="text-muted-foreground truncate">{translation.originalText}</div>
-                  </div>
-                ))}
               </div>
             </div>
           )}
