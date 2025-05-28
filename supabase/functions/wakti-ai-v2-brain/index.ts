@@ -236,7 +236,7 @@ function analyzeMessage(message: string, language: string, inputType: string = '
     };
   }
   
-  // Updated Arabic image patterns - expanded list
+  // Updated Arabic image patterns - expanded list including Gulf dialect
   const arabicImagePatterns = [
     "ارسم", 
     "أنشئ صورة", 
@@ -246,7 +246,20 @@ function analyzeMessage(message: string, language: string, inputType: string = '
     "أنشئ لي", 
     "أود رؤية صورة", 
     "ارني صورة", 
-    "عرض صورة"
+    "عرض صورة",
+    "ورني صورة",
+    "ابي صورة",
+    "صورة لو سمحت",
+    "هات لي صورة",
+    "ابغى صورة",
+    "ورني رسم",
+    "ارسم لي",
+    "ابيك ترسم",
+    "تراني ابغى صورة",
+    "يلا ارسم",
+    "اعطني رسم",
+    "صورة لوحدي",
+    "صورة فنية"
   ];
   
   // Enhanced English image patterns
