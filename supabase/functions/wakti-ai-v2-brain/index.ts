@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -82,7 +83,7 @@ serve(async (req) => {
         const translationResult = await translateImagePrompt(analysis.actionData.prompt, language);
         
         if (translationResult.translatedPrompt && !translationResult.error) {
-          const arabicResponse = `واكتي AI يُولّد الصور باللغة الإنجليزية فقط.
+          const arabicResponse = `يُولّد الصور باللغة الإنجليزية فقط.
 لا تقلق — لقد قمت بترجمة نصك أدناه.
 انسخه وألصقه، وسأقوم بإنشاء الصورة لك:
 
@@ -480,8 +481,8 @@ async function generateResponse(message: string, analysis: any, language: string
   }
 
   const systemPrompt = language === 'ar' 
-    ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات وإنشاء الصور بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
-    : `You are WAKTI AI V2.1, the advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, reminders, and image generation in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
+    ? `أنت مساعد ذكي متطور لتطبيق وكتي. اسم المستخدم هو ${userName}. أنت ودود ومفيد وذكي، تساعد في إدارة المهام والأحداث والتذكيرات وإنشاء الصور بطريقة طبيعية ومحادثة. استخدم الرموز التعبيرية بشكل مناسب. كن مختصراً ومفيداً.`
+    : `You are an advanced smart assistant for the Wakti app. The user's name is ${userName}. You are friendly, helpful, and intelligent, assisting with managing tasks, events, reminders, and image generation in a natural, conversational way. Use emojis appropriately. Be concise and helpful.`;
 
   const messages = [
     { role: 'system', content: systemPrompt },
