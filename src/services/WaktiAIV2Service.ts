@@ -1,4 +1,3 @@
-
 import { supabase, callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -62,13 +61,11 @@ export class WaktiAIV2Service {
       // Enhanced response handling for image generation (both English and Arabic)
       if (response.actionTaken === 'generate_image' && response.actionResult) {
         if (response.actionResult.imageUrl) {
-          // Check if this was translated from Arabic
-          if (response.actionResult.translatedFrom && response.actionResult.translatedTo) {
-            response.response += `\n\n🎨 ${language === 'ar' ? 'تم إنشاء الصورة بنجاح!' : 'Image generated successfully!'}`;
-            response.response += `\n\n📝 **${language === 'ar' ? 'ترجمة الطلب' : 'Translated Request'}:**\n${language === 'ar' ? 'من' : 'From'}: ${response.actionResult.translatedFrom}\n${language === 'ar' ? 'إلى' : 'To'}: ${response.actionResult.translatedTo}`;
-          } else {
-            response.response += `\n\n🎨 ${language === 'ar' ? 'تم إنشاء الصورة بنجاح!' : 'Image generated successfully!'}`;
+          // For English image generation, add success message
+          if (language === 'en') {
+            response.response += `\n\n🎨 Image generated successfully!`;
           }
+          // For Arabic, don't add anything since the backend already handles the translation message
         } else if (response.actionResult.error) {
           response.response += `\n\n❌ ${language === 'ar' 
             ? 'فشل في إنشاء الصورة: ' + response.actionResult.error
@@ -76,17 +73,8 @@ export class WaktiAIV2Service {
         }
       }
 
-      // Handle Arabic image translation response (fallback - shouldn't happen with new flow)
-      if (response.actionTaken === 'translate_for_image' && response.actionResult) {
-        if (response.actionResult.translatedPrompt) {
-          // Add the translated prompt to the response for display
-          response.response += `\n\n📝 **${language === 'ar' ? 'النص المترجم' : 'Translated Text'}:**\n${response.actionResult.translatedPrompt}`;
-        } else if (response.actionResult.error) {
-          response.response += `\n\n❌ ${language === 'ar' 
-            ? 'فشل في الترجمة: ' + response.actionResult.error
-            : 'Translation failed: ' + response.actionResult.error}`;
-        }
-      }
+      // Don't add translated text here for Arabic image translation - it's already handled in the backend
+      // This prevents duplication
       
       return response;
     } catch (error) {
