@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -180,7 +179,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     isAtSoftLimit,
     isAtHardLimit,
     canTranslate,
-    MAX_DAILY_TRANSLATIONS
+    MAX_DAILY_TRANSLATIONS,
+    loadUserQuota
   } = useQuotaManagement(language);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -216,8 +216,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     if (open && user) {
       loadTranslationHistory();
       loadAudioCache();
+      // Refresh quota when popup opens
+      loadUserQuota();
     }
-  }, [open, user]);
+  }, [open, user, loadUserQuota]);
 
   // Cleanup recording timer
   useEffect(() => {
@@ -446,12 +448,21 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Voice Translator result:', result);
 
       if (result.translatedText) {
-        let usageSuccess = false;
-        if (!quotaError) {
-          usageSuccess = await incrementTranslationCount();
-          console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed (continuing anyway)');
-        } else {
-          console.log('📊 Skipping usage tracking due to quota error - continuing with translation');
+        // CRITICAL: Increment usage count FIRST
+        console.log('📊 About to increment translation usage...');
+        const usageSuccess = await incrementTranslationCount();
+        console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
+        
+        if (!usageSuccess && !quotaError) {
+          console.warn('⚠️ Translation blocked due to quota limit');
+          toast({
+            title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
+            description: language === 'ar' 
+              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+              : 'You have reached your daily translation limit',
+            variant: 'destructive'
+          });
+          return;
         }
 
         setTranslatedText(result.translatedText);

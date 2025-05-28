@@ -65,10 +65,14 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   };
 
   const incrementTranslationCount = async (): Promise<boolean> => {
-    if (!user) return false;
+    if (!user) {
+      console.warn('⚠️ No user found for quota increment');
+      return false;
+    }
 
     try {
       console.log('🔄 Incrementing translation count for user:', user.id);
+      console.log('📊 Current quota before increment:', userQuota);
       
       const { data, error } = await supabase.rpc('increment_translation_usage', {
         p_user_id: user.id
@@ -84,13 +88,28 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         console.log('✅ Translation count result:', result);
         
         if (result.success) {
+          // Update local state immediately
           setUserQuota({
+            daily_count: result.daily_count,
+            extra_translations: result.extra_translations,
+            purchase_date: userQuota.purchase_date
+          });
+          
+          console.log('📊 Updated quota state:', {
             daily_count: result.daily_count,
             extra_translations: result.extra_translations
           });
+          
           return true;
         } else {
           console.warn('⚠️ Translation count increment failed - quota exceeded');
+          toast({
+            title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
+            description: language === 'ar' 
+              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+              : 'You have reached your daily translation limit',
+            variant: 'destructive'
+          });
           return false;
         }
       }
@@ -99,6 +118,16 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       return false;
     } catch (error) {
       console.error('❌ Error incrementing translation count:', error);
+      
+      // Show error but allow translation to continue for now
+      toast({
+        title: language === 'ar' ? 'تحذير' : 'Warning',
+        description: language === 'ar' 
+          ? 'حدث خطأ في تتبع الاستخدام، ولكن يمكنك المتابعة' 
+          : 'Error tracking usage, but you can continue',
+        variant: 'default'
+      });
+      
       console.log('🔄 Using fallback - allowing translation to continue despite quota error');
       return true;
     }
@@ -108,6 +137,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     if (!user) return false;
 
     try {
+      console.log('💰 Purchasing extra translations:', count);
+      
       const { data, error } = await supabase.rpc('purchase_extra_translations', {
         p_user_id: user.id,
         p_count: count
@@ -118,9 +149,11 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       if (data && data.length > 0) {
         const result = data[0];
         if (result.success) {
+          // Update local state immediately
           setUserQuota(prev => ({
             ...prev,
-            extra_translations: result.new_extra_count
+            extra_translations: result.new_extra_count,
+            purchase_date: new Date().toISOString()
           }));
           
           toast({
@@ -130,12 +163,13 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
               : `Added ${count} extra translations`,
           });
           
+          console.log('💰 Extra translations purchased successfully:', result.new_extra_count);
           return true;
         }
       }
       return false;
     } catch (error) {
-      console.error('Error purchasing extra translations:', error);
+      console.error('❌ Error purchasing extra translations:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
         description: language === 'ar' ? 'فشل في شراء الترجمات الإضافية' : 'Failed to purchase extra translations',
@@ -153,7 +187,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   }, [user]);
 
   // Helper computed values
-  const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - userQuota.daily_count;
+  const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
   const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
   const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
   const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
