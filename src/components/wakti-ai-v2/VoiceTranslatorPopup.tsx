@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Plus, Clock, PlayCircle, Volume2, ChevronDown } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Plus, Clock, PlayCircle, Volume2, ChevronDown, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
@@ -27,6 +28,12 @@ interface TranslationItem {
 
 interface CachedAudio {
   [text: string]: string; // base64 audio data
+}
+
+interface UserQuota {
+  daily_count: number;
+  extra_translations: number;
+  purchase_date?: string;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -59,8 +66,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
-  const [dailyCount, setDailyCount] = useState(0);
-  const [extraTranslations, setExtraTranslations] = useState(0);
+  const [userQuota, setUserQuota] = useState<UserQuota>({ daily_count: 0, extra_translations: 0 });
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -70,15 +76,50 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isPlaying, setIsPlaying] = useState(false);
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
+  const [isLoadingQuota, setIsLoadingQuota] = useState(false);
+  const [audioContextUnlocked, setAudioContextUnlocked] = useState(false);
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  // Initialize audio context and check for mobile restrictions
+  useEffect(() => {
+    const initAudioContext = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          audioContextRef.current = new AudioContextClass();
+          
+          // Check if audio context is suspended (mobile restriction)
+          if (audioContextRef.current.state === 'suspended') {
+            setNeedsAudioUnlock(true);
+          } else {
+            setAudioContextUnlocked(true);
+          }
+        }
+      } catch (error) {
+        console.warn('AudioContext not available:', error);
+      }
+    };
+
+    if (open) {
+      initAudioContext();
+    }
+
+    return () => {
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+      }
+    };
+  }, [open]);
 
   // Load data on mount
   useEffect(() => {
     if (open && user) {
-      loadDailyData();
+      loadUserQuota();
       loadTranslationHistory();
       loadAudioCache();
     }
@@ -93,51 +134,35 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     };
   }, []);
 
-  const loadDailyData = async () => {
+  const loadUserQuota = async () => {
+    if (!user) return;
+    
     try {
-      const today = new Date().toISOString().split('T')[0];
+      setIsLoadingQuota(true);
       
-      // Load daily count
-      const storedData = localStorage.getItem('voice_translator_daily_count');
-      if (storedData) {
-        const parsed = JSON.parse(storedData);
-        if (parsed.date === today) {
-          setDailyCount(parsed.count);
-        } else {
-          setDailyCount(0);
-          localStorage.setItem('voice_translator_daily_count', JSON.stringify({
-            date: today,
-            count: 0
-          }));
-        }
-      } else {
-        setDailyCount(0);
-        localStorage.setItem('voice_translator_daily_count', JSON.stringify({
-          date: today,
-          count: 0
-        }));
-      }
+      const { data, error } = await supabase.rpc('get_or_create_user_quota', {
+        p_user_id: user.id
+      });
 
-      // Load extra translations
-      const extraData = localStorage.getItem('voice_translator_extras');
-      if (extraData) {
-        const parsed = JSON.parse(extraData);
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-        
-        if (new Date(parsed.purchaseDate) > oneMonthAgo) {
-          setExtraTranslations(parsed.count);
-        } else {
-          setExtraTranslations(0);
-          localStorage.removeItem('voice_translator_extras');
-        }
-      } else {
-        setExtraTranslations(0);
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const quota = data[0];
+        setUserQuota({
+          daily_count: quota.daily_count,
+          extra_translations: quota.extra_translations,
+          purchase_date: quota.purchase_date
+        });
       }
     } catch (error) {
-      console.error('Error loading daily data:', error);
-      setDailyCount(0);
-      setExtraTranslations(0);
+      console.error('Error loading user quota:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في تحميل بيانات الحصة' : 'Failed to load quota data',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoadingQuota(false);
     }
   };
 
@@ -199,44 +224,91 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return text.split(' ').slice(0, wordCount).join(' ');
   };
 
-  const incrementTranslationCount = () => {
-    const today = new Date().toISOString().split('T')[0];
-    
-    if (dailyCount < MAX_DAILY_TRANSLATIONS) {
-      const newCount = dailyCount + 1;
-      setDailyCount(newCount);
-      localStorage.setItem('voice_translator_daily_count', JSON.stringify({
-        date: today,
-        count: newCount
-      }));
-    } else if (extraTranslations > 0) {
-      const newExtras = extraTranslations - 1;
-      setExtraTranslations(newExtras);
-      localStorage.setItem('voice_translator_extras', JSON.stringify({
-        count: newExtras,
-        purchaseDate: new Date().toISOString()
-      }));
+  const incrementTranslationCount = async () => {
+    if (!user) return false;
+
+    try {
+      const { data, error } = await supabase.rpc('increment_translation_usage', {
+        p_user_id: user.id
+      });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          setUserQuota({
+            daily_count: result.daily_count,
+            extra_translations: result.extra_translations
+          });
+          return true;
+        }
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error incrementing translation count:', error);
+      return false;
     }
   };
 
-  const purchaseExtraTranslations = () => {
-    const newExtras = extraTranslations + EXTRA_TRANSLATIONS_COUNT;
-    setExtraTranslations(newExtras);
-    localStorage.setItem('voice_translator_extras', JSON.stringify({
-      count: newExtras,
-      purchaseDate: new Date().toISOString()
-    }));
-    
-    toast({
-      title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
-      description: language === 'ar' 
-        ? `تم إضافة ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية` 
-        : `Added ${EXTRA_TRANSLATIONS_COUNT} extra translations`,
-    });
+  const purchaseExtraTranslations = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase.rpc('purchase_extra_translations', {
+        p_user_id: user.id,
+        p_count: EXTRA_TRANSLATIONS_COUNT
+      });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          setUserQuota(prev => ({
+            ...prev,
+            extra_translations: result.new_extra_count
+          }));
+          
+          toast({
+            title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
+            description: language === 'ar' 
+              ? `تم إضافة ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية` 
+              : `Added ${EXTRA_TRANSLATIONS_COUNT} extra translations`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error purchasing extra translations:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
+        description: language === 'ar' ? 'فشل في شراء الترجمات الإضافية' : 'Failed to purchase extra translations',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const unlockAudioContext = async () => {
+    if (!audioContextRef.current) return;
+
+    try {
+      await audioContextRef.current.resume();
+      setAudioContextUnlocked(true);
+      setNeedsAudioUnlock(false);
+      
+      toast({
+        title: language === 'ar' ? '🔊 تم تفعيل الصوت' : '🔊 Audio Unlocked',
+        description: language === 'ar' ? 'يمكنك الآن تشغيل الترجمات صوتياً' : 'You can now play translations with audio',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('Failed to unlock audio context:', error);
+    }
   };
 
   const startRecording = async () => {
-    const canTranslate = dailyCount < MAX_DAILY_TRANSLATIONS || extraTranslations > 0;
+    const canTranslate = userQuota.daily_count < MAX_DAILY_TRANSLATIONS || userQuota.extra_translations > 0;
     
     if (!canTranslate) {
       toast({
@@ -350,8 +422,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Voice Translator result:', result);
 
       if (result.translatedText) {
+        // Increment usage count in database
+        const usageSuccess = await incrementTranslationCount();
+        
+        if (!usageSuccess) {
+          throw new Error('Failed to update translation count');
+        }
+
         setTranslatedText(result.translatedText);
-        incrementTranslationCount();
         
         // Add to history
         const newTranslation: TranslationItem = {
@@ -373,8 +451,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           description: language === 'ar' ? 'تم إنجاز الترجمة بنجاح' : 'Translation completed successfully',
         });
 
-        // Auto-play if enabled
-        if (playbackEnabled) {
+        // Auto-play if enabled and audio is unlocked
+        if (playbackEnabled && (audioContextUnlocked || !needsAudioUnlock)) {
           playTranslatedText(result.translatedText);
         }
       } else {
@@ -393,42 +471,28 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   };
 
-  const getVoiceForLanguage = (langCode: string) => {
-    const voiceMap: { [key: string]: string } = {
-      'en': 'alloy',      // English
-      'ar': 'nova',       // Arabic - use female voice for better pronunciation
-      'es': 'alloy',      // Spanish
-      'fr': 'shimmer',    // French
-      'de': 'onyx',       // German
-      'it': 'alloy',      // Italian
-      'pt': 'echo',       // Portuguese
-      'ru': 'fable',      // Russian
-      'ja': 'nova',       // Japanese
-      'ko': 'alloy',      // Korean
-      'zh': 'shimmer',    // Chinese
-      'hi': 'nova',       // Hindi
-      'tr': 'alloy',      // Turkish
-      'nl': 'echo',       // Dutch
-      'sv': 'alloy'       // Swedish
-    };
-    
-    return voiceMap[langCode] || 'alloy';
-  };
-
   const playTranslatedText = async (text: string) => {
+    // Check if we need to unlock audio first
+    if (needsAudioUnlock && !audioContextUnlocked) {
+      toast({
+        title: language === 'ar' ? '🔊 مطلوب تفعيل الصوت' : '🔊 Audio Unlock Required',
+        description: language === 'ar' ? 'اضغط زر تفعيل الصوت أولاً' : 'Please tap the audio unlock button first',
+        variant: 'default'
+      });
+      return;
+    }
+
     try {
       setIsPlaying(true);
       
       // Check cache first
       const cacheKey = `${text}_${selectedLanguage}`;
       if (audioCache[cacheKey]) {
-        const audio = new Audio(`data:audio/mp3;base64,${audioCache[cacheKey]}`);
-        audio.onended = () => setIsPlaying(false);
-        await audio.play();
+        await playAudioFromBase64(audioCache[cacheKey]);
         return;
       }
       
-      // Call dedicated Voice Translator TTS edge function
+      // Call TTS service
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -437,7 +501,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      // Always use 'alloy' voice for consistent quality across all languages
       console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: alloy`);
       
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
@@ -462,10 +525,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           setAudioCache(newCache);
           saveAudioCache(newCache);
           
-          const audio = new Audio(`data:audio/mp3;base64,${audioContent}`);
-          audio.onended = () => setIsPlaying(false);
-          await audio.play();
-          
+          await playAudioFromBase64(audioContent);
           console.log('🔊 TTS playback successful');
         } else {
           throw new Error('No audio content received');
@@ -487,6 +547,34 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   };
 
+  const playAudioFromBase64 = async (base64Audio: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+        
+        audio.onended = () => {
+          setIsPlaying(false);
+          resolve();
+        };
+        
+        audio.onerror = (error) => {
+          console.error('Audio playback error:', error);
+          setIsPlaying(false);
+          reject(error);
+        };
+        
+        audio.oncanplaythrough = () => {
+          audio.play().catch(reject);
+        };
+        
+        audio.load();
+      } catch (error) {
+        setIsPlaying(false);
+        reject(error);
+      }
+    });
+  };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -504,10 +592,22 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return `${remainingTime}s`;
   };
 
-  const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - dailyCount;
-  const isAtSoftLimit = dailyCount >= SOFT_WARNING_THRESHOLD;
-  const isAtHardLimit = dailyCount >= MAX_DAILY_TRANSLATIONS && extraTranslations === 0;
-  const canTranslate = remainingFreeTranslations > 0 || extraTranslations > 0;
+  const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - userQuota.daily_count;
+  const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
+  const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
+  const canTranslate = remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+
+  if (isLoadingQuota) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-md">
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -523,8 +623,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                 isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
               )}>
                 {remainingFreeTranslations}/{MAX_DAILY_TRANSLATIONS}
-                {extraTranslations > 0 && (
-                  <span className="text-green-600"> + {extraTranslations} extra</span>
+                {userQuota.extra_translations > 0 && (
+                  <span className="text-green-600"> + {userQuota.extra_translations} extra</span>
                 )}
               </div>
             </div>
@@ -532,6 +632,25 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Audio unlock button for mobile */}
+          {needsAudioUnlock && !audioContextUnlocked && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <VolumeX className="h-4 w-4 text-blue-600" />
+              <div className="flex-1">
+                <p className="text-sm text-blue-600 dark:text-blue-400">
+                  {language === 'ar' 
+                    ? 'اضغط لتفعيل تشغيل الصوت على هذا الجهاز' 
+                    : 'Tap to enable audio playback on this device'
+                  }
+                </p>
+              </div>
+              <Button size="sm" onClick={unlockAudioContext} variant="outline">
+                <Volume2 className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'تفعيل' : 'Unlock'}
+              </Button>
+            </div>
+          )}
+
           {/* Limit warnings */}
           {isAtHardLimit && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -696,7 +815,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           )}
 
           {/* Extra translations purchase */}
-          {!isAtHardLimit && extraTranslations === 0 && (
+          {!isAtHardLimit && userQuota.extra_translations === 0 && (
             <div className="pt-2 border-t">
               <Button 
                 variant="outline" 

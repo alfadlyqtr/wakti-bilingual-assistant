@@ -762,6 +762,39 @@ export type Database = {
           },
         ]
       }
+      user_translation_quotas: {
+        Row: {
+          created_at: string
+          daily_count: number
+          daily_date: string
+          extra_translations: number
+          id: string
+          purchase_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_count?: number
+          daily_date?: string
+          extra_translations?: number
+          id?: string
+          purchase_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_count?: number
+          daily_date?: string
+          extra_translations?: number
+          id?: string
+          purchase_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -816,6 +849,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      get_or_create_user_quota: {
+        Args: { p_user_id: string }
+        Returns: {
+          daily_count: number
+          extra_translations: number
+          purchase_date: string
+        }[]
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -836,9 +877,24 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      increment_translation_usage: {
+        Args: { p_user_id: string }
+        Returns: {
+          success: boolean
+          daily_count: number
+          extra_translations: number
+        }[]
+      }
       mark_messages_as_read: {
         Args: { other_user_id: string }
         Returns: undefined
+      }
+      purchase_extra_translations: {
+        Args: { p_user_id: string; p_count: number }
+        Returns: {
+          success: boolean
+          new_extra_count: number
+        }[]
       }
       set_limit: {
         Args: { "": number }
