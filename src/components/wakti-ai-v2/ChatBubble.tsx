@@ -110,7 +110,7 @@ export function ChatBubble({ message }: ChatBubbleProps) {
         isUser ? "order-1" : "order-2"
       )}>
         <div className={cn(
-          "backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3 relative",
+          "backdrop-blur-md border border-border/50 rounded-xl shadow-xl p-3 relative",
           isUser 
             ? "bg-primary text-primary-foreground ml-auto" 
             : "bg-background/90"
