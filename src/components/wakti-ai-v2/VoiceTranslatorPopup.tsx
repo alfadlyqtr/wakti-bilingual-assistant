@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Play, Plus, Clock } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Play, Plus, Clock, Speaker } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
@@ -460,13 +459,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </Select>
           </div>
 
-          {/* Playback Toggle */}
+          {/* Playback Toggle with Speaker Icon */}
           <div className="flex items-center space-x-2">
             <Switch 
               id="playback" 
               checked={playbackEnabled} 
               onCheckedChange={setPlaybackEnabled}
             />
+            <Speaker className="h-4 w-4 text-muted-foreground" />
             <Label htmlFor="playback" className="text-sm">
               {language === 'ar' ? 'تشغيل الترجمة صوتياً' : 'Play translated text'}
             </Label>
