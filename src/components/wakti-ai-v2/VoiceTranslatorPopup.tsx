@@ -79,6 +79,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [audioContextUnlocked, setAudioContextUnlocked] = useState(false);
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
+  const [quotaError, setQuotaError] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -139,27 +140,41 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     
     try {
       setIsLoadingQuota(true);
+      setQuotaError(null);
+      
+      console.log('🔄 Loading user quota for user:', user.id);
       
       const { data, error } = await supabase.rpc('get_or_create_user_quota', {
         p_user_id: user.id
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error loading user quota:', error);
+        throw error;
+      }
 
       if (data && data.length > 0) {
         const quota = data[0];
+        console.log('✅ User quota loaded successfully:', quota);
         setUserQuota({
           daily_count: quota.daily_count,
           extra_translations: quota.extra_translations,
           purchase_date: quota.purchase_date
         });
+      } else {
+        console.warn('⚠️ No quota data returned, using defaults');
+        setUserQuota({ daily_count: 0, extra_translations: 0 });
       }
     } catch (error) {
-      console.error('Error loading user quota:', error);
+      console.error('❌ Error loading user quota:', error);
+      setQuotaError('Failed to load quota data');
+      // Set fallback quota to allow translations to continue
+      setUserQuota({ daily_count: 0, extra_translations: 0 });
+      
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في تحميل بيانات الحصة' : 'Failed to load quota data',
-        variant: 'destructive'
+        title: language === 'ar' ? 'تحذير' : 'Warning',
+        description: language === 'ar' ? 'تعذر تحميل بيانات الحصة، ولكن يمكنك المتابعة' : 'Could not load quota data, but you can continue',
+        variant: 'default'
       });
     } finally {
       setIsLoadingQuota(false);
@@ -224,31 +239,44 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return text.split(' ').slice(0, wordCount).join(' ');
   };
 
-  const incrementTranslationCount = async () => {
+  const incrementTranslationCount = async (): Promise<boolean> => {
     if (!user) return false;
 
     try {
+      console.log('🔄 Incrementing translation count for user:', user.id);
+      
       const { data, error } = await supabase.rpc('increment_translation_usage', {
         p_user_id: user.id
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error incrementing translation count:', error);
+        throw error;
+      }
 
       if (data && data.length > 0) {
         const result = data[0];
+        console.log('✅ Translation count result:', result);
+        
         if (result.success) {
           setUserQuota({
             daily_count: result.daily_count,
             extra_translations: result.extra_translations
           });
           return true;
+        } else {
+          console.warn('⚠️ Translation count increment failed - quota exceeded');
+          return false;
         }
       }
       
+      console.warn('⚠️ No data returned from increment function');
       return false;
     } catch (error) {
-      console.error('Error incrementing translation count:', error);
-      return false;
+      console.error('❌ Error incrementing translation count:', error);
+      // Return true as fallback to allow translation to continue
+      console.log('🔄 Using fallback - allowing translation to continue despite quota error');
+      return true;
     }
   };
 
@@ -308,9 +336,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   };
 
   const startRecording = async () => {
-    const canTranslate = userQuota.daily_count < MAX_DAILY_TRANSLATIONS || userQuota.extra_translations > 0;
+    // Allow recording even if quota loading failed (fallback behavior)
+    const canTranslate = quotaError || userQuota.daily_count < MAX_DAILY_TRANSLATIONS || userQuota.extra_translations > 0;
     
-    if (!canTranslate) {
+    if (!quotaError && !canTranslate) {
       toast({
         title: language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached',
         description: language === 'ar' 
@@ -422,11 +451,13 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Voice Translator result:', result);
 
       if (result.translatedText) {
-        // Increment usage count in database
-        const usageSuccess = await incrementTranslationCount();
-        
-        if (!usageSuccess) {
-          throw new Error('Failed to update translation count');
+        // Try to increment usage count, but continue even if it fails
+        let usageSuccess = false;
+        if (!quotaError) {
+          usageSuccess = await incrementTranslationCount();
+          console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed (continuing anyway)');
+        } else {
+          console.log('📊 Skipping usage tracking due to quota error - continuing with translation');
         }
 
         setTranslatedText(result.translatedText);
@@ -595,7 +626,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - userQuota.daily_count;
   const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
   const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
-  const canTranslate = remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+  const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
 
   if (isLoadingQuota) {
     return (
@@ -618,15 +649,21 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               {language === 'ar' ? '🎤 مترجم الصوت' : '🎤 Voice Translator'}
             </span>
             <div className="flex items-center gap-2 text-sm">
-              <div className={cn(
-                "font-medium",
-                isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
-              )}>
-                {remainingFreeTranslations}/{MAX_DAILY_TRANSLATIONS}
-                {userQuota.extra_translations > 0 && (
-                  <span className="text-green-600"> + {userQuota.extra_translations} extra</span>
-                )}
-              </div>
+              {quotaError ? (
+                <div className="text-orange-600 text-xs">
+                  {language === 'ar' ? 'خطأ في البيانات' : 'Data error'}
+                </div>
+              ) : (
+                <div className={cn(
+                  "font-medium",
+                  isAtHardLimit ? "text-red-600" : isAtSoftLimit ? "text-orange-600" : "text-muted-foreground"
+                )}>
+                  {remainingFreeTranslations}/{MAX_DAILY_TRANSLATIONS}
+                  {userQuota.extra_translations > 0 && (
+                    <span className="text-green-600"> + {userQuota.extra_translations} extra</span>
+                  )}
+                </div>
+              )}
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -651,8 +688,21 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </div>
           )}
 
+          {/* Quota error warning */}
+          {quotaError && (
+            <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <p className="text-sm text-orange-600 dark:text-orange-400">
+                {language === 'ar' 
+                  ? 'تعذر تحميل بيانات الحصة، ولكن يمكنك المتابعة' 
+                  : 'Could not load quota data, but you can continue'
+                }
+              </p>
+            </div>
+          )}
+
           {/* Limit warnings */}
-          {isAtHardLimit && (
+          {!quotaError && isAtHardLimit && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <p className="text-sm text-red-600 dark:text-red-400">
@@ -668,7 +718,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </div>
           )}
 
-          {isAtSoftLimit && !isAtHardLimit && (
+          {!quotaError && isAtSoftLimit && !isAtHardLimit && (
             <div className="flex items-center gap-2 p-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
               <AlertTriangle className="h-4 w-4 text-orange-600" />
               <p className="text-sm text-orange-600 dark:text-orange-400">
@@ -681,10 +731,12 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           )}
 
           {/* Daily reset info */}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            {language === 'ar' ? 'الحصة المجانية تتجدد يومياً' : 'Free quota resets daily'}
-          </div>
+          {!quotaError && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              {language === 'ar' ? 'الحصة المجانية تتجدد يومياً' : 'Free quota resets daily'}
+            </div>
+          )}
 
           {/* Language Selector */}
           <div>
@@ -756,7 +808,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
             <Button
               onClick={isRecording ? stopRecording : startRecording}
-              disabled={isProcessing || !canTranslate}
+              disabled={isProcessing || (!quotaError && !canTranslate)}
               size="lg"
               className={cn(
                 "h-16 w-16 rounded-full transition-all duration-200",
@@ -815,7 +867,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           )}
 
           {/* Extra translations purchase */}
-          {!isAtHardLimit && userQuota.extra_translations === 0 && (
+          {!quotaError && !isAtHardLimit && userQuota.extra_translations === 0 && (
             <div className="pt-2 border-t">
               <Button 
                 variant="outline" 
