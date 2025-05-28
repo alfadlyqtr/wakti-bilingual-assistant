@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -179,8 +179,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     isAtSoftLimit,
     isAtHardLimit,
     canTranslate,
-    MAX_DAILY_TRANSLATIONS,
-    loadUserQuota
+    MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
 
   const [isRecording, setIsRecording] = useState(false);
@@ -192,34 +191,39 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isPlaying, setIsPlaying] = useState(false);
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
-  const [audioManager] = useState(() => new AudioManager());
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize audio and check for mobile restrictions
+  // Memoize the audio manager to prevent recreation on every render
+  const audioManager = useMemo(() => new AudioManager(), []);
+
+  // Debounced audio unlock check to prevent rapid state changes
+  const checkAudioUnlock = useCallback(() => {
+    const needsUnlock = audioManager.needsUnlock();
+    setNeedsAudioUnlock(needsUnlock);
+  }, [audioManager]);
+
+  // Initialize audio only when popup opens, with debouncing
   useEffect(() => {
     if (open) {
-      const checkAudioState = () => {
-        setNeedsAudioUnlock(audioManager.needsUnlock());
-      };
-      
-      checkAudioState();
-      setTimeout(checkAudioState, 100);
+      checkAudioUnlock();
+      // Debounce the check to prevent rapid state changes
+      const timeoutId = setTimeout(checkAudioUnlock, 100);
+      return () => clearTimeout(timeoutId);
     }
-  }, [open, audioManager]);
+  }, [open, checkAudioUnlock]);
 
-  // Load data on mount
+  // Load data on mount - removed loadUserQuota dependency to prevent infinite loop
   useEffect(() => {
     if (open && user) {
       loadTranslationHistory();
       loadAudioCache();
-      // Refresh quota when popup opens
-      loadUserQuota();
+      // Don't call loadUserQuota here - it's handled by the hook itself
     }
-  }, [open, user, loadUserQuota]);
+  }, [open, user?.id]); // Only depend on user ID
 
   // Cleanup recording timer
   useEffect(() => {
@@ -231,7 +235,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     };
   }, [audioManager]);
 
-  const loadTranslationHistory = () => {
+  const loadTranslationHistory = useCallback(() => {
     try {
       const stored = localStorage.getItem('voice_translator_history');
       if (stored) {
@@ -245,9 +249,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.error('Error loading translation history:', error);
       setTranslationHistory([]);
     }
-  };
+  }, []);
 
-  const loadAudioCache = () => {
+  const loadAudioCache = useCallback(() => {
     try {
       const stored = localStorage.getItem('voice_translator_audio_cache');
       if (stored) {
@@ -267,17 +271,17 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.error('Error loading audio cache:', error);
       setAudioCache({});
     }
-  };
+  }, []);
 
-  const saveTranslationHistory = (history: TranslationItem[]) => {
+  const saveTranslationHistory = useCallback((history: TranslationItem[]) => {
     try {
       localStorage.setItem('voice_translator_history', JSON.stringify(history));
     } catch (error) {
       console.error('Error saving translation history:', error);
     }
-  };
+  }, []);
 
-  const saveAudioCache = (cache: CachedAudio) => {
+  const saveAudioCache = useCallback((cache: CachedAudio) => {
     try {
       const entries = Object.entries(cache);
       if (entries.length > MAX_CACHE_SIZE) {
@@ -293,23 +297,25 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('Error saving audio cache:', error);
     }
-  };
+  }, []);
 
-  const addToHistory = (translation: TranslationItem) => {
-    const newHistory = [translation, ...translationHistory.slice(0, MAX_HISTORY_ITEMS - 1)];
-    setTranslationHistory(newHistory);
-    saveTranslationHistory(newHistory);
-  };
+  const addToHistory = useCallback((translation: TranslationItem) => {
+    setTranslationHistory(prev => {
+      const newHistory = [translation, ...prev.slice(0, MAX_HISTORY_ITEMS - 1)];
+      saveTranslationHistory(newHistory);
+      return newHistory;
+    });
+  }, [saveTranslationHistory]);
 
-  const selectFromHistory = (item: TranslationItem) => {
+  const selectFromHistory = useCallback((item: TranslationItem) => {
     setTranslatedText(item.translatedText);
-  };
+  }, []);
 
-  const getFirstWords = (text: string, wordCount: number = 3) => {
+  const getFirstWords = useCallback((text: string, wordCount: number = 3) => {
     return text.split(' ').slice(0, wordCount).join(' ');
-  };
+  }, []);
 
-  const unlockAudioContext = async () => {
+  const unlockAudioContext = useCallback(async () => {
     try {
       const success = await audioManager.unlockAudio();
       setNeedsAudioUnlock(!success);
@@ -324,9 +330,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('Failed to unlock audio context:', error);
     }
-  };
+  }, [audioManager, language]);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
     if (!quotaError && !canTranslate) {
       toast({
         title: language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached',
@@ -400,9 +406,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         variant: 'destructive'
       });
     }
-  };
+  }, [quotaError, canTranslate, isOnCooldown, language]);
 
-  const stopRecording = () => {
+  const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
@@ -412,9 +418,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         recordingTimerRef.current = null;
       }
     }
-  };
+  }, [isRecording]);
 
-  const processVoiceTranslation = async (audioBlob: Blob) => {
+  const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
 
@@ -502,9 +508,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  };
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]);
 
-  const playTranslatedText = async (text: string, retryAttempt: number = 0) => {
+  const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
     if (needsAudioUnlock) {
       toast({
         title: language === 'ar' ? '🔊 مطلوب تفعيل الصوت' : '🔊 Audio Unlock Required',
@@ -608,9 +614,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } finally {
       setIsPlaying(false);
     }
-  };
+  }, [needsAudioUnlock, audioManager, selectedLanguage, audioCache, saveAudioCache, language]);
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = useCallback(async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       toast({
@@ -620,17 +626,17 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('Failed to copy text:', error);
     }
-  };
+  }, [language]);
 
-  const formatRecordingTime = (seconds: number) => {
+  const formatRecordingTime = useCallback((seconds: number) => {
     const remainingTime = MAX_RECORDING_TIME - seconds;
     return `${remainingTime}s`;
-  };
+  }, []);
 
-  const handlePurchaseExtra = async () => {
+  const handlePurchaseExtra = useCallback(async () => {
     const success = await purchaseExtraTranslations(EXTRA_TRANSLATIONS_COUNT);
     return success;
-  };
+  }, [purchaseExtraTranslations]);
 
   if (isLoadingQuota) {
     return (

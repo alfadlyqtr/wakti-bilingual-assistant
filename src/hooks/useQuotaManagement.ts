@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -19,7 +19,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const MAX_DAILY_TRANSLATIONS = 25;
   const SOFT_WARNING_THRESHOLD = 20;
 
-  const loadUserQuota = async () => {
+  // Memoize the loadUserQuota function to prevent infinite re-renders
+  const loadUserQuota = useCallback(async () => {
     if (!user) return;
     
     try {
@@ -62,9 +63,9 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     } finally {
       setIsLoadingQuota(false);
     }
-  };
+  }, [user, language]); // Only depend on user and language
 
-  const incrementTranslationCount = async (): Promise<boolean> => {
+  const incrementTranslationCount = useCallback(async (): Promise<boolean> => {
     if (!user) {
       console.warn('⚠️ No user found for quota increment');
       return false;
@@ -89,11 +90,11 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         
         if (result.success) {
           // Update local state immediately
-          setUserQuota({
+          setUserQuota(prev => ({
             daily_count: result.daily_count,
             extra_translations: result.extra_translations,
-            purchase_date: userQuota.purchase_date
-          });
+            purchase_date: prev.purchase_date
+          }));
           
           console.log('📊 Updated quota state:', {
             daily_count: result.daily_count,
@@ -131,9 +132,9 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       console.log('🔄 Using fallback - allowing translation to continue despite quota error');
       return true;
     }
-  };
+  }, [user, userQuota, language]);
 
-  const purchaseExtraTranslations = async (count: number = 100) => {
+  const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
     if (!user) return false;
 
     try {
@@ -177,20 +178,29 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       });
       return false;
     }
-  };
+  }, [user, language]);
 
-  // Auto-load quota when user changes
+  // Only load quota when user changes, not on every render
   useEffect(() => {
-    if (user) {
+    if (user && !isLoadingQuota) {
       loadUserQuota();
     }
-  }, [user]);
+  }, [user?.id]); // Only depend on user ID, not the entire user object or loadUserQuota function
 
-  // Helper computed values
-  const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
-  const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
-  const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
-  const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+  // Memoize computed values to prevent unnecessary re-renders
+  const computedValues = useMemo(() => {
+    const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
+    const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
+    const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
+    const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+
+    return {
+      remainingFreeTranslations,
+      isAtSoftLimit,
+      isAtHardLimit,
+      canTranslate
+    };
+  }, [userQuota, quotaError, MAX_DAILY_TRANSLATIONS, SOFT_WARNING_THRESHOLD]);
 
   return {
     userQuota,
@@ -199,11 +209,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     loadUserQuota,
     incrementTranslationCount,
     purchaseExtraTranslations,
-    remainingFreeTranslations,
-    isAtSoftLimit,
-    isAtHardLimit,
-    canTranslate,
     MAX_DAILY_TRANSLATIONS,
-    SOFT_WARNING_THRESHOLD
+    SOFT_WARNING_THRESHOLD,
+    ...computedValues
   };
 };
