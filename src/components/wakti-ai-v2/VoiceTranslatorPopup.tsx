@@ -1,7 +1,9 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,18 +35,11 @@ interface CachedAudio {
   };
 }
 
-interface UserQuota {
-  daily_count: number;
-  extra_translations: number;
-  purchase_date?: string;
-}
-
 // Audio management class for better mobile/desktop compatibility
 class AudioManager {
   private audioContext: AudioContext | null = null;
-  private audioQueue: HTMLAudioElement[] = [];
-  private isPlaying: boolean = false;
   private currentAudio: HTMLAudioElement | null = null;
+  private isPlaying: boolean = false;
 
   constructor() {
     this.initializeAudioContext();
@@ -78,17 +73,14 @@ class AudioManager {
   async playAudio(base64Audio: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // Stop any currently playing audio
         this.stopCurrentAudio();
 
         const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
         this.currentAudio = audio;
         
-        // Enhanced mobile compatibility settings
         audio.preload = 'auto';
         audio.volume = 1.0;
         
-        // Set up event listeners
         audio.onloadeddata = () => {
           console.log('🔊 Audio loaded successfully');
         };
@@ -113,7 +105,6 @@ class AudioManager {
           reject(new Error('Audio playback failed'));
         };
 
-        // Try to play immediately for better mobile support
         const playPromise = audio.play();
         if (playPromise) {
           playPromise.catch((error) => {
@@ -121,7 +112,6 @@ class AudioManager {
           });
         }
         
-        // Load the audio
         audio.load();
       } catch (error) {
         console.error('🔊 Audio setup error:', error);
@@ -166,21 +156,33 @@ const SUPPORTED_LANGUAGES = [
   { code: 'sv', name: 'Svenska (Swedish)' }
 ];
 
-const MAX_DAILY_TRANSLATIONS = 25;
-const SOFT_WARNING_THRESHOLD = 20;
-const MAX_RECORDING_TIME = 15; // 15 seconds
-const COOLDOWN_TIME = 5000; // 5 seconds
-const EXTRA_TRANSLATIONS_PRICE = 10; // 10 QAR
+const MAX_RECORDING_TIME = 15;
+const COOLDOWN_TIME = 5000;
+const EXTRA_TRANSLATIONS_PRICE = 10;
 const EXTRA_TRANSLATIONS_COUNT = 100;
 const MAX_HISTORY_ITEMS = 5;
-const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const MAX_CACHE_SIZE = 50; // Maximum cached audio items
+const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
+const MAX_CACHE_SIZE = 50;
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
-  const [userQuota, setUserQuota] = useState<UserQuota>({ daily_count: 0, extra_translations: 0 });
+  
+  // Use the quota management hook
+  const {
+    userQuota,
+    isLoadingQuota,
+    quotaError,
+    incrementTranslationCount,
+    purchaseExtraTranslations,
+    remainingFreeTranslations,
+    isAtSoftLimit,
+    isAtHardLimit,
+    canTranslate,
+    MAX_DAILY_TRANSLATIONS
+  } = useQuotaManagement(language);
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -190,11 +192,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isPlaying, setIsPlaying] = useState(false);
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
-  const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [audioManager] = useState(() => new AudioManager());
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -208,8 +207,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       };
       
       checkAudioState();
-      
-      // Check again after a brief delay for iOS
       setTimeout(checkAudioState, 100);
     }
   }, [open, audioManager]);
@@ -217,7 +214,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   // Load data on mount
   useEffect(() => {
     if (open && user) {
-      loadUserQuota();
       loadTranslationHistory();
       loadAudioCache();
     }
@@ -232,51 +228,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       audioManager.stopCurrentAudio();
     };
   }, [audioManager]);
-
-  const loadUserQuota = async () => {
-    if (!user) return;
-    
-    try {
-      setIsLoadingQuota(true);
-      setQuotaError(null);
-      
-      console.log('🔄 Loading user quota for user:', user.id);
-      
-      const { data, error } = await supabase.rpc('get_or_create_user_quota', {
-        p_user_id: user.id
-      });
-
-      if (error) {
-        console.error('❌ Error loading user quota:', error);
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        const quota = data[0];
-        console.log('✅ User quota loaded successfully:', quota);
-        setUserQuota({
-          daily_count: quota.daily_count,
-          extra_translations: quota.extra_translations,
-          purchase_date: quota.purchase_date
-        });
-      } else {
-        console.warn('⚠️ No quota data returned, using defaults');
-        setUserQuota({ daily_count: 0, extra_translations: 0 });
-      }
-    } catch (error) {
-      console.error('❌ Error loading user quota:', error);
-      setQuotaError('Failed to load quota data');
-      setUserQuota({ daily_count: 0, extra_translations: 0 });
-      
-      toast({
-        title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar' ? 'تعذر تحميل بيانات الحصة، ولكن يمكنك المتابعة' : 'Could not load quota data, but you can continue',
-        variant: 'default'
-      });
-    } finally {
-      setIsLoadingQuota(false);
-    }
-  };
 
   const loadTranslationHistory = () => {
     try {
@@ -299,7 +250,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       const stored = localStorage.getItem('voice_translator_audio_cache');
       if (stored) {
         const cache = JSON.parse(stored);
-        // Clean expired cache entries
         const now = Date.now();
         const cleanedCache: CachedAudio = {};
         
@@ -327,10 +277,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
   const saveAudioCache = (cache: CachedAudio) => {
     try {
-      // Limit cache size
       const entries = Object.entries(cache);
       if (entries.length > MAX_CACHE_SIZE) {
-        // Keep only the most recent entries
         entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
         const limitedCache: CachedAudio = {};
         entries.slice(0, MAX_CACHE_SIZE).forEach(([key, value]) => {
@@ -359,83 +307,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return text.split(' ').slice(0, wordCount).join(' ');
   };
 
-  const incrementTranslationCount = async (): Promise<boolean> => {
-    if (!user) return false;
-
-    try {
-      console.log('🔄 Incrementing translation count for user:', user.id);
-      
-      const { data, error } = await supabase.rpc('increment_translation_usage', {
-        p_user_id: user.id
-      });
-
-      if (error) {
-        console.error('❌ Error incrementing translation count:', error);
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        const result = data[0];
-        console.log('✅ Translation count result:', result);
-        
-        if (result.success) {
-          setUserQuota({
-            daily_count: result.daily_count,
-            extra_translations: result.extra_translations
-          });
-          return true;
-        } else {
-          console.warn('⚠️ Translation count increment failed - quota exceeded');
-          return false;
-        }
-      }
-      
-      console.warn('⚠️ No data returned from increment function');
-      return false;
-    } catch (error) {
-      console.error('❌ Error incrementing translation count:', error);
-      console.log('🔄 Using fallback - allowing translation to continue despite quota error');
-      return true;
-    }
-  };
-
-  const purchaseExtraTranslations = async () => {
-    if (!user) return;
-
-    try {
-      const { data, error } = await supabase.rpc('purchase_extra_translations', {
-        p_user_id: user.id,
-        p_count: EXTRA_TRANSLATIONS_COUNT
-      });
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const result = data[0];
-        if (result.success) {
-          setUserQuota(prev => ({
-            ...prev,
-            extra_translations: result.new_extra_count
-          }));
-          
-          toast({
-            title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
-            description: language === 'ar' 
-              ? `تم إضافة ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية` 
-              : `Added ${EXTRA_TRANSLATIONS_COUNT} extra translations`,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error purchasing extra translations:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
-        description: language === 'ar' ? 'فشل في شراء الترجمات الإضافية' : 'Failed to purchase extra translations',
-        variant: 'destructive'
-      });
-    }
-  };
-
   const unlockAudioContext = async () => {
     try {
       const success = await audioManager.unlockAudio();
@@ -454,8 +325,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   };
 
   const startRecording = async () => {
-    const canTranslate = quotaError || userQuota.daily_count < MAX_DAILY_TRANSLATIONS || userQuota.extra_translations > 0;
-    
     if (!quotaError && !canTranslate) {
       toast({
         title: language === 'ar' ? 'تم الوصول للحد اليومي' : 'Daily Limit Reached',
@@ -643,7 +512,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     try {
       setIsPlaying(true);
       
-      // Check cache first
       const cacheKey = `${text}_${selectedLanguage}`;
       if (audioCache[cacheKey] && audioCache[cacheKey].data) {
         console.log('🔊 Playing from cache:', cacheKey);
@@ -652,7 +520,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      // Call TTS service
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -671,7 +538,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         },
         body: JSON.stringify({
           text: text,
-          voice: 'alloy' // Always use alloy voice as required
+          voice: 'alloy'
         })
       });
 
@@ -682,7 +549,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         if (audioContent) {
           console.log(`🔊 TTS generated successfully, size: ${result.size || 'unknown'} bytes`);
           
-          // Cache the audio with metadata
           const newCache = { 
             ...audioCache, 
             [cacheKey]: {
@@ -703,7 +569,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         const errorText = await response.text();
         console.error('🔊 TTS error:', response.status, errorText);
         
-        // Retry logic for certain errors
         if (response.status >= 500 && retryAttempt < 2) {
           console.log(`🔊 Retrying TTS request (attempt ${retryAttempt + 1})`);
           setTimeout(() => {
@@ -717,7 +582,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
       
-      // Show user-friendly error message
       let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio';
       if (error.message.includes('Rate limit')) {
         errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
@@ -752,10 +616,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return `${remainingTime}s`;
   };
 
-  const remainingFreeTranslations = MAX_DAILY_TRANSLATIONS - userQuota.daily_count;
-  const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
-  const isAtHardLimit = userQuota.daily_count >= MAX_DAILY_TRANSLATIONS && userQuota.extra_translations === 0;
-  const canTranslate = quotaError || remainingFreeTranslations > 0 || userQuota.extra_translations > 0;
+  const handlePurchaseExtra = async () => {
+    const success = await purchaseExtraTranslations(EXTRA_TRANSLATIONS_COUNT);
+    return success;
+  };
 
   if (isLoadingQuota) {
     return (
@@ -840,7 +704,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                   : "You've reached your daily translation limit."
                 }
               </p>
-              <Button size="sm" onClick={purchaseExtraTranslations} className="ml-auto">
+              <Button size="sm" onClick={handlePurchaseExtra} className="ml-auto">
                 <Plus className="h-3 w-3 mr-1" />
                 {EXTRA_TRANSLATIONS_PRICE} QAR
               </Button>
@@ -863,7 +727,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           {!quotaError && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
-              {language === 'ar' ? 'الحصة المجانية تتجدد يومياً' : 'Free quota resets daily'}
+              {language === 'ar' ? 'الحصة المجانية تتجدد يومياً في منتصف الليل' : 'Free quota resets daily at midnight'}
             </div>
           )}
 
@@ -886,7 +750,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </Select>
           </div>
 
-          {/* Playback Toggle and Previous Translations Dropdown - Same Line */}
+          {/* Playback Toggle and Previous Translations Dropdown */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center space-x-2">
               <Switch 
@@ -1001,7 +865,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={purchaseExtraTranslations}
+                onClick={handlePurchaseExtra}
                 className="w-full"
               >
                 <Plus className="h-3 w-3 mr-2" />
