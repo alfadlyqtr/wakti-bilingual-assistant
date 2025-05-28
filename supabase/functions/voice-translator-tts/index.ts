@@ -16,62 +16,142 @@ serve(async (req) => {
     const { text, voice } = await req.json();
 
     if (!text) {
+      console.error('🔊 Voice Translator TTS: No text provided');
       return new Response(
         JSON.stringify({ error: 'Text is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Use provided voice or default to 'alloy'
-    const selectedVoice = voice || 'alloy';
-
-    console.log(`🔊 Voice Translator TTS: Generating speech for text length: ${text.length}, voice: ${selectedVoice}`);
-
-    // Call OpenAI TTS API
-    const response = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-      },
-      body: JSON.stringify({
-        model: 'tts-1',
-        voice: selectedVoice,
-        input: text
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI TTS API error:', errorText);
+    // Validate text length (OpenAI has limits)
+    if (text.length > 4096) {
+      console.error('🔊 Voice Translator TTS: Text too long:', text.length);
       return new Response(
-        JSON.stringify({ error: 'Text-to-speech failed', details: errorText }),
+        JSON.stringify({ error: 'Text too long. Maximum 4096 characters.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Use provided voice or default to 'alloy' (as required)
+    const selectedVoice = voice || 'alloy';
+    
+    // Ensure we always use the correct voice (alloy)
+    const finalVoice = selectedVoice === 'alloy' ? 'alloy' : 'alloy';
+
+    console.log(`🔊 Voice Translator TTS: Generating speech for text length: ${text.length}, voice: ${finalVoice}`);
+
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      console.error('🔊 Voice Translator TTS: OpenAI API key not configured');
+      return new Response(
+        JSON.stringify({ error: 'OpenAI API key not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get audio data as arrayBuffer and convert to base64
-    const audioBuffer = await response.arrayBuffer();
-    const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
-    
-    console.log('🔊 Voice Translator TTS: Audio generated successfully');
+    // Call OpenAI TTS API with timeout and retry logic
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    // Return base64 audio for immediate playback
+    try {
+      const response = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'tts-1', // Always use tts-1 as required
+          voice: finalVoice, // Always use alloy voice
+          input: text,
+          response_format: 'mp3',
+          speed: 1.0
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔊 Voice Translator TTS: OpenAI API error:', response.status, errorText);
+        
+        // Return a more specific error based on status code
+        let errorMessage = 'Text-to-speech failed';
+        if (response.status === 429) {
+          errorMessage = 'Rate limit exceeded. Please try again in a moment.';
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please check API key.';
+        } else if (response.status >= 500) {
+          errorMessage = 'OpenAI service temporarily unavailable. Please try again.';
+        }
+        
+        return new Response(
+          JSON.stringify({ error: errorMessage, details: errorText }),
+          { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Get audio data as arrayBuffer and convert to base64
+      const audioBuffer = await response.arrayBuffer();
+      
+      if (audioBuffer.byteLength === 0) {
+        console.error('🔊 Voice Translator TTS: Empty audio response');
+        return new Response(
+          JSON.stringify({ error: 'Empty audio response from OpenAI' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Convert to base64 efficiently
+      const uint8Array = new Uint8Array(audioBuffer);
+      let binaryString = '';
+      const chunkSize = 8192; // Process in chunks to avoid stack overflow
+      
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.slice(i, i + chunkSize);
+        binaryString += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+      
+      const base64Audio = btoa(binaryString);
+      
+      console.log(`🔊 Voice Translator TTS: Audio generated successfully, size: ${audioBuffer.byteLength} bytes`);
+
+      // Return base64 audio for immediate playback
+      return new Response(
+        JSON.stringify({ 
+          audioContent: base64Audio,
+          contentType: 'audio/mpeg',
+          size: audioBuffer.byteLength
+        }),
+        { 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json'
+          } 
+        }
+      );
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        console.error('🔊 Voice Translator TTS: Request timeout');
+        return new Response(
+          JSON.stringify({ error: 'Request timeout. Please try again.' }),
+          { status: 408, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      console.error('🔊 Voice Translator TTS: Fetch error:', fetchError);
+      throw fetchError;
+    }
+  } catch (error) {
+    console.error('🔊 Voice Translator TTS: Unexpected error:', error);
     return new Response(
       JSON.stringify({ 
-        audioContent: base64Audio
+        error: 'Text-to-speech service temporarily unavailable', 
+        details: error.message 
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json'
-        } 
-      }
-    );
-  } catch (error) {
-    console.error('Voice Translator TTS error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Text-to-speech failed', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

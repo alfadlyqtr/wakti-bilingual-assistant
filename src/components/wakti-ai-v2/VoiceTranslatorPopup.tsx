@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -27,13 +26,126 @@ interface TranslationItem {
 }
 
 interface CachedAudio {
-  [text: string]: string; // base64 audio data
+  [text: string]: {
+    data: string;
+    timestamp: number;
+    size: number;
+  };
 }
 
 interface UserQuota {
   daily_count: number;
   extra_translations: number;
   purchase_date?: string;
+}
+
+// Audio management class for better mobile/desktop compatibility
+class AudioManager {
+  private audioContext: AudioContext | null = null;
+  private audioQueue: HTMLAudioElement[] = [];
+  private isPlaying: boolean = false;
+  private currentAudio: HTMLAudioElement | null = null;
+
+  constructor() {
+    this.initializeAudioContext();
+  }
+
+  private async initializeAudioContext() {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass();
+      }
+    } catch (error) {
+      console.warn('AudioContext initialization failed:', error);
+    }
+  }
+
+  async unlockAudio(): Promise<boolean> {
+    try {
+      if (this.audioContext && this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+        console.log('🔊 AudioContext unlocked successfully');
+        return true;
+      }
+      return this.audioContext?.state === 'running' || false;
+    } catch (error) {
+      console.error('Failed to unlock AudioContext:', error);
+      return false;
+    }
+  }
+
+  async playAudio(base64Audio: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Stop any currently playing audio
+        this.stopCurrentAudio();
+
+        const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
+        this.currentAudio = audio;
+        
+        // Enhanced mobile compatibility settings
+        audio.preload = 'auto';
+        audio.volume = 1.0;
+        
+        // Set up event listeners
+        audio.onloadeddata = () => {
+          console.log('🔊 Audio loaded successfully');
+        };
+        
+        audio.oncanplaythrough = () => {
+          console.log('🔊 Audio ready to play');
+          this.isPlaying = true;
+          audio.play().catch(reject);
+        };
+        
+        audio.onended = () => {
+          console.log('🔊 Audio playback completed');
+          this.isPlaying = false;
+          this.currentAudio = null;
+          resolve();
+        };
+        
+        audio.onerror = (error) => {
+          console.error('🔊 Audio playback error:', error);
+          this.isPlaying = false;
+          this.currentAudio = null;
+          reject(new Error('Audio playback failed'));
+        };
+
+        // Try to play immediately for better mobile support
+        const playPromise = audio.play();
+        if (playPromise) {
+          playPromise.catch((error) => {
+            console.error('🔊 Immediate play failed, will retry on canplaythrough:', error);
+          });
+        }
+        
+        // Load the audio
+        audio.load();
+      } catch (error) {
+        console.error('🔊 Audio setup error:', error);
+        reject(error);
+      }
+    });
+  }
+
+  stopCurrentAudio() {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
+      this.currentAudio = null;
+      this.isPlaying = false;
+    }
+  }
+
+  isAudioPlaying(): boolean {
+    return this.isPlaying;
+  }
+
+  needsUnlock(): boolean {
+    return this.audioContext?.state === 'suspended' || false;
+  }
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -61,6 +173,8 @@ const COOLDOWN_TIME = 5000; // 5 seconds
 const EXTRA_TRANSLATIONS_PRICE = 10; // 10 QAR
 const EXTRA_TRANSLATIONS_COUNT = 100;
 const MAX_HISTORY_ITEMS = 5;
+const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_CACHE_SIZE = 50; // Maximum cached audio items
 
 export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
@@ -77,45 +191,28 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
-  const [audioContextUnlocked, setAudioContextUnlocked] = useState(false);
+  const [audioManager] = useState(() => new AudioManager());
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize audio context and check for mobile restrictions
+  // Initialize audio and check for mobile restrictions
   useEffect(() => {
-    const initAudioContext = () => {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          audioContextRef.current = new AudioContextClass();
-          
-          // Check if audio context is suspended (mobile restriction)
-          if (audioContextRef.current.state === 'suspended') {
-            setNeedsAudioUnlock(true);
-          } else {
-            setAudioContextUnlocked(true);
-          }
-        }
-      } catch (error) {
-        console.warn('AudioContext not available:', error);
-      }
-    };
-
     if (open) {
-      initAudioContext();
+      const checkAudioState = () => {
+        setNeedsAudioUnlock(audioManager.needsUnlock());
+      };
+      
+      checkAudioState();
+      
+      // Check again after a brief delay for iOS
+      setTimeout(checkAudioState, 100);
     }
-
-    return () => {
-      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-        audioContextRef.current.close();
-      }
-    };
-  }, [open]);
+  }, [open, audioManager]);
 
   // Load data on mount
   useEffect(() => {
@@ -132,8 +229,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
       }
+      audioManager.stopCurrentAudio();
     };
-  }, []);
+  }, [audioManager]);
 
   const loadUserQuota = async () => {
     if (!user) return;
@@ -168,7 +266,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } catch (error) {
       console.error('❌ Error loading user quota:', error);
       setQuotaError('Failed to load quota data');
-      // Set fallback quota to allow translations to continue
       setUserQuota({ daily_count: 0, extra_translations: 0 });
       
       toast({
@@ -201,7 +298,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     try {
       const stored = localStorage.getItem('voice_translator_audio_cache');
       if (stored) {
-        setAudioCache(JSON.parse(stored));
+        const cache = JSON.parse(stored);
+        // Clean expired cache entries
+        const now = Date.now();
+        const cleanedCache: CachedAudio = {};
+        
+        Object.entries(cache).forEach(([key, value]: [string, any]) => {
+          if (value.timestamp && (now - value.timestamp) < AUDIO_CACHE_EXPIRY) {
+            cleanedCache[key] = value;
+          }
+        });
+        
+        setAudioCache(cleanedCache);
       }
     } catch (error) {
       console.error('Error loading audio cache:', error);
@@ -219,7 +327,19 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
   const saveAudioCache = (cache: CachedAudio) => {
     try {
-      localStorage.setItem('voice_translator_audio_cache', JSON.stringify(cache));
+      // Limit cache size
+      const entries = Object.entries(cache);
+      if (entries.length > MAX_CACHE_SIZE) {
+        // Keep only the most recent entries
+        entries.sort((a, b) => b[1].timestamp - a[1].timestamp);
+        const limitedCache: CachedAudio = {};
+        entries.slice(0, MAX_CACHE_SIZE).forEach(([key, value]) => {
+          limitedCache[key] = value;
+        });
+        localStorage.setItem('voice_translator_audio_cache', JSON.stringify(limitedCache));
+      } else {
+        localStorage.setItem('voice_translator_audio_cache', JSON.stringify(cache));
+      }
     } catch (error) {
       console.error('Error saving audio cache:', error);
     }
@@ -274,7 +394,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       return false;
     } catch (error) {
       console.error('❌ Error incrementing translation count:', error);
-      // Return true as fallback to allow translation to continue
       console.log('🔄 Using fallback - allowing translation to continue despite quota error');
       return true;
     }
@@ -318,25 +437,23 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   };
 
   const unlockAudioContext = async () => {
-    if (!audioContextRef.current) return;
-
     try {
-      await audioContextRef.current.resume();
-      setAudioContextUnlocked(true);
-      setNeedsAudioUnlock(false);
+      const success = await audioManager.unlockAudio();
+      setNeedsAudioUnlock(!success);
       
-      toast({
-        title: language === 'ar' ? '🔊 تم تفعيل الصوت' : '🔊 Audio Unlocked',
-        description: language === 'ar' ? 'يمكنك الآن تشغيل الترجمات صوتياً' : 'You can now play translations with audio',
-        duration: 2000
-      });
+      if (success) {
+        toast({
+          title: language === 'ar' ? '🔊 تم تفعيل الصوت' : '🔊 Audio Unlocked',
+          description: language === 'ar' ? 'يمكنك الآن تشغيل الترجمات صوتياً' : 'You can now play translations with audio',
+          duration: 2000
+        });
+      }
     } catch (error) {
       console.error('Failed to unlock audio context:', error);
     }
   };
 
   const startRecording = async () => {
-    // Allow recording even if quota loading failed (fallback behavior)
     const canTranslate = quotaError || userQuota.daily_count < MAX_DAILY_TRANSLATIONS || userQuota.extra_translations > 0;
     
     if (!quotaError && !canTranslate) {
@@ -360,7 +477,16 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 44100,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+      
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
@@ -451,7 +577,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       console.log('🎤 Voice Translator result:', result);
 
       if (result.translatedText) {
-        // Try to increment usage count, but continue even if it fails
         let usageSuccess = false;
         if (!quotaError) {
           usageSuccess = await incrementTranslationCount();
@@ -462,7 +587,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
         setTranslatedText(result.translatedText);
         
-        // Add to history
         const newTranslation: TranslationItem = {
           id: Date.now().toString(),
           originalText: result.originalText,
@@ -473,7 +597,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         };
         addToHistory(newTranslation);
         
-        // Start cooldown
         setIsOnCooldown(true);
         setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
 
@@ -482,8 +605,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           description: language === 'ar' ? 'تم إنجاز الترجمة بنجاح' : 'Translation completed successfully',
         });
 
-        // Auto-play if enabled and audio is unlocked
-        if (playbackEnabled && (audioContextUnlocked || !needsAudioUnlock)) {
+        if (playbackEnabled && !needsAudioUnlock) {
           playTranslatedText(result.translatedText);
         }
       } else {
@@ -502,9 +624,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   };
 
-  const playTranslatedText = async (text: string) => {
-    // Check if we need to unlock audio first
-    if (needsAudioUnlock && !audioContextUnlocked) {
+  const playTranslatedText = async (text: string, retryAttempt: number = 0) => {
+    if (needsAudioUnlock) {
       toast({
         title: language === 'ar' ? '🔊 مطلوب تفعيل الصوت' : '🔊 Audio Unlock Required',
         description: language === 'ar' ? 'اضغط زر تفعيل الصوت أولاً' : 'Please tap the audio unlock button first',
@@ -513,13 +634,21 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       return;
     }
 
+    if (audioManager.isAudioPlaying()) {
+      audioManager.stopCurrentAudio();
+      setIsPlaying(false);
+      return;
+    }
+
     try {
       setIsPlaying(true);
       
       // Check cache first
       const cacheKey = `${text}_${selectedLanguage}`;
-      if (audioCache[cacheKey]) {
-        await playAudioFromBase64(audioCache[cacheKey]);
+      if (audioCache[cacheKey] && audioCache[cacheKey].data) {
+        console.log('🔊 Playing from cache:', cacheKey);
+        await audioManager.playAudio(audioCache[cacheKey].data);
+        setIsPlaying(false);
         return;
       }
       
@@ -532,7 +661,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: alloy`);
+      console.log(`🔊 Generating TTS for language: ${selectedLanguage}, voice: alloy`);
       
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
         method: 'POST',
@@ -542,7 +671,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         },
         body: JSON.stringify({
           text: text,
-          voice: 'alloy'
+          voice: 'alloy' // Always use alloy voice as required
         })
       });
 
@@ -551,59 +680,59 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         const audioContent = result.audioContent;
         
         if (audioContent) {
-          // Cache the audio
-          const newCache = { ...audioCache, [cacheKey]: audioContent };
+          console.log(`🔊 TTS generated successfully, size: ${result.size || 'unknown'} bytes`);
+          
+          // Cache the audio with metadata
+          const newCache = { 
+            ...audioCache, 
+            [cacheKey]: {
+              data: audioContent,
+              timestamp: Date.now(),
+              size: result.size || 0
+            }
+          };
           setAudioCache(newCache);
           saveAudioCache(newCache);
           
-          await playAudioFromBase64(audioContent);
+          await audioManager.playAudio(audioContent);
           console.log('🔊 TTS playback successful');
         } else {
           throw new Error('No audio content received');
         }
       } else {
         const errorText = await response.text();
-        console.error('🔊 TTS error:', errorText);
+        console.error('🔊 TTS error:', response.status, errorText);
+        
+        // Retry logic for certain errors
+        if (response.status >= 500 && retryAttempt < 2) {
+          console.log(`🔊 Retrying TTS request (attempt ${retryAttempt + 1})`);
+          setTimeout(() => {
+            playTranslatedText(text, retryAttempt + 1);
+          }, 1000 * (retryAttempt + 1));
+          return;
+        }
+        
         throw new Error(`TTS failed: ${errorText}`);
       }
     } catch (error) {
       console.error('🔊 Error playing TTS:', error);
+      
+      // Show user-friendly error message
+      let errorMessage = language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio';
+      if (error.message.includes('Rate limit')) {
+        errorMessage = language === 'ar' ? 'تم تجاوز الحد المسموح، حاول مرة أخرى' : 'Rate limit exceeded, please try again';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = language === 'ar' ? 'انتهت مهلة الاتصال، حاول مرة أخرى' : 'Request timeout, please try again';
+      }
+      
       toast({
         title: language === 'ar' ? 'خطأ في التشغيل' : 'Playback Error',
-        description: language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
       setIsPlaying(false);
     }
-  };
-
-  const playAudioFromBase64 = async (base64Audio: string): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      try {
-        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-        
-        audio.onended = () => {
-          setIsPlaying(false);
-          resolve();
-        };
-        
-        audio.onerror = (error) => {
-          console.error('Audio playback error:', error);
-          setIsPlaying(false);
-          reject(error);
-        };
-        
-        audio.oncanplaythrough = () => {
-          audio.play().catch(reject);
-        };
-        
-        audio.load();
-      } catch (error) {
-        setIsPlaying(false);
-        reject(error);
-      }
-    });
   };
 
   const copyToClipboard = async (text: string) => {
@@ -670,7 +799,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
         <div className="space-y-4">
           {/* Audio unlock button for mobile */}
-          {needsAudioUnlock && !audioContextUnlocked && (
+          {needsAudioUnlock && (
             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <VolumeX className="h-4 w-4 text-blue-600" />
               <div className="flex-1">
