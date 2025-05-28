@@ -9,7 +9,7 @@ export interface AIMessage {
   confidence?: 'high' | 'medium' | 'low';
   actionTaken?: string;
   inputType?: 'text' | 'voice';
-  imageUrl?: string; // Add image URL field
+  imageUrl?: string;
 }
 
 export interface AIConversation {
@@ -28,6 +28,7 @@ export interface AIResponse {
   actionResult?: any;
   needsConfirmation: boolean;
   needsClarification: boolean;
+  isNewConversation?: boolean;
 }
 
 export interface TranscriptionResponse {
@@ -73,9 +74,6 @@ export class WaktiAIV2Service {
         }
       }
 
-      // Don't add translated text here for Arabic image translation - it's already handled in the backend
-      // This prevents duplication
-      
       return response;
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in sendMessage:', error);
@@ -143,14 +141,14 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Get all conversations with proper error handling
+  // Get all conversations with proper error handling - Updated to enforce 7 limit
   static async getConversations(): Promise<AIConversation[]> {
     try {
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
         .order('last_message_at', { ascending: false })
-        .limit(20);
+        .limit(7); // Only fetch the 7 most recent
 
       if (error) {
         console.error('WAKTI AI V2.1 CLIENT: Error fetching conversations:', error);
@@ -197,6 +195,18 @@ export class WaktiAIV2Service {
   // Delete conversation with proper error handling
   static async deleteConversation(conversationId: string): Promise<void> {
     try {
+      // Delete chat history first (due to foreign key constraints)
+      const { error: historyError } = await supabase
+        .from('ai_chat_history')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      if (historyError) {
+        console.error('WAKTI AI V2.1 CLIENT: Error deleting chat history:', historyError);
+        throw historyError;
+      }
+
+      // Then delete the conversation
       const { error } = await supabase
         .from('ai_conversations')
         .delete()

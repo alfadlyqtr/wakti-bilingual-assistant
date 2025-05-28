@@ -182,6 +182,7 @@ export default function WaktiAIV2() {
     try {
       const data = await WaktiAIV2Service.getConversations();
       setConversations(data);
+      console.log('🔍 WAKTI AI V2.1: Loaded conversations:', data.length);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -194,6 +195,7 @@ export default function WaktiAIV2() {
       setMessages(data);
       setCurrentConversationId(conversationId);
       setLeftDrawerOpen(false);
+      console.log('🔍 WAKTI AI V2.1: Loaded conversation messages:', data.length);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
@@ -211,6 +213,7 @@ export default function WaktiAIV2() {
     setCurrentConversationId(null);
     setAttachedImages([]);
     initializeGreeting();
+    console.log('🔍 WAKTI AI V2.1: Started new conversation');
   };
 
   const clearCurrentConversation = () => {
@@ -318,7 +321,7 @@ export default function WaktiAIV2() {
       const response = await WaktiAIV2Service.sendMessage(
         content.trim(),
         currentConversationId || undefined,
-        detectedLanguage, // Use detected language instead of theme language
+        detectedLanguage,
         inputType
       );
 
@@ -340,9 +343,18 @@ export default function WaktiAIV2() {
 
       setMessages(prev => [...prev, assistantMessage]);
       
-      if (response.conversationId && !response.conversationId.includes('error')) {
-        setCurrentConversationId(response.conversationId);
-        loadConversations();
+      // Handle new conversation creation
+      if (response.conversationId && !response.conversationId.includes('error') && !response.conversationId.includes('temp-')) {
+        if (!currentConversationId || currentConversationId !== response.conversationId) {
+          setCurrentConversationId(response.conversationId);
+          console.log('🔍 WAKTI AI V2.1: Set conversation ID:', response.conversationId);
+        }
+        
+        // If this was a new conversation, reload the conversations list
+        if (response.isNewConversation) {
+          console.log('🔍 WAKTI AI V2.1: New conversation created, reloading list');
+          await loadConversations();
+        }
       }
 
       if (response.actionTaken) {

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -66,7 +65,7 @@ serve(async (req) => {
           .single();
         userName = profile?.display_name || profile?.username || 'there';
 
-        // NEW: Fetch user knowledge for AI personalization
+        // Fetch user knowledge for AI personalization
         console.log("WAKTI AI V2.1: Fetching user knowledge for personalization");
         const { data: knowledge } = await supabaseClient
           .from('ai_user_knowledge')
@@ -91,8 +90,63 @@ serve(async (req) => {
     const analysis = analyzeMessage(message, language, inputType);
     console.log("WAKTI AI V2.1: Intent analysis:", analysis);
 
-    // Handle conversation (simplified for now)
-    let conversationIdToUse = conversationId || 'temp-' + Date.now();
+    // Handle conversation creation and management
+    let conversationIdToUse = conversationId;
+    let isNewConversation = false;
+
+    if (user && (!conversationId || conversationId.includes('temp-'))) {
+      try {
+        // Create new conversation
+        const conversationTitle = generateConversationTitle(message, language);
+        
+        const { data: newConversation, error: convError } = await supabaseClient
+          .from('ai_conversations')
+          .insert({
+            user_id: user.id,
+            title: conversationTitle,
+            last_message_at: new Date().toISOString()
+          })
+          .select('*')
+          .single();
+
+        if (convError) {
+          console.error("WAKTI AI V2.1: Error creating conversation:", convError);
+          conversationIdToUse = 'temp-' + Date.now();
+        } else {
+          conversationIdToUse = newConversation.id;
+          isNewConversation = true;
+          console.log("WAKTI AI V2.1: Created new conversation:", conversationIdToUse);
+
+          // Enforce conversation limit (keep only 7 most recent)
+          await enforceConversationLimit(supabaseClient, user.id);
+        }
+      } catch (error) {
+        console.error("WAKTI AI V2.1: Error in conversation creation:", error);
+        conversationIdToUse = 'temp-' + Date.now();
+      }
+    } else if (!conversationIdToUse) {
+      conversationIdToUse = 'temp-' + Date.now();
+    }
+
+    // Save user message to chat history if we have a valid conversation
+    if (user && conversationIdToUse && !conversationIdToUse.includes('temp-')) {
+      try {
+        await supabaseClient
+          .from('ai_chat_history')
+          .insert({
+            conversation_id: conversationIdToUse,
+            user_id: user.id,
+            role: 'user',
+            content: message,
+            input_type: inputType,
+            language: language,
+            intent: analysis.intent,
+            confidence_level: analysis.confidence
+          });
+      } catch (error) {
+        console.error("WAKTI AI V2.1: Error saving user message:", error);
+      }
+    }
 
     // SPECIAL CASE: Arabic TEXT image requests ONLY (not voice input)
     if (analysis.intent === 'image' && analysis.confidence === 'high' && language === 'ar' && inputType === 'text') {
@@ -109,6 +163,37 @@ serve(async (req) => {
 **النص المترجم:**
 ${translationResult.translatedPrompt}`;
 
+          // Save assistant response
+          if (user && conversationIdToUse && !conversationIdToUse.includes('temp-')) {
+            try {
+              await supabaseClient
+                .from('ai_chat_history')
+                .insert({
+                  conversation_id: conversationIdToUse,
+                  user_id: user.id,
+                  role: 'assistant',
+                  content: arabicResponse,
+                  input_type: 'text',
+                  language: language,
+                  intent: analysis.intent,
+                  confidence_level: analysis.confidence,
+                  action_taken: 'translate_for_image',
+                  action_result: {
+                    translatedPrompt: translationResult.translatedPrompt,
+                    originalPrompt: analysis.actionData.prompt
+                  }
+                });
+
+              // Update conversation last message time
+              await supabaseClient
+                .from('ai_conversations')
+                .update({ last_message_at: new Date().toISOString() })
+                .eq('id', conversationIdToUse);
+            } catch (error) {
+              console.error("WAKTI AI V2.1: Error saving assistant response:", error);
+            }
+          }
+
           return new Response(
             JSON.stringify({
               response: arabicResponse,
@@ -122,6 +207,7 @@ ${translationResult.translatedPrompt}`;
               },
               needsConfirmation: false,
               needsClarification: false,
+              isNewConversation: isNewConversation
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -142,6 +228,7 @@ ${translationResult.translatedPrompt}`;
             confidence: 'low',
             needsConfirmation: false,
             needsClarification: true,
+            isNewConversation: isNewConversation
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -154,7 +241,7 @@ ${translationResult.translatedPrompt}`;
       analysis,
       language,
       userName,
-      userKnowledge, // NEW: Pass user knowledge to AI
+      userKnowledge,
       [] // Empty context for now to simplify
     );
 
@@ -183,6 +270,34 @@ ${translationResult.translatedPrompt}`;
       }
     }
 
+    // Save assistant response to chat history
+    if (user && conversationIdToUse && !conversationIdToUse.includes('temp-')) {
+      try {
+        await supabaseClient
+          .from('ai_chat_history')
+          .insert({
+            conversation_id: conversationIdToUse,
+            user_id: user.id,
+            role: 'assistant',
+            content: aiResponse,
+            input_type: 'text',
+            language: language,
+            intent: analysis.intent,
+            confidence_level: analysis.confidence,
+            action_taken: actionTaken,
+            action_result: actionResult
+          });
+
+        // Update conversation last message time
+        await supabaseClient
+          .from('ai_conversations')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', conversationIdToUse);
+      } catch (error) {
+        console.error("WAKTI AI V2.1: Error saving assistant response:", error);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         response: aiResponse,
@@ -193,6 +308,7 @@ ${translationResult.translatedPrompt}`;
         actionResult: actionResult,
         needsConfirmation: analysis.confidence === 'medium',
         needsClarification: analysis.confidence === 'low',
+        isNewConversation: isNewConversation
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -209,6 +325,79 @@ ${translationResult.translatedPrompt}`;
     );
   }
 });
+
+// Enforce conversation limit - keep only 7 most recent conversations
+async function enforceConversationLimit(supabaseClient: any, userId: string) {
+  try {
+    console.log("WAKTI AI V2.1: Enforcing conversation limit for user:", userId);
+    
+    // Get conversations ordered by last message time (newest first)
+    const { data: conversations, error } = await supabaseClient
+      .from('ai_conversations')
+      .select('id, last_message_at')
+      .eq('user_id', userId)
+      .order('last_message_at', { ascending: false });
+
+    if (error) {
+      console.error("WAKTI AI V2.1: Error fetching conversations for cleanup:", error);
+      return;
+    }
+
+    // If we have more than 7 conversations, delete the oldest ones
+    if (conversations && conversations.length > 7) {
+      const conversationsToDelete = conversations.slice(7); // Keep first 7, delete rest
+      const idsToDelete = conversationsToDelete.map(conv => conv.id);
+      
+      console.log("WAKTI AI V2.1: Deleting", idsToDelete.length, "old conversations");
+
+      // Delete chat history for these conversations first
+      const { error: historyError } = await supabaseClient
+        .from('ai_chat_history')
+        .delete()
+        .in('conversation_id', idsToDelete);
+
+      if (historyError) {
+        console.error("WAKTI AI V2.1: Error deleting old chat history:", historyError);
+      }
+
+      // Delete the conversations
+      const { error: deleteError } = await supabaseClient
+        .from('ai_conversations')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) {
+        console.error("WAKTI AI V2.1: Error deleting old conversations:", deleteError);
+      } else {
+        console.log("WAKTI AI V2.1: Successfully deleted", idsToDelete.length, "old conversations");
+      }
+    }
+  } catch (error) {
+    console.error("WAKTI AI V2.1: Error in enforceConversationLimit:", error);
+  }
+}
+
+// Generate conversation title from first message
+function generateConversationTitle(message: string, language: string) {
+  // Remove common command patterns
+  const cleanMessage = message
+    .replace(/^(create task|add task|new task|أنشئ مهمة|أضف مهمة)/gi, '')
+    .replace(/^(create event|add event|schedule|أنشئ حدث|أضف حدث)/gi, '')
+    .replace(/^(remind me|reminder|ذكرني|تذكير)/gi, '')
+    .replace(/^(generate image|create image|أنشئ صورة|ارسم)/gi, '')
+    .trim();
+
+  // Take first few words and limit length
+  const words = cleanMessage.split(' ').slice(0, 4).join(' ');
+  const title = words.length > 30 ? words.substring(0, 30) + '...' : words;
+  
+  // Fallback to default if title is too short
+  if (title.length < 3) {
+    return language === 'ar' ? 'محادثة جديدة' : 'New Chat';
+  }
+  
+  return title;
+}
 
 // Call the generate-image edge function
 async function callImageGenerationFunction(prompt: string, authHeader: string | null) {
