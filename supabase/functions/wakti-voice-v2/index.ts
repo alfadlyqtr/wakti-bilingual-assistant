@@ -68,16 +68,25 @@ serve(async (req) => {
 
     console.log('🎤 WAKTI VOICE V2: Processing audio blob, size:', audioBlob.size, 'language:', language);
 
-    // Prepare form data for OpenAI Whisper
+    // Prepare form data for OpenAI Whisper - FIXED FOR TRANSCRIPTION ONLY
     const whisperFormData = new FormData();
     whisperFormData.append('file', audioBlob, 'audio.webm');
     whisperFormData.append('model', 'whisper-1');
-    whisperFormData.append('language', language === 'ar' ? 'ar' : 'en');
+    
+    // CRITICAL FIX: Only set language for Arabic to ensure proper transcription
+    // For Arabic, explicitly set the language to prevent auto-translation
+    if (language === 'ar') {
+      whisperFormData.append('language', 'ar');
+      console.log('🎤 WAKTI VOICE V2: Set language to Arabic for proper transcription');
+    }
+    // For English or auto-detection, don't set language parameter to let Whisper auto-detect
+    // but ensure we're using transcriptions endpoint (not translations)
+    
     whisperFormData.append('response_format', 'json');
 
-    console.log('🎤 WAKTI VOICE V2: Sending to OpenAI Whisper...');
+    console.log('🎤 WAKTI VOICE V2: Sending to OpenAI Whisper transcriptions endpoint (NOT translations)...');
 
-    // Send to OpenAI Whisper
+    // CRITICAL: Use /transcriptions endpoint (not /translations) to avoid auto-translation
     const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
@@ -97,6 +106,7 @@ serve(async (req) => {
     const result = await response.json();
     console.log('🎤 WAKTI VOICE V2: Transcription successful, text length:', result.text?.length || 0);
     console.log('🎤 WAKTI VOICE V2: Transcribed text:', result.text);
+    console.log('🎤 WAKTI VOICE V2: Expected language was:', language, 'Result should be in same language');
 
     return new Response(
       JSON.stringify({ 
