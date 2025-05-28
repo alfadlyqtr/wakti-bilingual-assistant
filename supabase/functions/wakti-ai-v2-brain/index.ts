@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -33,11 +34,64 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1: Processing request with FULL CAPABILITIES (DeepSeek + Arabic Processing)');
+    console.log('WAKTI AI V2.1: Processing request with FULL DATABASE INTEGRATION');
+
+    // Initialize Supabase client with auth headers
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://hxauxozopvpzpdygoqwf.supabase.co';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseServiceKey) {
+      console.error('WAKTI AI V2.1: Missing Supabase service key');
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        headers: {
+          Authorization: authHeader,
+        },
+      },
+    });
+
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('WAKTI AI V2.1: Authentication failed:', authError);
+      return new Response(JSON.stringify({ error: 'Authentication failed' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('WAKTI AI V2.1: Authenticated user:', user.id);
+
+    // Get user profile for personalization
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name, username')
+      .eq('id', user.id)
+      .single();
+
+    const userName = profile?.display_name || profile?.username || 'there';
 
     const body: RequestBody = await req.json();
     const userMessage = body.message;
-    const conversationId = body.conversationId || `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    let conversationId = body.conversationId;
     const language = body.language || 'en';
     const inputType = body.inputType || 'text';
 
@@ -48,13 +102,66 @@ serve(async (req) => {
       });
     }
 
-    console.log('WAKTI AI V2.1: Processing message:', userMessage);
+    console.log('WAKTI AI V2.1: Processing message from user:', user.id);
+
+    // Manage conversation
+    let isNewConversation = false;
+    if (!conversationId) {
+      // Create new conversation
+      const { data: newConversation, error: convError } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: user.id,
+          title: userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : ''),
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (convError) {
+        console.error('WAKTI AI V2.1: Error creating conversation:', convError);
+        conversationId = `temp-${Date.now()}`;
+      } else {
+        conversationId = newConversation.id;
+        isNewConversation = true;
+      }
+    } else {
+      // Update existing conversation
+      await supabase
+        .from('ai_conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', conversationId)
+        .eq('user_id', user.id);
+    }
+
+    // Save user message to chat history
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'user',
+        content: userMessage,
+        language: language,
+        input_type: inputType
+      });
+
+    // Load recent conversation history for context
+    const { data: chatHistory } = await supabase
+      .from('ai_chat_history')
+      .select('role, content')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    const recentMessages = (chatHistory || []).reverse();
 
     // Analyze intent and detect actions
     const intentAnalysis = analyzeIntent(userMessage, language);
     console.log('WAKTI AI V2.1: Intent analysis:', intentAnalysis);
 
-    // Check if DeepSeek API key is available (primary), fallback to OpenAI
+    // Check AI API keys
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     
@@ -76,37 +183,53 @@ serve(async (req) => {
       });
     }
 
-    // Enhanced system message for action-aware AI
+    // Enhanced system message with user context
     const systemMessage = language === 'ar' 
-      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. يمكنك إنشاء المهام والأحداث والتذكيرات والصور. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة.
+      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}. يمكنك إنشاء المهام والأحداث والتذكيرات والصور. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة.
 
 قدراتك المتقدمة:
-- إنشاء المهام والمشاريع
-- إنشاء الأحداث والمواعيد  
-- إنشاء التذكيرات
+- إنشاء المهام والمشاريع في قاعدة البيانات
+- إنشاء الأحداث والمواعيد في قاعدة البيانات
+- إنشاء التذكيرات في قاعدة البيانات
 - إنشاء الصور بالذكاء الاصطناعي
-- تنفيذ الأوامر تلقائياً
+- تنفيذ الأوامر تلقائياً وحفظها
 
 عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.`
-      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You can create tasks, events, reminders, and generate images. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate.
+      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}. You can create tasks, events, reminders, and generate images. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate.
 
 Your advanced capabilities:
-- Create tasks and projects
-- Create events and appointments
-- Create reminders
+- Create tasks and projects in the database
+- Create events and appointments in the database
+- Create reminders in the database
 - Generate AI images
-- Execute commands automatically
+- Execute commands automatically and save them
 
 When users ask you to create something, execute it immediately if you're confident about the request.`;
 
-    console.log('WAKTI AI V2.1: Calling AI API with enhanced capabilities');
+    // Build conversation context
+    const conversationMessages = [
+      { role: 'system', content: systemMessage }
+    ];
+
+    // Add recent conversation history
+    recentMessages.forEach(msg => {
+      conversationMessages.push({ 
+        role: msg.role as 'user' | 'assistant', 
+        content: msg.content 
+      });
+    });
+
+    // Add current user message
+    conversationMessages.push({ role: 'user', content: userMessage });
+
+    console.log('WAKTI AI V2.1: Calling AI API with context and database integration');
 
     let aiResponse = '';
     
     // Try DeepSeek first, fallback to OpenAI
     if (deepseekApiKey) {
       try {
-        console.log('WAKTI AI V2.1: Using DeepSeek API for main chat');
+        console.log('WAKTI AI V2.1: Using DeepSeek API with conversation context');
         const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
@@ -114,10 +237,7 @@ When users ask you to create something, execute it immediately if you're confide
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            messages: [
-              { role: 'system', content: systemMessage },
-              { role: 'user', content: userMessage }
-            ],
+            messages: conversationMessages,
             model: 'deepseek-chat',
             temperature: 0.7,
             max_tokens: 1000,
@@ -142,10 +262,7 @@ When users ask you to create something, execute it immediately if you're confide
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              messages: [
-                { role: 'system', content: systemMessage },
-                { role: 'user', content: userMessage }
-              ],
+              messages: conversationMessages,
               model: 'gpt-4o-mini',
               temperature: 0.7,
               max_tokens: 1000,
@@ -172,10 +289,7 @@ When users ask you to create something, execute it immediately if you're confide
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          messages: [
-            { role: 'system', content: systemMessage },
-            { role: 'user', content: userMessage }
-          ],
+          messages: conversationMessages,
           model: 'gpt-4o-mini',
           temperature: 0.7,
           max_tokens: 1000,
@@ -209,7 +323,7 @@ When users ask you to create something, execute it immediately if you're confide
       });
     }
 
-    console.log('WAKTI AI V2.1: Generated AI response');
+    console.log('WAKTI AI V2.1: Generated AI response with context');
 
     // Execute actions if detected
     let actionResult = null;
@@ -217,15 +331,15 @@ When users ask you to create something, execute it immediately if you're confide
 
     if (intentAnalysis.confidence === 'high' && intentAnalysis.action) {
       try {
-        console.log('WAKTI AI V2.1: Executing action:', intentAnalysis.action);
-        actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language, openaiApiKey);
+        console.log('WAKTI AI V2.1: Executing database action:', intentAnalysis.action);
+        actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language, openaiApiKey, supabase, user.id);
         actionTaken = intentAnalysis.action;
         
         // Update AI response to include action confirmation and translation if applicable
         if (actionResult.success) {
           let actionConfirmation = language === 'ar' 
-            ? `\n\n✅ تم تنفيذ العملية بنجاح!`
-            : `\n\n✅ Action completed successfully!`;
+            ? `\n\n✅ تم تنفيذ العملية بنجاح وحفظها في قاعدة البيانات!`
+            : `\n\n✅ Action completed successfully and saved to database!`;
           
           // Add translation information for Arabic image prompts
           if (actionTaken === 'generate_image' && actionResult.translatedPrompt) {
@@ -243,7 +357,23 @@ When users ask you to create something, execute it immediately if you're confide
       }
     }
 
-    console.log('WAKTI AI V2.1: Response ready with actions');
+    // Save assistant response to chat history
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        conversation_id: conversationId,
+        user_id: user.id,
+        role: 'assistant',
+        content: aiResponse,
+        language: language,
+        input_type: 'text',
+        intent: intentAnalysis.intent,
+        confidence_level: intentAnalysis.confidence,
+        action_taken: actionTaken,
+        action_result: actionResult
+      });
+
+    console.log('WAKTI AI V2.1: Response ready with full database integration');
 
     return new Response(JSON.stringify({
       response: aiResponse,
@@ -254,7 +384,7 @@ When users ask you to create something, execute it immediately if you're confide
       actionResult: actionResult,
       needsConfirmation: intentAnalysis.confidence === 'medium',
       needsClarification: intentAnalysis.confidence === 'low',
-      isNewConversation: true
+      isNewConversation: isNewConversation
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -370,24 +500,22 @@ function extractReminderParams(message: string) {
   };
 }
 
-async function executeAction(action: string, params: any, language: string, openaiApiKey: string) {
+async function executeAction(action: string, params: any, language: string, openaiApiKey: string, supabase: any, userId: string) {
   try {
-    console.log('WAKTI AI V2.1: Executing action:', action, 'with params:', params);
+    console.log('WAKTI AI V2.1: Executing action with database integration:', action, 'with params:', params);
 
     switch (action) {
       case 'generate_image':
         return await generateImage(params.prompt, language, openaiApiKey);
         
       case 'create_task':
+        return await createTask(params, supabase, userId, language);
+        
       case 'create_event':
+        return await createEvent(params, supabase, userId, language);
+        
       case 'create_reminder':
-        // For now, return success message - could integrate with database later
-        return {
-          success: true,
-          message: language === 'ar' 
-            ? `تم إنشاء ${action.includes('task') ? 'المهمة' : action.includes('event') ? 'الحدث' : 'التذكير'}: ${params.title}`
-            : `${action.replace('create_', '').replace('_', ' ')} created: ${params.title}`
-        };
+        return await createReminder(params, supabase, userId, language);
         
       default:
         throw new Error(`Unknown action: ${action}`);
@@ -399,6 +527,103 @@ async function executeAction(action: string, params: any, language: string, open
       message: language === 'ar' ? 'فشل في تنفيذ العملية' : 'Failed to execute action',
       error: error.message
     };
+  }
+}
+
+async function createTask(params: any, supabase: any, userId: string, language: string) {
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: userId,
+        title: params.title,
+        description: params.description || '',
+        priority: params.priority || 'medium',
+        type: 'task',
+        status: 'pending'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      message: language === 'ar' 
+        ? `تم إنشاء المهمة: ${params.title}`
+        : `Task created: ${params.title}`,
+      data: data
+    };
+  } catch (error) {
+    console.error('Error creating task:', error);
+    throw error;
+  }
+}
+
+async function createEvent(params: any, supabase: any, userId: string, language: string) {
+  try {
+    const eventDate = new Date();
+    eventDate.setDate(eventDate.getDate() + 1); // Default to tomorrow
+
+    const { data, error } = await supabase
+      .from('maw3d_events')
+      .insert({
+        created_by: userId,
+        title: params.title,
+        description: params.description || '',
+        event_date: eventDate.toISOString().split('T')[0],
+        is_all_day: true,
+        is_public: false,
+        language: language
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      message: language === 'ar' 
+        ? `تم إنشاء الحدث: ${params.title}`
+        : `Event created: ${params.title}`,
+      data: data
+    };
+  } catch (error) {
+    console.error('Error creating event:', error);
+    throw error;
+  }
+}
+
+async function createReminder(params: any, supabase: any, userId: string, language: string) {
+  try {
+    const dueDate = new Date();
+    dueDate.setHours(dueDate.getHours() + 1); // Default to 1 hour from now
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        user_id: userId,
+        title: params.title,
+        description: params.description || '',
+        type: 'reminder',
+        status: 'pending',
+        due_date: dueDate.toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      success: true,
+      message: language === 'ar' 
+        ? `تم إنشاء التذكير: ${params.title}`
+        : `Reminder created: ${params.title}`,
+      data: data
+    };
+  } catch (error) {
+    console.error('Error creating reminder:', error);
+    throw error;
   }
 }
 
