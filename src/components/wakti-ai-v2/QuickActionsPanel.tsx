@@ -73,32 +73,32 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
-        <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2 mb-3">
-          <Sparkles className="h-4 w-4" />
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+          <Sparkles className="h-3 w-3" />
           {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
         </h3>
         
-        {/* Compact 2-column grid for actions */}
-        <div className="grid grid-cols-2 gap-2 mb-3">
+        {/* Ultra compact 2-column grid for actions */}
+        <div className="grid grid-cols-2 gap-1.5 mb-2">
           {quickActions.map((action, index) => (
             <Button
               key={index}
               variant="ghost"
               className={cn(
-                "h-auto p-2 flex flex-col items-center gap-1.5 hover:scale-105 transition-all duration-200",
+                "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
                 "border border-border/50 hover:border-border text-center"
               )}
               onClick={() => onSendMessage(action.message)}
             >
               <div className={cn(
-                "p-1.5 rounded-md bg-gradient-to-r",
+                "p-1 rounded-sm bg-gradient-to-r",
                 action.gradient
               )}>
-                <action.icon className="h-3.5 w-3.5 text-white" />
+                <action.icon className="h-3 w-3 text-white" />
               </div>
-              <span className="text-xs font-medium leading-tight">{action.label}</span>
+              <span className="text-[10px] font-medium leading-tight">{action.label}</span>
             </Button>
           ))}
           
@@ -108,14 +108,14 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
               <Button
                 variant="ghost"
                 className={cn(
-                  "h-auto p-2 flex flex-col items-center gap-1.5 hover:scale-105 transition-all duration-200",
+                  "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
                   "border border-border/50 hover:border-border text-center"
                 )}
               >
-                <div className="p-1.5 rounded-md bg-gradient-to-r from-gray-500 to-slate-500">
-                  <Settings className="h-3.5 w-3.5 text-white" />
+                <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
+                  <Settings className="h-3 w-3 text-white" />
                 </div>
-                <span className="text-xs font-medium leading-tight">
+                <span className="text-[10px] font-medium leading-tight">
                   {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'} ⚙️
                 </span>
               </Button>
@@ -159,11 +159,11 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
       </div>
 
       {/* Try asking me section */}
-      <div className="pt-3 border-t border-border/50">
-        <h4 className="text-xs font-medium text-muted-foreground mb-2">
+      <div className="pt-2 border-t border-border/50">
+        <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5">
           {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
         </h4>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {[
             language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
             language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
@@ -173,7 +173,7 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
               key={index}
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-8"
+              className="w-full justify-start text-[10px] text-muted-foreground hover:text-foreground h-6"
               onClick={() => onSendMessage(example)}
             >
               "{example}"
