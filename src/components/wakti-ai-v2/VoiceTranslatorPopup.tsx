@@ -437,8 +437,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         return;
       }
       
-      const selectedVoice = getVoiceForLanguage(selectedLanguage);
-      console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: ${selectedVoice}`);
+      // Always use 'alloy' voice for consistent quality across all languages
+      console.log(`🔊 Playing TTS for language: ${selectedLanguage}, voice: alloy`);
       
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator-tts', {
         method: 'POST',
@@ -448,7 +448,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         },
         body: JSON.stringify({
           text: text,
-          voice: selectedVoice
+          voice: 'alloy'
         })
       });
 
