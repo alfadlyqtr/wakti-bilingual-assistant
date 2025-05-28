@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CheckSquare, Calendar, Bell, Image, Sparkles, BookOpen, PenTool, Languages, Settings, Brain } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
@@ -15,6 +16,7 @@ interface QuickActionsPanelProps {
 export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
+  const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState('');
   const [customMessage, setCustomMessage] = useState('');
 
@@ -54,12 +56,6 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
       label: language === 'ar' ? 'إنشاء نص' : 'Text Generate',
       message: language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me',
       gradient: 'from-teal-500 to-cyan-500'
-    },
-    {
-      icon: Languages,
-      label: language === 'ar' ? 'مترجم' : 'Translator',
-      message: language === 'ar' ? 'ترجم هذا النص' : 'Translate this text',
-      gradient: 'from-rose-500 to-pink-500'
     }
   ];
 
@@ -101,6 +97,23 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
               <span className="text-[10px] font-medium leading-tight">{action.label}</span>
             </Button>
           ))}
+          
+          {/* Voice Translator Button */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
+              "border border-border/50 hover:border-border text-center"
+            )}
+            onClick={() => setVoiceTranslatorOpen(true)}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
+              <Languages className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'مترجم' : 'Translator'}
+            </span>
+          </Button>
           
           {/* Custom Input Action */}
           <Dialog open={customActionDialogOpen} onOpenChange={setCustomActionDialogOpen}>
@@ -181,6 +194,12 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
           ))}
         </div>
       </div>
+
+      {/* Voice Translator Popup */}
+      <VoiceTranslatorPopup 
+        open={voiceTranslatorOpen} 
+        onOpenChange={setVoiceTranslatorOpen} 
+      />
     </div>
   );
 }
