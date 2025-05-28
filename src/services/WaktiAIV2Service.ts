@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -39,7 +38,6 @@ export interface TranscriptionResponse {
 }
 
 export class WaktiAIV2Service {
-  // Enhanced sendMessage with proper Supabase auth forwarding
   static async sendMessage(
     message: string,
     conversationId?: string,
@@ -47,14 +45,13 @@ export class WaktiAIV2Service {
     inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('WAKTI AI V2.1 CLIENT: Sending enhanced message to brain:', { 
+      console.log('🔍 WAKTI AI CLIENT: Starting sendMessage with:', { 
         message, 
         conversationId, 
         language, 
         inputType 
       });
       
-      // Use Supabase's built-in auth forwarding instead of manual token handling
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -64,67 +61,39 @@ export class WaktiAIV2Service {
         }
       });
 
+      console.log('🔍 WAKTI AI CLIENT: Supabase response:', { data, error });
+
       if (error) {
-        console.error('WAKTI AI V2.1 CLIENT: Error from brain function:', error);
-        throw error;
+        console.error('🔍 WAKTI AI CLIENT: Supabase error:', error);
+        throw new Error(`Supabase error: ${error.message}`);
       }
 
-      console.log('WAKTI AI V2.1 CLIENT: Received enhanced response from brain:', data);
-      
-      // Enhanced response handling for image generation (both English and Arabic)
-      if (data.actionTaken === 'generate_image' && data.actionResult) {
-        if (data.actionResult.imageUrl) {
-          // For English image generation, add success message
-          if (language === 'en') {
-            data.response += `\n\n🎨 Image generated successfully!`;
-          }
-          // For Arabic, don't add anything since the backend already handles the translation message
-        } else if (data.actionResult.error) {
-          data.response += `\n\n❌ ${language === 'ar' 
-            ? 'فشل في إنشاء الصورة: ' + data.actionResult.error
-            : 'Image generation failed: ' + data.actionResult.error}`;
-        }
+      if (!data) {
+        console.error('🔍 WAKTI AI CLIENT: No data received');
+        throw new Error('No data received from AI service');
       }
 
+      console.log('🔍 WAKTI AI CLIENT: Returning data:', data);
       return data;
+      
     } catch (error) {
-      console.error('WAKTI AI V2.1 CLIENT: Error in enhanced sendMessage:', error);
+      console.error('🔍 WAKTI AI CLIENT: Error in sendMessage:', error);
       
-      // Enhanced error handling with user-friendly messages
-      let errorMessage = language === 'ar' 
-        ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
-        : 'Sorry, there was a system error. Please try again. 🔧';
-      
-      // Provide more specific error messages based on error type
-      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-        errorMessage = language === 'ar' 
-          ? 'خطأ في المصادقة. يرجى إعادة تسجيل الدخول وإعادة المحاولة. 🔑'
-          : 'Authentication error. Please log in again and try. 🔑';
-      } else if (error.message?.includes('API key') || error.message?.includes('configuration')) {
-        errorMessage = language === 'ar' 
-          ? 'خطأ في إعدادات النظام. يرجى التواصل مع الدعم الفني. ⚙️'
-          : 'System configuration error. Please contact support. ⚙️';
-      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        errorMessage = language === 'ar' 
-          ? 'خطأ في الاتصال. يرجى التحقق من الإنترنت والمحاولة مرة أخرى. 🌐'
-          : 'Connection error. Please check your internet and try again. 🌐';
-      }
-      
-      // Enhanced error handling with fallback response
       const fallbackResponse: AIResponse = {
-        response: errorMessage,
+        response: language === 'ar' 
+          ? `عذراً، حدث خطأ: ${error.message || 'خطأ غير معروف'}`
+          : `Sorry, there was an error: ${error.message || 'Unknown error'}`,
         conversationId: conversationId || 'error',
         intent: 'error',
         confidence: 'low',
         needsConfirmation: false,
-        needsClarification: true
+        needsClarification: false
       };
       
       return fallbackResponse;
     }
   }
 
-  // New method to get user knowledge for personalization
   static async getUserKnowledge(): Promise<any> {
     try {
       const { data, error } = await supabase
@@ -144,7 +113,6 @@ export class WaktiAIV2Service {
     }
   }
 
-  // New method to save user knowledge
   static async saveUserKnowledge(knowledge: {
     interests: string[];
     role?: string;
@@ -169,7 +137,6 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Enhanced voice transcription with proper Supabase auth forwarding
   static async transcribeVoice(
     audioData: string,
     language: 'en' | 'ar' = 'en'
@@ -180,7 +147,6 @@ export class WaktiAIV2Service {
         audioDataLength: audioData.length 
       });
       
-      // Use Supabase's built-in auth forwarding for voice transcription
       const { data, error } = await supabase.functions.invoke('wakti-voice-v2', {
         body: {
           audioData,
@@ -198,7 +164,6 @@ export class WaktiAIV2Service {
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in enhanced transcribeVoice:', error);
       
-      // Return fallback response
       return {
         text: '',
         language: language,
@@ -207,14 +172,13 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Enhanced conversation management - limit to 7 conversations
   static async getConversations(): Promise<AIConversation[]> {
     try {
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
         .order('last_message_at', { ascending: false })
-        .limit(7); // Strictly enforce 7 conversation limit
+        .limit(7);
 
       if (error) {
         console.error('WAKTI AI V2.1 CLIENT: Error fetching conversations:', error);
@@ -228,7 +192,6 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Get conversation messages with proper error handling
   static async getConversationMessages(conversationId: string): Promise<AIMessage[]> {
     try {
       const { data, error } = await supabase
@@ -258,10 +221,8 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Delete conversation with proper error handling
   static async deleteConversation(conversationId: string): Promise<void> {
     try {
-      // Delete chat history first (due to foreign key constraints)
       const { error: historyError } = await supabase
         .from('ai_chat_history')
         .delete()
@@ -272,7 +233,6 @@ export class WaktiAIV2Service {
         throw historyError;
       }
 
-      // Then delete the conversation
       const { error } = await supabase
         .from('ai_conversations')
         .delete()
@@ -288,7 +248,6 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Update conversation title with proper error handling
   static async updateConversationTitle(conversationId: string, title: string): Promise<void> {
     try {
       const { error } = await supabase
@@ -306,7 +265,6 @@ export class WaktiAIV2Service {
     }
   }
 
-  // Test API connectivity with proper auth forwarding
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
       const testMessage = "Hello, are you working? Please respond naturally.";
