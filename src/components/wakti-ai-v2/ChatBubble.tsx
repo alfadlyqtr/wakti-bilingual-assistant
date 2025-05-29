@@ -5,33 +5,7 @@ import { cn } from '@/lib/utils';
 import { User, Bot, Mic, CheckCircle, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 import { BrowsingIndicator } from './BrowsingIndicator';
-
-interface AIMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  inputType?: 'text' | 'voice';
-  intent?: string;
-  confidence?: string;
-  imageUrl?: string;
-  browsingUsed?: boolean;
-  browsingData?: {
-    hasResults: boolean;
-    imageUrl?: string;
-    sources?: Array<{
-      title: string;
-      url: string;
-      snippet: string;
-    }>;
-  };
-  quotaStatus?: {
-    count: number;
-    limit: number;
-    usagePercentage: number;
-    remaining: number;
-  };
-}
+import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatBubbleProps {
   message: AIMessage;
