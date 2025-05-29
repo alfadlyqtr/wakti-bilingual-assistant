@@ -26,6 +26,7 @@ export interface AIMessage {
     usagePercentage: number;
     remaining: number;
   };
+  requiresSearchConfirmation?: boolean;
 }
 
 export interface AIConversation {
@@ -68,7 +69,7 @@ export class WaktiAIV2Service {
         inputType 
       });
       
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
           message,
           conversationId,
@@ -94,6 +95,55 @@ export class WaktiAIV2Service {
       
     } catch (error) {
       console.error('🔍 WAKTI AI CLIENT: Error in sendMessage:', error);
+      
+      const fallbackResponse: AIResponse = {
+        response: language === 'ar' 
+          ? `عذراً، حدث خطأ: ${error.message || 'خطأ غير معروف'}`
+          : `Sorry, there was an error: ${error.message || 'Unknown error'}`,
+        conversationId: conversationId || 'error',
+        intent: 'error',
+        confidence: 'low',
+        needsConfirmation: false,
+        needsClarification: false
+      };
+      
+      return fallbackResponse;
+    }
+  }
+
+  static async sendMessageWithSearchConfirmation(
+    message: string,
+    conversationId?: string,
+    language: 'en' | 'ar' = 'en',
+    inputType: 'text' | 'voice' = 'text'
+  ): Promise<AIResponse> {
+    try {
+      console.log('🔍 WAKTI AI CLIENT: Sending message with search confirmation');
+      
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+        body: {
+          message,
+          conversationId,
+          language,
+          inputType,
+          confirmSearch: true
+        }
+      });
+
+      if (error) {
+        console.error('🔍 WAKTI AI CLIENT: Supabase error:', error);
+        throw new Error(`Supabase error: ${error.message}`);
+      }
+
+      if (!data) {
+        console.error('🔍 WAKTI AI CLIENT: No data received');
+        throw new Error('No data received from AI service');
+      }
+
+      return data;
+      
+    } catch (error) {
+      console.error('🔍 WAKTI AI CLIENT: Error in sendMessageWithSearchConfirmation:', error);
       
       const fallbackResponse: AIResponse = {
         response: language === 'ar' 

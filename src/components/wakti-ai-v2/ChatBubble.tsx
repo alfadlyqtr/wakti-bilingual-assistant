@@ -2,19 +2,34 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { User, Bot, Mic, CheckCircle, Globe } from 'lucide-react';
+import { User, Bot, Mic, CheckCircle, Globe, Search } from 'lucide-react';
 import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatBubbleProps {
   message: AIMessage;
+  onSearchConfirm?: (messageContent: string) => void;
 }
 
-export function ChatBubble({ message }: ChatBubbleProps) {
+export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
   const { theme, language } = useTheme();
   const isUser = message.role === 'user';
   const isArabic = language === 'ar';
+
+  // Check if this message requires search confirmation (80% quota reached)
+  const showSearchButton = !isUser && 
+    message.quotaStatus?.usagePercentage >= 80 && 
+    message.quotaStatus?.usagePercentage < 100 && 
+    !message.browsingUsed &&
+    onSearchConfirm;
+
+  const handleSearchConfirm = () => {
+    if (onSearchConfirm) {
+      onSearchConfirm(message.content);
+    }
+  };
 
   return (
     <div className={cn(
@@ -93,6 +108,21 @@ export function ChatBubble({ message }: ChatBubbleProps) {
                   e.currentTarget.style.display = 'none';
                 }}
               />
+            </div>
+          )}
+
+          {/* Mini Search Button - Only shown when 80% quota reached */}
+          {showSearchButton && (
+            <div className="mt-3 pt-2 border-t border-border/30">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleSearchConfirm}
+                className="flex items-center gap-2 text-xs h-8 px-3"
+              >
+                <Search className="h-3 w-3" />
+                {language === 'ar' ? 'البحث للحصول على معلومات حديثة؟' : 'Search for current info?'}
+              </Button>
             </div>
           )}
         </div>

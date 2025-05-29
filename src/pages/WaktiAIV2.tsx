@@ -337,13 +337,13 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      // Call the correct wakti-ai-v2-brain function with enhanced parameters
+      // Call the unified-ai-brain function
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) {
         throw new Error('No active session found');
       }
 
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
           message: content.trim(),
           userId: user?.id,
@@ -372,7 +372,8 @@ export default function WaktiAIV2() {
         confidence: data.confidence,
         browsingUsed: data.browsingUsed,
         browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus
+        quotaStatus: data.quotaStatus,
+        requiresSearchConfirmation: data.requiresSearchConfirmation
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -397,14 +398,14 @@ export default function WaktiAIV2() {
         });
       }
 
-      // Handle quota warnings with better messaging
-      if (data.quotaStatus?.usagePercentage >= 80) {
+      // Show quota warning when approaching limit
+      if (data.requiresSearchConfirmation) {
         toast({
-          title: language === 'ar' ? '⚠️ تنبيه الحصة' : '⚠️ Quota Alert',
+          title: language === 'ar' ? '⚠️ تنبيه البحث' : '⚠️ Search Notice',
           description: language === 'ar' 
-            ? `استخدمت ${data.quotaStatus.count}/${data.quotaStatus.limit} من عمليات البحث هذا الشهر (${data.quotaStatus.usagePercentage}%)`
-            : `Used ${data.quotaStatus.count}/${data.quotaStatus.limit} searches this month (${data.quotaStatus.usagePercentage}%)`,
-          duration: 5000
+            ? 'اقتربت من حد البحث الشهري - يمكنك تأكيد البحث عند الحاجة'
+            : 'Approaching monthly search limit - you can confirm searches when needed',
+          duration: 4000
         });
       }
 
@@ -597,7 +598,7 @@ export default function WaktiAIV2() {
     }
   };
 
-  const handleSearchConfirmation = async (query: string) => {
+  const handleSearchConfirmation = async (messageContent: string) => {
     setIsLoading(true);
     setIsTyping(true);
 
@@ -607,16 +608,16 @@ export default function WaktiAIV2() {
         throw new Error('No active session found');
       }
 
-      // Force search by calling with confirmed browsing
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      // Send the same message but with search confirmation
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
-          message: query,
+          message: messageContent,
           userId: user?.id,
           language: language,
           context: null,
           conversationId: currentConversationId,
           inputType: 'text',
-          forceBrowsing: true,
+          confirmSearch: true,
           conversationHistory: messages.slice(-10).map(msg => ({
             role: msg.role,
             content: msg.content
@@ -784,53 +785,15 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Enhanced Messages Area with Browsing Indicators */}
+      {/* Enhanced Messages Area with Search Confirmation */}
       <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
-            <div key={message.id} className="space-y-2">
-              <ChatBubble message={message} />
-              
-              {/* Browsing Indicator */}
-              {message.browsingUsed && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-12">
-                  <CheckCircle className="h-3 w-3 text-green-500" />
-                  <span>{language === 'ar' ? 'تم البحث بـ Tavily' : 'Tavily searched'}</span>
-                  {message.browsingData?.imageUrl && (
-                    <span className="text-blue-500">• {language === 'ar' ? 'صورة متضمنة' : 'Image included'}</span>
-                  )}
-                </div>
-              )}
-
-              {/* Search Confirmation Button */}
-              {message.role === 'assistant' && message.content.includes('🔍 Search') && (
-                <div className="ml-12">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleSearchConfirmation(message.content)}
-                    className="flex items-center gap-2"
-                  >
-                    <Search className="h-3 w-3" />
-                    {language === 'ar' ? 'بحث' : 'Search'}
-                  </Button>
-                </div>
-              )}
-
-              {/* Browsing Image Display */}
-              {message.browsingData?.imageUrl && (
-                <div className="ml-12">
-                  <img
-                    src={message.browsingData.imageUrl}
-                    alt="Search result"
-                    className="max-w-sm rounded-lg border shadow-sm"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                </div>
-              )}
-            </div>
+            <ChatBubble 
+              key={message.id} 
+              message={message} 
+              onSearchConfirm={handleSearchConfirmation}
+            />
           ))}
           
           {isTyping && <TypingIndicator />}

@@ -9,7 +9,8 @@ const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-const MONTHLY_BROWSING_LIMIT = 65; // Monthly limit for browsing quota
+const MONTHLY_BROWSING_LIMIT = 60; // Monthly limit for browsing quota
+const QUOTA_WARNING_THRESHOLD = 0.8; // 80% threshold for showing confirmation
 
 serve(async (req) => {
   // Handle CORS
@@ -20,7 +21,7 @@ serve(async (req) => {
   try {
     console.log("🔍 WAKTI AI V2.1 Enhanced: Processing unified request with smart browsing");
     
-    const { message, userId, language = 'en', context, conversationId, inputType = 'text', forceBrowsing = false } = await req.json();
+    const { message, userId, language = 'en', context, conversationId, inputType = 'text', forceBrowsing = false, confirmSearch = false } = await req.json();
 
     if (!message) {
       return new Response(
@@ -56,24 +57,42 @@ serve(async (req) => {
     let browsingData = null;
     let quotaStatus = null;
     let shouldBrowse = intent.requiresBrowsing || forceBrowsing;
+    let requiresSearchConfirmation = false;
 
     if (shouldBrowse && TAVILY_API_KEY) {
       quotaStatus = await checkBrowsingQuota(supabase, userId);
       console.log("🔍 Browsing quota status:", quotaStatus);
 
-      // More aggressive browsing - lower the threshold to 50%
-      if (quotaStatus.usagePercentage >= 85) {
-        // Very high usage - require confirmation
-        console.log("🔍 Very high quota usage - requiring confirmation");
+      const usagePercentage = quotaStatus.usagePercentage / 100; // Convert to decimal
+
+      // Check if we're at or above 80% threshold
+      if (usagePercentage >= QUOTA_WARNING_THRESHOLD) {
+        if (confirmSearch) {
+          // User has confirmed the search, proceed
+          console.log("🔍 User confirmed search at 80%+ quota - proceeding with browsing");
+          browsingData = await performTavilySearch(message, language);
+          
+          if (browsingData) {
+            await logBrowsingUsage(supabase, userId);
+            console.log("🔍 Confirmed browsing completed and logged");
+          }
+        } else if (quotaStatus.usagePercentage >= 100) {
+          // At 100% quota - no search option
+          console.log("🔍 100% quota reached - no browsing available");
+          requiresSearchConfirmation = false;
+        } else {
+          // At 80%+ but less than 100% - require confirmation
+          console.log("🔍 80% quota threshold reached - requiring user confirmation");
+          requiresSearchConfirmation = true;
+        }
       } else {
-        // Auto-browse for lower usage
-        console.log("🔍 Auto-browsing enabled - fetching data");
+        // Below 80% threshold - auto-browse as normal
+        console.log("🔍 Below 80% quota - auto-browsing enabled");
         browsingData = await performTavilySearch(message, language);
         
         if (browsingData) {
-          // Log usage
           await logBrowsingUsage(supabase, userId);
-          console.log("🔍 Browsing completed and logged");
+          console.log("🔍 Auto-browsing completed and logged");
         }
       }
     }
@@ -85,7 +104,8 @@ serve(async (req) => {
       context, 
       browsingData, 
       quotaStatus,
-      conversationHistory
+      conversationHistory,
+      requiresSearchConfirmation
     );
 
     // Process with AI
@@ -104,7 +124,8 @@ serve(async (req) => {
         imageUrl: browsingData.imageUrl,
         sources: browsingData.sources
       } : null,
-      quotaStatus: quotaStatus
+      quotaStatus: quotaStatus,
+      requiresSearchConfirmation: requiresSearchConfirmation
     };
 
     console.log("🔍 WAKTI AI V2.1 Enhanced: Response ready with smart browsing");
@@ -344,7 +365,8 @@ function createEnhancedSystemPrompt(
   context: any, 
   browsingData: any,
   quotaStatus: any,
-  conversationHistory: any[]
+  conversationHistory: any[],
+  requiresSearchConfirmation: boolean
 ) {
   const basePrompt = language === 'ar' 
     ? `أنت WAKTI AI V2.1، الدماغ الذكي المتطور لتطبيق وكتي. أنت مساعد قوي وودود يساعد في إدارة المهام والأحداث والمحتوى والمزيد. تتذكر المحادثات السابقة وتحافظ على السياق.`
@@ -361,13 +383,19 @@ function createEnhancedSystemPrompt(
     prompt += historyContext;
   }
 
-  // Add browsing context
+  // Add browsing context or search confirmation notice
   if (browsingData) {
     const browsingContext = language === 'ar'
       ? `\n\n🔍 معلومات حديثة من البحث:\n${browsingData.answer}\n\nمصادر: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nاستخدم هذه المعلومات الحديثة مباشرة في إجابتك. البحث تم بالفعل.`
       : `\n\n🔍 Current real-time information from search:\n${browsingData.answer}\n\nSources: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nUse this current information directly in your response. Search has already been performed.`;
     
     prompt += browsingContext;
+  } else if (requiresSearchConfirmation) {
+    const confirmationContext = language === 'ar'
+      ? `\n\n⚠️ تنبيه: يمكن الحصول على معلومات حديثة من الإنترنت ولكن المستخدم قارب من الوصول لحد البحث الشهري. اجب على السؤال بناءً على معرفتك التدريبية وأذكر أنه يمكن البحث للحصول على معلومات أحدث إذا رغب المستخدم.`
+      : `\n\n⚠️ Notice: Current information from the internet could be retrieved, but the user is approaching their monthly search limit. Answer based on your training knowledge and mention that searching for more current information is available if the user wants it.`;
+    
+    prompt += confirmationContext;
   }
 
   // Add intent-specific instructions
