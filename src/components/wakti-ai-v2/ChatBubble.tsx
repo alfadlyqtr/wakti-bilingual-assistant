@@ -1,12 +1,37 @@
 
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Download, Expand, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+import { User, Bot, Mic, CheckCircle, Globe } from 'lucide-react';
+import { format } from 'date-fns';
+import { BrowsingIndicator } from './BrowsingIndicator';
+
+interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  inputType?: 'text' | 'voice';
+  intent?: string;
+  confidence?: string;
+  imageUrl?: string;
+  browsingUsed?: boolean;
+  browsingData?: {
+    hasResults: boolean;
+    imageUrl?: string;
+    sources?: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+    }>;
+  };
+  quotaStatus?: {
+    count: number;
+    limit: number;
+    usagePercentage: number;
+    remaining: number;
+  };
+}
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -14,186 +39,110 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message }: ChatBubbleProps) {
   const { theme, language } = useTheme();
-  const [copied, setCopied] = React.useState(false);
-  
   const isUser = message.role === 'user';
-  const isSystem = message.role === 'system';
-  
-  const formatTime = (timestamp: Date) => {
-    return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    }).format(timestamp);
-  };
-
-  const getConfidenceColor = (confidence?: string) => {
-    switch (confidence) {
-      case 'high': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 'low': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
-    }
-  };
-
-  const getInputTypeIcon = (inputType?: string) => {
-    switch (inputType) {
-      case 'voice': return '🎤';
-      case 'text': return '💬';
-      default: return '';
-    }
-  };
-
-  const handleDownloadImage = () => {
-    if (message.imageUrl) {
-      const link = document.createElement('a');
-      link.href = message.imageUrl;
-      link.download = `wakti-generated-image-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const handleExpandImage = () => {
-    if (message.imageUrl) {
-      window.open(message.imageUrl, '_blank');
-    }
-  };
-
-  const handleCopyTranslatedText = async () => {
-    // Extract translated text from the message content - look for the pattern after "النص المترجم:**"
-    const translatedTextMatch = message.content.match(/\*\*النص المترجم:\*\*\s*\n(.+)/);
-    if (translatedTextMatch && translatedTextMatch[1]) {
-      try {
-        await navigator.clipboard.writeText(translatedTextMatch[1].trim());
-        setCopied(true);
-        toast.success(language === 'ar' ? 'تم نسخ النص المترجم' : 'Translated text copied');
-        setTimeout(() => setCopied(false), 2000);
-      } catch (error) {
-        toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
-      }
-    }
-  };
-
-  // Check if message contains translated text for Arabic image requests
-  const hasTranslatedText = message.content.includes('**النص المترجم:**') && 
-    message.actionTaken === 'translate_for_image';
-
-  if (isSystem) {
-    return (
-      <div className="flex justify-center my-4">
-        <div className="backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3 bg-muted/80 text-muted-foreground text-sm text-center max-w-md">
-          {message.content}
-        </div>
-      </div>
-    );
-  }
+  const isArabic = language === 'ar';
 
   return (
     <div className={cn(
-      "flex gap-3 mb-4",
-      isUser ? "justify-end" : "justify-start"
+      "flex gap-3 max-w-4xl",
+      isUser ? (isArabic ? "flex-row" : "flex-row-reverse") : "flex-row",
+      isUser ? (isArabic ? "justify-start" : "justify-end") : "justify-start"
     )}>
+      {/* Avatar */}
       <div className={cn(
-        "max-w-[80%] sm:max-w-[70%]",
-        isUser ? "order-1" : "order-2"
+        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
+        isUser 
+          ? "bg-primary text-primary-foreground" 
+          : "bg-muted text-muted-foreground"
       )}>
+        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+      </div>
+
+      {/* Message Content */}
+      <div className={cn(
+        "flex-1 space-y-2",
+        isUser ? "max-w-[80%]" : "max-w-[85%]"
+      )}>
+        {/* Message Bubble */}
         <div className={cn(
-          "backdrop-blur-md border border-border/50 rounded-xl shadow-xl p-3 relative",
+          "relative px-4 py-3 rounded-2xl shadow-sm",
           isUser 
-            ? "bg-primary text-primary-foreground ml-auto" 
-            : "bg-background/90"
+            ? "bg-primary text-primary-foreground" 
+            : "bg-muted/50 text-foreground border",
+          isUser 
+            ? (isArabic ? "rounded-br-md" : "rounded-bl-md")
+            : "rounded-bl-md"
         )}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+          {/* Voice Input Indicator */}
+          {message.inputType === 'voice' && isUser && (
+            <div className="flex items-center gap-1 mb-2 text-xs opacity-70">
+              <Mic className="h-3 w-3" />
+              <span>{language === 'ar' ? 'رسالة صوتية' : 'Voice message'}</span>
+            </div>
+          )}
+
+          {/* Message Text */}
+          <div className={cn(
+            "whitespace-pre-wrap break-words",
+            isArabic ? "text-right" : "text-left"
+          )}>
             {message.content}
           </div>
-          
-          {/* Copy button for translated Arabic text */}
-          {hasTranslatedText && !isUser && (
-            <div className="mt-3 flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleCopyTranslatedText}
-                className="text-xs flex items-center gap-1"
-              >
-                {copied ? (
-                  <Check className="h-3 w-3" />
-                ) : (
-                  <Copy className="h-3 w-3" />
-                )}
-                {language === 'ar' ? 'نسخ النص المترجم' : 'Copy translated text'}
-              </Button>
-            </div>
-          )}
-          
-          {/* Display generated image if available */}
-          {message.imageUrl && (
-            <div className="mt-3 relative group">
-              <img 
-                src={message.imageUrl} 
-                alt="Generated image"
-                className="rounded-lg max-w-full h-auto shadow-md"
-                loading="lazy"
-              />
-              
-              {/* Image action buttons */}
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-0"
-                  onClick={handleDownloadImage}
-                  title={language === 'ar' ? 'تحميل الصورة' : 'Download image'}
-                >
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="secondary"
-                  className="h-8 w-8 bg-black/50 hover:bg-black/70 text-white border-0"
-                  onClick={handleExpandImage}
-                  title={language === 'ar' ? 'فتح في نافذة جديدة' : 'Open in new tab'}
-                >
-                  <Expand className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          )}
-          
-          {/* Message metadata */}
-          <div className={cn(
-            "flex items-center gap-2 mt-2 text-xs opacity-70",
-            isUser ? "justify-end" : "justify-start"
-          )}>
-            <span>{formatTime(message.timestamp)}</span>
-            {message.inputType && (
-              <span>{getInputTypeIcon(message.inputType)}</span>
-            )}
-          </div>
-        </div>
-        
-        {/* AI metadata badges */}
-        {!isUser && (message.intent || message.confidence || message.actionTaken) && (
-          <div className="flex flex-wrap gap-1 mt-2">
-            {message.intent && (
-              <Badge variant="outline" className="text-xs">
+
+          {/* Intent Badge */}
+          {message.intent && !isUser && (
+            <div className="mt-2 flex items-center gap-1">
+              <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full">
                 {message.intent}
-              </Badge>
-            )}
-            {message.confidence && (
-              <Badge className={cn("text-xs", getConfidenceColor(message.confidence))}>
-                {message.confidence}
-              </Badge>
-            )}
-            {message.actionTaken && (
-              <Badge variant="secondary" className="text-xs">
-                ⚡ {message.actionTaken}
-              </Badge>
-            )}
+              </span>
+              {message.confidence && (
+                <span className={cn(
+                  "text-xs px-2 py-1 rounded-full",
+                  message.confidence === 'high' ? "bg-green-100 text-green-700" :
+                  message.confidence === 'medium' ? "bg-yellow-100 text-yellow-700" :
+                  "bg-gray-100 text-gray-700"
+                )}>
+                  {message.confidence}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Generated Image */}
+          {message.imageUrl && (
+            <div className="mt-3">
+              <img
+                src={message.imageUrl}
+                alt="Generated content"
+                className="max-w-full rounded-lg border shadow-sm"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Browsing Indicator - Only for assistant messages */}
+        {!isUser && (message.browsingUsed || message.quotaStatus) && (
+          <div className="ml-2">
+            <BrowsingIndicator
+              browsingUsed={message.browsingUsed}
+              quotaStatus={message.quotaStatus}
+              sources={message.browsingData?.sources}
+              imageUrl={message.browsingData?.imageUrl}
+              size="sm"
+            />
           </div>
         )}
+
+        {/* Timestamp */}
+        <div className={cn(
+          "text-xs text-muted-foreground px-2",
+          isUser ? (isArabic ? "text-left" : "text-right") : "text-left"
+        )}>
+          {format(message.timestamp, 'HH:mm')}
+        </div>
       </div>
     </div>
   );

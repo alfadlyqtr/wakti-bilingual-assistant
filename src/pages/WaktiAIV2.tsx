@@ -21,7 +21,10 @@ import {
   Camera,
   X,
   Square,
-  Brain
+  Brain,
+  Search,
+  CheckCircle,
+  Globe
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -49,6 +52,8 @@ export default function WaktiAIV2() {
   const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [browsingSources, setBrowsingSources] = useState<any[]>([]);
+  const [quotaStatus, setQuotaStatus] = useState<any>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -159,8 +164,8 @@ export default function WaktiAIV2() {
     }
 
     let greeting = language === 'ar' 
-      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
-      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
+      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور مع تصفح ذكي للإنترنت. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة من الإنترنت 🌐\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
+      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant with intelligent web browsing. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Getting current information from the web 🌐\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
     
     if (!connectionOk) {
       greeting += language === 'ar' 
@@ -212,6 +217,8 @@ export default function WaktiAIV2() {
     setMessages([]);
     setCurrentConversationId(null);
     setAttachedImages([]);
+    setBrowsingSources([]);
+    setQuotaStatus(null);
     initializeGreeting();
     console.log('🔍 WAKTI AI V2.1: Started new conversation');
   };
@@ -220,6 +227,8 @@ export default function WaktiAIV2() {
     setMessages([]);
     setCurrentConversationId(null);
     setAttachedImages([]);
+    setBrowsingSources([]);
+    setQuotaStatus(null);
     initializeGreeting();
     toast({
       title: language === 'ar' ? 'تم المسح' : 'Cleared',
@@ -318,76 +327,67 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      const response = await WaktiAIV2Service.sendMessage(
-        content.trim(),
-        currentConversationId || undefined,
-        detectedLanguage,
-        inputType
-      );
+      // Call unified AI brain function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) {
+        throw new Error('No active session found');
+      }
 
-      console.log('🔍 WAKTI AI V2.1: Received response:', response);
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+        body: {
+          message: content.trim(),
+          userId: user?.id,
+          language: detectedLanguage,
+          context: null,
+          conversationId: currentConversationId,
+          inputType
+        }
+      });
+
+      if (error) throw error;
+
+      console.log('🔍 WAKTI AI V2.1: Received enhanced response:', data);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.response,
+        content: data.response,
         timestamp: new Date(),
-        intent: response.intent,
-        confidence: response.confidence,
-        actionTaken: response.actionTaken
+        intent: data.intent,
+        confidence: data.confidence,
+        browsingUsed: data.browsingUsed,
+        browsingData: data.browsingData,
+        quotaStatus: data.quotaStatus
       };
 
-      if (response.actionTaken === 'generate_image' && response.actionResult?.imageUrl) {
-        assistantMessage.imageUrl = response.actionResult.imageUrl;
-      }
-
       setMessages(prev => [...prev, assistantMessage]);
-      
-      // Handle new conversation creation
-      if (response.conversationId && !response.conversationId.includes('error') && !response.conversationId.includes('temp-')) {
-        if (!currentConversationId || currentConversationId !== response.conversationId) {
-          setCurrentConversationId(response.conversationId);
-          console.log('🔍 WAKTI AI V2.1: Set conversation ID:', response.conversationId);
-        }
-        
-        // If this was a new conversation, reload the conversations list
-        if (response.isNewConversation) {
-          console.log('🔍 WAKTI AI V2.1: New conversation created, reloading list');
-          await loadConversations();
-        }
+
+      // Update quota status and sources
+      if (data.quotaStatus) {
+        setQuotaStatus(data.quotaStatus);
       }
 
-      if (response.actionTaken) {
-        const actionLabels = {
-          create_task: language === 'ar' ? 'تم إنشاء المهمة' : 'Task Created',
-          create_event: language === 'ar' ? 'تم إنشاء الحدث' : 'Event Created',
-          create_reminder: language === 'ar' ? 'تم إنشاء التذكير' : 'Reminder Created',
-          generate_image: language === 'ar' ? 'تم إنشاء الصورة' : 'Image Generated'
-        };
-        
-        const confidenceIcons = {
-          high: '⚡',
-          medium: '⏳',
-          low: '❓'
-        };
-        
+      if (data.browsingData?.sources) {
+        setBrowsingSources(data.browsingData.sources);
+      }
+
+      // Show browsing status
+      if (data.browsingUsed) {
         toast({
-          title: language === 'ar' ? '✅ تم التنفيذ' : '✅ Action Completed',
-          description: `${confidenceIcons[response.confidence]} ${actionLabels[response.actionTaken as keyof typeof actionLabels] || response.actionTaken}`
+          title: language === 'ar' ? '✅ تم البحث' : '✅ Searched',
+          description: language === 'ar' ? 'تم الحصول على معلومات حديثة' : 'Got current information',
+          duration: 3000
         });
       }
 
-      if (response.needsConfirmation) {
+      // Handle quota warnings
+      if (data.quotaStatus?.usagePercentage >= 80) {
         toast({
-          title: language === 'ar' ? '⏳ تأكيد مطلوب' : '⏳ Confirmation Required',
-          description: language === 'ar' ? 'يرجى تأكيد الإجراء' : 'Please confirm the action'
-        });
-      }
-
-      if (response.needsClarification) {
-        toast({
-          title: language === 'ar' ? '❓ توضيح مطلوب' : '❓ Clarification Needed',
-          description: language === 'ar' ? 'يرجى توضيح طلبك' : 'Please clarify your request'
+          title: language === 'ar' ? '⚠️ تنبيه الحصة' : '⚠️ Quota Alert',
+          description: language === 'ar' 
+            ? `استخدمت ${data.quotaStatus.count}/${data.quotaStatus.limit} من عمليات البحث`
+            : `Used ${data.quotaStatus.count}/${data.quotaStatus.limit} searches`,
+          duration: 5000
         });
       }
 
@@ -413,6 +413,15 @@ export default function WaktiAIV2() {
     } finally {
       setIsLoading(false);
       setIsTyping(false);
+    }
+  };
+
+  const retryLastMessage = () => {
+    if (messages.length >= 2) {
+      const lastUserMessage = messages[messages.length - 2];
+      if (lastUserMessage.role === 'user') {
+        sendMessage(lastUserMessage.content, lastUserMessage.inputType);
+      }
     }
   };
 
@@ -564,12 +573,63 @@ export default function WaktiAIV2() {
     }
   };
 
-  const retryLastMessage = () => {
-    if (messages.length >= 2) {
-      const lastUserMessage = messages[messages.length - 2];
-      if (lastUserMessage.role === 'user') {
-        sendMessage(lastUserMessage.content, lastUserMessage.inputType);
+  const handleSearchConfirmation = async (query: string) => {
+    setIsLoading(true);
+    setIsTyping(true);
+
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) {
+        throw new Error('No active session found');
       }
+
+      // Force search by calling with confirmed browsing
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+        body: {
+          message: query,
+          userId: user?.id,
+          language: language,
+          context: null,
+          conversationId: currentConversationId,
+          inputType: 'text',
+          forceBrowsing: true
+        }
+      });
+
+      if (error) throw error;
+
+      const assistantMessage: AIMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: data.response,
+        timestamp: new Date(),
+        intent: data.intent,
+        confidence: data.confidence,
+        browsingUsed: data.browsingUsed,
+        browsingData: data.browsingData,
+        quotaStatus: data.quotaStatus
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      if (data.browsingUsed) {
+        toast({
+          title: language === 'ar' ? '✅ تم البحث' : '✅ Search Complete',
+          description: language === 'ar' ? 'تم الحصول على النتائج' : 'Results retrieved',
+          duration: 3000
+        });
+      }
+
+    } catch (error) {
+      console.error('Search confirmation error:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في البحث' : 'Search failed',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+      setIsTyping(false);
     }
   };
 
@@ -587,7 +647,7 @@ export default function WaktiAIV2() {
       {/* App Header */}
       <AppHeader />
 
-      {/* Enhanced Header with Actions and AI Context Access */}
+      {/* Enhanced Header with Quota Status */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
@@ -600,7 +660,7 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        {/* Centered Action Icons */}
+        {/* Centered Action Icons with Quota Indicator */}
         <div className="flex items-center justify-center gap-2 flex-1">
           <Button
             variant="ghost"
@@ -621,6 +681,19 @@ export default function WaktiAIV2() {
           >
             <Trash2 className="h-5 w-5" />
           </Button>
+
+          {/* Browsing Quota Indicator */}
+          {quotaStatus && (
+            <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
+              <Globe className="h-3 w-3" />
+              <span className={cn(
+                "font-medium",
+                quotaStatus.usagePercentage >= 80 ? "text-orange-600" : "text-green-600"
+              )}>
+                {quotaStatus.count}/{quotaStatus.limit}
+              </span>
+            </div>
+          )}
           
           {/* New AI Context Button */}
           <Button
@@ -683,11 +756,53 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Enhanced Messages Area */}
+      {/* Enhanced Messages Area with Browsing Indicators */}
       <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
-            <ChatBubble key={message.id} message={message} />
+            <div key={message.id} className="space-y-2">
+              <ChatBubble message={message} />
+              
+              {/* Browsing Indicator */}
+              {message.browsingUsed && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-12">
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                  <span>{language === 'ar' ? 'تم البحث بـ Tavily' : 'Tavily searched'}</span>
+                  {message.browsingData?.imageUrl && (
+                    <span className="text-blue-500">• {language === 'ar' ? 'صورة متضمنة' : 'Image included'}</span>
+                  )}
+                </div>
+              )}
+
+              {/* Search Confirmation Button */}
+              {message.role === 'assistant' && message.content.includes('🔍 Search') && (
+                <div className="ml-12">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleSearchConfirmation(message.content)}
+                    className="flex items-center gap-2"
+                  >
+                    <Search className="h-3 w-3" />
+                    {language === 'ar' ? 'بحث' : 'Search'}
+                  </Button>
+                </div>
+              )}
+
+              {/* Browsing Image Display */}
+              {message.browsingData?.imageUrl && (
+                <div className="ml-12">
+                  <img
+                    src={message.browsingData.imageUrl}
+                    alt="Search result"
+                    className="max-w-sm rounded-lg border shadow-sm"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           ))}
           
           {isTyping && <TypingIndicator />}
