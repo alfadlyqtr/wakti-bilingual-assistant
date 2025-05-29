@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -47,6 +46,11 @@ export interface AIResponse {
   needsConfirmation: boolean;
   needsClarification: boolean;
   isNewConversation?: boolean;
+  imageUrl?: string;
+  browsingUsed?: boolean;
+  browsingData?: any;
+  quotaStatus?: any;
+  requiresSearchConfirmation?: boolean;
 }
 
 export interface TranscriptionResponse {
@@ -116,6 +120,13 @@ export class WaktiAIV2Service {
         conversationId: data.conversationId || conversationId || 'new',
         intent: data.intent || 'unknown',
         confidence: data.confidence || 'medium',
+        actionTaken: data.actionTaken,
+        actionResult: data.actionResult,
+        imageUrl: data.imageUrl,
+        browsingUsed: data.browsingUsed || false,
+        browsingData: data.browsingData,
+        quotaStatus: data.quotaStatus,
+        requiresSearchConfirmation: data.requiresSearchConfirmation || false,
         needsConfirmation: data.needsConfirmation || false,
         needsClarification: data.needsClarification || false
       };
@@ -156,11 +167,11 @@ export class WaktiAIV2Service {
       // Standardized payload structure with confirmSearch = true
       const payload = {
         message,
-        userId: user.id, // Always include userId
+        userId: user.id,
         language,
         conversationId: conversationId || null,
         inputType,
-        conversationHistory: [], // Empty for now
+        conversationHistory: [],
         confirmSearch: true // This is the key difference
       };
       
@@ -178,7 +189,21 @@ export class WaktiAIV2Service {
         throw new Error('Invalid response format from AI service');
       }
 
-      return data;
+      return {
+        response: data.response,
+        conversationId: data.conversationId,
+        intent: data.intent,
+        confidence: data.confidence,
+        actionTaken: data.actionTaken,
+        actionResult: data.actionResult,
+        imageUrl: data.imageUrl,
+        browsingUsed: data.browsingUsed || false,
+        browsingData: data.browsingData,
+        quotaStatus: data.quotaStatus,
+        requiresSearchConfirmation: false,
+        needsConfirmation: data.needsConfirmation || false,
+        needsClarification: data.needsClarification || false
+      };
       
     } catch (error) {
       console.error('🔍 WAKTI AI CLIENT: Error in sendMessageWithSearchConfirmation:', error);
@@ -318,6 +343,7 @@ export class WaktiAIV2Service {
         confidence: msg.confidence_level as 'high' | 'medium' | 'low',
         actionTaken: msg.action_taken,
         inputType: msg.input_type as 'text' | 'voice',
+        imageUrl: msg.action_result?.imageUrl,
         browsingUsed: msg.browsing_used,
         browsingData: msg.browsing_data,
         quotaStatus: msg.quota_status
