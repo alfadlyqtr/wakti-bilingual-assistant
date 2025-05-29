@@ -40,7 +40,9 @@ import {
   Stethoscope,
   Scale,
   TrendingUp,
-  Camera
+  Camera,
+  MessageCircle,
+  FileText
 } from 'lucide-react';
 
 interface KnowledgeModalProps {
@@ -53,6 +55,8 @@ interface UserKnowledge {
   role?: string;
   main_use?: string;
   interests?: string[];
+  communication_style?: string;
+  response_length?: string;
 }
 
 export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
@@ -68,7 +72,9 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     personal_note: '',
     role: '',
     main_use: '',
-    interests: []
+    interests: [],
+    communication_style: '',
+    response_length: ''
   });
 
   // Professional roles with icons
@@ -111,6 +117,21 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     { value: 'independent', label: language === 'ar' ? 'مستقل' : 'Independent Work' }
   ];
 
+  // Communication style options
+  const communicationStyles = [
+    { value: 'friendly_casual', label: language === 'ar' ? 'ودود وعفوي' : 'Friendly & Casual' },
+    { value: 'professional_formal', label: language === 'ar' ? 'مهني ورسمي' : 'Professional & Formal' },
+    { value: 'direct_concise', label: language === 'ar' ? 'مباشر ومختصر' : 'Direct & Concise' },
+    { value: 'encouraging_supportive', label: language === 'ar' ? 'مشجع وداعم' : 'Encouraging & Supportive' }
+  ];
+
+  // Response length options
+  const responseLengths = [
+    { value: 'brief', label: language === 'ar' ? 'موجز' : 'Brief' },
+    { value: 'balanced', label: language === 'ar' ? 'متوازن' : 'Balanced' },
+    { value: 'detailed', label: language === 'ar' ? 'مفصل' : 'Detailed' }
+  ];
+
   useEffect(() => {
     if (open && user) {
       loadExistingKnowledge();
@@ -137,7 +158,9 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
           personal_note: data.personal_note || '',
           role: data.role || '',
           main_use: data.main_use || '',
-          interests: data.interests || []
+          interests: data.interests || [],
+          communication_style: data.communication_style || '',
+          response_length: data.response_length || ''
         });
       }
     } catch (error) {
@@ -160,7 +183,9 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
           personal_note: knowledge.personal_note,
           role: knowledge.role,
           main_use: knowledge.main_use,
-          interests: knowledge.interests
+          interests: knowledge.interests,
+          communication_style: knowledge.communication_style,
+          response_length: knowledge.response_length
         });
 
       if (error) throw error;
@@ -307,6 +332,59 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                   {mainUseCategories.map((use) => (
                     <SelectItem key={use.value} value={use.value}>
                       {use.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Communication Style and Response Length - New Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Communication Style */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-primary" />
+                <label className="text-base font-medium">
+                  {language === 'ar' ? 'أسلوب التواصل' : 'Communication Style'}
+                </label>
+              </div>
+              <Select
+                value={knowledge.communication_style}
+                onValueChange={(value) => setKnowledge({ ...knowledge, communication_style: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر أسلوب التواصل' : 'Select communication style'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {communicationStyles.map((style) => (
+                    <SelectItem key={style.value} value={style.value}>
+                      {style.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Response Length */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" />
+                <label className="text-base font-medium">
+                  {language === 'ar' ? 'طول الاستجابة' : 'Response Length'}
+                </label>
+              </div>
+              <Select
+                value={knowledge.response_length}
+                onValueChange={(value) => setKnowledge({ ...knowledge, response_length: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر طول الاستجابة' : 'Select response length'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {responseLengths.map((length) => (
+                    <SelectItem key={length.value} value={length.value}>
+                      {length.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

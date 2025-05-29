@@ -94,31 +94,37 @@ export type Database = {
       }
       ai_user_knowledge: {
         Row: {
+          communication_style: string | null
           created_at: string
           id: string
           interests: string[] | null
           main_use: string | null
           personal_note: string | null
+          response_length: string | null
           role: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          communication_style?: string | null
           created_at?: string
           id?: string
           interests?: string[] | null
           main_use?: string | null
           personal_note?: string | null
+          response_length?: string | null
           role?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          communication_style?: string | null
           created_at?: string
           id?: string
           interests?: string[] | null
           main_use?: string | null
           personal_note?: string | null
+          response_length?: string | null
           role?: string | null
           updated_at?: string
           user_id?: string

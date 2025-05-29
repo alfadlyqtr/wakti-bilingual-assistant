@@ -226,6 +226,35 @@ serve(async (req) => {
         );
       }
 
+      // Add communication style preferences
+      if (userKnowledge.communication_style) {
+        const styleMapping = {
+          'friendly_casual': language === 'ar' ? 'ودود وعفوي' : 'friendly and casual',
+          'professional_formal': language === 'ar' ? 'مهني ورسمي' : 'professional and formal',
+          'direct_concise': language === 'ar' ? 'مباشر ومختصر' : 'direct and concise',
+          'encouraging_supportive': language === 'ar' ? 'مشجع وداعم' : 'encouraging and supportive'
+        };
+        
+        contextParts.push(language === 'ar' 
+          ? `أسلوب التواصل المفضل: ${styleMapping[userKnowledge.communication_style] || userKnowledge.communication_style}`
+          : `Preferred communication style: ${styleMapping[userKnowledge.communication_style] || userKnowledge.communication_style}`
+        );
+      }
+
+      // Add response length preferences
+      if (userKnowledge.response_length) {
+        const lengthMapping = {
+          'brief': language === 'ar' ? 'موجز' : 'brief',
+          'balanced': language === 'ar' ? 'متوازن' : 'balanced',
+          'detailed': language === 'ar' ? 'مفصل' : 'detailed'
+        };
+        
+        contextParts.push(language === 'ar' 
+          ? `طول الاستجابة المفضل: ${lengthMapping[userKnowledge.response_length] || userKnowledge.response_length}`
+          : `Preferred response length: ${lengthMapping[userKnowledge.response_length] || userKnowledge.response_length}`
+        );
+      }
+
       if (contextParts.length > 0) {
         systemMessage += language === 'ar' 
           ? `\n\nمعلومات المستخدم للسياق:\n${contextParts.join('\n')}`
@@ -242,7 +271,9 @@ serve(async (req) => {
 - إنشاء الصور بالذكاء الاصطناعي
 - تنفيذ الأوامر تلقائياً وحفظها
 
-عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.`
+عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.
+
+تذكر أن تلتزم بأسلوب التواصل وطول الاستجابة المفضل للمستخدم في جميع إجاباتك.`
       : `\n\nYour advanced capabilities:
 - Create tasks and projects in the database
 - Create events and appointments in the database
@@ -250,7 +281,9 @@ serve(async (req) => {
 - Generate AI images
 - Execute commands automatically and save them
 
-When users ask you to create something, execute it immediately if you're confident about the request.`;
+When users ask you to create something, execute it immediately if you're confident about the request.
+
+Remember to adapt your communication style and response length according to the user's preferences in all your responses.`;
 
     // Build conversation context
     const conversationMessages = [
