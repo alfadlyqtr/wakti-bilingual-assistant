@@ -69,7 +69,7 @@ export class WaktiAIV2Service {
         inputType 
       });
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
           conversationId,
@@ -120,7 +120,7 @@ export class WaktiAIV2Service {
     try {
       console.log('🔍 WAKTI AI CLIENT: Sending message with search confirmation');
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
           conversationId,
