@@ -296,11 +296,13 @@ async function executeBrowsing(query, language = 'en') {
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query: query,
-        search_depth: "advanced",
+        search_depth: "basic",
         include_answer: true,
-        include_images: false,
+        include_images: true,
         include_raw_content: false,
-        max_results: 5
+        max_results: 5,
+        chunks_per_source: 1,
+        time_range: "week"
       })
     });
     
@@ -315,6 +317,7 @@ async function executeBrowsing(query, language = 'en') {
       success: true,
       answer: data.answer,
       sources: data.results?.slice(0, 3) || [],
+      images: data.images || [],
       query: query
     };
     
@@ -592,6 +595,7 @@ serve(async (req) => {
           browsingData = {
             hasResults: true,
             sources: browsingResult.sources,
+            images: browsingResult.images,
             query: browsingResult.query
           };
           
