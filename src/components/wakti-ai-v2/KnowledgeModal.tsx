@@ -70,11 +70,11 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
   
   const [knowledge, setKnowledge] = useState<UserKnowledge>({
     personal_note: '',
-    role: '',
-    main_use: '',
+    role: undefined,
+    main_use: undefined,
     interests: [],
-    communication_style: '',
-    response_length: ''
+    communication_style: undefined,
+    response_length: undefined
   });
 
   // Professional roles with icons
@@ -153,14 +153,15 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
       }
 
       if (data) {
+        console.log('Loaded existing knowledge:', data);
         setHasExistingData(true);
         setKnowledge({
           personal_note: data.personal_note || '',
-          role: data.role || '',
-          main_use: data.main_use || '',
+          role: data.role || undefined,
+          main_use: data.main_use || undefined,
           interests: data.interests || [],
-          communication_style: data.communication_style || '',
-          response_length: data.response_length || ''
+          communication_style: data.communication_style || undefined,
+          response_length: data.response_length || undefined
         });
       }
     } catch (error) {
@@ -176,19 +177,26 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     try {
       setSaving(true);
       
+      // Convert empty strings to null and prepare data for save
+      const dataToSave = {
+        user_id: user.id,
+        personal_note: knowledge.personal_note || null,
+        role: knowledge.role || null,
+        main_use: knowledge.main_use || null,
+        interests: knowledge.interests || [],
+        communication_style: knowledge.communication_style || null,
+        response_length: knowledge.response_length || null
+      };
+
+      console.log('Saving knowledge data:', dataToSave);
+
       const { error } = await supabase
         .from('ai_user_knowledge')
-        .upsert({
-          user_id: user.id,
-          personal_note: knowledge.personal_note,
-          role: knowledge.role,
-          main_use: knowledge.main_use,
-          interests: knowledge.interests,
-          communication_style: knowledge.communication_style,
-          response_length: knowledge.response_length
-        });
+        .upsert(dataToSave);
 
       if (error) throw error;
+
+      console.log('Knowledge saved successfully');
 
       // Show success confirmation
       setSavedConfirmation(true);
@@ -294,7 +302,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.role}
+                value={knowledge.role || undefined}
                 onValueChange={(value) => setKnowledge({ ...knowledge, role: value })}
               >
                 <SelectTrigger>
@@ -322,7 +330,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.main_use}
+                value={knowledge.main_use || undefined}
                 onValueChange={(value) => setKnowledge({ ...knowledge, main_use: value })}
               >
                 <SelectTrigger>
@@ -350,7 +358,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.communication_style}
+                value={knowledge.communication_style || undefined}
                 onValueChange={(value) => setKnowledge({ ...knowledge, communication_style: value })}
               >
                 <SelectTrigger>
@@ -375,7 +383,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.response_length}
+                value={knowledge.response_length || undefined}
                 onValueChange={(value) => setKnowledge({ ...knowledge, response_length: value })}
               >
                 <SelectTrigger>
@@ -401,7 +409,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </label>
             </div>
             <Select
-              value={knowledge.interests?.[0] || ''}
+              value={knowledge.interests?.[0] || undefined}
               onValueChange={(value) => setKnowledge({ ...knowledge, interests: [value] })}
             >
               <SelectTrigger>
