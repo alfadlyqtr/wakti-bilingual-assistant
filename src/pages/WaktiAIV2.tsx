@@ -337,18 +337,17 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      // Call the unified-ai-brain function
+      // Call the wakti-ai-v2-brain function
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) {
         throw new Error('No active session found');
       }
 
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: content.trim(),
           userId: user?.id,
           language: detectedLanguage,
-          context: null,
           conversationId: currentConversationId,
           inputType,
           // Pass conversation history for better context
@@ -373,7 +372,8 @@ export default function WaktiAIV2() {
         browsingUsed: data.browsingUsed,
         browsingData: data.browsingData,
         quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation
+        requiresSearchConfirmation: data.requiresSearchConfirmation,
+        imageUrl: data.imageUrl
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -394,6 +394,17 @@ export default function WaktiAIV2() {
           description: language === 'ar' 
             ? `تم الحصول على معلومات حديثة من ${data.browsingData?.sources?.length || 0} مصادر`
             : `Got current information from ${data.browsingData?.sources?.length || 0} sources`,
+          duration: 3000
+        });
+      }
+
+      // Show image generation feedback
+      if (data.imageUrl) {
+        toast({
+          title: language === 'ar' ? '🎨 تم إنشاء الصورة' : '🎨 Image Generated',
+          description: language === 'ar' 
+            ? 'تم إنشاء الصورة بنجاح'
+            : 'Image generated successfully',
           duration: 3000
         });
       }
@@ -609,12 +620,11 @@ export default function WaktiAIV2() {
       }
 
       // Send the same message but with search confirmation
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: messageContent,
           userId: user?.id,
           language: language,
-          context: null,
           conversationId: currentConversationId,
           inputType: 'text',
           confirmSearch: true,
