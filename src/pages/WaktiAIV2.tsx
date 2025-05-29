@@ -72,12 +72,13 @@ export default function WaktiAIV2() {
     return hasArabicChars ? 'ar' : 'en';
   };
 
-  // Debug: Log component mount
+  // Debug: Log component mount with isolation test info
   useEffect(() => {
-    console.log('🔍 WAKTI AI V2.1: Component mounted');
+    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Component mounted');
     console.log('🔍 User:', user?.id);
     console.log('🔍 Language:', language);
     console.log('🔍 System Ready:', systemReady);
+    console.log('🔍 ISOLATION: Now calling unified-ai-brain instead of wakti-ai-v2-brain');
   }, []);
 
   const scrollToBottom = () => {
@@ -114,13 +115,13 @@ export default function WaktiAIV2() {
 
   const initializeSystem = async () => {
     try {
-      console.log('🔍 WAKTI AI V2.1: Initializing system...');
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Initializing system with unified-ai-brain...');
       
       const connectionTest = await WaktiAIV2Service.testConnection();
-      console.log('🔍 WAKTI AI V2.1: Connection test result:', connectionTest);
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Connection test result:', connectionTest);
       
       if (!connectionTest.success) {
-        console.warn('🔍 WAKTI AI V2.1: Connection test failed:', connectionTest.error);
+        console.warn('🔍 WAKTI AI V2.1 ISOLATION TEST: Connection test failed:', connectionTest.error);
       }
       
       await loadConversations();
@@ -131,7 +132,7 @@ export default function WaktiAIV2() {
       
       setSystemReady(true);
     } catch (error) {
-      console.error('WAKTI AI V2.1: System initialization failed:', error);
+      console.error('WAKTI AI V2.1 ISOLATION TEST: System initialization failed:', error);
       
       const errorMessage: AIMessage = {
         id: 'system-error',
@@ -164,8 +165,8 @@ export default function WaktiAIV2() {
     }
 
     let greeting = language === 'ar' 
-      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي المطور مع تصفح ذكي للإنترنت. 🚀\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة من الإنترنت 🌐\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
-      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your enhanced smart assistant with intelligent web browsing. 🚀\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Getting current information from the web 🌐\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
+      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي (ISOLATION TEST: unified-ai-brain). 🧪\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة من الإنترنت 🌐\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
+      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your smart assistant (ISOLATION TEST: unified-ai-brain). 🧪\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Getting current information from the web 🌐\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
     
     if (!connectionOk) {
       greeting += language === 'ar' 
@@ -174,7 +175,7 @@ export default function WaktiAIV2() {
     }
     
     const greetingMessage: AIMessage = {
-      id: 'greeting-v2-1',
+      id: 'greeting-v2-1-isolation',
       role: 'assistant',
       content: greeting,
       timestamp: new Date()
@@ -187,7 +188,7 @@ export default function WaktiAIV2() {
     try {
       const data = await WaktiAIV2Service.getConversations();
       setConversations(data);
-      console.log('🔍 WAKTI AI V2.1: Loaded conversations:', data.length);
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Loaded conversations:', data.length);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -210,7 +211,7 @@ export default function WaktiAIV2() {
       setMessages(convertedMessages);
       setCurrentConversationId(conversationId);
       setLeftDrawerOpen(false);
-      console.log('🔍 WAKTI AI V2.1: Loaded conversation messages:', data.length);
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Loaded conversation messages:', data.length);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
@@ -230,7 +231,7 @@ export default function WaktiAIV2() {
     setBrowsingSources([]);
     setQuotaStatus(null);
     initializeGreeting();
-    console.log('🔍 WAKTI AI V2.1: Started new conversation');
+    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Started new conversation');
   };
 
   const clearCurrentConversation = () => {
@@ -313,7 +314,7 @@ export default function WaktiAIV2() {
 
     // Ensure user is authenticated
     if (!user?.id) {
-      console.error('🔍 WAKTI AI V2.1: No authenticated user found');
+      console.error('🔍 WAKTI AI V2.1 ISOLATION TEST: No authenticated user found');
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first',
@@ -325,7 +326,7 @@ export default function WaktiAIV2() {
     // Detect language from user input content
     const detectedLanguage = detectLanguage(content.trim());
     
-    console.log('🔍 WAKTI AI V2.1: Language detection:', {
+    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Language detection:', {
       originalContent: content.trim(),
       detectedLanguage,
       themeLanguage: language
@@ -346,132 +347,74 @@ export default function WaktiAIV2() {
     setIsTyping(true);
 
     try {
-      console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Sending message to unified-ai-brain:', content.trim());
       
       // Get session with detailed logging
       const { data: session } = await supabase.auth.getSession();
-      console.log('🔍 WAKTI AI V2.1: Session check:', !!session?.session);
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Session check:', !!session?.session);
       
       if (!session?.session) {
         throw new Error('No active session found');
       }
 
-      console.log('🔍 WAKTI AI V2.1: Calling wakti-ai-v2-brain function...');
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Calling unified-ai-brain function via WaktiAIV2Service...');
 
-      // Standardized payload structure that matches backend expectations
-      const functionPayload = {
-        message: content.trim(),
-        userId: user.id, // Ensure this is always provided
-        language: detectedLanguage,
-        conversationId: currentConversationId,
-        inputType,
-        conversationHistory: messages.slice(-10).map(msg => ({
-          role: msg.role,
-          content: msg.content
-        })),
-        confirmSearch: false // Always include this field
-      };
-      
-      console.log('🔍 WAKTI AI V2.1: Function payload:', functionPayload);
+      // Call the service which now uses unified-ai-brain
+      const result = await WaktiAIV2Service.sendMessage(content.trim(), currentConversationId, detectedLanguage, inputType);
 
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: functionPayload,
-        headers: {
-          'Content-Type': 'application/json',
-          'x-app-name': 'WAKTI'
-        }
-      });
-
-      console.log('🔍 WAKTI AI V2.1: Raw function response:', { data, error });
-
-      if (error) {
-        console.error('🔍 WAKTI AI V2.1: Function invoke error:', error);
-        throw error;
-      }
-
-      if (!data || !data.response) {
-        console.error('🔍 WAKTI AI V2.1: Invalid response format:', data);
-        throw new Error('Invalid response format from AI function');
-      }
-
-      console.log('🔍 WAKTI AI V2.1: Creating assistant message...');
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Service response received:', result);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.response,
+        content: result.response,
         timestamp: new Date(),
-        intent: data.intent,
-        confidence: data.confidence,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation,
-        imageUrl: data.imageUrl
+        intent: result.intent,
+        confidence: result.confidence,
+        browsingUsed: result.browsingUsed,
+        browsingData: result.browsingData,
+        quotaStatus: result.quotaStatus,
+        requiresSearchConfirmation: result.requiresSearchConfirmation,
+        imageUrl: result.imageUrl
       };
 
-      console.log('🔍 WAKTI AI V2.1: Assistant message created:', assistantMessage);
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Assistant message created:', assistantMessage);
 
       setMessages(prev => [...prev, assistantMessage]);
 
       // Update quota status and sources
-      if (data.quotaStatus) {
-        setQuotaStatus(data.quotaStatus);
+      if (result.quotaStatus) {
+        setQuotaStatus(result.quotaStatus);
       }
 
-      if (data.browsingData?.sources) {
-        setBrowsingSources(data.browsingData.sources);
-      }
-
-      // Enhanced browsing status feedback
-      if (data.browsingUsed) {
-        toast({
-          title: language === 'ar' ? '✅ تم البحث' : '✅ Searched',
-          description: language === 'ar' 
-            ? `تم الحصول على معلومات حديثة من ${data.browsingData?.sources?.length || 0} مصادر`
-            : `Got current information from ${data.browsingData?.sources?.length || 0} sources`,
-          duration: 3000
-        });
-      }
-
-      // Show image generation feedback
-      if (data.imageUrl) {
-        toast({
-          title: language === 'ar' ? '🎨 تم إنشاء الصورة' : '🎨 Image Generated',
-          description: language === 'ar' 
-            ? 'تم إنشاء الصورة بنجاح'
-            : 'Image generated successfully',
-          duration: 3000
-        });
-      }
-
-      // Show quota warning when approaching limit
-      if (data.requiresSearchConfirmation) {
-        toast({
-          title: language === 'ar' ? '⚠️ تنبيه البحث' : '⚠️ Search Notice',
-          description: language === 'ar' 
-            ? 'اقتربت من حد البحث الشهري - يمكنك تأكيد البحث عند الحاجة'
-            : 'Approaching monthly search limit - you can confirm searches when needed',
-          duration: 4000
-        });
+      if (result.browsingData?.sources) {
+        setBrowsingSources(result.browsingData.sources);
       }
 
       // Update conversation ID if this was a new conversation
-      if (!currentConversationId && data.conversationId) {
-        setCurrentConversationId(data.conversationId);
+      if (!currentConversationId && result.conversationId) {
+        setCurrentConversationId(result.conversationId);
         // Reload conversations list
         loadConversations();
       }
 
-      console.log('🔍 WAKTI AI V2.1: Message processing completed successfully');
+      toast({
+        title: language === 'ar' ? '✅ نجح الاختبار' : '✅ Isolation Test Success',
+        description: language === 'ar' 
+          ? 'unified-ai-brain يعمل بشكل صحيح'
+          : 'unified-ai-brain is working correctly',
+        duration: 3000
+      });
+
+      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Message processing completed successfully');
 
     } catch (error) {
-      console.error('WAKTI AI V2.1: Error sending message:', error);
+      console.error('WAKTI AI V2.1 ISOLATION TEST: Error sending message:', error);
       
       // Enhanced error handling with specific error types
       let errorMessage = language === 'ar' 
-        ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
-        : 'Sorry, there was a system error. Please try again. 🔧';
+        ? 'عذراً، حدث خطأ في النظام (unified-ai-brain). يرجى المحاولة مرة أخرى. 🔧'
+        : 'Sorry, there was a system error (unified-ai-brain). Please try again. 🔧';
 
       if (error.message?.includes('session')) {
         errorMessage = language === 'ar'
@@ -493,8 +436,8 @@ export default function WaktiAIV2() {
       setMessages(prev => [...prev, errorAIMessage]);
       
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في إرسال الرسالة - يرجى المحاولة مرة أخرى' : 'Failed to send message - please try again',
+        title: language === 'ar' ? 'خطأ في الاختبار' : 'Isolation Test Error',
+        description: language === 'ar' ? 'فشل في الاتصال مع unified-ai-brain' : 'Failed to connect to unified-ai-brain',
         variant: 'destructive'
       });
     } finally {
@@ -586,7 +529,7 @@ export default function WaktiAIV2() {
     try {
       setIsTranscribing(true);
       
-      console.log('🎤 WAKTI AI V2.1: Processing voice input, blob size:', audioBlob.size);
+      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Processing voice input, blob size:', audioBlob.size);
 
       // Get the current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -600,7 +543,7 @@ export default function WaktiAIV2() {
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('language', language);
 
-      console.log('🎤 WAKTI AI V2.1: Uploading audio blob to wakti-voice-v2...');
+      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Uploading audio blob to wakti-voice-v2...');
 
       // Use direct fetch instead of supabase.functions.invoke() for FormData
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-voice-v2', {
@@ -611,16 +554,16 @@ export default function WaktiAIV2() {
         body: formData
       });
 
-      console.log('🎤 WAKTI AI V2.1: Voice transcription response status:', response.status);
+      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🎤 WAKTI AI V2.1: Voice transcription error:', errorText);
+        console.error('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription error:', errorText);
         throw new Error(`Voice transcription failed: ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('🎤 WAKTI AI V2.1: Voice transcription result:', result);
+      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription result:', result);
 
       const { text } = result;
       
@@ -648,7 +591,7 @@ export default function WaktiAIV2() {
         throw new Error('No transcription received');
       }
     } catch (error) {
-      console.error('🎤 WAKTI AI V2.1: Error processing voice input:', error);
+      console.error('🎤 WAKTI AI V2.1 ISOLATION TEST: Error processing voice input:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
         description: language === 'ar' ? 'فشل في معالجة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to process voice input - please try again',
@@ -662,7 +605,7 @@ export default function WaktiAIV2() {
 
   const handleSearchConfirmation = async (messageContent: string) => {
     if (!user?.id) {
-      console.error('🔍 WAKTI AI V2.1: No authenticated user for search confirmation');
+      console.error('🔍 WAKTI AI V2.1 ISOLATION TEST: No authenticated user for search confirmation');
       return;
     }
 
@@ -675,39 +618,24 @@ export default function WaktiAIV2() {
         throw new Error('No active session found');
       }
 
-      // Send the same message but with search confirmation
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message: messageContent,
-          userId: user.id, // Ensure userId is always provided
-          language: language,
-          conversationId: currentConversationId,
-          inputType: 'text',
-          confirmSearch: true, // This is the key difference
-          conversationHistory: messages.slice(-10).map(msg => ({
-            role: msg.role,
-            content: msg.content
-          }))
-        }
-      });
-
-      if (error) throw error;
+      // Use the service which now calls unified-ai-brain
+      const result = await WaktiAIV2Service.sendMessageWithSearchConfirmation(messageContent, currentConversationId, language, 'text');
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.response,
+        content: result.response,
         timestamp: new Date(),
-        intent: data.intent,
-        confidence: data.confidence,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus
+        intent: result.intent,
+        confidence: result.confidence,
+        browsingUsed: result.browsingUsed,
+        browsingData: result.browsingData,
+        quotaStatus: result.quotaStatus
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      if (data.browsingUsed) {
+      if (result.browsingUsed) {
         toast({
           title: language === 'ar' ? '✅ تم البحث' : '✅ Search Complete',
           description: language === 'ar' ? 'تم الحصول على النتائج' : 'Results retrieved',
@@ -735,14 +663,14 @@ export default function WaktiAIV2() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  console.log('🔍 DEBUG: About to render input area');
+  console.log('🔍 DEBUG ISOLATION TEST: About to render input area');
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
       {/* App Header */}
       <AppHeader />
 
-      {/* Enhanced Header with Quota Status */}
+      {/* Enhanced Header with Isolation Test Indicator */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
@@ -755,8 +683,12 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        {/* Centered Action Icons with Quota Indicator */}
+        {/* Centered Action Icons with Isolation Test Indicator */}
         <div className="flex items-center justify-center gap-2 flex-1">
+          <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300">
+            🧪 ISOLATION TEST: unified-ai-brain
+          </div>
+          
           <Button
             variant="ghost"
             size="icon"
