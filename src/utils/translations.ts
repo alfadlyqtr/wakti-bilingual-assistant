@@ -16,3 +16,24 @@ export const t = (key: TranslationKey, language: SupportedLanguage | string): st
   }
   return en[key] || key;
 };
+
+// Helper function for quota-specific messages
+export const getQuotaMessage = (language: SupportedLanguage, remaining: number, hasExtras: number): string => {
+  if (language === 'ar') {
+    if (remaining > 0) {
+      return `${remaining} ترجمات مجانية متبقية اليوم${hasExtras > 0 ? ` + ${hasExtras} إضافية` : ''}`;
+    } else if (hasExtras > 0) {
+      return `${hasExtras} ترجمات إضافية متبقية`;
+    } else {
+      return 'تم الوصول للحد الأقصى - اشتري 150 ترجمة إضافية';
+    }
+  } else {
+    if (remaining > 0) {
+      return `${remaining} free translations remaining today${hasExtras > 0 ? ` + ${hasExtras} extra` : ''}`;
+    } else if (hasExtras > 0) {
+      return `${hasExtras} extra translations remaining`;
+    } else {
+      return 'Limit reached - Buy 150 extra translations';
+    }
+  }
+};

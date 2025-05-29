@@ -131,7 +131,8 @@ serve(async (req) => {
         originalText,
         translatedText,
         sourceLanguage: 'auto-detected',
-        targetLanguage: targetLanguageName
+        targetLanguage: targetLanguageName,
+        quotaUsed: true // Indicates this translation counts against quota
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

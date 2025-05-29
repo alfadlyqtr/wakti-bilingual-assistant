@@ -16,8 +16,9 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
-  const MAX_DAILY_TRANSLATIONS = 25;
-  const SOFT_WARNING_THRESHOLD = 20;
+  // Updated daily limit from 25 to 5
+  const MAX_DAILY_TRANSLATIONS = 5;
+  const SOFT_WARNING_THRESHOLD = 4; // Warn at 4 out of 5
 
   // Memoize the loadUserQuota function to prevent infinite re-renders
   const loadUserQuota = useCallback(async () => {
@@ -107,8 +108,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           toast({
             title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
             description: language === 'ar' 
-              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-              : 'You have reached your daily translation limit',
+              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية (5 ترجمات)' 
+              : 'You have reached your daily translation limit (5 translations)',
             variant: 'destructive'
           });
           return false;
@@ -134,7 +135,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, userQuota, language]);
 
-  const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
+  // Updated to use 150 extra translations instead of 100
+  const purchaseExtraTranslations = useCallback(async (count: number = 150) => {
     if (!user) return false;
 
     try {
@@ -160,8 +162,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           toast({
             title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
             description: language === 'ar' 
-              ? `تم إضافة ${count} ترجمة إضافية` 
-              : `Added ${count} extra translations`,
+              ? `تم إضافة ${count} ترجمة إضافية (صالحة لشهر واحد)` 
+              : `Added ${count} extra translations (valid for 1 month)`,
           });
           
           console.log('💰 Extra translations purchased successfully:', result.new_extra_count);
