@@ -826,6 +826,7 @@ export default function WaktiAIV2() {
               currentConversationId={currentConversationId}
               onSelectConversation={loadConversation}
               onDeleteConversation={deleteConversation}
+              onRefresh={loadConversations}
             />
           </div>
         </div>
@@ -866,7 +867,7 @@ export default function WaktiAIV2() {
               variant="default"
             >
               <Brain className="h-4 w-4" />
-              {language === 'ar' ? 'تحسين وكتي AI الخاص بي' : 'Improve My Wakti AI'}
+              {language === 'ar' ? 'تحسين وكتي AI الخاص بي' : 'Improve my AI'}
             </Button>
             <p className="text-xs text-muted-foreground text-center mt-2">
               {language === 'ar' 
