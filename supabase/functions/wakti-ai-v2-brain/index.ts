@@ -189,10 +189,44 @@ serve(async (req) => {
       });
     }
 
+    // Get current date and time for accurate responses
+    const now = new Date();
+    const currentDateTime = language === 'ar' 
+      ? `التاريخ والوقت الحالي: ${now.toLocaleDateString('ar-EG', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          timeZone: 'Asia/Qatar'
+        })} - ${now.toLocaleTimeString('ar-EG', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'Asia/Qatar'
+        })} (توقيت قطر)`
+      : `Current Date & Time: ${now.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          timeZone: 'Asia/Qatar'
+        })} - ${now.toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          timeZone: 'Asia/Qatar'
+        })} (Qatar Time)`;
+
     // Enhanced system message with comprehensive user context using correct database fields
     let systemMessage = language === 'ar' 
-      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.`
-      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}.`;
+      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.
+
+${currentDateTime}
+
+تذكر: استخدم دائماً التاريخ والوقت الحالي المذكور أعلاه عند الإجابة على أسئلة متعلقة بالتاريخ أو الوقت.`
+      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}.
+
+${currentDateTime}
+
+IMPORTANT: Always use the current date and time shown above when answering any date or time-related questions.`;
 
     // Add user knowledge context if available - using correct database schema
     if (userKnowledge) {
