@@ -86,7 +86,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Load comprehensive user knowledge for AI context
+    // Load comprehensive user knowledge for AI context - using correct database schema
     const { data: userKnowledge } = await supabase
       .from('ai_user_knowledge')
       .select('*')
@@ -189,40 +189,40 @@ serve(async (req) => {
       });
     }
 
-    // Enhanced system message with comprehensive user context
+    // Enhanced system message with comprehensive user context using correct database fields
     let systemMessage = language === 'ar' 
       ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.`
       : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}.`;
 
-    // Add user knowledge context if available
+    // Add user knowledge context if available - using correct database schema
     if (userKnowledge) {
       const contextParts = [];
       
-      if (userKnowledge.personal_info) {
+      if (userKnowledge.personal_note) {
         contextParts.push(language === 'ar' 
-          ? `معلومات شخصية: ${userKnowledge.personal_info}`
-          : `Personal info: ${userKnowledge.personal_info}`
+          ? `معلومات شخصية: ${userKnowledge.personal_note}`
+          : `Personal info: ${userKnowledge.personal_note}`
         );
       }
       
-      if (userKnowledge.goals) {
+      if (userKnowledge.main_use) {
         contextParts.push(language === 'ar' 
-          ? `أهداف: ${userKnowledge.goals}`
-          : `Goals: ${userKnowledge.goals}`
+          ? `الهدف الأساسي: ${userKnowledge.main_use}`
+          : `Main use: ${userKnowledge.main_use}`
         );
       }
       
-      if (userKnowledge.work_context) {
+      if (userKnowledge.role) {
         contextParts.push(language === 'ar' 
-          ? `سياق العمل: ${userKnowledge.work_context}`
-          : `Work context: ${userKnowledge.work_context}`
+          ? `المجال المهني: ${userKnowledge.role}`
+          : `Professional role: ${userKnowledge.role}`
         );
       }
       
-      if (userKnowledge.preferences) {
+      if (userKnowledge.interests && userKnowledge.interests.length > 0) {
         contextParts.push(language === 'ar' 
-          ? `التفضيلات: ${userKnowledge.preferences}`
-          : `Preferences: ${userKnowledge.preferences}`
+          ? `الاهتمامات: ${userKnowledge.interests.join(', ')}`
+          : `Interests: ${userKnowledge.interests.join(', ')}`
         );
       }
 
@@ -230,50 +230,6 @@ serve(async (req) => {
         systemMessage += language === 'ar' 
           ? `\n\nمعلومات المستخدم للسياق:\n${contextParts.join('\n')}`
           : `\n\nUser context information:\n${contextParts.join('\n')}`;
-      }
-
-      // Add communication style preferences
-      if (userKnowledge.communication_style) {
-        const styleInstructions = {
-          formal: language === 'ar' 
-            ? 'استخدم أسلوباً رسمياً ومهنياً في التواصل.'
-            : 'Use a formal and professional communication style.',
-          casual: language === 'ar' 
-            ? 'استخدم أسلوباً غير رسمي وودود في التواصل.'
-            : 'Use a casual and friendly communication style.',
-          technical: language === 'ar' 
-            ? 'استخدم مصطلحات تقنية دقيقة وتفسيرات مفصلة.'
-            : 'Use precise technical terms and detailed explanations.',
-          friendly: language === 'ar' 
-            ? 'كن ودوداً ومتفهماً في تفاعلك.'
-            : 'Be warm and understanding in your interactions.'
-        };
-        
-        systemMessage += '\n\n' + styleInstructions[userKnowledge.communication_style as keyof typeof styleInstructions];
-      }
-
-      // Add response length preferences
-      if (userKnowledge.response_length) {
-        const lengthInstructions = {
-          brief: language === 'ar' 
-            ? 'قدم إجابات مختصرة ومباشرة.'
-            : 'Provide brief and direct responses.',
-          detailed: language === 'ar' 
-            ? 'قدم إجابات مفصلة مع شروحات واضحة.'
-            : 'Provide detailed responses with clear explanations.',
-          comprehensive: language === 'ar' 
-            ? 'قدم إجابات شاملة مع أمثلة وتفاصيل إضافية.'
-            : 'Provide comprehensive responses with examples and additional details.'
-        };
-        
-        systemMessage += '\n\n' + lengthInstructions[userKnowledge.response_length as keyof typeof lengthInstructions];
-      }
-
-      // Add working hours context for scheduling
-      if (userKnowledge.working_hours) {
-        systemMessage += language === 'ar' 
-          ? `\n\nساعات العمل: ${userKnowledge.working_hours} (${userKnowledge.time_zone || 'UTC'})`
-          : `\n\nWorking hours: ${userKnowledge.working_hours} (${userKnowledge.time_zone || 'UTC'})`;
       }
     }
 

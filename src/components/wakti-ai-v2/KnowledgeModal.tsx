@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,10 +24,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { 
   Brain, 
   Check, 
-  MessageCircle, 
   Settings,
   User,
-  FileText,
   Target,
   Briefcase,
   Heart,
@@ -50,16 +49,10 @@ interface KnowledgeModalProps {
 }
 
 interface UserKnowledge {
-  personal_info?: string;
-  goals?: string;
-  preferences?: string;
-  work_context?: string;
-  communication_style?: 'formal' | 'casual' | 'technical' | 'friendly';
-  response_length?: 'brief' | 'detailed' | 'comprehensive';
-  primary_language?: 'en' | 'ar' | 'auto';
-  time_zone?: string;
-  working_hours?: string;
-  notification_preferences?: string[];
+  personal_note?: string;
+  role?: string;
+  main_use?: string;
+  interests?: string[];
 }
 
 export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
@@ -72,16 +65,10 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
   const [hasExistingData, setHasExistingData] = useState(false);
   
   const [knowledge, setKnowledge] = useState<UserKnowledge>({
-    personal_info: '',
-    goals: '',
-    preferences: '',
-    work_context: '',
-    communication_style: 'friendly',
-    response_length: 'detailed',
-    primary_language: 'auto',
-    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    working_hours: '09:00-17:00',
-    notification_preferences: []
+    personal_note: '',
+    role: '',
+    main_use: '',
+    interests: []
   });
 
   // Professional roles with icons
@@ -100,8 +87,8 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     { value: 'other', label: language === 'ar' ? 'أخرى' : 'Other', icon: User }
   ];
 
-  // Goals categories
-  const goalCategories = [
+  // Main use categories
+  const mainUseCategories = [
     { value: 'academic_success', label: language === 'ar' ? 'النجاح الأكاديمي' : 'Academic Success' },
     { value: 'career_growth', label: language === 'ar' ? 'النمو المهني' : 'Career Growth' },
     { value: 'skill_development', label: language === 'ar' ? 'تطوير المهارات' : 'Skill Development' },
@@ -112,9 +99,9 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     { value: 'health_fitness', label: language === 'ar' ? 'الصحة واللياقة' : 'Health & Fitness' }
   ];
 
-  // Preferences options
-  const preferenceOptions = [
-    { value: 'visual_learner', label: language === 'ar' ? 'متعلم بصري' : 'Visual Learner' },
+  // Interest options
+  const interestOptions = [
+    { value: 'visual_learner', label: language === 'ar' ? 'متعلم بصري' : 'Visual Learning' },
     { value: 'step_by_step', label: language === 'ar' ? 'تعليمات خطوة بخطوة' : 'Step-by-step Instructions' },
     { value: 'quick_summaries', label: language === 'ar' ? 'ملخصات سريعة' : 'Quick Summaries' },
     { value: 'detailed_explanations', label: language === 'ar' ? 'شروحات مفصلة' : 'Detailed Explanations' },
@@ -147,16 +134,10 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
       if (data) {
         setHasExistingData(true);
         setKnowledge({
-          personal_info: data.personal_info || '',
-          goals: data.goals || '',
-          preferences: data.preferences || '',
-          work_context: data.work_context || '',
-          communication_style: data.communication_style || 'friendly',
-          response_length: data.response_length || 'detailed',
-          primary_language: data.primary_language || 'auto',
-          time_zone: data.time_zone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          working_hours: data.working_hours || '09:00-17:00',
-          notification_preferences: data.notification_preferences || []
+          personal_note: data.personal_note || '',
+          role: data.role || '',
+          main_use: data.main_use || '',
+          interests: data.interests || []
         });
       }
     } catch (error) {
@@ -176,16 +157,10 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
         .from('ai_user_knowledge')
         .upsert({
           user_id: user.id,
-          personal_info: knowledge.personal_info,
-          goals: knowledge.goals,
-          preferences: knowledge.preferences,
-          work_context: knowledge.work_context,
-          communication_style: knowledge.communication_style,
-          response_length: knowledge.response_length,
-          primary_language: knowledge.primary_language,
-          time_zone: knowledge.time_zone,
-          working_hours: knowledge.working_hours,
-          notification_preferences: knowledge.notification_preferences
+          personal_note: knowledge.personal_note,
+          role: knowledge.role,
+          main_use: knowledge.main_use,
+          interests: knowledge.interests
         });
 
       if (error) throw error;
@@ -263,7 +238,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
             </div>
           )}
 
-          {/* Personal Information - Keep as textarea */}
+          {/* Personal Information */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <User className="w-4 h-4 text-primary" />
@@ -272,8 +247,8 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </label>
             </div>
             <Textarea
-              value={knowledge.personal_info}
-              onChange={(e) => setKnowledge({ ...knowledge, personal_info: e.target.value })}
+              value={knowledge.personal_note}
+              onChange={(e) => setKnowledge({ ...knowledge, personal_note: e.target.value })}
               placeholder={language === 'ar' 
                 ? 'مثال: اسمي أحمد، أعمل كمطور برمجيات، أحب التقنية والرياضة...'
                 : 'e.g., My name is Ahmed, I work as a software developer, I enjoy technology and sports...'
@@ -294,8 +269,8 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.work_context}
-                onValueChange={(value) => setKnowledge({ ...knowledge, work_context: value })}
+                value={knowledge.role}
+                onValueChange={(value) => setKnowledge({ ...knowledge, role: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={language === 'ar' ? 'اختر مجالك المهني' : 'Select your role'} />
@@ -313,116 +288,55 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </Select>
             </div>
 
-            {/* Primary Goals */}
+            {/* Main Use */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Target className="w-4 h-4 text-primary" />
                 <label className="text-base font-medium">
-                  {language === 'ar' ? 'الهدف الأساسي' : 'Primary Goal'}
+                  {language === 'ar' ? 'الهدف الأساسي' : 'Main Use'}
                 </label>
               </div>
               <Select
-                value={knowledge.goals}
-                onValueChange={(value) => setKnowledge({ ...knowledge, goals: value })}
+                value={knowledge.main_use}
+                onValueChange={(value) => setKnowledge({ ...knowledge, main_use: value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={language === 'ar' ? 'اختر هدفك الأساسي' : 'Select your main goal'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {goalCategories.map((goal) => (
-                    <SelectItem key={goal.value} value={goal.value}>
-                      {goal.label}
+                  {mainUseCategories.map((use) => (
+                    <SelectItem key={use.value} value={use.value}>
+                      {use.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
 
-            {/* Learning Style */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Heart className="w-4 h-4 text-primary" />
-                <label className="text-base font-medium">
-                  {language === 'ar' ? 'أسلوب التعلم المفضل' : 'Learning Style'}
-                </label>
-              </div>
-              <Select
-                value={knowledge.preferences}
-                onValueChange={(value) => setKnowledge({ ...knowledge, preferences: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر أسلوب التعلم' : 'Select your style'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {preferenceOptions.map((pref) => (
-                    <SelectItem key={pref.value} value={pref.value}>
-                      {pref.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* Interests - Full width */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Heart className="w-4 h-4 text-primary" />
+              <label className="text-base font-medium">
+                {language === 'ar' ? 'الاهتمامات والتفضيلات' : 'Interests & Preferences'}
+              </label>
             </div>
-
-            {/* Communication Style - Keep as is */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-primary" />
-                <label className="text-base font-medium">
-                  {language === 'ar' ? 'أسلوب التواصل' : 'Communication Style'}
-                </label>
-              </div>
-              <Select
-                value={knowledge.communication_style}
-                onValueChange={(value: any) => setKnowledge({ ...knowledge, communication_style: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="formal">
-                    {language === 'ar' ? 'رسمي' : 'Formal'}
+            <Select
+              value={knowledge.interests?.[0] || ''}
+              onValueChange={(value) => setKnowledge({ ...knowledge, interests: [value] })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={language === 'ar' ? 'اختر اهتماماتك' : 'Select your interests'} />
+              </SelectTrigger>
+              <SelectContent>
+                {interestOptions.map((interest) => (
+                  <SelectItem key={interest.value} value={interest.value}>
+                    {interest.label}
                   </SelectItem>
-                  <SelectItem value="casual">
-                    {language === 'ar' ? 'غير رسمي' : 'Casual'}
-                  </SelectItem>
-                  <SelectItem value="technical">
-                    {language === 'ar' ? 'تقني' : 'Technical'}
-                  </SelectItem>
-                  <SelectItem value="friendly">
-                    {language === 'ar' ? 'ودود' : 'Friendly'}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Response Length - Keep as is */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <label className="text-base font-medium">
-                  {language === 'ar' ? 'طول الإجابة' : 'Response Length'}
-                </label>
-              </div>
-              <Select
-                value={knowledge.response_length}
-                onValueChange={(value: any) => setKnowledge({ ...knowledge, response_length: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="brief">
-                    {language === 'ar' ? 'مختصر' : 'Brief'}
-                  </SelectItem>
-                  <SelectItem value="detailed">
-                    {language === 'ar' ? 'مفصل' : 'Detailed'}
-                  </SelectItem>
-                  <SelectItem value="comprehensive">
-                    {language === 'ar' ? 'شامل' : 'Comprehensive'}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Action Buttons */}
