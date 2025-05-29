@@ -337,13 +337,13 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      // Call unified AI brain function
+      // Call the correct wakti-ai-v2-brain function
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) {
         throw new Error('No active session found');
       }
 
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: content.trim(),
           userId: user?.id,
@@ -594,7 +594,7 @@ export default function WaktiAIV2() {
       }
 
       // Force search by calling with confirmed browsing
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: query,
           userId: user?.id,
