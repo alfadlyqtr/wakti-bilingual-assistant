@@ -11,9 +11,9 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
-const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
+const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🔍 WAKTI AI V2.1 Enhanced: Processing request with advanced browsing and database integration");
+console.log("🔍 WAKTI AI V2.1 Enhanced: Processing request with Tavily search and database integration");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -85,8 +85,8 @@ serve(async (req) => {
           ? `⚠️ لقد استخدمت ${quotaCheck.usagePercentage.toFixed(0)}% من حصة البحث الشهرية.\n\nهل تريد المتابعة مع البحث للحصول على معلومات حديثة؟`
           : `⚠️ You've used ${quotaCheck.usagePercentage.toFixed(0)}% of your monthly browsing quota.\n\nWould you like to proceed with search for current information?`;
       } else {
-        // Perform the search
-        const searchResults = await performWebSearch(message, language);
+        // Perform the search with Tavily
+        const searchResults = await performTavilySearch(message, language);
         if (searchResults.success) {
           browsingUsed = true;
           browsingData = searchResults.data;
@@ -175,9 +175,9 @@ serve(async (req) => {
       image_generated: !!imageUrl
     });
 
-    console.log("WAKTI AI V2.1 Enhanced: Generated AI response with enhanced context and browsing");
+    console.log("WAKTI AI V2.1 Enhanced: Generated AI response with Tavily search integration");
     console.log("WAKTI AI V2.1 Enhanced: Usage logged successfully");
-    console.log("WAKTI AI V2.1 Enhanced: Response ready with enhanced browsing and context integration");
+    console.log("WAKTI AI V2.1 Enhanced: Response ready with Tavily search integration");
 
     // Return response with proper CORS headers
     return new Response(JSON.stringify({
@@ -465,38 +465,45 @@ async function updateBrowsingQuota(userId: string) {
   return true;
 }
 
-async function performWebSearch(query: string, language: string) {
-  if (!SERPER_API_KEY) {
-    return { success: false, error: "Search API not configured" };
+async function performTavilySearch(query: string, language: string) {
+  if (!TAVILY_API_KEY) {
+    console.log("TAVILY_API_KEY not configured, web search disabled");
+    return { success: false, error: "Web search not available" };
   }
 
   try {
-    console.log("WAKTI AI V2.1 Enhanced: Performing web search");
+    console.log("WAKTI AI V2.1 Enhanced: Performing Tavily web search");
     
-    const response = await fetch("https://google.serper.dev/search", {
+    const response = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: {
-        "X-API-KEY": SERPER_API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        q: query,
-        gl: language === 'ar' ? 'sa' : 'us',
-        hl: language,
-        num: 5
+        api_key: TAVILY_API_KEY,
+        query: query,
+        search_depth: "basic",
+        include_answer: false,
+        include_images: false,
+        include_raw_content: false,
+        max_results: 5,
+        include_domains: [],
+        exclude_domains: []
       })
     });
 
     if (!response.ok) {
-      return { success: false, error: `Search API error: ${response.status}` };
+      console.error("Tavily API error:", response.status);
+      return { success: false, error: `Tavily API error: ${response.status}` };
     }
 
     const result = await response.json();
+    console.log("Tavily search successful, results count:", result.results?.length || 0);
     
-    const sources = result.organic?.slice(0, 3).map((item: any) => ({
+    const sources = result.results?.slice(0, 3).map((item: any) => ({
       title: item.title,
-      url: item.link,
-      snippet: item.snippet
+      url: item.url,
+      snippet: item.content
     })) || [];
 
     return {
@@ -508,7 +515,7 @@ async function performWebSearch(query: string, language: string) {
       }
     };
   } catch (error) {
-    console.error("Search error:", error);
+    console.error("Tavily search error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -532,7 +539,7 @@ async function generateAIResponse(message: string, language: string, conversatio
 }
 
 async function callAIAPI(systemPrompt: string, message: string, language: string, conversationHistory: any[]) {
-  console.log("WAKTI AI V2.1 Enhanced: Calling AI API with enhanced context and browsing integration");
+  console.log("WAKTI AI V2.1 Enhanced: Calling AI API with Tavily search integration");
   
   const messages = [
     { role: "system", content: systemPrompt },
@@ -544,7 +551,7 @@ async function callAIAPI(systemPrompt: string, message: string, language: string
   try {
     if (!DEEPSEEK_API_KEY) throw new Error("DeepSeek API key not configured");
     
-    console.log("WAKTI AI V2.1 Enhanced: Using DeepSeek API (primary model) with enhanced context");
+    console.log("WAKTI AI V2.1 Enhanced: Using DeepSeek API (primary model)");
     
     const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",

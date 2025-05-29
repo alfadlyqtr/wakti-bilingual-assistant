@@ -140,7 +140,7 @@ policy = "oneshot"
 inspector_port = 8083
 
 [functions.wakti-ai-v2-brain]
-verify_jwt = false
+verify_jwt = true
 
 [functions.wakti-voice-v2]
 verify_jwt = false
