@@ -8,11 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
-const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
-
 console.log("🔍 WAKTI AI V2.1 Enhanced: Processing request with Tavily search and database integration");
 
 const supabase = createClient(
@@ -29,36 +24,9 @@ serve(async (req) => {
   try {
     console.log("🔍 WAKTI AI V2.1: Starting request processing");
 
-    // Get request body with better error handling
-    let requestBody;
-    try {
-      const bodyText = await req.text();
-      console.log("🔍 WAKTI AI V2.1: Raw body received, length:", bodyText?.length || 0);
-      
-      if (!bodyText || bodyText.trim() === '') {
-        console.error("🔍 WAKTI AI V2.1: Empty request body received");
-        return new Response(JSON.stringify({ 
-          error: "Empty request body - please ensure message is provided",
-          success: false
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-      
-      requestBody = JSON.parse(bodyText);
-      console.log("🔍 WAKTI AI V2.1: Successfully parsed request body");
-    } catch (parseError) {
-      console.error("🔍 WAKTI AI V2.1: JSON parsing failed:", parseError.message);
-      return new Response(JSON.stringify({ 
-        error: "Invalid JSON format in request",
-        details: parseError.message,
-        success: false
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
+    // Get request body
+    const requestBody = await req.json();
+    console.log("🔍 WAKTI AI V2.1: Successfully parsed request body:", requestBody);
 
     // Extract fields with defaults
     const {
