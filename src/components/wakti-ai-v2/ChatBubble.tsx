@@ -2,7 +2,6 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Download, Expand, Copy, Check } from 'lucide-react';
@@ -96,15 +95,6 @@ export function ChatBubble({ message }: ChatBubbleProps) {
       "flex gap-3 mb-4",
       isUser ? "justify-end" : "justify-start"
     )}>
-      {!isUser && (
-        <Avatar className="h-8 w-8 mt-1">
-          <AvatarImage src="/placeholder.svg" />
-          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-            AI
-          </AvatarFallback>
-        </Avatar>
-      )}
-      
       <div className={cn(
         "max-w-[80%] sm:max-w-[70%]",
         isUser ? "order-1" : "order-2"
@@ -205,15 +195,6 @@ export function ChatBubble({ message }: ChatBubbleProps) {
           </div>
         )}
       </div>
-      
-      {isUser && (
-        <Avatar className="h-8 w-8 mt-1 order-2">
-          <AvatarImage src="/placeholder.svg" />
-          <AvatarFallback className="bg-muted text-muted-foreground text-xs">
-            U
-          </AvatarFallback>
-        </Avatar>
-      )}
     </div>
   );
 }
