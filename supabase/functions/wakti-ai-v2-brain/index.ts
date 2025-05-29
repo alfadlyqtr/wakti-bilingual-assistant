@@ -2,6 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const RUNWARE_API_KEY = "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
+const TAVILY_API_KEY = "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";
 
 interface RequestBody {
   message: string;
@@ -20,6 +21,22 @@ interface AIResponse {
   needsConfirmation: boolean;
   needsClarification: boolean;
   isNewConversation?: boolean;
+  hasBrowsing?: boolean;
+  browsingData?: any;
+}
+
+interface TavilySearchResult {
+  title: string;
+  url: string;
+  content: string;
+  score: number;
+  published_date?: string;
+}
+
+interface TavilyResponse {
+  results: TavilySearchResult[];
+  query: string;
+  response_time: number;
 }
 
 serve(async (req) => {
@@ -33,7 +50,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1: Processing request with ENHANCED CONTEXT INTEGRATION');
+    console.log('WAKTI AI V2.1 Enhanced: Processing request with Tavily browsing capabilities');
 
     // Initialize Supabase client with auth headers
     const authHeader = req.headers.get('Authorization');
@@ -48,7 +65,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!supabaseServiceKey) {
-      console.error('WAKTI AI V2.1: Missing Supabase service key');
+      console.error('WAKTI AI V2.1 Enhanced: Missing Supabase service key');
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -70,14 +87,14 @@ serve(async (req) => {
     // Get authenticated user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error('WAKTI AI V2.1: Authentication failed:', authError);
+      console.error('WAKTI AI V2.1 Enhanced: Authentication failed:', authError);
       return new Response(JSON.stringify({ error: 'Authentication failed' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('WAKTI AI V2.1: Authenticated user:', user.id);
+    console.log('WAKTI AI V2.1 Enhanced: Authenticated user:', user.id);
 
     // Get enhanced user profile and knowledge for deeper personalization
     const { data: profile } = await supabase
@@ -108,7 +125,7 @@ serve(async (req) => {
       });
     }
 
-    console.log('WAKTI AI V2.1: Processing message from user:', user.id);
+    console.log('WAKTI AI V2.1 Enhanced: Processing message from user:', user.id);
 
     // Manage conversation
     let isNewConversation = false;
@@ -125,7 +142,7 @@ serve(async (req) => {
         .single();
 
       if (convError) {
-        console.error('WAKTI AI V2.1: Error creating conversation:', convError);
+        console.error('WAKTI AI V2.1 Enhanced: Error creating conversation:', convError);
         conversationId = `temp-${Date.now()}`;
       } else {
         conversationId = newConversation.id;
@@ -163,16 +180,42 @@ serve(async (req) => {
 
     const recentMessages = (chatHistory || []).reverse();
 
-    // Analyze intent and detect actions
-    const intentAnalysis = analyzeIntent(userMessage, language);
-    console.log('WAKTI AI V2.1: Intent analysis:', intentAnalysis);
+    // Enhanced intent analysis with real-time detection
+    const intentAnalysis = analyzeIntentEnhanced(userMessage, language);
+    console.log('WAKTI AI V2.1 Enhanced: Intent analysis:', intentAnalysis);
+
+    // Check browsing quota and get real-time data if needed
+    let browsingData = null;
+    let hasBrowsing = false;
+    
+    if (intentAnalysis.requiresBrowsing) {
+      const { data: quotaCheck } = await supabase.rpc('check_browsing_quota', { p_user_id: user.id });
+      const currentUsage = quotaCheck || 0;
+      
+      console.log('WAKTI AI V2.1 Enhanced: Browsing quota check - current usage:', currentUsage);
+      
+      if (currentUsage < 65) {
+        // User has quota remaining, perform Tavily search
+        try {
+          browsingData = await performTavilySearch(userMessage, language);
+          hasBrowsing = true;
+          console.log('WAKTI AI V2.1 Enhanced: Tavily search successful, results:', browsingData?.results?.length || 0);
+        } catch (error) {
+          console.error('WAKTI AI V2.1 Enhanced: Tavily search failed:', error);
+          // Continue without browsing data
+        }
+      } else {
+        console.log('WAKTI AI V2.1 Enhanced: Browsing quota exceeded, continuing without real-time data');
+        // Continue without browsing - silent fallback
+      }
+    }
 
     // Check AI API keys
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY');
     const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!deepseekApiKey && !openaiApiKey) {
-      console.error('WAKTI AI V2.1: No AI API keys found');
+      console.error('WAKTI AI V2.1 Enhanced: No AI API keys found');
       return new Response(JSON.stringify({ 
         error: 'AI service not configured',
         response: language === 'ar' 
@@ -215,7 +258,7 @@ serve(async (req) => {
           timeZone: 'Asia/Qatar'
         })} (Qatar Time)`;
 
-    // Enhanced system message with comprehensive user context using correct database fields
+    // Enhanced system message with comprehensive user context and browsing data
     let systemMessage = language === 'ar' 
       ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.
 
@@ -227,6 +270,15 @@ ${currentDateTime}
 ${currentDateTime}
 
 IMPORTANT: Always use the current date and time shown above when answering any date or time-related questions.`;
+
+    // Add real-time browsing data context if available
+    if (browsingData && browsingData.results && browsingData.results.length > 0) {
+      const browssingContext = language === 'ar' 
+        ? `\n\nمعلومات حديثة من الإنترنت:\n${formatBrowsingDataForPrompt(browsingData, language)}`
+        : `\n\nReal-time information from the internet:\n${formatBrowsingDataForPrompt(browsingData, language)}`;
+      
+      systemMessage += browssingContext;
+    }
 
     // Add user knowledge context if available - using correct database schema
     if (userKnowledge) {
@@ -256,7 +308,7 @@ IMPORTANT: Always use the current date and time shown above when answering any d
       if (userKnowledge.interests && userKnowledge.interests.length > 0) {
         contextParts.push(language === 'ar' 
           ? `الاهتمامات: ${userKnowledge.interests.join(', ')}`
-          : `Interests: ${userKnowledge.interests.join(', ')}`
+          : `Interests: ${userKnowledge.interests.join(', ')}` 
         );
       }
 
@@ -303,6 +355,7 @@ IMPORTANT: Always use the current date and time shown above when answering any d
 - إنشاء الأحداث والمواعيد في قاعدة البيانات  
 - إنشاء التذكيرات في قاعدة البيانات
 - إنشاء الصور بالذكاء الاصطناعي
+- الوصول إلى المعلومات الحديثة من الإنترنت عند الحاجة
 - تنفيذ الأوامر تلقائياً وحفظها
 
 عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.
@@ -313,6 +366,7 @@ IMPORTANT: Always use the current date and time shown above when answering any d
 - Create events and appointments in the database
 - Create reminders in the database
 - Generate AI images
+- Access real-time information from the internet when needed
 - Execute commands automatically and save them
 
 When users ask you to create something, execute it immediately if you're confident about the request.
@@ -335,14 +389,15 @@ Remember to adapt your communication style and response length according to the 
     // Add current user message
     conversationMessages.push({ role: 'user', content: userMessage });
 
-    console.log('WAKTI AI V2.1: Calling AI API with context and database integration');
+    console.log('WAKTI AI V2.1 Enhanced: Calling AI API with enhanced context and browsing integration');
 
     let aiResponse = '';
+    let modelUsed = '';
     
-    // Try DeepSeek first, fallback to OpenAI
+    // Try DeepSeek first (primary model), fallback to OpenAI only if DeepSeek fails
     if (deepseekApiKey) {
       try {
-        console.log('WAKTI AI V2.1: Using DeepSeek API with conversation context');
+        console.log('WAKTI AI V2.1 Enhanced: Using DeepSeek API (primary model) with enhanced context');
         const deepseekResponse = await fetch('https://api.deepseek.com/chat/completions', {
           method: 'POST',
           headers: {
@@ -360,12 +415,13 @@ Remember to adapt your communication style and response length according to the 
         if (deepseekResponse.ok) {
           const chatCompletion = await deepseekResponse.json();
           aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
-          console.log('WAKTI AI V2.1: DeepSeek response successful');
+          modelUsed = 'deepseek';
+          console.log('WAKTI AI V2.1 Enhanced: DeepSeek response successful');
         } else {
           throw new Error(`DeepSeek API failed: ${deepseekResponse.status}`);
         }
       } catch (error) {
-        console.error('WAKTI AI V2.1: DeepSeek failed, falling back to OpenAI:', error);
+        console.error('WAKTI AI V2.1 Enhanced: DeepSeek failed, falling back to OpenAI:', error);
         
         if (openaiApiKey) {
           const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -385,7 +441,8 @@ Remember to adapt your communication style and response length according to the 
           if (openaiResponse.ok) {
             const chatCompletion = await openaiResponse.json();
             aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
-            console.log('WAKTI AI V2.1: OpenAI fallback successful');
+            modelUsed = 'openai-fallback';
+            console.log('WAKTI AI V2.1 Enhanced: OpenAI fallback successful');
           } else {
             throw new Error('Both DeepSeek and OpenAI failed');
           }
@@ -394,7 +451,7 @@ Remember to adapt your communication style and response length according to the 
         }
       }
     } else if (openaiApiKey) {
-      console.log('WAKTI AI V2.1: Using OpenAI API (no DeepSeek key available)');
+      console.log('WAKTI AI V2.1 Enhanced: Using OpenAI API (no DeepSeek key available)');
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -417,6 +474,7 @@ Remember to adapt your communication style and response length according to the 
 
       const chatCompletion = await openaiResponse.json();
       aiResponse = chatCompletion.choices[0].message?.content || 'No response from AI';
+      modelUsed = 'openai';
     }
 
     if (!aiResponse) {
@@ -436,7 +494,7 @@ Remember to adapt your communication style and response length according to the 
       });
     }
 
-    console.log('WAKTI AI V2.1: Generated AI response with context');
+    console.log('WAKTI AI V2.1 Enhanced: Generated AI response with enhanced context and browsing');
 
     // Execute actions if detected
     let actionResult = null;
@@ -444,7 +502,7 @@ Remember to adapt your communication style and response length according to the 
 
     if (intentAnalysis.confidence === 'high' && intentAnalysis.action) {
       try {
-        console.log('WAKTI AI V2.1: Executing database action:', intentAnalysis.action);
+        console.log('WAKTI AI V2.1 Enhanced: Executing database action:', intentAnalysis.action);
         actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language, openaiApiKey, supabase, user.id);
         actionTaken = intentAnalysis.action;
         
@@ -465,9 +523,23 @@ Remember to adapt your communication style and response length according to the 
           aiResponse += actionConfirmation;
         }
       } catch (error) {
-        console.error('WAKTI AI V2.1: Action execution failed:', error);
+        console.error('WAKTI AI V2.1 Enhanced: Action execution failed:', error);
         actionResult = { success: false, error: error.message };
       }
+    }
+
+    // Log AI usage for quota tracking
+    try {
+      await supabase.rpc('log_ai_usage', {
+        p_user_id: user.id,
+        p_model_used: modelUsed,
+        p_has_browsing: hasBrowsing,
+        p_tokens_used: estimateTokens(aiResponse)
+      });
+      console.log('WAKTI AI V2.1 Enhanced: Usage logged successfully');
+    } catch (error) {
+      console.error('WAKTI AI V2.1 Enhanced: Failed to log usage:', error);
+      // Don't fail the request if logging fails
     }
 
     // Save assistant response to chat history
@@ -486,7 +558,7 @@ Remember to adapt your communication style and response length according to the 
         action_result: actionResult
       });
 
-    console.log('WAKTI AI V2.1: Response ready with enhanced user context integration');
+    console.log('WAKTI AI V2.1 Enhanced: Response ready with enhanced browsing and context integration');
 
     return new Response(JSON.stringify({
       response: aiResponse,
@@ -497,12 +569,14 @@ Remember to adapt your communication style and response length according to the 
       actionResult: actionResult,
       needsConfirmation: intentAnalysis.confidence === 'medium',
       needsClarification: intentAnalysis.confidence === 'low',
-      isNewConversation: isNewConversation
+      isNewConversation: isNewConversation,
+      hasBrowsing: hasBrowsing,
+      browsingData: browsingData
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('WAKTI AI V2.1: Error:', error);
+    console.error('WAKTI AI V2.1 Enhanced: Error:', error);
     
     const errorResponse = {
       error: 'Internal server error',
@@ -521,9 +595,28 @@ Remember to adapt your communication style and response length according to the 
   }
 });
 
-function analyzeIntent(message: string, language: string) {
+// Enhanced intent analysis with real-time browsing detection
+function analyzeIntentEnhanced(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
+  // Real-time information patterns (require browsing)
+  const realTimePatterns = language === 'ar' 
+    ? [
+        'أخبار', 'آخر الأخبار', 'الأخبار اليوم', 'ما الجديد', 'الطقس اليوم', 'درجة الحرارة',
+        'سعر السهم', 'أسعار الأسهم', 'البورصة', 'سعر الصرف', 'سعر الذهب', 'النفط',
+        'مباريات اليوم', 'نتائج المباريات', 'الدوري', 'كأس العالم', 'الألعاب الأولمبية',
+        'الانتخابات', 'المؤتمر', 'القمة', 'الاجتماع', 'المناسبة', 'الحدث اليوم',
+        'ترافيك', 'حالة الطرق', 'حالة الطيران', 'تأخير الرحلات'
+      ]
+    : [
+        'news', 'latest news', 'breaking news', "today's news", 'current events', 'weather today',
+        'temperature', 'stock price', 'stock market', 'exchange rate', 'gold price', 'oil price',
+        'crypto', 'bitcoin', 'ethereum', 'today matches', 'game results', 'sports scores',
+        'election', 'conference', 'summit', 'meeting', 'event today', 'happening now',
+        'traffic', 'road conditions', 'flight status', 'flight delays', 'what time is it',
+        'current time', 'time now', 'live updates', 'breaking'
+      ];
+
   // Task creation patterns
   const taskPatterns = language === 'ar' 
     ? ['أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة', 'مطلوب عمل']
@@ -544,12 +637,24 @@ function analyzeIntent(message: string, language: string) {
     ? ['أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'generate image', 'create image']
     : ['generate image', 'create image', 'draw', 'make picture', 'image of'];
 
+  // Check for real-time information requests first
+  if (realTimePatterns.some(p => lowerMessage.includes(p))) {
+    return {
+      intent: 'real_time_info',
+      confidence: 'high',
+      action: null,
+      params: null,
+      requiresBrowsing: true
+    };
+  }
+
   if (taskPatterns.some(p => lowerMessage.includes(p))) {
     return {
       intent: 'create_task',
       confidence: 'high',
       action: 'create_task',
-      params: extractTaskParams(message)
+      params: extractTaskParams(message),
+      requiresBrowsing: false
     };
   }
   
@@ -558,7 +663,8 @@ function analyzeIntent(message: string, language: string) {
       intent: 'create_event',
       confidence: 'high',
       action: 'create_event',
-      params: extractEventParams(message)
+      params: extractEventParams(message),
+      requiresBrowsing: false
     };
   }
   
@@ -567,7 +673,8 @@ function analyzeIntent(message: string, language: string) {
       intent: 'create_reminder',
       confidence: 'high',
       action: 'create_reminder',
-      params: extractReminderParams(message)
+      params: extractReminderParams(message),
+      requiresBrowsing: false
     };
   }
   
@@ -576,7 +683,8 @@ function analyzeIntent(message: string, language: string) {
       intent: 'generate_image',
       confidence: 'high',
       action: 'generate_image',
-      params: { prompt: message.replace(/أنشئ صورة|اصنع صورة|ارسم|generate image|create image|draw|make picture/gi, '').trim() }
+      params: { prompt: message.replace(/أنشئ صورة|اصنع صورة|ارسم|generate image|create image|draw|make picture/gi, '').trim() },
+      requiresBrowsing: false
     };
   }
 
@@ -584,8 +692,82 @@ function analyzeIntent(message: string, language: string) {
     intent: 'general_chat',
     confidence: 'medium',
     action: null,
-    params: null
+    params: null,
+    requiresBrowsing: false
   };
+}
+
+// Perform Tavily search for real-time information
+async function performTavilySearch(query: string, language: string): Promise<TavilyResponse | null> {
+  try {
+    console.log('WAKTI AI V2.1 Enhanced: Performing Tavily search for:', query);
+    
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TAVILY_API_KEY}`
+      },
+      body: JSON.stringify({
+        query: query,
+        search_depth: 'basic',
+        include_answer: true,
+        include_raw_content: false,
+        max_results: 5,
+        include_domains: [],
+        exclude_domains: [],
+        include_images: false
+      })
+    });
+
+    if (!response.ok) {
+      console.error('WAKTI AI V2.1 Enhanced: Tavily API error:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('WAKTI AI V2.1 Enhanced: Tavily search completed successfully');
+    
+    return {
+      results: data.results || [],
+      query: data.query || query,
+      response_time: data.response_time || 0
+    };
+    
+  } catch (error) {
+    console.error('WAKTI AI V2.1 Enhanced: Tavily search error:', error);
+    return null;
+  }
+}
+
+// Format browsing data for AI prompt injection
+function formatBrowsingDataForPrompt(browsingData: TavilyResponse, language: string): string {
+  if (!browsingData.results || browsingData.results.length === 0) {
+    return language === 'ar' ? 'لا توجد معلومات متاحة' : 'No information available';
+  }
+
+  const formatted = browsingData.results.slice(0, 3).map((result, index) => {
+    const title = result.title || 'Untitled';
+    const content = result.content || 'No content available';
+    const url = result.url || '';
+    const date = result.published_date ? ` (${result.published_date})` : '';
+    
+    return language === 'ar' 
+      ? `${index + 1}. ${title}${date}\nالمحتوى: ${content}\nالرابط: ${url}\n`
+      : `${index + 1}. ${title}${date}\nContent: ${content}\nURL: ${url}\n`;
+  }).join('\n');
+
+  const header = language === 'ar' 
+    ? `نتائج البحث الحديثة (${browsingData.results.length} نتيجة):\n\n`
+    : `Recent search results (${browsingData.results.length} results):\n\n`;
+
+  return header + formatted;
+}
+
+// Estimate token count for usage logging
+function estimateTokens(text: string): number {
+  // Rough estimation: 1 token ≈ 4 characters for English, 3 for Arabic
+  return Math.ceil(text.length / 3.5);
 }
 
 function extractTaskParams(message: string) {
@@ -615,7 +797,7 @@ function extractReminderParams(message: string) {
 
 async function executeAction(action: string, params: any, language: string, openaiApiKey: string, supabase: any, userId: string) {
   try {
-    console.log('WAKTI AI V2.1: Executing action with database integration:', action, 'with params:', params);
+    console.log('WAKTI AI V2.1 Enhanced: Executing action with database integration:', action, 'with params:', params);
 
     switch (action) {
       case 'generate_image':
@@ -634,7 +816,7 @@ async function executeAction(action: string, params: any, language: string, open
         throw new Error(`Unknown action: ${action}`);
     }
   } catch (error) {
-    console.error('WAKTI AI V2.1: Action execution error:', error);
+    console.error('WAKTI AI V2.1 Enhanced: Action execution error:', error);
     return {
       success: false,
       message: language === 'ar' ? 'فشل في تنفيذ العملية' : 'Failed to execute action',
@@ -742,7 +924,7 @@ async function createReminder(params: any, supabase: any, userId: string, langua
 
 async function translateArabicToEnglish(arabicPrompt: string, openaiApiKey: string): Promise<string> {
   try {
-    console.log("WAKTI AI V2.1: Translating Arabic prompt to English:", arabicPrompt);
+    console.log("WAKTI AI V2.1 Enhanced: Translating Arabic prompt to English:", arabicPrompt);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -767,21 +949,21 @@ async function translateArabicToEnglish(arabicPrompt: string, openaiApiKey: stri
     if (response.ok) {
       const result = await response.json();
       const translatedPrompt = result.choices[0].message?.content || arabicPrompt;
-      console.log("WAKTI AI V2.1: Translation result:", translatedPrompt);
+      console.log("WAKTI AI V2.1 Enhanced: Translation result:", translatedPrompt);
       return translatedPrompt.trim();
     } else {
-      console.error("WAKTI AI V2.1: Translation failed, using original prompt");
+      console.error("WAKTI AI V2.1 Enhanced: Translation failed, using original prompt");
       return arabicPrompt;
     }
   } catch (error) {
-    console.error('WAKTI AI V2.1: Error translating prompt:', error);
+    console.error('WAKTI AI V2.1 Enhanced: Error translating prompt:', error);
     return arabicPrompt;
   }
 }
 
 async function generateImage(prompt: string, language: string, openaiApiKey: string) {
   try {
-    console.log("WAKTI AI V2.1: Generating image with prompt:", prompt);
+    console.log("WAKTI AI V2.1 Enhanced: Generating image with prompt:", prompt);
 
     let finalPrompt = prompt;
     let translatedPrompt = null;
@@ -789,12 +971,12 @@ async function generateImage(prompt: string, language: string, openaiApiKey: str
     // If the prompt contains Arabic characters, translate it to English
     const containsArabic = /[\u0600-\u06FF]/.test(prompt);
     if (containsArabic && language === 'ar') {
-      console.log("WAKTI AI V2.1: Detected Arabic text, translating to English");
+      console.log("WAKTI AI V2.1 Enhanced: Detected Arabic text, translating to English");
       translatedPrompt = await translateArabicToEnglish(prompt, openaiApiKey);
       finalPrompt = translatedPrompt;
     }
 
-    console.log("WAKTI AI V2.1: Using final prompt for Runware:", finalPrompt);
+    console.log("WAKTI AI V2.1 Enhanced: Using final prompt for Runware:", finalPrompt);
 
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
@@ -822,11 +1004,11 @@ async function generateImage(prompt: string, language: string, openaiApiKey: str
       ]),
     });
 
-    console.log("WAKTI AI V2.1: Runware response status:", response.status);
+    console.log("WAKTI AI V2.1 Enhanced: Runware response status:", response.status);
 
     if (response.ok) {
       const result = await response.json();
-      console.log("WAKTI AI V2.1: Runware response data:", result);
+      console.log("WAKTI AI V2.1 Enhanced: Runware response data:", result);
       
       const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
       
@@ -842,12 +1024,12 @@ async function generateImage(prompt: string, language: string, openaiApiKey: str
       }
     } else {
       const errorText = await response.text();
-      console.error("WAKTI AI V2.1: Runware API error:", response.status, errorText);
+      console.error("WAKTI AI V2.1 Enhanced: Runware API error:", response.status, errorText);
       throw new Error(`Runware API failed: ${response.status}`);
     }
     
   } catch (error) {
-    console.error('WAKTI AI V2.1: Error generating image:', error);
+    console.error('WAKTI AI V2.1 Enhanced: Error generating image:', error);
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',

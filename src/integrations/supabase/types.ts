@@ -92,6 +92,36 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage_logs: {
+        Row: {
+          created_at: string
+          has_browsing: boolean
+          id: string
+          model_used: string
+          month_year: string
+          tokens_used: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          has_browsing?: boolean
+          id?: string
+          model_used: string
+          month_year?: string
+          tokens_used?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          has_browsing?: boolean
+          id?: string
+          model_used?: string
+          month_year?: string
+          tokens_used?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       ai_user_knowledge: {
         Row: {
           communication_style: string | null
@@ -856,6 +886,10 @@ export type Database = {
         Args: { sender_id: string; recipient_id: string }
         Returns: boolean
       }
+      check_browsing_quota: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -923,6 +957,15 @@ export type Database = {
           daily_count: number
           extra_translations: number
         }[]
+      }
+      log_ai_usage: {
+        Args: {
+          p_user_id: string
+          p_model_used: string
+          p_has_browsing?: boolean
+          p_tokens_used?: number
+        }
+        Returns: undefined
       }
       mark_messages_as_read: {
         Args: { other_user_id: string }
