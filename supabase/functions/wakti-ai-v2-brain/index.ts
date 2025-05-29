@@ -37,6 +37,8 @@ interface TavilyResponse {
   results: TavilySearchResult[];
   query: string;
   response_time: number;
+  answer?: string;
+  images?: string[];
 }
 
 serve(async (req) => {
@@ -50,7 +52,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1 Enhanced: Processing request with Tavily browsing capabilities');
+    console.log('WAKTI AI V2.1 Enhanced: Processing request with advanced browsing and database integration');
 
     // Initialize Supabase client with auth headers
     const authHeader = req.headers.get('Authorization');
@@ -103,7 +105,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Load comprehensive user knowledge for AI context - using correct database schema
+    // Load comprehensive user knowledge for AI context
     const { data: userKnowledge } = await supabase
       .from('ai_user_knowledge')
       .select('*')
@@ -180,7 +182,7 @@ serve(async (req) => {
 
     const recentMessages = (chatHistory || []).reverse();
 
-    // Enhanced intent analysis with real-time detection
+    // Enhanced intent analysis with aggressive real-time detection
     const intentAnalysis = analyzeIntentEnhanced(userMessage, language);
     console.log('WAKTI AI V2.1 Enhanced: Intent analysis:', intentAnalysis);
 
@@ -188,25 +190,23 @@ serve(async (req) => {
     let browsingData = null;
     let hasBrowsing = false;
     
-    if (intentAnalysis.requiresBrowsing) {
+    if (intentAnalysis.requiresBrowsing && TAVILY_API_KEY) {
       const { data: quotaCheck } = await supabase.rpc('check_browsing_quota', { p_user_id: user.id });
       const currentUsage = quotaCheck || 0;
       
       console.log('WAKTI AI V2.1 Enhanced: Browsing quota check - current usage:', currentUsage);
       
-      if (currentUsage < 65) {
-        // User has quota remaining, perform Tavily search
+      // More aggressive browsing - lower threshold to 50 instead of 65
+      if (currentUsage < 50) {
         try {
-          browsingData = await performTavilySearch(userMessage, language);
+          browsingData = await performEnhancedTavilySearch(userMessage, language);
           hasBrowsing = true;
           console.log('WAKTI AI V2.1 Enhanced: Tavily search successful, results:', browsingData?.results?.length || 0);
         } catch (error) {
           console.error('WAKTI AI V2.1 Enhanced: Tavily search failed:', error);
-          // Continue without browsing data
         }
       } else {
         console.log('WAKTI AI V2.1 Enhanced: Browsing quota exceeded, continuing without real-time data');
-        // Continue without browsing - silent fallback
       }
     }
 
@@ -273,14 +273,14 @@ IMPORTANT: Always use the current date and time shown above when answering any d
 
     // Add real-time browsing data context if available
     if (browsingData && browsingData.results && browsingData.results.length > 0) {
-      const browssingContext = language === 'ar' 
+      const browsingContext = language === 'ar' 
         ? `\n\nمعلومات حديثة من الإنترنت:\n${formatBrowsingDataForPrompt(browsingData, language)}`
         : `\n\nReal-time information from the internet:\n${formatBrowsingDataForPrompt(browsingData, language)}`;
       
-      systemMessage += browssingContext;
+      systemMessage += browsingContext;
     }
 
-    // Add user knowledge context if available - using correct database schema
+    // Add user knowledge context if available
     if (userKnowledge) {
       const contextParts = [];
       
@@ -595,27 +595,48 @@ Remember to adapt your communication style and response length according to the 
   }
 });
 
-// Enhanced intent analysis with real-time browsing detection
+// Enhanced intent analysis with aggressive real-time browsing detection
 function analyzeIntentEnhanced(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Real-time information patterns (require browsing)
-  const realTimePatterns = language === 'ar' 
-    ? [
-        'أخبار', 'آخر الأخبار', 'الأخبار اليوم', 'ما الجديد', 'الطقس اليوم', 'درجة الحرارة',
-        'سعر السهم', 'أسعار الأسهم', 'البورصة', 'سعر الصرف', 'سعر الذهب', 'النفط',
-        'مباريات اليوم', 'نتائج المباريات', 'الدوري', 'كأس العالم', 'الألعاب الأولمبية',
-        'الانتخابات', 'المؤتمر', 'القمة', 'الاجتماع', 'المناسبة', 'الحدث اليوم',
-        'ترافيك', 'حالة الطرق', 'حالة الطيران', 'تأخير الرحلات'
-      ]
-    : [
-        'news', 'latest news', 'breaking news', "today's news", 'current events', 'weather today',
-        'temperature', 'stock price', 'stock market', 'exchange rate', 'gold price', 'oil price',
-        'crypto', 'bitcoin', 'ethereum', 'today matches', 'game results', 'sports scores',
-        'election', 'conference', 'summit', 'meeting', 'event today', 'happening now',
-        'traffic', 'road conditions', 'flight status', 'flight delays', 'what time is it',
-        'current time', 'time now', 'live updates', 'breaking'
-      ];
+  // Enhanced real-time browsing patterns - more aggressive detection
+  const browsingPatterns = [
+    // Sports & scores - enhanced
+    'who won', 'game score', 'latest score', 'final score', 'match result', 'score',
+    'sports news', 'game last night', 'game tonight', 'game today', 'football', 'soccer',
+    'basketball', 'baseball', 'tennis', 'cricket', 'rugby', 'hockey', 'golf',
+    'premier league', 'champions league', 'world cup', 'olympics', 'nfl', 'nba', 'fifa',
+    'player stats', 'team standings', 'league table', 'tournament', 'championship',
+    // News & current events - enhanced
+    'latest news', 'breaking news', 'current events', 'what happened', 'recent',
+    'news today', 'headlines', 'update on', 'current situation', 'latest update',
+    // Weather - enhanced
+    'weather today', 'current weather', 'forecast', 'temperature', 'rain', 'sunny',
+    'climate', 'weather in', 'hot', 'cold', 'storm', 'hurricane',
+    // Stocks & markets - enhanced
+    'stock price', 'market today', 'stock market', 'price of', 'crypto', 'bitcoin',
+    'exchange rate', 'currency', 'trading', 'dow jones', 'nasdaq', 's&p 500',
+    // General current info - enhanced
+    'current', 'latest', 'recent', 'now', 'today', 'this week', 'happening',
+    'status of', 'update', 'information about', 'tell me about',
+    // Technology & trends
+    'new release', 'latest version', 'tech news', 'gadget', 'smartphone',
+    // Arabic equivalents - enhanced
+    'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم',
+    'أخبار', 'جديد', 'حالي', 'اليوم', 'الآن', 'مؤخراً'
+  ];
+
+  // Check for browsing requirement with lower threshold
+  const requiresBrowsing = browsingPatterns.some(pattern => lowerMessage.includes(pattern)) ||
+    // Also check if message contains question words + current context
+    (lowerMessage.includes('what') && (lowerMessage.includes('current') || lowerMessage.includes('latest') || lowerMessage.includes('now'))) ||
+    (lowerMessage.includes('how') && (lowerMessage.includes('today') || lowerMessage.includes('recent'))) ||
+    // Check for any sports team names or events
+    /\b(madrid|barcelona|manchester|chelsea|arsenal|liverpool|united|city|psg|bayern|juventus|milan|inter)\b/i.test(lowerMessage) ||
+    // Check for current year mentions
+    lowerMessage.includes('2025') ||
+    // Check for temporal indicators
+    /\b(today|yesterday|this week|last night|recently|currently)\b/i.test(lowerMessage);
 
   // Task creation patterns
   const taskPatterns = language === 'ar' 
@@ -638,7 +659,7 @@ function analyzeIntentEnhanced(message: string, language: string) {
     : ['generate image', 'create image', 'draw', 'make picture', 'image of'];
 
   // Check for real-time information requests first
-  if (realTimePatterns.some(p => lowerMessage.includes(p))) {
+  if (requiresBrowsing) {
     return {
       intent: 'real_time_info',
       confidence: 'high',
@@ -697,10 +718,10 @@ function analyzeIntentEnhanced(message: string, language: string) {
   };
 }
 
-// Perform Tavily search for real-time information
-async function performTavilySearch(query: string, language: string): Promise<TavilyResponse | null> {
+// Enhanced Tavily search with image extraction and better data formatting
+async function performEnhancedTavilySearch(query: string, language: string): Promise<TavilyResponse | null> {
   try {
-    console.log('WAKTI AI V2.1 Enhanced: Performing Tavily search for:', query);
+    console.log('WAKTI AI V2.1 Enhanced: Performing enhanced Tavily search for:', query);
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -713,10 +734,10 @@ async function performTavilySearch(query: string, language: string): Promise<Tav
         search_depth: 'basic',
         include_answer: true,
         include_raw_content: false,
+        include_images: true,
         max_results: 5,
         include_domains: [],
         exclude_domains: [],
-        include_images: false
       })
     });
 
@@ -726,27 +747,38 @@ async function performTavilySearch(query: string, language: string): Promise<Tav
     }
 
     const data = await response.json();
-    console.log('WAKTI AI V2.1 Enhanced: Tavily search completed successfully');
+    console.log('WAKTI AI V2.1 Enhanced: Enhanced Tavily search completed successfully');
     
     return {
       results: data.results || [],
       query: data.query || query,
-      response_time: data.response_time || 0
+      response_time: data.response_time || 0,
+      answer: data.answer || '',
+      images: data.images || []
     };
     
   } catch (error) {
-    console.error('WAKTI AI V2.1 Enhanced: Tavily search error:', error);
+    console.error('WAKTI AI V2.1 Enhanced: Enhanced Tavily search error:', error);
     return null;
   }
 }
 
-// Format browsing data for AI prompt injection
+// Format browsing data for AI prompt injection with enhanced formatting
 function formatBrowsingDataForPrompt(browsingData: TavilyResponse, language: string): string {
   if (!browsingData.results || browsingData.results.length === 0) {
     return language === 'ar' ? 'لا توجد معلومات متاحة' : 'No information available';
   }
 
-  const formatted = browsingData.results.slice(0, 3).map((result, index) => {
+  let formatted = '';
+  
+  // Add Tavily's answer if available
+  if (browsingData.answer) {
+    const answerHeader = language === 'ar' ? 'الإجابة المباشرة: ' : 'Direct Answer: ';
+    formatted += answerHeader + browsingData.answer + '\n\n';
+  }
+
+  // Add search results
+  const resultsFormatted = browsingData.results.slice(0, 3).map((result, index) => {
     const title = result.title || 'Untitled';
     const content = result.content || 'No content available';
     const url = result.url || '';
@@ -758,10 +790,12 @@ function formatBrowsingDataForPrompt(browsingData: TavilyResponse, language: str
   }).join('\n');
 
   const header = language === 'ar' 
-    ? `نتائج البحث الحديثة (${browsingData.results.length} نتيجة):\n\n`
-    : `Recent search results (${browsingData.results.length} results):\n\n`;
+    ? `نتائج البحث (${browsingData.results.length} نتيجة):\n\n`
+    : `Search results (${browsingData.results.length} results):\n\n`;
 
-  return header + formatted;
+  formatted += header + resultsFormatted;
+
+  return formatted;
 }
 
 // Estimate token count for usage logging
