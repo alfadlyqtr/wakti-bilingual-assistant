@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from "../_shared/cors.ts";
@@ -15,6 +16,7 @@ const supabase = createClient(
 );
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -172,6 +174,7 @@ serve(async (req) => {
     console.log("WAKTI AI V2.1 Enhanced: Usage logged successfully");
     console.log("WAKTI AI V2.1 Enhanced: Response ready with enhanced browsing and context integration");
 
+    // Return response with proper CORS headers
     return new Response(JSON.stringify({
       response,
       conversationId: finalConversationId,
@@ -183,12 +186,18 @@ serve(async (req) => {
       requiresSearchConfirmation,
       imageUrl
     }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200
     });
 
   } catch (error) {
     console.error("WAKTI AI V2.1 Enhanced: Error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    
+    // Return error response with proper CORS headers
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      details: "Internal server error in WAKTI AI V2.1"
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });

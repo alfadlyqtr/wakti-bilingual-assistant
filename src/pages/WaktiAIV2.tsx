@@ -337,11 +337,13 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      // Call the wakti-ai-v2-brain function
+      // Call the wakti-ai-v2-brain function with proper error handling
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) {
         throw new Error('No active session found');
       }
+
+      console.log('🔍 WAKTI AI V2.1: Calling wakti-ai-v2-brain function...');
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -355,10 +357,21 @@ export default function WaktiAIV2() {
             role: msg.role,
             content: msg.content
           }))
+        },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-name': 'WAKTI'
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('🔍 WAKTI AI V2.1: Function invoke error:', error);
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('No response data received from AI function');
+      }
 
       console.log('🔍 WAKTI AI V2.1: Received enhanced response:', data);
 
@@ -430,16 +443,29 @@ export default function WaktiAIV2() {
     } catch (error) {
       console.error('WAKTI AI V2.1: Error sending message:', error);
       
-      const errorMessage: AIMessage = {
+      // Enhanced error handling with specific error types
+      let errorMessage = language === 'ar' 
+        ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
+        : 'Sorry, there was a system error. Please try again. 🔧';
+
+      if (error.message?.includes('CORS')) {
+        errorMessage = language === 'ar'
+          ? 'خطأ في الاتصال. يرجى إعادة تحميل الصفحة والمحاولة مرة أخرى.'
+          : 'Connection error. Please refresh the page and try again.';
+      } else if (error.message?.includes('session')) {
+        errorMessage = language === 'ar'
+          ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.'
+          : 'Session expired. Please log in again.';
+      }
+      
+      const errorAIMessage: AIMessage = {
         id: (Date.now() + 2).toString(),
         role: 'assistant',
-        content: language === 'ar' 
-          ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧\n\nإذا استمرت المشكلة، يرجى التحقق من الاتصال أو إعدادات النظام.'
-          : 'Sorry, there was a system error. Please try again. 🔧\n\nIf the issue persists, please check your connection or system settings.',
+        content: errorMessage,
         timestamp: new Date()
       };
 
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorAIMessage]);
       
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
