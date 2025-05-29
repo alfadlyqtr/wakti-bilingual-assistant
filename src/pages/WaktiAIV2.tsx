@@ -337,7 +337,7 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI V2.1: Sending message:', content.trim());
       
-      // Call the correct wakti-ai-v2-brain function
+      // Call the correct wakti-ai-v2-brain function with enhanced parameters
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) {
         throw new Error('No active session found');
@@ -350,7 +350,12 @@ export default function WaktiAIV2() {
           language: detectedLanguage,
           context: null,
           conversationId: currentConversationId,
-          inputType
+          inputType,
+          // Pass conversation history for better context
+          conversationHistory: messages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
         }
       });
 
@@ -381,24 +386,33 @@ export default function WaktiAIV2() {
         setBrowsingSources(data.browsingData.sources);
       }
 
-      // Show browsing status
+      // Enhanced browsing status feedback
       if (data.browsingUsed) {
         toast({
           title: language === 'ar' ? '✅ تم البحث' : '✅ Searched',
-          description: language === 'ar' ? 'تم الحصول على معلومات حديثة' : 'Got current information',
+          description: language === 'ar' 
+            ? `تم الحصول على معلومات حديثة من ${data.browsingData?.sources?.length || 0} مصادر`
+            : `Got current information from ${data.browsingData?.sources?.length || 0} sources`,
           duration: 3000
         });
       }
 
-      // Handle quota warnings
+      // Handle quota warnings with better messaging
       if (data.quotaStatus?.usagePercentage >= 80) {
         toast({
           title: language === 'ar' ? '⚠️ تنبيه الحصة' : '⚠️ Quota Alert',
           description: language === 'ar' 
-            ? `استخدمت ${data.quotaStatus.count}/${data.quotaStatus.limit} من عمليات البحث`
-            : `Used ${data.quotaStatus.count}/${data.quotaStatus.limit} searches`,
+            ? `استخدمت ${data.quotaStatus.count}/${data.quotaStatus.limit} من عمليات البحث هذا الشهر (${data.quotaStatus.usagePercentage}%)`
+            : `Used ${data.quotaStatus.count}/${data.quotaStatus.limit} searches this month (${data.quotaStatus.usagePercentage}%)`,
           duration: 5000
         });
+      }
+
+      // Update conversation ID if this was a new conversation
+      if (!currentConversationId && data.conversationId) {
+        setCurrentConversationId(data.conversationId);
+        // Reload conversations list
+        loadConversations();
       }
 
     } catch (error) {
@@ -602,7 +616,11 @@ export default function WaktiAIV2() {
           context: null,
           conversationId: currentConversationId,
           inputType: 'text',
-          forceBrowsing: true
+          forceBrowsing: true,
+          conversationHistory: messages.slice(-10).map(msg => ({
+            role: msg.role,
+            content: msg.content
+          }))
         }
       });
 

@@ -20,7 +20,7 @@ serve(async (req) => {
   try {
     console.log("🔍 WAKTI AI V2.1 Enhanced: Processing unified request with smart browsing");
     
-    const { message, userId, language = 'en', context, conversationId, inputType = 'text' } = await req.json();
+    const { message, userId, language = 'en', context, conversationId, inputType = 'text', forceBrowsing = false } = await req.json();
 
     if (!message) {
       return new Response(
@@ -35,70 +35,76 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
-    // Enhanced intent detection with browsing capability
+    // Get conversation history for better context
+    let conversationHistory = [];
+    if (conversationId) {
+      const { data: historyData } = await supabase
+        .from('ai_chat_history')
+        .select('role, content')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true })
+        .limit(10); // Last 10 messages for context
+      
+      conversationHistory = historyData || [];
+    }
+
+    // Enhanced intent detection with improved browsing triggers
     const intent = await detectEnhancedIntent(message, language);
     console.log("🔍 Enhanced intent analysis:", intent);
 
-    // Check browsing quota if browsing is required
+    // Check browsing quota if browsing is required or forced
     let browsingData = null;
     let quotaStatus = null;
-    let shouldConfirmBrowsing = false;
+    let shouldBrowse = intent.requiresBrowsing || forceBrowsing;
 
-    if (intent.requiresBrowsing && TAVILY_API_KEY) {
+    if (shouldBrowse && TAVILY_API_KEY) {
       quotaStatus = await checkBrowsingQuota(supabase, userId);
       console.log("🔍 Browsing quota status:", quotaStatus);
 
-      if (quotaStatus.usagePercentage >= 65) {
-        // High usage - require confirmation
-        shouldConfirmBrowsing = true;
-        console.log("🔍 High quota usage - requiring confirmation");
+      // More aggressive browsing - lower the threshold to 50%
+      if (quotaStatus.usagePercentage >= 85) {
+        // Very high usage - require confirmation
+        console.log("🔍 Very high quota usage - requiring confirmation");
       } else {
-        // Auto-browse for low usage
+        // Auto-browse for lower usage
         console.log("🔍 Auto-browsing enabled - fetching data");
         browsingData = await performTavilySearch(message, language);
         
         if (browsingData) {
           // Log usage
           await logBrowsingUsage(supabase, userId);
+          console.log("🔍 Browsing completed and logged");
         }
       }
     }
 
-    // Create enhanced system prompt with browsing context
+    // Create enhanced system prompt with conversation history and browsing context
     const systemPrompt = createEnhancedSystemPrompt(
       intent, 
       language, 
       context, 
       browsingData, 
-      shouldConfirmBrowsing,
-      quotaStatus
+      quotaStatus,
+      conversationHistory
     );
 
     // Process with AI
-    const aiResponse = await callAIService(systemPrompt, message, intent);
+    const aiResponse = await callAIService(systemPrompt, message, intent, conversationHistory);
     
-    // Generate enhanced actions and response
-    const actions = generateEnhancedActions(intent, aiResponse, language, shouldConfirmBrowsing);
-    
-    // Generate auto-actions for immediate execution
-    const autoActions = generateAutoActions(intent, aiResponse, browsingData);
+    // Save conversation to database
+    await saveConversationMessage(supabase, userId, conversationId, message, aiResponse, intent, browsingData, quotaStatus, inputType);
 
     const response = {
       response: aiResponse,
       intent: intent.type,
-      actions: actions,
-      autoActions: autoActions,
       confidence: intent.confidence,
-      type: 'text',
-      provider: 'deepseek',
       browsingUsed: !!browsingData,
-      browsingConfirmRequired: shouldConfirmBrowsing,
-      quotaStatus: quotaStatus,
       browsingData: browsingData ? {
         hasResults: true,
         imageUrl: browsingData.imageUrl,
         sources: browsingData.sources
-      } : null
+      } : null,
+      quotaStatus: quotaStatus
     };
 
     console.log("🔍 WAKTI AI V2.1 Enhanced: Response ready with smart browsing");
@@ -120,29 +126,48 @@ serve(async (req) => {
   }
 });
 
-// Enhanced intent detection with browsing triggers
+// Enhanced intent detection with improved browsing triggers
 async function detectEnhancedIntent(message: string, language: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Real-time browsing patterns
+  // Enhanced real-time browsing patterns - more aggressive detection
   const browsingPatterns = [
-    // Sports & scores
-    'who won', 'game score', 'latest score', 'final score', 'match result',
-    'sports news', 'game last night', 'game tonight', 'game today',
-    // News & current events  
-    'latest news', 'breaking news', 'current events', 'what happened',
-    'news today', 'recent news', 'headlines',
-    // Weather
-    'weather today', 'current weather', 'forecast', 'temperature',
-    // Stocks & markets
-    'stock price', 'market today', 'stock market', 'price of',
-    // General current info
-    'current', 'latest', 'recent', 'now', 'today', 'this week',
-    // Arabic equivalents
-    'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم'
+    // Sports & scores - enhanced
+    'who won', 'game score', 'latest score', 'final score', 'match result', 'score',
+    'sports news', 'game last night', 'game tonight', 'game today', 'football', 'soccer',
+    'basketball', 'baseball', 'tennis', 'cricket', 'rugby', 'hockey', 'golf',
+    'premier league', 'champions league', 'world cup', 'olympics', 'nfl', 'nba', 'fifa',
+    'player stats', 'team standings', 'league table', 'tournament', 'championship',
+    // News & current events - enhanced
+    'latest news', 'breaking news', 'current events', 'what happened', 'recent',
+    'news today', 'headlines', 'update on', 'current situation', 'latest update',
+    // Weather - enhanced
+    'weather today', 'current weather', 'forecast', 'temperature', 'rain', 'sunny',
+    'climate', 'weather in', 'hot', 'cold', 'storm', 'hurricane',
+    // Stocks & markets - enhanced
+    'stock price', 'market today', 'stock market', 'price of', 'crypto', 'bitcoin',
+    'exchange rate', 'currency', 'trading', 'dow jones', 'nasdaq', 's&p 500',
+    // General current info - enhanced
+    'current', 'latest', 'recent', 'now', 'today', 'this week', 'happening',
+    'status of', 'update', 'information about', 'tell me about',
+    // Technology & trends
+    'new release', 'latest version', 'tech news', 'gadget', 'smartphone',
+    // Arabic equivalents - enhanced
+    'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم',
+    'أخبار', 'جديد', 'حالي', 'اليوم', 'الآن', 'مؤخراً'
   ];
 
-  const requiresBrowsing = browsingPatterns.some(pattern => lowerMessage.includes(pattern));
+  // Check for browsing requirement with lower threshold
+  const requiresBrowsing = browsingPatterns.some(pattern => lowerMessage.includes(pattern)) ||
+    // Also check if message contains question words + current context
+    (lowerMessage.includes('what') && (lowerMessage.includes('current') || lowerMessage.includes('latest') || lowerMessage.includes('now'))) ||
+    (lowerMessage.includes('how') && (lowerMessage.includes('today') || lowerMessage.includes('recent'))) ||
+    // Check for any sports team names or events
+    /\b(madrid|barcelona|manchester|chelsea|arsenal|liverpool|united|city|psg|bayern|juventus|milan|inter)\b/i.test(lowerMessage) ||
+    // Check for current year mentions
+    lowerMessage.includes('2025') ||
+    // Check for temporal indicators
+    /\b(today|yesterday|this week|last night|recently|currently)\b/i.test(lowerMessage);
 
   // Task creation patterns
   const taskPatterns = [
@@ -224,7 +249,7 @@ async function checkBrowsingQuota(supabase: any, userId: string) {
 
     if (error) {
       console.error("Error checking browsing quota:", error);
-      return { count: 0, usagePercentage: 0, remaining: MONTHLY_BROWSING_LIMIT };
+      return { count: 0, usagePercentage: 0, remaining: MONTHLY_BROWSING_LIMIT, limit: MONTHLY_BROWSING_LIMIT };
     }
 
     const count = data?.length || 0;
@@ -239,7 +264,7 @@ async function checkBrowsingQuota(supabase: any, userId: string) {
     };
   } catch (error) {
     console.error("Error in quota check:", error);
-    return { count: 0, usagePercentage: 0, remaining: MONTHLY_BROWSING_LIMIT };
+    return { count: 0, usagePercentage: 0, remaining: MONTHLY_BROWSING_LIMIT, limit: MONTHLY_BROWSING_LIMIT };
   }
 }
 
@@ -312,34 +337,37 @@ async function performTavilySearch(query: string, language: string) {
   }
 }
 
-// Enhanced system prompt creation
+// Enhanced system prompt creation with conversation history
 function createEnhancedSystemPrompt(
   intent: any, 
   language: string, 
   context: any, 
   browsingData: any,
-  shouldConfirmBrowsing: boolean,
-  quotaStatus: any
+  quotaStatus: any,
+  conversationHistory: any[]
 ) {
   const basePrompt = language === 'ar' 
-    ? `أنت WAKTI AI V2.1، الدماغ الذكي المتطور لتطبيق وكتي. أنت مساعد قوي وودود يساعد في إدارة المهام والأحداث والمحتوى والمزيد.`
-    : `You are WAKTI AI V2.1, the advanced intelligent brain of the Wakti app. You are a powerful and friendly assistant that helps manage tasks, events, content, and much more.`;
+    ? `أنت WAKTI AI V2.1، الدماغ الذكي المتطور لتطبيق وكتي. أنت مساعد قوي وودود يساعد في إدارة المهام والأحداث والمحتوى والمزيد. تتذكر المحادثات السابقة وتحافظ على السياق.`
+    : `You are WAKTI AI V2.1, the advanced intelligent brain of the Wakti app. You are a powerful and friendly assistant that helps manage tasks, events, content, and much more. You remember previous conversations and maintain context.`;
 
   let prompt = basePrompt;
+
+  // Add conversation history for context
+  if (conversationHistory.length > 0) {
+    const historyContext = language === 'ar'
+      ? `\n\n📜 سياق المحادثة السابقة:\n${conversationHistory.map(h => `${h.role === 'user' ? 'المستخدم' : 'WAKTI AI'}: ${h.content}`).join('\n')}\n\nاستخدم هذا السياق للإجابة بشكل متسق ومترابط.`
+      : `\n\n📜 Previous conversation context:\n${conversationHistory.map(h => `${h.role === 'user' ? 'User' : 'WAKTI AI'}: ${h.content}`).join('\n')}\n\nUse this context to provide consistent and connected responses.`;
+    
+    prompt += historyContext;
+  }
 
   // Add browsing context
   if (browsingData) {
     const browsingContext = language === 'ar'
-      ? `\n\n🔍 معلومات حديثة من البحث:\n${browsingData.answer}\n\nمصادر: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nاستخدم هذه المعلومات الحديثة مباشرة في إجابتك. لا تسأل عن البحث - قد تم بالفعل.`
-      : `\n\n🔍 Current real-time information from search:\n${browsingData.answer}\n\nSources: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nUse this current information directly in your response. Do not ask about searching - it has already been done.`;
+      ? `\n\n🔍 معلومات حديثة من البحث:\n${browsingData.answer}\n\nمصادر: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nاستخدم هذه المعلومات الحديثة مباشرة في إجابتك. البحث تم بالفعل.`
+      : `\n\n🔍 Current real-time information from search:\n${browsingData.answer}\n\nSources: ${browsingData.sources.map((s: any) => s.title).join(', ')}\n\nUse this current information directly in your response. Search has already been performed.`;
     
     prompt += browsingContext;
-  } else if (shouldConfirmBrowsing && quotaStatus) {
-    const confirmContext = language === 'ar'
-      ? `\n\n⚠️ تحتاج معلومات حديثة للإجابة بدقة. اسأل المستخدم إذا كان يريد البحث. استخدمت ${quotaStatus.count}/${quotaStatus.limit} من عمليات البحث هذا الشهر.`
-      : `\n\n⚠️ Current information needed for accurate response. Ask user if they want to search. You've used ${quotaStatus.count}/${quotaStatus.limit} searches this month.`;
-    
-    prompt += confirmContext;
   }
 
   // Add intent-specific instructions
@@ -360,24 +388,41 @@ function getIntentPrompt(intentType: string, language: string) {
       task_creation: "User wants to create a task. Extract and confirm task details clearly.",
       event_creation: "User wants to create an event. Extract and confirm event details clearly.", 
       image_generation: "User wants to generate an image. Create a detailed, creative prompt.",
-      real_time_query: "User needs current information. Provide accurate, up-to-date answers with sources.",
-      general_chat: "Provide helpful, conversational responses with actionable suggestions when appropriate."
+      real_time_query: "User needs current information. Provide accurate, up-to-date answers with sources when available.",
+      general_chat: "Provide helpful, conversational responses while maintaining context from previous messages."
     },
     ar: {
       task_creation: "يريد المستخدم إنشاء مهمة. استخرج وأكد تفاصيل المهمة بوضوح.",
       event_creation: "يريد المستخدم إنشاء حدث. استخرج وأكد تفاصيل الحدث بوضوح.",
       image_generation: "يريد المستخدم إنشاء صورة. اصنع موجه مفصل وإبداعي.",
-      real_time_query: "يحتاج المستخدم معلومات حديثة. قدم إجابات دقيقة ومحدثة مع المصادر.",
-      general_chat: "قدم ردود مفيدة ومحادثة مع اقتراحات قابلة للتنفيذ عند الحاجة."
+      real_time_query: "يحتاج المستخدم معلومات حديثة. قدم إجابات دقيقة ومحدثة مع المصادر عند توفرها.",
+      general_chat: "قدم ردود مفيدة ومحادثة مع الحفاظ على السياق من الرسائل السابقة."
     }
   };
   
   return prompts[language][intentType] || prompts[language].general_chat;
 }
 
-// Enhanced AI service calling
-async function callAIService(systemPrompt: string, message: string, intent: any) {
+// Enhanced AI service calling with conversation history
+async function callAIService(systemPrompt: string, message: string, intent: any, conversationHistory: any[]) {
   try {
+    // Build messages array with history
+    const messages = [
+      { role: "system", content: systemPrompt }
+    ];
+
+    // Add recent conversation history (last 6 messages to avoid token limits)
+    const recentHistory = conversationHistory.slice(-6);
+    for (const hist of recentHistory) {
+      messages.push({
+        role: hist.role,
+        content: hist.content
+      });
+    }
+
+    // Add current message
+    messages.push({ role: "user", content: message });
+
     // Try DeepSeek first
     if (DEEPSEEK_API_KEY) {
       const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
@@ -388,10 +433,7 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
         },
         body: JSON.stringify({
           model: "deepseek-chat",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message }
-          ],
+          messages: messages,
           temperature: 0.7,
           max_tokens: 1000,
         }),
@@ -413,10 +455,7 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: message }
-          ],
+          messages: messages,
           temperature: 0.7,
           max_tokens: 1000,
         }),
@@ -434,69 +473,78 @@ async function callAIService(systemPrompt: string, message: string, intent: any)
   }
 }
 
-// Enhanced action generation
-function generateEnhancedActions(intent: any, aiResponse: string, language: string, shouldConfirmBrowsing: boolean) {
-  const actions = [];
-  
-  // Add search confirmation button if needed
-  if (shouldConfirmBrowsing) {
-    actions.push({
-      text: language === 'ar' ? '🔍 بحث' : '🔍 Search',
-      id: 'confirm_search',
-      variant: 'secondary',
-      data: { query: intent.data?.query }
-    });
-  }
+// Save conversation message to database
+async function saveConversationMessage(
+  supabase: any, 
+  userId: string, 
+  conversationId: string | null, 
+  userMessage: string, 
+  aiResponse: string, 
+  intent: any, 
+  browsingData: any, 
+  quotaStatus: any, 
+  inputType: string
+) {
+  try {
+    // Create or get conversation
+    let currentConversationId = conversationId;
+    
+    if (!currentConversationId) {
+      // Create new conversation
+      const conversationTitle = userMessage.substring(0, 50) + (userMessage.length > 50 ? '...' : '');
+      const { data: newConversation, error: convError } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId,
+          title: conversationTitle,
+          last_message_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
-  // Standard actions based on intent
-  switch (intent.type) {
-    case 'task_creation':
-      actions.push({
-        text: language === 'ar' ? 'إنشاء المهمة' : 'Create Task',
-        id: 'create_task',
-        variant: 'default',
-        data: intent.data
-      });
-      break;
-      
-    case 'event_creation':
-      actions.push({
-        text: language === 'ar' ? 'إنشاء الحدث' : 'Create Event',
-        id: 'create_event',
-        variant: 'default',
-        data: intent.data
-      });
-      break;
-      
-    case 'image_generation':
-      actions.push({
-        text: language === 'ar' ? 'إنشاء الصورة' : 'Generate Image',
-        id: 'generate_image',
-        variant: 'default',
-        data: intent.data
-      });
-      break;
-  }
-  
-  return actions;
-}
-
-// Auto-actions for immediate execution
-function generateAutoActions(intent: any, aiResponse: string, browsingData: any) {
-  const autoActions = [];
-  
-  if (intent.confidence === 'high') {
-    switch (intent.type) {
-      case 'image_generation':
-        autoActions.push({
-          type: 'generate_image',
-          prompt: intent.data.prompt
-        });
-        break;
+      if (convError) throw convError;
+      currentConversationId = newConversation.id;
+    } else {
+      // Update existing conversation timestamp
+      await supabase
+        .from('ai_conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', currentConversationId);
     }
+
+    // Save user message
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        conversation_id: currentConversationId,
+        user_id: userId,
+        role: 'user',
+        content: userMessage,
+        input_type: inputType,
+        intent: intent.type,
+        confidence_level: intent.confidence
+      });
+
+    // Save AI response
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        conversation_id: currentConversationId,
+        user_id: userId,
+        role: 'assistant',
+        content: aiResponse,
+        intent: intent.type,
+        confidence_level: intent.confidence,
+        browsing_used: !!browsingData,
+        browsing_data: browsingData,
+        quota_status: quotaStatus
+      });
+
+    return currentConversationId;
+  } catch (error) {
+    console.error("Error saving conversation:", error);
+    return conversationId;
   }
-  
-  return autoActions;
 }
 
 // Data extraction functions
