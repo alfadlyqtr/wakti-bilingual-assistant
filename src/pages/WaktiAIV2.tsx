@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIMessage, type AIConversation } from '@/services/WaktiAIV2Service';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -34,34 +34,6 @@ import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
-
-interface AIMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
-  intent?: string;
-  confidence?: 'high' | 'medium' | 'low';
-  actionTaken?: string;
-  inputType?: 'text' | 'voice';
-  imageUrl?: string;
-  browsingUsed?: boolean;
-  browsingData?: {
-    hasResults: boolean;
-    imageUrl?: string;
-    sources?: Array<{
-      title: string;
-      url: string;
-      snippet: string;
-    }>;
-  };
-  quotaStatus?: {
-    count: number;
-    limit: number;
-    usagePercentage: number;
-    remaining: number;
-  };
-}
 
 export default function WaktiAIV2() {
   const { user } = useAuth();

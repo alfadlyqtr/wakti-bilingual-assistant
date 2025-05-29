@@ -10,6 +10,22 @@ export interface AIMessage {
   actionTaken?: string;
   inputType?: 'text' | 'voice';
   imageUrl?: string;
+  browsingUsed?: boolean;
+  browsingData?: {
+    hasResults: boolean;
+    imageUrl?: string;
+    sources?: Array<{
+      title: string;
+      url: string;
+      snippet: string;
+    }>;
+  };
+  quotaStatus?: {
+    count: number;
+    limit: number;
+    usagePercentage: number;
+    remaining: number;
+  };
 }
 
 export interface AIConversation {
@@ -213,7 +229,10 @@ export class WaktiAIV2Service {
         intent: msg.intent,
         confidence: msg.confidence_level as 'high' | 'medium' | 'low',
         actionTaken: msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice'
+        inputType: msg.input_type as 'text' | 'voice',
+        browsingUsed: msg.browsing_used,
+        browsingData: msg.browsing_data,
+        quotaStatus: msg.quota_status
       }));
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in getConversationMessages:', error);
