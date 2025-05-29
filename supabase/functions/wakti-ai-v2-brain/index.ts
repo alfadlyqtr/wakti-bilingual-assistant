@@ -1,3 +1,4 @@
+
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -33,7 +34,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1: Processing request with ENHANCED CONTEXT INTEGRATION');
+    console.log('WAKTI AI V2.1: Processing request with FULL DATABASE INTEGRATION');
 
     // Initialize Supabase client with auth headers
     const authHeader = req.headers.get('Authorization');
@@ -79,18 +80,11 @@ serve(async (req) => {
 
     console.log('WAKTI AI V2.1: Authenticated user:', user.id);
 
-    // Get enhanced user profile and knowledge for deeper personalization
+    // Get user profile for personalization
     const { data: profile } = await supabase
       .from('profiles')
       .select('display_name, username')
       .eq('id', user.id)
-      .single();
-
-    // Load comprehensive user knowledge for AI context - using correct database schema
-    const { data: userKnowledge } = await supabase
-      .from('ai_user_knowledge')
-      .select('*')
-      .eq('user_id', user.id)
       .single();
 
     const userName = profile?.display_name || profile?.username || 'there';
@@ -189,61 +183,21 @@ serve(async (req) => {
       });
     }
 
-    // Enhanced system message with comprehensive user context using correct database fields
-    let systemMessage = language === 'ar' 
-      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.`
-      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}.`;
+    // Enhanced system message with user context
+    const systemMessage = language === 'ar' 
+      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}. يمكنك إنشاء المهام والأحداث والتذكيرات والصور. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة.
 
-    // Add user knowledge context if available - using correct database schema
-    if (userKnowledge) {
-      const contextParts = [];
-      
-      if (userKnowledge.personal_note) {
-        contextParts.push(language === 'ar' 
-          ? `معلومات شخصية: ${userKnowledge.personal_note}`
-          : `Personal info: ${userKnowledge.personal_note}`
-        );
-      }
-      
-      if (userKnowledge.main_use) {
-        contextParts.push(language === 'ar' 
-          ? `الهدف الأساسي: ${userKnowledge.main_use}`
-          : `Main use: ${userKnowledge.main_use}`
-        );
-      }
-      
-      if (userKnowledge.role) {
-        contextParts.push(language === 'ar' 
-          ? `المجال المهني: ${userKnowledge.role}`
-          : `Professional role: ${userKnowledge.role}`
-        );
-      }
-      
-      if (userKnowledge.interests && userKnowledge.interests.length > 0) {
-        contextParts.push(language === 'ar' 
-          ? `الاهتمامات: ${userKnowledge.interests.join(', ')}`
-          : `Interests: ${userKnowledge.interests.join(', ')}`
-        );
-      }
-
-      if (contextParts.length > 0) {
-        systemMessage += language === 'ar' 
-          ? `\n\nمعلومات المستخدم للسياق:\n${contextParts.join('\n')}`
-          : `\n\nUser context information:\n${contextParts.join('\n')}`;
-      }
-    }
-
-    // Add general capabilities
-    systemMessage += language === 'ar' 
-      ? `\n\nقدراتك المتقدمة:
+قدراتك المتقدمة:
 - إنشاء المهام والمشاريع في قاعدة البيانات
-- إنشاء الأحداث والمواعيد في قاعدة البيانات  
+- إنشاء الأحداث والمواعيد في قاعدة البيانات
 - إنشاء التذكيرات في قاعدة البيانات
 - إنشاء الصور بالذكاء الاصطناعي
 - تنفيذ الأوامر تلقائياً وحفظها
 
 عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.`
-      : `\n\nYour advanced capabilities:
+      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}. You can create tasks, events, reminders, and generate images. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate.
+
+Your advanced capabilities:
 - Create tasks and projects in the database
 - Create events and appointments in the database
 - Create reminders in the database
@@ -419,7 +373,7 @@ When users ask you to create something, execute it immediately if you're confide
         action_result: actionResult
       });
 
-    console.log('WAKTI AI V2.1: Response ready with enhanced user context integration');
+    console.log('WAKTI AI V2.1: Response ready with full database integration');
 
     return new Response(JSON.stringify({
       response: aiResponse,

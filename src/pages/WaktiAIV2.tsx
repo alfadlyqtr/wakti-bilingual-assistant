@@ -587,7 +587,7 @@ export default function WaktiAIV2() {
       {/* App Header */}
       <AppHeader />
 
-      {/* Enhanced Header with Actions and AI Context Access */}
+      {/* Centered Header with Actions */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
@@ -620,17 +620,6 @@ export default function WaktiAIV2() {
             title={language === 'ar' ? 'مسح المحادثة' : 'Clear conversation'}
           >
             <Trash2 className="h-5 w-5" />
-          </Button>
-          
-          {/* New AI Context Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setKnowledgeModalOpen(true)}
-            className="hover:scale-110 transition-transform text-primary"
-            title={language === 'ar' ? 'تحسين AI الخاص بي' : 'Improve my AI'}
-          >
-            <Brain className="h-5 w-5" />
           </Button>
           
           <Button
@@ -754,27 +743,21 @@ export default function WaktiAIV2() {
             }} />
           </div>
 
-          {/* Enhanced AI Context Button */}
+          {/* Knowledge Button */}
           <div className="p-4 border-t border-border/30">
             <Button
               onClick={() => setKnowledgeModalOpen(true)}
-              className="w-full flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 transition-all"
-              variant="default"
+              className="w-full flex items-center gap-2"
+              variant="outline"
             >
               <Brain className="h-4 w-4" />
-              {language === 'ar' ? 'تحسين وكتي AI الخاص بي' : 'Improve My Wakti AI'}
+              {language === 'ar' ? 'تحسين WAKTI AI الخاص بي' : 'Improve My Wakti AI'}
             </Button>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              {language === 'ar' 
-                ? 'ساعد AI على فهمك بشكل أفضل'
-                : 'Help AI understand you better'
-              }
-            </p>
           </div>
         </div>
       </div>
 
-      {/* Enhanced Knowledge Modal */}
+      {/* Knowledge Modal */}
       <KnowledgeModal 
         open={knowledgeModalOpen} 
         onOpenChange={setKnowledgeModalOpen} 
