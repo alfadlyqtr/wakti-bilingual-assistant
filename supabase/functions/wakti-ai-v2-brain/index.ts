@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -473,10 +472,36 @@ serve(async (req) => {
 
   try {
     console.log("🔍 WAKTI AI V2.1: Starting request processing");
+    console.log("🔍 WAKTI AI V2.1: Request method:", req.method);
+    console.log("🔍 WAKTI AI V2.1: Request headers:", Object.fromEntries(req.headers.entries()));
 
-    // Get request body
-    const requestBody = await req.json();
-    console.log("🔍 WAKTI AI V2.1: Successfully parsed request body:", requestBody);
+    // Enhanced JSON parsing with detailed debugging
+    let requestBody;
+    try {
+      const rawBody = await req.text();
+      console.log("🔍 WAKTI AI V2.1: Raw request body:", rawBody);
+      console.log("🔍 WAKTI AI V2.1: Raw body type:", typeof rawBody);
+      console.log("🔍 WAKTI AI V2.1: Raw body length:", rawBody.length);
+      
+      if (!rawBody || rawBody.trim() === '') {
+        throw new Error("Empty request body received");
+      }
+      
+      requestBody = JSON.parse(rawBody);
+      console.log("🔍 WAKTI AI V2.1: Successfully parsed request body:", requestBody);
+    } catch (parseError) {
+      console.error("🔍 WAKTI AI V2.1: JSON parsing error:", parseError);
+      console.error("🔍 WAKTI AI V2.1: Parse error message:", parseError.message);
+      
+      return new Response(JSON.stringify({ 
+        error: "Invalid JSON in request body",
+        details: parseError.message,
+        success: false
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     // Extract fields with defaults
     const {
@@ -707,6 +732,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("🔍 WAKTI AI V2.1: Unexpected error:", error);
+    console.error("🔍 WAKTI AI V2.1: Error stack:", error.stack);
     
     // Return error response with proper CORS headers
     return new Response(JSON.stringify({ 

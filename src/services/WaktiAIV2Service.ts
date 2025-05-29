@@ -67,7 +67,7 @@ export class WaktiAIV2Service {
     inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('🔍 WAKTI AI CLIENT: Starting sendMessage with unified-ai-brain:', { 
+      console.log('🔍 WAKTI AI CLIENT: Starting sendMessage with wakti-ai-v2-brain:', { 
         message, 
         conversationId, 
         language, 
@@ -82,7 +82,7 @@ export class WaktiAIV2Service {
 
       console.log('🔍 WAKTI AI CLIENT: User authenticated:', user.id);
 
-      // Create clean payload for unified-ai-brain
+      // Create clean payload for wakti-ai-v2-brain
       const payload = {
         message: message.trim(),
         userId: user.id,
@@ -93,13 +93,13 @@ export class WaktiAIV2Service {
         confirmSearch: false
       };
       
-      console.log('🔍 WAKTI AI CLIENT: Sending payload to unified-ai-brain:', payload);
+      console.log('🔍 WAKTI AI CLIENT: Sending payload to wakti-ai-v2-brain:', JSON.stringify(payload, null, 2));
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
 
-      console.log('🔍 WAKTI AI CLIENT: Response from unified-ai-brain:', { data, error });
+      console.log('🔍 WAKTI AI CLIENT: Response from wakti-ai-v2-brain:', { data, error });
 
       if (error) {
         console.error('🔍 WAKTI AI CLIENT: Supabase error:', error);
@@ -132,7 +132,7 @@ export class WaktiAIV2Service {
       };
       
     } catch (error) {
-      console.error('🔍 WAKTI AI CLIENT: Error in sendMessage with unified-ai-brain:', error);
+      console.error('🔍 WAKTI AI CLIENT: Error in sendMessage with wakti-ai-v2-brain:', error);
       
       const fallbackResponse: AIResponse = {
         response: language === 'ar' 
@@ -156,7 +156,7 @@ export class WaktiAIV2Service {
     inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('🔍 WAKTI AI CLIENT: Sending message with search confirmation to unified-ai-brain');
+      console.log('🔍 WAKTI AI CLIENT: Sending message with search confirmation to wakti-ai-v2-brain');
 
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -175,7 +175,7 @@ export class WaktiAIV2Service {
         confirmSearch: true // This is the key difference
       };
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
 
@@ -206,7 +206,7 @@ export class WaktiAIV2Service {
       };
       
     } catch (error) {
-      console.error('🔍 WAKTI AI CLIENT: Error in sendMessageWithSearchConfirmation with unified-ai-brain:', error);
+      console.error('🔍 WAKTI AI CLIENT: Error in sendMessageWithSearchConfirmation with wakti-ai-v2-brain:', error);
       
       const fallbackResponse: AIResponse = {
         response: language === 'ar' 
