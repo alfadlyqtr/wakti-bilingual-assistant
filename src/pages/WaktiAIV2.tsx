@@ -311,6 +311,17 @@ export default function WaktiAIV2() {
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
     if (!content.trim() || isLoading) return;
 
+    // Ensure user is authenticated
+    if (!user?.id) {
+      console.error('🔍 WAKTI AI V2.1: No authenticated user found');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     // Detect language from user input content
     const detectedLanguage = detectLanguage(content.trim());
     
@@ -347,17 +358,18 @@ export default function WaktiAIV2() {
 
       console.log('🔍 WAKTI AI V2.1: Calling wakti-ai-v2-brain function...');
 
-      // Call the function with detailed logging
+      // Standardized payload structure that matches backend expectations
       const functionPayload = {
         message: content.trim(),
-        userId: user?.id,
+        userId: user.id, // Ensure this is always provided
         language: detectedLanguage,
         conversationId: currentConversationId,
         inputType,
         conversationHistory: messages.slice(-10).map(msg => ({
           role: msg.role,
           content: msg.content
-        }))
+        })),
+        confirmSearch: false // Always include this field
       };
       
       console.log('🔍 WAKTI AI V2.1: Function payload:', functionPayload);
@@ -371,33 +383,17 @@ export default function WaktiAIV2() {
       });
 
       console.log('🔍 WAKTI AI V2.1: Raw function response:', { data, error });
-      console.log('🔍 WAKTI AI V2.1: Response type:', typeof data);
-      console.log('🔍 WAKTI AI V2.1: Response data structure:', data ? Object.keys(data) : 'null');
 
       if (error) {
         console.error('🔍 WAKTI AI V2.1: Function invoke error:', error);
         throw error;
       }
 
-      if (!data) {
-        console.error('🔍 WAKTI AI V2.1: No response data received');
-        throw new Error('No response data received from AI function');
+      if (!data || !data.response) {
+        console.error('🔍 WAKTI AI V2.1: Invalid response format:', data);
+        throw new Error('Invalid response format from AI function');
       }
 
-      // Detailed validation of response structure
-      console.log('🔍 WAKTI AI V2.1: Validating response structure...');
-      
-      if (typeof data !== 'object') {
-        console.error('🔍 WAKTI AI V2.1: Response is not an object:', typeof data);
-        throw new Error('Invalid response format - not an object');
-      }
-
-      if (!data.response) {
-        console.error('🔍 WAKTI AI V2.1: No response field in data:', data);
-        throw new Error('Invalid response format - missing response field');
-      }
-
-      console.log('🔍 WAKTI AI V2.1: Response validation passed');
       console.log('🔍 WAKTI AI V2.1: Creating assistant message...');
 
       const assistantMessage: AIMessage = {
@@ -471,29 +467,20 @@ export default function WaktiAIV2() {
 
     } catch (error) {
       console.error('WAKTI AI V2.1: Error sending message:', error);
-      console.error('🔍 WAKTI AI V2.1: Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
       
       // Enhanced error handling with specific error types
       let errorMessage = language === 'ar' 
         ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
         : 'Sorry, there was a system error. Please try again. 🔧';
 
-      if (error.message?.includes('CORS')) {
-        errorMessage = language === 'ar'
-          ? 'خطأ في الاتصال. يرجى إعادة تحميل الصفحة والمحاولة مرة أخرى.'
-          : 'Connection error. Please refresh the page and try again.';
-      } else if (error.message?.includes('session')) {
+      if (error.message?.includes('session')) {
         errorMessage = language === 'ar'
           ? 'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.'
           : 'Session expired. Please log in again.';
-      } else if (error.message?.includes('response')) {
+      } else if (error.message?.includes('Invalid JSON')) {
         errorMessage = language === 'ar'
-          ? `خطأ في تنسيق الاستجابة: ${error.message}`
-          : `Response format error: ${error.message}`;
+          ? 'خطأ في تنسيق البيانات. يرجى إعادة تحميل الصفحة والمحاولة مرة أخرى.'
+          : 'Data format error. Please refresh the page and try again.';
       }
       
       const errorAIMessage: AIMessage = {
@@ -674,6 +661,11 @@ export default function WaktiAIV2() {
   };
 
   const handleSearchConfirmation = async (messageContent: string) => {
+    if (!user?.id) {
+      console.error('🔍 WAKTI AI V2.1: No authenticated user for search confirmation');
+      return;
+    }
+
     setIsLoading(true);
     setIsTyping(true);
 
@@ -687,11 +679,11 @@ export default function WaktiAIV2() {
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: messageContent,
-          userId: user?.id,
+          userId: user.id, // Ensure userId is always provided
           language: language,
           conversationId: currentConversationId,
           inputType: 'text',
-          confirmSearch: true,
+          confirmSearch: true, // This is the key difference
           conversationHistory: messages.slice(-10).map(msg => ({
             role: msg.role,
             content: msg.content

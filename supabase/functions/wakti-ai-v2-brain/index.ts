@@ -27,10 +27,81 @@ serve(async (req) => {
   }
 
   try {
-    const { message, userId, language = 'en', conversationId, inputType = 'text', conversationHistory = [], confirmSearch = false } = await req.json();
+    // Enhanced request parsing with proper error handling
+    let requestBody;
+    try {
+      const text = await req.text();
+      console.log("🔍 WAKTI AI V2.1: Raw request body:", text);
+      
+      if (!text || text.trim() === '') {
+        throw new Error('Empty request body');
+      }
+      
+      requestBody = JSON.parse(text);
+      console.log("🔍 WAKTI AI V2.1: Parsed request body:", JSON.stringify(requestBody, null, 2));
+    } catch (parseError) {
+      console.error("🔍 WAKTI AI V2.1: JSON parsing error:", parseError);
+      return new Response(JSON.stringify({ 
+        error: "Invalid JSON in request body",
+        details: parseError.message 
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
-    console.log("WAKTI AI V2.1 Enhanced: Authenticated user:", userId);
-    console.log("WAKTI AI V2.1 Enhanced: Processing message from user:", userId);
+    // Extract and validate required fields with proper defaults
+    const {
+      message,
+      userId,
+      language = 'en',
+      conversationId = null,
+      inputType = 'text',
+      conversationHistory = [],
+      confirmSearch = false
+    } = requestBody;
+
+    // Validate required fields
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      return new Response(JSON.stringify({ 
+        error: "Missing or invalid 'message' field",
+        received: { message, type: typeof message }
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Get userId from JWT if not provided in body
+    let finalUserId = userId;
+    if (!finalUserId) {
+      try {
+        const authHeader = req.headers.get('authorization');
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+          const token = authHeader.substring(7);
+          const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+          if (user && !userError) {
+            finalUserId = user.id;
+            console.log("🔍 WAKTI AI V2.1: Extracted userId from JWT:", finalUserId);
+          }
+        }
+      } catch (jwtError) {
+        console.warn("🔍 WAKTI AI V2.1: Failed to extract user from JWT:", jwtError);
+      }
+    }
+
+    if (!finalUserId) {
+      return new Response(JSON.stringify({ 
+        error: "Missing user authentication",
+        details: "No userId provided and no valid JWT token found"
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    console.log("WAKTI AI V2.1 Enhanced: Authenticated user:", finalUserId);
+    console.log("WAKTI AI V2.1 Enhanced: Processing message from user:", finalUserId);
 
     // Enhanced intent analysis with proper priority order
     const intentAnalysis = analyzeMessageIntent(message, language, conversationHistory);
@@ -72,7 +143,7 @@ serve(async (req) => {
       console.log("WAKTI AI V2.1 Enhanced: Processing browsing request");
       
       // Check browsing quota
-      const quotaCheck = await checkBrowsingQuota(userId);
+      const quotaCheck = await checkBrowsingQuota(finalUserId);
       quotaStatus = quotaCheck;
       
       if (quotaCheck.usagePercentage >= 100) {
@@ -92,7 +163,7 @@ serve(async (req) => {
           browsingData = searchResults.data;
           
           // Update quota
-          await updateBrowsingQuota(userId);
+          await updateBrowsingQuota(finalUserId);
           
           // Generate AI response with search context
           response = await generateAIResponseWithContext(
@@ -125,7 +196,7 @@ serve(async (req) => {
         .from('ai_conversations')
         .insert({
           title: message.substring(0, 50) + (message.length > 50 ? '...' : ''),
-          user_id: userId
+          user_id: finalUserId
         })
         .select()
         .single();
@@ -140,7 +211,7 @@ serve(async (req) => {
       // Store user message
       await supabase.from('ai_chat_history').insert({
         conversation_id: finalConversationId,
-        user_id: userId,
+        user_id: finalUserId,
         role: 'user',
         content: message,
         input_type: inputType
@@ -149,7 +220,7 @@ serve(async (req) => {
       // Store AI response
       await supabase.from('ai_chat_history').insert({
         conversation_id: finalConversationId,
-        user_id: userId,
+        user_id: finalUserId,
         role: 'assistant',
         content: response,
         intent: intentAnalysis.intent,
@@ -168,7 +239,7 @@ serve(async (req) => {
 
     // Log usage
     await supabase.from('ai_usage_logs').insert({
-      user_id: userId,
+      user_id: finalUserId,
       intent: intentAnalysis.intent,
       language: language,
       browsing_used: browsingUsed,

@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -68,14 +69,28 @@ export class WaktiAIV2Service {
         language, 
         inputType 
       });
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Standardized payload structure
+      const payload = {
+        message,
+        userId: user.id, // Always include userId
+        language,
+        conversationId: conversationId || null,
+        inputType,
+        conversationHistory: [], // Empty for now, will be populated by calling component
+        confirmSearch: false // Always include this field
+      };
+      
+      console.log('🔍 WAKTI AI CLIENT: Sending payload:', payload);
       
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          conversationId,
-          language,
-          inputType
-        }
+        body: payload
       });
 
       console.log('🔍 WAKTI AI CLIENT: Supabase response:', { data, error });
@@ -85,9 +100,9 @@ export class WaktiAIV2Service {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      if (!data) {
-        console.error('🔍 WAKTI AI CLIENT: No data received');
-        throw new Error('No data received from AI service');
+      if (!data || !data.response) {
+        console.error('🔍 WAKTI AI CLIENT: Invalid response format:', data);
+        throw new Error('Invalid response format from AI service');
       }
 
       console.log('🔍 WAKTI AI CLIENT: Returning data:', data);
@@ -119,15 +134,26 @@ export class WaktiAIV2Service {
   ): Promise<AIResponse> {
     try {
       console.log('🔍 WAKTI AI CLIENT: Sending message with search confirmation');
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('No authenticated user found');
+      }
+
+      // Standardized payload structure with confirmSearch = true
+      const payload = {
+        message,
+        userId: user.id, // Always include userId
+        language,
+        conversationId: conversationId || null,
+        inputType,
+        conversationHistory: [], // Empty for now
+        confirmSearch: true // This is the key difference
+      };
       
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          conversationId,
-          language,
-          inputType,
-          confirmSearch: true
-        }
+        body: payload
       });
 
       if (error) {
@@ -135,9 +161,9 @@ export class WaktiAIV2Service {
         throw new Error(`Supabase error: ${error.message}`);
       }
 
-      if (!data) {
-        console.error('🔍 WAKTI AI CLIENT: No data received');
-        throw new Error('No data received from AI service');
+      if (!data || !data.response) {
+        console.error('🔍 WAKTI AI CLIENT: Invalid response format:', data);
+        throw new Error('Invalid response format from AI service');
       }
 
       return data;
