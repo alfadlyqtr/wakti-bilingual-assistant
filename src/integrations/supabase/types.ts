@@ -13,6 +13,8 @@ export type Database = {
         Row: {
           action_result: Json | null
           action_taken: string | null
+          browsing_data: Json | null
+          browsing_used: boolean | null
           confidence_level: string | null
           content: string
           conversation_id: string
@@ -22,12 +24,15 @@ export type Database = {
           intent: string | null
           language: string
           metadata: Json | null
+          quota_status: Json | null
           role: string
           user_id: string
         }
         Insert: {
           action_result?: Json | null
           action_taken?: string | null
+          browsing_data?: Json | null
+          browsing_used?: boolean | null
           confidence_level?: string | null
           content: string
           conversation_id: string
@@ -37,12 +42,15 @@ export type Database = {
           intent?: string | null
           language?: string
           metadata?: Json | null
+          quota_status?: Json | null
           role: string
           user_id: string
         }
         Update: {
           action_result?: Json | null
           action_taken?: string | null
+          browsing_data?: Json | null
+          browsing_used?: boolean | null
           confidence_level?: string | null
           content?: string
           conversation_id?: string
@@ -52,6 +60,7 @@ export type Database = {
           intent?: string | null
           language?: string
           metadata?: Json | null
+          quota_status?: Json | null
           role?: string
           user_id?: string
         }
