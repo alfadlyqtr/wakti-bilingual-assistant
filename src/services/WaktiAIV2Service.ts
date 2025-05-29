@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -303,6 +304,8 @@ export class WaktiAIV2Service {
 
   static async getConversations(): Promise<AIConversation[]> {
     try {
+      console.log('🔍 WAKTI AI CLIENT: Fetching conversations from database');
+      
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
@@ -314,6 +317,7 @@ export class WaktiAIV2Service {
         return [];
       }
 
+      console.log('🔍 WAKTI AI CLIENT: Successfully fetched conversations:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in getConversations:', error);
@@ -323,6 +327,8 @@ export class WaktiAIV2Service {
 
   static async getConversationMessages(conversationId: string): Promise<AIMessage[]> {
     try {
+      console.log('🔍 WAKTI AI CLIENT: Fetching conversation messages for ID:', conversationId);
+      
       const { data, error } = await supabase
         .from('ai_chat_history')
         .select('*')
@@ -333,6 +339,8 @@ export class WaktiAIV2Service {
         console.error('WAKTI AI V2.1 CLIENT: Error fetching conversation messages:', error);
         return [];
       }
+      
+      console.log('🔍 WAKTI AI CLIENT: Successfully fetched messages:', data?.length || 0);
       
       return (data || []).map(msg => ({
         id: msg.id,
@@ -356,6 +364,8 @@ export class WaktiAIV2Service {
 
   static async deleteConversation(conversationId: string): Promise<void> {
     try {
+      console.log('🔍 WAKTI AI CLIENT: Deleting conversation:', conversationId);
+      
       const { error: historyError } = await supabase
         .from('ai_chat_history')
         .delete()
@@ -375,6 +385,8 @@ export class WaktiAIV2Service {
         console.error('WAKTI AI V2.1 CLIENT: Error deleting conversation:', error);
         throw error;
       }
+      
+      console.log('🔍 WAKTI AI CLIENT: Successfully deleted conversation');
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in deleteConversation:', error);
       throw error;
@@ -383,6 +395,8 @@ export class WaktiAIV2Service {
 
   static async updateConversationTitle(conversationId: string, title: string): Promise<void> {
     try {
+      console.log('🔍 WAKTI AI CLIENT: Updating conversation title:', conversationId, title);
+      
       const { error } = await supabase
         .from('ai_conversations')
         .update({ title })
@@ -392,6 +406,8 @@ export class WaktiAIV2Service {
         console.error('WAKTI AI V2.1 CLIENT: Error updating conversation title:', error);
         throw error;
       }
+      
+      console.log('🔍 WAKTI AI CLIENT: Successfully updated conversation title');
     } catch (error) {
       console.error('WAKTI AI V2.1 CLIENT: Error in updateConversationTitle:', error);
       throw error;

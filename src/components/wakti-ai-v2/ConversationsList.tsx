@@ -18,22 +18,50 @@ interface ConversationsListProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onRefresh: () => void;
 }
 
 export function ConversationsList({
   conversations,
   currentConversationId,
   onSelectConversation,
-  onDeleteConversation
+  onDeleteConversation,
+  onRefresh
 }: ConversationsListProps) {
   const { language } = useTheme();
 
+  const handleSelectConversation = (id: string) => {
+    console.log('🔍 CONVERSATIONS: Selecting conversation:', id);
+    onSelectConversation(id);
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    console.log('🔍 CONVERSATIONS: Deleting conversation:', id);
+    try {
+      await onDeleteConversation(id);
+      // Refresh the conversations list after deletion
+      onRefresh();
+    } catch (error) {
+      console.error('🔍 CONVERSATIONS: Error deleting conversation:', error);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold flex items-center gap-2">
-        <MessageSquare className="h-5 w-5" />
-        {language === 'ar' ? 'المحادثات' : 'Conversations'}
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <MessageSquare className="h-5 w-5" />
+          {language === 'ar' ? 'المحادثات' : 'Conversations'}
+        </h2>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onRefresh}
+          className="text-xs"
+        >
+          {language === 'ar' ? 'تحديث' : 'Refresh'}
+        </Button>
+      </div>
       
       <ScrollArea className="h-[calc(100vh-200px)] scrollbar-hide">
         <div className="space-y-2">
@@ -44,7 +72,7 @@ export function ConversationsList({
                 "p-3 rounded-lg border cursor-pointer hover:bg-accent transition-colors group",
                 currentConversationId === conversation.id && "bg-accent border-primary"
               )}
-              onClick={() => onSelectConversation(conversation.id)}
+              onClick={() => handleSelectConversation(conversation.id)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
@@ -69,7 +97,7 @@ export function ConversationsList({
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteConversation(conversation.id);
+                    handleDeleteConversation(conversation.id);
                   }}
                 >
                   <Trash2 className="h-3 w-3" />
@@ -83,6 +111,9 @@ export function ConversationsList({
               <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm">
                 {language === 'ar' ? 'لا توجد محادثات بعد' : 'No conversations yet'}
+              </p>
+              <p className="text-xs mt-1">
+                {language === 'ar' ? 'ابدأ محادثة جديدة' : 'Start a new conversation'}
               </p>
             </div>
           )}
