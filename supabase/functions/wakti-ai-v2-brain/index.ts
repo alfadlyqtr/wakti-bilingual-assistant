@@ -196,8 +196,8 @@ serve(async (req) => {
       
       console.log('WAKTI AI V2.1 Enhanced: Browsing quota check - current usage:', currentUsage);
       
-      // More aggressive browsing - lower threshold to 50 instead of 65
-      if (currentUsage < 50) {
+      // Updated browsing quota limit to 60 (was 50)
+      if (currentUsage < 60) {
         try {
           browsingData = await performEnhancedTavilySearch(userMessage, language);
           hasBrowsing = true;
@@ -506,13 +506,11 @@ Remember to adapt your communication style and response length according to the 
         actionResult = await executeAction(intentAnalysis.action, intentAnalysis.params, language, openaiApiKey, supabase, user.id);
         actionTaken = intentAnalysis.action;
         
-        // Update AI response to include action confirmation and translation if applicable
         if (actionResult.success) {
           let actionConfirmation = language === 'ar' 
             ? `\n\n✅ تم تنفيذ العملية بنجاح وحفظها في قاعدة البيانات!`
             : `\n\n✅ Action completed successfully and saved to database!`;
           
-          // Add translation information for Arabic image prompts
           if (actionTaken === 'generate_image' && actionResult.translatedPrompt) {
             const translationNote = language === 'ar'
               ? `\n\n🌍 تم ترجمة النص إلى الإنجليزية: "${actionResult.translatedPrompt}"`
