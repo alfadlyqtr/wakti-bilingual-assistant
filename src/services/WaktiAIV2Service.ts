@@ -76,15 +76,17 @@ export class WaktiAIV2Service {
         throw new Error('No authenticated user found');
       }
 
-      // Standardized payload structure
+      console.log('🔍 WAKTI AI CLIENT: User authenticated:', user.id);
+
+      // Create clean payload
       const payload = {
-        message,
-        userId: user.id, // Always include userId
+        message: message.trim(),
+        userId: user.id,
         language,
         conversationId: conversationId || null,
         inputType,
-        conversationHistory: [], // Empty for now, will be populated by calling component
-        confirmSearch: false // Always include this field
+        conversationHistory: [],
+        confirmSearch: false
       };
       
       console.log('🔍 WAKTI AI CLIENT: Sending payload:', payload);
@@ -93,20 +95,30 @@ export class WaktiAIV2Service {
         body: payload
       });
 
-      console.log('🔍 WAKTI AI CLIENT: Supabase response:', { data, error });
+      console.log('🔍 WAKTI AI CLIENT: Response:', { data, error });
 
       if (error) {
         console.error('🔍 WAKTI AI CLIENT: Supabase error:', error);
-        throw new Error(`Supabase error: ${error.message}`);
+        throw new Error(`Function error: ${error.message}`);
       }
 
-      if (!data || !data.response) {
-        console.error('🔍 WAKTI AI CLIENT: Invalid response format:', data);
-        throw new Error('Invalid response format from AI service');
+      if (!data) {
+        throw new Error('No response data received');
       }
 
-      console.log('🔍 WAKTI AI CLIENT: Returning data:', data);
-      return data;
+      // Handle both success and error responses from the function
+      if (data.success === false) {
+        throw new Error(data.error || 'Function returned error');
+      }
+
+      return {
+        response: data.response || 'No response received',
+        conversationId: data.conversationId || conversationId || 'new',
+        intent: data.intent || 'unknown',
+        confidence: data.confidence || 'medium',
+        needsConfirmation: data.needsConfirmation || false,
+        needsClarification: data.needsClarification || false
+      };
       
     } catch (error) {
       console.error('🔍 WAKTI AI CLIENT: Error in sendMessage:', error);
