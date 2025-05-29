@@ -1,4 +1,3 @@
-
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -34,7 +33,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('WAKTI AI V2.1: Processing request with FULL DATABASE INTEGRATION');
+    console.log('WAKTI AI V2.1: Processing request with ENHANCED CONTEXT INTEGRATION');
 
     // Initialize Supabase client with auth headers
     const authHeader = req.headers.get('Authorization');
@@ -80,11 +79,18 @@ serve(async (req) => {
 
     console.log('WAKTI AI V2.1: Authenticated user:', user.id);
 
-    // Get user profile for personalization
+    // Get enhanced user profile and knowledge for deeper personalization
     const { data: profile } = await supabase
       .from('profiles')
       .select('display_name, username')
       .eq('id', user.id)
+      .single();
+
+    // Load comprehensive user knowledge for AI context
+    const { data: userKnowledge } = await supabase
+      .from('ai_user_knowledge')
+      .select('*')
+      .eq('user_id', user.id)
       .single();
 
     const userName = profile?.display_name || profile?.username || 'there';
@@ -183,21 +189,105 @@ serve(async (req) => {
       });
     }
 
-    // Enhanced system message with user context
-    const systemMessage = language === 'ar' 
-      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}. يمكنك إنشاء المهام والأحداث والتذكيرات والصور. أنت ودود ومفيد وتساعد في إدارة المهام والأحداث والتذكيرات. رد بشكل طبيعي ومحادثة، واستخدم الرموز التعبيرية عند الحاجة.
+    // Enhanced system message with comprehensive user context
+    let systemMessage = language === 'ar' 
+      ? `أنت WAKTI AI V2.1، المساعد الذكي المتطور لتطبيق وكتي. أنت تتحدث مع ${userName}.`
+      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}.`;
 
-قدراتك المتقدمة:
+    // Add user knowledge context if available
+    if (userKnowledge) {
+      const contextParts = [];
+      
+      if (userKnowledge.personal_info) {
+        contextParts.push(language === 'ar' 
+          ? `معلومات شخصية: ${userKnowledge.personal_info}`
+          : `Personal info: ${userKnowledge.personal_info}`
+        );
+      }
+      
+      if (userKnowledge.goals) {
+        contextParts.push(language === 'ar' 
+          ? `أهداف: ${userKnowledge.goals}`
+          : `Goals: ${userKnowledge.goals}`
+        );
+      }
+      
+      if (userKnowledge.work_context) {
+        contextParts.push(language === 'ar' 
+          ? `سياق العمل: ${userKnowledge.work_context}`
+          : `Work context: ${userKnowledge.work_context}`
+        );
+      }
+      
+      if (userKnowledge.preferences) {
+        contextParts.push(language === 'ar' 
+          ? `التفضيلات: ${userKnowledge.preferences}`
+          : `Preferences: ${userKnowledge.preferences}`
+        );
+      }
+
+      if (contextParts.length > 0) {
+        systemMessage += language === 'ar' 
+          ? `\n\nمعلومات المستخدم للسياق:\n${contextParts.join('\n')}`
+          : `\n\nUser context information:\n${contextParts.join('\n')}`;
+      }
+
+      // Add communication style preferences
+      if (userKnowledge.communication_style) {
+        const styleInstructions = {
+          formal: language === 'ar' 
+            ? 'استخدم أسلوباً رسمياً ومهنياً في التواصل.'
+            : 'Use a formal and professional communication style.',
+          casual: language === 'ar' 
+            ? 'استخدم أسلوباً غير رسمي وودود في التواصل.'
+            : 'Use a casual and friendly communication style.',
+          technical: language === 'ar' 
+            ? 'استخدم مصطلحات تقنية دقيقة وتفسيرات مفصلة.'
+            : 'Use precise technical terms and detailed explanations.',
+          friendly: language === 'ar' 
+            ? 'كن ودوداً ومتفهماً في تفاعلك.'
+            : 'Be warm and understanding in your interactions.'
+        };
+        
+        systemMessage += '\n\n' + styleInstructions[userKnowledge.communication_style as keyof typeof styleInstructions];
+      }
+
+      // Add response length preferences
+      if (userKnowledge.response_length) {
+        const lengthInstructions = {
+          brief: language === 'ar' 
+            ? 'قدم إجابات مختصرة ومباشرة.'
+            : 'Provide brief and direct responses.',
+          detailed: language === 'ar' 
+            ? 'قدم إجابات مفصلة مع شروحات واضحة.'
+            : 'Provide detailed responses with clear explanations.',
+          comprehensive: language === 'ar' 
+            ? 'قدم إجابات شاملة مع أمثلة وتفاصيل إضافية.'
+            : 'Provide comprehensive responses with examples and additional details.'
+        };
+        
+        systemMessage += '\n\n' + lengthInstructions[userKnowledge.response_length as keyof typeof lengthInstructions];
+      }
+
+      // Add working hours context for scheduling
+      if (userKnowledge.working_hours) {
+        systemMessage += language === 'ar' 
+          ? `\n\nساعات العمل: ${userKnowledge.working_hours} (${userKnowledge.time_zone || 'UTC'})`
+          : `\n\nWorking hours: ${userKnowledge.working_hours} (${userKnowledge.time_zone || 'UTC'})`;
+      }
+    }
+
+    // Add general capabilities
+    systemMessage += language === 'ar' 
+      ? `\n\nقدراتك المتقدمة:
 - إنشاء المهام والمشاريع في قاعدة البيانات
-- إنشاء الأحداث والمواعيد في قاعدة البيانات
+- إنشاء الأحداث والمواعيد في قاعدة البيانات  
 - إنشاء التذكيرات في قاعدة البيانات
 - إنشاء الصور بالذكاء الاصطناعي
 - تنفيذ الأوامر تلقائياً وحفظها
 
 عندما يطلب المستخدم إنشاء شيء، قم بتنفيذه فوراً إذا كنت متأكداً من الطلب.`
-      : `You are WAKTI AI V2.1, the advanced intelligent assistant for the Wakti app. You are talking to ${userName}. You can create tasks, events, reminders, and generate images. You are friendly, helpful, and assist with managing tasks, events, and reminders. Respond naturally and conversationally, using emojis when appropriate.
-
-Your advanced capabilities:
+      : `\n\nYour advanced capabilities:
 - Create tasks and projects in the database
 - Create events and appointments in the database
 - Create reminders in the database
@@ -373,7 +463,7 @@ When users ask you to create something, execute it immediately if you're confide
         action_result: actionResult
       });
 
-    console.log('WAKTI AI V2.1: Response ready with full database integration');
+    console.log('WAKTI AI V2.1: Response ready with enhanced user context integration');
 
     return new Response(JSON.stringify({
       response: aiResponse,
