@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { PageContainer } from '@/components/PageContainer';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
@@ -19,7 +18,7 @@ import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { cn } from '@/lib/utils';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Menu, MessageSquare, Settings } from 'lucide-react';
+import { MessageSquare, Camera, Mic, Settings, Send } from 'lucide-react';
 
 const WaktiAIV2 = () => {
   const { language } = useTheme();
@@ -34,8 +33,8 @@ const WaktiAIV2 = () => {
   const [userContext, setUserContext] = useState<any>(null);
   const [conversations, setConversations] = useState<any[]>([]);
   const [currentConversation, setCurrentConversation] = useState<any>(null);
-  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
+  const [conversationsDialogOpen, setConversationsDialogOpen] = useState(false);
 
   // Load trigger from localStorage on initial load
   useEffect(() => {
@@ -61,6 +60,11 @@ const WaktiAIV2 = () => {
 
     fetchUserContext();
   }, [user]);
+
+  // Fetch conversations on initial load and whenever the user changes
+  useEffect(() => {
+    refreshConversations();
+  }, [refreshConversations]);
 
   const handleSendMessage = useCallback(async (messageContent: string) => {
     if (!messageContent.trim()) return;
@@ -102,7 +106,6 @@ const WaktiAIV2 = () => {
       };
       setMessages(prevMessages => [...prevMessages, aiMessage]);
 
-      // Save the conversation if a current conversation exists
       if (currentConversation) {
         await saveMessageToConversation(currentConversation.id, userMessage.content, aiMessage.content);
       }
@@ -276,102 +279,83 @@ const WaktiAIV2 = () => {
     }
   }, [toast]);
 
-  // Fetch conversations on initial load and whenever the user changes
-  useEffect(() => {
-    refreshConversations();
-  }, [refreshConversations]);
-
   return (
     <PageContainer>
-      <div className="min-h-screen flex w-full">
-        {/* Left Drawer - Quick Actions */}
-        <Sheet open={leftDrawerOpen} onOpenChange={setLeftDrawerOpen}>
-          <SheetTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="fixed top-4 left-4 z-50 bg-background/80 backdrop-blur-sm border"
-            >
-              <Menu className="h-4 w-4" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-80 p-0">
-            <div className="h-full overflow-hidden">
-              <div className="p-4 border-b">
-                <h3 className="font-semibold text-lg">
-                  {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-                </h3>
-              </div>
-              <div className="flex-1 overflow-y-auto p-4">
-                <QuickActionsPanel
-                  onSendMessage={handleSendMessage}
-                  activeTrigger={activeTrigger}
-                  onTriggerChange={setActiveTrigger}
-                />
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="min-h-screen flex w-full relative">
+        {/* Header */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
+          <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-foreground">
-                  {language === 'ar' ? 'وقتي الذكي' : 'Wakti AI'}
-                </h1>
-                <SearchModeIndicator isVisible={activeTrigger === 'search'} />
-                <AdvancedSearchModeIndicator isVisible={activeTrigger === 'advanced_search'} />
-              </div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {language === 'ar' ? 'وقتي الذكي' : 'WAKTI AI'}
+              </h1>
+              <SearchModeIndicator isVisible={activeTrigger === 'search'} />
+              <AdvancedSearchModeIndicator isVisible={activeTrigger === 'advanced_search'} />
             </div>
 
             <div className="flex items-center gap-3">
               <QuotaIndicator />
               <NewConversationButton onNewConversation={handleNewConversation} />
-              <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
-                <SheetTrigger asChild>
+              
+              <Dialog open={conversationsDialogOpen} onOpenChange={setConversationsDialogOpen}>
+                <DialogTrigger asChild>
                   <Button variant="outline" size="sm" className="flex items-center gap-2">
                     <MessageSquare className="h-4 w-4" />
                     {language === 'ar' ? 'المحادثات' : 'Conversations'}
                   </Button>
-                </SheetTrigger>
-                <SheetContent side="right" className="w-80 p-0">
-                  <div className="h-full overflow-hidden">
-                    <div className="p-4 border-b">
-                      <h3 className="font-semibold text-lg flex items-center gap-2">
-                        <MessageSquare className="h-5 w-5" />
-                        {language === 'ar' ? 'المحادثات' : 'Conversations'}
-                      </h3>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-4">
-                      <ConversationsList 
-                        conversations={conversations}
-                        currentConversationId={currentConversation?.id}
-                        onSelectConversation={handleSelectConversation}
-                        onDeleteConversation={handleDeleteConversation}
-                        onRefresh={refreshConversations}
-                      />
-                    </div>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <MessageSquare className="h-5 w-5" />
+                      {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="max-h-96 overflow-y-auto">
+                    <ConversationsList 
+                      conversations={conversations}
+                      currentConversationId={currentConversation?.id}
+                      onSelectConversation={(id) => {
+                        handleSelectConversation(id);
+                        setConversationsDialogOpen(false);
+                      }}
+                      onDeleteConversation={handleDeleteConversation}
+                      onRefresh={refreshConversations}
+                    />
                   </div>
-                </SheetContent>
-              </Sheet>
+                </DialogContent>
+              </Dialog>
+
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowQuickActions(!showQuickActions)}
+                className="flex items-center gap-2"
+              >
+                <Settings className="h-4 w-4" />
+                {language === 'ar' ? 'الإجراءات' : 'Actions'}
+              </Button>
             </div>
           </div>
+        </div>
 
+        {/* Main Content Area */}
+        <div className="flex-1 pt-20 pb-4">
           {/* Messages Area */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col h-[calc(100vh-120px)]">
             {/* Messages Panel */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-4 space-y-4">
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
+                    <div className="text-6xl font-bold mb-4 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      {language === 'ar' ? 'وقتي الذكي' : 'WAKTI AI'}
+                    </div>
                     <p className="text-lg font-medium mb-2">
                       {language === 'ar' ? 'مرحباً بك في وقتي الذكي' : 'Welcome to Wakti AI'}
                     </p>
                     <p className="text-sm">
-                      {language === 'ar' ? 'ابدأ محادثة جديدة' : 'Start a new conversation'}
+                      {language === 'ar' ? 'ابدأ محادثة جديدة أو استخدم الإجراءات السريعة' : 'Start a new conversation or use quick actions'}
                     </p>
                   </div>
                 </div>
@@ -387,6 +371,9 @@ const WaktiAIV2 = () => {
             {/* Message Input */}
             <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
               <div className="flex items-center gap-3 max-w-4xl mx-auto">
+                <Button variant="ghost" size="icon" className="flex-shrink-0">
+                  <Camera className="h-4 w-4" />
+                </Button>
                 <Input
                   type="text"
                   placeholder={language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'}
@@ -401,13 +388,60 @@ const WaktiAIV2 = () => {
                   disabled={isThinking}
                   className="flex-1"
                 />
-                <Button onClick={() => handleSendMessage(newMessage)} disabled={isThinking}>
-                  {language === 'ar' ? 'إرسال' : 'Send'}
+                <Button variant="ghost" size="icon" className="flex-shrink-0">
+                  <Mic className="h-4 w-4" />
+                </Button>
+                <Button 
+                  onClick={() => handleSendMessage(newMessage)} 
+                  disabled={isThinking || !newMessage.trim()}
+                  size="icon"
+                >
+                  <Send className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Right Sidebar - Quick Actions */}
+        <div className={cn(
+          "fixed top-20 right-0 h-[calc(100vh-80px)] w-80 bg-background border-l transform transition-transform duration-300 ease-in-out z-40",
+          showQuickActions ? "translate-x-0" : "translate-x-full"
+        )}>
+          <div className="h-full overflow-hidden">
+            <div className="p-4 border-b">
+              <h3 className="font-semibold text-lg flex items-center justify-between">
+                {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowQuickActions(false)}
+                  className="h-6 w-6 p-0"
+                >
+                  ×
+                </Button>
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <QuickActionsPanel
+                onSendMessage={(message) => {
+                  handleSendMessage(message);
+                  setShowQuickActions(false);
+                }}
+                activeTrigger={activeTrigger}
+                onTriggerChange={setActiveTrigger}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Overlay */}
+        {showQuickActions && (
+          <div 
+            className="fixed inset-0 bg-black/20 z-30 top-20"
+            onClick={() => setShowQuickActions(false)}
+          />
+        )}
       </div>
     </PageContainer>
   );
