@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -279,21 +280,34 @@ async function translateText(text, fromLang, toLang) {
   }
 }
 
-// Enhanced browsing function with richer context formation
-async function executeBrowsing(query, language = 'en') {
+// Enhanced browsing function with search mode differentiation
+async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
   try {
-    console.log("🌐 WAKTI AI V2.1: Executing browsing for:", query);
+    console.log("🌐 WAKTI AI V2.1: Executing browsing for:", query, "in mode:", searchMode);
     
     if (!TAVILY_API_KEY) {
       throw new Error("Tavily API key not configured");
     }
     
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    // Configure Tavily parameters based on search mode
+    let tavilyConfig;
+    
+    if (searchMode === 'advanced') {
+      // Advanced Search Configuration
+      tavilyConfig = {
+        api_key: TAVILY_API_KEY,
+        query: query,
+        search_depth: "advanced",
+        include_answer: true,
+        include_images: true,
+        include_raw_content: false,
+        max_results: 10,
+        chunks_per_source: 5,
+        time_range: "year"
+      };
+    } else {
+      // Basic Search Configuration
+      tavilyConfig = {
         api_key: TAVILY_API_KEY,
         query: query,
         search_depth: "basic",
@@ -303,7 +317,17 @@ async function executeBrowsing(query, language = 'en') {
         max_results: 5,
         chunks_per_source: 3,
         time_range: "month"
-      })
+      };
+    }
+    
+    console.log("🌐 WAKTI AI V2.1: Using Tavily config:", tavilyConfig);
+    
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(tavilyConfig)
     });
     
     if (!response.ok) {
@@ -314,7 +338,7 @@ async function executeBrowsing(query, language = 'en') {
     console.log("🌐 WAKTI AI V2.1: Browsing results:", data);
     
     // Create rich context for AI processing
-    let richContext = `Search Query: "${query}"\n\n`;
+    let richContext = `Search Query: "${query}" (${searchMode} mode)\n\n`;
     
     // Add main answer
     if (data.answer) {
@@ -342,9 +366,10 @@ async function executeBrowsing(query, language = 'en') {
     return {
       success: true,
       answer: data.answer,
-      sources: data.results?.slice(0, 5) || [],
+      sources: data.results?.slice(0, searchMode === 'advanced' ? 10 : 5) || [],
       images: data.images || [],
       query: query,
+      searchMode: searchMode,
       richContext: richContext
     };
     
@@ -605,7 +630,7 @@ serve(async (req) => {
       });
     }
 
-    // Extract fields with defaults
+    // Extract fields with defaults - NOW INCLUDING activeTrigger
     const {
       message,
       userId,
@@ -613,7 +638,8 @@ serve(async (req) => {
       conversationId = null,
       inputType = 'text',
       conversationHistory = [],
-      confirmSearch = false
+      confirmSearch = false,
+      activeTrigger = 'chat'
     } = requestBody;
 
     console.log("🔍 WAKTI AI V2.1: Extracted fields:", {
@@ -621,7 +647,8 @@ serve(async (req) => {
       hasUserId: !!userId,
       language,
       inputType,
-      confirmSearch
+      confirmSearch,
+      activeTrigger
     });
 
     // Validate required fields
@@ -648,6 +675,7 @@ serve(async (req) => {
     }
 
     console.log("🔍 WAKTI AI V2.1: Processing message for user:", userId);
+    console.log("🔍 WAKTI AI V2.1: Active trigger mode:", activeTrigger);
 
     // Analyze intent with enhanced priority system
     const intentAnalysis = analyzeIntentEnhanced(message, language);
@@ -664,8 +692,43 @@ serve(async (req) => {
     // Get quota status
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Handle different intents
-    if (intentAnalysis.intent === 'generate_image') {
+    // Handle different intents based on activeTrigger
+    if (activeTrigger === 'advanced_search') {
+      console.log("🔮 WAKTI AI V2.1: Handling advanced search mode");
+      
+      if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
+        // Use advanced search functionality
+        const browsingResult = await executeBrowsing(message, 'advanced', language);
+        
+        if (browsingResult.success) {
+          browsingUsed = true;
+          browsingData = {
+            hasResults: true,
+            sources: browsingResult.sources,
+            images: browsingResult.images,
+            query: browsingResult.query,
+            searchMode: browsingResult.searchMode
+          };
+          
+          // Use rich context for better AI processing
+          response = await processWithAI(message, browsingResult.richContext, language);
+          
+          // Log browsing usage
+          await logAIUsage(userId, 'deepseek-chat', true);
+        } else {
+          response = await processWithAI(message, null, language);
+        }
+      } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
+        response = language === 'ar' 
+          ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث المتقدم؟`
+          : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with advanced search?`;
+      } else {
+        response = language === 'ar' 
+          ? `لقد وصلت إلى حد البحث الشهري (${quotaStatus.limit}). يمكنني الإجابة على أسئلة عامة.`
+          : `You've reached your monthly search limit (${quotaStatus.limit}). I can answer general questions.`;
+      }
+      
+    } else if (intentAnalysis.intent === 'generate_image') {
       console.log("🎨 WAKTI AI V2.1: Handling image generation");
       
       const imageResult = await generateImage(intentAnalysis.params.prompt, language);
@@ -687,7 +750,8 @@ serve(async (req) => {
       console.log("🌐 WAKTI AI V2.1: Handling browsing request");
       
       if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
-        const browsingResult = await executeBrowsing(message, language);
+        // Use basic search for regular search mode
+        const browsingResult = await executeBrowsing(message, 'basic', language);
         
         if (browsingResult.success) {
           browsingUsed = true;
@@ -695,7 +759,8 @@ serve(async (req) => {
             hasResults: true,
             sources: browsingResult.sources,
             images: browsingResult.images,
-            query: browsingResult.query
+            query: browsingResult.query,
+            searchMode: browsingResult.searchMode
           };
           
           // Use rich context for better AI processing
