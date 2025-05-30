@@ -146,15 +146,15 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}
         </div>
 
-        {/* Browsing Indicator - Only for assistant messages */}
-        {!isUser && (message.browsingUsed || message.quotaStatus) && (
+        {/* Browsing Indicator - Only for assistant messages and only show quota in search mode */}
+        {!isUser && (message.browsingUsed || (activeTrigger === 'search' && message.quotaStatus)) && (
           <div className={cn(
             "ml-2",
             isUser && "mr-2"
           )}>
             <BrowsingIndicator
               browsingUsed={message.browsingUsed}
-              quotaStatus={message.quotaStatus}
+              quotaStatus={activeTrigger === 'search' ? message.quotaStatus : undefined}
               sources={message.browsingData?.sources}
               imageUrl={message.imageUrl}
               size="sm"
