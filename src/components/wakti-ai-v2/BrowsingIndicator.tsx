@@ -54,7 +54,7 @@ export function BrowsingIndicator({
         )}>
           <CheckCircle className={cn("text-green-500", iconSizes[size])} />
           <span>
-            {language === 'ar' ? 'تم البحث بـ WAKTI AI' : 'WAKTI AI searched'}
+            {language === 'ar' ? 'تم البحث بـ Tavily' : 'Tavily searched'}
           </span>
           {imageUrl && (
             <>
@@ -67,7 +67,7 @@ export function BrowsingIndicator({
         </div>
       )}
 
-      {/* Quota Status - Only show in search mode */}
+      {/* Quota Status */}
       {quotaStatus && (
         <div className={cn(
           "flex items-center",
