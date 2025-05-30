@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,25 +8,19 @@ export interface UserQuota {
   daily_count: number;
   extra_translations: number;
   purchase_date?: string;
-  advanced_search_count: number;
-  extra_advanced_searches: number;
-  advanced_search_purchase_date?: string;
 }
 
 export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
-  const [userQuota, setUserQuota] = useState<UserQuota>({ 
-    daily_count: 0, 
-    extra_translations: 0,
-    advanced_search_count: 0,
-    extra_advanced_searches: 0
-  });
+  const [userQuota, setUserQuota] = useState<UserQuota>({ daily_count: 0, extra_translations: 0 });
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
+  // Updated daily limit from 25 to 5
   const MAX_DAILY_TRANSLATIONS = 5;
-  const SOFT_WARNING_THRESHOLD = 4;
+  const SOFT_WARNING_THRESHOLD = 4; // Warn at 4 out of 5
 
+  // Memoize the loadUserQuota function to prevent infinite re-renders
   const loadUserQuota = useCallback(async () => {
     if (!user) return;
     
@@ -50,29 +45,16 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         setUserQuota({
           daily_count: quota.daily_count,
           extra_translations: quota.extra_translations,
-          purchase_date: quota.purchase_date,
-          advanced_search_count: quota.advanced_search_count || 0,
-          extra_advanced_searches: quota.extra_advanced_searches || 0,
-          advanced_search_purchase_date: quota.advanced_search_purchase_date
+          purchase_date: quota.purchase_date
         });
       } else {
         console.warn('⚠️ No quota data returned, using defaults');
-        setUserQuota({ 
-          daily_count: 0, 
-          extra_translations: 0,
-          advanced_search_count: 0,
-          extra_advanced_searches: 0
-        });
+        setUserQuota({ daily_count: 0, extra_translations: 0 });
       }
     } catch (error) {
       console.error('❌ Error loading user quota:', error);
       setQuotaError('Failed to load quota data');
-      setUserQuota({ 
-        daily_count: 0, 
-        extra_translations: 0,
-        advanced_search_count: 0,
-        extra_advanced_searches: 0
-      });
+      setUserQuota({ daily_count: 0, extra_translations: 0 });
       
       toast({
         title: language === 'ar' ? 'تحذير' : 'Warning',
@@ -82,7 +64,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     } finally {
       setIsLoadingQuota(false);
     }
-  }, [user, language]);
+  }, [user, language]); // Only depend on user and language
 
   const incrementTranslationCount = useCallback(async (): Promise<boolean> => {
     if (!user) {
@@ -112,10 +94,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           setUserQuota(prev => ({
             daily_count: result.daily_count,
             extra_translations: result.extra_translations,
-            purchase_date: prev.purchase_date,
-            advanced_search_count: prev.advanced_search_count,
-            extra_advanced_searches: prev.extra_advanced_searches,
-            advanced_search_purchase_date: prev.advanced_search_purchase_date
+            purchase_date: prev.purchase_date
           }));
           
           console.log('📊 Updated quota state:', {
@@ -156,6 +135,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, userQuota, language]);
 
+  // Updated to use 150 extra translations instead of 100
   const purchaseExtraTranslations = useCallback(async (count: number = 150) => {
     if (!user) return false;
 
@@ -172,6 +152,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       if (data && data.length > 0) {
         const result = data[0];
         if (result.success) {
+          // Update local state immediately
           setUserQuota(prev => ({
             ...prev,
             extra_translations: result.new_extra_count,
@@ -201,57 +182,14 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, language]);
 
-  const purchaseExtraAdvancedSearches = useCallback(async (count: number = 50) => {
-    if (!user) return false;
-
-    try {
-      console.log('💰 Purchasing extra advanced searches:', count);
-      
-      const { data, error } = await supabase.rpc('purchase_extra_advanced_searches', {
-        p_user_id: user.id,
-        p_count: count
-      });
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const result = data[0];
-        if (result.success) {
-          setUserQuota(prev => ({
-            ...prev,
-            extra_advanced_searches: result.new_extra_count,
-            advanced_search_purchase_date: new Date().toISOString()
-          }));
-          
-          toast({
-            title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
-            description: language === 'ar' 
-              ? `تم إضافة ${count} بحث متقدم إضافي (صالح لشهر واحد)` 
-              : `Added ${count} extra advanced searches (valid for 1 month)`,
-          });
-          
-          console.log('💰 Extra advanced searches purchased successfully:', result.new_extra_count);
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error('❌ Error purchasing extra advanced searches:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
-        description: language === 'ar' ? 'فشل في شراء البحث المتقدم الإضافي' : 'Failed to purchase extra advanced searches',
-        variant: 'destructive'
-      });
-      return false;
-    }
-  }, [user, language]);
-
+  // Only load quota when user changes, not on every render
   useEffect(() => {
     if (user && !isLoadingQuota) {
       loadUserQuota();
     }
-  }, [user?.id]);
+  }, [user?.id]); // Only depend on user ID, not the entire user object or loadUserQuota function
 
+  // Memoize computed values to prevent unnecessary re-renders
   const computedValues = useMemo(() => {
     const remainingFreeTranslations = Math.max(0, MAX_DAILY_TRANSLATIONS - userQuota.daily_count);
     const isAtSoftLimit = userQuota.daily_count >= SOFT_WARNING_THRESHOLD;
@@ -273,7 +211,6 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     loadUserQuota,
     incrementTranslationCount,
     purchaseExtraTranslations,
-    purchaseExtraAdvancedSearches,
     MAX_DAILY_TRANSLATIONS,
     SOFT_WARNING_THRESHOLD,
     ...computedValues

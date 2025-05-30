@@ -17,37 +17,19 @@ interface BuyExtrasPopupProps {
 
 export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
   const { language } = useTheme();
-  const { userQuota, isLoadingQuota, purchaseExtraTranslations, purchaseExtraAdvancedSearches } = useQuotaManagement(language);
+  const { userQuota, isLoadingQuota, purchaseExtraTranslations } = useQuotaManagement(language);
   const [isPurchasing, setIsPurchasing] = useState<string | null>(null);
 
   const handleTranslatorPurchase = async () => {
     setIsPurchasing('translator');
     try {
-      const success = await purchaseExtraTranslations(150);
+      const success = await purchaseExtraTranslations(100);
       if (success) {
         toast({
           title: language === 'ar' ? '✅ تم الشراء بنجاح' : '✅ Purchase Successful',
           description: language === 'ar' 
-            ? 'تم إضافة 150 ترجمة إضافية لحسابك' 
-            : 'Added 150 extra translations to your account',
-        });
-        onOpenChange(false);
-      }
-    } finally {
-      setIsPurchasing(null);
-    }
-  };
-
-  const handleAdvancedSearchPurchase = async () => {
-    setIsPurchasing('search');
-    try {
-      const success = await purchaseExtraAdvancedSearches(50);
-      if (success) {
-        toast({
-          title: language === 'ar' ? '✅ تم الشراء بنجاح' : '✅ Purchase Successful',
-          description: language === 'ar' 
-            ? 'تم إضافة 50 بحث متقدم إضافي لحسابك' 
-            : 'Added 50 extra advanced searches to your account',
+            ? 'تم إضافة 100 ترجمة إضافية لحسابك' 
+            : 'Added 100 extra translations to your account',
         });
         onOpenChange(false);
       }
@@ -70,7 +52,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       id: 'translator',
       icon: Languages,
       title: language === 'ar' ? 'ترجمات إضافية' : 'Extra Translations',
-      quota: language === 'ar' ? '150 ترجمة' : '150 translations',
+      quota: language === 'ar' ? '100 ترجمة' : '100 translations',
       price: '10 QAR',
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
       available: true,
@@ -85,9 +67,9 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       quota: language === 'ar' ? '50 بحث متقدم' : '50 advanced searches',
       price: '10 QAR',
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
-      available: true,
-      current: userQuota.extra_advanced_searches,
-      onPurchase: handleAdvancedSearchPurchase,
+      available: false,
+      current: 0,
+      onPurchase: () => handleComingSoonPurchase('search'),
       color: 'from-green-500 to-emerald-500'
     },
     {
