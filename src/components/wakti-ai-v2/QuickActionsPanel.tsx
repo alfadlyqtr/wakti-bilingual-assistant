@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -50,7 +51,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       id: 'advanced_search' as TriggerMode,
       icon: Zap,
       label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
-      description: language === 'ar' ? 'قريباً' : 'Coming soon',
+      description: language === 'ar' ? 'بحث شامل ومتقدم' : 'Comprehensive & advanced',
       color: 'bg-purple-500'
     },
     {
@@ -97,11 +98,9 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               variant={activeTrigger === trigger.id ? "default" : "outline"}
               className={cn(
                 "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
-                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1",
-                trigger.id === 'advanced_search' && "opacity-50 cursor-not-allowed"
+                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1"
               )}
-              onClick={() => trigger.id !== 'advanced_search' && onTriggerChange(trigger.id)}
-              disabled={trigger.id === 'advanced_search'}
+              onClick={() => onTriggerChange(trigger.id)}
             >
               <div className={cn(
                 "p-1.5 rounded-md",
