@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { Mic, Search, MessageSquare } from 'lucide-react';
+import { Mic, Search, MessageSquare, Expand, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
@@ -42,6 +42,32 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
   const handleSwitchToChat = () => {
     if (onSwitchToChat) {
       onSwitchToChat();
+    }
+  };
+
+  const handleExpandImage = () => {
+    if (message.imageUrl) {
+      window.open(message.imageUrl, '_blank');
+    }
+  };
+
+  const handleDownloadImage = async () => {
+    if (message.imageUrl) {
+      try {
+        const response = await fetch(message.imageUrl);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `wakti-generated-image-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } catch (error) {
+        console.error('Error downloading image:', error);
+      }
     }
   };
 
@@ -100,9 +126,9 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
             </div>
           )}
 
-          {/* Generated Image */}
+          {/* Generated Image with Controls */}
           {message.imageUrl && (
-            <div className="mt-3">
+            <div className="mt-3 relative group">
               <img
                 src={message.imageUrl}
                 alt="Generated content"
@@ -111,6 +137,29 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
                   e.currentTarget.style.display = 'none';
                 }}
               />
+              
+              {/* Image Controls - Show on hover */}
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleExpandImage}
+                  className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white border-0"
+                  title={language === 'ar' ? 'توسيع الصورة' : 'Expand image'}
+                >
+                  <Expand className="h-3 w-3" />
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleDownloadImage}
+                  className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white border-0"
+                  title={language === 'ar' ? 'تحميل الصورة' : 'Download image'}
+                >
+                  <Download className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           )}
 
