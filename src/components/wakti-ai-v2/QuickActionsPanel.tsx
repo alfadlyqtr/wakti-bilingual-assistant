@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckSquare, Calendar, Bell, Image, Sparkles, BookOpen, PenTool, Languages, Settings, Brain, Search, Zap, MessageSquare } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 
@@ -23,27 +23,6 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState('');
   const [customMessage, setCustomMessage] = useState('');
-
-  const quickActions = [
-    {
-      icon: CheckSquare,
-      label: language === 'ar' ? 'مهمة جديدة' : 'New Task',
-      message: language === 'ar' ? 'أنشئ مهمة جديدة' : 'Create a new task',
-      gradient: 'from-blue-500 to-cyan-500'
-    },
-    {
-      icon: Calendar,
-      label: language === 'ar' ? 'حدث جديد' : 'New Event',
-      message: language === 'ar' ? 'أنشئ حدث جديد' : 'Create a new event',
-      gradient: 'from-purple-500 to-pink-500'
-    },
-    {
-      icon: Bell,
-      label: language === 'ar' ? 'تذكير جديد' : 'New Reminder',
-      message: language === 'ar' ? 'ذكرني بشيء مهم' : 'Remind me of something important',
-      gradient: 'from-orange-500 to-red-500'
-    }
-  ];
 
   const triggerButtons = [
     {
@@ -122,70 +101,6 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               </div>
             </Button>
           ))}
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div>
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
-          <Sparkles className="h-3 w-3" />
-          {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-1.5 mb-2">
-          {quickActions.map((action, index) => (
-            <Button
-              key={index}
-              variant="ghost"
-              className={cn(
-                "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-                "border border-border/50 hover:border-border text-center"
-              )}
-              onClick={() => onSendMessage(action.message)}
-            >
-              <div className={cn(
-                "p-1 rounded-sm bg-gradient-to-r",
-                action.gradient
-              )}>
-                <action.icon className="h-3 w-3 text-white" />
-              </div>
-              <span className="text-[10px] font-medium leading-tight">{action.label}</span>
-            </Button>
-          ))}
-          
-          {/* Image Generation Button */}
-          <Button
-            variant="ghost"
-            className={cn(
-              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-              "border border-border/50 hover:border-border text-center"
-            )}
-            onClick={() => onSendMessage(language === 'ar' ? 'أنشئ صورة لي' : 'Generate an image for me')}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-green-500 to-emerald-500">
-              <Image className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'إنشاء صورة' : 'Generate Image'}
-            </span>
-          </Button>
-
-          {/* Homework Button */}
-          <Button
-            variant="ghost"
-            className={cn(
-              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-              "border border-border/50 hover:border-border text-center"
-            )}
-            onClick={() => onSendMessage(language === 'ar' ? 'ساعدني في واجبي المنزلي' : 'Help me with my homework')}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
-              <BookOpen className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'واجب منزلي' : 'Homework'}
-            </span>
-          </Button>
         </div>
       </div>
 
