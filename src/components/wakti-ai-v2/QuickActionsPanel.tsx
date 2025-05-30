@@ -5,15 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { CheckSquare, Calendar, Bell, Image, Sparkles, BookOpen, PenTool, Languages, Settings, Brain } from 'lucide-react';
+import { CheckSquare, Calendar, Bell, Image, Sparkles, BookOpen, PenTool, Languages, Settings, Brain, Search, Zap, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 
+type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
+  activeTrigger: TriggerMode;
+  onTriggerChange: (trigger: TriggerMode) => void;
 }
 
-export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
@@ -38,24 +42,37 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
       label: language === 'ar' ? 'تذكير جديد' : 'New Reminder',
       message: language === 'ar' ? 'ذكرني بشيء مهم' : 'Remind me of something important',
       gradient: 'from-orange-500 to-red-500'
+    }
+  ];
+
+  const triggerButtons = [
+    {
+      id: 'chat' as TriggerMode,
+      icon: MessageSquare,
+      label: language === 'ar' ? 'محادثة' : 'Chat',
+      description: language === 'ar' ? 'الوضع الافتراضي' : 'Default mode',
+      color: 'bg-blue-500'
     },
     {
+      id: 'search' as TriggerMode,
+      icon: Search,
+      label: language === 'ar' ? 'بحث' : 'Search',
+      description: language === 'ar' ? 'البحث والمعلومات الحديثة' : 'Search & current info',
+      color: 'bg-green-500'
+    },
+    {
+      id: 'advanced_search' as TriggerMode,
+      icon: Zap,
+      label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
+      description: language === 'ar' ? 'قريباً' : 'Coming soon',
+      color: 'bg-purple-500'
+    },
+    {
+      id: 'image' as TriggerMode,
       icon: Image,
-      label: language === 'ar' ? 'إنشاء صورة' : 'Generate Image',
-      message: language === 'ar' ? 'أنشئ صورة لي' : 'Generate an image for me',
-      gradient: 'from-green-500 to-emerald-500'
-    },
-    {
-      icon: BookOpen,
-      label: language === 'ar' ? 'واجب منزلي' : 'Homework',
-      message: language === 'ar' ? 'ساعدني في واجبي المنزلي' : 'Help me with my homework',
-      gradient: 'from-indigo-500 to-blue-500'
-    },
-    {
-      icon: PenTool,
-      label: language === 'ar' ? 'إنشاء نص' : 'Text Generate',
-      message: language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me',
-      gradient: 'from-teal-500 to-cyan-500'
+      label: language === 'ar' ? 'صورة' : 'Image',
+      description: language === 'ar' ? 'إنشاء الصور' : 'Image generation',
+      color: 'bg-orange-500'
     }
   ];
 
@@ -69,14 +86,52 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* AI Trigger Controls */}
+      <div>
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
+          <Brain className="h-3 w-3" />
+          {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
+        </h3>
+        
+        <div className="grid grid-cols-2 gap-2">
+          {triggerButtons.map((trigger) => (
+            <Button
+              key={trigger.id}
+              variant={activeTrigger === trigger.id ? "default" : "outline"}
+              className={cn(
+                "h-auto p-3 flex flex-col items-center gap-2 text-center transition-all duration-200",
+                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-2",
+                trigger.id === 'advanced_search' && "opacity-50 cursor-not-allowed"
+              )}
+              onClick={() => trigger.id !== 'advanced_search' && onTriggerChange(trigger.id)}
+              disabled={trigger.id === 'advanced_search'}
+            >
+              <div className={cn(
+                "p-2 rounded-lg",
+                activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
+              )}>
+                <trigger.icon className={cn(
+                  "h-4 w-4",
+                  activeTrigger === trigger.id ? "text-primary" : "text-white"
+                )} />
+              </div>
+              <div>
+                <div className="text-xs font-medium">{trigger.label}</div>
+                <div className="text-[10px] text-muted-foreground">{trigger.description}</div>
+              </div>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Actions */}
       <div>
         <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
           <Sparkles className="h-3 w-3" />
           {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
         </h3>
         
-        {/* 2-column grid for actions - back to original size */}
         <div className="grid grid-cols-2 gap-1.5 mb-2">
           {quickActions.map((action, index) => (
             <Button
@@ -98,6 +153,50 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
             </Button>
           ))}
           
+          {/* Image Generation Button */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
+              "border border-border/50 hover:border-border text-center"
+            )}
+            onClick={() => onSendMessage(language === 'ar' ? 'أنشئ صورة لي' : 'Generate an image for me')}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-green-500 to-emerald-500">
+              <Image className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'إنشاء صورة' : 'Generate Image'}
+            </span>
+          </Button>
+
+          {/* Homework Button */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
+              "border border-border/50 hover:border-border text-center"
+            )}
+            onClick={() => onSendMessage(language === 'ar' ? 'ساعدني في واجبي المنزلي' : 'Help me with my homework')}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
+              <BookOpen className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'واجب منزلي' : 'Homework'}
+            </span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Action Buttons (Not Triggers) */}
+      <div>
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+          <Settings className="h-3 w-3" />
+          {language === 'ar' ? 'أدوات' : 'Tools'}
+        </h3>
+        
+        <div className="grid grid-cols-2 gap-1.5">
           {/* Voice Translator Button */}
           <Button
             variant="ghost"
@@ -115,6 +214,40 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
             </span>
           </Button>
           
+          {/* Text Generation Button */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
+              "border border-border/50 hover:border-border text-center"
+            )}
+            onClick={() => onSendMessage(language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me')}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
+              <PenTool className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
+            </span>
+          </Button>
+          
+          {/* Improve AI Button */}
+          <Button
+            variant="ghost"
+            className={cn(
+              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
+              "border border-border/50 hover:border-border text-center"
+            )}
+            onClick={() => onSendMessage(language === 'ar' ? 'كيف يمكنني تحسين استخدام الذكاء الاصطناعي؟' : 'How can I improve my AI usage?')}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
+              <Brain className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
+            </span>
+          </Button>
+          
           {/* Custom Input Action */}
           <Dialog open={customActionDialogOpen} onOpenChange={setCustomActionDialogOpen}>
             <DialogTrigger asChild>
@@ -129,7 +262,7 @@ export function QuickActionsPanel({ onSendMessage }: QuickActionsPanelProps) {
                   <Settings className="h-3 w-3 text-white" />
                 </div>
                 <span className="text-[10px] font-medium leading-tight">
-                  {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'} ⚙️
+                  {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
                 </span>
               </Button>
             </DialogTrigger>

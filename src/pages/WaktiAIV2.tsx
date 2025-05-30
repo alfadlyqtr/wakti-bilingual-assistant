@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +34,9 @@ import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
 
+// Add trigger types
+type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+
 export default function WaktiAIV2() {
   const { user } = useAuth();
   const { theme, language } = useTheme();
@@ -54,6 +56,9 @@ export default function WaktiAIV2() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
+
+  // Add trigger state
+  const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -71,6 +76,53 @@ export default function WaktiAIV2() {
     const hasArabicChars = /[\u0600-\u06FF]/.test(text);
     return hasArabicChars ? 'ar' : 'en';
   };
+
+  // Helper function to get trigger mode display name
+  const getTriggerModeDisplay = (mode: TriggerMode): string => {
+    switch (mode) {
+      case 'chat':
+        return language === 'ar' ? 'محادثة' : 'Chat';
+      case 'search':
+        return language === 'ar' ? 'بحث' : 'Search';
+      case 'advanced_search':
+        return language === 'ar' ? 'بحث متقدم' : 'Advanced Search';
+      case 'image':
+        return language === 'ar' ? 'صورة' : 'Image';
+      default:
+        return language === 'ar' ? 'محادثة' : 'Chat';
+    }
+  };
+
+  // Helper function to get trigger mode color
+  const getTriggerModeColor = (mode: TriggerMode): string => {
+    switch (mode) {
+      case 'chat':
+        return 'bg-blue-500';
+      case 'search':
+        return 'bg-green-500';
+      case 'advanced_search':
+        return 'bg-purple-500';
+      case 'image':
+        return 'bg-orange-500';
+      default:
+        return 'bg-blue-500';
+    }
+  };
+
+  // Handle trigger mode change
+  const handleTriggerChange = (newTrigger: TriggerMode) => {
+    setActiveTrigger(newTrigger);
+    toast({
+      title: language === 'ar' ? 'تم تغيير الوضع' : 'Mode Changed',
+      description: `${language === 'ar' ? 'الوضع النشط:' : 'Active mode:'} ${getTriggerModeDisplay(newTrigger)}`,
+      duration: 2000
+    });
+  };
+
+  // Reset trigger to chat mode on page reload
+  useEffect(() => {
+    setActiveTrigger('chat');
+  }, []);
 
   // Debug: Log component mount
   useEffect(() => {
@@ -229,6 +281,7 @@ export default function WaktiAIV2() {
     setAttachedImages([]);
     setBrowsingSources([]);
     setQuotaStatus(null);
+    setActiveTrigger('chat'); // Reset trigger to chat mode
     initializeGreeting();
     console.log('🔍 WAKTI AI: Started new conversation');
   };
@@ -239,6 +292,7 @@ export default function WaktiAIV2() {
     setAttachedImages([]);
     setBrowsingSources([]);
     setQuotaStatus(null);
+    setActiveTrigger('chat'); // Reset trigger to chat mode
     initializeGreeting();
     toast({
       title: language === 'ar' ? 'تم المسح' : 'Cleared',
@@ -328,7 +382,8 @@ export default function WaktiAIV2() {
     console.log('🔍 WAKTI AI: Language detection:', {
       originalContent: content.trim(),
       detectedLanguage,
-      themeLanguage: language
+      themeLanguage: language,
+      activeTrigger
     });
 
     const userMessage: AIMessage = {
@@ -358,8 +413,14 @@ export default function WaktiAIV2() {
 
       console.log('🔍 WAKTI AI: Calling unified-ai-brain function via WaktiAIV2Service...');
 
-      // Call the service which now uses unified-ai-brain
-      const result = await WaktiAIV2Service.sendMessage(content.trim(), currentConversationId, detectedLanguage, inputType);
+      // Call the service with active trigger
+      const result = await WaktiAIV2Service.sendMessageWithTrigger(
+        content.trim(), 
+        currentConversationId, 
+        detectedLanguage, 
+        inputType,
+        activeTrigger
+      );
 
       console.log('🔍 WAKTI AI: Service response received:', result);
 
@@ -674,8 +735,16 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        {/* Centered Action Icons */}
+        {/* Centered Action Icons with Mode Indicator */}
         <div className="flex items-center justify-center gap-2 flex-1">
+          {/* Mode Indicator */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
+            <div className={cn("w-2 h-2 rounded-full", getTriggerModeColor(activeTrigger))}></div>
+            <span className="font-medium text-xs">
+              {getTriggerModeDisplay(activeTrigger)}
+            </span>
+          </div>
+
           <Button
             variant="ghost"
             size="icon"
@@ -808,7 +877,7 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
-      {/* Right Drawer - Quick Actions */}
+      {/* Right Drawer - Quick Actions with Trigger Controls */}
       <div className={cn(
         "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
@@ -829,10 +898,14 @@ export default function WaktiAIV2() {
           </div>
           
           <div className="flex-1 p-4 overflow-y-auto">
-            <QuickActionsPanel onSendMessage={(message) => {
-              sendMessage(message);
-              setRightDrawerOpen(false);
-            }} />
+            <QuickActionsPanel 
+              onSendMessage={(message) => {
+                sendMessage(message);
+                setRightDrawerOpen(false);
+              }}
+              activeTrigger={activeTrigger}
+              onTriggerChange={handleTriggerChange}
+            />
           </div>
         </div>
       </div>
