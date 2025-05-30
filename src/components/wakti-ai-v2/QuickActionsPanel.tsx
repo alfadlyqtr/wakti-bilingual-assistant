@@ -223,29 +223,31 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
         </div>
       </div>
 
-      {/* Try asking me section - with larger text */}
-      <div className="flex-1 pt-2 border-t border-border/50">
-        <h4 className="text-xs font-medium text-muted-foreground mb-2">
-          {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
-        </h4>
-        <div className="space-y-1.5">
-          {[
-            language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
-            language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
-            language === 'ar' ? 'أرني تقويمي' : 'Show me my calendar'
-          ].map((example, index) => (
-            <Button
-              key={index}
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-7 px-2"
-              onClick={() => handleTryExample(example)}
-            >
-              "{example}"
-            </Button>
-          ))}
+      {/* Try asking me section - ONLY visible in chat mode */}
+      {activeTrigger === 'chat' && (
+        <div className="flex-1 pt-2 border-t border-border/50">
+          <h4 className="text-xs font-medium text-muted-foreground mb-2">
+            {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
+          </h4>
+          <div className="space-y-1.5">
+            {[
+              language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
+              language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
+              language === 'ar' ? 'أرني تقويمي' : 'Show me my calendar'
+            ].map((example, index) => (
+              <Button
+                key={index}
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                onClick={() => handleTryExample(example)}
+              >
+                "{example}"
+              </Button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Voice Translator Popup */}
       <VoiceTranslatorPopup 

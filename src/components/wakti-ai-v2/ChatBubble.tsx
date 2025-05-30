@@ -146,8 +146,8 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}
         </div>
 
-        {/* Browsing Indicator - Only for assistant messages */}
-        {!isUser && (message.browsingUsed || message.quotaStatus) && (
+        {/* Browsing Indicator - Only for assistant messages AND only in search mode */}
+        {!isUser && activeTrigger === 'search' && (message.browsingUsed || message.quotaStatus) && (
           <div className={cn(
             "ml-2",
             isUser && "mr-2"

@@ -54,7 +54,7 @@ export function BrowsingIndicator({
         )}>
           <CheckCircle className={cn("text-green-500", iconSizes[size])} />
           <span>
-            {language === 'ar' ? 'تم البحث بـ Tavily' : 'Tavily searched'}
+            {language === 'ar' ? 'تم البحث بـ WAKTI AI' : 'WAKTI AI searched'}
           </span>
           {imageUrl && (
             <>

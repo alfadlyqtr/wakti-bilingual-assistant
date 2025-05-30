@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -722,7 +723,7 @@ export default function WaktiAIV2() {
       {/* App Header */}
       <AppHeader />
 
-      {/* Header */}
+      {/* Header - Updated layout */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
@@ -735,35 +736,14 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        {/* Centered Action Icons with Mode Indicator */}
+        {/* Centered Mode Indicator */}
         <div className="flex items-center justify-center gap-2 flex-1">
-          {/* Mode Indicator */}
           <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
             <div className={cn("w-2 h-2 rounded-full", getTriggerModeColor(activeTrigger))}></div>
             <span className="font-medium text-xs">
               {getTriggerModeDisplay(activeTrigger)}
             </span>
           </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={startNewConversation}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={clearCurrentConversation}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'مسح المحادثة' : 'Clear conversation'}
-          >
-            <Trash2 className="h-5 w-5" />
-          </Button>
 
           {/* Search Quota Indicator - Only show in Search mode */}
           {quotaStatus && activeTrigger === 'search' && (
@@ -777,16 +757,6 @@ export default function WaktiAIV2() {
               </span>
             </div>
           )}
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleFileUpload}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'رفع ملف' : 'Upload file'}
-          >
-            <Upload className="h-5 w-5" />
-          </Button>
         </div>
         
         <div className="flex items-center">
@@ -826,6 +796,7 @@ export default function WaktiAIV2() {
               key={message.id} 
               message={message} 
               onSearchConfirm={handleSearchConfirmation}
+              activeTrigger={activeTrigger}
             />
           ))}
           
@@ -835,7 +806,7 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Left Drawer - Chat Archive */}
+      {/* Left Drawer - Chat Archive with + icon moved here */}
       <div className={cn(
         "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
@@ -845,14 +816,25 @@ export default function WaktiAIV2() {
             <h3 className="font-semibold text-lg">
               {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
             </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setLeftDrawerOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={startNewConversation}
+                className="h-8 w-8 hover:scale-110 transition-transform"
+                title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLeftDrawerOpen(false)}
+                className="h-8 w-8"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           
           <div className="flex-1 p-4 overflow-y-auto">
@@ -917,7 +899,7 @@ export default function WaktiAIV2() {
         />
       )}
 
-      {/* Enhanced Fixed Input Area with Voice Recording and Camera */}
+      {/* Enhanced Fixed Input Area with Voice Recording and Camera - Combined Upload/Camera */}
       <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
         <div className="max-w-4xl mx-auto">
           {/* Recording Timer Display */}
@@ -982,16 +964,16 @@ export default function WaktiAIV2() {
                 />
               </div>
               
-              {/* Camera Button - Moved to input area */}
+              {/* Combined Upload/Camera Button */}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleCameraCapture}
+                onClick={handleFileUpload}
                 disabled={isLoading || isRecording || isTranscribing}
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
-                title={language === 'ar' ? 'التقاط صورة' : 'Take photo'}
+                title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
               >
-                <Camera className="h-5 w-5" />
+                <Upload className="h-5 w-5" />
               </Button>
               
               <Button
