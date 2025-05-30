@@ -3,7 +3,7 @@ import React from 'react';
 import { Copy, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { toast } from '@/components/ui/toast-helper';
+import { toast } from 'sonner';
 import { generatePDF } from '@/utils/pdfUtils';
 
 interface SearchResultActionsProps {
@@ -32,17 +32,10 @@ export function SearchResultActions({
   const handleCopyText = async () => {
     try {
       await navigator.clipboard.writeText(content);
-      toast({
-        title: language === 'ar' ? 'تم النسخ' : 'Copied',
-        description: language === 'ar' ? 'تم نسخ النص بنجاح' : 'Text copied to clipboard successfully'
-      });
+      toast.success(language === 'ar' ? 'تم نسخ النص بنجاح' : 'Text copied to clipboard successfully');
     } catch (error) {
       console.error('Failed to copy text:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text',
-        variant: 'destructive'
-      });
+      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
     }
   };
 
@@ -56,9 +49,7 @@ export function SearchResultActions({
         metadata: {
           createdAt: new Date().toISOString(),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
-          type: metadata.searchMode === 'advanced' 
-            ? (language === 'ar' ? 'بحث متقدم' : 'Advanced Search')
-            : (language === 'ar' ? 'بحث أساسي' : 'Basic Search'),
+          type: metadata.searchMode || (language === 'ar' ? 'بحث' : 'Search'),
           host: 'WAKTI AI'
         },
         language: language as 'en' | 'ar'
@@ -77,17 +68,10 @@ export function SearchResultActions({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      toast({
-        title: language === 'ar' ? 'تم التصدير' : 'Exported',
-        description: language === 'ar' ? 'تم تصدير PDF بنجاح' : 'PDF exported successfully'
-      });
+      toast.success(language === 'ar' ? 'تم تصدير PDF بنجاح' : 'PDF exported successfully');
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في تصدير PDF' : 'Failed to export PDF',
-        variant: 'destructive'
-      });
+      toast.error(language === 'ar' ? 'فشل في تصدير PDF' : 'Failed to export PDF');
     }
   };
 

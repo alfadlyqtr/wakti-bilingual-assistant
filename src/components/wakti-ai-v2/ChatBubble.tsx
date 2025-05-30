@@ -228,7 +228,9 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
               query={message.browsingData?.query || ''}
               sources={message.browsingData?.sources}
               metadata={{
-                searchMode: message.browsingData?.searchMode,
+                searchMode: activeTrigger === 'advanced_search' 
+                  ? (language === 'ar' ? 'بحث متقدم' : 'Advanced Search')
+                  : (language === 'ar' ? 'بحث أساسي' : 'Basic Search'),
                 intent: message.intent,
                 timestamp: message.timestamp
               }}
