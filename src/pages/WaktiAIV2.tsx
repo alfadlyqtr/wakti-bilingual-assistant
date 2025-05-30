@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -201,24 +200,10 @@ export default function WaktiAIV2() {
   };
 
   const initializeGreeting = async (connectionOk: boolean = true) => {
-    let userName = 'there';
-    try {
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('display_name, username')
-          .eq('id', user.id)
-          .single();
-        
-        userName = profile?.display_name || profile?.username || 'there';
-      }
-    } catch (error) {
-      console.log('Could not fetch user profile for greeting');
-    }
-
+    // Simple, fast greeting without database calls
     let greeting = language === 'ar' 
-      ? `مرحباً ${userName}! 👋\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة 🌐\n• إدارة جدولك اليومي 📅\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
-      : `Hello ${userName}! 👋\n\nI can help you with:\n• Creating tasks and events ✅\n• Getting current information 🌐\n• Managing your schedule 📅\n\nHow can I assist you today? ✨`;
+      ? 'مرحباً! أنا WAKTI AI. كيف يمكنني مساعدتك اليوم؟'
+      : 'Hello! I\'m WAKTI AI. How can I help you today?';
     
     if (!connectionOk) {
       greeting += language === 'ar' 
@@ -413,7 +398,7 @@ export default function WaktiAIV2() {
       }
 
       console.log('🔍 WAKTI AI: Calling unified-ai-brain function via WaktiAIV2Service...');
-
+      
       // Call the service with active trigger
       const result = await WaktiAIV2Service.sendMessageWithTrigger(
         content.trim(), 
