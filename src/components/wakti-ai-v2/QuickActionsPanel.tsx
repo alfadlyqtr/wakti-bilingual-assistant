@@ -1,13 +1,13 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
+import { BuyExtrasPopup } from './BuyExtrasPopup';
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
@@ -21,6 +21,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   const { language } = useTheme();
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
+  const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState('');
   const [customMessage, setCustomMessage] = useState('');
 
@@ -249,10 +250,30 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
         </div>
       )}
 
+      {/* Buy Extras Button - Fixed at bottom */}
+      <div className="flex-shrink-0 pt-3 border-t border-border/30">
+        <Button
+          onClick={() => setBuyExtrasOpen(true)}
+          variant="outline"
+          className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200"
+        >
+          <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <span className="font-medium text-emerald-700 dark:text-emerald-300">
+            {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
+          </span>
+        </Button>
+      </div>
+
       {/* Voice Translator Popup */}
       <VoiceTranslatorPopup 
         open={voiceTranslatorOpen} 
         onOpenChange={setVoiceTranslatorOpen} 
+      />
+
+      {/* Buy Extras Popup */}
+      <BuyExtrasPopup 
+        open={buyExtrasOpen} 
+        onOpenChange={setBuyExtrasOpen} 
       />
     </div>
   );
