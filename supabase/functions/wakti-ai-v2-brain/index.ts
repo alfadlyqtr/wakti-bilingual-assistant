@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -21,13 +20,14 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// Enhanced intent analysis with IMAGE GENERATION FIRST PRIORITY
-function analyzeIntentEnhanced(message, language = 'en') {
+// Enhanced intent analysis with TRIGGER MODE RESPECT
+function analyzeIntentEnhanced(message, language = 'en', activeTrigger = 'chat') {
   const lowerMessage = message.toLowerCase();
   
   console.log("🔍 WAKTI AI V2.1: Analyzing intent for:", message);
+  console.log("🔍 WAKTI AI V2.1: Active trigger mode:", activeTrigger);
   
-  // 1. IMAGE GENERATION - HIGHEST PRIORITY (moved before browsing)
+  // 1. IMAGE GENERATION - HIGHEST PRIORITY
   const imagePatterns = [
     'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of',
     'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'اعمل صورة', 'كون صورة'
@@ -100,62 +100,79 @@ function analyzeIntentEnhanced(message, language = 'en') {
     };
   }
   
-  // 5. BROWSING - NOW LAST PRIORITY (moved after specific actions)
-  const browsingPatterns = [
-    // Sports & Entertainment
-    'who won', 'game score', 'latest score', 'final score', 'match result', 'score',
-    'sports news', 'game last night', 'game tonight', 'game today',
-    'football', 'soccer', 'basketball', 'baseball', 'tennis', 'cricket', 'rugby', 'hockey', 'golf',
-    'premier league', 'champions league', 'world cup', 'olympics', 'nfl', 'nba', 'fifa',
-    'player stats', 'team standings', 'league table', 'tournament', 'championship',
-    
-    // News & Current Events
-    'latest news', 'breaking news', 'current events', 'what happened', 'recent',
-    'news today', 'headlines', 'update on', 'current situation', 'latest update',
-    
-    // Weather
-    'weather today', 'current weather', 'forecast', 'temperature', 'rain', 'sunny',
-    'climate', 'weather in', 'hot', 'cold', 'storm', 'hurricane',
-    
-    // Finance
-    'stock price', 'market today', 'stock market', 'price of', 'crypto', 'bitcoin',
-    'exchange rate', 'currency', 'trading', 'dow jones', 'nasdaq', 's&p 500',
-    
-    // Technology
-    'new release', 'latest version', 'tech news', 'gadget', 'smartphone',
-    
-    // General temporal indicators
-    'current', 'latest', 'recent', 'now', 'today', 'this week', 'happening',
-    'status of', 'update', 'information about', 'tell me about',
-    
-    // Arabic patterns
-    'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم',
-    'أخبار', 'جديد', 'حالي', 'اليوم', 'الآن', 'مؤخراً'
-  ];
-  
-  // Team name detection
-  const teamNames = [
-    'madrid', 'barcelona', 'manchester', 'chelsea', 'arsenal', 'liverpool', 'united', 'city',
-    'psg', 'bayern', 'juventus', 'milan', 'inter', 'panthers', 'lakers', 'warriors'
-  ];
-  
-  const requiresBrowsing = browsingPatterns.some(p => lowerMessage.includes(p)) ||
-                          teamNames.some(t => lowerMessage.includes(t)) ||
-                          lowerMessage.includes('2025') ||
-                          (lowerMessage.includes('what') && (lowerMessage.includes('current') || lowerMessage.includes('latest') || lowerMessage.includes('now'))) ||
-                          (lowerMessage.includes('how') && (lowerMessage.includes('today') || lowerMessage.includes('recent')));
-  
-  if (requiresBrowsing) {
+  // 5. TRIGGER MODE RESPECT - THIS IS THE KEY FIX!
+  // If activeTrigger is 'chat', FORCE no browsing regardless of content
+  if (activeTrigger === 'chat') {
+    console.log("🔍 WAKTI AI V2.1: Chat mode - forcing no browsing");
     return {
-      intent: 'real_time_info',
-      confidence: 'high',
+      intent: 'general_chat',
+      confidence: 'medium',
       action: null,
       params: null,
-      requiresBrowsing: true
+      requiresBrowsing: false // FORCED OFF for chat mode
     };
   }
   
-  // Default: General chat
+  // 6. BROWSING - Only for search/advanced_search modes
+  if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
+    const browsingPatterns = [
+      // Sports & Entertainment
+      'who won', 'game score', 'latest score', 'final score', 'match result', 'score',
+      'sports news', 'game last night', 'game tonight', 'game today',
+      'football', 'soccer', 'basketball', 'baseball', 'tennis', 'cricket', 'rugby', 'hockey', 'golf',
+      'premier league', 'champions league', 'world cup', 'olympics', 'nfl', 'nba', 'fifa',
+      'player stats', 'team standings', 'league table', 'tournament', 'championship',
+      
+      // News & Current Events
+      'latest news', 'breaking news', 'current events', 'what happened', 'recent',
+      'news today', 'headlines', 'update on', 'current situation', 'latest update',
+      
+      // Weather
+      'weather today', 'current weather', 'forecast', 'temperature', 'rain', 'sunny',
+      'climate', 'weather in', 'hot', 'cold', 'storm', 'hurricane',
+      
+      // Finance
+      'stock price', 'market today', 'stock market', 'price of', 'crypto', 'bitcoin',
+      'exchange rate', 'currency', 'trading', 'dow jones', 'nasdaq', 's&p 500',
+      
+      // Technology
+      'new release', 'latest version', 'tech news', 'gadget', 'smartphone',
+      
+      // General temporal indicators
+      'current', 'latest', 'recent', 'now', 'today', 'this week', 'happening',
+      'status of', 'update', 'information about', 'tell me about',
+      
+      // Arabic patterns
+      'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم',
+      'أخبار', 'جديد', 'حالي', 'اليوم', 'الآن', 'مؤخراً'
+    ];
+    
+    // Team name detection
+    const teamNames = [
+      'madrid', 'barcelona', 'manchester', 'chelsea', 'arsenal', 'liverpool', 'united', 'city',
+      'psg', 'bayern', 'juventus', 'milan', 'inter', 'panthers', 'lakers', 'warriors'
+    ];
+    
+    const requiresBrowsing = browsingPatterns.some(p => lowerMessage.includes(p)) ||
+                            teamNames.some(t => lowerMessage.includes(t)) ||
+                            lowerMessage.includes('2025') ||
+                            (lowerMessage.includes('what') && (lowerMessage.includes('current') || lowerMessage.includes('latest') || lowerMessage.includes('now'))) ||
+                            (lowerMessage.includes('how') && (lowerMessage.includes('today') || lowerMessage.includes('recent')));
+    
+    if (requiresBrowsing) {
+      console.log("🔍 WAKTI AI V2.1: Search mode - enabling browsing");
+      return {
+        intent: 'real_time_info',
+        confidence: 'high',
+        action: null,
+        params: null,
+        requiresBrowsing: true
+      };
+    }
+  }
+  
+  // Default: General chat (no browsing)
+  console.log("🔍 WAKTI AI V2.1: Default - general chat, no browsing");
   return {
     intent: 'general_chat',
     confidence: 'medium',
@@ -677,8 +694,8 @@ serve(async (req) => {
     console.log("🔍 WAKTI AI V2.1: Processing message for user:", userId);
     console.log("🔍 WAKTI AI V2.1: Active trigger mode:", activeTrigger);
 
-    // Analyze intent with enhanced priority system
-    const intentAnalysis = analyzeIntentEnhanced(message, language);
+    // Analyze intent with enhanced priority system and TRIGGER RESPECT
+    const intentAnalysis = analyzeIntentEnhanced(message, language, activeTrigger);
     console.log("🔍 WAKTI AI V2.1: Intent analysis:", intentAnalysis);
 
     let response = '';
@@ -746,8 +763,8 @@ serve(async (req) => {
           : `Sorry, failed to generate image: ${imageResult.error}`;
       }
       
-    } else if (intentAnalysis.requiresBrowsing) {
-      console.log("🌐 WAKTI AI V2.1: Handling browsing request");
+    } else if (intentAnalysis.requiresBrowsing && activeTrigger === 'search') {
+      console.log("🌐 WAKTI AI V2.1: Handling browsing request in search mode");
       
       if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
         // Use basic search for regular search mode
@@ -869,43 +886,43 @@ serve(async (req) => {
           .from('ai_conversations')
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', finalConversationId);
-      } catch (historyErr) {
-        console.log("🔍 WAKTI AI V2.1: History storage failed, continuing");
+      } catch (dbError) {
+        console.error("🔍 WAKTI AI V2.1: Database storage error:", dbError);
       }
     }
 
-    console.log("🔍 WAKTI AI V2.1: Successfully processed request");
+    // Log AI usage
+    await logAIUsage(userId, 'deepseek-chat', browsingUsed);
 
-    // Return successful response with all data
-    return new Response(JSON.stringify({
-      response,
+    // Return successful response
+    const responseData = {
+      success: true,
+      response: response,
       conversationId: finalConversationId,
       intent: intentAnalysis.intent,
       confidence: intentAnalysis.confidence,
-      actionTaken,
-      actionResult,
-      imageUrl,
-      browsingUsed,
-      browsingData,
-      quotaStatus,
-      requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch,
-      needsConfirmation: false,
-      needsClarification: false,
-      success: true
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200
+      actionTaken: actionTaken,
+      actionResult: actionResult,
+      imageUrl: imageUrl,
+      browsingUsed: browsingUsed,
+      browsingData: browsingData,
+      quotaStatus: quotaStatus,
+      requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch && intentAnalysis.requiresBrowsing
+    };
+
+    console.log("🔍 WAKTI AI V2.1: Successfully processed request");
+
+    return new Response(JSON.stringify(responseData), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🔍 WAKTI AI V2.1: Unexpected error:", error);
-    console.error("🔍 WAKTI AI V2.1: Error stack:", error.stack);
+    console.error("🔍 WAKTI AI V2.1: Request processing error:", error);
     
-    // Return error response with proper CORS headers
     return new Response(JSON.stringify({ 
-      error: "Internal server error",
-      details: error.message,
-      success: false
+      success: false,
+      error: error.message || "Internal server error",
+      response: "Sorry, I encountered an error processing your request. Please try again."
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
