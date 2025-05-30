@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { PageContainer } from '@/components/PageContainer';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
@@ -13,11 +15,11 @@ import { QuotaIndicator } from '@/components/wakti-ai-v2/QuotaIndicator';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 import { AdvancedSearchModeIndicator } from '@/components/wakti-ai-v2/AdvancedSearchModeIndicator';
-import { AdvancedSearchResult } from '@/components/wakti-ai-v2/AdvancedSearchResult';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { cn } from '@/lib/utils';
 import { AIMessage } from '@/services/WaktiAIV2Service';
+import { Menu, MessageSquare, Settings } from 'lucide-react';
 
 const WaktiAIV2 = () => {
   const { language } = useTheme();
@@ -32,6 +34,8 @@ const WaktiAIV2 = () => {
   const [userContext, setUserContext] = useState<any>(null);
   const [conversations, setConversations] = useState<any[]>([]);
   const [currentConversation, setCurrentConversation] = useState<any>(null);
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
 
   // Load trigger from localStorage on initial load
   useEffect(() => {
@@ -279,90 +283,131 @@ const WaktiAIV2 = () => {
 
   return (
     <PageContainer>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              {language === 'ar' ? 'وقتي الذكي' : 'Wakti AI'}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {language === 'ar' ? 'مساعدك الذكي المتطور' : 'Your Advanced AI Assistant'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <SearchModeIndicator isVisible={activeTrigger === 'search'} />
-          <AdvancedSearchModeIndicator isVisible={activeTrigger === 'advanced_search'} />
-          <QuotaIndicator />
-          <NewConversationButton onNewConversation={handleNewConversation} />
-          <ConversationsList 
-            conversations={conversations}
-            currentConversationId={currentConversation?.id}
-            onSelectConversation={handleSelectConversation}
-            onDeleteConversation={handleDeleteConversation}
-            onRefresh={refreshConversations}
-          />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-150px)]">
-        {/* Left Panel: Quick Actions */}
-        <aside className="col-span-1 lg:col-span-1 h-full">
-          <QuickActionsPanel
-            onSendMessage={handleSendMessage}
-            activeTrigger={activeTrigger}
-            onTriggerChange={setActiveTrigger}
-          />
-        </aside>
-
-        {/* Right Panel: Messages */}
-        <main className="col-span-1 lg:col-span-3 flex flex-col h-full">
-          {/* Messages Panel */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20 rounded-lg mb-4">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <div className="text-center">
-                  <p className="text-lg font-medium mb-2">
-                    {language === 'ar' ? 'مرحباً بك في وقتي الذكي' : 'Welcome to Wakti AI'}
-                  </p>
-                  <p className="text-sm">
-                    {language === 'ar' ? 'ابدأ محادثة جديدة' : 'Start a new conversation'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              messages.map((message, index) => (
-                <ChatBubble key={index} message={message} />
-              ))
-            )}
-            
-            {isThinking && <TypingIndicator />}
-          </div>
-
-          {/* Message Input */}
-          <div className="flex items-center gap-3 border-t border-border/50 pt-4">
-            <Input
-              type="text"
-              placeholder={language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(newMessage);
-                }
-              }}
-              disabled={isThinking}
-              className="flex-1"
-            />
-            <Button onClick={() => handleSendMessage(newMessage)} disabled={isThinking}>
-              {language === 'ar' ? 'إرسال' : 'Send'}
+      <div className="min-h-screen flex w-full">
+        {/* Left Drawer - Quick Actions */}
+        <Sheet open={leftDrawerOpen} onOpenChange={setLeftDrawerOpen}>
+          <SheetTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="fixed top-4 left-4 z-50 bg-background/80 backdrop-blur-sm border"
+            >
+              <Menu className="h-4 w-4" />
             </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-80 p-0">
+            <div className="h-full overflow-hidden">
+              <div className="p-4 border-b">
+                <h3 className="font-semibold text-lg">
+                  {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+                </h3>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <QuickActionsPanel
+                  onSendMessage={handleSendMessage}
+                  activeTrigger={activeTrigger}
+                  onTriggerChange={setActiveTrigger}
+                />
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-foreground">
+                  {language === 'ar' ? 'وقتي الذكي' : 'Wakti AI'}
+                </h1>
+                <SearchModeIndicator isVisible={activeTrigger === 'search'} />
+                <AdvancedSearchModeIndicator isVisible={activeTrigger === 'advanced_search'} />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <QuotaIndicator />
+              <NewConversationButton onNewConversation={handleNewConversation} />
+              <Sheet open={rightDrawerOpen} onOpenChange={setRightDrawerOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-80 p-0">
+                  <div className="h-full overflow-hidden">
+                    <div className="p-4 border-b">
+                      <h3 className="font-semibold text-lg flex items-center gap-2">
+                        <MessageSquare className="h-5 w-5" />
+                        {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                      </h3>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4">
+                      <ConversationsList 
+                        conversations={conversations}
+                        currentConversationId={currentConversation?.id}
+                        onSelectConversation={handleSelectConversation}
+                        onDeleteConversation={handleDeleteConversation}
+                        onRefresh={refreshConversations}
+                      />
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
-        </main>
+
+          {/* Messages Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Messages Panel */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <div className="text-center">
+                    <p className="text-lg font-medium mb-2">
+                      {language === 'ar' ? 'مرحباً بك في وقتي الذكي' : 'Welcome to Wakti AI'}
+                    </p>
+                    <p className="text-sm">
+                      {language === 'ar' ? 'ابدأ محادثة جديدة' : 'Start a new conversation'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                messages.map((message, index) => (
+                  <ChatBubble key={`${message.id}-${index}`} message={message} />
+                ))
+              )}
+              
+              {isThinking && <TypingIndicator />}
+            </div>
+
+            {/* Message Input */}
+            <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 p-4">
+              <div className="flex items-center gap-3 max-w-4xl mx-auto">
+                <Input
+                  type="text"
+                  placeholder={language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(newMessage);
+                    }
+                  }}
+                  disabled={isThinking}
+                  className="flex-1"
+                />
+                <Button onClick={() => handleSendMessage(newMessage)} disabled={isThinking}>
+                  {language === 'ar' ? 'إرسال' : 'Send'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </PageContainer>
   );
