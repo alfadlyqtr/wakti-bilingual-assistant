@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { Mic, Search } from 'lucide-react';
+import { Mic, Search, MessageSquare } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
