@@ -86,9 +86,9 @@ export class WaktiAIV2Service {
         activeTrigger: 'chat'
       };
       
-      console.log('🔍 WaktiAIV2Service: Calling unified-ai-brain with test payload:', testPayload);
+      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with test payload:', testPayload);
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: testPayload
       });
       
@@ -113,7 +113,7 @@ export class WaktiAIV2Service {
     inputType: 'text' | 'voice' = 'text'
   ): Promise<AIResponse> {
     try {
-      console.log('🔍 WaktiAIV2Service: Sending message via unified-ai-brain');
+      console.log('🔍 WaktiAIV2Service: Sending message via wakti-ai-v2-brain');
       
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -130,23 +130,23 @@ export class WaktiAIV2Service {
         activeTrigger: 'chat' // Default to chat mode for backward compatibility
       };
       
-      console.log('🔍 WaktiAIV2Service: Calling unified-ai-brain with payload:', payload);
+      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with payload:', payload);
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
       
       if (error) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain error:', error);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
         throw new Error(error.message || 'AI service error');
       }
       
       if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain returned failure:', data);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
         throw new Error(data.error || 'AI processing failed');
       }
       
-      console.log('🔍 WaktiAIV2Service: unified-ai-brain response:', data);
+      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain response:', data);
       
       return {
         response: data.response,
@@ -193,23 +193,23 @@ export class WaktiAIV2Service {
         activeTrigger
       };
       
-      console.log('🔍 WaktiAIV2Service: Calling unified-ai-brain with trigger payload:', payload);
+      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with trigger payload:', payload);
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
       
       if (error) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain error:', error);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
         throw new Error(error.message || 'AI service error');
       }
       
       if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain returned failure:', data);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
         throw new Error(data.error || 'AI processing failed');
       }
       
-      console.log('🔍 WaktiAIV2Service: unified-ai-brain response:', data);
+      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain response:', data);
       
       return {
         response: data.response,
@@ -256,23 +256,23 @@ export class WaktiAIV2Service {
         activeTrigger: 'search' // Force search mode for confirmation
       };
       
-      console.log('🔍 WaktiAIV2Service: Calling unified-ai-brain with search confirmation:', payload);
+      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with search confirmation:', payload);
       
-      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
       
       if (error) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain error:', error);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
         throw new Error(error.message || 'AI service error');
       }
       
       if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: unified-ai-brain returned failure:', data);
+        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
         throw new Error(data.error || 'AI processing failed');
       }
       
-      console.log('🔍 WaktiAIV2Service: unified-ai-brain search confirmation response:', data);
+      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain search confirmation response:', data);
       
       return {
         response: data.response,
