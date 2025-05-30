@@ -24,6 +24,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   const [customLabel, setCustomLabel] = useState('');
   const [customMessage, setCustomMessage] = useState('');
 
+  // Save trigger state to localStorage and dispatch event for header
+  React.useEffect(() => {
+    localStorage.setItem('wakti-ai-active-trigger', activeTrigger);
+    window.dispatchEvent(new Event('ai-trigger-change'));
+  }, [activeTrigger]);
+
   const triggerButtons = [
     {
       id: 'chat' as TriggerMode,
@@ -64,40 +70,50 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     }
   };
 
+  const handleTryExample = (example: string) => {
+    onSendMessage(example);
+    // If in search mode, auto-switch to chat mode for better experience
+    if (activeTrigger === 'search') {
+      setTimeout(() => {
+        onTriggerChange('chat');
+      }, 100);
+    }
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 max-h-[calc(100vh-8rem)] overflow-hidden">
       {/* AI Trigger Controls */}
       <div>
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
           <Brain className="h-3 w-3" />
           {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
         </h3>
         
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
               variant={activeTrigger === trigger.id ? "default" : "outline"}
               className={cn(
-                "h-auto p-3 flex flex-col items-center gap-2 text-center transition-all duration-200",
-                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-2",
+                "h-16 p-2 flex flex-col items-center gap-1 text-center transition-all duration-200 text-xs",
+                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1",
                 trigger.id === 'advanced_search' && "opacity-50 cursor-not-allowed"
               )}
               onClick={() => trigger.id !== 'advanced_search' && onTriggerChange(trigger.id)}
               disabled={trigger.id === 'advanced_search'}
             >
               <div className={cn(
-                "p-2 rounded-lg",
+                "p-1.5 rounded-md",
                 activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
               )}>
                 <trigger.icon className={cn(
-                  "h-4 w-4",
+                  "h-3 w-3",
                   activeTrigger === trigger.id ? "text-primary" : "text-white"
                 )} />
               </div>
-              <div>
-                <div className="text-xs font-medium">{trigger.label}</div>
-                <div className="text-[10px] text-muted-foreground">{trigger.description}</div>
+              <div className="leading-tight">
+                <div className="text-[10px] font-medium">{trigger.label}</div>
+                <div className="text-[8px] text-muted-foreground">{trigger.description}</div>
               </div>
             </Button>
           ))}
@@ -115,16 +131,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Voice Translator Button */}
           <Button
             variant="ghost"
-            className={cn(
-              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-              "border border-border/50 hover:border-border text-center"
-            )}
+            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setVoiceTranslatorOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
               <Languages className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-[9px] font-medium leading-tight">
               {language === 'ar' ? 'مترجم' : 'Translator'}
             </span>
           </Button>
@@ -132,16 +145,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Text Generation Button */}
           <Button
             variant="ghost"
-            className={cn(
-              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-              "border border-border/50 hover:border-border text-center"
-            )}
+            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => onSendMessage(language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me')}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
               <PenTool className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-[9px] font-medium leading-tight">
               {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
             </span>
           </Button>
@@ -149,16 +159,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Improve AI Button */}
           <Button
             variant="ghost"
-            className={cn(
-              "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-              "border border-border/50 hover:border-border text-center"
-            )}
+            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => onSendMessage(language === 'ar' ? 'كيف يمكنني تحسين استخدام الذكاء الاصطناعي؟' : 'How can I improve my AI usage?')}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
               <Brain className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-[9px] font-medium leading-tight">
               {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
             </span>
           </Button>
@@ -168,15 +175,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             <DialogTrigger asChild>
               <Button
                 variant="ghost"
-                className={cn(
-                  "h-auto p-1.5 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200",
-                  "border border-border/50 hover:border-border text-center"
-                )}
+                className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
               >
                 <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
                   <Settings className="h-3 w-3 text-white" />
                 </div>
-                <span className="text-[10px] font-medium leading-tight">
+                <span className="text-[9px] font-medium leading-tight">
                   {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
                 </span>
               </Button>
@@ -234,8 +238,8 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               key={index}
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-[10px] text-muted-foreground hover:text-foreground h-6"
-              onClick={() => onSendMessage(example)}
+              className="w-full justify-start text-[9px] text-muted-foreground hover:text-foreground h-5"
+              onClick={() => handleTryExample(example)}
             >
               "{example}"
             </Button>

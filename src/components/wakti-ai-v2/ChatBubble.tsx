@@ -11,9 +11,11 @@ import { AIMessage } from '@/services/WaktiAIV2Service';
 interface ChatBubbleProps {
   message: AIMessage;
   onSearchConfirm?: (messageContent: string) => void;
+  onSwitchToChat?: () => void;
+  activeTrigger?: string;
 }
 
-export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
+export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTrigger }: ChatBubbleProps) {
   const { theme, language } = useTheme();
   const isUser = message.role === 'user';
   const isArabic = language === 'ar';
@@ -25,9 +27,21 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
     !message.browsingUsed &&
     onSearchConfirm;
 
+  // Show chat mode switch button if we're in search mode and user sent a general chat message
+  const showChatModeSwitch = !isUser && 
+    activeTrigger === 'search' && 
+    message.content.includes('⚠️') && 
+    onSwitchToChat;
+
   const handleSearchConfirm = () => {
     if (onSearchConfirm) {
       onSearchConfirm(message.content);
+    }
+  };
+
+  const handleSwitchToChat = () => {
+    if (onSwitchToChat) {
+      onSwitchToChat();
     }
   };
 
@@ -100,18 +114,34 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
             </div>
           )}
 
-          {/* Mini Search Button - Only shown when 80% quota reached */}
-          {showSearchButton && (
-            <div className="mt-3 pt-2 border-t border-border/30">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSearchConfirm}
-                className="flex items-center gap-2 text-xs h-8 px-3"
-              >
-                <Search className="h-3 w-3" />
-                {language === 'ar' ? 'البحث للحصول على معلومات حديثة؟' : 'Search for current info?'}
-              </Button>
+          {/* Action Buttons */}
+          {(showSearchButton || showChatModeSwitch) && (
+            <div className="mt-3 pt-2 border-t border-border/30 flex gap-2">
+              {/* Mini Search Button - Only shown when 80% quota reached */}
+              {showSearchButton && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSearchConfirm}
+                  className="flex items-center gap-2 text-xs h-8 px-3"
+                >
+                  <Search className="h-3 w-3" />
+                  {language === 'ar' ? 'البحث للحصول على معلومات حديثة؟' : 'Search for current info?'}
+                </Button>
+              )}
+
+              {/* Chat Mode Switch Button */}
+              {showChatModeSwitch && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleSwitchToChat}
+                  className="flex items-center gap-2 text-xs h-8 px-3 bg-blue-500 hover:bg-blue-600"
+                >
+                  <MessageSquare className="h-3 w-3" />
+                  {language === 'ar' ? 'التبديل إلى وضع المحادثة' : 'Switch to Chat Mode'}
+                </Button>
+              )}
             </div>
           )}
         </div>

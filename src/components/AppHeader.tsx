@@ -17,6 +17,7 @@ import { Globe, Moon, Sun } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
+import { SearchModeIndicator } from "@/components/wakti-ai-v2/SearchModeIndicator";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -26,6 +27,32 @@ export function AppHeader() {
   
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
+  
+  // Get search mode state from localStorage or URL params if needed
+  const [searchModeActive, setSearchModeActive] = React.useState(false);
+  
+  React.useEffect(() => {
+    if (isWaktiAIPage) {
+      // Listen for changes in AI mode from localStorage or other state management
+      const checkSearchMode = () => {
+        const activeTrigger = localStorage.getItem('wakti-ai-active-trigger');
+        setSearchModeActive(activeTrigger === 'search');
+      };
+      
+      checkSearchMode();
+      
+      // Listen for storage changes
+      window.addEventListener('storage', checkSearchMode);
+      
+      // Custom event listener for trigger changes
+      window.addEventListener('ai-trigger-change', checkSearchMode);
+      
+      return () => {
+        window.removeEventListener('storage', checkSearchMode);
+        window.removeEventListener('ai-trigger-change', checkSearchMode);
+      };
+    }
+  }, [isWaktiAIPage]);
   
   const handleLogout = async () => {
     await signOut();
@@ -97,6 +124,8 @@ export function AppHeader() {
           {getPageTitle() && (
             <h1 className="text-lg font-medium">{getPageTitle()}</h1>
           )}
+          {/* Search Mode Indicator */}
+          <SearchModeIndicator isVisible={isWaktiAIPage && searchModeActive} />
         </div>
         <div className="flex items-center space-x-4">
           {/* Language Toggle Button - disabled on Wakti AI page */}
