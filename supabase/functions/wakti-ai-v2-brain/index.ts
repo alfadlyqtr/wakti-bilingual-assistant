@@ -279,7 +279,7 @@ async function translateText(text, fromLang, toLang) {
   }
 }
 
-// Browsing function with Tavily
+// Enhanced browsing function with richer context formation
 async function executeBrowsing(query, language = 'en') {
   try {
     console.log("🌐 WAKTI AI V2.1: Executing browsing for:", query);
@@ -313,12 +313,39 @@ async function executeBrowsing(query, language = 'en') {
     const data = await response.json();
     console.log("🌐 WAKTI AI V2.1: Browsing results:", data);
     
+    // Create rich context for AI processing
+    let richContext = `Search Query: "${query}"\n\n`;
+    
+    // Add main answer
+    if (data.answer) {
+      richContext += `Main Answer: ${data.answer}\n\n`;
+    }
+    
+    // Add detailed source information
+    if (data.results && data.results.length > 0) {
+      richContext += "Additional Sources & Details:\n";
+      data.results.forEach((result, index) => {
+        richContext += `${index + 1}. ${result.title}\n`;
+        richContext += `   URL: ${result.url}\n`;
+        if (result.content) {
+          richContext += `   Content: ${result.content}\n`;
+        }
+        richContext += "\n";
+      });
+    }
+    
+    // Add image context if available
+    if (data.images && data.images.length > 0) {
+      richContext += `Images Available: ${data.images.length} related images found\n\n`;
+    }
+    
     return {
       success: true,
       answer: data.answer,
       sources: data.results?.slice(0, 5) || [],
       images: data.images || [],
-      query: query
+      query: query,
+      richContext: richContext
     };
     
   } catch (error) {
@@ -330,7 +357,39 @@ async function executeBrowsing(query, language = 'en') {
   }
 }
 
-// AI processing function
+// Detect query type for specialized formatting
+function detectQueryType(query) {
+  const lowerQuery = query.toLowerCase();
+  
+  // Sports patterns
+  const sportsPatterns = ['game', 'score', 'match', 'team', 'player', 'league', 'championship', 'final', 'tournament', 'win', 'won', 'beat', 'defeat', 'goal', 'points'];
+  
+  // News patterns
+  const newsPatterns = ['news', 'breaking', 'latest', 'update', 'report', 'announcement', 'today', 'happened', 'event'];
+  
+  // Tech patterns
+  const techPatterns = ['tech', 'technology', 'software', 'app', 'device', 'smartphone', 'computer', 'ai', 'artificial intelligence', 'specs', 'features'];
+  
+  // Entertainment patterns
+  const entertainmentPatterns = ['movie', 'film', 'tv show', 'series', 'actor', 'actress', 'director', 'review', 'rating', 'music', 'album', 'song'];
+  
+  // Weather patterns
+  const weatherPatterns = ['weather', 'temperature', 'rain', 'sunny', 'cloudy', 'forecast', 'storm', 'climate'];
+  
+  // Finance patterns
+  const financePatterns = ['stock', 'market', 'price', 'crypto', 'bitcoin', 'currency', 'trading', 'exchange rate'];
+  
+  if (sportsPatterns.some(pattern => lowerQuery.includes(pattern))) return 'sports';
+  if (newsPatterns.some(pattern => lowerQuery.includes(pattern))) return 'news';
+  if (techPatterns.some(pattern => lowerQuery.includes(pattern))) return 'tech';
+  if (entertainmentPatterns.some(pattern => lowerQuery.includes(pattern))) return 'entertainment';
+  if (weatherPatterns.some(pattern => lowerQuery.includes(pattern))) return 'weather';
+  if (financePatterns.some(pattern => lowerQuery.includes(pattern))) return 'finance';
+  
+  return 'general';
+}
+
+// Enhanced AI processing function with conversational tone
 async function processWithAI(message, context, language = 'en') {
   try {
     console.log("🤖 WAKTI AI V2.1: Processing with AI");
@@ -349,10 +408,50 @@ async function processWithAI(message, context, language = 'en') {
     if (!apiKey) {
       throw new Error("No AI API key configured");
     }
+
+    // Detect query type for specialized formatting
+    const queryType = detectQueryType(message);
     
+    // Enhanced conversational system prompt
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.`;
+      ? `أنت WAKTI، مساعد ذكي ودود جداً يتحدث العربية بطلاقة. تتحدث مثل صديق مقرب ومطلع يحب مشاركة المعلومات بطريقة ممتعة ومفصلة.
+
+🎯 أسلوبك في الحديث:
+- كن ودوداً ومحادثاً مثل صديق مقرب
+- استخدم تعبيرات عامية وطبيعية
+- اظهر الحماس والشغف عند مشاركة المعلومات
+- قدم تفاصيل غنية ومعلومات إضافية مثيرة
+- اربط المعلومات بالسياق والخلفية
+
+📝 تنسيق الإجابات:
+${queryType === 'sports' ? '- الرياضة: اذكر النتائج، النقاط المهمة، اللحظات الحاسمة، إحصائيات اللاعبين' : ''}
+${queryType === 'news' ? '- الأخبار: قدم الخط الزمني، الحقائق المهمة، التأثيرات والخلفية' : ''}
+${queryType === 'tech' ? '- التكنولوجيا: اذكر المواصفات، المقارنات، الميزات الجديدة' : ''}
+${queryType === 'entertainment' ? '- الترفيه: قدم المراجعات، التقييمات، معلومات عن الطاقم' : ''}
+${queryType === 'weather' ? '- الطقس: اذكر التوقعات، النصائح، المقارنات' : ''}
+${queryType === 'finance' ? '- المالية: قدم الأرقام، الاتجاهات، التحليل' : ''}
+- عام: قدم شرحاً شاملاً مع السياق والخلفية
+
+كن صديقاً حقيقياً يحب مشاركة المعلومات الرائعة!`
+      : `You are WAKTI, a super friendly and knowledgeable AI assistant. You chat like a close buddy who's genuinely excited to share cool information and help out!
+
+🎯 Your conversation style:
+- Be warm, friendly, and conversational like a close friend
+- Use casual expressions and natural language
+- Show enthusiasm and passion when sharing information
+- Provide rich details and interesting additional context
+- Connect information to broader context and background
+
+📝 Response formatting based on query type:
+${queryType === 'sports' ? '- Sports: Include scores, highlights, key moments, player stats, game analysis' : ''}
+${queryType === 'news' ? '- News: Provide timeline, key facts, implications, background context' : ''}
+${queryType === 'tech' ? '- Tech: Mention specs, comparisons, new features, user impact' : ''}
+${queryType === 'entertainment' ? '- Entertainment: Include reviews, ratings, cast/crew info, behind-the-scenes' : ''}
+${queryType === 'weather' ? '- Weather: Give forecasts, tips, comparisons, what to expect' : ''}
+${queryType === 'finance' ? '- Finance: Provide numbers, trends, analysis, market context' : ''}
+- General: Give comprehensive explanations with context and background
+
+Be like that friend who always has the coolest facts and loves sharing them in an engaging way!`;
     
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -360,7 +459,7 @@ async function processWithAI(message, context, language = 'en') {
     ];
     
     if (context) {
-      messages.splice(1, 0, { role: 'assistant', content: `Context: ${context}` });
+      messages.splice(1, 0, { role: 'assistant', content: `Here's what I found: ${context}` });
     }
     
     const response = await fetch(apiUrl, {
@@ -372,8 +471,8 @@ async function processWithAI(message, context, language = 'en') {
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000
+        temperature: 0.8, // Increased for more conversational tone
+        max_tokens: 1200 // Increased for richer responses
       })
     });
     
@@ -417,7 +516,7 @@ function extractEventData(message) {
 
 // Reminder extraction helper
 function extractReminderData(message) {
-  const title = message.replace(/remind me|reminder|don't forget|alert me|ذكرني|تذكير|لا تنس/gi, '').trim();
+  const title = message.replace(/remind me|reminder|don\'t forget|alert me|ذكرني|تذكير|لا تنس/gi, '').trim();
   return {
     title: title || 'New Reminder',
     dueDate: null
@@ -599,9 +698,8 @@ serve(async (req) => {
             query: browsingResult.query
           };
           
-          // Process browsing results with AI
-          const context = `Search results for "${message}": ${browsingResult.answer}`;
-          response = await processWithAI(message, context, language);
+          // Use rich context for better AI processing
+          response = await processWithAI(message, browsingResult.richContext, language);
           
           // Log browsing usage
           await logAIUsage(userId, 'deepseek-chat', true);
