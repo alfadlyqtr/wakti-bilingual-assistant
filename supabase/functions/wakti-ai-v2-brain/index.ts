@@ -300,8 +300,8 @@ async function executeBrowsing(query, language = 'en') {
         include_answer: true,
         include_images: true,
         include_raw_content: false,
-        max_results: 2,
-        chunks_per_source: 1,
+        max_results: 5,
+        chunks_per_source: 3,
         time_range: "month"
       })
     });
@@ -316,7 +316,7 @@ async function executeBrowsing(query, language = 'en') {
     return {
       success: true,
       answer: data.answer,
-      sources: data.results?.slice(0, 2) || [],
+      sources: data.results?.slice(0, 5) || [],
       images: data.images || [],
       query: query
     };
