@@ -126,7 +126,7 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
               browsingUsed={message.browsingUsed}
               quotaStatus={message.quotaStatus}
               sources={message.browsingData?.sources}
-              imageUrl={message.browsingData?.imageUrl}
+              imageUrl={message.imageUrl}
               size="sm"
             />
           </div>
