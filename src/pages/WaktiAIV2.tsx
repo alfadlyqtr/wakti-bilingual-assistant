@@ -765,8 +765,8 @@ export default function WaktiAIV2() {
             <Trash2 className="h-5 w-5" />
           </Button>
 
-          {/* Browsing Quota Indicator */}
-          {quotaStatus && (
+          {/* Search Quota Indicator - Only show in Search mode */}
+          {quotaStatus && activeTrigger === 'search' && (
             <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
               <Globe className="h-3 w-3" />
               <span className={cn(
@@ -786,16 +786,6 @@ export default function WaktiAIV2() {
             title={language === 'ar' ? 'رفع ملف' : 'Upload file'}
           >
             <Upload className="h-5 w-5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleCameraCapture}
-            className="hover:scale-110 transition-transform"
-            title={language === 'ar' ? 'التقاط صورة' : 'Take photo'}
-          >
-            <Camera className="h-5 w-5" />
           </Button>
         </div>
         
@@ -927,7 +917,7 @@ export default function WaktiAIV2() {
         />
       )}
 
-      {/* Enhanced Fixed Input Area with Voice Recording */}
+      {/* Enhanced Fixed Input Area with Voice Recording and Camera */}
       <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
         <div className="max-w-4xl mx-auto">
           {/* Recording Timer Display */}
@@ -991,6 +981,18 @@ export default function WaktiAIV2() {
                   rows={1}
                 />
               </div>
+              
+              {/* Camera Button - Moved to input area */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCameraCapture}
+                disabled={isLoading || isRecording || isTranscribing}
+                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
+                title={language === 'ar' ? 'التقاط صورة' : 'Take photo'}
+              >
+                <Camera className="h-5 w-5" />
+              </Button>
               
               <Button
                 variant="ghost"
