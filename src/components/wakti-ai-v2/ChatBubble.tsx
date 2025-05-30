@@ -6,6 +6,7 @@ import { Mic, Search, MessageSquare, Expand, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
+import { SearchResultActions } from './SearchResultActions';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface ChatBubbleProps {
@@ -32,6 +33,11 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     activeTrigger === 'search' && 
     message.content.includes('⚠️') && 
     onSwitchToChat;
+
+  // Check if we should show search-related features - NOW INCLUDES both search and advanced_search
+  const isSearchResult = !isUser && 
+    (activeTrigger === 'search' || activeTrigger === 'advanced_search') && 
+    (message.browsingUsed || message.quotaStatus);
 
   const handleSearchConfirm = () => {
     if (onSearchConfirm) {
@@ -195,8 +201,8 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}
         </div>
 
-        {/* Browsing Indicator - Only for assistant messages AND only in search mode */}
-        {!isUser && activeTrigger === 'search' && (message.browsingUsed || message.quotaStatus) && (
+        {/* Browsing Indicator - Show for both search and advanced_search */}
+        {isSearchResult && (
           <div className={cn(
             "ml-2",
             isUser && "mr-2"
@@ -207,6 +213,25 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
               sources={message.browsingData?.sources}
               imageUrl={message.imageUrl}
               size="sm"
+            />
+          </div>
+        )}
+
+        {/* Search Result Actions - Copy Text and Export PDF */}
+        {isSearchResult && message.browsingUsed && (
+          <div className={cn(
+            "ml-2",
+            isUser && "mr-2"
+          )}>
+            <SearchResultActions
+              content={message.content}
+              query={message.browsingData?.query || ''}
+              sources={message.browsingData?.sources}
+              metadata={{
+                searchMode: message.browsingData?.searchMode,
+                intent: message.intent,
+                timestamp: message.timestamp
+              }}
             />
           </div>
         )}

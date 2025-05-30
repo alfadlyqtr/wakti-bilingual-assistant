@@ -15,7 +15,8 @@ interface BrowsingIndicatorProps {
   sources?: Array<{
     title: string;
     url: string;
-    snippet: string;
+    snippet?: string;
+    content?: string;
   }>;
   imageUrl?: string;
   size?: 'sm' | 'md' | 'lg';
@@ -94,7 +95,7 @@ export function BrowsingIndicator({
         </div>
       )}
 
-      {/* Sources */}
+      {/* Sources - Show for both basic and advanced search */}
       {sources.length > 0 && (
         <div className="space-y-1">
           <div className={cn(
