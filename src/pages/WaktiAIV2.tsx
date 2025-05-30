@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -8,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { PageContainer } from '@/components/PageContainer';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
+import { NewConversationButton } from '@/components/wakti-ai-v2/NewConversationButton';
 import { SearchModeIndicator } from '@/components/wakti-ai-v2/SearchModeIndicator';
 import { QuotaIndicator } from '@/components/wakti-ai-v2/QuotaIndicator';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,11 +17,7 @@ import { AdvancedSearchResult } from '@/components/wakti-ai-v2/AdvancedSearchRes
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { cn } from '@/lib/utils';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { AIMessage } from '@/services/WaktiAIV2Service';
 
 const WaktiAIV2 = () => {
   const { language } = useTheme();
@@ -29,7 +25,7 @@ const WaktiAIV2 = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<AIMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<'chat' | 'search' | 'advanced_search' | 'image'>('chat');
@@ -65,7 +61,12 @@ const WaktiAIV2 = () => {
   const handleSendMessage = useCallback(async (messageContent: string) => {
     if (!messageContent.trim()) return;
 
-    const userMessage: Message = { role: 'user', content: messageContent };
+    const userMessage: AIMessage = { 
+      id: crypto.randomUUID(),
+      role: 'user', 
+      content: messageContent,
+      timestamp: new Date()
+    };
     setMessages(prevMessages => [...prevMessages, userMessage]);
     setNewMessage('');
     setIsThinking(true);
@@ -89,7 +90,12 @@ const WaktiAIV2 = () => {
       }
 
       const data = await response.json();
-      const aiMessage: Message = { role: 'assistant', content: data.content };
+      const aiMessage: AIMessage = { 
+        id: crypto.randomUUID(),
+        role: 'assistant', 
+        content: data.content,
+        timestamp: new Date()
+      };
       setMessages(prevMessages => [...prevMessages, aiMessage]);
 
       // Save the conversation if a current conversation exists
@@ -103,7 +109,12 @@ const WaktiAIV2 = () => {
         description: language === 'ar' ? 'فشل إرسال الرسالة' : 'Failed to send message',
         variant: 'destructive'
       });
-      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: language === 'ar' ? 'عذراً، حدث خطأ ما' : 'Sorry, something went wrong' }]);
+      setMessages(prevMessages => [...prevMessages, { 
+        id: crypto.randomUUID(),
+        role: 'assistant', 
+        content: language === 'ar' ? 'عذراً، حدث خطأ ما' : 'Sorry, something went wrong',
+        timestamp: new Date()
+      }]);
     } finally {
       setIsThinking(false);
     }
@@ -142,13 +153,16 @@ const WaktiAIV2 = () => {
     }
   }, [user, language, toast]);
 
-  const handleSelectConversation = useCallback(async (conversation: any) => {
+  const handleSelectConversation = useCallback(async (conversationId: string) => {
+    const conversation = conversations.find(c => c.id === conversationId);
+    if (!conversation) return;
+    
     setCurrentConversation(conversation);
     try {
       const { data, error } = await supabase
         .from('messages')
         .select('*')
-        .eq('conversation_id', conversation.id)
+        .eq('conversation_id', conversationId)
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -156,9 +170,11 @@ const WaktiAIV2 = () => {
       }
 
       // Map the messages to the correct format
-      const formattedMessages = data.map((msg: any) => ({
+      const formattedMessages: AIMessage[] = data.map((msg: any) => ({
+        id: msg.id || crypto.randomUUID(),
         role: msg.role,
         content: msg.content,
+        timestamp: new Date(msg.created_at)
       }));
 
       setMessages(formattedMessages);
@@ -169,9 +185,14 @@ const WaktiAIV2 = () => {
         description: language === 'ar' ? 'فشل جلب الرسائل' : 'Failed to fetch messages',
         variant: 'destructive'
       });
-      setMessages([{ role: 'assistant', content: language === 'ar' ? 'عذراً، حدث خطأ ما' : 'Sorry, something went wrong' }]);
+      setMessages([{ 
+        id: crypto.randomUUID(),
+        role: 'assistant', 
+        content: language === 'ar' ? 'عذراً، حدث خطأ ما' : 'Sorry, something went wrong',
+        timestamp: new Date()
+      }]);
     }
-  }, [language, toast]);
+  }, [conversations, language, toast]);
 
   const handleDeleteConversation = useCallback(async (conversationId: string) => {
     try {
@@ -201,6 +222,31 @@ const WaktiAIV2 = () => {
     }
   }, [currentConversation, language, toast]);
 
+  const refreshConversations = useCallback(async () => {
+    if (user) {
+      try {
+        const { data, error } = await supabase
+          .from('conversations')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          throw error;
+        }
+
+        setConversations(data || []);
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ' : 'Error',
+          description: language === 'ar' ? 'فشل جلب المحادثات' : 'Failed to fetch conversations',
+          variant: 'destructive'
+        });
+      }
+    }
+  }, [user, toast]);
+
   const saveMessageToConversation = useCallback(async (conversationId: string, userMessage: string, aiMessage: string) => {
     try {
       // Insert both user and AI messages into the messages table
@@ -228,33 +274,8 @@ const WaktiAIV2 = () => {
 
   // Fetch conversations on initial load and whenever the user changes
   useEffect(() => {
-    const fetchConversations = async () => {
-      if (user) {
-        try {
-          const { data, error } = await supabase
-            .from('conversations')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false });
-
-          if (error) {
-            throw error;
-          }
-
-          setConversations(data || []);
-        } catch (error) {
-          console.error('Error fetching conversations:', error);
-          toast({
-            title: language === 'ar' ? 'خطأ' : 'Error',
-            description: language === 'ar' ? 'فشل جلب المحادثات' : 'Failed to fetch conversations',
-            variant: 'destructive'
-          });
-        }
-      }
-    };
-
-    fetchConversations();
-  }, [user, toast]);
+    refreshConversations();
+  }, [refreshConversations]);
 
   return (
     <PageContainer>
@@ -275,12 +296,13 @@ const WaktiAIV2 = () => {
           <SearchModeIndicator isVisible={activeTrigger === 'search'} />
           <AdvancedSearchModeIndicator isVisible={activeTrigger === 'advanced_search'} />
           <QuotaIndicator />
+          <NewConversationButton onNewConversation={handleNewConversation} />
           <ConversationsList 
             conversations={conversations}
             currentConversationId={currentConversation?.id}
             onSelectConversation={handleSelectConversation}
-            onNewConversation={handleNewConversation}
             onDeleteConversation={handleDeleteConversation}
+            onRefresh={refreshConversations}
           />
         </div>
       </div>
