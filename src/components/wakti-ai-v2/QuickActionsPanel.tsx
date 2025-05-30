@@ -81,21 +81,21 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   };
 
   return (
-    <div className="space-y-3 max-h-[calc(100vh-8rem)] overflow-hidden">
+    <div className="space-y-4 h-full flex flex-col">
       {/* AI Trigger Controls */}
-      <div>
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+      <div className="flex-shrink-0">
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
           <Brain className="h-3 w-3" />
           {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
         </h3>
         
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
               variant={activeTrigger === trigger.id ? "default" : "outline"}
               className={cn(
-                "h-16 p-2 flex flex-col items-center gap-1 text-center transition-all duration-200 text-xs",
+                "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
                 activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1",
                 trigger.id === 'advanced_search' && "opacity-50 cursor-not-allowed"
               )}
@@ -121,23 +121,23 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       </div>
 
       {/* Action Buttons (Not Triggers) */}
-      <div>
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+      <div className="flex-shrink-0">
+        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
           <Settings className="h-3 w-3" />
           {language === 'ar' ? 'أدوات' : 'Tools'}
         </h3>
         
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           {/* Voice Translator Button */}
           <Button
             variant="ghost"
-            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setVoiceTranslatorOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
               <Languages className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[9px] font-medium leading-tight">
+            <span className="text-[10px] font-medium leading-tight">
               {language === 'ar' ? 'مترجم' : 'Translator'}
             </span>
           </Button>
@@ -145,13 +145,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Text Generation Button */}
           <Button
             variant="ghost"
-            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => onSendMessage(language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me')}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
               <PenTool className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[9px] font-medium leading-tight">
+            <span className="text-[10px] font-medium leading-tight">
               {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
             </span>
           </Button>
@@ -159,13 +159,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Improve AI Button */}
           <Button
             variant="ghost"
-            className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => onSendMessage(language === 'ar' ? 'كيف يمكنني تحسين استخدام الذكاء الاصطناعي؟' : 'How can I improve my AI usage?')}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
               <Brain className="h-3 w-3 text-white" />
             </div>
-            <span className="text-[9px] font-medium leading-tight">
+            <span className="text-[10px] font-medium leading-tight">
               {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
             </span>
           </Button>
@@ -175,12 +175,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             <DialogTrigger asChild>
               <Button
                 variant="ghost"
-                className="h-12 p-2 flex flex-col items-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+                className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
               >
                 <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
                   <Settings className="h-3 w-3 text-white" />
                 </div>
-                <span className="text-[9px] font-medium leading-tight">
+                <span className="text-[10px] font-medium leading-tight">
                   {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
                 </span>
               </Button>
@@ -223,12 +223,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
         </div>
       </div>
 
-      {/* Try asking me section */}
-      <div className="pt-2 border-t border-border/50">
-        <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5">
+      {/* Try asking me section - with larger text */}
+      <div className="flex-1 pt-2 border-t border-border/50">
+        <h4 className="text-xs font-medium text-muted-foreground mb-2">
           {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
         </h4>
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {[
             language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
             language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
@@ -238,7 +238,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               key={index}
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-[9px] text-muted-foreground hover:text-foreground h-5"
+              className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-7 px-2"
               onClick={() => handleTryExample(example)}
             >
               "{example}"
