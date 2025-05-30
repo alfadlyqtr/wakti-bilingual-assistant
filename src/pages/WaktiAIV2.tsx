@@ -1,21 +1,22 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/router';
+import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ModeToggle } from '@/components/ModeToggle';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { PageContainer } from '@/components/PageContainer';
-import { MessagesPanel } from '@/components/wakti-ai-v2/MessagesPanel';
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { SearchModeIndicator } from '@/components/wakti-ai-v2/SearchModeIndicator';
 import { QuotaIndicator } from '@/components/wakti-ai-v2/QuotaIndicator';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from "@/hooks/use-toast"
-import { cn } from '@/lib/utils';
+import { useToast } from "@/hooks/use-toast";
 import { AdvancedSearchModeIndicator } from '@/components/wakti-ai-v2/AdvancedSearchModeIndicator';
+import { AdvancedSearchResult } from '@/components/wakti-ai-v2/AdvancedSearchResult';
+import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
+import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
+import { cn } from '@/lib/utils';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -25,7 +26,7 @@ interface Message {
 const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { user, signOut } = useAuth();
-  const router = useRouter();
+  const navigate = useNavigate();
   const { toast } = useToast();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -276,7 +277,7 @@ const WaktiAIV2 = () => {
           <QuotaIndicator />
           <ConversationsList 
             conversations={conversations}
-            currentConversation={currentConversation}
+            currentConversationId={currentConversation?.id}
             onSelectConversation={handleSelectConversation}
             onNewConversation={handleNewConversation}
             onDeleteConversation={handleDeleteConversation}
@@ -297,13 +298,30 @@ const WaktiAIV2 = () => {
 
         {/* Right Panel: Messages */}
         <main className="col-span-1 lg:col-span-3 flex flex-col h-full">
-          <MessagesPanel 
-            messages={messages}
-            isThinking={isThinking}
-          />
+          {/* Messages Panel */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-muted/20 rounded-lg mb-4">
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <p className="text-lg font-medium mb-2">
+                    {language === 'ar' ? 'مرحباً بك في وقتي الذكي' : 'Welcome to Wakti AI'}
+                  </p>
+                  <p className="text-sm">
+                    {language === 'ar' ? 'ابدأ محادثة جديدة' : 'Start a new conversation'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              messages.map((message, index) => (
+                <ChatBubble key={index} message={message} />
+              ))
+            )}
+            
+            {isThinking && <TypingIndicator />}
+          </div>
 
           {/* Message Input */}
-          <div className="mt-4 flex items-center gap-3 border-t border-border/50 pt-4">
+          <div className="flex items-center gap-3 border-t border-border/50 pt-4">
             <Input
               type="text"
               placeholder={language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'}
