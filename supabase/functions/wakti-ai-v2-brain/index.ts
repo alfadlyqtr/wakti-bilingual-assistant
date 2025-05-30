@@ -13,200 +13,108 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🔍 WAKTI AI V2.2 FIXED: Processing request with proper trigger isolation");
+console.log("🔍 WAKTI AI V2.3 TEACHER CONCEPT: Processing request with absolute trigger control");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// Enhanced intent analysis with STRICT TRIGGER MODE RESPECT
-function analyzeIntentEnhanced(message, language = 'en', activeTrigger = 'chat') {
+// SIMPLIFIED TRIGGER-BASED INTENT ANALYSIS - TEACHER CONCEPT
+function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger = 'chat') {
   const lowerMessage = message.toLowerCase();
   
-  console.log("🔍 WAKTI AI V2.2: === TRIGGER ANALYSIS START ===");
-  console.log("🔍 WAKTI AI V2.2: Message:", message);
-  console.log("🔍 WAKTI AI V2.2: Active trigger received:", activeTrigger);
-  console.log("🔍 WAKTI AI V2.2: Language:", language);
+  console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT TRIGGER ANALYSIS ===");
+  console.log("🎯 WAKTI AI V2.3: Message:", message);
+  console.log("🎯 WAKTI AI V2.3: Active trigger (teacher's hand):", activeTrigger);
+  console.log("🎯 WAKTI AI V2.3: Language:", language);
   
-  // 🚨 CRITICAL FIX: STRICT TRIGGER MODE ENFORCEMENT
-  // If activeTrigger is 'chat', IMMEDIATELY return no browsing
-  if (activeTrigger === 'chat') {
-    console.log("🔍 WAKTI AI V2.2: ✅ CHAT MODE DETECTED - NO BROWSING ALLOWED");
-    return {
-      intent: 'general_chat',
-      confidence: 'high',
-      action: null,
-      params: null,
-      requiresBrowsing: false, // FORCED OFF for chat mode
-      triggerMode: 'chat'
-    };
-  }
+  // 🚨 TEACHER CONCEPT: Trigger is the ABSOLUTE controller
+  // If no "hands up" (search triggers), then NO browsing - period!
   
-  // For non-chat modes, continue with original logic
-  console.log("🔍 WAKTI AI V2.2: Non-chat mode detected, analyzing patterns...");
-  
-  // 1. IMAGE GENERATION - HIGHEST PRIORITY
-  const imagePatterns = [
-    'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of',
-    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'اعمل صورة', 'كون صورة'
-  ];
-  
-  // Enhanced follow-up detection for image generation
-  const imageFollowUpPatterns = [
-    'yes, generate', 'yes generate', 'yes create', 'نعم اصنع', 'نعم ارسم', 'نعم',
-    'generate it', 'create it', 'make it', 'اعملها', 'اصنعها', 'ارسمها'
-  ];
-  
-  if (imagePatterns.some(p => lowerMessage.includes(p)) || 
-      imageFollowUpPatterns.some(p => lowerMessage.includes(p))) {
-    const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة|yes,?\s*(generate|create)|نعم\s*(اصنع|ارسم)?)/gi, '').trim();
-    
-    console.log("🔍 WAKTI AI V2.2: Image generation intent detected");
-    return {
-      intent: 'generate_image',
-      confidence: 'high',
-      action: 'generate_image',
-      params: { prompt: prompt || message },
-      requiresBrowsing: false,
-      triggerMode: activeTrigger
-    };
-  }
-  
-  // 2. TASK CREATION
-  const taskPatterns = [
-    'create task', 'add task', 'new task', 'make task', 'todo', 'need to do',
-    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'اصنع مهمة', 'مطلوب عمل'
-  ];
-  
-  if (taskPatterns.some(p => lowerMessage.includes(p))) {
-    console.log("🔍 WAKTI AI V2.2: Task creation intent detected");
-    return {
-      intent: 'create_task',
-      confidence: 'high',
-      action: 'create_task',
-      params: extractTaskData(message),
-      requiresBrowsing: false,
-      triggerMode: activeTrigger
-    };
-  }
-  
-  // 3. EVENT CREATION
-  const eventPatterns = [
-    'create event', 'add event', 'schedule', 'meeting', 'appointment',
-    'أنشئ حدث', 'أضف حدث', 'موعد جديد', 'اجتماع', 'حفلة'
-  ];
-  
-  if (eventPatterns.some(p => lowerMessage.includes(p))) {
-    console.log("🔍 WAKTI AI V2.2: Event creation intent detected");
-    return {
-      intent: 'create_event',
-      confidence: 'high',
-      action: 'create_event',
-      params: extractEventData(message),
-      requiresBrowsing: false,
-      triggerMode: activeTrigger
-    };
-  }
-  
-  // 4. REMINDER CREATION
-  const reminderPatterns = [
-    'remind me', 'reminder', 'don\'t forget', 'alert me',
-    'ذكرني', 'تذكير', 'لا تنس', 'نبهني'
-  ];
-  
-  if (reminderPatterns.some(p => lowerMessage.includes(p))) {
-    console.log("🔍 WAKTI AI V2.2: Reminder creation intent detected");
-    return {
-      intent: 'create_reminder',
-      confidence: 'high',
-      action: 'create_reminder',
-      params: extractReminderData(message),
-      requiresBrowsing: false,
-      triggerMode: activeTrigger
-    };
-  }
-  
-  // 5. BROWSING - Only for search/advanced_search modes
-  if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
-    console.log("🔍 WAKTI AI V2.2: Search mode detected, checking for browsing patterns...");
-    
-    const browsingPatterns = [
-      // Sports & Entertainment
-      'who won', 'game score', 'latest score', 'final score', 'match result', 'score',
-      'sports news', 'game last night', 'game tonight', 'game today',
-      'football', 'soccer', 'basketball', 'baseball', 'tennis', 'cricket', 'rugby', 'hockey', 'golf',
-      'premier league', 'champions league', 'world cup', 'olympics', 'nfl', 'nba', 'fifa',
-      'player stats', 'team standings', 'league table', 'tournament', 'championship',
+  switch (activeTrigger) {
+    case 'chat':
+      console.log("🎯 WAKTI AI V2.3: ✅ CHAT MODE - NO HANDS UP = NO BROWSING");
       
-      // News & Current Events
-      'latest news', 'breaking news', 'current events', 'what happened', 'recent',
-      'news today', 'headlines', 'update on', 'current situation', 'latest update',
+      // Check for image generation patterns only
+      const imagePatterns = [
+        'generate image', 'create image', 'draw', 'make picture', 'image of', 'picture of',
+        'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'اعمل صورة', 'كون صورة'
+      ];
       
-      // Weather
-      'weather today', 'current weather', 'forecast', 'temperature', 'rain', 'sunny',
-      'climate', 'weather in', 'hot', 'cold', 'storm', 'hurricane',
+      if (imagePatterns.some(p => lowerMessage.includes(p))) {
+        const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة)/gi, '').trim();
+        return {
+          intent: 'generate_image',
+          confidence: 'high',
+          action: 'generate_image',
+          params: { prompt: prompt || message },
+          requiresBrowsing: false, // NEVER browse in chat mode
+          triggerMode: 'chat'
+        };
+      }
       
-      // Finance
-      'stock price', 'market today', 'stock market', 'price of', 'crypto', 'bitcoin',
-      'exchange rate', 'currency', 'trading', 'dow jones', 'nasdaq', 's&p 500',
-      
-      // Technology
-      'new release', 'latest version', 'tech news', 'gadget', 'smartphone',
-      
-      // General temporal indicators
-      'current', 'latest', 'recent', 'now', 'today', 'this week', 'happening',
-      'status of', 'update', 'information about', 'tell me about',
-      
-      // Arabic patterns
-      'من فاز', 'نتيجة المباراة', 'آخر الأخبار', 'الطقس اليوم', 'سعر السهم',
-      'أخبار', 'جديد', 'حالي', 'اليوم', 'الآن', 'مؤخراً'
-    ];
-    
-    // Team name detection
-    const teamNames = [
-      'madrid', 'barcelona', 'manchester', 'chelsea', 'arsenal', 'liverpool', 'united', 'city',
-      'psg', 'bayern', 'juventus', 'milan', 'inter', 'panthers', 'lakers', 'warriors'
-    ];
-    
-    const requiresBrowsing = browsingPatterns.some(p => lowerMessage.includes(p)) ||
-                            teamNames.some(t => lowerMessage.includes(t)) ||
-                            lowerMessage.includes('2025') ||
-                            (lowerMessage.includes('what') && (lowerMessage.includes('current') || lowerMessage.includes('latest') || lowerMessage.includes('now'))) ||
-                            (lowerMessage.includes('how') && (lowerMessage.includes('today') || lowerMessage.includes('recent')));
-    
-    console.log("🔍 WAKTI AI V2.2: Browsing patterns check result:", requiresBrowsing);
-    
-    if (requiresBrowsing) {
-      console.log("🔍 WAKTI AI V2.2: ✅ Search mode - enabling browsing");
+      // Default chat response - NO BROWSING
       return {
-        intent: 'real_time_info',
+        intent: 'general_chat',
         confidence: 'high',
         action: null,
         params: null,
-        requiresBrowsing: true,
-        triggerMode: activeTrigger
+        requiresBrowsing: false, // FORCED OFF - teacher's hand is down
+        triggerMode: 'chat'
       };
-    }
+      
+    case 'search':
+      console.log("🎯 WAKTI AI V2.3: ✅ SEARCH MODE - HAND IS UP = ENABLE BROWSING");
+      return {
+        intent: 'real_time_search',
+        confidence: 'high',
+        action: null,
+        params: null,
+        requiresBrowsing: true, // FORCED ON - teacher's hand is up
+        triggerMode: 'search'
+      };
+      
+    case 'advanced_search':
+      console.log("🎯 WAKTI AI V2.3: ✅ ADVANCED SEARCH MODE - HAND IS UP = ENABLE ADVANCED BROWSING");
+      return {
+        intent: 'advanced_real_time_search',
+        confidence: 'high',
+        action: null,
+        params: null,
+        requiresBrowsing: true, // FORCED ON - teacher's hand is up
+        triggerMode: 'advanced_search'
+      };
+      
+    case 'image':
+      console.log("🎯 WAKTI AI V2.3: ✅ IMAGE MODE - GENERATE IMAGES");
+      const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة)/gi, '').trim();
+      return {
+        intent: 'generate_image',
+        confidence: 'high',
+        action: 'generate_image',
+        params: { prompt: prompt || message },
+        requiresBrowsing: false, // No browsing for image generation
+        triggerMode: 'image'
+      };
+      
+    default:
+      console.log("🎯 WAKTI AI V2.3: ⚠️ UNKNOWN TRIGGER - DEFAULTING TO CHAT (NO BROWSING)");
+      return {
+        intent: 'general_chat',
+        confidence: 'medium',
+        action: null,
+        params: null,
+        requiresBrowsing: false, // Default safe mode - no browsing
+        triggerMode: 'chat'
+      };
   }
-  
-  // Default: General chat (no browsing)
-  console.log("🔍 WAKTI AI V2.2: ✅ Default - general chat, no browsing");
-  console.log("🔍 WAKTI AI V2.2: === TRIGGER ANALYSIS END ===");
-  return {
-    intent: 'general_chat',
-    confidence: 'medium',
-    action: null,
-    params: null,
-    requiresBrowsing: false,
-    triggerMode: activeTrigger
-  };
 }
 
 // Image generation function
 async function generateImage(prompt, language = 'en') {
   try {
-    console.log("🎨 WAKTI AI V2.2: Generating image with prompt:", prompt);
+    console.log("🎨 WAKTI AI V2.3: Generating image with prompt:", prompt);
     
     if (!RUNWARE_API_KEY) {
       throw new Error("Runware API key not configured");
@@ -253,7 +161,7 @@ async function generateImage(prompt, language = 'en') {
     }
     
     const result = await response.json();
-    console.log("🎨 WAKTI AI V2.2: Image generation result:", result);
+    console.log("🎨 WAKTI AI V2.3: Image generation result:", result);
     
     if (result.data && result.data.length > 0) {
       const imageData = result.data.find(item => item.taskType === "imageInference");
@@ -269,7 +177,7 @@ async function generateImage(prompt, language = 'en') {
     throw new Error("No image URL in response");
     
   } catch (error) {
-    console.error("🎨 WAKTI AI V2.2: Image generation error:", error);
+    console.error("🎨 WAKTI AI V2.3: Image generation error:", error);
     return {
       success: false,
       error: error.message
@@ -321,7 +229,7 @@ async function translateText(text, fromLang, toLang) {
 // Enhanced browsing function with search mode differentiation
 async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
   try {
-    console.log("🌐 WAKTI AI V2.2: Executing browsing for:", query, "in mode:", searchMode);
+    console.log("🌐 WAKTI AI V2.3: Executing browsing for:", query, "in mode:", searchMode);
     
     if (!TAVILY_API_KEY) {
       throw new Error("Tavily API key not configured");
@@ -358,7 +266,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
       };
     }
     
-    console.log("🌐 WAKTI AI V2.2: Using Tavily config:", tavilyConfig);
+    console.log("🌐 WAKTI AI V2.3: Using Tavily config:", tavilyConfig);
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -373,7 +281,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
     }
     
     const data = await response.json();
-    console.log("🌐 WAKTI AI V2.2: Browsing results:", data);
+    console.log("🌐 WAKTI AI V2.3: Browsing results:", data);
     
     // Create rich context for AI processing
     let richContext = `Search Query: "${query}" (${searchMode} mode)\n\n`;
@@ -412,7 +320,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
     };
     
   } catch (error) {
-    console.error("🌐 WAKTI AI V2.2: Browsing error:", error);
+    console.error("🌐 WAKTI AI V2.3: Browsing error:", error);
     return {
       success: false,
       error: error.message
@@ -455,7 +363,7 @@ function detectQueryType(query) {
 // Enhanced AI processing function with conversational tone
 async function processWithAI(message, context, language = 'en') {
   try {
-    console.log("🤖 WAKTI AI V2.2: Processing with AI");
+    console.log("🤖 WAKTI AI V2.3: Processing with AI");
     
     // Try DeepSeek first, fallback to OpenAI
     let apiKey = DEEPSEEK_API_KEY;
@@ -547,7 +455,7 @@ Be like that friend who always has the coolest facts and loves sharing them in a
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🤖 WAKTI AI V2.2: AI processing error:", error);
+    console.error("🤖 WAKTI AI V2.3: AI processing error:", error);
     
     // Fallback response
     return language === 'ar' 
@@ -636,23 +544,23 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 WAKTI AI V2.2: === REQUEST START ===");
-    console.log("🔍 WAKTI AI V2.2: Request method:", req.method);
+    console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT REQUEST START ===");
+    console.log("🎯 WAKTI AI V2.3: Request method:", req.method);
 
     // Enhanced JSON parsing with detailed debugging
     let requestBody;
     try {
       const rawBody = await req.text();
-      console.log("🔍 WAKTI AI V2.2: Raw request body received");
+      console.log("🎯 WAKTI AI V2.3: Raw request body received");
       
       if (!rawBody || rawBody.trim() === '') {
         throw new Error("Empty request body received");
       }
       
       requestBody = JSON.parse(rawBody);
-      console.log("🔍 WAKTI AI V2.2: ✅ Successfully parsed request body");
+      console.log("🎯 WAKTI AI V2.3: ✅ Successfully parsed request body");
     } catch (parseError) {
-      console.error("🔍 WAKTI AI V2.2: ❌ JSON parsing error:", parseError);
+      console.error("🎯 WAKTI AI V2.3: ❌ JSON parsing error:", parseError);
       
       return new Response(JSON.stringify({ 
         error: "Invalid JSON in request body",
@@ -676,17 +584,17 @@ serve(async (req) => {
       activeTrigger = 'chat'
     } = requestBody;
 
-    console.log("🔍 WAKTI AI V2.2: === EXTRACTED FIELDS ===");
-    console.log("🔍 WAKTI AI V2.2: Message:", message);
-    console.log("🔍 WAKTI AI V2.2: User ID:", userId);
-    console.log("🔍 WAKTI AI V2.2: Language:", language);
-    console.log("🔍 WAKTI AI V2.2: Active Trigger:", activeTrigger);
-    console.log("🔍 WAKTI AI V2.2: Input Type:", inputType);
-    console.log("🔍 WAKTI AI V2.2: Confirm Search:", confirmSearch);
+    console.log("🎯 WAKTI AI V2.3: === EXTRACTED FIELDS ===");
+    console.log("🎯 WAKTI AI V2.3: Message:", message);
+    console.log("🎯 WAKTI AI V2.3: User ID:", userId);
+    console.log("🎯 WAKTI AI V2.3: Language:", language);
+    console.log("🎯 WAKTI AI V2.3: Active Trigger (Teacher's Hand):", activeTrigger);
+    console.log("🎯 WAKTI AI V2.3: Input Type:", inputType);
+    console.log("🎯 WAKTI AI V2.3: Confirm Search:", confirmSearch);
 
     // Validate required fields
     if (!message || typeof message !== 'string' || message.trim() === '') {
-      console.error("🔍 WAKTI AI V2.2: ❌ Invalid message field");
+      console.error("🎯 WAKTI AI V2.3: ❌ Invalid message field");
       return new Response(JSON.stringify({ 
         error: "Message is required and must be a non-empty string",
         success: false
@@ -697,7 +605,7 @@ serve(async (req) => {
     }
 
     if (!userId) {
-      console.error("🔍 WAKTI AI V2.2: ❌ Missing userId");
+      console.error("🎯 WAKTI AI V2.3: ❌ Missing userId");
       return new Response(JSON.stringify({ 
         error: "User ID is required",
         success: false
@@ -707,13 +615,13 @@ serve(async (req) => {
       });
     }
 
-    // Analyze intent with enhanced priority system and STRICT TRIGGER RESPECT
-    console.log("🔍 WAKTI AI V2.2: === STARTING INTENT ANALYSIS ===");
-    const intentAnalysis = analyzeIntentEnhanced(message, language, activeTrigger);
-    console.log("🔍 WAKTI AI V2.2: === INTENT ANALYSIS RESULT ===");
-    console.log("🔍 WAKTI AI V2.2: Intent:", intentAnalysis.intent);
-    console.log("🔍 WAKTI AI V2.2: Requires Browsing:", intentAnalysis.requiresBrowsing);
-    console.log("🔍 WAKTI AI V2.2: Trigger Mode:", intentAnalysis.triggerMode);
+    // TEACHER CONCEPT: Analyze intent with ABSOLUTE trigger control
+    console.log("🎯 WAKTI AI V2.3: === STARTING TEACHER CONCEPT ANALYSIS ===");
+    const intentAnalysis = analyzeIntentWithTriggerControl(message, language, activeTrigger);
+    console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT RESULT ===");
+    console.log("🎯 WAKTI AI V2.3: Intent:", intentAnalysis.intent);
+    console.log("🎯 WAKTI AI V2.3: Requires Browsing:", intentAnalysis.requiresBrowsing);
+    console.log("🎯 WAKTI AI V2.3: Trigger Mode:", intentAnalysis.triggerMode);
 
     let response = '';
     let imageUrl = null;
@@ -726,46 +634,11 @@ serve(async (req) => {
     // Get quota status
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Handle different intents based on activeTrigger
-    console.log("🔍 WAKTI AI V2.2: === PROCESSING BASED ON TRIGGER ===");
+    // TEACHER CONCEPT: Process based on ABSOLUTE trigger control
+    console.log("🎯 WAKTI AI V2.3: === PROCESSING WITH TEACHER CONCEPT ===");
     
-    if (activeTrigger === 'advanced_search') {
-      console.log("🔮 WAKTI AI V2.2: Handling advanced search mode");
-      
-      if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
-        // Use advanced search functionality
-        const browsingResult = await executeBrowsing(message, 'advanced', language);
-        
-        if (browsingResult.success) {
-          browsingUsed = true;
-          browsingData = {
-            hasResults: true,
-            sources: browsingResult.sources,
-            images: browsingResult.images,
-            query: browsingResult.query,
-            searchMode: browsingResult.searchMode
-          };
-          
-          // Use rich context for better AI processing
-          response = await processWithAI(message, browsingResult.richContext, language);
-          
-          // Log browsing usage
-          await logAIUsage(userId, 'deepseek-chat', true);
-        } else {
-          response = await processWithAI(message, null, language);
-        }
-      } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
-        response = language === 'ar' 
-          ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث المتقدم؟`
-          : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with advanced search?`;
-      } else {
-        response = language === 'ar' 
-          ? `لقد وصلت إلى حد البحث الشهري (${quotaStatus.limit}). يمكنني الإجابة على أسئلة عامة.`
-          : `You've reached your monthly search limit (${quotaStatus.limit}). I can answer general questions.`;
-      }
-      
-    } else if (intentAnalysis.intent === 'generate_image') {
-      console.log("🎨 WAKTI AI V2.2: Handling image generation");
+    if (intentAnalysis.intent === 'generate_image') {
+      console.log("🎨 WAKTI AI V2.3: Handling image generation");
       
       const imageResult = await generateImage(intentAnalysis.params.prompt, language);
       
@@ -782,12 +655,14 @@ serve(async (req) => {
           : `Sorry, failed to generate image: ${imageResult.error}`;
       }
       
-    } else if (intentAnalysis.requiresBrowsing && activeTrigger === 'search') {
-      console.log("🌐 WAKTI AI V2.2: Handling browsing request in search mode");
+    } else if (intentAnalysis.requiresBrowsing) {
+      console.log("🌐 WAKTI AI V2.3: Teacher's hand is UP - enabling browsing");
       
       if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
-        // Use basic search for regular search mode
-        const browsingResult = await executeBrowsing(message, 'basic', language);
+        // Determine search mode based on trigger
+        const searchMode = activeTrigger === 'advanced_search' ? 'advanced' : 'basic';
+        
+        const browsingResult = await executeBrowsing(message, searchMode, language);
         
         if (browsingResult.success) {
           browsingUsed = true;
@@ -809,46 +684,16 @@ serve(async (req) => {
         }
       } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
         response = language === 'ar' 
-          ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث عن معلومات حديثة؟`
-          : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with searching for current information?`;
+          ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث؟`
+          : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with search?`;
       } else {
         response = language === 'ar' 
           ? `لقد وصلت إلى حد البحث الشهري (${quotaStatus.limit}). يمكنني الإجابة على أسئلة عامة.`
           : `You've reached your monthly search limit (${quotaStatus.limit}). I can answer general questions.`;
       }
       
-    } else if (intentAnalysis.action) {
-      console.log("🔧 WAKTI AI V2.2: Handling action:", intentAnalysis.action);
-      
-      // For now, provide guidance for task/event/reminder creation
-      switch (intentAnalysis.action) {
-        case 'create_task':
-          response = language === 'ar' 
-            ? `سأساعدك في إنشاء مهمة جديدة. يمكنك إنشاء المهام من خلال صفحة المهام في التطبيق.`
-            : `I'll help you create a new task. You can create tasks through the Tasks page in the app.`;
-          actionTaken = 'create_task';
-          actionResult = intentAnalysis.params;
-          break;
-          
-        case 'create_event':
-          response = language === 'ar' 
-            ? `سأساعدك في إنشاء حدث جديد. يمكنك إنشاء الأحداث من خلال صفحة الأحداث في التطبيق.`
-            : `I'll help you create a new event. You can create events through the Events page in the app.`;
-          actionTaken = 'create_event';
-          actionResult = intentAnalysis.params;
-          break;
-          
-        case 'create_reminder':
-          response = language === 'ar' 
-            ? `سأساعدك في إنشاء تذكير جديد. يمكنك إنشاء التذكيرات من خلال صفحة التذكيرات في التطبيق.`
-            : `I'll help you create a new reminder. You can create reminders through the Reminders page in the app.`;
-          actionTaken = 'create_reminder';
-          actionResult = intentAnalysis.params;
-          break;
-      }
-      
     } else {
-      console.log("💬 WAKTI AI V2.2: Handling general chat - NO BROWSING");
+      console.log("💬 WAKTI AI V2.3: Teacher's hand is DOWN - NO browsing, general chat only");
       response = await processWithAI(message, null, language);
     }
 
@@ -869,7 +714,7 @@ serve(async (req) => {
           finalConversationId = newConv.id;
         }
       } catch (convErr) {
-        console.log("🔍 WAKTI AI V2.2: Conversation creation failed, continuing without storage");
+        console.log("🎯 WAKTI AI V2.3: Conversation creation failed, continuing without storage");
       }
     }
 
@@ -906,7 +751,7 @@ serve(async (req) => {
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', finalConversationId);
       } catch (dbError) {
-        console.error("🔍 WAKTI AI V2.2: Database storage error:", dbError);
+        console.error("🎯 WAKTI AI V2.3: Database storage error:", dbError);
       }
     }
 
@@ -929,17 +774,18 @@ serve(async (req) => {
       requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch && intentAnalysis.requiresBrowsing
     };
 
-    console.log("🔍 WAKTI AI V2.2: === SUCCESSFUL RESPONSE ===");
-    console.log("🔍 WAKTI AI V2.2: Browsing Used:", browsingUsed);
-    console.log("🔍 WAKTI AI V2.2: Intent:", intentAnalysis.intent);
-    console.log("🔍 WAKTI AI V2.2: === REQUEST END ===");
+    console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT SUCCESS ===");
+    console.log("🎯 WAKTI AI V2.3: Browsing Used:", browsingUsed);
+    console.log("🎯 WAKTI AI V2.3: Intent:", intentAnalysis.intent);
+    console.log("🎯 WAKTI AI V2.3: Teacher's Hand (Trigger):", activeTrigger);
+    console.log("🎯 WAKTI AI V2.3: === REQUEST END ===");
 
     return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🔍 WAKTI AI V2.2: ❌ Request processing error:", error);
+    console.error("🎯 WAKTI AI V2.3: ❌ Request processing error:", error);
     
     return new Response(JSON.stringify({ 
       success: false,
