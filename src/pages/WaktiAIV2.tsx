@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,7 +22,6 @@ import {
   Camera,
   X,
   Square,
-  Brain,
   Search,
   CheckCircle,
   Globe
@@ -72,13 +72,12 @@ export default function WaktiAIV2() {
     return hasArabicChars ? 'ar' : 'en';
   };
 
-  // Debug: Log component mount with isolation test info
+  // Debug: Log component mount
   useEffect(() => {
-    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Component mounted');
+    console.log('🔍 WAKTI AI: Component mounted');
     console.log('🔍 User:', user?.id);
     console.log('🔍 Language:', language);
     console.log('🔍 System Ready:', systemReady);
-    console.log('🔍 ISOLATION: Now calling unified-ai-brain instead of wakti-ai-v2-brain');
   }, []);
 
   const scrollToBottom = () => {
@@ -115,13 +114,13 @@ export default function WaktiAIV2() {
 
   const initializeSystem = async () => {
     try {
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Initializing system with unified-ai-brain...');
+      console.log('🔍 WAKTI AI: Initializing system...');
       
       const connectionTest = await WaktiAIV2Service.testConnection();
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Connection test result:', connectionTest);
+      console.log('🔍 WAKTI AI: Connection test result:', connectionTest);
       
       if (!connectionTest.success) {
-        console.warn('🔍 WAKTI AI V2.1 ISOLATION TEST: Connection test failed:', connectionTest.error);
+        console.warn('🔍 WAKTI AI: Connection test failed:', connectionTest.error);
       }
       
       await loadConversations();
@@ -132,7 +131,7 @@ export default function WaktiAIV2() {
       
       setSystemReady(true);
     } catch (error) {
-      console.error('WAKTI AI V2.1 ISOLATION TEST: System initialization failed:', error);
+      console.error('WAKTI AI: System initialization failed:', error);
       
       const errorMessage: AIMessage = {
         id: 'system-error',
@@ -165,8 +164,8 @@ export default function WaktiAIV2() {
     }
 
     let greeting = language === 'ar' 
-      ? `مرحباً ${userName}! 👋\n\nأنا WAKTI AI V2.1، مساعدك الذكي (ISOLATION TEST: unified-ai-brain). 🧪\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة من الإنترنت 🌐\n• إدارة جدولك اليومي 📅\n• الإجابة على أسئلتك 💬\n• تنفيذ الأوامر تلقائياً ⚡\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
-      : `Hello ${userName}! 👋\n\nI'm WAKTI AI V2.1, your smart assistant (ISOLATION TEST: unified-ai-brain). 🧪\n\nI can help you with:\n• Creating tasks, events, and reminders ✅\n• Getting current information from the web 🌐\n• Managing your daily schedule 📅\n• Answering your questions 💬\n• Executing commands automatically ⚡\n\nHow can I assist you today? ✨`;
+      ? `مرحباً ${userName}! 👋\n\nيمكنني مساعدتك في:\n• إنشاء المهام والأحداث والتذكيرات ✅\n• الحصول على معلومات حديثة 🌐\n• إدارة جدولك اليومي 📅\n\nكيف يمكنني مساعدتك اليوم؟ ✨`
+      : `Hello ${userName}! 👋\n\nI can help you with:\n• Creating tasks and events ✅\n• Getting current information 🌐\n• Managing your schedule 📅\n\nHow can I assist you today? ✨`;
     
     if (!connectionOk) {
       greeting += language === 'ar' 
@@ -175,7 +174,7 @@ export default function WaktiAIV2() {
     }
     
     const greetingMessage: AIMessage = {
-      id: 'greeting-v2-1-isolation',
+      id: 'greeting-wakti-ai',
       role: 'assistant',
       content: greeting,
       timestamp: new Date()
@@ -188,7 +187,7 @@ export default function WaktiAIV2() {
     try {
       const data = await WaktiAIV2Service.getConversations();
       setConversations(data);
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Loaded conversations:', data.length);
+      console.log('🔍 WAKTI AI: Loaded conversations:', data.length);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -211,7 +210,7 @@ export default function WaktiAIV2() {
       setMessages(convertedMessages);
       setCurrentConversationId(conversationId);
       setLeftDrawerOpen(false);
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Loaded conversation messages:', data.length);
+      console.log('🔍 WAKTI AI: Loaded conversation messages:', data.length);
     } catch (error) {
       console.error('Error loading conversation:', error);
       toast({
@@ -231,7 +230,7 @@ export default function WaktiAIV2() {
     setBrowsingSources([]);
     setQuotaStatus(null);
     initializeGreeting();
-    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Started new conversation');
+    console.log('🔍 WAKTI AI: Started new conversation');
   };
 
   const clearCurrentConversation = () => {
@@ -314,7 +313,7 @@ export default function WaktiAIV2() {
 
     // Ensure user is authenticated
     if (!user?.id) {
-      console.error('🔍 WAKTI AI V2.1 ISOLATION TEST: No authenticated user found');
+      console.error('🔍 WAKTI AI: No authenticated user found');
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first',
@@ -326,7 +325,7 @@ export default function WaktiAIV2() {
     // Detect language from user input content
     const detectedLanguage = detectLanguage(content.trim());
     
-    console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Language detection:', {
+    console.log('🔍 WAKTI AI: Language detection:', {
       originalContent: content.trim(),
       detectedLanguage,
       themeLanguage: language
@@ -347,22 +346,22 @@ export default function WaktiAIV2() {
     setIsTyping(true);
 
     try {
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Sending message to unified-ai-brain:', content.trim());
+      console.log('🔍 WAKTI AI: Sending message:', content.trim());
       
       // Get session with detailed logging
       const { data: session } = await supabase.auth.getSession();
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Session check:', !!session?.session);
+      console.log('🔍 WAKTI AI: Session check:', !!session?.session);
       
       if (!session?.session) {
         throw new Error('No active session found');
       }
 
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Calling unified-ai-brain function via WaktiAIV2Service...');
+      console.log('🔍 WAKTI AI: Calling unified-ai-brain function via WaktiAIV2Service...');
 
       // Call the service which now uses unified-ai-brain
       const result = await WaktiAIV2Service.sendMessage(content.trim(), currentConversationId, detectedLanguage, inputType);
 
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Service response received:', result);
+      console.log('🔍 WAKTI AI: Service response received:', result);
 
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
@@ -378,7 +377,7 @@ export default function WaktiAIV2() {
         imageUrl: result.imageUrl
       };
 
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Assistant message created:', assistantMessage);
+      console.log('🔍 WAKTI AI: Assistant message created:', assistantMessage);
 
       setMessages(prev => [...prev, assistantMessage]);
 
@@ -398,23 +397,15 @@ export default function WaktiAIV2() {
         loadConversations();
       }
 
-      toast({
-        title: language === 'ar' ? '✅ نجح الاختبار' : '✅ Isolation Test Success',
-        description: language === 'ar' 
-          ? 'unified-ai-brain يعمل بشكل صحيح'
-          : 'unified-ai-brain is working correctly',
-        duration: 3000
-      });
-
-      console.log('🔍 WAKTI AI V2.1 ISOLATION TEST: Message processing completed successfully');
+      console.log('🔍 WAKTI AI: Message processing completed successfully');
 
     } catch (error) {
-      console.error('WAKTI AI V2.1 ISOLATION TEST: Error sending message:', error);
+      console.error('WAKTI AI: Error sending message:', error);
       
       // Enhanced error handling with specific error types
       let errorMessage = language === 'ar' 
-        ? 'عذراً، حدث خطأ في النظام (unified-ai-brain). يرجى المحاولة مرة أخرى. 🔧'
-        : 'Sorry, there was a system error (unified-ai-brain). Please try again. 🔧';
+        ? 'عذراً، حدث خطأ في النظام. يرجى المحاولة مرة أخرى. 🔧'
+        : 'Sorry, there was a system error. Please try again. 🔧';
 
       if (error.message?.includes('session')) {
         errorMessage = language === 'ar'
@@ -436,8 +427,8 @@ export default function WaktiAIV2() {
       setMessages(prev => [...prev, errorAIMessage]);
       
       toast({
-        title: language === 'ar' ? 'خطأ في الاختبار' : 'Isolation Test Error',
-        description: language === 'ar' ? 'فشل في الاتصال مع unified-ai-brain' : 'Failed to connect to unified-ai-brain',
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في الاتصال مع النظام' : 'Failed to connect to system',
         variant: 'destructive'
       });
     } finally {
@@ -529,7 +520,7 @@ export default function WaktiAIV2() {
     try {
       setIsTranscribing(true);
       
-      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Processing voice input, blob size:', audioBlob.size);
+      console.log('🎤 WAKTI AI: Processing voice input, blob size:', audioBlob.size);
 
       // Get the current session for authentication
       const { data: { session } } = await supabase.auth.getSession();
@@ -543,7 +534,7 @@ export default function WaktiAIV2() {
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('language', language);
 
-      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Uploading audio blob to wakti-voice-v2...');
+      console.log('🎤 WAKTI AI: Uploading audio blob to wakti-voice-v2...');
 
       // Use direct fetch instead of supabase.functions.invoke() for FormData
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-voice-v2', {
@@ -554,16 +545,16 @@ export default function WaktiAIV2() {
         body: formData
       });
 
-      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription response status:', response.status);
+      console.log('🎤 WAKTI AI: Voice transcription response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription error:', errorText);
+        console.error('🎤 WAKTI AI: Voice transcription error:', errorText);
         throw new Error(`Voice transcription failed: ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('🎤 WAKTI AI V2.1 ISOLATION TEST: Voice transcription result:', result);
+      console.log('🎤 WAKTI AI: Voice transcription result:', result);
 
       const { text } = result;
       
@@ -591,7 +582,7 @@ export default function WaktiAIV2() {
         throw new Error('No transcription received');
       }
     } catch (error) {
-      console.error('🎤 WAKTI AI V2.1 ISOLATION TEST: Error processing voice input:', error);
+      console.error('🎤 WAKTI AI: Error processing voice input:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
         description: language === 'ar' ? 'فشل في معالجة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to process voice input - please try again',
@@ -605,7 +596,7 @@ export default function WaktiAIV2() {
 
   const handleSearchConfirmation = async (messageContent: string) => {
     if (!user?.id) {
-      console.error('🔍 WAKTI AI V2.1 ISOLATION TEST: No authenticated user for search confirmation');
+      console.error('🔍 WAKTI AI: No authenticated user for search confirmation');
       return;
     }
 
@@ -663,14 +654,14 @@ export default function WaktiAIV2() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  console.log('🔍 DEBUG ISOLATION TEST: About to render input area');
+  console.log('🔍 DEBUG: About to render input area');
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
       {/* App Header */}
       <AppHeader />
 
-      {/* Enhanced Header with Isolation Test Indicator */}
+      {/* Header */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
@@ -683,12 +674,8 @@ export default function WaktiAIV2() {
           </Button>
         </div>
         
-        {/* Centered Action Icons with Isolation Test Indicator */}
+        {/* Centered Action Icons */}
         <div className="flex items-center justify-center gap-2 flex-1">
-          <div className="px-3 py-1 bg-blue-100 dark:bg-blue-900 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300">
-            🧪 ISOLATION TEST: unified-ai-brain
-          </div>
-          
           <Button
             variant="ghost"
             size="icon"
@@ -721,17 +708,6 @@ export default function WaktiAIV2() {
               </span>
             </div>
           )}
-          
-          {/* New AI Context Button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setKnowledgeModalOpen(true)}
-            className="hover:scale-110 transition-transform text-primary"
-            title={language === 'ar' ? 'تحسين AI الخاص بي' : 'Improve my AI'}
-          >
-            <Brain className="h-5 w-5" />
-          </Button>
           
           <Button
             variant="ghost"
@@ -857,24 +833,6 @@ export default function WaktiAIV2() {
               sendMessage(message);
               setRightDrawerOpen(false);
             }} />
-          </div>
-
-          {/* Enhanced AI Context Button */}
-          <div className="p-4 border-t border-border/30">
-            <Button
-              onClick={() => setKnowledgeModalOpen(true)}
-              className="w-full flex items-center gap-2 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 transition-all"
-              variant="default"
-            >
-              <Brain className="h-4 w-4" />
-              {language === 'ar' ? 'تحسين وكتي AI الخاص بي' : 'Improve my AI'}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center mt-2">
-              {language === 'ar' 
-                ? 'ساعد AI على فهمك بشكل أفضل'
-                : 'Help AI understand you better'
-              }
-            </p>
           </div>
         </div>
       </div>

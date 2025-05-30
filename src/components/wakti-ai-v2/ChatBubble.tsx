@@ -2,7 +2,7 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { User, Bot, Mic, CheckCircle, Globe, Search } from 'lucide-react';
+import { Mic, Search } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
@@ -34,19 +34,8 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
   return (
     <div className={cn(
       "flex gap-3 max-w-4xl",
-      isUser ? (isArabic ? "flex-row" : "flex-row-reverse") : "flex-row",
       isUser ? (isArabic ? "justify-start" : "justify-end") : "justify-start"
     )}>
-      {/* Avatar */}
-      <div className={cn(
-        "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center",
-        isUser 
-          ? "bg-primary text-primary-foreground" 
-          : "bg-muted text-muted-foreground"
-      )}>
-        {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-      </div>
-
       {/* Message Content */}
       <div className={cn(
         "flex-1 space-y-2",
@@ -56,7 +45,7 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
         <div className={cn(
           "relative px-4 py-3 rounded-2xl shadow-sm",
           isUser 
-            ? "bg-primary text-primary-foreground" 
+            ? "bg-primary text-primary-foreground ml-auto" 
             : "bg-muted/50 text-foreground border",
           isUser 
             ? (isArabic ? "rounded-br-md" : "rounded-bl-md")
@@ -129,7 +118,10 @@ export function ChatBubble({ message, onSearchConfirm }: ChatBubbleProps) {
 
         {/* Browsing Indicator - Only for assistant messages */}
         {!isUser && (message.browsingUsed || message.quotaStatus) && (
-          <div className="ml-2">
+          <div className={cn(
+            "ml-2",
+            isUser && "mr-2"
+          )}>
             <BrowsingIndicator
               browsingUsed={message.browsingUsed}
               quotaStatus={message.quotaStatus}
