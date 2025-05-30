@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -202,17 +203,21 @@ export default function WaktiAIV2() {
                 {/* Conversations */}
                 <ConversationsList
                   conversations={conversations}
-                  activeConversationId={activeConversationId}
                   onSelectConversation={handleSelectConversation}
                   onNewConversation={handleNewConversation}
-                  language={language}
                 />
                 
-                {/* Try asking me section - Only show in Chat mode */}
+                {/* Quick Actions Panel - Only show in Chat mode */}
                 {activeTrigger === 'chat' && (
                   <QuickActionsPanel
-                    onSendMessage={handleSendMessage}
-                    language={language}
+                    onSendMessage={(message: string) => {
+                      setInputMessage(message);
+                      setTimeout(() => {
+                        handleSendMessage();
+                      }, 100);
+                    }}
+                    activeTrigger={activeTrigger}
+                    onTriggerChange={setActiveTrigger}
                   />
                 )}
               </div>
