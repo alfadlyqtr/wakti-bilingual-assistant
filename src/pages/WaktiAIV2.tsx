@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -47,8 +48,6 @@ export default function WaktiAIV2() {
   const [isRecording, setIsRecording] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const waktiAIV2Service = new WaktiAIV2Service();
-
   // Adjust textarea height on input change
   useEffect(() => {
     if (textareaRef.current) {
@@ -73,9 +72,9 @@ export default function WaktiAIV2() {
     setIsLoading(true);
 
     try {
-      const response = await waktiAIV2Service.sendMessage(inputMessage, user?.id, language, activeConversationId, 'text', false, activeTrigger);
+      const response = await WaktiAIV2Service.sendMessageWithTrigger(inputMessage, activeConversationId, language, 'text', activeTrigger);
 
-      if (response.success) {
+      if (response.response) {
         const aiMessage: AIMessage = {
           id: Date.now().toString(),
           role: 'assistant',
@@ -95,7 +94,7 @@ export default function WaktiAIV2() {
       } else {
         toast({
           title: language === 'ar' ? 'خطأ' : 'Error',
-          description: response.error || (language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'),
+          description: language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred',
           variant: 'destructive'
         });
       }
@@ -131,9 +130,9 @@ export default function WaktiAIV2() {
   const handleSearchConfirm = async (messageContent: string) => {
     setIsLoading(true);
     try {
-      const response = await waktiAIV2Service.sendMessage(messageContent, user?.id, language, activeConversationId, 'text', true, activeTrigger);
+      const response = await WaktiAIV2Service.sendMessageWithSearchConfirmation(messageContent, activeConversationId, language, 'text');
 
-      if (response.success) {
+      if (response.response) {
         const aiMessage: AIMessage = {
           id: Date.now().toString(),
           role: 'assistant',
@@ -153,7 +152,7 @@ export default function WaktiAIV2() {
       } else {
         toast({
           title: language === 'ar' ? 'خطأ' : 'Error',
-          description: response.error || (language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'),
+          description: language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred',
           variant: 'destructive'
         });
       }
@@ -203,8 +202,10 @@ export default function WaktiAIV2() {
                 {/* Conversations */}
                 <ConversationsList
                   conversations={conversations}
+                  currentConversationId={activeConversationId}
                   onSelectConversation={handleSelectConversation}
-                  onNewConversation={handleNewConversation}
+                  onDeleteConversation={() => {}}
+                  onRefresh={() => {}}
                 />
                 
                 {/* Quick Actions Panel - Only show in Chat mode */}
@@ -383,3 +384,4 @@ export default function WaktiAIV2() {
     </div>
   );
 }
+
