@@ -168,48 +168,52 @@ export default function WaktiAIV2() {
     try {
       console.log('🔍 WAKTI AI: Initializing system...');
       
-      const connectionTest = await WaktiAIV2Service.testConnection();
-      console.log('🔍 WAKTI AI: Connection test result:', connectionTest);
-      
-      if (!connectionTest.success) {
-        console.warn('🔍 WAKTI AI: Connection test failed:', connectionTest.error);
+      // Show greeting immediately - no waiting!
+      if (messages.length === 0) {
+        initializeGreeting();
       }
       
+      // Load conversations
       await loadConversations();
       
-      if (messages.length === 0) {
-        await initializeGreeting(connectionTest.success);
-      }
+      // Run connection test in background (don't await it)
+      backgroundConnectionTest();
       
       setSystemReady(true);
     } catch (error) {
       console.error('WAKTI AI: System initialization failed:', error);
-      
-      const errorMessage: AIMessage = {
-        id: 'system-error',
-        role: 'assistant',
-        content: language === 'ar' 
-          ? '⚠️ نظام الذكاء الاصطناعي غير متاح حالياً. يرجى المحاولة مرة أخرى.\n\nإذا استمرت المشكلة، يرجى التحقق من إعدادات API أو التواصل مع الدعم الفني.'
-          : '⚠️ AI system is currently unavailable. Please try again.\n\nIf the issue persists, please check API settings or contact support.',
-        timestamp: new Date()
-      };
-      
-      setMessages([errorMessage]);
       setSystemReady(true);
     }
   };
 
-  const initializeGreeting = async (connectionOk: boolean = true) => {
-    // Simple, fast greeting without database calls
-    let greeting = language === 'ar' 
+  const backgroundConnectionTest = async () => {
+    try {
+      console.log('🔍 WAKTI AI: Running background connection test...');
+      const connectionTest = await WaktiAIV2Service.testConnection();
+      console.log('🔍 WAKTI AI: Background connection test result:', connectionTest);
+      
+      if (!connectionTest.success) {
+        console.warn('🔍 WAKTI AI: Background connection test failed:', connectionTest.error);
+        // Optionally show a subtle warning toast, but don't block the UI
+        toast({
+          title: language === 'ar' ? 'تحذير' : 'Warning',
+          description: language === 'ar' 
+            ? 'قد تكون هناك مشاكل في الاتصال'
+            : 'There may be connection issues',
+          variant: 'default',
+          duration: 3000
+        });
+      }
+    } catch (error) {
+      console.error('WAKTI AI: Background connection test error:', error);
+    }
+  };
+
+  const initializeGreeting = () => {
+    // Simple, fast greeting without any async calls
+    const greeting = language === 'ar' 
       ? 'مرحباً! أنا WAKTI AI. كيف يمكنني مساعدتك اليوم؟'
       : 'Hello! I\'m WAKTI AI. How can I help you today?';
-    
-    if (!connectionOk) {
-      greeting += language === 'ar' 
-        ? '\n\n⚠️ ملاحظة: قد تكون هناك مشاكل في الاتصال. إذا واجهت صعوبات، يرجى إعادة المحاولة لاحقاً.'
-        : '\n\n⚠️ Note: There may be connection issues. If you experience difficulties, please try again later.';
-    }
     
     const greetingMessage: AIMessage = {
       id: 'greeting-wakti-ai',
@@ -219,6 +223,7 @@ export default function WaktiAIV2() {
     };
     
     setMessages([greetingMessage]);
+    console.log('🔍 WAKTI AI: Greeting shown instantly');
   };
 
   const loadConversations = async () => {
