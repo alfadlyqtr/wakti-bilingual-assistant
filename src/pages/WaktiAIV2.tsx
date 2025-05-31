@@ -62,7 +62,7 @@ export default function WaktiAIV2() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const speechRecognitionRef = useRef<any>(null);
+  const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
 
   // Helper function to detect language from text input
   const detectLanguage = (text: string): 'en' | 'ar' => {
@@ -151,7 +151,8 @@ export default function WaktiAIV2() {
 
   // Initialize speech recognition
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    // Type assertion to access Speech Recognition APIs
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -167,7 +168,7 @@ export default function WaktiAIV2() {
         setIsListening(true);
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         console.log('🎤 Speech recognition result:', transcript);
         
@@ -194,7 +195,7 @@ export default function WaktiAIV2() {
         }
       };
 
-      recognition.onerror = (event) => {
+      recognition.onerror = (event: any) => {
         console.error('🎤 Speech recognition error:', event.error);
         
         let errorMessage = language === 'ar' 
