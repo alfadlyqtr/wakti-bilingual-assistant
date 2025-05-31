@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -51,6 +52,7 @@ export default function WaktiAIV2() {
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(true);
   const [showKnowledge, setShowKnowledge] = useState(false);
+  const [conversations, setConversations] = useState([]);
   
   // AI Trigger State with background removal support
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>(localStorage.getItem('wakti-ai-active-trigger') as TriggerMode || 'chat');
@@ -475,6 +477,53 @@ export default function WaktiAIV2() {
     }
   };
 
+  const handleConversationSelected = (id: string) => {
+    setConversationId(id);
+    setMessages([]);
+    WaktiAIV2Service.getConversationMessages(id)
+      .then(messages => {
+        const formattedMessages = messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          timestamp: new Date(msg.created_at),
+          intent: msg.intent,
+          confidence: msg.confidence,
+          actionTaken: msg.action_taken,
+          inputType: msg.input_type,
+          browsingUsed: msg.browsing_used,
+          browsingData: msg.browsing_data,
+          quotaStatus: msg.quota_status,
+          requiresSearchConfirmation: msg.requires_search_confirmation,
+          imageUrl: msg.image_url
+        }));
+        setMessages(formattedMessages);
+      })
+      .catch(error => {
+        console.error('Error fetching conversation messages:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ' : 'Error',
+          description: language === 'ar' ? 'فشل في جلب الرسائل' : 'Failed to fetch messages',
+          variant: 'destructive'
+        });
+      });
+    setShowSidebar(false);
+  };
+
+  const handleDeleteConversation = async (id: string) => {
+    // Implementation for deleting conversation
+    console.log('Deleting conversation:', id);
+  };
+
+  const handleRefreshConversations = () => {
+    // Implementation for refreshing conversations
+    console.log('Refreshing conversations');
+  };
+
+  const handleSendButtonClick = () => {
+    handleSendMessage();
+  };
+
   if (!isMounted) {
     return null;
   }
@@ -519,41 +568,11 @@ export default function WaktiAIV2() {
           )}
         >
           <ConversationsList 
-            showConversations={showConversations}
-            onClose={() => setShowConversations(false)}
-            onNewConversation={handleNewConversation}
-            onConversationSelected={(id) => {
-              setConversationId(id);
-              setMessages([]);
-              WaktiAIV2Service.getConversationMessages(id)
-                .then(messages => {
-                  const formattedMessages = messages.map(msg => ({
-                    id: msg.id,
-                    role: msg.role,
-                    content: msg.content,
-                    timestamp: new Date(msg.created_at),
-                    intent: msg.intent,
-                    confidence: msg.confidence,
-                    actionTaken: msg.action_taken,
-                    inputType: msg.input_type,
-                    browsingUsed: msg.browsing_used,
-                    browsingData: msg.browsing_data,
-                    quotaStatus: msg.quota_status,
-                    requiresSearchConfirmation: msg.requires_search_confirmation,
-                    imageUrl: msg.image_url
-                  }));
-                  setMessages(formattedMessages);
-                })
-                .catch(error => {
-                  console.error('Error fetching conversation messages:', error);
-                  toast({
-                    title: language === 'ar' ? 'خطأ' : 'Error',
-                    description: language === 'ar' ? 'فشل في جلب الرسائل' : 'Failed to fetch messages',
-                    variant: 'destructive'
-                  });
-                });
-              setShowSidebar(false);
-            }}
+            conversations={conversations}
+            currentConversationId={conversationId}
+            onSelectConversation={handleConversationSelected}
+            onDeleteConversation={handleDeleteConversation}
+            onRefresh={handleRefreshConversations}
           />
         </aside>
 
@@ -630,7 +649,7 @@ export default function WaktiAIV2() {
 
                 {/* Send Button */}
                 <Button
-                  onClick={handleSendMessage}
+                  onClick={handleSendButtonClick}
                   disabled={isLoading}
                 >
                   <Send className="h-4 w-4 mr-2" />
