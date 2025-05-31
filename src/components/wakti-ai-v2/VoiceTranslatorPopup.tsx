@@ -34,45 +34,16 @@ interface CachedAudio {
   };
 }
 
-// Audio management class for better mobile/desktop compatibility
+// Simplified audio manager that doesn't block on AudioContext
 class AudioManager {
-  private audioContext: AudioContext | null = null;
   private currentAudio: HTMLAudioElement | null = null;
   private isPlaying: boolean = false;
-
-  constructor() {
-    this.initializeAudioContext();
-  }
-
-  private async initializeAudioContext() {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass) {
-        this.audioContext = new AudioContextClass();
-      }
-    } catch (error) {
-      console.warn('AudioContext initialization failed:', error);
-    }
-  }
-
-  async unlockAudio(): Promise<boolean> {
-    try {
-      if (this.audioContext && this.audioContext.state === 'suspended') {
-        await this.audioContext.resume();
-        console.log('🔊 AudioContext unlocked successfully');
-        return true;
-      }
-      return this.audioContext?.state === 'running' || false;
-    } catch (error) {
-      console.error('Failed to unlock AudioContext:', error);
-      return false;
-    }
-  }
 
   async playAudio(base64Audio: string): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         this.stopCurrentAudio();
+        console.log('🔊 Creating new audio element');
 
         const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
         this.currentAudio = audio;
@@ -86,8 +57,6 @@ class AudioManager {
         
         audio.oncanplaythrough = () => {
           console.log('🔊 Audio ready to play');
-          this.isPlaying = true;
-          audio.play().catch(reject);
         };
         
         audio.onended = () => {
@@ -104,16 +73,27 @@ class AudioManager {
           reject(new Error('Audio playback failed'));
         };
 
+        // Start playing immediately
+        this.isPlaying = true;
         const playPromise = audio.play();
+        
         if (playPromise) {
-          playPromise.catch((error) => {
-            console.error('🔊 Immediate play failed, will retry on canplaythrough:', error);
-          });
+          playPromise
+            .then(() => {
+              console.log('🔊 Audio started playing successfully');
+            })
+            .catch((error) => {
+              console.error('🔊 Play failed:', error);
+              this.isPlaying = false;
+              this.currentAudio = null;
+              reject(error);
+            });
         }
         
-        audio.load();
       } catch (error) {
         console.error('🔊 Audio setup error:', error);
+        this.isPlaying = false;
+        this.currentAudio = null;
         reject(error);
       }
     });
@@ -130,10 +110,6 @@ class AudioManager {
 
   isAudioPlaying(): boolean {
     return this.isPlaying;
-  }
-
-  needsUnlock(): boolean {
-    return this.audioContext?.state === 'suspended' || false;
   }
 }
 
@@ -192,7 +168,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isCopying, setIsCopying] = useState(false);
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
-  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
+  const [audioUnlockAttempted, setAudioUnlockAttempted] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -204,9 +180,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   // Clear translation when language changes
   useEffect(() => {
     console.log('🎤 Language selection changed to:', selectedLanguage);
-    setTranslatedText(''); // Clear previous translation when language changes
+    setTranslatedText('');
     
-    // Also clear cache if it contains old language entries
     const currentLangCache: CachedAudio = {};
     Object.entries(audioCache).forEach(([key, value]) => {
       if (key.includes(`_${selectedLanguage}`)) {
@@ -216,30 +191,13 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     setAudioCache(currentLangCache);
   }, [selectedLanguage]);
 
-  // Debounced audio unlock check to prevent rapid state changes
-  const checkAudioUnlock = useCallback(() => {
-    const needsUnlock = audioManager.needsUnlock();
-    setNeedsAudioUnlock(needsUnlock);
-  }, [audioManager]);
-
-  // Initialize audio only when popup opens, with debouncing
-  useEffect(() => {
-    if (open) {
-      checkAudioUnlock();
-      // Debounce the check to prevent rapid state changes
-      const timeoutId = setTimeout(checkAudioUnlock, 100);
-      return () => clearTimeout(timeoutId);
-    }
-  }, [open, checkAudioUnlock]);
-
-  // Load data on mount - removed loadUserQuota dependency to prevent infinite loop
+  // Load data on mount
   useEffect(() => {
     if (open && user) {
       loadTranslationHistory();
       loadAudioCache();
-      // Don't call loadUserQuota here - it's handled by the hook itself
     }
-  }, [open, user?.id]); // Only depend on user ID
+  }, [open, user?.id]);
 
   // Cleanup recording timer
   useEffect(() => {
@@ -333,20 +291,24 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
   const unlockAudioContext = useCallback(async () => {
     try {
-      const success = await audioManager.unlockAudio();
-      setNeedsAudioUnlock(!success);
+      console.log('🔊 Attempting to unlock audio context...');
+      setAudioUnlockAttempted(true);
       
-      if (success) {
-        toast({
-          title: language === 'ar' ? '🔊 تم تفعيل الصوت' : '🔊 Audio Unlocked',
-          description: language === 'ar' ? 'يمكنك الآن تشغيل الترجمات صوتياً' : 'You can now play translations with audio',
-          duration: 2000
-        });
-      }
+      // Try playing a silent audio to unlock the context
+      const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA');
+      await silentAudio.play();
+      silentAudio.pause();
+      
+      toast({
+        title: language === 'ar' ? '🔊 تم تفعيل الصوت' : '🔊 Audio Unlocked',
+        description: language === 'ar' ? 'يمكنك الآن تشغيل الترجمات صوتياً' : 'You can now play translations with audio',
+        duration: 2000
+      });
     } catch (error) {
-      console.error('Failed to unlock audio context:', error);
+      console.log('🔊 Audio unlock not needed or failed, but will try direct playback:', error);
+      setAudioUnlockAttempted(true);
     }
-  }, [audioManager, language]);
+  }, [language]);
 
   const startRecording = useCallback(async () => {
     if (!quotaError && !canTranslate) {
@@ -438,13 +400,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
-  // FIXED: Added selectedLanguage to useCallback dependencies to prevent stale closure
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
 
       console.log('🎤 Processing translation with target language:', selectedLanguage);
-      console.log('🎤 Language mapping check:', SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage));
 
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -474,20 +434,15 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       const result = await response.json();
       console.log('🎤 Voice Translator result:', result);
-      console.log('🎤 Requested language:', selectedLanguage, 'Received language:', result.targetLanguageCode);
 
-      // Validate that we received a translation
       if (!result.translatedText) {
         throw new Error('No translation received from service');
       }
 
-      // Enhanced validation that target language matches what was requested
       if (result.targetLanguageCode && result.targetLanguageCode !== selectedLanguage) {
         console.error('🎤 CRITICAL ERROR: Language mismatch!', {
           requested: selectedLanguage,
-          received: result.targetLanguageCode,
-          selectedLanguageName: SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name,
-          receivedLanguageName: SUPPORTED_LANGUAGES.find(lang => lang.code === result.targetLanguageCode)?.name
+          received: result.targetLanguageCode
         });
         
         toast({
@@ -497,11 +452,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${result.targetLanguage}`,
           variant: 'destructive'
         });
-        
-        // Still proceed with the translation but warn the user
       }
 
-      // CRITICAL: Increment usage count FIRST
       console.log('📊 About to increment translation usage...');
       const usageSuccess = await incrementTranslationCount();
       console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
@@ -533,7 +485,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsOnCooldown(true);
       setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
 
-      // Enhanced success message with language confirmation
       const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
       toast({
         title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
@@ -542,7 +493,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
           : `Translation to ${targetLangName} completed successfully`,
       });
 
-      if (playbackEnabled && !needsAudioUnlock) {
+      if (playbackEnabled) {
         playTranslatedText(result.translatedText);
       }
     } catch (error) {
@@ -558,21 +509,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]);
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled]);
 
   const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
     console.log('🔊 Play button clicked, text:', text);
     
-    if (needsAudioUnlock) {
-      console.log('🔊 Audio unlock required');
-      toast({
-        title: language === 'ar' ? '🔊 مطلوب تفعيل الصوت' : '🔊 Audio Unlock Required',
-        description: language === 'ar' ? 'اضغط زر تفعيل الصوت أولاً' : 'Please tap the audio unlock button first',
-        variant: 'default'
-      });
-      return;
-    }
-
     if (audioManager.isAudioPlaying()) {
       console.log('🔊 Stopping current audio playback');
       audioManager.stopCurrentAudio();
@@ -669,7 +610,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     } finally {
       setIsPlaying(false);
     }
-  }, [needsAudioUnlock, audioManager, selectedLanguage, audioCache, saveAudioCache, language]);
+  }, [audioManager, selectedLanguage, audioCache, saveAudioCache, language]);
 
   const copyToClipboard = useCallback(async (text: string) => {
     console.log('📋 Copy button clicked, text:', text);
@@ -677,10 +618,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     try {
       setIsCopying(true);
       
-      // Check if clipboard API is available
       if (!navigator.clipboard) {
         console.log('📋 Clipboard API not available, using fallback');
-        // Fallback for older browsers
         const textArea = document.createElement('textarea');
         textArea.value = text;
         textArea.style.position = 'fixed';
@@ -734,6 +673,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     );
   }
 
+  // Check if we need audio unlock (only show if not attempted and on mobile)
+  const needsAudioUnlock = !audioUnlockAttempted && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
@@ -763,7 +705,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Audio unlock button for mobile */}
+          {/* Audio unlock button for mobile - only show if needed */}
           {needsAudioUnlock && (
             <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <VolumeX className="h-4 w-4 text-blue-600" />
@@ -832,7 +774,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </div>
           )}
 
-          {/* Enhanced Language Selector with visual confirmation */}
+          {/* Enhanced Language Selector */}
           <div>
             <label className="text-sm font-medium mb-2 block">
               {language === 'ar' ? 'ترجم إلى:' : 'Translate to:'}
@@ -841,7 +783,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               console.log('🎤 User selected language:', value);
               setSelectedLanguage(value);
               
-              // Show immediate visual feedback
               const selectedLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === value)?.name;
               toast({
                 title: language === 'ar' ? '🔄 تم تغيير اللغة' : '🔄 Language Changed',
@@ -862,7 +803,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                 ))}
               </SelectContent>
             </Select>
-            {/* Language confirmation indicator */}
             <div className="text-xs text-muted-foreground mt-1 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
               {language === 'ar' 
                 ? `✅ سيتم الترجمة إلى: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
@@ -960,6 +900,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      console.log('🔊 Play button clicked directly');
                       copyToClipboard(translatedText);
                     }}
                     disabled={isCopying}
@@ -982,6 +923,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      console.log('🔊 Play button clicked directly, text:', translatedText);
                       playTranslatedText(translatedText);
                     }}
                     disabled={isPlaying}
