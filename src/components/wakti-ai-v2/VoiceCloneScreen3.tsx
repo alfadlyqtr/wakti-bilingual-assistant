@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -82,6 +81,8 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     setAudioUrl(null);
 
     try {
+      console.log('Calling voice-tts function with:', { text: text.trim(), voice_id: selectedVoiceId });
+
       const response = await supabase.functions.invoke('voice-tts', {
         body: {
           text: text.trim(),
@@ -89,11 +90,31 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         }
       });
 
-      if (response.error) throw response.error;
+      console.log('Voice TTS response:', response);
 
-      // The response.data should be a blob for audio
-      const audioBlob = response.data;
+      if (response.error) {
+        console.error('Voice TTS error:', response.error);
+        throw new Error(response.error.message || 'Failed to generate speech');
+      }
+
+      const responseData = response.data;
+      
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Failed to generate speech');
+      }
+
+      // Convert base64 audio to blob URL
+      const audioData = responseData.audioData;
+      const byteCharacters = atob(audioData);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
       const url = URL.createObjectURL(audioBlob);
+      
+      console.log('Audio blob created, URL:', url);
       setAudioUrl(url);
 
       // Update usage
@@ -122,7 +143,14 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const playAudio = () => {
     if (audioUrl) {
       const audio = new Audio(audioUrl);
-      audio.play();
+      audio.play().catch(error => {
+        console.error('Error playing audio:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ' : 'Error',
+          description: language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio',
+          variant: 'destructive',
+        });
+      });
     }
   };
 
