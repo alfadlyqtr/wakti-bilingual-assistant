@@ -66,10 +66,6 @@ serve(async (req) => {
         result = await upscaleImage(action.imageUrl || action.data?.imageUrl, userId, language);
         break;
         
-      case 'remove_background':
-        result = await removeBackground(action.imageUrl || action.data?.imageUrl, userId, language);
-        break;
-        
       default:
         result = {
           success: false,
@@ -398,7 +394,7 @@ async function generatePhotoMaker(prompt: string, images: string[], userId: stri
   }
 }
 
-// Upscale image with Runware
+// New function: Upscale image with Runware
 async function upscaleImage(imageUrl: string, userId: string, language: string) {
   try {
     console.log("Upscaling image with Runware for image:", imageUrl);
@@ -487,108 +483,6 @@ async function upscaleImage(imageUrl: string, userId: string, language: string) 
     return {
       success: false,
       message: language === 'ar' ? 'فشل في تحسين الصورة' : 'Failed to upscale image',
-      error: error.message
-    };
-  }
-}
-
-// New function: Remove background with Runware
-async function removeBackground(imageUrl: string, userId: string, language: string) {
-  try {
-    console.log("Removing background with Runware for image:", imageUrl);
-
-    // Validate input image
-    if (!imageUrl || typeof imageUrl !== 'string') {
-      throw new Error('Valid image URL is required for background removal');
-    }
-
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "imageBackgroundRemoval",
-          taskUUID: crypto.randomUUID(),
-          inputImage: imageUrl,
-          outputFormat: "PNG",
-          outputType: "URL",
-          model: "runware:109@1",
-          settings: {
-            rgba: [255, 255, 255, 0],
-            postProcessMask: true,
-            returnOnlyMask: false,
-            alphaMatting: true,
-            alphaMattingForegroundThreshold: 240,
-            alphaMattingBackgroundThreshold: 10,
-            alphaMattingErodeSize: 10
-          }
-        },
-      ]),
-    });
-
-    console.log("Runware background removal response status:", response.status);
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Runware background removal response data:", result);
-      
-      // Find the background removal result
-      const backgroundRemovalResult = result.data?.find((item: any) => item.taskType === "imageBackgroundRemoval");
-      
-      if (backgroundRemovalResult && backgroundRemovalResult.imageURL) {
-        // Create Supabase client to save image
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-
-        // Save background removed image to database
-        try {
-          await supabase
-            .from('images')
-            .insert({
-              user_id: userId,
-              prompt: 'Background removal',
-              image_url: backgroundRemovalResult.imageURL,
-              metadata: { 
-                provider: 'runware', 
-                imageUUID: backgroundRemovalResult.imageUUID,
-                type: 'background_removal',
-                originalImageUrl: imageUrl,
-                model: "runware:109@1",
-                outputFormat: "PNG"
-              }
-            });
-        } catch (dbError) {
-          console.log("Could not save background-removed image to database:", dbError);
-          // Continue anyway, the image was processed successfully
-        }
-
-        return {
-          success: true,
-          message: language === 'ar' ? 'تم إزالة الخلفية بنجاح' : 'Background removed successfully',
-          imageUrl: backgroundRemovalResult.imageURL
-        };
-      } else {
-        throw new Error('No image URL in background removal response');
-      }
-    } else {
-      const errorText = await response.text();
-      console.error("Runware background removal API error:", response.status, errorText);
-      throw new Error(`Runware background removal API failed: ${response.status}`);
-    }
-    
-  } catch (error) {
-    console.error('Error removing background with Runware:', error);
-    return {
-      success: false,
-      message: language === 'ar' ? 'فشل في إزالة الخلفية' : 'Failed to remove background',
       error: error.message
     };
   }

@@ -4,14 +4,14 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2, TrendingUp, Scissors } from 'lucide-react';
+import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
 
-// Updated trigger types with background removal
+// Updated trigger types with upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'background_removal';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -31,9 +31,6 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
   
   // Determine if this is an Image Upscaling related message
   const isUpscalingMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'upscaling';
-
-  // Determine if this is a Background Removal related message
-  const isBackgroundRemovalMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'background_removal';
 
   return (
     <div className={cn(
@@ -95,22 +92,8 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
             </div>
           )}
 
-          {/* Image Display for Background Removal */}
-          {isBackgroundRemovalMessage && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-              <img 
-                src={message.imageUrl} 
-                alt="Background removed image"
-                className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-600"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {language === 'ar' ? 'صورة مع إزالة الخلفية بالذكاء الاصطناعي' : 'AI background-removed image'}
-              </p>
-            </div>
-          )}
-
           {/* Regular Image Display */}
-          {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && !isBackgroundRemovalMessage && (
+          {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
             <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
               <img 
                 src={message.imageUrl} 
@@ -192,16 +175,8 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
                 </Badge>
               )}
 
-              {/* Background Removal Indicator */}
-              {isBackgroundRemovalMessage && (
-                <Badge variant="outline" className="text-xs py-0 px-1 bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800">
-                  <Scissors className="w-3 h-3 mr-1" />
-                  {language === 'ar' ? 'إزالة الخلفية' : 'Background Removed'}
-                </Badge>
-              )}
-
               {/* Image Generation Indicator */}
-              {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && !isBackgroundRemovalMessage && (
+              {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
                 <Badge variant="outline" className="text-xs py-0 px-1">
                   {language === 'ar' ? 'صورة' : 'Image'}
                 </Badge>

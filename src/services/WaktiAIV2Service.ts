@@ -63,9 +63,9 @@ export interface AIConversation {
   last_message_at: string;
 }
 
-// Updated trigger type with background removal
+// Updated trigger type with image upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'background_removal';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 export class WaktiAIV2Service {
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
@@ -188,7 +188,7 @@ export class WaktiAIV2Service {
         throw new Error('User not authenticated');
       }
       
-      // Prepare payload with image mode information including background removal
+      // Prepare payload with image mode information including upscaling
       const payload = {
         message,
         userId: session.user.id,
@@ -199,7 +199,6 @@ export class WaktiAIV2Service {
         imageMode: activeTrigger === 'image' ? imageMode : undefined,
         isPhotoMaker: activeTrigger === 'image' && imageMode === 'photomaker',
         isUpscaling: activeTrigger === 'image' && imageMode === 'upscaling',
-        isBackgroundRemoval: activeTrigger === 'image' && imageMode === 'background_removal',
         attachedImagesCount: attachedImages?.length || 0
       };
       
