@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -192,7 +191,7 @@ async function addContact(supabase: any, data: any, userId: string, language: st
   }
 }
 
-// Generate image with Runware
+// Generate image with Runware using Juggernaut XL model
 async function generateImage(prompt: string, userId: string, language: string) {
   try {
     console.log("Generating image with Runware for prompt:", prompt);
@@ -211,14 +210,14 @@ async function generateImage(prompt: string, userId: string, language: string) {
           taskType: "imageInference",
           taskUUID: crypto.randomUUID(),
           positivePrompt: prompt,
-          model: "runware:100@1",
-          width: 512,
-          height: 512,
+          model: "civitai:133005@471120",
+          width: 1024,
+          height: 1024,
           numberResults: 1,
-          outputFormat: "WEBP",
-          CFGScale: 1,
+          outputFormat: "JPG",
+          CFGScale: 7,
           scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 4,
+          steps: 25,
         },
       ]),
     });
