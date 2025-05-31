@@ -1,16 +1,17 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2, TrendingUp, Palette } from 'lucide-react';
+import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
 
-// Updated trigger types with stylized art
+// Updated trigger types with upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'stylized';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -30,9 +31,6 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
   
   // Determine if this is an Image Upscaling related message
   const isUpscalingMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'upscaling';
-
-  // Determine if this is a Stylized Art related message
-  const isStylizedMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'stylized';
 
   return (
     <div className={cn(
@@ -94,22 +92,8 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
             </div>
           )}
 
-          {/* Image Display for Stylized Art */}
-          {isStylizedMessage && (
-            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
-              <img 
-                src={message.imageUrl} 
-                alt="Stylized art image"
-                className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-600"
-              />
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                {language === 'ar' ? 'فن مخصص مولد بالذكاء الاصطناعي' : 'AI-generated stylized art'}
-              </p>
-            </div>
-          )}
-
           {/* Regular Image Display */}
-          {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && !isStylizedMessage && (
+          {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
             <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
               <img 
                 src={message.imageUrl} 
@@ -191,16 +175,8 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
                 </Badge>
               )}
 
-              {/* Stylized Art Indicator */}
-              {isStylizedMessage && (
-                <Badge variant="outline" className="text-xs py-0 px-1 bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800">
-                  <Palette className="w-3 h-3 mr-1" />
-                  {language === 'ar' ? 'فن مخصص' : 'Stylized Art'}
-                </Badge>
-              )}
-
               {/* Image Generation Indicator */}
-              {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && !isStylizedMessage && (
+              {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
                 <Badge variant="outline" className="text-xs py-0 px-1">
                   {language === 'ar' ? 'صورة' : 'Image'}
                 </Badge>
