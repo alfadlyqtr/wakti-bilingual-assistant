@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -56,6 +57,10 @@ serve(async (req) => {
         
       case 'generate_image':
         result = await generateImage(action.prompt || action.data?.prompt, userId, language);
+        break;
+        
+      case 'generate_photomaker':
+        result = await generatePhotoMaker(action.prompt || action.data?.prompt, action.images || action.data?.images, userId, language);
         break;
         
       default:
@@ -272,6 +277,115 @@ async function generateImage(prompt: string, userId: string, language: string) {
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',
+      error: error.message
+    };
+  }
+}
+
+// Generate PhotoMaker personalized image with Runware
+async function generatePhotoMaker(prompt: string, images: string[], userId: string, language: string) {
+  try {
+    console.log("Generating PhotoMaker image with Runware for prompt:", prompt);
+    console.log("Number of face images:", images?.length || 0);
+
+    // Auto-prepend 'rwre' if not already in prompt
+    let enhancedPrompt = prompt;
+    if (!prompt.toLowerCase().includes('rwre')) {
+      enhancedPrompt = `rwre ${prompt}`;
+    }
+
+    // Validate images
+    if (!images || images.length === 0) {
+      throw new Error('At least 1 face image is required for PhotoMaker');
+    }
+    if (images.length > 4) {
+      throw new Error('Maximum 4 images allowed for PhotoMaker');
+    }
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "photoMaker",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: enhancedPrompt,
+          model: "civitai:133005@471120", // Juggernaut XL
+          width: 1024,
+          height: 1024,
+          strength: 15,
+          style: "No style",
+          outputFormat: "JPG",
+          outputType: "URL",
+          steps: 25,
+          CFGScale: 7,
+          inputImages: images, // Array of base64 or URL images
+        },
+      ]),
+    });
+
+    console.log("Runware PhotoMaker response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("Runware PhotoMaker response data:", result);
+      
+      // Find the photoMaker result
+      const photoMakerResult = result.data?.find((item: any) => item.taskType === "photoMaker");
+      
+      if (photoMakerResult && photoMakerResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        // Save PhotoMaker image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: enhancedPrompt,
+              image_url: photoMakerResult.imageURL,
+              metadata: { 
+                provider: 'runware', 
+                imageUUID: photoMakerResult.imageUUID,
+                type: 'photomaker',
+                originalPrompt: prompt,
+                imagesCount: images.length
+              }
+            });
+        } catch (dbError) {
+          console.log("Could not save PhotoMaker image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
+
+        return {
+          success: true,
+          message: language === 'ar' ? 'تم إنشاء الصورة الشخصية بنجاح' : 'Personalized image generated successfully',
+          imageUrl: photoMakerResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in PhotoMaker response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("Runware PhotoMaker API error:", response.status, errorText);
+      throw new Error(`Runware PhotoMaker API failed: ${response.status}`);
+    }
+    
+  } catch (error) {
+    console.error('Error generating PhotoMaker image with Runware:', error);
+    return {
+      success: false,
+      message: language === 'ar' ? 'فشل في إنشاء الصورة الشخصية' : 'Failed to generate personalized image',
       error: error.message
     };
   }

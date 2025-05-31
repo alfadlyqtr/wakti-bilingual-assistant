@@ -23,7 +23,8 @@ import {
   Square,
   Search,
   CheckCircle,
-  Globe
+  Globe,
+  User
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -34,8 +35,8 @@ import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
 
-// Add trigger types
-type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+// Add trigger types including photomaker
+type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image' | 'photomaker';
 
 export default function WaktiAIV2() {
   const { user } = useAuth();
@@ -55,7 +56,7 @@ export default function WaktiAIV2() {
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
 
-  // Add trigger state
+  // Add trigger state including photomaker
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -81,7 +82,9 @@ export default function WaktiAIV2() {
       case 'advanced_search':
         return language === 'ar' ? 'بحث متقدم' : 'Advanced Search';
       case 'image':
-        return language === 'ar' ? 'صورة' : 'Image';
+        return language === 'ar' ? 'مولد الصور' : 'Image Generator';
+      case 'photomaker':
+        return language === 'ar' ? 'صانع الصور الشخصية' : 'Photo Maker Personal';
       default:
         return language === 'ar' ? 'محادثة' : 'Chat';
     }
@@ -97,20 +100,45 @@ export default function WaktiAIV2() {
       case 'advanced_search':
         return 'bg-purple-500';
       case 'image':
+      case 'photomaker':
         return 'bg-orange-500';
       default:
         return 'bg-blue-500';
     }
   };
 
+  // Helper function to get trigger mode icon
+  const getTriggerModeIcon = (mode: TriggerMode) => {
+    switch (mode) {
+      case 'photomaker':
+        return User;
+      case 'image':
+        return ({ className }: { className?: string }) => <Upload className={className} />;
+      default:
+        return ({ className }: { className?: string }) => <MessageSquare className={className} />;
+    }
+  };
+
   // Handle trigger mode change
   const handleTriggerChange = (newTrigger: TriggerMode) => {
     setActiveTrigger(newTrigger);
-    toast({
-      title: language === 'ar' ? 'تم تغيير الوضع' : 'Mode Changed',
-      description: `${language === 'ar' ? 'الوضع النشط:' : 'Active mode:'} ${getTriggerModeDisplay(newTrigger)}`,
-      duration: 2000
-    });
+    
+    // Show different instructions for PhotoMaker
+    if (newTrigger === 'photomaker') {
+      toast({
+        title: language === 'ar' ? 'وضع صانع الصور الشخصية' : 'PhotoMaker Mode',
+        description: language === 'ar' 
+          ? 'ارفع 1-4 صور بوجوه واضحة واكتب الوصف المطلوب'
+          : 'Upload 1-4 images with clear faces and write your prompt',
+        duration: 4000
+      });
+    } else {
+      toast({
+        title: language === 'ar' ? 'تم تغيير الوضع' : 'Mode Changed',
+        description: `${language === 'ar' ? 'الوضع النشط:' : 'Active mode:'} ${getTriggerModeDisplay(newTrigger)}`,
+        duration: 2000
+      });
+    }
   };
 
   // Reset trigger to chat mode on page reload
@@ -151,7 +179,7 @@ export default function WaktiAIV2() {
 
   // Initialize speech recognition
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
@@ -167,7 +195,7 @@ export default function WaktiAIV2() {
         setIsListening(true);
       };
 
-      recognition.onresult = (event) => {
+      recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
         console.log('🎤 Speech recognition result:', transcript);
         
@@ -194,7 +222,7 @@ export default function WaktiAIV2() {
         }
       };
 
-      recognition.onerror = (event) => {
+      recognition.onerror = (event: any) => {
         console.error('🎤 Speech recognition error:', event.error);
         
         let errorMessage = language === 'ar' 
@@ -392,10 +420,25 @@ export default function WaktiAIV2() {
     if (!file) return;
 
     if (file.type.startsWith('image/')) {
+      // Validate PhotoMaker mode image limits
+      if (activeTrigger === 'photomaker') {
+        if (attachedImages.length >= 4) {
+          toast({
+            title: language === 'ar' ? 'حد الصور' : 'Image Limit',
+            description: language === 'ar' ? 'يمكن رفع 4 صور كحد أقصى لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
+            variant: 'destructive'
+          });
+          event.target.value = '';
+          return;
+        }
+      }
+      
       setAttachedImages(prev => [...prev, file]);
       toast({
         title: language === 'ar' ? 'تم إرفاق الصورة' : 'Image Attached',
-        description: file.name
+        description: activeTrigger === 'photomaker' 
+          ? `${file.name} (${attachedImages.length + 1}/4)`
+          : file.name
       });
     } else {
       toast({
@@ -432,6 +475,26 @@ export default function WaktiAIV2() {
       return;
     }
 
+    // PhotoMaker validation
+    if (activeTrigger === 'photomaker') {
+      if (attachedImages.length === 0) {
+        toast({
+          title: language === 'ar' ? 'صور مطلوبة' : 'Images Required',
+          description: language === 'ar' ? 'يرجى رفع 1-4 صور للوجوه قبل الإرسال' : 'Please upload 1-4 face images before sending',
+          variant: 'destructive'
+        });
+        return;
+      }
+      if (attachedImages.length > 4) {
+        toast({
+          title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
+          description: language === 'ar' ? 'الحد الأقصى 4 صور لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
+          variant: 'destructive'
+        });
+        return;
+      }
+    }
+
     // Detect language from user input content
     const detectedLanguage = detectLanguage(content.trim());
     
@@ -439,7 +502,8 @@ export default function WaktiAIV2() {
       originalContent: content.trim(),
       detectedLanguage,
       themeLanguage: language,
-      activeTrigger
+      activeTrigger,
+      attachedImages: attachedImages.length
     });
 
     const userMessage: AIMessage = {
@@ -452,6 +516,7 @@ export default function WaktiAIV2() {
 
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
+    const currentAttachedImages = [...attachedImages];
     setAttachedImages([]);
     setIsLoading(true);
     setIsTyping(true);
@@ -469,13 +534,14 @@ export default function WaktiAIV2() {
 
       console.log('🔍 WAKTI AI: Calling unified-ai-brain function via WaktiAIV2Service...');
       
-      // Call the service with active trigger
+      // Call the service with active trigger and images for PhotoMaker
       const result = await WaktiAIV2Service.sendMessageWithTrigger(
         content.trim(), 
         currentConversationId, 
         detectedLanguage, 
         inputType,
-        activeTrigger
+        activeTrigger,
+        activeTrigger === 'photomaker' ? currentAttachedImages : undefined
       );
 
       console.log('🔍 WAKTI AI: Service response received:', result);
@@ -512,6 +578,15 @@ export default function WaktiAIV2() {
         setCurrentConversationId(result.conversationId);
         // Reload conversations list
         loadConversations();
+      }
+
+      // Show success message for PhotoMaker
+      if (activeTrigger === 'photomaker' && result.imageUrl) {
+        toast({
+          title: language === 'ar' ? '✅ تم إنشاء الصورة الشخصية' : '✅ Personal Image Generated',
+          description: language === 'ar' ? 'تم إنشاء صورتك الشخصية بنجاح' : 'Your personalized image has been created',
+          duration: 4000
+        });
       }
 
       console.log('🔍 WAKTI AI: Message processing completed successfully');
@@ -691,6 +766,10 @@ export default function WaktiAIV2() {
             <span className="font-medium text-xs">
               {getTriggerModeDisplay(activeTrigger)}
             </span>
+            {/* Show PhotoMaker icon when active */}
+            {activeTrigger === 'photomaker' && (
+              <User className="h-3 w-3 ml-1" />
+            )}
           </div>
 
           {/* Search Quota Indicator - Only show in Search mode */}
@@ -725,7 +804,8 @@ export default function WaktiAIV2() {
         ref={fileInputRef}
         onChange={processFileUpload}
         className="hidden"
-        accept="*/*"
+        accept={activeTrigger === 'photomaker' ? 'image/*' : '*/*'}
+        multiple={activeTrigger === 'photomaker'}
       />
       <input
         type="file"
@@ -866,24 +946,52 @@ export default function WaktiAIV2() {
 
           {/* Image Attachments Preview */}
           {attachedImages.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {attachedImages.map((image, index) => (
-                <div key={index} className="relative">
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Attachment ${index + 1}`}
-                    className="w-16 h-16 object-cover rounded-lg border-2 border-border"
-                  />
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => removeAttachedImage(index)}
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ))}
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs text-muted-foreground">
+                  {activeTrigger === 'photomaker' 
+                    ? (language === 'ar' ? `صور الوجوه (${attachedImages.length}/4)` : `Face Images (${attachedImages.length}/4)`)
+                    : (language === 'ar' ? 'الصور المرفقة' : 'Attached Images')
+                  }
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {attachedImages.map((image, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={URL.createObjectURL(image)}
+                      alt={`Attachment ${index + 1}`}
+                      className="w-16 h-16 object-cover rounded-lg border-2 border-border"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => removeAttachedImage(index)}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* PhotoMaker Mode Banner */}
+          {activeTrigger === 'photomaker' && (
+            <div className="mb-3 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                <User className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {language === 'ar' ? 'وضع صانع الصور الشخصية نشط' : 'PhotoMaker Mode Active'}
+                </span>
+              </div>
+              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                {language === 'ar' 
+                  ? 'ارفع 1-4 صور بوجوه واضحة واكتب الوصف'
+                  : 'Upload 1-4 clear face images and write your prompt'
+                }
+              </p>
             </div>
           )}
 
@@ -896,7 +1004,11 @@ export default function WaktiAIV2() {
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleTextareaKeyPress}
-                  placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
+                  placeholder={
+                    activeTrigger === 'photomaker'
+                      ? (language === 'ar' ? 'اكتب وصف الصورة المطلوبة...' : 'Describe the image you want...')
+                      : (language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...')
+                  }
                   disabled={isLoading || isListening}
                   className={cn(
                     "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
@@ -913,7 +1025,11 @@ export default function WaktiAIV2() {
                 onClick={handleFileUpload}
                 disabled={isLoading || isListening}
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
-                title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
+                title={
+                  activeTrigger === 'photomaker'
+                    ? (language === 'ar' ? 'رفع صور الوجوه' : 'Upload face images')
+                    : (language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo')
+                }
               >
                 <Upload className="h-5 w-5" />
               </Button>
@@ -939,7 +1055,7 @@ export default function WaktiAIV2() {
               
               <Button
                 onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading || isListening}
+                disabled={!inputMessage.trim() || isLoading || isListening || (activeTrigger === 'photomaker' && attachedImages.length === 0)}
                 size="icon"
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
               >

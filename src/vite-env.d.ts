@@ -68,16 +68,15 @@ interface SpeechGrammar {
   weight: number;
 }
 
-declare global {
-  interface Window {
-    SpeechRecognition: {
-      new(): SpeechRecognition;
-    };
-    webkitSpeechRecognition: {
-      new(): SpeechRecognition;
-    };
-  }
-}
+declare var SpeechRecognition: {
+  prototype: SpeechRecognition;
+  new(): SpeechRecognition;
+};
+
+declare var webkitSpeechRecognition: {
+  prototype: SpeechRecognition;
+  new(): SpeechRecognition;
+};
 
 declare module '@/utils/translations' {
   import { TranslationKey } from '@/utils/translationTypes';
