@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
+import { TextGeneratorPopup } from './TextGeneratorPopup';
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
@@ -15,13 +16,15 @@ interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
   activeTrigger: TriggerMode;
   onTriggerChange: (trigger: TriggerMode) => void;
+  onTextGenerated?: (text: string, mode: 'compose' | 'reply') => void;
 }
 
-export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange, onTextGenerated }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
   const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
   const [voiceCloneOpen, setVoiceCloneOpen] = useState(false);
+  const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
 
   // Save trigger state to localStorage and dispatch event for header
   React.useEffect(() => {
@@ -67,6 +70,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       setTimeout(() => {
         onTriggerChange('chat');
       }, 100);
+    }
+  };
+
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
+    if (onTextGenerated) {
+      onTextGenerated(text, mode);
     }
   };
 
@@ -130,11 +139,11 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             </span>
           </Button>
           
-          {/* Text Generation Button */}
+          {/* Text Generation Button - Updated to open popup */}
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => onSendMessage(language === 'ar' ? 'اكتب نصاً لي' : 'Generate text for me')}
+            onClick={() => setTextGeneratorOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
               <PenTool className="h-3 w-3 text-white" />
@@ -230,6 +239,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       <VoiceClonePopup 
         open={voiceCloneOpen} 
         onOpenChange={setVoiceCloneOpen} 
+      />
+
+      {/* Text Generator Popup */}
+      <TextGeneratorPopup 
+        open={textGeneratorOpen} 
+        onOpenChange={setTextGeneratorOpen}
+        onGenerated={handleTextGenerated}
       />
     </div>
   );
