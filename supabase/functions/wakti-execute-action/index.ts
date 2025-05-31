@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -56,14 +57,6 @@ serve(async (req) => {
         
       case 'generate_image':
         result = await generateImage(action.prompt || action.data?.prompt, userId, language);
-        break;
-        
-      case 'generate_photomaker':
-        result = await generatePhotoMaker(action.prompt || action.data?.prompt, action.images || action.data?.images, userId, language);
-        break;
-        
-      case 'upscale_image':
-        result = await upscaleImage(action.imageUrl || action.data?.imageUrl, userId, language);
         break;
         
       default:
@@ -199,7 +192,7 @@ async function addContact(supabase: any, data: any, userId: string, language: st
   }
 }
 
-// Generate image with Runware using Juggernaut XL model
+// Generate image with Runware
 async function generateImage(prompt: string, userId: string, language: string) {
   try {
     console.log("Generating image with Runware for prompt:", prompt);
@@ -218,14 +211,14 @@ async function generateImage(prompt: string, userId: string, language: string) {
           taskType: "imageInference",
           taskUUID: crypto.randomUUID(),
           positivePrompt: prompt,
-          model: "civitai:133005@471120",
-          width: 1024,
-          height: 1024,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
           numberResults: 1,
-          outputFormat: "JPG",
-          CFGScale: 7,
+          outputFormat: "WEBP",
+          CFGScale: 1,
           scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 25,
+          steps: 4,
         },
       ]),
     });
@@ -280,209 +273,6 @@ async function generateImage(prompt: string, userId: string, language: string) {
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة' : 'Failed to generate image',
-      error: error.message
-    };
-  }
-}
-
-// Generate PhotoMaker personalized image with Runware
-async function generatePhotoMaker(prompt: string, images: string[], userId: string, language: string) {
-  try {
-    console.log("Generating PhotoMaker image with Runware for prompt:", prompt);
-    console.log("Number of face images:", images?.length || 0);
-
-    // Auto-prepend 'rwre' if not already in prompt
-    let enhancedPrompt = prompt;
-    if (!prompt.toLowerCase().includes('rwre')) {
-      enhancedPrompt = `rwre ${prompt}`;
-    }
-
-    // Validate images
-    if (!images || images.length === 0) {
-      throw new Error('At least 1 face image is required for PhotoMaker');
-    }
-    if (images.length > 4) {
-      throw new Error('Maximum 4 images allowed for PhotoMaker');
-    }
-
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "photoMaker",
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: enhancedPrompt,
-          model: "civitai:133005@471120", // Juggernaut XL
-          width: 1024,
-          height: 1024,
-          strength: 15,
-          style: "No style",
-          outputFormat: "JPG",
-          outputType: "URL",
-          steps: 25,
-          CFGScale: 7,
-          inputImages: images, // Array of base64 or URL images
-        },
-      ]),
-    });
-
-    console.log("Runware PhotoMaker response status:", response.status);
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Runware PhotoMaker response data:", result);
-      
-      // Find the photoMaker result
-      const photoMakerResult = result.data?.find((item: any) => item.taskType === "photoMaker");
-      
-      if (photoMakerResult && photoMakerResult.imageURL) {
-        // Create Supabase client to save image
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-
-        // Save PhotoMaker image to database
-        try {
-          await supabase
-            .from('images')
-            .insert({
-              user_id: userId,
-              prompt: enhancedPrompt,
-              image_url: photoMakerResult.imageURL,
-              metadata: { 
-                provider: 'runware', 
-                imageUUID: photoMakerResult.imageUUID,
-                type: 'photomaker',
-                originalPrompt: prompt,
-                imagesCount: images.length
-              }
-            });
-        } catch (dbError) {
-          console.log("Could not save PhotoMaker image to database:", dbError);
-          // Continue anyway, the image was generated successfully
-        }
-
-        return {
-          success: true,
-          message: language === 'ar' ? 'تم إنشاء الصورة الشخصية بنجاح' : 'Personalized image generated successfully',
-          imageUrl: photoMakerResult.imageURL
-        };
-      } else {
-        throw new Error('No image URL in PhotoMaker response');
-      }
-    } else {
-      const errorText = await response.text();
-      console.error("Runware PhotoMaker API error:", response.status, errorText);
-      throw new Error(`Runware PhotoMaker API failed: ${response.status}`);
-    }
-    
-  } catch (error) {
-    console.error('Error generating PhotoMaker image with Runware:', error);
-    return {
-      success: false,
-      message: language === 'ar' ? 'فشل في إنشاء الصورة الشخصية' : 'Failed to generate personalized image',
-      error: error.message
-    };
-  }
-}
-
-// New function: Upscale image with Runware
-async function upscaleImage(imageUrl: string, userId: string, language: string) {
-  try {
-    console.log("Upscaling image with Runware for image:", imageUrl);
-
-    // Validate input image
-    if (!imageUrl || typeof imageUrl !== 'string') {
-      throw new Error('Valid image URL is required for upscaling');
-    }
-
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "imageUpscale",
-          taskUUID: crypto.randomUUID(),
-          inputImage: imageUrl,
-          outputFormat: "JPG",
-          outputType: "URL",
-          upscaleFactor: 2,
-          outputQuality: 95,
-        },
-      ]),
-    });
-
-    console.log("Runware upscale response status:", response.status);
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log("Runware upscale response data:", result);
-      
-      // Find the image upscale result
-      const upscaleResult = result.data?.find((item: any) => item.taskType === "imageUpscale");
-      
-      if (upscaleResult && upscaleResult.imageURL) {
-        // Create Supabase client to save image
-        const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-
-        // Save upscaled image to database
-        try {
-          await supabase
-            .from('images')
-            .insert({
-              user_id: userId,
-              prompt: 'Image upscaling 2x',
-              image_url: upscaleResult.imageURL,
-              metadata: { 
-                provider: 'runware', 
-                imageUUID: upscaleResult.imageUUID,
-                type: 'upscaling',
-                originalImageUrl: imageUrl,
-                upscaleFactor: 2,
-                outputQuality: 95
-              }
-            });
-        } catch (dbError) {
-          console.log("Could not save upscaled image to database:", dbError);
-          // Continue anyway, the image was upscaled successfully
-        }
-
-        return {
-          success: true,
-          message: language === 'ar' ? 'تم تحسين الصورة بنجاح (2x)' : 'Image upscaled successfully (2x)',
-          imageUrl: upscaleResult.imageURL
-        };
-      } else {
-        throw new Error('No image URL in upscale response');
-      }
-    } else {
-      const errorText = await response.text();
-      console.error("Runware upscale API error:", response.status, errorText);
-      throw new Error(`Runware upscale API failed: ${response.status}`);
-    }
-    
-  } catch (error) {
-    console.error('Error upscaling image with Runware:', error);
-    return {
-      success: false,
-      message: language === 'ar' ? 'فشل في تحسين الصورة' : 'Failed to upscale image',
       error: error.message
     };
   }

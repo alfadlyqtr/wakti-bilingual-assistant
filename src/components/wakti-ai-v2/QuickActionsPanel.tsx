@@ -4,31 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-// Updated trigger types with image upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
   activeTrigger: TriggerMode;
   onTriggerChange: (trigger: TriggerMode) => void;
-  imageMode: ImageMode;
-  onImageModeChange: (imageMode: ImageMode) => void;
 }
 
-export function QuickActionsPanel({ 
-  onSendMessage, 
-  activeTrigger, 
-  onTriggerChange, 
-  imageMode, 
-  onImageModeChange 
-}: QuickActionsPanelProps) {
+export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange }: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
@@ -39,9 +28,8 @@ export function QuickActionsPanel({
   // Save trigger state to localStorage and dispatch event for header
   React.useEffect(() => {
     localStorage.setItem('wakti-ai-active-trigger', activeTrigger);
-    localStorage.setItem('wakti-ai-image-mode', imageMode);
     window.dispatchEvent(new Event('ai-trigger-change'));
-  }, [activeTrigger, imageMode]);
+  }, [activeTrigger]);
 
   const triggerButtons = [
     {
@@ -64,40 +52,15 @@ export function QuickActionsPanel({
       label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
       description: language === 'ar' ? 'بحث عميق وتحليل' : 'Deep search & analysis',
       color: 'bg-purple-500'
-    }
-  ];
-
-  // Image generation dropdown options with upscaling
-  const imageOptions = [
-    {
-      id: 'regular' as ImageMode,
-      label: language === 'ar' ? 'مولد الصور' : 'Image Generator',
-      description: language === 'ar' ? 'إنشاء الصور العادية' : 'Regular image creation',
-      icon: Image
     },
     {
-      id: 'photomaker' as ImageMode,
-      label: language === 'ar' ? 'صانع الصور الشخصية' : 'Photo Maker Personal',
-      description: language === 'ar' ? 'إنشاء صور شخصية مخصصة' : 'Custom personal images',
-      icon: User
-    },
-    {
-      id: 'upscaling' as ImageMode,
-      label: language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling',
-      description: language === 'ar' ? 'تحسين جودة ودقة الصورة' : 'Enhance image quality & resolution',
-      icon: TrendingUp
+      id: 'image' as TriggerMode,
+      icon: Image,
+      label: language === 'ar' ? 'صورة' : 'Image',
+      description: language === 'ar' ? 'إنشاء الصور' : 'Image generation',
+      color: 'bg-orange-500'
     }
   ];
-
-  const getImageModeDisplay = () => {
-    const activeImageMode = imageOptions.find(option => option.id === imageMode);
-    return activeImageMode ? activeImageMode.label : (language === 'ar' ? 'صورة' : 'Image');
-  };
-
-  const getImageModeIcon = () => {
-    const activeImageMode = imageOptions.find(option => option.id === imageMode);
-    return activeImageMode ? activeImageMode.icon : Image;
-  };
 
   const handleCustomAction = () => {
     if (customLabel && customMessage) {
@@ -118,14 +81,6 @@ export function QuickActionsPanel({
     }
   };
 
-  const handleImageTriggerClick = () => {
-    onTriggerChange('image');
-    // When switching to image trigger, ensure we have a valid image mode
-    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling') {
-      onImageModeChange('regular');
-    }
-  };
-
   return (
     <div className="space-y-4 h-full flex flex-col">
       {/* AI Trigger Controls */}
@@ -136,7 +91,6 @@ export function QuickActionsPanel({
         </h3>
         
         <div className="grid grid-cols-2 gap-2">
-          {/* Regular trigger buttons */}
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
@@ -162,60 +116,6 @@ export function QuickActionsPanel({
               </div>
             </Button>
           ))}
-
-          {/* Image Generation Dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant={activeTrigger === 'image' ? "default" : "outline"}
-                className={cn(
-                  "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
-                  activeTrigger === 'image' && "ring-2 ring-primary ring-offset-1"
-                )}
-                onClick={handleImageTriggerClick}
-              >
-                <div className={cn(
-                  "p-1.5 rounded-md flex items-center gap-1",
-                  activeTrigger === 'image' ? "bg-primary-foreground" : "bg-orange-500"
-                )}>
-                  {React.createElement(getImageModeIcon(), {
-                    className: cn(
-                      "h-3 w-3",
-                      activeTrigger === 'image' ? "text-primary" : "text-white"
-                    )
-                  })}
-                  <ChevronDown className={cn(
-                    "h-2 w-2",
-                    activeTrigger === 'image' ? "text-primary" : "text-white"
-                  )} />
-                </div>
-                <div className="leading-tight">
-                  <div className="text-[10px] font-medium">{getImageModeDisplay()}</div>
-                  <div className="text-[8px] text-muted-foreground">
-                    {language === 'ar' ? 'إنشاء الصور' : 'Image generation'}
-                  </div>
-                </div>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56" align="center">
-              {imageOptions.map((option) => (
-                <DropdownMenuItem
-                  key={option.id}
-                  onClick={() => {
-                    onTriggerChange('image');
-                    onImageModeChange(option.id);
-                  }}
-                  className="flex flex-col items-start p-3"
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <option.icon className="h-4 w-4" />
-                    <span className="font-medium">{option.label}</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground mt-1">{option.description}</span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
 
@@ -344,56 +244,6 @@ export function QuickActionsPanel({
                 "{example}"
               </Button>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* PhotoMaker instructions - ONLY visible in photomaker mode */}
-      {activeTrigger === 'image' && imageMode === 'photomaker' && (
-        <div className="flex-1 pt-2 border-t border-border/50">
-          <h4 className="text-xs font-medium text-muted-foreground mb-2">
-            {language === 'ar' ? 'تعليمات صانع الصور الشخصية' : 'PhotoMaker Instructions'}
-          </h4>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <div className="p-2 bg-muted/30 rounded-lg">
-              <p className="font-medium mb-1">
-                {language === 'ar' ? '📸 رفع الصور:' : '📸 Upload Images:'}
-              </p>
-              <p>{language === 'ar' ? '• 1-4 صور بوجوه واضحة' : '• 1-4 images with clear faces'}</p>
-              <p>{language === 'ar' ? '• استخدم أزرار الرفع أسفل الشاشة' : '• Use upload buttons below screen'}</p>
-            </div>
-            <div className="p-2 bg-muted/30 rounded-lg">
-              <p className="font-medium mb-1">
-                {language === 'ar' ? '✍️ كتابة الوصف:' : '✍️ Write Prompt:'}
-              </p>
-              <p>{language === 'ar' ? '• اكتب وصف الصورة المطلوبة' : '• Describe the desired image'}</p>
-              <p>{language === 'ar' ? '• سيتم إضافة "rwre" تلقائياً' : '• "rwre" will be added automatically'}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Image Upscaling instructions - ONLY visible in upscaling mode */}
-      {activeTrigger === 'image' && imageMode === 'upscaling' && (
-        <div className="flex-1 pt-2 border-t border-border/50">
-          <h4 className="text-xs font-medium text-muted-foreground mb-2">
-            {language === 'ar' ? 'تعليمات تحسين الصور' : 'Image Upscaling Instructions'}
-          </h4>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <div className="p-2 bg-muted/30 rounded-lg">
-              <p className="font-medium mb-1">
-                {language === 'ar' ? '📸 رفع الصورة:' : '📸 Upload Image:'}
-              </p>
-              <p>{language === 'ar' ? '• صورة واحدة فقط' : '• Single image only'}</p>
-              <p>{language === 'ar' ? '• سيتم تحسين الجودة والدقة' : '• Quality & resolution will be enhanced'}</p>
-            </div>
-            <div className="p-2 bg-muted/30 rounded-lg">
-              <p className="font-medium mb-1">
-                {language === 'ar' ? '⚡ معالجة:' : '⚡ Processing:'}
-              </p>
-              <p>{language === 'ar' ? '• التحسين بمعامل 2x' : '• 2x upscaling factor'}</p>
-              <p>{language === 'ar' ? '• جودة عالية 95%' : '• High quality 95%'}</p>
-            </div>
           </div>
         </div>
       )}

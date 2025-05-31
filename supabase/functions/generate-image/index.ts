@@ -29,7 +29,7 @@ serve(async (req) => {
 
     console.log("Generating image with Runware API for prompt:", prompt);
 
-    // Use Runware API for image generation with Juggernaut XL model
+    // Use Runware API for image generation
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
       headers: {
@@ -44,14 +44,14 @@ serve(async (req) => {
           taskType: "imageInference",
           taskUUID: crypto.randomUUID(),
           positivePrompt: prompt,
-          model: "civitai:133005@471120",
-          width: 1024,
-          height: 1024,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
           numberResults: 1,
-          outputFormat: "JPG",
-          CFGScale: 7,
+          outputFormat: "WEBP",
+          CFGScale: 1,
           scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 25,
+          steps: 4,
         },
       ]),
     });
