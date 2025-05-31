@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -190,6 +189,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   const [isOnCooldown, setIsOnCooldown] = useState(false);
   const [playbackEnabled, setPlaybackEnabled] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
   const [translationHistory, setTranslationHistory] = useState<TranslationItem[]>([]);
   const [audioCache, setAudioCache] = useState<CachedAudio>({});
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
@@ -424,7 +424,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         variant: 'destructive'
       });
     }
-  }, [quotaError, canTranslate, isOnCooldown, language, selectedLanguage]); // Added selectedLanguage to dependencies
+  }, [quotaError, canTranslate, isOnCooldown, language, selectedLanguage]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -558,10 +558,13 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]); // FIXED: Added selectedLanguage to dependencies
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]);
 
   const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
+    console.log('🔊 Play button clicked, text:', text);
+    
     if (needsAudioUnlock) {
+      console.log('🔊 Audio unlock required');
       toast({
         title: language === 'ar' ? '🔊 مطلوب تفعيل الصوت' : '🔊 Audio Unlock Required',
         description: language === 'ar' ? 'اضغط زر تفعيل الصوت أولاً' : 'Please tap the audio unlock button first',
@@ -571,12 +574,14 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
 
     if (audioManager.isAudioPlaying()) {
+      console.log('🔊 Stopping current audio playback');
       audioManager.stopCurrentAudio();
       setIsPlaying(false);
       return;
     }
 
     try {
+      console.log('🔊 Starting audio playback');
       setIsPlaying(true);
       
       const cacheKey = `${text}_${selectedLanguage}`;
@@ -667,14 +672,43 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   }, [needsAudioUnlock, audioManager, selectedLanguage, audioCache, saveAudioCache, language]);
 
   const copyToClipboard = useCallback(async (text: string) => {
+    console.log('📋 Copy button clicked, text:', text);
+    
     try {
-      await navigator.clipboard.writeText(text);
+      setIsCopying(true);
+      
+      // Check if clipboard API is available
+      if (!navigator.clipboard) {
+        console.log('📋 Clipboard API not available, using fallback');
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      
+      console.log('📋 Text copied successfully');
       toast({
-        title: language === 'ar' ? 'تم النسخ' : 'Copied',
+        title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
         description: language === 'ar' ? 'تم نسخ النص المترجم' : 'Translated text copied to clipboard',
       });
     } catch (error) {
-      console.error('Failed to copy text:', error);
+      console.error('📋 Failed to copy text:', error);
+      toast({
+        title: language === 'ar' ? '❌ فشل النسخ' : '❌ Copy Failed',
+        description: language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text to clipboard',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCopying(false);
     }
   }, [language]);
 
@@ -914,31 +948,54 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </p>
           </div>
 
-          {/* Translation Results */}
+          {/* Translation Results with FIXED buttons */}
           {translatedText && (
             <div className="space-y-3">
               <div className="p-4 bg-muted rounded-lg text-center relative">
-                <div className="text-sm font-medium mb-2">{translatedText}</div>
-                <div className="flex justify-center gap-2">
+                <div className="text-sm font-medium mb-3">{translatedText}</div>
+                <div className="flex justify-center gap-3">
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => copyToClipboard(translatedText)}
-                    className="h-8 w-8 p-0"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      copyToClipboard(translatedText);
+                    }}
+                    disabled={isCopying}
+                    className="h-10 w-20 flex items-center justify-center gap-2"
                   >
-                    <Copy className="h-3 w-3" />
+                    {isCopying ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4" />
+                        <span className="text-xs">
+                          {language === 'ar' ? 'نسخ' : 'Copy'}
+                        </span>
+                      </>
+                    )}
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
-                    onClick={() => playTranslatedText(translatedText)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      playTranslatedText(translatedText);
+                    }}
                     disabled={isPlaying}
-                    className="h-8 w-8 p-0"
+                    className="h-10 w-20 flex items-center justify-center gap-2"
                   >
                     {isPlaying ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Volume2 className="h-3 w-3" />
+                      <>
+                        <Volume2 className="h-4 w-4" />
+                        <span className="text-xs">
+                          {language === 'ar' ? 'تشغيل' : 'Play'}
+                        </span>
+                      </>
                     )}
                   </Button>
                 </div>
