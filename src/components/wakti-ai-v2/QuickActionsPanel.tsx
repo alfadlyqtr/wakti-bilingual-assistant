@@ -11,7 +11,7 @@ import {
   PenTool,
   Mic,
   Globe,
-  Languages,
+  Translate,
   Volume2,
   BookOpen
 } from 'lucide-react';
@@ -44,22 +44,22 @@ export function QuickActionsPanel({
 
   const triggerModes = [
     {
-      mode: 'chat' as TriggerMode,
+      mode: 'chat',
       label: language === 'ar' ? 'محادثة' : 'Chat',
       icon: MessageSquare
     },
     {
-      mode: 'search' as TriggerMode,
+      mode: 'search',
       label: language === 'ar' ? 'بحث' : 'Search',
       icon: Search
     },
     {
-      mode: 'advanced_search' as TriggerMode,
+      mode: 'advanced_search',
       label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
       icon: Layers3
     },
     {
-      mode: 'image' as TriggerMode,
+      mode: 'image',
       label: language === 'ar' ? 'صورة' : 'Image',
       icon: ImageIcon
     }
@@ -172,7 +172,7 @@ export function QuickActionsPanel({
           </div>
         </Button>
         <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3" onClick={() => setVoiceTranslatorOpen(true)}>
-          <Languages className="h-4 w-4" />
+          <Translate className="h-4 w-4" />
           <div className="text-left">
             <div className="font-medium">
               {language === 'ar' ? 'ترجمة الصوت' : 'Voice Translator'}

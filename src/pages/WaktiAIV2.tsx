@@ -69,8 +69,6 @@ export default function WaktiAIV2() {
 
   // Handle text generated from the popup
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    console.log('🔍 TEXT GENERATOR: handleTextGenerated called', { text, mode });
-    
     if (mode === 'compose') {
       // Add as AI response in chat with action buttons
       const assistantMessage: AIMessage = {
@@ -81,33 +79,20 @@ export default function WaktiAIV2() {
         isGeneratedText: true,
         generatedTextMode: mode
       };
-      
-      console.log('🔍 TEXT GENERATOR: Adding message to chat:', assistantMessage);
-      setMessages(prev => {
-        const newMessages = [...prev, assistantMessage];
-        console.log('🔍 TEXT GENERATOR: Updated messages array:', newMessages);
-        return newMessages;
-      });
+      setMessages(prev => [...prev, assistantMessage]);
     } else {
       // For reply mode, set text in input field
-      console.log('🔍 TEXT GENERATOR: Setting text in input field:', text);
       setInputMessage(text);
       // Focus the textarea after a short delay
       setTimeout(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
           textareaRef.current.setSelectionRange(text.length, text.length);
-          console.log('🔍 TEXT GENERATOR: Focused textarea and set cursor position');
         }
       }, 100);
     }
 
-    // Close the text generator popup
-    console.log('🔍 TEXT GENERATOR: Closing text generator popup');
-    setTextGeneratorOpen(false);
-    
     // Close the right drawer
-    console.log('🔍 TEXT GENERATOR: Closing right drawer');
     setRightDrawerOpen(false);
 
     toast({
@@ -116,8 +101,6 @@ export default function WaktiAIV2() {
         ? (language === 'ar' ? 'ظهر النص في المحادثة' : 'Text appeared in chat')
         : (language === 'ar' ? 'النص جاهز للإرسال' : 'Text ready to send'),
     });
-    
-    console.log('🔍 TEXT GENERATOR: handleTextGenerated completed successfully');
   };
 
   // Helper function to detect language from text input
@@ -908,10 +891,7 @@ export default function WaktiAIV2() {
       {/* Text Generator Popup */}
       <TextGeneratorPopup
         open={textGeneratorOpen}
-        onOpenChange={(open) => {
-          console.log('🔍 TEXT GENERATOR: Popup open state changed:', open);
-          setTextGeneratorOpen(open);
-        }}
+        onOpenChange={setTextGeneratorOpen}
         onGenerated={handleTextGenerated}
       />
 
