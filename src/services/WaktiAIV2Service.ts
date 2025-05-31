@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIResponse {
@@ -36,14 +37,22 @@ export interface AIMessage {
   content: string;
   timestamp: Date;
   intent?: string;
-  confidence?: number;
+  confidence?: string;
   actionTaken?: string;
   inputType?: 'text' | 'voice';
   browsingUsed?: boolean;
   browsingData?: {
-    sources: any[];
+    hasResults?: boolean;
+    sources?: any[];
+    images?: any[];
+    query?: string;
   };
-  quotaStatus?: any;
+  quotaStatus?: {
+    count: number;
+    limit: number;
+    usagePercentage: number;
+    remaining: number;
+  };
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
   isGeneratedText?: boolean;
