@@ -48,7 +48,6 @@ serve(async (req) => {
       .single();
 
     if (usageError) {
-      console.error('Failed to check character usage:', usageError);
       throw new Error('Failed to check character usage');
     }
 
@@ -56,8 +55,6 @@ serve(async (req) => {
     if (text.length > remainingChars) {
       throw new Error(`Not enough characters remaining. You have ${remainingChars} characters left.`);
     }
-
-    console.log('Making request to ElevenLabs API...');
 
     // Call ElevenLabs TTS API
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
@@ -76,23 +73,11 @@ serve(async (req) => {
       }),
     });
 
-    console.log('ElevenLabs API response status:', response.status);
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('ElevenLabs TTS API error:', errorText);
       throw new Error(`Failed to generate speech: ${errorText}`);
     }
-
-    // Get audio data as arrayBuffer
-    console.log('Converting audio response to array buffer...');
-    const audioBuffer = await response.arrayBuffer();
-    console.log('Audio buffer size:', audioBuffer.byteLength);
-
-    // Convert to base64 for frontend consumption
-    const audioArray = new Uint8Array(audioBuffer);
-    const base64Audio = btoa(String.fromCharCode(...audioArray));
-    console.log('Base64 audio length:', base64Audio.length);
 
     // Update character usage
     const { error: updateError } = await supabase
@@ -104,31 +89,24 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('Failed to update character usage:', updateError);
-    } else {
-      console.log('Character usage updated successfully');
     }
 
-    // Return base64 encoded audio
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        audioData: base64Audio,
-        contentType: 'audio/mpeg'
-      }),
-      {
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    // Return audio as blob
+    const audioBuffer = await response.arrayBuffer();
+    
+    return new Response(audioBuffer, {
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'audio/mpeg',
+        'Content-Disposition': 'attachment; filename="voice-output.mp3"',
+      },
+    });
 
   } catch (error) {
     console.error('Error in voice-tts function:', error);
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'Unknown error occurred',
-        success: false
+        error: error.message || 'Unknown error occurred' 
       }),
       { 
         status: 400, 
