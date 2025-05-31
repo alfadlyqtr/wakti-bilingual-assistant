@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -260,8 +261,8 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
         include_answer: true,
         include_images: true,
         include_raw_content: false,
-        max_results: 5,
-        chunks_per_source: 3,
+        max_results: 2,
+        chunks_per_source: 1,
         time_range: "month"
       };
     }
@@ -312,7 +313,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en') {
     return {
       success: true,
       answer: data.answer,
-      sources: data.results?.slice(0, searchMode === 'advanced' ? 10 : 5) || [],
+      sources: data.results?.slice(0, searchMode === 'advanced' ? 10 : 2) || [],
       images: data.images || [],
       query: query,
       searchMode: searchMode,
