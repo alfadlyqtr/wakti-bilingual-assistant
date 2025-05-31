@@ -2,13 +2,6 @@
 /// <reference types="vite/client" />
 
 // Speech Recognition API declarations
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
-
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
   grammars: SpeechGrammarList;
@@ -79,6 +72,13 @@ declare var SpeechRecognition: {
   prototype: SpeechRecognition;
   new(): SpeechRecognition;
 };
+
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+}
 
 declare module '@/utils/translations' {
   import { TranslationKey } from '@/utils/translationTypes';
