@@ -188,6 +188,7 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
         {/* Search Results Actions */}
         {message.browsingData?.sources && (
           <SearchResultActions 
+            content={message.content}
             sources={message.browsingData.sources}
             query={message.browsingData.query}
           />
