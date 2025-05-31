@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -540,8 +541,7 @@ export default function WaktiAIV2() {
         currentConversationId, 
         detectedLanguage, 
         inputType,
-        activeTrigger,
-        activeTrigger === 'photomaker' ? currentAttachedImages : undefined
+        activeTrigger
       );
 
       console.log('🔍 WAKTI AI: Service response received:', result);
