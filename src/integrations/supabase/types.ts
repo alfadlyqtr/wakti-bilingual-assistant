@@ -873,6 +873,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_voice_clones: {
+        Row: {
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+          voice_id: string
+          voice_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+          voice_id: string
+          voice_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+          voice_id?: string
+          voice_name?: string
+        }
+        Relationships: []
+      }
+      user_voice_usage: {
+        Row: {
+          characters_limit: number
+          characters_used: number
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          characters_limit?: number
+          characters_used?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          characters_limit?: number
+          characters_used?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
