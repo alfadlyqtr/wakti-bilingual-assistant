@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -169,7 +170,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             </span>
           </Button>
           
-          {/* Custom Input Action */}
+          {/* Voice Clone Button (formerly Custom Input) */}
           <Dialog open={customActionDialogOpen} onOpenChange={setCustomActionDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -180,7 +181,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
                   <Settings className="h-3 w-3 text-white" />
                 </div>
                 <span className="text-[10px] font-medium leading-tight">
-                  {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
+                  {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
                 </span>
               </Button>
             </DialogTrigger>
