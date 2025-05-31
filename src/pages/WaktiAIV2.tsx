@@ -33,8 +33,6 @@ import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
-import { TextActionButtons } from '@/components/wakti-ai-v2/TextActionButtons';
-import { TextGeneratorPopup } from '@/components/wakti-ai-v2/TextGeneratorPopup';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
@@ -56,7 +54,6 @@ export default function WaktiAIV2() {
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
-  const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
 
   // Add trigger state
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
@@ -66,42 +63,6 @@ export default function WaktiAIV2() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
-
-  // Handle text generated from the popup
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    if (mode === 'compose') {
-      // Add as AI response in chat with action buttons
-      const assistantMessage: AIMessage = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: text,
-        timestamp: new Date(),
-        isGeneratedText: true,
-        generatedTextMode: mode
-      };
-      setMessages(prev => [...prev, assistantMessage]);
-    } else {
-      // For reply mode, set text in input field
-      setInputMessage(text);
-      // Focus the textarea after a short delay
-      setTimeout(() => {
-        if (textareaRef.current) {
-          textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(text.length, text.length);
-        }
-      }, 100);
-    }
-
-    // Close the right drawer
-    setRightDrawerOpen(false);
-
-    toast({
-      title: language === 'ar' ? 'تم إنشاء النص!' : 'Text Generated!',
-      description: mode === 'compose' 
-        ? (language === 'ar' ? 'ظهر النص في المحادثة' : 'Text appeared in chat')
-        : (language === 'ar' ? 'النص جاهز للإرسال' : 'Text ready to send'),
-    });
-  };
 
   // Helper function to detect language from text input
   const detectLanguage = (text: string): 'en' | 'ar' => {
@@ -780,22 +741,12 @@ export default function WaktiAIV2() {
       <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
-            <div key={message.id}>
-              <ChatBubble 
-                message={message} 
-                onSearchConfirm={handleSearchConfirmation}
-                activeTrigger={activeTrigger}
-              />
-              {/* Add Text Action Buttons for generated text */}
-              {message.role === 'assistant' && message.isGeneratedText && (
-                <div className="ml-auto max-w-[85%] mt-1">
-                  <TextActionButtons 
-                    text={message.content} 
-                    mode={message.generatedTextMode || 'compose'}
-                  />
-                </div>
-              )}
-            </div>
+            <ChatBubble 
+              key={message.id} 
+              message={message} 
+              onSearchConfirm={handleSearchConfirmation}
+              activeTrigger={activeTrigger}
+            />
           ))}
           
           {isTyping && <TypingIndicator />}
@@ -875,8 +826,6 @@ export default function WaktiAIV2() {
               }}
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
-              onTextGenerated={handleTextGenerated}
-              onOpenTextGenerator={() => setTextGeneratorOpen(true)}
             />
           </div>
         </div>
@@ -886,13 +835,6 @@ export default function WaktiAIV2() {
       <KnowledgeModal 
         open={knowledgeModalOpen} 
         onOpenChange={setKnowledgeModalOpen} 
-      />
-
-      {/* Text Generator Popup */}
-      <TextGeneratorPopup
-        open={textGeneratorOpen}
-        onOpenChange={setTextGeneratorOpen}
-        onGenerated={handleTextGenerated}
       />
 
       {/* Overlay for both drawers */}

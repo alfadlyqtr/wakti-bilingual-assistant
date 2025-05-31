@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIResponse {
@@ -42,7 +41,7 @@ export interface AIMessage {
   inputType?: 'text' | 'voice';
   browsingUsed?: boolean;
   browsingData?: {
-    hasResults?: boolean;
+    hasResults: boolean;
     sources?: any[];
     images?: any[];
     query?: string;
@@ -55,8 +54,6 @@ export interface AIMessage {
   };
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
-  isGeneratedText?: boolean;
-  generatedTextMode?: 'compose' | 'reply';
 }
 
 export interface AIConversation {
