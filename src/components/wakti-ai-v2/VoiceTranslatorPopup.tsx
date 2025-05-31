@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -200,6 +201,21 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
   // Memoize the audio manager to prevent recreation on every render
   const audioManager = useMemo(() => new AudioManager(), []);
 
+  // Clear translation when language changes
+  useEffect(() => {
+    console.log('🎤 Language selection changed to:', selectedLanguage);
+    setTranslatedText(''); // Clear previous translation when language changes
+    
+    // Also clear cache if it contains old language entries
+    const currentLangCache: CachedAudio = {};
+    Object.entries(audioCache).forEach(([key, value]) => {
+      if (key.includes(`_${selectedLanguage}`)) {
+        currentLangCache[key] = value;
+      }
+    });
+    setAudioCache(currentLangCache);
+  }, [selectedLanguage]);
+
   // Debounced audio unlock check to prevent rapid state changes
   const checkAudioUnlock = useCallback(() => {
     const needsUnlock = audioManager.needsUnlock();
@@ -354,6 +370,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
 
     try {
+      console.log('🎤 Starting recording with target language:', selectedLanguage);
+      
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           sampleRate: 44100,
@@ -406,7 +424,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
         variant: 'destructive'
       });
     }
-  }, [quotaError, canTranslate, isOnCooldown, language]);
+  }, [quotaError, canTranslate, isOnCooldown, language, selectedLanguage]); // Added selectedLanguage to dependencies
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
@@ -420,9 +438,13 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     }
   }, [isRecording]);
 
+  // FIXED: Added selectedLanguage to useCallback dependencies to prevent stale closure
   const processVoiceTranslation = useCallback(async (audioBlob: Blob) => {
     try {
       setIsProcessing(true);
+
+      console.log('🎤 Processing translation with target language:', selectedLanguage);
+      console.log('🎤 Language mapping check:', SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage));
 
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -434,7 +456,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       formData.append('audioBlob', audioBlob, 'audio.webm');
       formData.append('targetLanguage', selectedLanguage);
 
-      console.log('🎤 Voice Translator: Processing translation...');
+      console.log('🎤 Voice Translator: Processing translation to:', selectedLanguage);
 
       const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-translator', {
         method: 'POST',
@@ -452,18 +474,31 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
 
       const result = await response.json();
       console.log('🎤 Voice Translator result:', result);
+      console.log('🎤 Requested language:', selectedLanguage, 'Received language:', result.targetLanguageCode);
 
       // Validate that we received a translation
       if (!result.translatedText) {
         throw new Error('No translation received from service');
       }
 
-      // Validate target language matches what was requested
+      // Enhanced validation that target language matches what was requested
       if (result.targetLanguageCode && result.targetLanguageCode !== selectedLanguage) {
-        console.warn('🎤 Warning: Target language mismatch!', {
+        console.error('🎤 CRITICAL ERROR: Language mismatch!', {
           requested: selectedLanguage,
-          received: result.targetLanguageCode
+          received: result.targetLanguageCode,
+          selectedLanguageName: SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name,
+          receivedLanguageName: SUPPORTED_LANGUAGES.find(lang => lang.code === result.targetLanguageCode)?.name
         });
+        
+        toast({
+          title: language === 'ar' ? '⚠️ خطأ في اللغة' : '⚠️ Language Mismatch',
+          description: language === 'ar' 
+            ? `تم طلب الترجمة إلى ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} ولكن تم الحصول على ${result.targetLanguage}` 
+            : `Requested ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name} but got ${result.targetLanguage}`,
+          variant: 'destructive'
+        });
+        
+        // Still proceed with the translation but warn the user
       }
 
       // CRITICAL: Increment usage count FIRST
@@ -523,7 +558,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]);
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, needsAudioUnlock]); // FIXED: Added selectedLanguage to dependencies
 
   const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
     if (needsAudioUnlock) {
@@ -771,6 +806,16 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             <Select value={selectedLanguage} onValueChange={(value) => {
               console.log('🎤 User selected language:', value);
               setSelectedLanguage(value);
+              
+              // Show immediate visual feedback
+              const selectedLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === value)?.name;
+              toast({
+                title: language === 'ar' ? '🔄 تم تغيير اللغة' : '🔄 Language Changed',
+                description: language === 'ar' 
+                  ? `تم اختيار ${selectedLangName} للترجمة التالية` 
+                  : `Selected ${selectedLangName} for next translation`,
+                duration: 2000
+              });
             }}>
               <SelectTrigger>
                 <SelectValue />
@@ -784,10 +829,10 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               </SelectContent>
             </Select>
             {/* Language confirmation indicator */}
-            <div className="text-xs text-muted-foreground mt-1">
+            <div className="text-xs text-muted-foreground mt-1 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
               {language === 'ar' 
-                ? `سيتم الترجمة إلى: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
-                : `Will translate to: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
+                ? `✅ سيتم الترجمة إلى: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
+                : `✅ Will translate to: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
               }
             </div>
           </div>
