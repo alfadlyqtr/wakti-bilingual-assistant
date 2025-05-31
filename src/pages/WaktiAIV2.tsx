@@ -24,7 +24,8 @@ import {
   Search,
   CheckCircle,
   Globe,
-  User
+  User,
+  TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -35,9 +36,9 @@ import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
 
-// Updated trigger types - removed photomaker as separate trigger
+// Updated trigger types with image upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 export default function WaktiAIV2() {
   const { user } = useAuth();
@@ -57,7 +58,7 @@ export default function WaktiAIV2() {
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
 
-  // Updated trigger state - separate image mode state
+  // Updated trigger state - separate image mode state with upscaling
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
   const [imageMode, setImageMode] = useState<ImageMode>('regular');
   
@@ -86,6 +87,9 @@ export default function WaktiAIV2() {
       case 'image':
         if (imgMode === 'photomaker') {
           return language === 'ar' ? 'صانع الصور الشخصية' : 'Photo Maker Personal';
+        }
+        if (imgMode === 'upscaling') {
+          return language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling';
         }
         return language === 'ar' ? 'مولد الصور' : 'Image Generator';
       default:
@@ -116,6 +120,9 @@ export default function WaktiAIV2() {
         if (imgMode === 'photomaker') {
           return User;
         }
+        if (imgMode === 'upscaling') {
+          return TrendingUp;
+        }
         return ({ className }: { className?: string }) => <Upload className={className} />;
       default:
         return ({ className }: { className?: string }) => <MessageSquare className={className} />;
@@ -138,12 +145,25 @@ export default function WaktiAIV2() {
     });
   };
 
-  // Handle image mode change
+  // Handle image mode change with upscaling support
   const handleImageModeChange = (newImageMode: ImageMode) => {
     setImageMode(newImageMode);
     
-    // Show different instructions for PhotoMaker
-    if (newImageMode === 'photomaker') {
+    // Clear existing images when switching modes
+    setAttachedImages([]);
+    
+    // Set pre-filled prompt for upscaling mode
+    if (newImageMode === 'upscaling') {
+      setInputMessage(language === 'ar' ? 'تحسين جودة الصورة' : 'enhance image quality');
+      toast({
+        title: language === 'ar' ? 'وضع تحسين الصور' : 'Image Upscaling Mode',
+        description: language === 'ar' 
+          ? 'ارفع صورة واحدة لتحسين جودتها ودقتها'
+          : 'Upload a single image to enhance its quality and resolution',
+        duration: 4000
+      });
+    } else if (newImageMode === 'photomaker') {
+      setInputMessage('');
       toast({
         title: language === 'ar' ? 'وضع صانع الصور الشخصية' : 'PhotoMaker Mode',
         description: language === 'ar' 
@@ -152,6 +172,7 @@ export default function WaktiAIV2() {
         duration: 4000
       });
     } else {
+      setInputMessage('');
       toast({
         title: language === 'ar' ? 'وضع مولد الصور' : 'Image Generator Mode',
         description: language === 'ar' 
@@ -444,25 +465,43 @@ export default function WaktiAIV2() {
     if (!file) return;
 
     if (file.type.startsWith('image/')) {
-      // Validate PhotoMaker mode image limits
-      if (activeTrigger === 'image' && imageMode === 'photomaker') {
-        if (attachedImages.length >= 4) {
-          toast({
-            title: language === 'ar' ? 'حد الصور' : 'Image Limit',
-            description: language === 'ar' ? 'يمكن رفع 4 صور كحد أقصى لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
-            variant: 'destructive'
-          });
-          event.target.value = '';
-          return;
+      // Validate image upload limits based on mode
+      if (activeTrigger === 'image') {
+        if (imageMode === 'photomaker') {
+          if (attachedImages.length >= 4) {
+            toast({
+              title: language === 'ar' ? 'حد الصور' : 'Image Limit',
+              description: language === 'ar' ? 'يمكن رفع 4 صور كحد أقصى لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
+              variant: 'destructive'
+            });
+            event.target.value = '';
+            return;
+          }
+        } else if (imageMode === 'upscaling') {
+          if (attachedImages.length >= 1) {
+            toast({
+              title: language === 'ar' ? 'حد الصور' : 'Image Limit',
+              description: language === 'ar' ? 'يمكن رفع صورة واحدة فقط لوضع تحسين الصور' : 'Only one image allowed for Upscaling mode',
+              variant: 'destructive'
+            });
+            event.target.value = '';
+            return;
+          }
         }
       }
       
       setAttachedImages(prev => [...prev, file]);
+      
+      let toastDescription = file.name;
+      if (activeTrigger === 'image' && imageMode === 'photomaker') {
+        toastDescription = `${file.name} (${attachedImages.length + 1}/4)`;
+      } else if (activeTrigger === 'image' && imageMode === 'upscaling') {
+        toastDescription = language === 'ar' ? 'جاهز للتحسين' : 'Ready for upscaling';
+      }
+      
       toast({
         title: language === 'ar' ? 'تم إرفاق الصورة' : 'Image Attached',
-        description: (activeTrigger === 'image' && imageMode === 'photomaker')
-          ? `${file.name} (${attachedImages.length + 1}/4)`
-          : file.name
+        description: toastDescription
       });
     } else {
       toast({
@@ -499,23 +538,42 @@ export default function WaktiAIV2() {
       return;
     }
 
-    // PhotoMaker validation
-    if (activeTrigger === 'image' && imageMode === 'photomaker') {
-      if (attachedImages.length === 0) {
-        toast({
-          title: language === 'ar' ? 'صور مطلوبة' : 'Images Required',
-          description: language === 'ar' ? 'يرجى رفع 1-4 صور للوجوه قبل الإرسال' : 'Please upload 1-4 face images before sending',
-          variant: 'destructive'
-        });
-        return;
-      }
-      if (attachedImages.length > 4) {
-        toast({
-          title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
-          description: language === 'ar' ? 'الحد الأقصى 4 صور لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
-          variant: 'destructive'
-        });
-        return;
+    // Image mode validations
+    if (activeTrigger === 'image') {
+      if (imageMode === 'photomaker') {
+        if (attachedImages.length === 0) {
+          toast({
+            title: language === 'ar' ? 'صور مطلوبة' : 'Images Required',
+            description: language === 'ar' ? 'يرجى رفع 1-4 صور للوجوه قبل الإرسال' : 'Please upload 1-4 face images before sending',
+            variant: 'destructive'
+          });
+          return;
+        }
+        if (attachedImages.length > 4) {
+          toast({
+            title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
+            description: language === 'ar' ? 'الحد الأقصى 4 صور لوضع صانع الصور الشخصية' : 'Maximum 4 images for PhotoMaker mode',
+            variant: 'destructive'
+          });
+          return;
+        }
+      } else if (imageMode === 'upscaling') {
+        if (attachedImages.length === 0) {
+          toast({
+            title: language === 'ar' ? 'صورة مطلوبة' : 'Image Required',
+            description: language === 'ar' ? 'يرجى رفع صورة واحدة قبل الإرسال' : 'Please upload an image before sending',
+            variant: 'destructive'
+          });
+          return;
+        }
+        if (attachedImages.length > 1) {
+          toast({
+            title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
+            description: language === 'ar' ? 'يمكن رفع صورة واحدة فقط لوضع تحسين الصور' : 'Only one image allowed for Upscaling mode',
+            variant: 'destructive'
+          });
+          return;
+        }
       }
     }
 
@@ -606,13 +664,21 @@ export default function WaktiAIV2() {
         loadConversations();
       }
 
-      // Show success message for PhotoMaker
-      if (activeTrigger === 'image' && imageMode === 'photomaker' && result.imageUrl) {
-        toast({
-          title: language === 'ar' ? '✅ تم إنشاء الصورة الشخصية' : '✅ Personal Image Generated',
-          description: language === 'ar' ? 'تم إنشاء صورتك الشخصية بنجاح' : 'Your personalized image has been created',
-          duration: 4000
-        });
+      // Show success message for image operations
+      if (activeTrigger === 'image' && result.imageUrl) {
+        if (imageMode === 'photomaker') {
+          toast({
+            title: language === 'ar' ? '✅ تم إنشاء الصورة الشخصية' : '✅ Personal Image Generated',
+            description: language === 'ar' ? 'تم إنشاء صورتك الشخصية بنجاح' : 'Your personalized image has been created',
+            duration: 4000
+          });
+        } else if (imageMode === 'upscaling') {
+          toast({
+            title: language === 'ar' ? '✅ تم تحسين الصورة' : '✅ Image Upscaled',
+            description: language === 'ar' ? 'تم تحسين جودة ودقة الصورة بنجاح' : 'Image quality and resolution enhanced successfully',
+            duration: 4000
+          });
+        }
       }
 
       console.log('🔍 WAKTI AI: Message processing completed successfully');
@@ -792,9 +858,12 @@ export default function WaktiAIV2() {
             <span className="font-medium text-xs">
               {getTriggerModeDisplay(activeTrigger, imageMode)}
             </span>
-            {/* Show PhotoMaker icon when active */}
+            {/* Show mode-specific icons when active */}
             {activeTrigger === 'image' && imageMode === 'photomaker' && (
               <User className="h-3 w-3 ml-1" />
+            )}
+            {activeTrigger === 'image' && imageMode === 'upscaling' && (
+              <TrendingUp className="h-3 w-3 ml-1" />
             )}
           </div>
 
@@ -830,7 +899,7 @@ export default function WaktiAIV2() {
         ref={fileInputRef}
         onChange={processFileUpload}
         className="hidden"
-        accept={activeTrigger === 'image' && imageMode === 'photomaker' ? 'image/*' : '*/*'}
+        accept={activeTrigger === 'image' ? 'image/*' : '*/*'}
         multiple={activeTrigger === 'image' && imageMode === 'photomaker'}
       />
       <input
@@ -980,6 +1049,8 @@ export default function WaktiAIV2() {
                 <span className="text-xs text-muted-foreground">
                   {(activeTrigger === 'image' && imageMode === 'photomaker')
                     ? (language === 'ar' ? `صور الوجوه (${attachedImages.length}/4)` : `Face Images (${attachedImages.length}/4)`)
+                    : (activeTrigger === 'image' && imageMode === 'upscaling')
+                    ? (language === 'ar' ? 'صورة للتحسين' : 'Image for Upscaling')
                     : (language === 'ar' ? 'الصور المرفقة' : 'Attached Images')
                   }
                 </span>
@@ -1024,6 +1095,24 @@ export default function WaktiAIV2() {
             </div>
           )}
 
+          {/* Image Upscaling Mode Banner */}
+          {activeTrigger === 'image' && imageMode === 'upscaling' && (
+            <div className="mb-3 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                <TrendingUp className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {language === 'ar' ? 'وضع تحسين الصور نشط' : 'Image Upscaling Mode Active'}
+                </span>
+              </div>
+              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                {language === 'ar' 
+                  ? 'ارفع صورة واحدة لتحسين جودتها ودقتها 2x'
+                  : 'Upload one image to enhance quality & resolution 2x'
+                }
+              </p>
+            </div>
+          )}
+
           {/* Input Container */}
           <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
             <div className="flex gap-2 items-end">
@@ -1036,6 +1125,8 @@ export default function WaktiAIV2() {
                   placeholder={
                     (activeTrigger === 'image' && imageMode === 'photomaker')
                       ? (language === 'ar' ? 'اكتب وصف الصورة المطلوبة...' : 'Describe the image you want...')
+                      : (activeTrigger === 'image' && imageMode === 'upscaling')
+                      ? (language === 'ar' ? 'وصف اختياري (مُعبأ مسبقاً)...' : 'Optional description (pre-filled)...')
                       : (language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...')
                   }
                   disabled={isLoading || isListening}
@@ -1057,6 +1148,8 @@ export default function WaktiAIV2() {
                 title={
                   (activeTrigger === 'image' && imageMode === 'photomaker')
                     ? (language === 'ar' ? 'رفع صور الوجوه' : 'Upload face images')
+                    : (activeTrigger === 'image' && imageMode === 'upscaling')
+                    ? (language === 'ar' ? 'رفع صورة للتحسين' : 'Upload image for upscaling')
                     : (language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo')
                 }
               >
@@ -1084,7 +1177,10 @@ export default function WaktiAIV2() {
               
               <Button
                 onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading || isListening || (activeTrigger === 'image' && imageMode === 'photomaker' && attachedImages.length === 0)}
+                disabled={!inputMessage.trim() || isLoading || isListening || 
+                  (activeTrigger === 'image' && imageMode === 'photomaker' && attachedImages.length === 0) ||
+                  (activeTrigger === 'image' && imageMode === 'upscaling' && attachedImages.length === 0)
+                }
                 size="icon"
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
               >

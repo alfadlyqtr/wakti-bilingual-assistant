@@ -1,16 +1,17 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2 } from 'lucide-react';
+import { Check, Clock, Bot, User as UserIcon, Search, Globe, CheckCircle2, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
 
-// Updated trigger types
+// Updated trigger types with upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -27,6 +28,9 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
   
   // Determine if this is a PhotoMaker related message
   const isPhotoMakerMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'photomaker';
+  
+  // Determine if this is an Image Upscaling related message
+  const isUpscalingMessage = message.imageUrl && activeTrigger === 'image' && imageMode === 'upscaling';
 
   return (
     <div className={cn(
@@ -74,8 +78,22 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
             </div>
           )}
 
+          {/* Image Display for Upscaling */}
+          {isUpscalingMessage && (
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
+              <img 
+                src={message.imageUrl} 
+                alt="Upscaled image"
+                className="max-w-full h-auto rounded-lg border border-gray-200 dark:border-gray-600"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                {language === 'ar' ? 'صورة محسنة الجودة بالذكاء الاصطناعي' : 'AI-enhanced quality image'}
+              </p>
+            </div>
+          )}
+
           {/* Regular Image Display */}
-          {message.imageUrl && !isPhotoMakerMessage && (
+          {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
             <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-600">
               <img 
                 src={message.imageUrl} 
@@ -149,8 +167,16 @@ export function ChatBubble({ message, onSearchConfirm, activeTrigger, imageMode 
                 </Badge>
               )}
 
+              {/* Image Upscaling Indicator */}
+              {isUpscalingMessage && (
+                <Badge variant="outline" className="text-xs py-0 px-1 bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+                  <TrendingUp className="w-3 h-3 mr-1" />
+                  {language === 'ar' ? 'تحسين الصور' : 'Image Upscaled'}
+                </Badge>
+              )}
+
               {/* Image Generation Indicator */}
-              {message.imageUrl && !isPhotoMakerMessage && (
+              {message.imageUrl && !isPhotoMakerMessage && !isUpscalingMessage && (
                 <Badge variant="outline" className="text-xs py-0 px-1">
                   {language === 'ar' ? 'صورة' : 'Image'}
                 </Badge>

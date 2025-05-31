@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -6,14 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-// Updated trigger types - removed photomaker as separate trigger
+// Updated trigger types with image upscaling
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
@@ -68,23 +67,36 @@ export function QuickActionsPanel({
     }
   ];
 
-  // Image generation dropdown options
+  // Image generation dropdown options with upscaling
   const imageOptions = [
     {
       id: 'regular' as ImageMode,
       label: language === 'ar' ? 'مولد الصور' : 'Image Generator',
-      description: language === 'ar' ? 'إنشاء الصور العادية' : 'Regular image creation'
+      description: language === 'ar' ? 'إنشاء الصور العادية' : 'Regular image creation',
+      icon: Image
     },
     {
       id: 'photomaker' as ImageMode,
       label: language === 'ar' ? 'صانع الصور الشخصية' : 'Photo Maker Personal',
-      description: language === 'ar' ? 'إنشاء صور شخصية مخصصة' : 'Custom personal images'
+      description: language === 'ar' ? 'إنشاء صور شخصية مخصصة' : 'Custom personal images',
+      icon: User
+    },
+    {
+      id: 'upscaling' as ImageMode,
+      label: language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling',
+      description: language === 'ar' ? 'تحسين جودة ودقة الصورة' : 'Enhance image quality & resolution',
+      icon: TrendingUp
     }
   ];
 
   const getImageModeDisplay = () => {
     const activeImageMode = imageOptions.find(option => option.id === imageMode);
     return activeImageMode ? activeImageMode.label : (language === 'ar' ? 'صورة' : 'Image');
+  };
+
+  const getImageModeIcon = () => {
+    const activeImageMode = imageOptions.find(option => option.id === imageMode);
+    return activeImageMode ? activeImageMode.icon : Image;
   };
 
   const handleCustomAction = () => {
@@ -109,7 +121,7 @@ export function QuickActionsPanel({
   const handleImageTriggerClick = () => {
     onTriggerChange('image');
     // When switching to image trigger, ensure we have a valid image mode
-    if (imageMode !== 'regular' && imageMode !== 'photomaker') {
+    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling') {
       onImageModeChange('regular');
     }
   };
@@ -166,17 +178,12 @@ export function QuickActionsPanel({
                   "p-1.5 rounded-md flex items-center gap-1",
                   activeTrigger === 'image' ? "bg-primary-foreground" : "bg-orange-500"
                 )}>
-                  {activeTrigger === 'image' && imageMode === 'photomaker' ? (
-                    <User className={cn(
+                  {React.createElement(getImageModeIcon(), {
+                    className: cn(
                       "h-3 w-3",
                       activeTrigger === 'image' ? "text-primary" : "text-white"
-                    )} />
-                  ) : (
-                    <Image className={cn(
-                      "h-3 w-3",
-                      activeTrigger === 'image' ? "text-primary" : "text-white"
-                    )} />
-                  )}
+                    )
+                  })}
                   <ChevronDown className={cn(
                     "h-2 w-2",
                     activeTrigger === 'image' ? "text-primary" : "text-white"
@@ -201,7 +208,7 @@ export function QuickActionsPanel({
                   className="flex flex-col items-start p-3"
                 >
                   <div className="flex items-center gap-2 w-full">
-                    {option.id === 'photomaker' ? <User className="h-4 w-4" /> : <Image className="h-4 w-4" />}
+                    <option.icon className="h-4 w-4" />
                     <span className="font-medium">{option.label}</span>
                   </div>
                   <span className="text-xs text-muted-foreground mt-1">{option.description}</span>
@@ -361,6 +368,31 @@ export function QuickActionsPanel({
               </p>
               <p>{language === 'ar' ? '• اكتب وصف الصورة المطلوبة' : '• Describe the desired image'}</p>
               <p>{language === 'ar' ? '• سيتم إضافة "rwre" تلقائياً' : '• "rwre" will be added automatically'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Upscaling instructions - ONLY visible in upscaling mode */}
+      {activeTrigger === 'image' && imageMode === 'upscaling' && (
+        <div className="flex-1 pt-2 border-t border-border/50">
+          <h4 className="text-xs font-medium text-muted-foreground mb-2">
+            {language === 'ar' ? 'تعليمات تحسين الصور' : 'Image Upscaling Instructions'}
+          </h4>
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '📸 رفع الصورة:' : '📸 Upload Image:'}
+              </p>
+              <p>{language === 'ar' ? '• صورة واحدة فقط' : '• Single image only'}</p>
+              <p>{language === 'ar' ? '• سيتم تحسين الجودة والدقة' : '• Quality & resolution will be enhanced'}</p>
+            </div>
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '⚡ معالجة:' : '⚡ Processing:'}
+              </p>
+              <p>{language === 'ar' ? '• التحسين بمعامل 2x' : '• 2x upscaling factor'}</p>
+              <p>{language === 'ar' ? '• جودة عالية 95%' : '• High quality 95%'}</p>
             </div>
           </div>
         </div>

@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
@@ -61,6 +60,10 @@ serve(async (req) => {
         
       case 'generate_photomaker':
         result = await generatePhotoMaker(action.prompt || action.data?.prompt, action.images || action.data?.images, userId, language);
+        break;
+        
+      case 'upscale_image':
+        result = await upscaleImage(action.imageUrl || action.data?.imageUrl, userId, language);
         break;
         
       default:
@@ -386,6 +389,100 @@ async function generatePhotoMaker(prompt: string, images: string[], userId: stri
     return {
       success: false,
       message: language === 'ar' ? 'فشل في إنشاء الصورة الشخصية' : 'Failed to generate personalized image',
+      error: error.message
+    };
+  }
+}
+
+// New function: Upscale image with Runware
+async function upscaleImage(imageUrl: string, userId: string, language: string) {
+  try {
+    console.log("Upscaling image with Runware for image:", imageUrl);
+
+    // Validate input image
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      throw new Error('Valid image URL is required for upscaling');
+    }
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageUpscale",
+          taskUUID: crypto.randomUUID(),
+          inputImage: imageUrl,
+          outputFormat: "JPG",
+          outputType: "URL",
+          upscaleFactor: 2,
+          outputQuality: 95,
+        },
+      ]),
+    });
+
+    console.log("Runware upscale response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("Runware upscale response data:", result);
+      
+      // Find the image upscale result
+      const upscaleResult = result.data?.find((item: any) => item.taskType === "imageUpscale");
+      
+      if (upscaleResult && upscaleResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        // Save upscaled image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: 'Image upscaling 2x',
+              image_url: upscaleResult.imageURL,
+              metadata: { 
+                provider: 'runware', 
+                imageUUID: upscaleResult.imageUUID,
+                type: 'upscaling',
+                originalImageUrl: imageUrl,
+                upscaleFactor: 2,
+                outputQuality: 95
+              }
+            });
+        } catch (dbError) {
+          console.log("Could not save upscaled image to database:", dbError);
+          // Continue anyway, the image was upscaled successfully
+        }
+
+        return {
+          success: true,
+          message: language === 'ar' ? 'تم تحسين الصورة بنجاح (2x)' : 'Image upscaled successfully (2x)',
+          imageUrl: upscaleResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in upscale response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("Runware upscale API error:", response.status, errorText);
+      throw new Error(`Runware upscale API failed: ${response.status}`);
+    }
+    
+  } catch (error) {
+    console.error('Error upscaling image with Runware:', error);
+    return {
+      success: false,
+      message: language === 'ar' ? 'فشل في تحسين الصورة' : 'Failed to upscale image',
       error: error.message
     };
   }
