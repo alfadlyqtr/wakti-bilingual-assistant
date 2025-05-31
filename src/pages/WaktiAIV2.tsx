@@ -43,8 +43,7 @@ export default function WaktiAIV2() {
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
+  const [isListening, setIsListening] = useState(false);
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
@@ -53,7 +52,6 @@ export default function WaktiAIV2() {
   const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
 
@@ -61,14 +59,10 @@ export default function WaktiAIV2() {
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const MAX_RECORDING_TIME = 45; // 45 seconds
+  const speechRecognitionRef = useRef<any>(null);
 
   // Helper function to detect language from text input
   const detectLanguage = (text: string): 'en' | 'ar' => {
@@ -155,14 +149,85 @@ export default function WaktiAIV2() {
     }
   }, [inputMessage]);
 
-  // Cleanup recording timer on unmount
+  // Initialize speech recognition
   useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
-    };
-  }, []);
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      
+      // Set language based on current UI language
+      recognition.lang = language === 'ar' ? 'ar-SA' : 'en-US';
+      
+      recognition.onstart = () => {
+        console.log('🎤 Speech recognition started');
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('🎤 Speech recognition result:', transcript);
+        
+        if (transcript && transcript.trim()) {
+          // Insert transcription into input field
+          setInputMessage(transcript.trim());
+          
+          // Focus back on textarea and expand it
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.focus();
+              // Move cursor to end
+              const length = transcript.trim().length;
+              textareaRef.current.setSelectionRange(length, length);
+            }
+          }, 100);
+
+          // Show subtle feedback
+          toast({
+            title: language === 'ar' ? '✅ تم النسخ' : '✅ Transcribed',
+            description: language === 'ar' ? 'تم إضافة النص - اضغط إرسال أو قم بالتعديل' : 'Text added — tap send or edit',
+            duration: 3000
+          });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('🎤 Speech recognition error:', event.error);
+        
+        let errorMessage = language === 'ar' 
+          ? 'حدث خطأ في التعرف على الصوت'
+          : 'Speech recognition error occurred';
+
+        if (event.error === 'not-allowed') {
+          errorMessage = language === 'ar'
+            ? 'يرجى السماح بالوصول للميكروفون'
+            : 'Please allow microphone access';
+        } else if (event.error === 'no-speech') {
+          errorMessage = language === 'ar'
+            ? 'لم يتم اكتشاف صوت - يرجى المحاولة مرة أخرى'
+            : 'No speech detected - please try again';
+        }
+
+        toast({
+          title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
+          description: errorMessage,
+          variant: 'destructive'
+        });
+      };
+
+      recognition.onend = () => {
+        console.log('🎤 Speech recognition ended');
+        setIsListening(false);
+      };
+
+      speechRecognitionRef.current = recognition;
+    } else {
+      console.warn('🎤 Speech recognition not supported');
+    }
+  }, [language]);
 
   const initializeSystem = async () => {
     try {
@@ -498,151 +563,51 @@ export default function WaktiAIV2() {
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
+  // Updated speech recognition functions
+  const toggleSpeechRecognition = () => {
+    if (isListening) {
+      stopSpeechRecognition();
     } else {
-      startRecording();
+      startSpeechRecognition();
     }
   };
 
-  const startRecording = async () => {
+  const startSpeechRecognition = () => {
+    if (!speechRecognitionRef.current) {
+      toast({
+        title: language === 'ar' ? 'غير مدعوم' : 'Not Supported',
+        description: language === 'ar' 
+          ? 'التعرف على الصوت غير مدعوم في هذا المتصفح'
+          : 'Speech recognition not supported in this browser',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     try {
+      // Blur textarea to prevent keyboard issues
       if (textareaRef.current) {
         textareaRef.current.blur();
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
+      // Update language before starting
+      speechRecognitionRef.current.lang = language === 'ar' ? 'ar-SA' : 'en-US';
       
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-      setRecordingTime(0);
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await processVoiceInput(audioBlob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-
-      mediaRecorder.start(100);
-      setIsRecording(true);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => {
-          if (prev >= MAX_RECORDING_TIME - 1) {
-            stopRecording();
-            return MAX_RECORDING_TIME;
-          }
-          return prev + 1;
-        });
-      }, 1000);
-
+      console.log('🎤 Starting speech recognition with language:', speechRecognitionRef.current.lang);
+      speechRecognitionRef.current.start();
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('Error starting speech recognition:', error);
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في بدء التسجيل' : 'Failed to start recording',
+        description: language === 'ar' ? 'فشل في بدء التعرف على الصوت' : 'Failed to start speech recognition',
         variant: 'destructive'
       });
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-        recordingTimerRef.current = null;
-      }
-    }
-  };
-
-  const processVoiceInput = async (audioBlob: Blob) => {
-    try {
-      setIsTranscribing(true);
-      
-      console.log('🎤 WAKTI AI: Processing voice input, blob size:', audioBlob.size);
-
-      // Get the current session for authentication
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session found');
-      }
-
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append('audioBlob', audioBlob, 'audio.webm');
-      formData.append('language', language);
-
-      console.log('🎤 WAKTI AI: Uploading audio blob to wakti-voice-v2...');
-
-      // Use direct fetch instead of supabase.functions.invoke() for FormData
-      const response = await fetch('https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-voice-v2', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: formData
-      });
-
-      console.log('🎤 WAKTI AI: Voice transcription response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('🎤 WAKTI AI: Voice transcription error:', errorText);
-        throw new Error(`Voice transcription failed: ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('🎤 WAKTI AI: Voice transcription result:', result);
-
-      const { text } = result;
-      
-      if (text && text.trim()) {
-        // Insert transcription into input field instead of auto-sending
-        setInputMessage(text.trim());
-        
-        // Focus back on textarea and expand it
-        setTimeout(() => {
-          if (textareaRef.current) {
-            textareaRef.current.focus();
-            // Move cursor to end
-            const length = text.trim().length;
-            textareaRef.current.setSelectionRange(length, length);
-          }
-        }, 100);
-
-        // Show subtle feedback
-        toast({
-          title: language === 'ar' ? '✅ تم النسخ' : '✅ Transcribed',
-          description: language === 'ar' ? 'تم إضافة النص - اضغط إرسال أو قم بالتعديل' : 'Text added — tap send or edit',
-          duration: 3000
-        });
-      } else {
-        throw new Error('No transcription received');
-      }
-    } catch (error) {
-      console.error('🎤 WAKTI AI: Error processing voice input:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الصوت' : 'Voice Error',
-        description: language === 'ar' ? 'فشل في معالجة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to process voice input - please try again',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsTranscribing(false);
-      setRecordingTime(0);
+  const stopSpeechRecognition = () => {
+    if (speechRecognitionRef.current && isListening) {
+      speechRecognitionRef.current.stop();
     }
   };
 
@@ -697,13 +662,6 @@ export default function WaktiAIV2() {
       setIsLoading(false);
       setIsTyping(false);
     }
-  };
-
-  const formatRecordingTime = (seconds: number) => {
-    const remainingTime = MAX_RECORDING_TIME - seconds;
-    const mins = Math.floor(remainingTime / 60);
-    const secs = remainingTime % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   console.log('🔍 DEBUG: About to render input area');
@@ -889,24 +847,18 @@ export default function WaktiAIV2() {
         />
       )}
 
-      {/* Enhanced Fixed Input Area with Voice Recording and Camera - Combined Upload/Camera */}
+      {/* Enhanced Fixed Input Area with Voice Recognition */}
       <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
         <div className="max-w-4xl mx-auto">
-          {/* Recording Timer Display */}
-          {isRecording && (
+          {/* Listening Status Display */}
+          {isListening && (
             <div className="mb-3 flex items-center justify-center">
-              <div className="bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2 flex items-center gap-3">
+              <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                  <span className="text-red-600 dark:text-red-400 font-mono text-sm">
-                    {language === 'ar' ? 'تسجيل' : 'Recording'} {formatRecordingTime(recordingTime)}
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
+                    {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
                   </span>
-                </div>
-                <div className="flex-1 bg-red-200 dark:bg-red-800 rounded-full h-1">
-                  <div 
-                    className="bg-red-500 h-1 rounded-full transition-all duration-1000"
-                    style={{ width: `${(recordingTime / MAX_RECORDING_TIME) * 100}%` }}
-                  ></div>
                 </div>
               </div>
             </div>
@@ -945,7 +897,7 @@ export default function WaktiAIV2() {
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleTextareaKeyPress}
                   placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-                  disabled={isLoading || isRecording || isTranscribing}
+                  disabled={isLoading || isListening}
                   className={cn(
                     "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
                     language === 'ar' ? 'text-right' : ''
@@ -959,7 +911,7 @@ export default function WaktiAIV2() {
                 variant="ghost"
                 size="icon"
                 onClick={handleFileUpload}
-                disabled={isLoading || isRecording || isTranscribing}
+                disabled={isLoading || isListening}
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
                 title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
               >
@@ -969,19 +921,16 @@ export default function WaktiAIV2() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={toggleRecording}
-                disabled={isLoading || isTranscribing}
+                onClick={toggleSpeechRecognition}
+                disabled={isLoading}
                 className={cn(
                   "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
-                  isRecording 
-                    ? "bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 scale-105" 
-                    : "hover:bg-muted",
-                  isTranscribing && "opacity-50"
+                  isListening 
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
+                    : "hover:bg-muted"
                 )}
               >
-                {isTranscribing ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : isRecording ? (
+                {isListening ? (
                   <Square className="h-5 w-5" />
                 ) : (
                   <Mic className="h-5 w-5" />
@@ -990,7 +939,7 @@ export default function WaktiAIV2() {
               
               <Button
                 onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading || isRecording || isTranscribing}
+                disabled={!inputMessage.trim() || isLoading || isListening}
                 size="icon"
                 className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
               >
