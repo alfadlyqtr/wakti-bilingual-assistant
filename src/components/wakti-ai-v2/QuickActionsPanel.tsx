@@ -5,14 +5,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-// Updated trigger types with image upscaling
+// Updated trigger types with background removal
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'background_removal';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
@@ -67,7 +67,7 @@ export function QuickActionsPanel({
     }
   ];
 
-  // Image generation dropdown options with upscaling
+  // Image generation dropdown options with background removal
   const imageOptions = [
     {
       id: 'regular' as ImageMode,
@@ -86,6 +86,12 @@ export function QuickActionsPanel({
       label: language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling',
       description: language === 'ar' ? 'تحسين جودة ودقة الصورة' : 'Enhance image quality & resolution',
       icon: TrendingUp
+    },
+    {
+      id: 'background_removal' as ImageMode,
+      label: language === 'ar' ? 'إزالة الخلفية' : 'Background Removal',
+      description: language === 'ar' ? 'إزالة خلفية الصورة بالذكاء الاصطناعي' : 'AI-powered background removal',
+      icon: Scissors
     }
   ];
 
@@ -121,7 +127,7 @@ export function QuickActionsPanel({
   const handleImageTriggerClick = () => {
     onTriggerChange('image');
     // When switching to image trigger, ensure we have a valid image mode
-    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling') {
+    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling' && imageMode !== 'background_removal') {
       onImageModeChange('regular');
     }
   };
@@ -393,6 +399,31 @@ export function QuickActionsPanel({
               </p>
               <p>{language === 'ar' ? '• التحسين بمعامل 2x' : '• 2x upscaling factor'}</p>
               <p>{language === 'ar' ? '• جودة عالية 95%' : '• High quality 95%'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Background Removal instructions - ONLY visible in background removal mode */}
+      {activeTrigger === 'image' && imageMode === 'background_removal' && (
+        <div className="flex-1 pt-2 border-t border-border/50">
+          <h4 className="text-xs font-medium text-muted-foreground mb-2">
+            {language === 'ar' ? 'تعليمات إزالة الخلفية' : 'Background Removal Instructions'}
+          </h4>
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '📸 رفع الصورة:' : '📸 Upload Image:'}
+              </p>
+              <p>{language === 'ar' ? '• صورة واحدة فقط' : '• Single image only'}</p>
+              <p>{language === 'ar' ? '• سيتم إزالة الخلفية تلقائياً' : '• Background will be removed automatically'}</p>
+            </div>
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '✨ النتيجة:' : '✨ Result:'}
+              </p>
+              <p>{language === 'ar' ? '• صورة شفافة PNG' : '• Transparent PNG image'}</p>
+              <p>{language === 'ar' ? '• جودة عالية مع تقنية الذكاء الاصطناعي' : '• High quality with AI technology'}</p>
             </div>
           </div>
         </div>
