@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,8 +39,8 @@ import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
 import { PageContainer } from '@/components/PageContainer';
-import { SearchModeIndicator } from '@/components/SearchModeIndicator';
-import { QuotaIndicator } from '@/components/QuotaIndicator';
+import { SearchModeIndicator } from '@/components/wakti-ai-v2/SearchModeIndicator';
+import { QuotaIndicator } from '@/components/wakti-ai-v2/QuotaIndicator';
 
 // Updated trigger types with stylized art
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
@@ -363,7 +364,7 @@ export default function WaktiAIV2() {
     }
   };
 
-  const loadConversation = async (conversationId: string) => {
+  const handleConversationSelect = async (conversationId: string) => {
     try {
       setIsLoading(true);
       const data = await WaktiAIV2Service.getConversationMessages(conversationId);
@@ -379,7 +380,7 @@ export default function WaktiAIV2() {
       }));
       setMessages(convertedMessages);
       setCurrentConversationId(conversationId);
-      setLeftDrawerOpen(false);
+      setShowConversations(false);
       console.log('🔍 WAKTI AI: Loaded conversation messages:', data.length);
     } catch (error) {
       console.error('Error loading conversation:', error);
@@ -393,7 +394,7 @@ export default function WaktiAIV2() {
     }
   };
 
-  const startNewConversation = () => {
+  const handleNewConversation = () => {
     setMessages([]);
     setCurrentConversationId(null);
     setAttachedImages([]);
@@ -426,7 +427,7 @@ export default function WaktiAIV2() {
       setConversations(prev => prev.filter(c => c.id !== conversationId));
       
       if (currentConversationId === conversationId) {
-        startNewConversation();
+        handleNewConversation();
       }
 
       toast({
@@ -523,7 +524,13 @@ export default function WaktiAIV2() {
   const handleTextareaKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage(inputMessage);
+      handleSendMessage();
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (inputMessage.trim()) {
+      sendMessage(inputMessage.trim());
     }
   };
 
@@ -857,6 +864,13 @@ export default function WaktiAIV2() {
     }
   };
 
+  const handleQuickAction = (message: string) => {
+    setInputMessage(message);
+    setTimeout(() => {
+      handleSendMessage();
+    }, 100);
+  };
+
   console.log('🔍 DEBUG: About to render input area');
 
   const isPhotoMakerMode = activeTrigger === 'image' && imageMode === 'photomaker';
@@ -928,7 +942,10 @@ export default function WaktiAIV2() {
                 {language === 'ar' ? 'المحادثات' : 'Conversations'}
               </Button>
               
-              <KnowledgeModal />
+              <KnowledgeModal 
+                open={knowledgeModalOpen}
+                onOpenChange={setKnowledgeModalOpen}
+              />
             </div>
           </div>
         </div>
@@ -1057,6 +1074,7 @@ export default function WaktiAIV2() {
               <div className="flex items-end gap-3">
                 <div className="flex-1 relative">
                   <Textarea
+                    ref={textareaRef}
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     placeholder={
@@ -1074,19 +1092,14 @@ export default function WaktiAIV2() {
                         (language === 'ar' ? 'اكتب وصف الصورة...' : 'Describe the image you want...') :
                         (language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...')
                     }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
+                    onKeyDown={handleTextareaKeyPress}
                     className="min-h-[60px] resize-none pr-12"
                   />
                   
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setIsListening(!isListening)}
+                    onClick={toggleSpeechRecognition}
                     className={cn(
                       "absolute bottom-2 right-2 w-8 h-8 p-0",
                       isListening && "bg-red-500 text-white hover:bg-red-600"
@@ -1136,7 +1149,7 @@ export default function WaktiAIV2() {
             <QuickActionsPanel 
               onSendMessage={handleQuickAction}
               activeTrigger={activeTrigger}
-              onTriggerChange={setActiveTrigger}
+              onTriggerChange={handleTriggerChange}
               imageMode={imageMode}
               onImageModeChange={handleImageModeChange}
             />
