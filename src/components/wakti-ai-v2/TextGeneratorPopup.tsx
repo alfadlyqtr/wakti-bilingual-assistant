@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -96,7 +95,10 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
   };
 
   const handleGenerate = async () => {
+    console.log('🔍 TextGenerator: Generate button clicked');
+    
     if (!isFormValid()) {
+      console.log('🔍 TextGenerator: Form validation failed');
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields',
@@ -106,6 +108,7 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     }
 
     setIsGenerating(true);
+    console.log('🔍 TextGenerator: Starting generation process...');
 
     try {
       const payload = {
@@ -124,13 +127,26 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
         from: formData.from
       };
 
+      console.log('🔍 TextGenerator: Calling text-generator function with payload:', payload);
+
       const { data, error } = await supabase.functions.invoke('text-generator', {
         body: payload
       });
 
-      if (error) throw error;
+      console.log('🔍 TextGenerator: Function response:', { data, error });
 
-      if (data.generatedText) {
+      if (error) {
+        console.error('🔍 TextGenerator: Supabase function error:', error);
+        throw new Error(error.message || 'Function call failed');
+      }
+
+      if (data?.error) {
+        console.error('🔍 TextGenerator: Function returned error:', data.error);
+        throw new Error(data.error);
+      }
+
+      if (data?.generatedText) {
+        console.log('🔍 TextGenerator: Text generated successfully');
         onGenerated(data.generatedText, formData.mode);
         onOpenChange(false);
         
@@ -152,12 +168,25 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
           title: language === 'ar' ? 'نجح!' : 'Success!',
           description: language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully',
         });
+      } else {
+        console.error('🔍 TextGenerator: No generated text in response:', data);
+        throw new Error('No generated text received');
       }
     } catch (error: any) {
-      console.error('Error generating text:', error);
+      console.error('🔍 TextGenerator: Generation error:', error);
+      
+      let errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text');
+      
+      // Check for specific error types
+      if (errorMessage.includes('not configured')) {
+        errorMessage = language === 'ar' ? 'خطأ في إعداد النظام - يرجى المحاولة لاحقاً' : 'System configuration error - please try again later';
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+        errorMessage = language === 'ar' ? 'خطأ في الاتصال - يرجى التحقق من الإنترنت' : 'Connection error - please check your internet';
+      }
+      
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'),
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
