@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import {
   PenTool,
   Mic,
   Globe,
-  Translate,
+  Languages,
   Volume2,
   BookOpen
 } from 'lucide-react';
@@ -44,22 +45,22 @@ export function QuickActionsPanel({
 
   const triggerModes = [
     {
-      mode: 'chat',
+      mode: 'chat' as TriggerMode,
       label: language === 'ar' ? 'محادثة' : 'Chat',
       icon: MessageSquare
     },
     {
-      mode: 'search',
+      mode: 'search' as TriggerMode,
       label: language === 'ar' ? 'بحث' : 'Search',
       icon: Search
     },
     {
-      mode: 'advanced_search',
+      mode: 'advanced_search' as TriggerMode,
       label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
       icon: Layers3
     },
     {
-      mode: 'image',
+      mode: 'image' as TriggerMode,
       label: language === 'ar' ? 'صورة' : 'Image',
       icon: ImageIcon
     }
@@ -172,7 +173,7 @@ export function QuickActionsPanel({
           </div>
         </Button>
         <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3" onClick={() => setVoiceTranslatorOpen(true)}>
-          <Translate className="h-4 w-4" />
+          <Languages className="h-4 w-4" />
           <div className="text-left">
             <div className="font-medium">
               {language === 'ar' ? 'ترجمة الصوت' : 'Voice Translator'}
