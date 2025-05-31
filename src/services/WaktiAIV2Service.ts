@@ -36,24 +36,18 @@ export interface AIMessage {
   content: string;
   timestamp: Date;
   intent?: string;
-  confidence?: string;
+  confidence?: number;
   actionTaken?: string;
   inputType?: 'text' | 'voice';
   browsingUsed?: boolean;
   browsingData?: {
-    hasResults: boolean;
-    sources?: any[];
-    images?: any[];
-    query?: string;
+    sources: any[];
   };
-  quotaStatus?: {
-    count: number;
-    limit: number;
-    usagePercentage: number;
-    remaining: number;
-  };
+  quotaStatus?: any;
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
+  isGeneratedText?: boolean;
+  generatedTextMode?: 'compose' | 'reply';
 }
 
 export interface AIConversation {
