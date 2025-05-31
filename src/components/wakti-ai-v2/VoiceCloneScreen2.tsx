@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -424,8 +425,9 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                 </>
               )}
             </Button>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
       {/* Navigation */}
       <div className="flex gap-3 pt-4">
