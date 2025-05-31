@@ -1,20 +1,20 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer';
 import { toast } from 'sonner';
-import { Mic, Send, Loader2, Upload, X, MessageSquare, Search, Zap, Image as ImageIcon, Settings, Menu, Users, LogOut, ArrowLeft, Download, FileDown, Trash2, Volume2, VolumeX, Palette, TrendingUp } from 'lucide-react';
+import { Mic, Send, Loader2, Upload, X, MessageSquare, Search, Zap, Image as ImageIcon, Settings, Users, LogOut, Palette, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { ConversationsPanel } from '@/components/wakti-ai-v2/ConversationsPanel';
-import { SearchModeIndicator } from '@/components/wakti-ai-v2/SearchModeIndicator';
 import { WaktiAIV2Service, AIResponse, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 
 // Updated trigger types with stylized art
@@ -37,7 +37,7 @@ export default function WaktiAIV2() {
   const [isRecording, setIsRecording] = useState(false);
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [conversationsPanelOpen, setConversationsPanelOpen] = useState(false);
-  const [quickActionsPanelOpen, setQuickActionsPanelOpen] = useState(true);
+  const [quickActionsPanelOpen, setQuickActionsPanelOpen] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
   const [imageMode, setImageMode] = useState<ImageMode>('regular');
 
@@ -313,15 +313,6 @@ export default function WaktiAIV2() {
     setAttachedImages(newImages);
   };
 
-  const handleDownloadImage = (imageUrl: string) => {
-    const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = 'image.jpg';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const getPlaceholderText = () => {
     if (activeTrigger === 'image') {
       switch (imageMode) {
@@ -339,217 +330,200 @@ export default function WaktiAIV2() {
   };
 
   return (
-    <div className="h-screen bg-gradient-to-br from-background via-background to-muted/30 flex flex-col">
-      {/* Header */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="flex items-center justify-between p-4">
-          {/* Mobile Menu Button */}
-          <Button
-            variant="ghost"
-            className="lg:hidden"
-            onClick={() => setConversationsPanelOpen((open) => !open)}
-          >
-            <Menu className="w-5 h-5" />
-          </Button>
-
-          {/* Logo and Title */}
-          <div className="flex items-center gap-2">
-            <ImageIcon className="w-6 h-6" />
-            <h1 className="text-lg font-semibold">Wakti AI V2</h1>
-          </div>
+    <div className="mobile-container bg-gradient-to-br from-background via-background to-muted/30">
+      {/* Header Bar */}
+      <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <ImageIcon className="w-6 h-6" />
+          <h1 className="text-lg font-semibold">Wakti AI V2</h1>
           
           {/* Mode Indicators */}
-          <div className="flex items-center gap-2">
-            {activeTrigger === 'search' && (
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                <Search className="w-3 h-3 mr-1" />
-                {language === 'ar' ? 'وضع البحث' : 'Search Mode'}
-              </Badge>
-            )}
-            {activeTrigger === 'advanced_search' && (
-              <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
-                <Zap className="w-3 h-3 mr-1" />
-                {language === 'ar' ? 'بحث متقدم' : 'Advanced Search'}
-              </Badge>
-            )}
-            {activeTrigger === 'image' && (
-              <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                {imageMode === 'photomaker' && <Users className="w-3 h-3 mr-1" />}
-                {imageMode === 'upscaling' && <TrendingUp className="w-3 h-3 mr-1" />}
-                {imageMode === 'stylized' && <Palette className="w-3 h-3 mr-1" />}
-                {imageMode === 'regular' && <ImageIcon className="w-3 h-3 mr-1" />}
-                {imageMode === 'photomaker' && (language === 'ar' ? 'صانع الصور الشخصية' : 'PhotoMaker')}
-                {imageMode === 'upscaling' && (language === 'ar' ? 'تحسين الصور' : 'Upscaling')}
-                {imageMode === 'stylized' && (language === 'ar' ? 'فن مخصص' : 'Stylized Art')}
-                {imageMode === 'regular' && (language === 'ar' ? 'إنشاء صور' : 'Image Gen')}
-              </Badge>
-            )}
-          </div>
+          {activeTrigger === 'search' && (
+            <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+              <Search className="w-3 h-3 mr-1" />
+              {language === 'ar' ? 'وضع البحث' : 'Search Mode'}
+            </Badge>
+          )}
+          {activeTrigger === 'advanced_search' && (
+            <Badge variant="secondary" className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400">
+              <Zap className="w-3 h-3 mr-1" />
+              {language === 'ar' ? 'بحث متقدم' : 'Advanced Search'}
+            </Badge>
+          )}
+          {activeTrigger === 'image' && (
+            <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+              {imageMode === 'photomaker' && <Users className="w-3 h-3 mr-1" />}
+              {imageMode === 'upscaling' && <TrendingUp className="w-3 h-3 mr-1" />}
+              {imageMode === 'stylized' && <Palette className="w-3 h-3 mr-1" />}
+              {imageMode === 'regular' && <ImageIcon className="w-3 h-3 mr-1" />}
+              {imageMode === 'photomaker' && (language === 'ar' ? 'صانع الصور الشخصية' : 'PhotoMaker')}
+              {imageMode === 'upscaling' && (language === 'ar' ? 'تحسين الصور' : 'Upscaling')}
+              {imageMode === 'stylized' && (language === 'ar' ? 'فن مخصص' : 'Stylized Art')}
+              {imageMode === 'regular' && (language === 'ar' ? 'إنشاء صور' : 'Image Gen')}
+            </Badge>
+          )}
+        </div>
 
-          {/* Header Controls */}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => navigate('/account')}>
-              <Settings className="w-4 h-4" />
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/logout')}>
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          {/* Quick Actions Drawer */}
+          <Drawer open={quickActionsPanelOpen} onOpenChange={setQuickActionsPanelOpen}>
+            <DrawerTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <Zap className="w-4 h-4" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent>
+              <QuickActionsPanel
+                onSendMessage={handleSendMessage}
+                activeTrigger={activeTrigger}
+                onTriggerChange={handleTriggerChange}
+                imageMode={imageMode}
+                onImageModeChange={handleImageModeChange}
+              />
+            </DrawerContent>
+          </Drawer>
+
+          {/* Conversations Drawer */}
+          <Drawer open={conversationsPanelOpen} onOpenChange={setConversationsPanelOpen}>
+            <DrawerTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <MessageSquare className="w-4 h-4" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent>
+              <ConversationsPanel
+                conversations={conversations}
+                selectedConversation={selectedConversation}
+                onSelectConversation={handleSelectConversation}
+                onNewConversation={handleNewConversation}
+                onDeleteConversation={handleDeleteConversation}
+                setConversationsPanelOpen={setConversationsPanelOpen}
+              />
+            </DrawerContent>
+          </Drawer>
+
+          <Button variant="ghost" size="sm" onClick={() => navigate('/settings')}>
+            <Settings className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Main Chat Panel */}
-          <ResizablePanel defaultSize={conversationsPanelOpen || quickActionsPanelOpen ? 65 : 85} minSize={50}>
-            <div className="h-full flex flex-col">
-              {/* Messages Area */}
-              <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-                <div className="space-y-6 max-w-4xl mx-auto">
-                  {chatHistory.map((message) => (
-                    <ChatBubble
-                      key={message.id}
-                      message={message}
-                      onSearchConfirm={handleSearchConfirmation}
-                      activeTrigger={activeTrigger}
-                      imageMode={imageMode}
-                    />
-                  ))}
-                </div>
-              </ScrollArea>
+        {/* Messages Area */}
+        <ScrollArea className="h-[calc(100vh-140px)] p-4" ref={scrollAreaRef}>
+          <div className="space-y-6 max-w-4xl mx-auto">
+            {chatHistory.map((message) => (
+              <ChatBubble
+                key={message.id}
+                message={message}
+                onSearchConfirm={handleSearchConfirmation}
+                activeTrigger={activeTrigger}
+                imageMode={imageMode}
+              />
+            ))}
+          </div>
+        </ScrollArea>
 
-              {/* Input Area */}
-              <div className="border-t p-4 bg-background/95 backdrop-blur">
-                <div className="max-w-4xl mx-auto space-y-3">
-                  {/* Image Upload Section */}
-                  {activeTrigger === 'image' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">
-                          {imageMode === 'stylized' 
-                            ? (language === 'ar' ? 'رفع الصورة (1 فقط)' : 'Upload Image (1 only)')
-                            : (language === 'ar' ? 'رفع الصور' : 'Upload Images')
-                          }
-                        </label>
-                        <span className="text-xs text-muted-foreground">
-                          {imageMode === 'photomaker' && (language === 'ar' ? '1-4 صور' : '1-4 images')}
-                          {imageMode === 'upscaling' && (language === 'ar' ? 'صورة واحدة' : '1 image')}
-                          {imageMode === 'stylized' && (language === 'ar' ? 'صورة واحدة' : '1 image')}
-                          {imageMode === 'regular' && (language === 'ar' ? 'اختياري' : 'Optional')}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Input
-                          type="file"
-                          id="image-upload"
-                          multiple={imageMode !== 'stylized'}
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleFileUpload}
-                        />
-                        <Button variant="outline" size="sm" asChild>
-                          <label htmlFor="image-upload" className="cursor-pointer">
-                            {language === 'ar' ? 'تحميل' : 'Upload'}
-                            <Upload className="w-4 h-4 ml-2" />
-                          </label>
-                        </Button>
-                        {attachedImages.length > 0 && (
-                          <div className="flex items-center space-x-1">
-                            {attachedImages.map((image, index) => (
-                              <div key={index} className="relative">
-                                <img
-                                  src={URL.createObjectURL(image)}
-                                  alt={image.name}
-                                  className="w-12 h-12 rounded-md object-cover"
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute -top-2 -right-2 bg-background hover:bg-muted"
-                                  onClick={() => handleRemoveAttachedImage(index)}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+        {/* Input Area */}
+        <div className="border-t p-4 bg-background/95 backdrop-blur">
+          <div className="max-w-4xl mx-auto space-y-3">
+            {/* Image Upload Section */}
+            {activeTrigger === 'image' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">
+                    {imageMode === 'stylized' 
+                      ? (language === 'ar' ? 'رفع الصورة (1 فقط)' : 'Upload Image (1 only)')
+                      : (language === 'ar' ? 'رفع الصور' : 'Upload Images')
+                    }
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {imageMode === 'photomaker' && (language === 'ar' ? '1-4 صور' : '1-4 images')}
+                    {imageMode === 'upscaling' && (language === 'ar' ? 'صورة واحدة' : '1 image')}
+                    {imageMode === 'stylized' && (language === 'ar' ? 'صورة واحدة' : '1 image')}
+                    {imageMode === 'regular' && (language === 'ar' ? 'اختياري' : 'Optional')}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    type="file"
+                    id="image-upload"
+                    multiple={imageMode !== 'stylized'}
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  <Button variant="outline" size="sm" asChild>
+                    <label htmlFor="image-upload" className="cursor-pointer">
+                      {language === 'ar' ? 'تحميل' : 'Upload'}
+                      <Upload className="w-4 h-4 ml-2" />
+                    </label>
+                  </Button>
+                  {attachedImages.length > 0 && (
+                    <div className="flex items-center space-x-1">
+                      {attachedImages.map((image, index) => (
+                        <div key={index} className="relative">
+                          <img
+                            src={URL.createObjectURL(image)}
+                            alt={image.name}
+                            className="w-12 h-12 rounded-md object-cover"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="absolute -top-2 -right-2 bg-background hover:bg-muted"
+                            onClick={() => handleRemoveAttachedImage(index)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
                     </div>
                   )}
-
-                  {/* Message Input */}
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 relative">
-                      <Textarea
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder={getPlaceholderText()}
-                        onKeyDown={handleKeyDown}
-                        className="min-h-[44px] max-h-32 resize-none pr-12"
-                        disabled={isLoading}
-                      />
-                      
-                      {/* Voice Input Button */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-2 h-8 w-8 p-0"
-                        onClick={toggleRecording}
-                        disabled={isLoading}
-                      >
-                        <Mic className={cn("h-4 w-4", isRecording && "text-red-500")} />
-                      </Button>
-                    </div>
-
-                    {/* Send Button */}
-                    <Button 
-                      onClick={() => handleSendMessage()}
-                      disabled={isLoading}
-                      className="h-11 px-4"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
                 </div>
               </div>
+            )}
+
+            {/* Message Input */}
+            <div className="flex gap-3 items-end">
+              <div className="flex-1 relative">
+                <Textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={getPlaceholderText()}
+                  onKeyDown={handleKeyDown}
+                  className="min-h-[44px] max-h-32 resize-none pr-12"
+                  disabled={isLoading}
+                />
+                
+                {/* Voice Input Button */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-2 h-8 w-8 p-0"
+                  onClick={toggleRecording}
+                  disabled={isLoading}
+                >
+                  <Mic className={cn("h-4 w-4", isRecording && "text-red-500")} />
+                </Button>
+              </div>
+
+              {/* Send Button */}
+              <Button 
+                onClick={() => handleSendMessage()}
+                disabled={isLoading}
+                className="h-11 px-4"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-          </ResizablePanel>
-
-          {/* Resizable Handle */}
-          {(conversationsPanelOpen || quickActionsPanelOpen) && (
-            <ResizableHandle withHandle />
-          )}
-
-          {/* Right Panels */}
-          {(conversationsPanelOpen || quickActionsPanelOpen) && (
-            <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
-              {conversationsPanelOpen ? (
-                <ConversationsPanel
-                  conversations={conversations}
-                  selectedConversation={selectedConversation}
-                  onSelectConversation={handleSelectConversation}
-                  onNewConversation={handleNewConversation}
-                  onDeleteConversation={handleDeleteConversation}
-                  setConversationsPanelOpen={setConversationsPanelOpen}
-                />
-              ) : (
-                <QuickActionsPanel
-                  onSendMessage={handleSendMessage}
-                  activeTrigger={activeTrigger}
-                  onTriggerChange={handleTriggerChange}
-                  imageMode={imageMode}
-                  onImageModeChange={handleImageModeChange}
-                />
-              )}
-            </ResizablePanel>
-          )}
-        </ResizablePanelGroup>
+          </div>
+        </div>
       </div>
     </div>
   );
