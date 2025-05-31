@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Mic, Send, Loader2, Upload, X, MessageSquare, Search, Zap, Image as ImageIcon, Settings, Menu, Users, LogOut, ArrowLeft, Download, FileDown, Trash2, Volume2, VolumeX, Palette } from 'lucide-react';
+import { Mic, Send, Loader2, Upload, X, MessageSquare, Search, Zap, Image as ImageIcon, Settings, Menu, Users, LogOut, ArrowLeft, Download, FileDown, Trash2, Volume2, VolumeX, Palette, TrendingUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
@@ -140,7 +140,7 @@ export default function WaktiAIV2() {
   };
 
   const handleLanguageChange = (newLanguage: string) => {
-    setLanguage(newLanguage);
+    setLanguage(newLanguage as 'en' | 'ar');
   };
 
   const handleTriggerChange = (trigger: TriggerMode) => {
