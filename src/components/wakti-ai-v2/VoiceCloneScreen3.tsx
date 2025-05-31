@@ -86,13 +86,12 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         body: {
           text: text.trim(),
           voice_id: selectedVoiceId,
-        },
-        responseType: 'blob'
+        }
       });
 
       if (response.error) throw response.error;
 
-      // Create URL for audio blob
+      // The response.data should be a blob for audio
       const audioBlob = response.data;
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
