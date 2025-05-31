@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -28,6 +29,11 @@ const WaktiAIV2 = () => {
   const [conversations, setConversations] = useState<any[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [awaitingSearchConfirmation, setAwaitingSearchConfirmation] = useState<any | null>(null);
+
+  // Fix: Move activeTrigger declaration before useEffect that uses it
+  const [activeTrigger, setActiveTrigger] = useState<TriggerMode>(() => {
+    return (localStorage.getItem('wakti-ai-active-trigger') as TriggerMode) || 'chat';
+  });
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -62,10 +68,6 @@ const WaktiAIV2 = () => {
       window.removeEventListener('ai-trigger-change', handleTriggerChange);
     };
   }, [activeTrigger]);
-
-  const [activeTrigger, setActiveTrigger] = useState<TriggerMode>(() => {
-    return (localStorage.getItem('wakti-ai-active-trigger') as TriggerMode) || 'chat';
-  });
 
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [attachedImageFile, setAttachedImageFile] = useState<File | null>(null);
@@ -335,9 +337,10 @@ const WaktiAIV2 = () => {
           
           <ConversationsList
             conversations={conversations}
-            onSelect={handleConversationSelect}
-            onDelete={handleDeleteConversation}
+            onSelectConversation={handleConversationSelect}
+            onDeleteConversation={handleDeleteConversation}
             currentConversationId={currentConversationId}
+            onRefresh={fetchConversations}
           />
         </div>
       </aside>
@@ -361,7 +364,7 @@ const WaktiAIV2 = () => {
                 <h1 className="text-lg font-semibold">
                   {language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}
                 </h1>
-                <SearchModeIndicator activeTrigger={activeTrigger} language={language} />
+                <SearchModeIndicator isVisible={activeTrigger === 'search' || activeTrigger === 'advanced_search'} />
               </div>
             </div>
             
@@ -401,10 +404,10 @@ const WaktiAIV2 = () => {
               )}
               
               {messages.map((message) => (
-                <ChatBubble key={message.id} message={message} language={language} />
+                <ChatBubble key={message.id} message={message} />
               ))}
               
-              {isLoading && <TypingIndicator language={language} />}
+              {isLoading && <TypingIndicator />}
             </div>
 
             {/* Input Area */}
