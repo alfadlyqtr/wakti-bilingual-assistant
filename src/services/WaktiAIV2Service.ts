@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIResponse {
@@ -174,8 +173,7 @@ export class WaktiAIV2Service {
     conversationId?: string | null,
     language: string = 'en',
     inputType: 'text' | 'voice' = 'text',
-    activeTrigger: TriggerMode = 'chat',
-    imageAttachment?: string | null
+    activeTrigger: TriggerMode = 'chat'
   ): Promise<AIResponse> {
     try {
       console.log('🔍 WaktiAIV2Service: Sending message with trigger:', activeTrigger);
@@ -192,8 +190,7 @@ export class WaktiAIV2Service {
         language,
         conversationId,
         inputType,
-        activeTrigger,
-        imageAttachment
+        activeTrigger
       };
       
       console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with trigger payload:', payload);

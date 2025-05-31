@@ -21,14 +21,13 @@ const supabase = createClient(
 );
 
 // SIMPLIFIED TRIGGER-BASED INTENT ANALYSIS - TEACHER CONCEPT
-function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger = 'chat', hasImageAttachment = false) {
+function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger = 'chat') {
   const lowerMessage = message.toLowerCase();
   
   console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT TRIGGER ANALYSIS ===");
   console.log("🎯 WAKTI AI V2.3: Message:", message);
   console.log("🎯 WAKTI AI V2.3: Active trigger (teacher's hand):", activeTrigger);
   console.log("🎯 WAKTI AI V2.3: Language:", language);
-  console.log("🎯 WAKTI AI V2.3: Has image attachment:", hasImageAttachment);
   
   // 🚨 TEACHER CONCEPT: Trigger is the ABSOLUTE controller
   // If no "hands up" (search triggers), then NO browsing - period!
@@ -88,29 +87,7 @@ function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger
       };
       
     case 'image':
-      console.log("🎯 WAKTI AI V2.3: ✅ IMAGE MODE - ANALYZE FOR IMAGE ACTIONS");
-      
-      // Check for background removal patterns when image is attached
-      if (hasImageAttachment) {
-        const backgroundRemovalPatterns = [
-          'remove background', 'remove bg', 'transparent background', 'cut out background',
-          'background removal', 'delete background', 'clear background', 'isolate subject',
-          'إزالة الخلفية', 'احذف الخلفية', 'خلفية شفافة', 'اقطع الخلفية'
-        ];
-        
-        if (backgroundRemovalPatterns.some(p => lowerMessage.includes(p))) {
-          return {
-            intent: 'remove_background',
-            confidence: 'high',
-            action: 'remove_background',
-            params: { imageAttachment: true },
-            requiresBrowsing: false,
-            triggerMode: 'image'
-          };
-        }
-      }
-      
-      // Default image generation
+      console.log("🎯 WAKTI AI V2.3: ✅ IMAGE MODE - GENERATE IMAGES");
       const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة)/gi, '').trim();
       return {
         intent: 'generate_image',
@@ -131,70 +108,6 @@ function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger
         requiresBrowsing: false, // Default safe mode - no browsing
         triggerMode: 'chat'
       };
-  }
-}
-
-// Background removal function
-async function removeImageBackground(imageData, language = 'en') {
-  try {
-    console.log("✂️ WAKTI AI V2.3: Starting background removal process");
-    
-    if (!RUNWARE_API_KEY) {
-      throw new Error("Runware API key not configured");
-    }
-    
-    // Call Runware background removal API
-    const response = await fetch('https://api.runware.ai/v1', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${RUNWARE_API_KEY}`
-      },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY
-        },
-        {
-          taskType: "removeImageBackground",
-          taskUUID: crypto.randomUUID(),
-          image: imageData,
-          includeCost: true,
-          outputFormat: "PNG"
-        }
-      ])
-    });
-
-    if (!response.ok) {
-      throw new Error(`Runware API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log("✂️ WAKTI AI V2.3: Background removal result:", result);
-
-    if (result.data && result.data.length > 0) {
-      const backgroundRemovalData = result.data.find(item => item.taskType === "removeImageBackground");
-      
-      if (backgroundRemovalData && (backgroundRemovalData.imageURL || backgroundRemovalData.imageBase64Data)) {
-        console.log("✂️ WAKTI AI V2.3: Background removal successful!");
-        
-        return {
-          success: true,
-          imageUrl: backgroundRemovalData.imageURL,
-          imageBase64Data: backgroundRemovalData.imageBase64Data,
-          cost: backgroundRemovalData.cost
-        };
-      }
-    }
-
-    throw new Error("No background removal result in response");
-
-  } catch (error) {
-    console.error("✂️ WAKTI AI V2.3: Background removal error:", error);
-    return {
-      success: false,
-      error: error.message || "Background removal failed"
-    };
   }
 }
 
@@ -692,7 +605,7 @@ serve(async (req) => {
       });
     }
 
-    // Extract fields with defaults - INCLUDING activeTrigger and imageAttachment
+    // Extract fields with defaults - INCLUDING activeTrigger
     const {
       message,
       userId,
@@ -701,8 +614,7 @@ serve(async (req) => {
       inputType = 'text',
       conversationHistory = [],
       confirmSearch = false,
-      activeTrigger = 'chat',
-      imageAttachment = null
+      activeTrigger = 'chat'
     } = requestBody;
 
     console.log("🎯 WAKTI AI V2.3: === EXTRACTED FIELDS ===");
@@ -711,7 +623,6 @@ serve(async (req) => {
     console.log("🎯 WAKTI AI V2.3: Language:", language);
     console.log("🎯 WAKTI AI V2.3: Active Trigger (Teacher's Hand):", activeTrigger);
     console.log("🎯 WAKTI AI V2.3: Input Type:", inputType);
-    console.log("🎯 WAKTI AI V2.3: Image Attachment:", !!imageAttachment);
     console.log("🎯 WAKTI AI V2.3: Confirm Search:", confirmSearch);
 
     // Validate required fields
@@ -737,9 +648,9 @@ serve(async (req) => {
       });
     }
 
-    // TEACHER CONCEPT: Analyze intent with ABSOLUTE trigger control and image attachment awareness
+    // TEACHER CONCEPT: Analyze intent with ABSOLUTE trigger control
     console.log("🎯 WAKTI AI V2.3: === STARTING TEACHER CONCEPT ANALYSIS ===");
-    const intentAnalysis = analyzeIntentWithTriggerControl(message, language, activeTrigger, !!imageAttachment);
+    const intentAnalysis = analyzeIntentWithTriggerControl(message, language, activeTrigger);
     console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT RESULT ===");
     console.log("🎯 WAKTI AI V2.3: Intent:", intentAnalysis.intent);
     console.log("🎯 WAKTI AI V2.3: Requires Browsing:", intentAnalysis.requiresBrowsing);
@@ -759,40 +670,7 @@ serve(async (req) => {
     // TEACHER CONCEPT: Process based on ABSOLUTE trigger control
     console.log("🎯 WAKTI AI V2.3: === PROCESSING WITH TEACHER CONCEPT ===");
     
-    if (intentAnalysis.intent === 'remove_background') {
-      console.log("✂️ WAKTI AI V2.3: Handling background removal with image attachment");
-      
-      if (!imageAttachment) {
-        response = language === 'ar' 
-          ? `لإزالة الخلفية، يرجى رفع صورة أولاً.`
-          : `To remove the background, please upload an image first.`;
-      } else {
-        const backgroundRemovalResult = await removeImageBackground(imageAttachment, language);
-        
-        if (backgroundRemovalResult.success) {
-          imageUrl = backgroundRemovalResult.imageUrl || backgroundRemovalResult.imageBase64Data;
-          response = language === 'ar' 
-            ? `تم إزالة الخلفية بنجاح! ✂️🎨\n\nتم إنشاء صورة شفافة جديدة بدون خلفية. يمكنك تحميلها أو استخدامها في مشاريعك.`
-            : `Background removed successfully! ✂️🎨\n\nI've created a new transparent image with the background removed. You can download it or use it in your projects.`;
-          
-          actionTaken = 'remove_background';
-          actionResult = { 
-            imageUrl, 
-            cost: backgroundRemovalResult.cost,
-            originalImageAttachment: true 
-          };
-          
-          if (backgroundRemovalResult.cost) {
-            console.log('Background removal cost:', backgroundRemovalResult.cost);
-          }
-        } else {
-          response = language === 'ar' 
-            ? `عذراً، فشل في إزالة الخلفية: ${backgroundRemovalResult.error}`
-            : `Sorry, failed to remove background: ${backgroundRemovalResult.error}`;
-        }
-      }
-      
-    } else if (intentAnalysis.intent === 'generate_image') {
+    if (intentAnalysis.intent === 'generate_image') {
       console.log("🎨 WAKTI AI V2.3: Handling image generation");
       
       const imageResult = await generateImage(intentAnalysis.params.prompt, language);
