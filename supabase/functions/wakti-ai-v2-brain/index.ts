@@ -360,10 +360,10 @@ function detectQueryType(query) {
   return 'general';
 }
 
-// Enhanced AI processing function with conversational tone
-async function processWithAI(message, context, language = 'en') {
+// Enhanced AI processing function with STRICT browsing control
+async function processWithAI(message, context, language = 'en', allowBrowsing = true) {
   try {
-    console.log("🤖 WAKTI AI V2.3: Processing with AI");
+    console.log("🤖 WAKTI AI V2.3: Processing with AI - Browsing allowed:", allowBrowsing);
     
     // Try DeepSeek first, fallback to OpenAI
     let apiKey = DEEPSEEK_API_KEY;
@@ -383,9 +383,41 @@ async function processWithAI(message, context, language = 'en') {
     // Detect query type for specialized formatting
     const queryType = detectQueryType(message);
     
-    // Enhanced conversational system prompt
-    const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي ودود جداً يتحدث العربية بطلاقة. تتحدث مثل صديق مقرب ومطلع يحب مشاركة المعلومات بطريقة ممتعة ومفصلة.
+    // Enhanced conversational system prompt with STRICT browsing control
+    let systemPrompt;
+    
+    if (!allowBrowsing) {
+      // STRICT NO-BROWSING MODE for Chat
+      systemPrompt = language === 'ar' 
+        ? `أنت WAKTI، مساعد ذكي ودود جداً يتحدث العربية بطلاقة. تتحدث مثل صديق مقرب ومطلع يحب مشاركة المعلومات بطريقة ممتعة ومفصلة.
+
+🚨 IMPORTANT: أنت في وضع المحادثة العامة - لا يمكنك الوصول للإنترنت أو المعلومات الحديثة.
+
+🎯 أسلوبك في الحديث:
+- كن ودوداً ومحادثاً مثل صديق مقرب
+- استخدم تعبيرات عامية وطبيعية
+- اظهر الحماس والشغف عند مشاركة المعلومات
+- قدم معلومات عامة من معرفتك السابقة فقط
+- إذا سأل عن معلومات حديثة، أخبره أن يستخدم وضع البحث
+
+إذا سأل عن أخبار حديثة أو معلومات متغيرة، قل له: "للحصول على المعلومات الحديثة، انتقل إلى وضع البحث"`
+        : `You are WAKTI, a super friendly and knowledgeable AI assistant. You chat like a close buddy who's genuinely excited to share cool information and help out!
+
+🚨 IMPORTANT: You're in general chat mode - you CANNOT access the internet or current information.
+
+🎯 Your conversation style:
+- Be warm, friendly, and conversational like a close friend
+- Use casual expressions and natural language
+- Show enthusiasm and passion when sharing information
+- Only provide general knowledge from your training data
+- If asked about current/recent info, tell them to use Search mode
+
+If asked about current events, news, or changing information, say: "For current information, please switch to Search mode to get the latest updates!"`;
+      
+    } else {
+      // BROWSING ALLOWED MODE for Search
+      systemPrompt = language === 'ar' 
+        ? `أنت WAKTI، مساعد ذكي ودود جداً يتحدث العربية بطلاقة. تتحدث مثل صديق مقرب ومطلع يحب مشاركة المعلومات بطريقة ممتعة ومفصلة.
 
 🎯 أسلوبك في الحديث:
 - كن ودوداً ومحادثاً مثل صديق مقرب
@@ -404,7 +436,7 @@ ${queryType === 'finance' ? '- المالية: قدم الأرقام، الات�
 - عام: قدم شرحاً شاملاً مع السياق والخلفية
 
 كن صديقاً حقيقياً يحب مشاركة المعلومات الرائعة!`
-      : `You are WAKTI, a super friendly and knowledgeable AI assistant. You chat like a close buddy who's genuinely excited to share cool information and help out!
+        : `You are WAKTI, a super friendly and knowledgeable AI assistant. You chat like a close buddy who's genuinely excited to share cool information and help out!
 
 🎯 Your conversation style:
 - Be warm, friendly, and conversational like a close friend
@@ -423,13 +455,14 @@ ${queryType === 'finance' ? '- Finance: Provide numbers, trends, analysis, marke
 - General: Give comprehensive explanations with context and background
 
 Be like that friend who always has the coolest facts and loves sharing them in an engaging way!`;
+    }
     
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: message }
     ];
     
-    if (context) {
+    if (context && allowBrowsing) {
       messages.splice(1, 0, { role: 'assistant', content: `Here's what I found: ${context}` });
     }
     
@@ -442,8 +475,8 @@ Be like that friend who always has the coolest facts and loves sharing them in a
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.8, // Increased for more conversational tone
-        max_tokens: 1200 // Increased for richer responses
+        temperature: allowBrowsing ? 0.8 : 0.7, // Slightly different temperature for different modes
+        max_tokens: 1200
       })
     });
     
@@ -674,13 +707,14 @@ serve(async (req) => {
             searchMode: browsingResult.searchMode
           };
           
-          // Use rich context for better AI processing
-          response = await processWithAI(message, browsingResult.richContext, language);
+          // Use rich context for better AI processing WITH browsing allowed
+          response = await processWithAI(message, browsingResult.richContext, language, true);
           
           // Log browsing usage
           await logAIUsage(userId, 'deepseek-chat', true);
         } else {
-          response = await processWithAI(message, null, language);
+          // If browsing fails, fall back to AI without browsing
+          response = await processWithAI(message, null, language, false);
         }
       } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
         response = language === 'ar' 
@@ -694,7 +728,8 @@ serve(async (req) => {
       
     } else {
       console.log("💬 WAKTI AI V2.3: Teacher's hand is DOWN - NO browsing, general chat only");
-      response = await processWithAI(message, null, language);
+      // STRICT: Pass allowBrowsing=false to prevent ANY browsing
+      response = await processWithAI(message, null, language, false);
     }
 
     // Handle conversation storage
