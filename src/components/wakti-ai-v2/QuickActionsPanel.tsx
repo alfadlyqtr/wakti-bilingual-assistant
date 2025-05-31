@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, Mic2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
@@ -177,8 +176,8 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
                 variant="ghost"
                 className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
               >
-                <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
-                  <Settings className="h-3 w-3 text-white" />
+                <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
+                  <Mic2 className="h-3 w-3 text-white" />
                 </div>
                 <span className="text-[10px] font-medium leading-tight">
                   {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
