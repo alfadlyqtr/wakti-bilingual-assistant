@@ -1,13 +1,15 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
+import { BackgroundRemovalModal } from './BackgroundRemovalModal';
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
@@ -22,6 +24,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
   const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
+  const [backgroundRemovalOpen, setBackgroundRemovalOpen] = useState(false);
   const [customLabel, setCustomLabel] = useState('');
   const [customMessage, setCustomMessage] = useState('');
 
@@ -141,6 +144,20 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             </span>
           </Button>
           
+          {/* Remove Background Button */}
+          <Button
+            variant="ghost"
+            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            onClick={() => setBackgroundRemovalOpen(true)}
+          >
+            <div className="p-1 rounded-sm bg-gradient-to-r from-orange-500 to-amber-500">
+              <Scissors className="h-3 w-3 text-white" />
+            </div>
+            <span className="text-[10px] font-medium leading-tight">
+              {language === 'ar' ? 'إزالة الخلفية' : 'Remove BG'}
+            </span>
+          </Button>
+          
           {/* Text Generation Button */}
           <Button
             variant="ghost"
@@ -168,58 +185,60 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
             </span>
           </Button>
-          
-          {/* Custom Input Action */}
-          <Dialog open={customActionDialogOpen} onOpenChange={setCustomActionDialogOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-              >
-                <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
-                  <Settings className="h-3 w-3 text-white" />
-                </div>
-                <span className="text-[10px] font-medium leading-tight">
-                  {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
-                </span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>
-                  {language === 'ar' ? 'إنشاء إجراء مخصص' : 'Create Custom Action'}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="custom-label">
-                    {language === 'ar' ? 'تسمية الإجراء' : 'Action Label'}
-                  </Label>
-                  <Input
-                    id="custom-label"
-                    value={customLabel}
-                    onChange={(e) => setCustomLabel(e.target.value)}
-                    placeholder={language === 'ar' ? 'مثال: ملخص ذكي' : 'e.g., AI Summary'}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="custom-message">
-                    {language === 'ar' ? 'الرسالة المرسلة' : 'Message to Send'}
-                  </Label>
-                  <Input
-                    id="custom-message"
-                    value={customMessage}
-                    onChange={(e) => setCustomMessage(e.target.value)}
-                    placeholder={language === 'ar' ? 'مثال: لخص هذا النص' : 'e.g., Summarize this text'}
-                  />
-                </div>
-                <Button onClick={handleCustomAction} className="w-full">
-                  {language === 'ar' ? 'إنشاء' : 'Create'}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
+      </div>
+
+      {/* Custom Input Action */}
+      <div className="flex-shrink-0">
+        <Dialog open={customActionDialogOpen} onOpenChange={setCustomActionDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              variant="ghost"
+              className="w-full h-12 flex items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            >
+              <div className="p-1 rounded-sm bg-gradient-to-r from-gray-500 to-slate-500">
+                <Settings className="h-3 w-3 text-white" />
+              </div>
+              <span className="text-[10px] font-medium">
+                {language === 'ar' ? 'إدخال مخصص' : 'Custom Input'}
+              </span>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {language === 'ar' ? 'إنشاء إجراء مخصص' : 'Create Custom Action'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="custom-label">
+                  {language === 'ar' ? 'تسمية الإجراء' : 'Action Label'}
+                </Label>
+                <Input
+                  id="custom-label"
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: ملخص ذكي' : 'e.g., AI Summary'}
+                />
+              </div>
+              <div>
+                <Label htmlFor="custom-message">
+                  {language === 'ar' ? 'الرسالة المرسلة' : 'Message to Send'}
+                </Label>
+                <Input
+                  id="custom-message"
+                  value={customMessage}
+                  onChange={(e) => setCustomMessage(e.target.value)}
+                  placeholder={language === 'ar' ? 'مثال: لخص هذا النص' : 'e.g., Summarize this text'}
+                />
+              </div>
+              <Button onClick={handleCustomAction} className="w-full">
+                {language === 'ar' ? 'إنشاء' : 'Create'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Try asking me section - ONLY visible in chat mode */}
@@ -266,6 +285,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       <VoiceTranslatorPopup 
         open={voiceTranslatorOpen} 
         onOpenChange={setVoiceTranslatorOpen} 
+      />
+
+      {/* Background Removal Modal */}
+      <BackgroundRemovalModal 
+        open={backgroundRemovalOpen} 
+        onOpenChange={setBackgroundRemovalOpen} 
       />
 
       {/* Buy Extras Popup */}
