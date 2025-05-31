@@ -68,15 +68,14 @@ interface SpeechGrammar {
   weight: number;
 }
 
-interface SpeechRecognitionConstructor {
-  prototype: SpeechRecognition;
-  new(): SpeechRecognition;
-}
-
 declare global {
   interface Window {
-    SpeechRecognition: SpeechRecognitionConstructor;
-    webkitSpeechRecognition: SpeechRecognitionConstructor;
+    SpeechRecognition: {
+      new(): SpeechRecognition;
+    };
+    webkitSpeechRecognition: {
+      new(): SpeechRecognition;
+    };
   }
 }
 
@@ -100,8 +99,6 @@ declare module '@/utils/translations' {
   export interface EventText {
     // Event text interface
   }
-  
-  // Removed VoiceSummaryText interface
   
   export interface SettingsText {
     // Settings text interface
