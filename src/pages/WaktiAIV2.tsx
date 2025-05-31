@@ -34,6 +34,7 @@ import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
 import { TextActionButtons } from '@/components/wakti-ai-v2/TextActionButtons';
+import { TextGeneratorPopup } from '@/components/wakti-ai-v2/TextGeneratorPopup';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
@@ -55,6 +56,7 @@ export default function WaktiAIV2() {
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
+  const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
 
   // Add trigger state
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
@@ -874,6 +876,7 @@ export default function WaktiAIV2() {
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
               onTextGenerated={handleTextGenerated}
+              onOpenTextGenerator={() => setTextGeneratorOpen(true)}
             />
           </div>
         </div>
@@ -883,6 +886,13 @@ export default function WaktiAIV2() {
       <KnowledgeModal 
         open={knowledgeModalOpen} 
         onOpenChange={setKnowledgeModalOpen} 
+      />
+
+      {/* Text Generator Popup */}
+      <TextGeneratorPopup
+        open={textGeneratorOpen}
+        onOpenChange={setTextGeneratorOpen}
+        onGenerated={handleTextGenerated}
       />
 
       {/* Overlay for both drawers */}

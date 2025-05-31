@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, Mic2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { 
+  MessageSquare, 
+  Search, 
+  Layers3, 
+  Image as ImageIcon,
+  PenTool,
+  Mic,
+  Globe,
+  Translate,
+  Volume2,
+  BookOpen
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { VoiceClonePopup } from './VoiceClonePopup';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
-import { VoiceClonePopup } from './VoiceClonePopup';
-import { TextGeneratorPopup } from './TextGeneratorPopup';
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
@@ -16,212 +26,209 @@ interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
   activeTrigger: TriggerMode;
   onTriggerChange: (trigger: TriggerMode) => void;
-  onTextGenerated?: (text: string, mode: 'compose' | 'reply') => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
+  onOpenTextGenerator: () => void;
 }
 
-export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange, onTextGenerated }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ 
+  onSendMessage, 
+  activeTrigger, 
+  onTriggerChange, 
+  onTextGenerated,
+  onOpenTextGenerator
+}: QuickActionsPanelProps) {
   const { language } = useTheme();
-  const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
-  const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
-  const [voiceCloneOpen, setVoiceCloneOpen] = useState(false);
-  const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
+  const [voiceCloneOpen, setVoiceCloneOpen] = React.useState(false);
+  const [voiceTranslatorOpen, setVoiceTranslatorOpen] = React.useState(false);
+  const [buyExtrasOpen, setBuyExtrasOpen] = React.useState(false);
 
-  // Save trigger state to localStorage and dispatch event for header
-  React.useEffect(() => {
-    localStorage.setItem('wakti-ai-active-trigger', activeTrigger);
-    window.dispatchEvent(new Event('ai-trigger-change'));
-  }, [activeTrigger]);
-
-  const triggerButtons = [
+  const triggerModes = [
     {
-      id: 'chat' as TriggerMode,
-      icon: MessageSquare,
+      mode: 'chat',
       label: language === 'ar' ? 'محادثة' : 'Chat',
-      description: language === 'ar' ? 'الوضع الافتراضي' : 'Default mode',
-      color: 'bg-blue-500'
+      icon: MessageSquare
     },
     {
-      id: 'search' as TriggerMode,
-      icon: Search,
+      mode: 'search',
       label: language === 'ar' ? 'بحث' : 'Search',
-      description: language === 'ar' ? 'البحث والمعلومات الحديثة' : 'Search & current info',
-      color: 'bg-green-500'
+      icon: Search
     },
     {
-      id: 'advanced_search' as TriggerMode,
-      icon: Zap,
+      mode: 'advanced_search',
       label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
-      description: language === 'ar' ? 'بحث عميق وتحليل' : 'Deep search & analysis',
-      color: 'bg-purple-500'
+      icon: Layers3
     },
     {
-      id: 'image' as TriggerMode,
-      icon: Image,
+      mode: 'image',
       label: language === 'ar' ? 'صورة' : 'Image',
-      description: language === 'ar' ? 'إنشاء الصور' : 'Image generation',
-      color: 'bg-orange-500'
+      icon: ImageIcon
     }
   ];
 
-  const handleTryExample = (example: string) => {
-    onSendMessage(example);
-    // If in search mode, auto-switch to chat mode for better experience
-    if (activeTrigger === 'search') {
-      setTimeout(() => {
-        onTriggerChange('chat');
-      }, 100);
+  const quickTemplates = [
+    {
+      message: language === 'ar' ? 'ما هي حالة الطقس اليوم؟' : 'What is the weather today?',
+      description: language === 'ar' ? 'احصل على معلومات الطقس' : 'Get weather information'
+    },
+    {
+      message: language === 'ar' ? 'أرسل لي صورة قطة' : 'Send me a picture of a cat',
+      description: language === 'ar' ? 'احصل على صور عشوائية' : 'Get random images'
+    },
+    {
+      message: language === 'ar' ? 'ما هي آخر الأخبار؟' : 'What is the latest news?',
+      description: language === 'ar' ? 'ابق على اطلاع دائم' : 'Stay up-to-date'
     }
-  };
-
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    if (onTextGenerated) {
-      onTextGenerated(text, mode);
-    }
-  };
+  ];
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* AI Trigger Controls */}
-      <div className="flex-shrink-0">
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
-          <Brain className="h-3 w-3" />
-          {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-2">
-          {triggerButtons.map((trigger) => (
-            <Button
-              key={trigger.id}
-              variant={activeTrigger === trigger.id ? "default" : "outline"}
-              className={cn(
-                "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
-                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1"
-              )}
-              onClick={() => onTriggerChange(trigger.id)}
+    <div className="space-y-6">
+      {/* Trigger Modes */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'أوضاع التشغيل' : 'Trigger Modes'}
+        </h4>
+        <div className="flex flex-wrap gap-2">
+          {triggerModes.map((mode) => (
+            <Badge
+              key={mode.mode}
+              variant={activeTrigger === mode.mode ? 'default' : 'secondary'}
+              onClick={() => onTriggerChange(mode.mode)}
+              className="cursor-pointer"
             >
-              <div className={cn(
-                "p-1.5 rounded-md",
-                activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
-              )}>
-                <trigger.icon className={cn(
-                  "h-3 w-3",
-                  activeTrigger === trigger.id ? "text-primary" : "text-white"
-                )} />
-              </div>
-              <div className="leading-tight">
-                <div className="text-[10px] font-medium">{trigger.label}</div>
-                <div className="text-[8px] text-muted-foreground">{trigger.description}</div>
+              <mode.icon className="h-3 w-3 mr-2" />
+              {mode.label}
+            </Badge>
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      {/* Quick Templates */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'قوالب سريعة' : 'Quick Templates'}
+        </h4>
+        <div className="grid gap-2">
+          {quickTemplates.map((template, index) => (
+            <Button
+              key={index}
+              variant="outline"
+              className="w-full justify-start gap-2 h-auto p-3"
+              onClick={() => onSendMessage(template.message)}
+            >
+              <MessageSquare className="h-4 w-4" />
+              <div className="text-left">
+                <div className="font-medium">{template.message}</div>
+                <div className="text-xs text-muted-foreground">
+                  {template.description}
+                </div>
               </div>
             </Button>
           ))}
         </div>
       </div>
 
-      {/* Action Buttons (Not Triggers) */}
-      <div className="flex-shrink-0">
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
-          <Settings className="h-3 w-3" />
-          {language === 'ar' ? 'أدوات' : 'Tools'}
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-2">
-          {/* Voice Translator Button */}
-          <Button
-            variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setVoiceTranslatorOpen(true)}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
-              <Languages className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'مترجم' : 'Translator'}
-            </span>
-          </Button>
-          
-          {/* Text Generation Button - Updated to open popup */}
-          <Button
-            variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setTextGeneratorOpen(true)}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
-              <PenTool className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
-            </span>
-          </Button>
-          
-          {/* Improve AI Button */}
-          <Button
-            variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => onSendMessage(language === 'ar' ? 'كيف يمكنني تحسين استخدام الذكاء الاصطناعي؟' : 'How can I improve my AI usage?')}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
-              <Brain className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
-            </span>
-          </Button>
-          
-          {/* Voice Clone Button */}
-          <Button
-            variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setVoiceCloneOpen(true)}
-          >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
-              <Mic2 className="h-3 w-3 text-white" />
-            </div>
-            <span className="text-[10px] font-medium leading-tight">
-              {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
-            </span>
-          </Button>
-        </div>
-      </div>
+      <Separator />
 
-      {/* Try asking me section - ONLY visible in chat mode */}
-      {activeTrigger === 'chat' && (
-        <div className="flex-1 pt-2 border-t border-border/50">
-          <h4 className="text-xs font-medium text-muted-foreground mb-2">
-            {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
-          </h4>
-          <div className="space-y-1.5">
-            {[
-              language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
-              language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
-              language === 'ar' ? 'أرني تقويمي' : 'Show me my calendar'
-            ].map((example, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-7 px-2"
-                onClick={() => handleTryExample(example)}
-              >
-                "{example}"
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Buy Extras Button - Fixed at bottom */}
-      <div className="flex-shrink-0 pt-3 border-t border-border/30">
-        <Button
-          onClick={() => setBuyExtrasOpen(true)}
-          variant="outline"
-          className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200"
+      {/* Text Generation Section */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'إنشاء النصوص' : 'Text Generation'}
+        </h4>
+        <Button 
+          onClick={onOpenTextGenerator}
+          variant="outline" 
+          className="w-full justify-start gap-2 h-auto p-3"
         >
-          <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <span className="font-medium text-emerald-700 dark:text-emerald-300">
-            {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
-          </span>
+          <PenTool className="h-4 w-4" />
+          <div className="text-left">
+            <div className="font-medium">
+              {language === 'ar' ? 'مولد النصوص' : 'Text Generator'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'إنشاء رسائل ومحتوى' : 'Create messages & content'}
+            </div>
+          </div>
         </Button>
       </div>
+
+      <Separator />
+
+      {/* Voice Tools */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'أدوات الصوت' : 'Voice Tools'}
+        </h4>
+        <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3" onClick={() => setVoiceCloneOpen(true)}>
+          <Mic className="h-4 w-4" />
+          <div className="text-left">
+            <div className="font-medium">
+              {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a clone of your voice'}
+            </div>
+          </div>
+        </Button>
+        <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3" onClick={() => setVoiceTranslatorOpen(true)}>
+          <Translate className="h-4 w-4" />
+          <div className="text-left">
+            <div className="font-medium">
+              {language === 'ar' ? 'ترجمة الصوت' : 'Voice Translator'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'ترجمة صوتك إلى لغات أخرى' : 'Translate your voice to other languages'}
+            </div>
+          </div>
+        </Button>
+      </div>
+
+      <Separator />
+
+      {/* Knowledge Base */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'قاعدة المعرفة' : 'Knowledge Base'}
+        </h4>
+        <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3">
+          <BookOpen className="h-4 w-4" />
+          <div className="text-left">
+            <div className="font-medium">
+              {language === 'ar' ? 'الوصول إلى قاعدة المعرفة' : 'Access Knowledge Base'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'ابحث عن معلومات وموارد مفيدة' : 'Find helpful information and resources'}
+            </div>
+          </div>
+        </Button>
+      </div>
+
+      <Separator />
+
+      {/* Buy Extras */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm text-muted-foreground">
+          {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
+        </h4>
+        <Button variant="outline" className="w-full justify-start gap-2 h-auto p-3" onClick={() => setBuyExtrasOpen(true)}>
+          <Globe className="h-4 w-4" />
+          <div className="text-left">
+            <div className="font-medium">
+              {language === 'ar' ? 'احصل على المزيد من الميزات' : 'Get More Features'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {language === 'ar' ? 'قم بترقية تجربتك' : 'Upgrade your experience'}
+            </div>
+          </div>
+        </Button>
+      </div>
+
+      {/* Voice Clone Popup */}
+      <VoiceClonePopup 
+        open={voiceCloneOpen} 
+        onOpenChange={setVoiceCloneOpen} 
+      />
 
       {/* Voice Translator Popup */}
       <VoiceTranslatorPopup 
@@ -233,19 +240,6 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       <BuyExtrasPopup 
         open={buyExtrasOpen} 
         onOpenChange={setBuyExtrasOpen} 
-      />
-
-      {/* Voice Clone Popup */}
-      <VoiceClonePopup 
-        open={voiceCloneOpen} 
-        onOpenChange={setVoiceCloneOpen} 
-      />
-
-      {/* Text Generator Popup */}
-      <TextGeneratorPopup 
-        open={textGeneratorOpen} 
-        onOpenChange={setTextGeneratorOpen}
-        onGenerated={handleTextGenerated}
       />
     </div>
   );
