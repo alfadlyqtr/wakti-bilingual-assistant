@@ -25,7 +25,9 @@ import {
   CheckCircle,
   Globe,
   User,
-  TrendingUp
+  TrendingUp,
+  Bot,
+  ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -35,10 +37,13 @@ import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
 import { AppHeader } from '@/components/AppHeader';
+import { PageContainer } from '@/components/PageContainer';
+import { SearchModeIndicator } from '@/components/SearchModeIndicator';
+import { QuotaIndicator } from '@/components/QuotaIndicator';
 
-// Updated trigger types with image upscaling
+// Updated trigger types with stylized art
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'stylized';
 
 export default function WaktiAIV2() {
   const { user } = useAuth();
@@ -57,6 +62,7 @@ export default function WaktiAIV2() {
   const [attachedImages, setAttachedImages] = useState<File[]>([]);
   const [browsingSources, setBrowsingSources] = useState<any[]>([]);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
+  const [showConversations, setShowConversations] = useState(false);
 
   // Updated trigger state - separate image mode state with upscaling
   const [activeTrigger, setActiveTrigger] = useState<TriggerMode>('chat');
@@ -91,6 +97,9 @@ export default function WaktiAIV2() {
         if (imgMode === 'upscaling') {
           return language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling';
         }
+        if (imgMode === 'stylized') {
+          return language === 'ar' ? 'أسلوب ديزني، كتاب هزلي، أنمي...' : 'Disney style, comic book, anime...';
+        }
         return language === 'ar' ? 'مولد الصور' : 'Image Generator';
       default:
         return language === 'ar' ? 'محادثة' : 'Chat';
@@ -123,6 +132,9 @@ export default function WaktiAIV2() {
         if (imgMode === 'upscaling') {
           return TrendingUp;
         }
+        if (imgMode === 'stylized') {
+          return ImageIcon;
+        }
         return ({ className }: { className?: string }) => <Upload className={className} />;
       default:
         return ({ className }: { className?: string }) => <MessageSquare className={className} />;
@@ -148,38 +160,17 @@ export default function WaktiAIV2() {
   // Handle image mode change with upscaling support
   const handleImageModeChange = (newImageMode: ImageMode) => {
     setImageMode(newImageMode);
-    
-    // Clear existing images when switching modes
     setAttachedImages([]);
     
-    // Set pre-filled prompt for upscaling mode
-    if (newImageMode === 'upscaling') {
-      setInputMessage(language === 'ar' ? 'تحسين جودة الصورة' : 'enhance image quality');
-      toast({
-        title: language === 'ar' ? 'وضع تحسين الصور' : 'Image Upscaling Mode',
-        description: language === 'ar' 
-          ? 'ارفع صورة واحدة لتحسين جودتها ودقتها'
-          : 'Upload a single image to enhance its quality and resolution',
-        duration: 4000
-      });
-    } else if (newImageMode === 'photomaker') {
-      setInputMessage('');
-      toast({
-        title: language === 'ar' ? 'وضع صانع الصور الشخصية' : 'PhotoMaker Mode',
-        description: language === 'ar' 
-          ? 'ارفع 1-4 صور بوجوه واضحة واكتب الوصف المطلوب'
-          : 'Upload 1-4 images with clear faces and write your prompt',
-        duration: 4000
-      });
+    // Set appropriate placeholder based on mode
+    if (newImageMode === 'photomaker') {
+      setInputMessage(language === 'ar' ? 'اكتب وصف الصورة الشخصية المطلوبة...' : 'Describe the personal image you want...');
+    } else if (newImageMode === 'upscaling') {
+      setInputMessage(language === 'ar' ? 'تحسين جودة الصورة' : 'Enhance image quality');
+    } else if (newImageMode === 'stylized') {
+      setInputMessage(language === 'ar' ? 'أسلوب ديزني، كتاب هزلي، أنمي...' : 'Disney style, comic book, anime...');
     } else {
       setInputMessage('');
-      toast({
-        title: language === 'ar' ? 'وضع مولد الصور' : 'Image Generator Mode',
-        description: language === 'ar' 
-          ? 'اكتب وصف الصورة المطلوبة'
-          : 'Write a description of the desired image',
-        duration: 2000
-      });
     }
   };
 
@@ -487,6 +478,16 @@ export default function WaktiAIV2() {
             event.target.value = '';
             return;
           }
+        } else if (imageMode === 'stylized') {
+          if (attachedImages.length >= 1) {
+            toast({
+              title: language === 'ar' ? 'حد الصور' : 'Image Limit',
+              description: language === 'ar' ? 'يمكن رفع صورة واحدة فقط لوضع التحويل الفني' : 'Only one image allowed for Stylized mode',
+              variant: 'destructive'
+            });
+            event.target.value = '';
+            return;
+          }
         }
       }
       
@@ -497,6 +498,8 @@ export default function WaktiAIV2() {
         toastDescription = `${file.name} (${attachedImages.length + 1}/4)`;
       } else if (activeTrigger === 'image' && imageMode === 'upscaling') {
         toastDescription = language === 'ar' ? 'جاهز للتحسين' : 'Ready for upscaling';
+      } else if (activeTrigger === 'image' && imageMode === 'stylized') {
+        toastDescription = language === 'ar' ? 'جاهز للتحويل الفني' : 'Ready for stylization';
       }
       
       toast({
@@ -570,6 +573,23 @@ export default function WaktiAIV2() {
           toast({
             title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
             description: language === 'ar' ? 'يمكن رفع صورة واحدة فقط لوضع تحسين الصور' : 'Only one image allowed for Upscaling mode',
+            variant: 'destructive'
+          });
+          return;
+        }
+      } else if (imageMode === 'stylized') {
+        if (attachedImages.length === 0) {
+          toast({
+            title: language === 'ar' ? 'صورة مطلوبة' : 'Image Required',
+            description: language === 'ar' ? 'يرجى رفع صورة واحدة قبل الإرسال' : 'Please upload an image before sending',
+            variant: 'destructive'
+          });
+          return;
+        }
+        if (attachedImages.length > 1) {
+          toast({
+            title: language === 'ar' ? 'كثرة الصور' : 'Too Many Images',
+            description: language === 'ar' ? 'يمكن رفع صورة واحدة فقط لوضع التحويل الفني' : 'Only one image allowed for Stylized mode',
             variant: 'destructive'
           });
           return;
@@ -675,7 +695,13 @@ export default function WaktiAIV2() {
         } else if (imageMode === 'upscaling') {
           toast({
             title: language === 'ar' ? '✅ تم تحسين الصورة' : '✅ Image Upscaled',
-            description: language === 'ar' ? 'تم تحسين جودة ودقة الصورة بنجاح' : 'Image quality and resolution enhanced successfully',
+            description: language === 'ar' ? 'تم تحسين جودة ودقت الصورة بنجاح' : 'Image quality and resolution enhanced successfully',
+            duration: 4000
+          });
+        } else if (imageMode === 'stylized') {
+          toast({
+            title: language === 'ar' ? '✅ تم تحويل الصورة' : '✅ Image Stylized',
+            description: language === 'ar' ? 'تم تحويل الصورة بنجاح' : 'Image has been successfully stylized',
             duration: 4000
           });
         }
@@ -833,370 +859,290 @@ export default function WaktiAIV2() {
 
   console.log('🔍 DEBUG: About to render input area');
 
+  const isPhotoMakerMode = activeTrigger === 'image' && imageMode === 'photomaker';
+  const isUpscalingMode = activeTrigger === 'image' && imageMode === 'upscaling';
+  const isStylizedMode = activeTrigger === 'image' && imageMode === 'stylized';
+  const isImageGenerationMode = activeTrigger === 'image';
+
+  // Image upload validation
+  const getMaxImages = () => {
+    if (imageMode === 'photomaker') return 4;
+    if (imageMode === 'upscaling' || imageMode === 'stylized') return 1;
+    return 10; // regular mode
+  };
+
+  const getImageUploadText = () => {
+    if (imageMode === 'photomaker') {
+      return language === 'ar' ? 'رفع 1-4 صور بوجوه واضحة' : 'Upload 1-4 images with clear faces';
+    }
+    if (imageMode === 'upscaling') {
+      return language === 'ar' ? 'رفع صورة واحدة للتحسين' : 'Upload one image to enhance';
+    }
+    if (imageMode === 'stylized') {
+      return language === 'ar' ? 'رفع صورة واحدة للتحويل الفني' : 'Upload one image to stylize';
+    }
+    return language === 'ar' ? 'رفع الصور (اختياري)' : 'Upload images (optional)';
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    processFileUpload(event);
+  };
+
+  const removeImage = (index: number) => {
+    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+  };
+
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-      {/* App Header */}
-      <AppHeader />
+    <PageContainer>
+      <div className="flex flex-col h-screen bg-background">
+        {/* Header */}
+        <div className="flex-shrink-0 border-b border-border/50 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <h1 className="text-xl font-bold">
+                  {language === 'ar' ? 'وقتي الذكي V2' : 'Wakti AI V2'}
+                </h1>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <SearchModeIndicator 
+                  activeTrigger={activeTrigger} 
+                  imageMode={imageMode}
+                />
+                <QuotaIndicator />
+              </div>
+            </div>
 
-      {/* Header - Updated layout */}
-      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setLeftDrawerOpen(true)}
-            className="hover:scale-110 transition-transform"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
-        
-        {/* Centered Mode Indicator */}
-        <div className="flex items-center justify-center gap-2 flex-1">
-          <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
-            <div className={cn("w-2 h-2 rounded-full", getTriggerModeColor(activeTrigger))}></div>
-            <span className="font-medium text-xs">
-              {getTriggerModeDisplay(activeTrigger, imageMode)}
-            </span>
-            {/* Show mode-specific icons when active */}
-            {activeTrigger === 'image' && imageMode === 'photomaker' && (
-              <User className="h-3 w-3 ml-1" />
-            )}
-            {activeTrigger === 'image' && imageMode === 'upscaling' && (
-              <TrendingUp className="h-3 w-3 ml-1" />
-            )}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowConversations(!showConversations)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <MessageSquare className="w-4 h-4" />
+                {language === 'ar' ? 'المحادثات' : 'Conversations'}
+              </Button>
+              
+              <KnowledgeModal />
+            </div>
           </div>
+        </div>
 
-          {/* Search Quota Indicator - Only show in Search mode */}
-          {quotaStatus && activeTrigger === 'search' && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
-              <Globe className="h-3 w-3" />
-              <span className={cn(
-                "font-medium",
-                quotaStatus.usagePercentage >= 80 ? "text-orange-600" : "text-green-600"
-              )}>
-                {quotaStatus.count}/{quotaStatus.limit}
-              </span>
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Conversations Sidebar */}
+          {showConversations && (
+            <div className="w-80 border-r border-border/50 flex flex-col">
+              <ConversationsList 
+                onConversationSelect={handleConversationSelect}
+                selectedConversationId={currentConversationId}
+                onNewConversation={handleNewConversation}
+              />
             </div>
           )}
-        </div>
-        
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setRightDrawerOpen(true)}
-            className="hover:scale-110 transition-transform"
-          >
-            <MessageSquare className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
 
-      {/* Hidden file inputs */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={processFileUpload}
-        className="hidden"
-        accept={activeTrigger === 'image' ? 'image/*' : '*/*'}
-        multiple={activeTrigger === 'image' && imageMode === 'photomaker'}
-      />
-      <input
-        type="file"
-        ref={cameraInputRef}
-        onChange={processFileUpload}
-        className="hidden"
-        accept="image/*"
-        capture="environment"
-      />
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col">
+            {/* Messages Container */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center space-y-4 max-w-md">
+                    <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
+                      <Bot className="w-8 h-8 text-white" />
+                    </div>
+                    <h2 className="text-2xl font-bold">
+                      {language === 'ar' ? 'مرحباً بك في وقتي الذكي V2' : 'Welcome to Wakti AI V2'}
+                    </h2>
+                    <p className="text-muted-foreground">
+                      {language === 'ar' 
+                        ? 'اختر وضع الذكاء الاصطناعي من الجانب الأيمن وابدأ المحادثة'
+                        : 'Choose an AI mode from the right panel and start chatting'
+                      }
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                messages.map((message) => (
+                  <ChatBubble 
+                    key={message.id} 
+                    message={message} 
+                    onSearchConfirm={handleSearchConfirmation}
+                    activeTrigger={activeTrigger}
+                    imageMode={imageMode}
+                  />
+                ))
+              )}
+              
+              {isTyping && <TypingIndicator />}
+              
+              <div ref={messagesEndRef} />
+            </div>
 
-      {/* Enhanced Messages Area with Search Confirmation */}
-      <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {messages.map((message) => (
-            <ChatBubble 
-              key={message.id} 
-              message={message} 
-              onSearchConfirm={handleSearchConfirmation}
-              activeTrigger={activeTrigger}
-              imageMode={imageMode}
-            />
-          ))}
-          
-          {isTyping && <TypingIndicator />}
-          
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+            {/* Image Upload Area */}
+            {isImageGenerationMode && (
+              <div className="flex-shrink-0 p-4 border-t border-border/50 bg-muted/30">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple={imageMode !== 'upscaling' && imageMode !== 'stylized'}
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="image-upload"
+                      disabled={attachedImages.length >= getMaxImages()}
+                    />
+                    <label
+                      htmlFor="image-upload"
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-border cursor-pointer hover:bg-muted/50 transition-colors",
+                        attachedImages.length >= getMaxImages() && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span className="text-sm font-medium">
+                        {getImageUploadText()}
+                      </span>
+                    </label>
+                  </div>
+                  
+                  {attachedImages.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {attachedImages.length}/{getMaxImages()} {language === 'ar' ? 'صور' : 'images'}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAttachedImages([])}
+                        className="h-8 px-2"
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Preview attached images */}
+                {attachedImages.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {attachedImages.map((image, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={URL.createObjectURL(image)}
+                          alt={`Uploaded ${index + 1}`}
+                          className="w-16 h-16 object-cover rounded-lg border border-border"
+                        />
+                        <button
+                          onClick={() => removeImage(index)}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-      {/* Left Drawer - Chat Archive with + icon moved here */}
-      <div className={cn(
-        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
-        leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-border/30">
-            <h3 className="font-semibold text-lg">
-              {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
-            </h3>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={startNewConversation}
-                className="h-8 w-8 hover:scale-110 transition-transform"
-                title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLeftDrawerOpen(false)}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
+            {/* Input Area */}
+            <div className="flex-shrink-0 p-4 border-t border-border/50">
+              <div className="flex items-end gap-3">
+                <div className="flex-1 relative">
+                  <Textarea
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    placeholder={
+                      activeTrigger === 'search' ? 
+                        (language === 'ar' ? 'ابحث عن معلومات حديثة...' : 'Search for current information...') :
+                      activeTrigger === 'advanced_search' ?
+                        (language === 'ar' ? 'بحث متقدم وتحليل...' : 'Advanced search & analysis...') :
+                      activeTrigger === 'image' && imageMode === 'photomaker' ?
+                        (language === 'ar' ? 'اكتب وصف الصورة الشخصية...' : 'Describe the personal image...') :
+                      activeTrigger === 'image' && imageMode === 'upscaling' ?
+                        (language === 'ar' ? 'تحسين جودة الصورة' : 'Enhance image quality') :
+                      activeTrigger === 'image' && imageMode === 'stylized' ?
+                        (language === 'ar' ? 'أسلوب ديزني، كتاب هزلي، أنمي...' : 'Disney style, comic book, anime...') :
+                      activeTrigger === 'image' && imageMode === 'regular' ?
+                        (language === 'ar' ? 'اكتب وصف الصورة...' : 'Describe the image you want...') :
+                        (language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...')
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="min-h-[60px] resize-none pr-12"
+                  />
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsListening(!isListening)}
+                    className={cn(
+                      "absolute bottom-2 right-2 w-8 h-8 p-0",
+                      isListening && "bg-red-500 text-white hover:bg-red-600"
+                    )}
+                    disabled={isLoading}
+                  >
+                    <Mic className="w-4 h-4" />
+                  </Button>
+                </div>
+                
+                <Button 
+                  onClick={handleSendMessage}
+                  disabled={isLoading || inputMessage.trim() === '' || (isImageGenerationMode && attachedImages.length === 0 && (imageMode === 'upscaling' || imageMode === 'stylized'))}
+                  className="h-[60px] px-6"
+                >
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              
+              {/* Mode-specific validation messages */}
+              {isImageGenerationMode && (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {imageMode === 'upscaling' || imageMode === 'stylized' ? (
+                    attachedImages.length === 0 && (
+                      <span className="text-orange-600">
+                        {language === 'ar' ? 'يجب رفع صورة واحدة' : 'Please upload one image'}
+                      </span>
+                    )
+                  ) : imageMode === 'photomaker' ? (
+                    attachedImages.length === 0 && (
+                      <span className="text-orange-600">
+                        {language === 'ar' ? 'يجب رفع صورة واحدة على الأقل' : 'Please upload at least one image'}
+                      </span>
+                    )
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
-          
-          <div className="flex-1 p-4 overflow-y-auto">
-            <ConversationsList
-              conversations={conversations}
-              currentConversationId={currentConversationId}
-              onSelectConversation={loadConversation}
-              onDeleteConversation={deleteConversation}
-              onRefresh={loadConversations}
-            />
-          </div>
-        </div>
-      </div>
 
-      {/* Right Drawer - Quick Actions with Trigger Controls */}
-      <div className={cn(
-        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
-        rightDrawerOpen ? "translate-x-0" : "translate-x-full"
-      )}>
-        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-border/30">
-            <h3 className="font-semibold text-lg">
-              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setRightDrawerOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="flex-1 p-4 overflow-y-auto">
+          {/* Right Sidebar - Quick Actions */}
+          <div className="w-80 border-l border-border/50 p-4 overflow-y-auto">
             <QuickActionsPanel 
-              onSendMessage={(message) => {
-                sendMessage(message);
-                setRightDrawerOpen(false);
-              }}
+              onSendMessage={handleQuickAction}
               activeTrigger={activeTrigger}
-              onTriggerChange={handleTriggerChange}
+              onTriggerChange={setActiveTrigger}
               imageMode={imageMode}
               onImageModeChange={handleImageModeChange}
             />
           </div>
         </div>
       </div>
-
-      {/* Enhanced Knowledge Modal */}
-      <KnowledgeModal 
-        open={knowledgeModalOpen} 
-        onOpenChange={setKnowledgeModalOpen} 
-      />
-
-      {/* Overlay for both drawers */}
-      {(leftDrawerOpen || rightDrawerOpen) && (
-        <div 
-          className="fixed inset-0 bg-black/10 z-35" 
-          onClick={() => {
-            setLeftDrawerOpen(false);
-            setRightDrawerOpen(false);
-          }}
-        />
-      )}
-
-      {/* Enhanced Fixed Input Area with Voice Recognition */}
-      <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Listening Status Display */}
-          {isListening && (
-            <div className="mb-3 flex items-center justify-center">
-              <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
-                    {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Image Attachments Preview */}
-          {attachedImages.length > 0 && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs text-muted-foreground">
-                  {(activeTrigger === 'image' && imageMode === 'photomaker')
-                    ? (language === 'ar' ? `صور الوجوه (${attachedImages.length}/4)` : `Face Images (${attachedImages.length}/4)`)
-                    : (activeTrigger === 'image' && imageMode === 'upscaling')
-                    ? (language === 'ar' ? 'صورة للتحسين' : 'Image for Upscaling')
-                    : (language === 'ar' ? 'الصور المرفقة' : 'Attached Images')
-                  }
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {attachedImages.map((image, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={URL.createObjectURL(image)}
-                      alt={`Attachment ${index + 1}`}
-                      className="w-16 h-16 object-cover rounded-lg border-2 border-border"
-                    />
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => removeAttachedImage(index)}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* PhotoMaker Mode Banner */}
-          {activeTrigger === 'image' && imageMode === 'photomaker' && (
-            <div className="mb-3 p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-lg">
-              <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                <User className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {language === 'ar' ? 'وضع صانع الصور الشخصية نشط' : 'PhotoMaker Mode Active'}
-                </span>
-              </div>
-              <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                {language === 'ar' 
-                  ? 'ارفع 1-4 صور بوجوه واضحة واكتب الوصف'
-                  : 'Upload 1-4 clear face images and write your prompt'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Image Upscaling Mode Banner */}
-          {activeTrigger === 'image' && imageMode === 'upscaling' && (
-            <div className="mb-3 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-              <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                <TrendingUp className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {language === 'ar' ? 'وضع تحسين الصور نشط' : 'Image Upscaling Mode Active'}
-                </span>
-              </div>
-              <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                {language === 'ar' 
-                  ? 'ارفع صورة واحدة لتحسين جودتها ودقتها 2x'
-                  : 'Upload one image to enhance quality & resolution 2x'
-                }
-              </p>
-            </div>
-          )}
-
-          {/* Input Container */}
-          <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 relative">
-                <Textarea
-                  ref={textareaRef}
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={handleTextareaKeyPress}
-                  placeholder={
-                    (activeTrigger === 'image' && imageMode === 'photomaker')
-                      ? (language === 'ar' ? 'اكتب وصف الصورة المطلوبة...' : 'Describe the image you want...')
-                      : (activeTrigger === 'image' && imageMode === 'upscaling')
-                      ? (language === 'ar' ? 'وصف اختياري (مُعبأ مسبقاً)...' : 'Optional description (pre-filled)...')
-                      : (language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...')
-                  }
-                  disabled={isLoading || isListening}
-                  className={cn(
-                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
-                    language === 'ar' ? 'text-right' : ''
-                  )}
-                  rows={1}
-                />
-              </div>
-              
-              {/* Combined Upload/Camera Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleFileUpload}
-                disabled={isLoading || isListening}
-                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
-                title={
-                  (activeTrigger === 'image' && imageMode === 'photomaker')
-                    ? (language === 'ar' ? 'رفع صور الوجوه' : 'Upload face images')
-                    : (activeTrigger === 'image' && imageMode === 'upscaling')
-                    ? (language === 'ar' ? 'رفع صورة للتحسين' : 'Upload image for upscaling')
-                    : (language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo')
-                }
-              >
-                <Upload className="h-5 w-5" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSpeechRecognition}
-                disabled={isLoading}
-                className={cn(
-                  "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
-                  isListening 
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
-                    : "hover:bg-muted"
-                )}
-              >
-                {isListening ? (
-                  <Square className="h-5 w-5" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
-              </Button>
-              
-              <Button
-                onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading || isListening || 
-                  (activeTrigger === 'image' && imageMode === 'photomaker' && attachedImages.length === 0) ||
-                  (activeTrigger === 'image' && imageMode === 'upscaling' && attachedImages.length === 0)
-                }
-                size="icon"
-                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Navigation */}
-      <MobileNav />
-    </div>
+    </PageContainer>
   );
 }

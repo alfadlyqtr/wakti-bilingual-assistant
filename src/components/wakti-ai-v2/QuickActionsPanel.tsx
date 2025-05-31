@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -5,14 +6,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp } from 'lucide-react';
+import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, ChevronDown, User, TrendingUp, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-// Updated trigger types with image upscaling
+// Updated trigger types with stylized art
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
-type ImageMode = 'regular' | 'photomaker' | 'upscaling';
+type ImageMode = 'regular' | 'photomaker' | 'upscaling' | 'stylized';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
@@ -67,7 +68,7 @@ export function QuickActionsPanel({
     }
   ];
 
-  // Image generation dropdown options with upscaling
+  // Image generation dropdown options with stylized art
   const imageOptions = [
     {
       id: 'regular' as ImageMode,
@@ -86,6 +87,12 @@ export function QuickActionsPanel({
       label: language === 'ar' ? 'تحسين جودة الصورة' : 'Image Upscaling',
       description: language === 'ar' ? 'تحسين جودة ودقة الصورة' : 'Enhance image quality & resolution',
       icon: TrendingUp
+    },
+    {
+      id: 'stylized' as ImageMode,
+      label: language === 'ar' ? 'مولد الفن المخصص' : 'Stylized Art Generator',
+      description: language === 'ar' ? 'تحويل الصور إلى أساليب فنية' : 'Transform images into artistic styles',
+      icon: Palette
     }
   ];
 
@@ -121,7 +128,7 @@ export function QuickActionsPanel({
   const handleImageTriggerClick = () => {
     onTriggerChange('image');
     // When switching to image trigger, ensure we have a valid image mode
-    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling') {
+    if (imageMode !== 'regular' && imageMode !== 'photomaker' && imageMode !== 'upscaling' && imageMode !== 'stylized') {
       onImageModeChange('regular');
     }
   };
@@ -393,6 +400,32 @@ export function QuickActionsPanel({
               </p>
               <p>{language === 'ar' ? '• التحسين بمعامل 2x' : '• 2x upscaling factor'}</p>
               <p>{language === 'ar' ? '• جودة عالية 95%' : '• High quality 95%'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stylized Art instructions - ONLY visible in stylized mode */}
+      {activeTrigger === 'image' && imageMode === 'stylized' && (
+        <div className="flex-1 pt-2 border-t border-border/50">
+          <h4 className="text-xs font-medium text-muted-foreground mb-2">
+            {language === 'ar' ? 'تعليمات مولد الفن المخصص' : 'Stylized Art Instructions'}
+          </h4>
+          <div className="space-y-2 text-xs text-muted-foreground">
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '📸 رفع الصورة:' : '📸 Upload Image:'}
+              </p>
+              <p>{language === 'ar' ? '• صورة واحدة فقط' : '• Single image only'}</p>
+              <p>{language === 'ar' ? '• سيتم تحويلها إلى أسلوب فني' : '• Will be transformed into artistic style'}</p>
+            </div>
+            <div className="p-2 bg-muted/30 rounded-lg">
+              <p className="font-medium mb-1">
+                {language === 'ar' ? '🎨 وصف الأسلوب:' : '🎨 Style Prompt:'}
+              </p>
+              <p>{language === 'ar' ? '• "أسلوب ديزني"' : '• "Disney character style"'}</p>
+              <p>{language === 'ar' ? '• "كتاب هزلي قديم"' : '• "vintage comic book"'}</p>
+              <p>{language === 'ar' ? '• "أسلوب أنمي"' : '• "anime style"'}</p>
             </div>
           </div>
         </div>

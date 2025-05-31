@@ -66,6 +66,10 @@ serve(async (req) => {
         result = await upscaleImage(action.imageUrl || action.data?.imageUrl, userId, language);
         break;
         
+      case 'generate_stylized':
+        result = await generateStylizedArt(action.prompt || action.data?.prompt, action.imageUrl || action.data?.imageUrl, userId, language);
+        break;
+        
       default:
         result = {
           success: false,
@@ -483,6 +487,107 @@ async function upscaleImage(imageUrl: string, userId: string, language: string) 
     return {
       success: false,
       message: language === 'ar' ? 'فشل في تحسين الصورة' : 'Failed to upscale image',
+      error: error.message
+    };
+  }
+}
+
+// New function: Generate Stylized Art with Runware
+async function generateStylizedArt(prompt: string, imageUrl: string, userId: string, language: string) {
+  try {
+    console.log("Generating stylized art with Runware for image:", imageUrl, "prompt:", prompt);
+
+    // Validate inputs
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      throw new Error('Valid image URL is required for stylized art generation');
+    }
+    if (!prompt || typeof prompt !== 'string') {
+      throw new Error('Valid style prompt is required for stylized art generation');
+    }
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          inputImage: imageUrl,
+          positivePrompt: prompt,
+          model: "runware:100@1",
+          width: 1024,
+          height: 1024,
+          numberResults: 1,
+          outputFormat: "JPG",
+          CFGScale: 7,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          steps: 25,
+        },
+      ]),
+    });
+
+    console.log("Runware stylized art response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("Runware stylized art response data:", result);
+      
+      // Find the image inference result
+      const stylizedResult = result.data?.find((item: any) => item.taskType === "imageInference");
+      
+      if (stylizedResult && stylizedResult.imageURL) {
+        // Create Supabase client to save image
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+
+        // Save stylized image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: stylizedResult.imageURL,
+              metadata: { 
+                provider: 'runware', 
+                imageUUID: stylizedResult.imageUUID,
+                type: 'stylized',
+                originalImageUrl: imageUrl,
+                stylePrompt: prompt
+              }
+            });
+        } catch (dbError) {
+          console.log("Could not save stylized image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
+
+        return {
+          success: true,
+          message: language === 'ar' ? 'تم إنشاء الفن المخصص بنجاح' : 'Stylized art generated successfully',
+          imageUrl: stylizedResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in stylized art response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("Runware stylized art API error:", response.status, errorText);
+      throw new Error(`Runware stylized art API failed: ${response.status}`);
+    }
+    
+  } catch (error) {
+    console.error('Error generating stylized art with Runware:', error);
+    return {
+      success: false,
+      message: language === 'ar' ? 'فشل في إنشاء الفن المخصص' : 'Failed to generate stylized art',
       error: error.message
     };
   }
