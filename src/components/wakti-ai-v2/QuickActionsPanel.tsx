@@ -11,15 +11,25 @@ import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image' | 'photomaker';
+// Updated trigger types - removed photomaker as separate trigger
+type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+type ImageMode = 'regular' | 'photomaker';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
   activeTrigger: TriggerMode;
   onTriggerChange: (trigger: TriggerMode) => void;
+  imageMode: ImageMode;
+  onImageModeChange: (imageMode: ImageMode) => void;
 }
 
-export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange }: QuickActionsPanelProps) {
+export function QuickActionsPanel({ 
+  onSendMessage, 
+  activeTrigger, 
+  onTriggerChange, 
+  imageMode, 
+  onImageModeChange 
+}: QuickActionsPanelProps) {
   const { language } = useTheme();
   const [customActionDialogOpen, setCustomActionDialogOpen] = useState(false);
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
@@ -30,8 +40,9 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   // Save trigger state to localStorage and dispatch event for header
   React.useEffect(() => {
     localStorage.setItem('wakti-ai-active-trigger', activeTrigger);
+    localStorage.setItem('wakti-ai-image-mode', imageMode);
     window.dispatchEvent(new Event('ai-trigger-change'));
-  }, [activeTrigger]);
+  }, [activeTrigger, imageMode]);
 
   const triggerButtons = [
     {
@@ -60,19 +71,19 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   // Image generation dropdown options
   const imageOptions = [
     {
-      id: 'image' as TriggerMode,
+      id: 'regular' as ImageMode,
       label: language === 'ar' ? 'مولد الصور' : 'Image Generator',
       description: language === 'ar' ? 'إنشاء الصور العادية' : 'Regular image creation'
     },
     {
-      id: 'photomaker' as TriggerMode,
+      id: 'photomaker' as ImageMode,
       label: language === 'ar' ? 'صانع الصور الشخصية' : 'Photo Maker Personal',
       description: language === 'ar' ? 'إنشاء صور شخصية مخصصة' : 'Custom personal images'
     }
   ];
 
   const getImageModeDisplay = () => {
-    const activeImageMode = imageOptions.find(option => option.id === activeTrigger);
+    const activeImageMode = imageOptions.find(option => option.id === imageMode);
     return activeImageMode ? activeImageMode.label : (language === 'ar' ? 'صورة' : 'Image');
   };
 
@@ -92,6 +103,14 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       setTimeout(() => {
         onTriggerChange('chat');
       }, 100);
+    }
+  };
+
+  const handleImageTriggerClick = () => {
+    onTriggerChange('image');
+    // When switching to image trigger, ensure we have a valid image mode
+    if (imageMode !== 'regular' && imageMode !== 'photomaker') {
+      onImageModeChange('regular');
     }
   };
 
@@ -136,30 +155,31 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant={activeTrigger === 'image' || activeTrigger === 'photomaker' ? "default" : "outline"}
+                variant={activeTrigger === 'image' ? "default" : "outline"}
                 className={cn(
                   "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
-                  (activeTrigger === 'image' || activeTrigger === 'photomaker') && "ring-2 ring-primary ring-offset-1"
+                  activeTrigger === 'image' && "ring-2 ring-primary ring-offset-1"
                 )}
+                onClick={handleImageTriggerClick}
               >
                 <div className={cn(
                   "p-1.5 rounded-md flex items-center gap-1",
-                  (activeTrigger === 'image' || activeTrigger === 'photomaker') ? "bg-primary-foreground" : "bg-orange-500"
+                  activeTrigger === 'image' ? "bg-primary-foreground" : "bg-orange-500"
                 )}>
-                  {activeTrigger === 'photomaker' ? (
+                  {activeTrigger === 'image' && imageMode === 'photomaker' ? (
                     <User className={cn(
                       "h-3 w-3",
-                      activeTrigger === 'photomaker' ? "text-primary" : "text-white"
+                      activeTrigger === 'image' ? "text-primary" : "text-white"
                     )} />
                   ) : (
                     <Image className={cn(
                       "h-3 w-3",
-                      (activeTrigger === 'image' || activeTrigger === 'photomaker') ? "text-primary" : "text-white"
+                      activeTrigger === 'image' ? "text-primary" : "text-white"
                     )} />
                   )}
                   <ChevronDown className={cn(
                     "h-2 w-2",
-                    (activeTrigger === 'image' || activeTrigger === 'photomaker') ? "text-primary" : "text-white"
+                    activeTrigger === 'image' ? "text-primary" : "text-white"
                   )} />
                 </div>
                 <div className="leading-tight">
@@ -174,7 +194,10 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
               {imageOptions.map((option) => (
                 <DropdownMenuItem
                   key={option.id}
-                  onClick={() => onTriggerChange(option.id)}
+                  onClick={() => {
+                    onTriggerChange('image');
+                    onImageModeChange(option.id);
+                  }}
                   className="flex flex-col items-start p-3"
                 >
                   <div className="flex items-center gap-2 w-full">
@@ -319,7 +342,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       )}
 
       {/* PhotoMaker instructions - ONLY visible in photomaker mode */}
-      {activeTrigger === 'photomaker' && (
+      {activeTrigger === 'image' && imageMode === 'photomaker' && (
         <div className="flex-1 pt-2 border-t border-border/50">
           <h4 className="text-xs font-medium text-muted-foreground mb-2">
             {language === 'ar' ? 'تعليمات صانع الصور الشخصية' : 'PhotoMaker Instructions'}

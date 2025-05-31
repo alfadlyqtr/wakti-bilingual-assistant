@@ -63,7 +63,9 @@ export interface AIConversation {
   last_message_at: string;
 }
 
+// Updated trigger type - removed photomaker as separate trigger
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+type ImageMode = 'regular' | 'photomaker';
 
 export class WaktiAIV2Service {
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
@@ -173,10 +175,12 @@ export class WaktiAIV2Service {
     conversationId?: string | null,
     language: string = 'en',
     inputType: 'text' | 'voice' = 'text',
-    activeTrigger: TriggerMode = 'chat'
+    activeTrigger: TriggerMode = 'chat',
+    imageMode?: ImageMode,
+    attachedImages?: File[]
   ): Promise<AIResponse> {
     try {
-      console.log('🔍 WaktiAIV2Service: Sending message with trigger:', activeTrigger);
+      console.log('🔍 WaktiAIV2Service: Sending message with trigger:', activeTrigger, 'imageMode:', imageMode);
       
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -184,13 +188,17 @@ export class WaktiAIV2Service {
         throw new Error('User not authenticated');
       }
       
+      // Prepare payload with image mode information
       const payload = {
         message,
         userId: session.user.id,
         language,
         conversationId,
         inputType,
-        activeTrigger
+        activeTrigger,
+        imageMode: activeTrigger === 'image' ? imageMode : undefined,
+        isPhotoMaker: activeTrigger === 'image' && imageMode === 'photomaker',
+        attachedImagesCount: attachedImages?.length || 0
       };
       
       console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with trigger payload:', payload);
