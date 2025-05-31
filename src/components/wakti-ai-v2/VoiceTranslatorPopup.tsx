@@ -453,55 +453,70 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       const result = await response.json();
       console.log('🎤 Voice Translator result:', result);
 
-      if (result.translatedText) {
-        // CRITICAL: Increment usage count FIRST
-        console.log('📊 About to increment translation usage...');
-        const usageSuccess = await incrementTranslationCount();
-        console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
-        
-        if (!usageSuccess && !quotaError) {
-          console.warn('⚠️ Translation blocked due to quota limit');
-          toast({
-            title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
-            description: language === 'ar' 
-              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
-              : 'You have reached your daily translation limit',
-            variant: 'destructive'
-          });
-          return;
-        }
+      // Validate that we received a translation
+      if (!result.translatedText) {
+        throw new Error('No translation received from service');
+      }
 
-        setTranslatedText(result.translatedText);
-        
-        const newTranslation: TranslationItem = {
-          id: Date.now().toString(),
-          originalText: result.originalText,
-          translatedText: result.translatedText,
-          sourceLanguage: result.sourceLanguage,
-          targetLanguage: result.targetLanguage,
-          timestamp: new Date()
-        };
-        addToHistory(newTranslation);
-        
-        setIsOnCooldown(true);
-        setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
-
-        toast({
-          title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
-          description: language === 'ar' ? 'تم إنجاز الترجمة بنجاح' : 'Translation completed successfully',
+      // Validate target language matches what was requested
+      if (result.targetLanguageCode && result.targetLanguageCode !== selectedLanguage) {
+        console.warn('🎤 Warning: Target language mismatch!', {
+          requested: selectedLanguage,
+          received: result.targetLanguageCode
         });
+      }
 
-        if (playbackEnabled && !needsAudioUnlock) {
-          playTranslatedText(result.translatedText);
-        }
-      } else {
-        throw new Error('No translation received');
+      // CRITICAL: Increment usage count FIRST
+      console.log('📊 About to increment translation usage...');
+      const usageSuccess = await incrementTranslationCount();
+      console.log('📊 Usage tracking result:', usageSuccess ? 'success' : 'failed');
+      
+      if (!usageSuccess && !quotaError) {
+        console.warn('⚠️ Translation blocked due to quota limit');
+        toast({
+          title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
+          description: language === 'ar' 
+            ? 'لقد وصلت للحد الأقصى من الترجمات اليومية' 
+            : 'You have reached your daily translation limit',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      setTranslatedText(result.translatedText);
+      
+      const newTranslation: TranslationItem = {
+        id: Date.now().toString(),
+        originalText: result.originalText,
+        translatedText: result.translatedText,
+        sourceLanguage: result.sourceLanguage,
+        targetLanguage: result.targetLanguage,
+        timestamp: new Date()
+      };
+      addToHistory(newTranslation);
+      
+      setIsOnCooldown(true);
+      setTimeout(() => setIsOnCooldown(false), COOLDOWN_TIME);
+
+      // Enhanced success message with language confirmation
+      const targetLangName = SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name || selectedLanguage;
+      toast({
+        title: language === 'ar' ? '✅ تمت الترجمة' : '✅ Translation Complete',
+        description: language === 'ar' 
+          ? `تم إنجاز الترجمة إلى ${targetLangName} بنجاح` 
+          : `Translation to ${targetLangName} completed successfully`,
+      });
+
+      if (playbackEnabled && !needsAudioUnlock) {
+        playTranslatedText(result.translatedText);
       }
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الترجمة' : 'Translation Error',
-        description: language === 'ar' ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' : 'Failed to translate voice - please try again',
+        description: language === 'ar' 
+          ? 'فشل في ترجمة الصوت - يرجى المحاولة مرة أخرى' 
+          : 'Failed to translate voice - please try again',
         variant: 'destructive'
       });
     } finally {
@@ -722,7 +737,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                 }
               </p>
               <Button size="sm" onClick={handlePurchaseExtra} className="ml-auto">
-                <Plus className="h-3 w-3 mr-1" />
+                <Plus className="h-3 w-3 mr-2" />
                 {EXTRA_TRANSLATIONS_PRICE} QAR
               </Button>
             </div>
@@ -748,12 +763,15 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
             </div>
           )}
 
-          {/* Language Selector */}
+          {/* Enhanced Language Selector with visual confirmation */}
           <div>
             <label className="text-sm font-medium mb-2 block">
               {language === 'ar' ? 'ترجم إلى:' : 'Translate to:'}
             </label>
-            <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+            <Select value={selectedLanguage} onValueChange={(value) => {
+              console.log('🎤 User selected language:', value);
+              setSelectedLanguage(value);
+            }}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -765,6 +783,13 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
                 ))}
               </SelectContent>
             </Select>
+            {/* Language confirmation indicator */}
+            <div className="text-xs text-muted-foreground mt-1">
+              {language === 'ar' 
+                ? `سيتم الترجمة إلى: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
+                : `Will translate to: ${SUPPORTED_LANGUAGES.find(lang => lang.code === selectedLanguage)?.name}`
+              }
+            </div>
           </div>
 
           {/* Playback Toggle and Previous Translations Dropdown */}

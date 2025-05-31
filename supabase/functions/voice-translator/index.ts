@@ -10,6 +10,33 @@ const corsHeaders = {
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
+// Enhanced language mapping with validation
+const LANGUAGE_MAPPING = {
+  'en': { name: 'English', code: 'en' },
+  'ar': { name: 'Arabic', code: 'ar' },
+  'es': { name: 'Spanish', code: 'es' },
+  'fr': { name: 'French', code: 'fr' },
+  'de': { name: 'German', code: 'de' },
+  'it': { name: 'Italian', code: 'it' },
+  'pt': { name: 'Portuguese', code: 'pt' },
+  'ru': { name: 'Russian', code: 'ru' },
+  'ja': { name: 'Japanese', code: 'ja' },
+  'ko': { name: 'Korean', code: 'ko' },
+  'zh': { name: 'Chinese', code: 'zh' },
+  'hi': { name: 'Hindi', code: 'hi' },
+  'tr': { name: 'Turkish', code: 'tr' },
+  'nl': { name: 'Dutch', code: 'nl' },
+  'sv': { name: 'Swedish', code: 'sv' }
+};
+
+function validateLanguageCode(langCode: string): boolean {
+  return langCode in LANGUAGE_MAPPING;
+}
+
+function getLanguageName(langCode: string): string {
+  return LANGUAGE_MAPPING[langCode as keyof typeof LANGUAGE_MAPPING]?.name || 'Unknown';
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -31,6 +58,15 @@ serve(async (req) => {
     const targetLanguage = (formData.get('targetLanguage') as string) || 'en';
     
     console.log('🎤 Voice Translator: Audio file size:', audioFile?.size, 'Target language:', targetLanguage);
+    
+    // Validate target language
+    if (!validateLanguageCode(targetLanguage)) {
+      console.error('🎤 Voice Translator: Invalid target language:', targetLanguage);
+      return new Response(
+        JSON.stringify({ error: `Invalid target language code: ${targetLanguage}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     
     if (!audioFile) {
       console.error('🎤 Voice Translator: No audio file found');
@@ -74,28 +110,21 @@ serve(async (req) => {
       );
     }
 
-    // Step 2: Translate using GPT-4 Turbo
-    console.log('🎤 Voice Translator: Translating to', targetLanguage);
+    // Step 2: Enhanced translation with strict language validation
+    const targetLanguageName = getLanguageName(targetLanguage);
+    console.log('🎤 Voice Translator: Translating to', targetLanguageName, `(${targetLanguage})`);
 
-    const languageNames = {
-      'en': 'English',
-      'ar': 'Arabic',
-      'es': 'Spanish',
-      'fr': 'French',
-      'de': 'German',
-      'it': 'Italian',
-      'pt': 'Portuguese',
-      'ru': 'Russian',
-      'ja': 'Japanese',
-      'ko': 'Korean',
-      'zh': 'Chinese',
-      'hi': 'Hindi',
-      'tr': 'Turkish',
-      'nl': 'Dutch',
-      'sv': 'Swedish'
-    };
+    // Enhanced system prompt with strict language enforcement
+    const systemPrompt = `You are a professional translator. Your ONLY task is to translate the given text accurately into ${targetLanguageName}.
 
-    const targetLanguageName = languageNames[targetLanguage as keyof typeof languageNames] || 'English';
+CRITICAL REQUIREMENTS:
+1. ONLY return the translated text in ${targetLanguageName}
+2. Do NOT include any explanations, comments, or additional text
+3. Do NOT translate into any other language except ${targetLanguageName}
+4. Preserve the meaning, tone, and context of the original text
+5. If the original text is already in ${targetLanguageName}, return it as-is
+
+The target language is: ${targetLanguageName} (code: ${targetLanguage})`;
 
     const translationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -104,19 +133,19 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `You are a professional translator. Translate the given text accurately to ${targetLanguageName}. Only return the translated text, nothing else. Preserve the meaning and tone of the original text.`
+            content: systemPrompt
           },
           {
             role: 'user',
             content: `Translate this text to ${targetLanguageName}: "${originalText}"`
           }
         ],
-        temperature: 0.3,
-        max_tokens: 500
+        temperature: 0.1, // Lower temperature for more consistent translations
+        max_tokens: 1000
       }),
     });
 
@@ -130,6 +159,13 @@ serve(async (req) => {
     const translatedText = translationResult.choices[0].message.content.trim();
 
     console.log('🎤 Voice Translator: Translation successful');
+    console.log('🎤 Voice Translator: Original:', originalText);
+    console.log('🎤 Voice Translator: Translated to', targetLanguageName + ':', translatedText);
+
+    // Validate translation is not empty
+    if (!translatedText || translatedText.length === 0) {
+      throw new Error("Translation returned empty result");
+    }
 
     return new Response(
       JSON.stringify({ 
@@ -137,7 +173,8 @@ serve(async (req) => {
         translatedText,
         sourceLanguage: 'auto-detected',
         targetLanguage: targetLanguageName,
-        quotaUsed: true // Indicates this translation counts against quota
+        targetLanguageCode: targetLanguage,
+        quotaUsed: true
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -145,7 +182,10 @@ serve(async (req) => {
   } catch (error) {
     console.error("🎤 Voice Translator: Error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: "Translation service encountered an error"
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
