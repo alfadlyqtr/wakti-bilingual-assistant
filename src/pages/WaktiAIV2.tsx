@@ -523,13 +523,22 @@ export default function WaktiAIV2() {
 
       console.log('🔍 WAKTI AI: Service response received:', result);
 
+      // Type-safe confidence mapping
+      const mapConfidence = (confidence: string | undefined): 'high' | 'medium' | 'low' | undefined => {
+        if (!confidence) return undefined;
+        if (confidence === 'high' || confidence === 'medium' || confidence === 'low') {
+          return confidence;
+        }
+        return 'low'; // Default fallback for unknown confidence values
+      };
+
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: result.response,
         timestamp: new Date(),
         intent: result.intent,
-        confidence: result.confidence,
+        confidence: mapConfidence(result.confidence),
         browsingUsed: result.browsingUsed,
         browsingData: result.browsingData,
         quotaStatus: result.quotaStatus,
@@ -672,13 +681,22 @@ export default function WaktiAIV2() {
       // Use the service which now calls unified-ai-brain
       const result = await WaktiAIV2Service.sendMessageWithSearchConfirmation(messageContent, currentConversationId, language, 'text');
 
+      // Type-safe confidence mapping
+      const mapConfidence = (confidence: string | undefined): 'high' | 'medium' | 'low' | undefined => {
+        if (!confidence) return undefined;
+        if (confidence === 'high' || confidence === 'medium' || confidence === 'low') {
+          return confidence;
+        }
+        return 'low'; // Default fallback for unknown confidence values
+      };
+
       const assistantMessage: AIMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: result.response,
         timestamp: new Date(),
         intent: result.intent,
-        confidence: result.confidence,
+        confidence: mapConfidence(result.confidence),
         browsingUsed: result.browsingUsed,
         browsingData: result.browsingData,
         quotaStatus: result.quotaStatus

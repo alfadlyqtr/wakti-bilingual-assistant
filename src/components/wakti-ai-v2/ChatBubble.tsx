@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
@@ -229,7 +230,10 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}>
             <BrowsingIndicator
               browsingUsed={message.browsingUsed}
-              quotaStatus={message.quotaStatus}
+              quotaStatus={message.quotaStatus ? {
+                ...message.quotaStatus,
+                remaining: message.quotaStatus.limit - message.quotaStatus.count
+              } : undefined}
               sources={message.browsingData?.sources}
               imageUrl={message.imageUrl}
               size="sm"
