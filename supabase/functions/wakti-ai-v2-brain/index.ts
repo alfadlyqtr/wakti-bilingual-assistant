@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -22,13 +21,27 @@ const supabase = createClient(
 );
 
 // SIMPLIFIED TRIGGER-BASED INTENT ANALYSIS - TEACHER CONCEPT
-function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger = 'chat') {
+function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger = 'chat', textGenParams = null) {
   const lowerMessage = message.toLowerCase();
   
   console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT TRIGGER ANALYSIS ===");
   console.log("🎯 WAKTI AI V2.3: Message:", message);
   console.log("🎯 WAKTI AI V2.3: Active trigger (teacher's hand):", activeTrigger);
   console.log("🎯 WAKTI AI V2.3: Language:", language);
+  console.log("🎯 WAKTI AI V2.3: Text Gen Params:", textGenParams);
+  
+  // Check for text generation request
+  if (textGenParams) {
+    console.log("🎯 WAKTI AI V2.3: ✅ TEXT GENERATION MODE DETECTED");
+    return {
+      intent: 'generate_text',
+      confidence: 'high',
+      action: 'generate_text',
+      params: textGenParams,
+      requiresBrowsing: false, // Text generation doesn't need browsing
+      triggerMode: 'text_generation'
+    };
+  }
   
   // 🚨 TEACHER CONCEPT: Trigger is the ABSOLUTE controller
   // If no "hands up" (search triggers), then NO browsing - period!
@@ -109,6 +122,108 @@ function analyzeIntentWithTriggerControl(message, language = 'en', activeTrigger
         requiresBrowsing: false, // Default safe mode - no browsing
         triggerMode: 'chat'
       };
+  }
+}
+
+// Text generation function
+async function generateText(params, language = 'en') {
+  try {
+    console.log("📝 WAKTI AI V2.3: Generating text with params:", params);
+    
+    if (!DEEPSEEK_API_KEY) {
+      throw new Error("DeepSeek API key not configured");
+    }
+    
+    let systemPrompt = '';
+    let userPrompt = '';
+
+    // Length mapping
+    const lengthMap = {
+      'Short': '1-2 paragraphs (50-100 words)',
+      'Medium': '3-4 paragraphs (150-300 words)', 
+      'Long': '5+ paragraphs (400+ words)'
+    };
+
+    // Format instructions
+    const formatMap = {
+      'Plain': 'Write in continuous text format.',
+      'Bullet Points': 'Use bullet points and clear structure.',
+      'Paragraphs': 'Organize into well-structured paragraphs with clear topic sentences.'
+    };
+
+    if (params.mode === 'compose') {
+      systemPrompt = `You are a professional text generator. Create ${params.contentType?.toLowerCase()} content that is ${params.tone?.toLowerCase()} in tone. 
+
+Length: ${lengthMap[params.length]}
+Format: ${formatMap[params.format]}
+
+${params.to ? `Recipient: ${params.to}` : ''}
+${params.from ? `Sender: ${params.from}` : ''}
+
+Focus on clarity, appropriate tone, and meeting the exact requirements specified.`;
+
+      userPrompt = params.topic ? `Please write a ${params.contentType?.toLowerCase()} about: ${params.topic}` : `Please write a ${params.contentType?.toLowerCase()}.`;
+    } else {
+      // Reply mode
+      systemPrompt = `You are writing a ${params.replyType?.toLowerCase()} reply. Be ${params.tone?.toLowerCase()} in tone and keep it ${lengthMap[params.length]}.
+
+${formatMap[params.format]}
+
+${params.to ? `To: ${params.to}` : ''}
+${params.from ? `From: ${params.from}` : ''}
+
+Write a direct reply that addresses the original message appropriately.`;
+
+      userPrompt = `Original message to reply to:
+"${params.originalMessage}"
+
+Please write an appropriate reply.`;
+    }
+
+    console.log('📝 WAKTI AI V2.3: Calling DeepSeek API for text generation...');
+
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+    });
+
+    console.log('📝 WAKTI AI V2.3: DeepSeek API response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('📝 WAKTI AI V2.3: DeepSeek API error:', errorData);
+      throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const generatedText = data.choices[0].message.content;
+
+    console.log('📝 WAKTI AI V2.3: Successfully generated text, length:', generatedText?.length);
+
+    return {
+      success: true,
+      generatedText: generatedText,
+      params: params
+    };
+    
+  } catch (error) {
+    console.error("📝 WAKTI AI V2.3: Text generation error:", error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
 }
 
@@ -606,7 +721,7 @@ serve(async (req) => {
       });
     }
 
-    // Extract fields with defaults - INCLUDING activeTrigger
+    // Extract fields with defaults - INCLUDING activeTrigger and textGenParams
     const {
       message,
       userId,
@@ -615,7 +730,8 @@ serve(async (req) => {
       inputType = 'text',
       conversationHistory = [],
       confirmSearch = false,
-      activeTrigger = 'chat'
+      activeTrigger = 'chat',
+      textGenParams = null
     } = requestBody;
 
     console.log("🎯 WAKTI AI V2.3: === EXTRACTED FIELDS ===");
@@ -624,6 +740,7 @@ serve(async (req) => {
     console.log("🎯 WAKTI AI V2.3: Language:", language);
     console.log("🎯 WAKTI AI V2.3: Active Trigger (Teacher's Hand):", activeTrigger);
     console.log("🎯 WAKTI AI V2.3: Input Type:", inputType);
+    console.log("🎯 WAKTI AI V2.3: Text Gen Params:", textGenParams);
     console.log("🎯 WAKTI AI V2.3: Confirm Search:", confirmSearch);
 
     // Validate required fields
@@ -651,7 +768,7 @@ serve(async (req) => {
 
     // TEACHER CONCEPT: Analyze intent with ABSOLUTE trigger control
     console.log("🎯 WAKTI AI V2.3: === STARTING TEACHER CONCEPT ANALYSIS ===");
-    const intentAnalysis = analyzeIntentWithTriggerControl(message, language, activeTrigger);
+    const intentAnalysis = analyzeIntentWithTriggerControl(message, language, activeTrigger, textGenParams);
     console.log("🎯 WAKTI AI V2.3: === TEACHER CONCEPT RESULT ===");
     console.log("🎯 WAKTI AI V2.3: Intent:", intentAnalysis.intent);
     console.log("🎯 WAKTI AI V2.3: Requires Browsing:", intentAnalysis.requiresBrowsing);
@@ -659,6 +776,7 @@ serve(async (req) => {
 
     let response = '';
     let imageUrl = null;
+    let generatedText = null;
     let browsingUsed = false;
     let browsingData = null;
     let quotaStatus = null;
@@ -671,7 +789,25 @@ serve(async (req) => {
     // TEACHER CONCEPT: Process based on ABSOLUTE trigger control
     console.log("🎯 WAKTI AI V2.3: === PROCESSING WITH TEACHER CONCEPT ===");
     
-    if (intentAnalysis.intent === 'generate_image') {
+    if (intentAnalysis.intent === 'generate_text') {
+      console.log("📝 WAKTI AI V2.3: Handling text generation");
+      
+      const textResult = await generateText(intentAnalysis.params, language);
+      
+      if (textResult.success) {
+        generatedText = textResult.generatedText;
+        response = language === 'ar' 
+          ? `تم إنشاء النص بنجاح! 📝\n\n${textResult.generatedText}`
+          : `Text generated successfully! 📝\n\n${textResult.generatedText}`;
+        actionTaken = 'generate_text';
+        actionResult = { generatedText: textResult.generatedText, params: textResult.params };
+      } else {
+        response = language === 'ar' 
+          ? `عذراً، فشل في إنشاء النص: ${textResult.error}`
+          : `Sorry, failed to generate text: ${textResult.error}`;
+      }
+      
+    } else if (intentAnalysis.intent === 'generate_image') {
       console.log("🎨 WAKTI AI V2.3: Handling image generation");
       
       const imageResult = await generateImage(intentAnalysis.params.prompt, language);
@@ -804,6 +940,7 @@ serve(async (req) => {
       actionTaken: actionTaken,
       actionResult: actionResult,
       imageUrl: imageUrl,
+      generatedText: generatedText,
       browsingUsed: browsingUsed,
       browsingData: browsingData,
       quotaStatus: quotaStatus,

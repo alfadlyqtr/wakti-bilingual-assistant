@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PenTool, MessageSquare, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface TextGeneratorPopupProps {
   open: boolean;
@@ -33,6 +34,7 @@ interface FormData {
 
 export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGeneratorPopupProps) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState<FormData>({
@@ -105,10 +107,22 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
       return;
     }
 
+    if (!user?.id) {
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
-      const payload = {
+      console.log('📝 TextGeneratorPopup: Calling main brain for text generation');
+      
+      // Prepare text generation parameters
+      const textGenParams = {
         mode: formData.mode,
         ...(formData.mode === 'compose' ? {
           contentType: formData.contentType,
@@ -124,13 +138,31 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
         from: formData.from
       };
 
-      const { data, error } = await supabase.functions.invoke('text-generator', {
+      // Call the main brain with text generation parameters
+      const payload = {
+        message: formData.mode === 'compose' 
+          ? `Generate ${formData.contentType} about: ${formData.topic || 'general topic'}`
+          : `Reply to: ${formData.originalMessage}`,
+        userId: user.id,
+        language: language,
+        activeTrigger: 'chat', // Use chat mode for text generation
+        textGenParams: textGenParams
+      };
+
+      console.log('📝 TextGeneratorPopup: Payload prepared:', payload);
+
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('📝 TextGeneratorPopup: Main brain error:', error);
+        throw error;
+      }
 
-      if (data.generatedText) {
+      console.log('📝 TextGeneratorPopup: Main brain response:', data);
+
+      if (data.success && data.generatedText) {
         onGenerated(data.generatedText, formData.mode);
         onOpenChange(false);
         
@@ -152,9 +184,11 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
           title: language === 'ar' ? 'نجح!' : 'Success!',
           description: language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully',
         });
+      } else {
+        throw new Error(data.error || 'No generated text received');
       }
     } catch (error: any) {
-      console.error('Error generating text:', error);
+      console.error('📝 TextGeneratorPopup: Error generating text:', error);
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'),
