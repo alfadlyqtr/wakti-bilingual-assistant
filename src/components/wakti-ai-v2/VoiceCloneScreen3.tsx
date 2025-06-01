@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -82,6 +81,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     setAudioUrl(null);
 
     try {
+      console.log('🎵 Starting TTS generation...');
+      console.log('🎵 Text length:', text.trim().length);
+      console.log('🎵 Voice ID:', selectedVoiceId);
+
       const response = await supabase.functions.invoke('voice-tts', {
         body: {
           text: text.trim(),
@@ -89,11 +92,42 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         }
       });
 
-      if (response.error) throw response.error;
+      console.log('🎵 Edge function response:', response);
 
-      // The response.data should be a blob for audio
-      const audioBlob = response.data;
+      if (response.error) {
+        console.error('🎵 Edge function error:', response.error);
+        throw response.error;
+      }
+
+      if (!response.data) {
+        console.error('🎵 No data returned from edge function');
+        throw new Error('No audio data received');
+      }
+
+      console.log('🎵 Response data type:', typeof response.data);
+      console.log('🎵 Response data constructor:', response.data.constructor.name);
+
+      // Convert ArrayBuffer to Blob if needed
+      let audioBlob: Blob;
+      if (response.data instanceof ArrayBuffer) {
+        console.log('🎵 Converting ArrayBuffer to Blob, size:', response.data.byteLength);
+        audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
+      } else if (response.data instanceof Blob) {
+        console.log('🎵 Data is already a Blob, size:', response.data.size);
+        audioBlob = response.data;
+      } else {
+        console.error('🎵 Unexpected data type:', typeof response.data);
+        throw new Error('Unexpected audio data format');
+      }
+
+      console.log('🎵 Final blob size:', audioBlob.size);
+      
+      if (audioBlob.size === 0) {
+        throw new Error('Received empty audio data');
+      }
+
       const url = URL.createObjectURL(audioBlob);
+      console.log('🎵 Created object URL:', url);
       setAudioUrl(url);
 
       // Update usage
@@ -108,7 +142,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       });
 
     } catch (error: any) {
-      console.error('Error generating speech:', error);
+      console.error('🎵 Error generating speech:', error);
       toast({
         title: language === 'ar' ? 'خطأ' : 'Error',
         description: error.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'),
@@ -121,13 +155,22 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
 
   const playAudio = () => {
     if (audioUrl) {
+      console.log('🎵 Playing audio from URL:', audioUrl);
       const audio = new Audio(audioUrl);
-      audio.play();
+      audio.play().catch(error => {
+        console.error('🎵 Error playing audio:', error);
+        toast({
+          title: language === 'ar' ? 'خطأ' : 'Error',
+          description: language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio',
+          variant: 'destructive',
+        });
+      });
     }
   };
 
   const downloadAudio = () => {
     if (audioUrl) {
+      console.log('🎵 Downloading audio from URL:', audioUrl);
       const link = document.createElement('a');
       link.href = audioUrl;
       link.download = 'voice-output.mp3';

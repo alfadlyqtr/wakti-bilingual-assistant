@@ -36,9 +36,9 @@ serve(async (req) => {
       throw new Error('Text and voice_id are required');
     }
 
-    console.log('Generating TTS for user:', user.id);
-    console.log('Voice ID:', voice_id);
-    console.log('Text length:', text.length);
+    console.log('🎵 Generating TTS for user:', user.id);
+    console.log('🎵 Voice ID:', voice_id);
+    console.log('🎵 Text length:', text.length);
 
     // Check character usage
     const { data: usage, error: usageError } = await supabase
@@ -48,6 +48,7 @@ serve(async (req) => {
       .single();
 
     if (usageError) {
+      console.error('🎵 Usage check error:', usageError);
       throw new Error('Failed to check character usage');
     }
 
@@ -55,6 +56,8 @@ serve(async (req) => {
     if (text.length > remainingChars) {
       throw new Error(`Not enough characters remaining. You have ${remainingChars} characters left.`);
     }
+
+    console.log('🎵 Calling ElevenLabs TTS API...');
 
     // Call ElevenLabs TTS API
     const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voice_id}`, {
@@ -75,9 +78,11 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('ElevenLabs TTS API error:', errorText);
+      console.error('🎵 ElevenLabs TTS API error:', errorText);
       throw new Error(`Failed to generate speech: ${errorText}`);
     }
+
+    console.log('🎵 ElevenLabs API successful, processing audio...');
 
     // Update character usage
     const { error: updateError } = await supabase
@@ -88,22 +93,25 @@ serve(async (req) => {
       .eq('user_id', user.id);
 
     if (updateError) {
-      console.error('Failed to update character usage:', updateError);
+      console.error('🎵 Failed to update character usage:', updateError);
+    } else {
+      console.log('🎵 Character usage updated successfully');
     }
 
-    // Return audio as blob
+    // Return audio as ArrayBuffer
     const audioBuffer = await response.arrayBuffer();
+    console.log('🎵 Audio buffer size:', audioBuffer.byteLength);
     
     return new Response(audioBuffer, {
       headers: {
         ...corsHeaders,
         'Content-Type': 'audio/mpeg',
-        'Content-Disposition': 'attachment; filename="voice-output.mp3"',
+        'Content-Length': audioBuffer.byteLength.toString(),
       },
     });
 
   } catch (error) {
-    console.error('Error in voice-tts function:', error);
+    console.error('🎵 Error in voice-tts function:', error);
     return new Response(
       JSON.stringify({ 
         error: error.message || 'Unknown error occurred' 
