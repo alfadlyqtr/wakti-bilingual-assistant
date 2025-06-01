@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
@@ -41,6 +42,9 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
   const isSearchResult = !isUser && 
     (activeTrigger === 'search' || activeTrigger === 'advanced_search') && 
     (message.browsingUsed || message.quotaStatus);
+
+  // Check if we should show the mini copy button for regular chat messages
+  const showMiniCopyButton = activeTrigger === 'chat' && !isTextGenerated;
 
   const handleSearchConfirm = () => {
     if (onSearchConfirm) {
@@ -98,6 +102,24 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     }
   };
 
+  const handleCopyMessage = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({
+        title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
+        description: language === 'ar' ? 'تم نسخ الرسالة' : 'Message copied',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('Error copying message:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في نسخ الرسالة' : 'Failed to copy message',
+        variant: 'destructive'
+      });
+    }
+  };
+
   return (
     <div className={cn(
       "flex gap-3 max-w-4xl",
@@ -110,7 +132,7 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
       )}>
         {/* Message Bubble */}
         <div className={cn(
-          "relative px-4 py-3 rounded-2xl shadow-sm",
+          "relative px-4 py-3 rounded-2xl shadow-sm group",
           isUser 
             ? "bg-primary text-primary-foreground ml-auto" 
             : "bg-muted/50 text-foreground border",
@@ -133,6 +155,24 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}>
             {message.content}
           </div>
+
+          {/* Mini Copy Button for Regular Chat Messages */}
+          {showMiniCopyButton && (
+            <div className={cn(
+              "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+              isUser ? "left-2" : "right-2"
+            )}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyMessage}
+                className="h-6 w-6 p-0 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 rounded-full"
+                title={language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
 
           {/* Intent Badge */}
           {message.intent && !isUser && (
@@ -302,3 +342,4 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     </div>
   );
 }
+
