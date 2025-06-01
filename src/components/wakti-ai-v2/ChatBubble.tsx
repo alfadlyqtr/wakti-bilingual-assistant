@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
@@ -103,19 +102,57 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
   };
 
   const handleCopyMessage = async () => {
+    console.log('🔍 Copy button clicked - attempting to copy message');
+    
     try {
-      await navigator.clipboard.writeText(message.content);
+      // First, try the modern Clipboard API
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(message.content);
+        console.log('✅ Successfully copied using Clipboard API');
+      } else {
+        // Fallback for older browsers or non-secure contexts
+        console.log('⚠️ Clipboard API not available, using fallback method');
+        
+        // Create a temporary textarea element
+        const textArea = document.createElement('textarea');
+        textArea.value = message.content;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        
+        // Select and copy the text
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (!successful) {
+          throw new Error('Fallback copy method failed');
+        }
+        
+        console.log('✅ Successfully copied using fallback method');
+      }
+      
+      // Show success toast
       toast({
         title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
         description: language === 'ar' ? 'تم نسخ الرسالة' : 'Message copied',
         duration: 2000
       });
+      
     } catch (error) {
-      console.error('Error copying message:', error);
+      console.error('❌ Error copying message:', error);
+      
+      // Show error toast with more helpful message
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في نسخ الرسالة' : 'Failed to copy message',
-        variant: 'destructive'
+        title: language === 'ar' ? 'فشل النسخ' : 'Copy Failed',
+        description: language === 'ar' 
+          ? 'تعذر نسخ النص. يرجى تحديد النص ونسخه يدوياً' 
+          : 'Unable to copy text. Please select and copy manually',
+        variant: 'destructive',
+        duration: 4000
       });
     }
   };
@@ -342,4 +379,3 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     </div>
   );
 }
-
