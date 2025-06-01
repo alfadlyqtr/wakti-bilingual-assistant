@@ -172,13 +172,10 @@ export class WaktiAIV2Service {
         actionTaken: data.actionTaken,
         actionResult: data.actionResult,
         imageUrl: data.imageUrl,
-        generatedText: data.generatedText,
         browsingUsed: data.browsingUsed,
         browsingData: data.browsingData,
         quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation,
-        triggerMode: data.triggerMode,
-        strictMode: data.strictMode
+        requiresSearchConfirmation: data.requiresSearchConfirmation
       };
 
     } catch (error: any) {
