@@ -419,6 +419,47 @@ export default function WaktiAIV2() {
     }
   };
 
+  // NEW: Handler for text generator
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
+    console.log('🔍 Text generated:', { text, mode });
+    
+    if (mode === 'compose') {
+      // Add generated text as assistant message
+      const assistantMessage: AIMessage = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: text,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      
+      toast({
+        title: language === 'ar' ? '✅ تم إنشاء النص' : '✅ Text Generated',
+        description: language === 'ar' ? 'تم إضافة النص إلى المحادثة' : 'Text added to conversation',
+        duration: 3000
+      });
+    } else {
+      // Insert generated text into input field for editing
+      setInputMessage(text);
+      
+      // Focus textarea and move cursor to end
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const length = text.length;
+          textareaRef.current.setSelectionRange(length, length);
+        }
+      }, 100);
+      
+      toast({
+        title: language === 'ar' ? '✅ تم إنشاء الرد' : '✅ Reply Generated',
+        description: language === 'ar' ? 'تم إضافة النص إلى حقل الإدخال - راجع وأرسل' : 'Text added to input field - review and send',
+        duration: 3000
+      });
+    }
+  };
+
   const sendMessage = async (content: string, inputType: 'text' | 'voice' = 'text') => {
     if (!content.trim() || isLoading) return;
 
@@ -826,6 +867,7 @@ export default function WaktiAIV2() {
               }}
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
+              onTextGenerated={handleTextGenerated}
             />
           </div>
         </div>
