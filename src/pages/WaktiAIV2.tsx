@@ -419,17 +419,18 @@ export default function WaktiAIV2() {
     }
   };
 
-  // NEW: Handler for text generator
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    console.log('🔍 Text generated:', { text, mode });
+  // NEW: Handler for text generator - Updated to accept the flag
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => {
+    console.log('🔍 Text generated:', { text, mode, isTextGenerated });
     
     if (mode === 'compose') {
-      // Add generated text as assistant message
+      // Add generated text as assistant message with text generation flag
       const assistantMessage: AIMessage = {
         id: Date.now().toString(),
         role: 'assistant',
         content: text,
-        timestamp: new Date()
+        timestamp: new Date(),
+        isTextGenerated: isTextGenerated || false
       };
       
       setMessages(prev => [...prev, assistantMessage]);
@@ -787,6 +788,7 @@ export default function WaktiAIV2() {
               message={message} 
               onSearchConfirm={handleSearchConfirmation}
               activeTrigger={activeTrigger}
+              isTextGenerated={message.isTextGenerated}
             />
           ))}
           

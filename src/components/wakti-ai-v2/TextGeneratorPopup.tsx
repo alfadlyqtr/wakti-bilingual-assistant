@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -16,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 interface TextGeneratorPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onGenerated: (text: string, mode: 'compose' | 'reply') => void;
+  onGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
 }
 
 interface FormData {
@@ -77,7 +76,11 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
   const formats = [
     { value: 'Plain', label: language === 'ar' ? 'عادي' : 'Plain' },
     { value: 'Bullet Points', label: language === 'ar' ? 'نقاط' : 'Bullet Points' },
-    { value: 'Paragraphs', label: language === 'ar' ? 'فقرات' : 'Paragraphs' }
+    { value: 'Numbered List', label: language === 'ar' ? 'قائمة مرقمة' : 'Numbered List' },
+    { value: 'Paragraphs', label: language === 'ar' ? 'فقرات' : 'Paragraphs' },
+    { value: 'Table', label: language === 'ar' ? 'جدول' : 'Table' },
+    { value: 'Summary', label: language === 'ar' ? 'ملخص' : 'Summary' },
+    { value: 'Q&A Format', label: language === 'ar' ? 'تنسيق سؤال وجواب' : 'Q&A Format' }
   ];
 
   const replyTypes = [
@@ -163,7 +166,7 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
       console.log('📝 TextGeneratorPopup: Main brain response:', data);
 
       if (data.success && data.generatedText) {
-        onGenerated(data.generatedText, formData.mode);
+        onGenerated(data.generatedText, formData.mode, true); // Add flag to identify text generated content
         onOpenChange(false);
         
         // Reset form
@@ -222,29 +225,102 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
           </TabsList>
 
           <TabsContent value="compose" className="space-y-4">
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'نوع المحتوى' : 'Content Type'} *</Label>
-              <Select value={formData.contentType} onValueChange={(value) => updateFormData('contentType', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {contentTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'نوع المحتوى' : 'Content Type'} *</Label>
+                <Select value={formData.contentType} onValueChange={(value) => updateFormData('contentType', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر نوع المحتوى' : 'Select content type'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {contentTypes.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'التنسيق' : 'Format'} *</Label>
+                <Select value={formData.format} onValueChange={(value) => updateFormData('format', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'اختر التنسيق' : 'Select format'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formats.map((format) => (
+                      <SelectItem key={format.value} value={format.value}>
+                        {format.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'النبرة' : 'Tone'} *</Label>
+                <Select value={formData.tone} onValueChange={(value) => updateFormData('tone', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'نبرة' : 'Tone'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tones.map((tone) => (
+                      <SelectItem key={tone.value} value={tone.value}>
+                        {tone.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الطول' : 'Length'} *</Label>
+                <Select value={formData.length} onValueChange={(value) => updateFormData('length', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'طول' : 'Length'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lengths.map((length) => (
+                      <SelectItem key={length.value} value={length.value}>
+                        {length.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label>{language === 'ar' ? 'الموضوع (اختياري)' : 'Topic (Optional)'}</Label>
-              <Input
+              <Textarea
                 value={formData.topic}
                 onChange={(e) => updateFormData('topic', e.target.value)}
-                placeholder={language === 'ar' ? 'ما الذي تريد الكتابة عنه؟' : 'What do you want to write about?'}
+                placeholder={language === 'ar' ? 'يرجى تقديم النقاط الرئيسية حول ما تريد الكتابة عنه' : 'Please provide key points on what you want to write about'}
+                className="min-h-16 max-h-24 resize-none"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'إلى' : 'To'}</Label>
+                <Input
+                  value={formData.to}
+                  onChange={(e) => updateFormData('to', e.target.value)}
+                  placeholder={language === 'ar' ? 'المستقبل' : 'Recipient'}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'من' : 'From'}</Label>
+                <Input
+                  value={formData.from}
+                  onChange={(e) => updateFormData('from', e.target.value)}
+                  placeholder={language === 'ar' ? 'المرسل' : 'Sender'}
+                />
+              </div>
             </div>
           </TabsContent>
 
@@ -274,81 +350,78 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'النبرة' : 'Tone'} *</Label>
+                <Select value={formData.tone} onValueChange={(value) => updateFormData('tone', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'نبرة' : 'Tone'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tones.map((tone) => (
+                      <SelectItem key={tone.value} value={tone.value}>
+                        {tone.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'الطول' : 'Length'} *</Label>
+                <Select value={formData.length} onValueChange={(value) => updateFormData('length', value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={language === 'ar' ? 'طول' : 'Length'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lengths.map((length) => (
+                      <SelectItem key={length.value} value={length.value}>
+                        {length.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{language === 'ar' ? 'التنسيق' : 'Format'} *</Label>
+              <Select value={formData.format} onValueChange={(value) => updateFormData('format', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder={language === 'ar' ? 'اختر التنسيق' : 'Select format'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {formats.map((format) => (
+                    <SelectItem key={format.value} value={format.value}>
+                      {format.label}
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'إلى' : 'To'}</Label>
+                <Input
+                  value={formData.to}
+                  onChange={(e) => updateFormData('to', e.target.value)}
+                  placeholder={language === 'ar' ? 'المستقبل' : 'Recipient'}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>{language === 'ar' ? 'من' : 'From'}</Label>
+                <Input
+                  value={formData.from}
+                  onChange={(e) => updateFormData('from', e.target.value)}
+                  placeholder={language === 'ar' ? 'المرسل' : 'Sender'}
+                />
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
-
-        {/* Common fields for both modes */}
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'النبرة' : 'Tone'} *</Label>
-              <Select value={formData.tone} onValueChange={(value) => updateFormData('tone', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'نبرة' : 'Tone'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {tones.map((tone) => (
-                    <SelectItem key={tone.value} value={tone.value}>
-                      {tone.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'الطول' : 'Length'} *</Label>
-              <Select value={formData.length} onValueChange={(value) => updateFormData('length', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'طول' : 'Length'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {lengths.map((length) => (
-                    <SelectItem key={length.value} value={length.value}>
-                      {length.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>{language === 'ar' ? 'التنسيق' : 'Format'} *</Label>
-            <Select value={formData.format} onValueChange={(value) => updateFormData('format', value)}>
-              <SelectTrigger>
-                <SelectValue placeholder={language === 'ar' ? 'اختر التنسيق' : 'Select format'} />
-              </SelectTrigger>
-              <SelectContent>
-                {formats.map((format) => (
-                  <SelectItem key={format.value} value={format.value}>
-                    {format.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'إلى' : 'To'}</Label>
-              <Input
-                value={formData.to}
-                onChange={(e) => updateFormData('to', e.target.value)}
-                placeholder={language === 'ar' ? 'المستقبل' : 'Recipient'}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'من' : 'From'}</Label>
-              <Input
-                value={formData.from}
-                onChange={(e) => updateFormData('from', e.target.value)}
-                placeholder={language === 'ar' ? 'المرسل' : 'Sender'}
-              />
-            </div>
-          </div>
-        </div>
 
         <div className="flex gap-3 pt-4">
           <Button onClick={() => onOpenChange(false)} variant="outline" className="flex-1">

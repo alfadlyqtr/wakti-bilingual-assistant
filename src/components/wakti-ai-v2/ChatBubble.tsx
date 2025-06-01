@@ -1,23 +1,25 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { Mic, Search, MessageSquare, Expand, Download } from 'lucide-react';
+import { Mic, Search, MessageSquare, Expand, Download, Copy, PenTool } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
 import { AIMessage } from '@/services/WaktiAIV2Service';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatBubbleProps {
   message: AIMessage;
   onSearchConfirm?: (messageContent: string) => void;
   onSwitchToChat?: () => void;
   activeTrigger?: string;
+  isTextGenerated?: boolean;
 }
 
-export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTrigger }: ChatBubbleProps) {
+export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTrigger, isTextGenerated }: ChatBubbleProps) {
   const { theme, language } = useTheme();
+  const { toast } = useToast();
   const isUser = message.role === 'user';
   const isArabic = language === 'ar';
 
@@ -74,6 +76,24 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
       } catch (error) {
         console.error('Error downloading image:', error);
       }
+    }
+  };
+
+  const handleCopyTextGenerated = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({
+        title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
+        description: language === 'ar' ? 'تم نسخ النص المولد' : 'Generated text copied',
+        duration: 2000
+      });
+    } catch (error) {
+      console.error('Error copying text:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -238,13 +258,42 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           </div>
         )}
 
-        {/* Timestamp */}
-        <div className={cn(
-          "text-xs text-muted-foreground px-2",
-          isUser ? (isArabic ? "text-left" : "text-right") : "text-left"
-        )}>
-          {format(message.timestamp, 'HH:mm')}
-        </div>
+        {/* Text Generation Indicator and Copy Button */}
+        {isTextGenerated && !isUser && (
+          <div className={cn(
+            "flex items-center justify-between ml-2",
+            isUser && "mr-2"
+          )}>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <PenTool className="h-3 w-3" />
+                <span>{language === 'ar' ? 'WAKTI AI نص مولد' : 'WAKTI AI Text Gen.'}</span>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {format(message.timestamp, 'HH:mm')}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyTextGenerated}
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              title={language === 'ar' ? 'نسخ النص المولد' : 'Copy generated text'}
+            >
+              <Copy className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* Regular Timestamp - Only show if not text generated */}
+        {!isTextGenerated && (
+          <div className={cn(
+            "text-xs text-muted-foreground px-2",
+            isUser ? (isArabic ? "text-left" : "text-right") : "text-left"
+          )}>
+            {format(message.timestamp, 'HH:mm')}
+          </div>
+        )}
       </div>
     </div>
   );
