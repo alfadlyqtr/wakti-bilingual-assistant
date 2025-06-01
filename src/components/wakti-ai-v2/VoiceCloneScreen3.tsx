@@ -85,39 +85,68 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       console.log('🎵 Text length:', text.trim().length);
       console.log('🎵 Voice ID:', selectedVoiceId);
 
-      const response = await supabase.functions.invoke('voice-tts', {
-        body: {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) {
+        throw new Error('User not authenticated');
+      }
+
+      // Make direct fetch call to the edge function
+      const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/voice-tts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.session.access_token}`,
+        },
+        body: JSON.stringify({
           text: text.trim(),
           voice_id: selectedVoiceId,
-        }
+        })
       });
 
-      console.log('🎵 Edge function response:', response);
+      console.log('🎵 Response status:', response.status);
+      console.log('🎵 Response headers:', Object.fromEntries(response.headers.entries()));
 
-      if (response.error) {
-        console.error('🎵 Edge function error:', response.error);
-        throw response.error;
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🎵 Response error:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
-      if (!response.data) {
-        console.error('🎵 No data returned from edge function');
-        throw new Error('No audio data received');
-      }
+      // Check content type to determine how to handle the response
+      const contentType = response.headers.get('content-type');
+      console.log('🎵 Content-Type:', contentType);
 
-      console.log('🎵 Response data type:', typeof response.data);
-      console.log('🎵 Response data constructor:', response.data.constructor.name);
-
-      // Convert ArrayBuffer to Blob if needed
       let audioBlob: Blob;
-      if (response.data instanceof ArrayBuffer) {
-        console.log('🎵 Converting ArrayBuffer to Blob, size:', response.data.byteLength);
-        audioBlob = new Blob([response.data], { type: 'audio/mpeg' });
-      } else if (response.data instanceof Blob) {
-        console.log('🎵 Data is already a Blob, size:', response.data.size);
-        audioBlob = response.data;
+
+      if (contentType?.includes('application/json')) {
+        // Response is JSON - might contain base64 encoded audio or error
+        const jsonData = await response.json();
+        console.log('🎵 JSON response received:', Object.keys(jsonData));
+        
+        if (jsonData.error) {
+          throw new Error(jsonData.error);
+        }
+        
+        if (jsonData.audioContent) {
+          // Base64 encoded audio
+          console.log('🎵 Converting base64 to blob...');
+          const binaryString = atob(jsonData.audioContent);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          audioBlob = new Blob([bytes], { type: 'audio/mpeg' });
+        } else {
+          throw new Error('No audio content in response');
+        }
+      } else if (contentType?.includes('audio/mpeg')) {
+        // Response is audio data
+        console.log('🎵 Processing audio response...');
+        const arrayBuffer = await response.arrayBuffer();
+        console.log('🎵 Audio buffer size:', arrayBuffer.byteLength);
+        audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
       } else {
-        console.error('🎵 Unexpected data type:', typeof response.data);
-        throw new Error('Unexpected audio data format');
+        throw new Error(`Unexpected content type: ${contentType}`);
       }
 
       console.log('🎵 Final blob size:', audioBlob.size);
