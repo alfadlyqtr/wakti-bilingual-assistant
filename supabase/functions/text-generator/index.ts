@@ -12,10 +12,15 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🔍 TEXT GENERATOR: Request received')
+    
     const { mode, contentType, tone, length, format, to, from, originalMessage, replyType, topic } = await req.json()
+    
+    console.log('🔍 TEXT GENERATOR: Parsed request data:', { mode, contentType, tone, length })
 
     const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
     if (!deepseekApiKey) {
+      console.error('🔍 TEXT GENERATOR: DeepSeek API key not configured')
       throw new Error('DeepSeek API key not configured')
     }
 
@@ -65,7 +70,10 @@ Write a direct reply that addresses the original message appropriately.`
 Please write an appropriate reply.`
     }
 
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
+    console.log('🔍 TEXT GENERATOR: Calling DeepSeek API...')
+
+    // FIXED: Added /v1/ to the endpoint URL to match the working wakti-ai-v2-brain function
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${deepseekApiKey}`,
@@ -82,19 +90,24 @@ Please write an appropriate reply.`
       }),
     })
 
+    console.log('🔍 TEXT GENERATOR: DeepSeek API response status:', response.status)
+
     if (!response.ok) {
       const errorData = await response.json()
-      throw new Error(errorData.error?.message || 'Failed to generate text')
+      console.error('🔍 TEXT GENERATOR: DeepSeek API error:', errorData)
+      throw new Error(errorData.error?.message || `API request failed with status ${response.status}`)
     }
 
     const data = await response.json()
     const generatedText = data.choices[0].message.content
 
+    console.log('🔍 TEXT GENERATOR: Successfully generated text, length:', generatedText?.length)
+
     return new Response(JSON.stringify({ generatedText }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (error) {
-    console.error('Error in text-generator function:', error)
+    console.error('🔍 TEXT GENERATOR: Error in text-generator function:', error)
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
