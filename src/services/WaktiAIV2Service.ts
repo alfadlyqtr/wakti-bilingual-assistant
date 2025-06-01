@@ -105,48 +105,66 @@ export class WaktiAIV2Service {
   }
 
   static async sendMessage(
-    message: string,
-    conversationId?: string | null,
+    message: string, 
+    userId: string, 
     language: string = 'en',
-    inputType: 'text' | 'voice' = 'text'
+    conversationId?: string,
+    inputType: 'text' | 'voice' = 'text',
+    conversationHistory: AIMessage[] = [],
+    confirmSearch: boolean = false,
+    activeTrigger: string = 'chat',
+    textGenParams?: any
   ): Promise<AIResponse> {
     try {
-      console.log('🔍 WaktiAIV2Service: Sending message via wakti-ai-v2-brain');
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
-      }
-      
+      console.log('🔄 WaktiAIV2Service: === SEND MESSAGE START ===');
+      console.log('🔄 WaktiAIV2Service: Message:', message);
+      console.log('🔄 WaktiAIV2Service: Active Trigger (SERVICE):', activeTrigger);
+      console.log('🔄 WaktiAIV2Service: Text Gen Params:', textGenParams);
+      console.log('🔄 WaktiAIV2Service: Confirm Search:', confirmSearch);
+      console.log('🔄 WaktiAIV2Service: Language:', language);
+
       const payload = {
         message,
-        userId: session.user.id,
+        userId,
         language,
         conversationId,
         inputType,
-        activeTrigger: 'chat' // Default to chat mode for backward compatibility
+        conversationHistory,
+        confirmSearch,
+        activeTrigger, // CRITICAL: Ensure this is passed through
+        textGenParams
       };
-      
-      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with payload:', payload);
-      
+
+      console.log('🔄 WaktiAIV2Service: === PAYLOAD TO EDGE FUNCTION ===');
+      console.log('🔄 WaktiAIV2Service: Active Trigger in payload:', payload.activeTrigger);
+      console.log('🔄 WaktiAIV2Service: Full payload:', JSON.stringify(payload, null, 2));
+
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
-      
+
+      console.log('🔄 WaktiAIV2Service: === EDGE FUNCTION RESPONSE ===');
+      console.log('🔄 WaktiAIV2Service: Error:', error);
+      console.log('🔄 WaktiAIV2Service: Data success:', data?.success);
+      console.log('🔄 WaktiAIV2Service: Browsing used:', data?.browsingUsed);
+      console.log('🔄 WaktiAIV2Service: Trigger mode returned:', data?.triggerMode);
+      console.log('🔄 WaktiAIV2Service: Strict mode returned:', data?.strictMode);
+
       if (error) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
-        throw new Error(error.message || 'AI service error');
+        console.error('🔄 WaktiAIV2Service: ❌ Edge function error:', error);
+        throw error;
       }
-      
+
       if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
+        console.error('🔄 WaktiAIV2Service: ❌ AI processing failed:', data.error);
         throw new Error(data.error || 'AI processing failed');
       }
-      
-      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain response:', data);
-      
+
+      console.log('🔄 WaktiAIV2Service: ✅ Message sent successfully');
+      console.log('🔄 WaktiAIV2Service: Response length:', data.response?.length);
+
       return {
+        success: true,
         response: data.response,
         conversationId: data.conversationId,
         intent: data.intent,
@@ -154,15 +172,21 @@ export class WaktiAIV2Service {
         actionTaken: data.actionTaken,
         actionResult: data.actionResult,
         imageUrl: data.imageUrl,
+        generatedText: data.generatedText,
         browsingUsed: data.browsingUsed,
         browsingData: data.browsingData,
         quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation
+        requiresSearchConfirmation: data.requiresSearchConfirmation,
+        triggerMode: data.triggerMode,
+        strictMode: data.strictMode
       };
-      
-    } catch (error) {
-      console.error('🔍 WaktiAIV2Service: Service error:', error);
-      throw error;
+
+    } catch (error: any) {
+      console.error('🔄 WaktiAIV2Service: ❌ Service error:', error);
+      return {
+        success: false,
+        error: error.message || 'Unknown error occurred'
+      };
     }
   }
 
