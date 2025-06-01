@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
@@ -84,58 +83,94 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
   };
 
   const handleCopyTextGenerated = async () => {
+    console.log('📋 Copy text generated button clicked');
+    
     try {
-      await navigator.clipboard.writeText(message.content);
+      // Enhanced copy function with multiple fallbacks
+      await copyToClipboard(message.content);
+      
       toast({
         title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
         description: language === 'ar' ? 'تم نسخ النص المولد' : 'Generated text copied',
         duration: 2000
       });
     } catch (error) {
-      console.error('Error copying text:', error);
+      console.error('❌ Error copying text generated:', error);
       toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+        title: language === 'ar' ? 'فشل النسخ' : 'Copy Failed',
         description: language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text',
         variant: 'destructive'
       });
     }
   };
 
-  const handleCopyMessage = async () => {
-    console.log('🔍 Copy button clicked - attempting to copy message');
+  // Enhanced copy function with multiple fallback methods
+  const copyToClipboard = async (text: string) => {
+    console.log('📋 Attempting to copy text:', text.substring(0, 50) + '...');
     
-    try {
-      // First, try the modern Clipboard API
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(message.content);
+    // Method 1: Modern Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
         console.log('✅ Successfully copied using Clipboard API');
+        return;
+      } catch (error) {
+        console.warn('⚠️ Clipboard API failed, trying fallback:', error);
+      }
+    }
+    
+    // Method 2: execCommand fallback
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      textArea.style.opacity = '0';
+      textArea.style.pointerEvents = 'none';
+      textArea.setAttribute('readonly', '');
+      textArea.setAttribute('contenteditable', 'true');
+      
+      document.body.appendChild(textArea);
+      
+      // For mobile compatibility
+      if (navigator.userAgent.match(/ipad|ipod|iphone/i)) {
+        textArea.contentEditable = 'true';
+        textArea.readOnly = false;
+        const range = document.createRange();
+        range.selectNodeContents(textArea);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        textArea.setSelectionRange(0, text.length);
       } else {
-        // Fallback for older browsers or non-secure contexts
-        console.log('⚠️ Clipboard API not available, using fallback method');
-        
-        // Create a temporary textarea element
-        const textArea = document.createElement('textarea');
-        textArea.value = message.content;
-        textArea.style.position = 'fixed';
-        textArea.style.left = '-999999px';
-        textArea.style.top = '-999999px';
-        document.body.appendChild(textArea);
-        
-        // Select and copy the text
-        textArea.focus();
         textArea.select();
-        
-        const successful = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        
-        if (!successful) {
-          throw new Error('Fallback copy method failed');
-        }
-        
-        console.log('✅ Successfully copied using fallback method');
+        textArea.setSelectionRange(0, text.length);
       }
       
-      // Show success toast
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        console.log('✅ Successfully copied using execCommand');
+        return;
+      } else {
+        throw new Error('execCommand copy failed');
+      }
+    } catch (error) {
+      console.warn('⚠️ execCommand method failed:', error);
+    }
+    
+    // Method 3: Manual selection prompt
+    throw new Error('All copy methods failed. Please select and copy manually.');
+  };
+
+  const handleCopyMessage = async () => {
+    console.log('📋 Copy message button clicked');
+    
+    try {
+      await copyToClipboard(message.content);
+      
       toast({
         title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
         description: language === 'ar' ? 'تم نسخ الرسالة' : 'Message copied',
@@ -145,7 +180,6 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     } catch (error) {
       console.error('❌ Error copying message:', error);
       
-      // Show error toast with more helpful message
       toast({
         title: language === 'ar' ? 'فشل النسخ' : 'Copy Failed',
         description: language === 'ar' 
@@ -193,17 +227,18 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
             {message.content}
           </div>
 
-          {/* Mini Copy Button for Regular Chat Messages */}
+          {/* Enhanced Mini Copy Button for Regular Chat Messages - Always visible for better UX */}
           {showMiniCopyButton && (
             <div className={cn(
-              "absolute top-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
-              isUser ? "left-2" : "right-2"
+              "absolute top-2 transition-opacity duration-200",
+              isUser ? "left-2" : "right-2",
+              "opacity-60 hover:opacity-100" // Always slightly visible, full opacity on hover
             )}>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleCopyMessage}
-                className="h-6 w-6 p-0 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 rounded-full"
+                className="h-7 w-7 p-0 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 rounded-full transition-all duration-200 hover:scale-110"
                 title={language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
               >
                 <Copy className="h-3 w-3" />
@@ -339,7 +374,7 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           </div>
         )}
 
-        {/* Text Generation Indicator and Copy Button */}
+        {/* Enhanced Text Generation Indicator and Copy Button */}
         {isTextGenerated && !isUser && (
           <div className={cn(
             "flex items-center justify-between ml-2",
@@ -358,7 +393,7 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
               variant="ghost"
               size="sm"
               onClick={handleCopyTextGenerated}
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-full transition-all duration-200 hover:scale-110"
               title={language === 'ar' ? 'نسخ النص المولد' : 'Copy generated text'}
             >
               <Copy className="h-3 w-3" />

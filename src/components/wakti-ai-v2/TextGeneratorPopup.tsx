@@ -101,6 +101,63 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     }
   };
 
+  // Create a more structured prompt that enforces format, tone, and length
+  const createStructuredPrompt = (): string => {
+    const lengthInstructions = {
+      'Short': 'Write approximately 50-100 words (1-2 short paragraphs)',
+      'Medium': 'Write approximately 150-300 words (2-4 paragraphs)', 
+      'Long': 'Write approximately 400-600 words (4-8 paragraphs)'
+    };
+
+    const formatInstructions = {
+      'Plain': 'Write in plain text format with natural paragraphs',
+      'Bullet Points': 'Format as bullet points using • symbol for each point',
+      'Numbered List': 'Format as a numbered list using 1., 2., 3., etc. for each item',
+      'Paragraphs': 'Organize into clear, distinct paragraphs',
+      'Table': 'Present information in a table format with clear rows and columns',
+      'Summary': 'Write as a concise summary with key points highlighted',
+      'Q&A Format': 'Structure as questions and answers'
+    };
+
+    const toneInstructions = {
+      'Formal': 'Use formal, professional language with proper grammar and sophisticated vocabulary',
+      'Casual': 'Use relaxed, conversational language as if talking to a friend',
+      'Professional': 'Use business-appropriate language that is clear and competent',
+      'Friendly': 'Use warm, approachable language that is welcoming and kind',
+      'Supportive': 'Use encouraging, empathetic language that shows understanding',
+      'Enthusiastic': 'Use energetic, positive language that shows excitement and passion'
+    };
+
+    if (formData.mode === 'compose') {
+      return `Generate a ${formData.contentType} about: ${formData.topic || 'the specified topic'}
+
+CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
+
+1. FORMAT: ${formatInstructions[formData.format as keyof typeof formatInstructions]}
+2. TONE: ${toneInstructions[formData.tone as keyof typeof toneInstructions]}  
+3. LENGTH: ${lengthInstructions[formData.length as keyof typeof lengthInstructions]}
+
+${formData.to ? `To: ${formData.to}` : ''}
+${formData.from ? `From: ${formData.from}` : ''}
+
+IMPORTANT: You MUST follow the format, tone, and length requirements exactly as specified above. Do not deviate from these instructions.`;
+    } else {
+      return `Reply to this message: "${formData.originalMessage}"
+
+CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
+
+1. FORMAT: ${formatInstructions[formData.format as keyof typeof formatInstructions]}
+2. TONE: ${toneInstructions[formData.tone as keyof typeof toneInstructions]}
+3. LENGTH: ${lengthInstructions[formData.length as keyof typeof lengthInstructions]}
+4. REPLY TYPE: ${formData.replyType}
+
+${formData.to ? `To: ${formData.to}` : ''}
+${formData.from ? `From: ${formData.from}` : ''}
+
+IMPORTANT: You MUST follow the format, tone, and length requirements exactly as specified above. Do not deviate from these instructions.`;
+    }
+  };
+
   const handleGenerate = async () => {
     if (!isFormValid()) {
       toast({
@@ -123,10 +180,15 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     setIsGenerating(true);
 
     try {
-      console.log('📝 TextGeneratorPopup: Calling main brain for text generation');
+      console.log('📝 TextGeneratorPopup: Generating text with enhanced parameters');
       
-      // Prepare text generation parameters
-      const textGenParams = {
+      // Create a structured message that emphasizes format, tone, and length
+      const structuredPrompt = createStructuredPrompt();
+      
+      console.log('📝 TextGeneratorPopup: Structured prompt:', structuredPrompt);
+
+      // Prepare enhanced text generation parameters with strict formatting
+      const enhancedTextGenParams = {
         mode: formData.mode,
         ...(formData.mode === 'compose' ? {
           contentType: formData.contentType,
@@ -139,35 +201,37 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
         length: formData.length,
         format: formData.format,
         to: formData.to,
-        from: formData.from
+        from: formData.from,
+        strictFormatting: true, // Flag to indicate strict format enforcement needed
+        formatInstruction: `MUST use ${formData.format} format`,
+        toneInstruction: `MUST use ${formData.tone} tone`,
+        lengthInstruction: `MUST be ${formData.length} length`
       };
 
-      // Call the main brain with text generation parameters
+      // Call the brain with the structured prompt and enhanced parameters
       const payload = {
-        message: formData.mode === 'compose' 
-          ? `Generate ${formData.contentType} about: ${formData.topic || 'general topic'}`
-          : `Reply to: ${formData.originalMessage}`,
+        message: structuredPrompt,
         userId: user.id,
         language: language,
-        activeTrigger: 'chat', // Use chat mode for text generation
-        textGenParams: textGenParams
+        activeTrigger: 'chat',
+        textGenParams: enhancedTextGenParams
       };
 
-      console.log('📝 TextGeneratorPopup: Payload prepared:', payload);
+      console.log('📝 TextGeneratorPopup: Enhanced payload:', payload);
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
       });
 
       if (error) {
-        console.error('📝 TextGeneratorPopup: Main brain error:', error);
+        console.error('📝 TextGeneratorPopup: Brain function error:', error);
         throw error;
       }
 
-      console.log('📝 TextGeneratorPopup: Main brain response:', data);
+      console.log('📝 TextGeneratorPopup: Brain response:', data);
 
       if (data.success && data.generatedText) {
-        onGenerated(data.generatedText, formData.mode, true); // Add flag to identify text generated content
+        onGenerated(data.generatedText, formData.mode, true);
         onOpenChange(false);
         
         // Reset form
@@ -186,7 +250,29 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
 
         toast({
           title: language === 'ar' ? 'نجح!' : 'Success!',
-          description: language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully',
+          description: language === 'ar' ? 'تم إنشاء النص بالتنسيق والنبرة المطلوبة' : 'Text generated with requested format and tone',
+        });
+      } else if (data.success && data.response) {
+        // Fallback: use the regular response if generatedText is not available
+        onGenerated(data.response, formData.mode, true);
+        onOpenChange(false);
+        
+        setFormData({
+          mode: 'compose',
+          contentType: '',
+          tone: '',
+          length: '',
+          format: '',
+          to: '',
+          from: '',
+          topic: '',
+          originalMessage: '',
+          replyType: ''
+        });
+
+        toast({
+          title: language === 'ar' ? 'نجح!' : 'Success!',
+          description: language === 'ar' ? 'تم إنشاء النص' : 'Text generated',
         });
       } else {
         throw new Error(data.error || 'No generated text received');
