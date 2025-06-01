@@ -22,6 +22,7 @@ export interface AIResponse {
     remaining: number;
   };
   requiresSearchConfirmation?: boolean;
+  error?: string;
 }
 
 export interface TranscriptionResponse {
@@ -164,7 +165,6 @@ export class WaktiAIV2Service {
       console.log('🔄 WaktiAIV2Service: Response length:', data.response?.length);
 
       return {
-        success: true,
         response: data.response,
         conversationId: data.conversationId,
         intent: data.intent,
@@ -184,7 +184,7 @@ export class WaktiAIV2Service {
     } catch (error: any) {
       console.error('🔄 WaktiAIV2Service: ❌ Service error:', error);
       return {
-        success: false,
+        response: 'Sorry, I encountered an error processing your request. Please try again.',
         error: error.message || 'Unknown error occurred'
       };
     }
