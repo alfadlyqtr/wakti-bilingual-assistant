@@ -162,6 +162,18 @@ export class TRService {
     return data || null;
   }
 
+  static async getSharedTask(shareLink: string): Promise<TRTask | null> {
+    const { data, error } = await supabase
+      .from('tr_tasks')
+      .select('*')
+      .eq('share_link', shareLink)
+      .eq('is_shared', true)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw error;
+    return data || null;
+  }
+
   // Subtask operations
   static async getSubtasks(taskId: string): Promise<TRSubtask[]> {
     const { data, error } = await supabase

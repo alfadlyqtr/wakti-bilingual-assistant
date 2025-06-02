@@ -489,4 +489,5 @@ export type TranslationKey =
   | "taskIncomplete"
   | "subtaskAdded"
   | "subtaskUpdated"
-  | "subtaskDeleted";
+  | "subtaskDeleted"
+  | "recurrence";
