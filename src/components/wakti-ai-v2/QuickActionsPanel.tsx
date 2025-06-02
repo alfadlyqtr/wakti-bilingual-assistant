@@ -21,7 +21,7 @@ interface QuickActionsPanelProps {
 }
 
 export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange, onTextGenerated }: QuickActionsPanelProps) {
-  const { language } = useTheme();
+  const { language, toggleLanguage } = useTheme();
   const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
   const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
   const [voiceCloneOpen, setVoiceCloneOpen] = useState(false);
@@ -85,10 +85,21 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     <div className="space-y-4 h-full flex flex-col">
       {/* AI Trigger Controls */}
       <div className="flex-shrink-0">
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
-          <Brain className="h-3 w-3" />
-          {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5">
+            <Brain className="h-3 w-3" />
+            {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleLanguage}
+            className="h-6 w-6 rounded-full"
+            title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+          >
+            <Languages className="h-3 w-3" />
+          </Button>
+        </div>
         
         <div className="grid grid-cols-2 gap-2">
           {triggerButtons.map((trigger) => (

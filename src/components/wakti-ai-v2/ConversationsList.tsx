@@ -1,9 +1,8 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare } from 'lucide-react';
+import { Trash2, MessageSquare, Languages } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Conversation {
@@ -28,7 +27,7 @@ export function ConversationsList({
   onDeleteConversation,
   onRefresh
 }: ConversationsListProps) {
-  const { language } = useTheme();
+  const { language, toggleLanguage } = useTheme();
 
   const handleSelectConversation = (id: string) => {
     console.log('🔍 CONVERSATIONS: Selecting conversation:', id);
@@ -53,14 +52,25 @@ export function ConversationsList({
           <MessageSquare className="h-5 w-5" />
           {language === 'ar' ? 'المحادثات' : 'Conversations'}
         </h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          className="text-xs"
-        >
-          {language === 'ar' ? 'تحديث' : 'Refresh'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleLanguage}
+            className="h-8 w-8 rounded-full"
+            title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+          >
+            <Languages className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            className="text-xs"
+          >
+            {language === 'ar' ? 'تحديث' : 'Refresh'}
+          </Button>
+        </div>
       </div>
       
       <ScrollArea className="h-[calc(100vh-200px)] scrollbar-hide">
