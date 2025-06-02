@@ -1,26 +1,29 @@
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { QueryClient } from "react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
-import { Dashboard } from "@/pages/Dashboard";
-import { Calendar } from "@/pages/Calendar";
-import { Maw3d } from "@/pages/Maw3d";
-import { Tasjeel } from "@/pages/Tasjeel";
-import { WaktiAi } from "@/pages/WaktiAi";
-import { Settings } from "@/pages/Settings";
+import Dashboard from "@/pages/Dashboard";
+import Calendar from "@/pages/Calendar";
+import Maw3d from "@/pages/Maw3d";
+import Tasjeel from "@/pages/Tasjeel";
+import WaktiAi from "@/pages/WaktiAi";
+import Settings from "@/pages/Settings";
 import { Knowledge } from "@/pages/Knowledge";
 import { PageContainer } from "@/components/PageContainer";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import TasksReminders from "@/pages/TasksReminders";
 import SharedTask from "@/pages/SharedTask";
+
+const queryClient = new QueryClient();
 
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <QueryClient>
+          <QueryClientProvider client={queryClient}>
             <div className="min-h-screen bg-background text-foreground">
               <Routes>
                 {/* Core Routes */}
@@ -115,7 +118,7 @@ function App() {
               </Routes>
               <Toaster />
             </div>
-          </QueryClient>
+          </QueryClientProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

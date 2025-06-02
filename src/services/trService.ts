@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TRTask {
@@ -61,13 +60,13 @@ export class TRService {
     return data || [];
   }
 
-  static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link'>): Promise<TRTask> {
+  static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>): Promise<TRTask> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
     const { data, error } = await supabase
       .from('tr_tasks')
-      .insert([{ ...task, user_id: user.id }])
+      .insert([{ ...task, user_id: user.id, completed: false }])
       .select()
       .single();
     
