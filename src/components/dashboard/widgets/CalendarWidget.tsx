@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -6,16 +7,15 @@ import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { Maw3dService } from "@/services/maw3dService";
 import { Maw3dEvent } from "@/types/maw3d";
-import { getCalendarEntries, CalendarEntry } from "@/utils/calendarUtils";
+import { getCalendarEntries, CalendarEntry, EntryType } from "@/utils/calendarUtils";
 
 interface CalendarWidgetProps {
   isLoading: boolean;
   events: any[];
-  tasks: any[];
   language: 'en' | 'ar';
 }
 
-export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, tasks, language }) => {
+export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, language }) => {
   const navigate = useNavigate();
   const [maw3dEvents, setMaw3dEvents] = useState<Maw3dEvent[]>([]);
   const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
@@ -65,7 +65,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
   useEffect(() => {
     const fetchEntries = async () => {
       try {
-        const entries = await getCalendarEntries(tasks, [], manualEntries, events, maw3dEvents);
+        const entries = await getCalendarEntries(manualEntries, events, maw3dEvents);
         setAllEntries(entries);
       } catch (error) {
         console.error('Error fetching calendar entries:', error);
@@ -76,7 +76,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     if (!isLoading && !maw3dLoading) {
       fetchEntries();
     }
-  }, [tasks, events, maw3dEvents, manualEntries, isLoading, maw3dLoading]);
+  }, [events, maw3dEvents, manualEntries, isLoading, maw3dLoading]);
   
   // Filter entries for today and tomorrow
   const todayEntries = allEntries.filter(entry => entry.date === today);
@@ -91,30 +91,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     }
     
     const itemTypes = [];
-    const tasks = todayEntries.filter(e => e.type === 'task');
-    const events = todayEntries.filter(e => e.type === 'event');
-    const maw3d = todayEntries.filter(e => e.type === 'maw3d_event');
-    const linked = todayEntries.filter(e => e.type === 'linked_event');
-    const manual = todayEntries.filter(e => e.type === 'manual_note');
-    const reminders = todayEntries.filter(e => e.type === 'reminder');
+    const events = todayEntries.filter(e => e.type === EntryType.EVENT);
+    const maw3d = todayEntries.filter(e => e.type === EntryType.MAW3D_EVENT);
+    const manual = todayEntries.filter(e => e.type === EntryType.MANUAL_NOTE);
     
-    if (tasks.length > 0) {
-      itemTypes.push(`${tasks.length} ${tasks.length === 1 ? t("task", language) : t("tasks", language)}`);
-    }
     if (events.length > 0) {
       itemTypes.push(`${events.length} ${events.length === 1 ? t("event", language) : t("events", language)}`);
     }
     if (maw3d.length > 0) {
       itemTypes.push(`${maw3d.length} Maw3d`);
     }
-    if (linked.length > 0) {
-      itemTypes.push(`${linked.length} Linked`);
-    }
     if (manual.length > 0) {
       itemTypes.push(`${manual.length} Manual`);
-    }
-    if (reminders.length > 0) {
-      itemTypes.push(`${reminders.length} ${reminders.length === 1 ? 'Reminder' : 'Reminders'}`);
     }
     
     return itemTypes.join(', ');
@@ -126,30 +114,18 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     }
     
     const itemTypes = [];
-    const tasks = tomorrowEntries.filter(e => e.type === 'task');
-    const events = tomorrowEntries.filter(e => e.type === 'event');
-    const maw3d = tomorrowEntries.filter(e => e.type === 'maw3d_event');
-    const linked = tomorrowEntries.filter(e => e.type === 'linked_event');
-    const manual = tomorrowEntries.filter(e => e.type === 'manual_note');
-    const reminders = tomorrowEntries.filter(e => e.type === 'reminder');
+    const events = tomorrowEntries.filter(e => e.type === EntryType.EVENT);
+    const maw3d = tomorrowEntries.filter(e => e.type === EntryType.MAW3D_EVENT);
+    const manual = tomorrowEntries.filter(e => e.type === EntryType.MANUAL_NOTE);
     
-    if (tasks.length > 0) {
-      itemTypes.push(`${tasks.length} ${tasks.length === 1 ? t("task", language) : t("tasks", language)}`);
-    }
     if (events.length > 0) {
       itemTypes.push(`${events.length} ${events.length === 1 ? t("event", language) : t("events", language)}`);
     }
     if (maw3d.length > 0) {
       itemTypes.push(`${maw3d.length} Maw3d`);
     }
-    if (linked.length > 0) {
-      itemTypes.push(`${linked.length} Linked`);
-    }
     if (manual.length > 0) {
       itemTypes.push(`${manual.length} Manual`);
-    }
-    if (reminders.length > 0) {
-      itemTypes.push(`${reminders.length} ${reminders.length === 1 ? 'Reminder' : 'Reminders'}`);
     }
     
     return itemTypes.join(', ');

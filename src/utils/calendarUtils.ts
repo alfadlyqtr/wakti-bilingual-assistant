@@ -20,7 +20,6 @@ export interface CalendarEntry {
   description?: string;
   location?: string;
   isAllDay?: boolean;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
 
 export const getCalendarEntries = async (
@@ -44,11 +43,11 @@ export const getCalendarEntries = async (
     id: `maw3d-${event.id}`,
     title: event.title,
     date: event.event_date,
-    time: event.event_time || undefined,
+    time: undefined, // Maw3d events don't have separate time field
     type: EntryType.MAW3D_EVENT,
     description: event.description || undefined,
     location: event.location || undefined,
-    isAllDay: !event.event_time
+    isAllDay: true // Maw3d events are all day events
   }));
 
   entries.push(...maw3dEntries);
