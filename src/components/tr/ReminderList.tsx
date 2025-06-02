@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Calendar, Clock, Edit, Trash2, Sleep } from 'lucide-react';
+import { MoreVertical, Calendar, Clock, Edit, Trash2, Pause } from 'lucide-react';
 import { format, isPast, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -12,10 +12,18 @@ import { ReminderForm } from './ReminderForm';
 import { toast } from 'sonner';
 
 interface ReminderListProps {
+  reminders?: TRReminder[];
+  onReminderEdit?: (reminder: TRReminder) => void;
+  onRemindersChanged?: () => void;
   onReminderUpdate?: () => void;
 }
 
-export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) => {
+export const ReminderList: React.FC<ReminderListProps> = ({ 
+  reminders: propReminders, 
+  onReminderEdit, 
+  onRemindersChanged, 
+  onReminderUpdate 
+}) => {
   const { language } = useTheme();
   const [reminders, setReminders] = useState<TRReminder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +31,19 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   useEffect(() => {
-    loadReminders();
-  }, []);
+    if (propReminders) {
+      // Filter out snoozed reminders if using prop reminders
+      const now = new Date();
+      const activeReminders = propReminders.filter(reminder => {
+        if (!reminder.snoozed_until) return true;
+        return parseISO(reminder.snoozed_until) <= now;
+      });
+      setReminders(activeReminders);
+      setLoading(false);
+    } else {
+      loadReminders();
+    }
+  }, [propReminders]);
 
   const loadReminders = async () => {
     try {
@@ -48,15 +67,23 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
   };
 
   const handleEditReminder = (reminder: TRReminder) => {
-    setEditingReminder(reminder);
-    setIsFormOpen(true);
+    if (onReminderEdit) {
+      onReminderEdit(reminder);
+    } else {
+      setEditingReminder(reminder);
+      setIsFormOpen(true);
+    }
   };
 
   const handleSnoozeReminder = async (reminder: TRReminder) => {
     try {
       await TRService.snoozeReminder(reminder.id);
       toast.success('Reminder snoozed for 1 day');
-      loadReminders();
+      if (onRemindersChanged) {
+        onRemindersChanged();
+      } else {
+        loadReminders();
+      }
       onReminderUpdate?.();
     } catch (error) {
       console.error('Error snoozing reminder:', error);
@@ -69,7 +96,11 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
       try {
         await TRService.deleteReminder(reminder.id);
         toast.success(t('reminderDeleted', language));
-        loadReminders();
+        if (onRemindersChanged) {
+          onRemindersChanged();
+        } else {
+          loadReminders();
+        }
         onReminderUpdate?.();
       } catch (error) {
         console.error('Error deleting reminder:', error);
@@ -84,7 +115,11 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
   };
 
   const handleReminderSaved = () => {
-    loadReminders();
+    if (onRemindersChanged) {
+      onRemindersChanged();
+    } else {
+      loadReminders();
+    }
     onReminderUpdate?.();
   };
 
@@ -154,7 +189,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
                       {t('edit', language)}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleSnoozeReminder(reminder)}>
-                      <Sleep className="h-4 w-4 mr-2" />
+                      <Pause className="h-4 w-4 mr-2" />
                       Snooze
                     </DropdownMenuItem>
                     <DropdownMenuItem 
@@ -172,12 +207,14 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
         ))}
       </div>
 
-      <ReminderForm
-        isOpen={isFormOpen}
-        onClose={handleFormClose}
-        reminder={editingReminder}
-        onReminderSaved={handleReminderSaved}
-      />
+      {!onReminderEdit && (
+        <ReminderForm
+          isOpen={isFormOpen}
+          onClose={handleFormClose}
+          reminder={editingReminder}
+          onReminderSaved={handleReminderSaved}
+        />
+      )}
     </>
   );
 };
