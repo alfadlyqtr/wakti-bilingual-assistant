@@ -6,10 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Share2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -35,6 +34,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [taskType, setTaskType] = useState<'one-time' | 'repeated'>('one-time');
   const [shareTask, setShareTask] = useState(false);
+  const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Reset form when dialog opens/closes or task changes
@@ -48,6 +48,10 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setPriority(task.priority);
         setTaskType(task.task_type);
         setShareTask(task.is_shared || false);
+        // Load subtasks for existing task
+        if (task.id) {
+          loadSubtasks(task.id);
+        }
       } else {
         // Reset form for new task
         setTitle('');
@@ -57,9 +61,19 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setPriority('normal');
         setTaskType('one-time');
         setShareTask(false);
+        setSubtasks([]);
       }
     }
   }, [isOpen, task]);
+
+  const loadSubtasks = async (taskId: string) => {
+    try {
+      const data = await TRService.getSubtasks(taskId);
+      setSubtasks(data);
+    } catch (error) {
+      console.error('Error loading subtasks:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +95,22 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         await TRService.updateTask(task.id, taskData);
         showSuccess(t('taskUpdated', language));
       } else {
-        await TRService.createTask(taskData);
+        // Create task first
+        const newTask = await TRService.createTask(taskData);
+        
+        // Then create subtasks if any
+        if (subtasks.length > 0) {
+          for (let i = 0; i < subtasks.length; i++) {
+            const subtask = subtasks[i];
+            await TRService.createSubtask({
+              task_id: newTask.id,
+              title: subtask.title,
+              completed: subtask.completed,
+              order_index: i
+            });
+          }
+        }
+        
         showSuccess(t('taskCreated', language));
       }
 
@@ -93,6 +122,29 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubtaskAdd = (title: string) => {
+    const newSubtask: TRSubtask = {
+      id: `temp-${Date.now()}`,
+      task_id: '',
+      title,
+      completed: false,
+      order_index: subtasks.length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    setSubtasks([...subtasks, newSubtask]);
+  };
+
+  const handleSubtaskUpdate = (id: string, updates: Partial<TRSubtask>) => {
+    setSubtasks(subtasks.map(st => 
+      st.id === id ? { ...st, ...updates } : st
+    ));
+  };
+
+  const handleSubtaskDelete = (id: string) => {
+    setSubtasks(subtasks.filter(st => st.id !== id));
   };
 
   return (
@@ -165,63 +217,97 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             </div>
           </div>
 
-          {/* Priority */}
-          <div className="space-y-2">
-            <Label>{t('priority', language)}</Label>
-            <Select value={priority} onValueChange={(value: 'normal' | 'high' | 'urgent') => setPriority(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">{t('normal', language)}</SelectItem>
-                <SelectItem value="high">{t('high', language)}</SelectItem>
-                <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Task Type */}
-          <div className="space-y-2">
-            <Label>{t('taskType', language)}</Label>
-            <Select value={taskType} onValueChange={(value: 'one-time' | 'repeated') => setTaskType(value)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
-                <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Share Task */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="share">{t('shareTask', language)}</Label>
-            <Switch
-              id="share"
-              checked={shareTask}
-              onCheckedChange={setShareTask}
-            />
-          </div>
-
-          {/* Subtasks Section - Only show for existing tasks */}
-          {task && (
+          {/* Priority and Task Type on same line */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>{t('subtasks', language)}</Label>
-              <SubtaskManager
-                taskId={task.id}
-              />
+              <Label>{t('priority', language)}</Label>
+              <Select value={priority} onValueChange={(value: 'normal' | 'high' | 'urgent') => setPriority(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">{t('normal', language)}</SelectItem>
+                  <SelectItem value="high">{t('high', language)}</SelectItem>
+                  <SelectItem value="urgent">{t('urgent', language)}</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          )}
+
+            <div className="space-y-2">
+              <Label>{t('taskType', language)}</Label>
+              <Select value={taskType} onValueChange={(value: 'one-time' | 'repeated') => setTaskType(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="one-time">{t('oneTime', language)}</SelectItem>
+                  <SelectItem value="repeated">{t('repeated', language)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Subtasks Section - Show for both new and existing tasks */}
+          <div className="space-y-2">
+            <Label>{t('subtasks', language)}</Label>
+            {task ? (
+              <SubtaskManager taskId={task.id} />
+            ) : (
+              <div className="space-y-2">
+                {subtasks.map((subtask) => (
+                  <div key={subtask.id} className="flex items-center gap-2 p-2 bg-secondary/20 rounded-md">
+                    <span className="flex-1 text-sm">{subtask.title}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleSubtaskDelete(subtask.id)}
+                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder={t('enterSubtaskTitle', language)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const input = e.target as HTMLInputElement;
+                        if (input.value.trim()) {
+                          handleSubtaskAdd(input.value.trim());
+                          input.value = '';
+                        }
+                      }
+                    }}
+                    className="flex-1"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Form Actions */}
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              {t('cancel', language)}
+          <div className="flex justify-between items-center pt-4">
+            <Button
+              type="button"
+              variant={shareTask ? "default" : "outline"}
+              onClick={() => setShareTask(!shareTask)}
+              className="flex items-center gap-2"
+            >
+              <Share2 className="h-4 w-4" />
+              {shareTask ? t('shared', language) : t('shareTask', language)}
             </Button>
-            <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
-              {loading ? t('loading', language) : t('save', language)}
-            </Button>
+            
+            <div className="flex space-x-2">
+              <Button type="button" variant="outline" onClick={onClose}>
+                {t('cancel', language)}
+              </Button>
+              <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
+                {loading ? t('loading', language) : task ? t('save', language) : t('create', language)}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
