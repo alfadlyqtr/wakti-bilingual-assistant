@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -8,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Share2 } from 'lucide-react';
+import { CalendarIcon, Share2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -36,6 +35,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [shareTask, setShareTask] = useState(false);
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(false);
+  const [subtaskInput, setSubtaskInput] = useState('');
 
   // Reset form when dialog opens/closes or task changes
   useEffect(() => {
@@ -62,6 +62,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setTaskType('one-time');
         setShareTask(false);
         setSubtasks([]);
+        setSubtaskInput('');
       }
     }
   }, [isOpen, task]);
@@ -145,6 +146,20 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
   const handleSubtaskDelete = (id: string) => {
     setSubtasks(subtasks.filter(st => st.id !== id));
+  };
+
+  const handleAddSubtaskFromInput = () => {
+    if (subtaskInput.trim()) {
+      handleSubtaskAdd(subtaskInput.trim());
+      setSubtaskInput('');
+    }
+  };
+
+  const handleSubtaskInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddSubtaskFromInput();
+    }
   };
 
   return (
@@ -268,21 +283,23 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                     </Button>
                   </div>
                 ))}
-                <div className="flex items-center gap-2">
+                <div className="relative">
                   <Input
-                    placeholder={t('enterSubtaskTitle', language)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const input = e.target as HTMLInputElement;
-                        if (input.value.trim()) {
-                          handleSubtaskAdd(input.value.trim());
-                          input.value = '';
-                        }
-                      }
-                    }}
-                    className="flex-1"
+                    value={subtaskInput}
+                    onChange={(e) => setSubtaskInput(e.target.value)}
+                    onKeyDown={handleSubtaskInputKeyDown}
+                    placeholder="Enter subtask"
+                    className="pr-10"
                   />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleAddSubtaskFromInput}
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             )}
