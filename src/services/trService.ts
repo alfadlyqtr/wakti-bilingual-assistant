@@ -49,6 +49,22 @@ export interface TRSharedAccess {
 }
 
 export class TRService {
+  // Helper method to sanitize task data before database operations
+  private static sanitizeTaskData(taskData: any) {
+    const sanitized = { ...taskData };
+    
+    // Convert empty strings to null for optional fields
+    if (sanitized.due_time === '') {
+      sanitized.due_time = null;
+    }
+    if (sanitized.description === '') {
+      sanitized.description = null;
+    }
+    
+    console.log('Sanitized task data:', sanitized);
+    return sanitized;
+  }
+
   // Task operations
   static async getTasks(): Promise<TRTask[]> {
     const { data, error } = await supabase
@@ -62,6 +78,7 @@ export class TRService {
 
   static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>): Promise<TRTask> {
     console.log('TRService.createTask: Starting task creation');
+    console.log('TRService.createTask: Raw input data:', task);
     
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
@@ -76,7 +93,6 @@ export class TRService {
     }
 
     console.log('TRService.createTask: User authenticated:', user.id);
-    console.log('TRService.createTask: Task data:', task);
 
     const taskData = { 
       ...task, 
@@ -84,16 +100,25 @@ export class TRService {
       completed: false 
     };
 
-    console.log('TRService.createTask: Inserting task data:', taskData);
+    // Sanitize the data before sending to database
+    const sanitizedData = this.sanitizeTaskData(taskData);
+
+    console.log('TRService.createTask: Final sanitized data being inserted:', sanitizedData);
 
     const { data, error } = await supabase
       .from('tr_tasks')
-      .insert([taskData])
+      .insert([sanitizedData])
       .select()
       .single();
     
     if (error) {
       console.error('TRService.createTask: Database error:', error);
+      console.error('TRService.createTask: Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       throw new Error(`Failed to create task: ${error.message}`);
     }
 
@@ -102,9 +127,12 @@ export class TRService {
   }
 
   static async updateTask(id: string, updates: Partial<TRTask>): Promise<TRTask> {
+    // Sanitize update data as well
+    const sanitizedUpdates = this.sanitizeTaskData(updates);
+    
     const { data, error } = await supabase
       .from('tr_tasks')
-      .update(updates)
+      .update(sanitizedUpdates)
       .eq('id', id)
       .select()
       .single();
@@ -193,9 +221,12 @@ export class TRService {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
+    // Sanitize reminder data too
+    const sanitizedReminder = this.sanitizeTaskData(reminder);
+
     const { data, error } = await supabase
       .from('tr_reminders')
-      .insert([{ ...reminder, user_id: user.id }])
+      .insert([{ ...sanitizedReminder, user_id: user.id }])
       .select()
       .single();
     
@@ -204,9 +235,11 @@ export class TRService {
   }
 
   static async updateReminder(id: string, updates: Partial<TRReminder>): Promise<TRReminder> {
+    const sanitizedUpdates = this.sanitizeTaskData(updates);
+    
     const { data, error } = await supabase
       .from('tr_reminders')
-      .update(updates)
+      .update(sanitizedUpdates)
       .eq('id', id)
       .select()
       .single();
