@@ -21,32 +21,20 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
     const widgetVisibility = getUserPreferences();
     
     // Import components dynamically to avoid circular dependencies
-    import("@/components/dashboard/widgets").then(({ TasksWidget, RemindersWidget, CalendarWidget, EventsWidget }) => {
+    import("@/components/dashboard/widgets").then(({ CalendarWidget, EventsWidget }) => {
       import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
         const defaultWidgets = {
-          tasks: {
-            id: "tasks",
-            title: "tasks" as TranslationKey,
-            visible: widgetVisibility.tasks,
-            component: React.createElement(TasksWidget, { isLoading, tasks, language }),
-          },
           calendar: {
             id: "calendar",
             title: "calendar" as TranslationKey,
             visible: widgetVisibility.calendar !== false, // Default to true if not set
-            component: React.createElement(CalendarWidget, { isLoading, events: legacyEvents, tasks, language }),
+            component: React.createElement(CalendarWidget, { isLoading, events: legacyEvents, language }),
           },
           events: {
             id: "events",
             title: "events" as TranslationKey,
             visible: widgetVisibility.events !== false, // Default to true if not set
             component: React.createElement(EventsWidget, { isLoading, events: legacyEvents, language }),
-          },
-          reminders: {
-            id: "reminders",
-            title: "reminders" as TranslationKey,
-            visible: widgetVisibility.reminders,
-            component: React.createElement(RemindersWidget, { isLoading, reminders, language }),
           },
           quote: {
             id: "quote",
@@ -64,7 +52,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
         setWidgets(orderedWidgets);
       });
     });
-  }, [language, navigate, isLoading, tasks, legacyEvents, reminders]);
+  }, [language, navigate, isLoading, legacyEvents]);
   
   const handleDragEnd = (result: any) => {
     if (!result.destination) return;
