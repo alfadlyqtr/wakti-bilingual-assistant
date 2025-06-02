@@ -70,11 +70,11 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
   
   const [knowledge, setKnowledge] = useState<UserKnowledge>({
     personal_note: '',
-    role: undefined,
-    main_use: undefined,
+    role: '',
+    main_use: '',
     interests: [],
-    communication_style: undefined,
-    response_length: undefined
+    communication_style: '',
+    response_length: ''
   });
 
   // Professional roles with icons
@@ -139,15 +139,19 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
   }, [open, user]);
 
   const loadExistingKnowledge = async () => {
+    if (!user) return;
+    
     try {
       setIsLoading(true);
+      console.log('Loading knowledge for user:', user.id);
+      
       const { data, error } = await supabase
         .from('ai_user_knowledge')
         .select('*')
-        .eq('user_id', user?.id)
-        .single();
+        .eq('user_id', user.id)
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error loading knowledge:', error);
         return;
       }
@@ -155,17 +159,34 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
       if (data) {
         console.log('Loaded existing knowledge:', data);
         setHasExistingData(true);
+        
+        // Properly map database values to form state
         setKnowledge({
           personal_note: data.personal_note || '',
-          role: data.role || undefined,
-          main_use: data.main_use || undefined,
-          interests: data.interests || [],
-          communication_style: data.communication_style || undefined,
-          response_length: data.response_length || undefined
+          role: data.role || '',
+          main_use: data.main_use || '',
+          interests: Array.isArray(data.interests) ? data.interests : [],
+          communication_style: data.communication_style || '',
+          response_length: data.response_length || ''
+        });
+      } else {
+        console.log('No existing knowledge found, using defaults');
+        setHasExistingData(false);
+        // Reset to defaults when no data exists
+        setKnowledge({
+          personal_note: '',
+          role: '',
+          main_use: '',
+          interests: [],
+          communication_style: '',
+          response_length: ''
         });
       }
     } catch (error) {
       console.error('Error loading knowledge:', error);
+      toast.error(
+        language === 'ar' ? 'فشل في تحميل البيانات' : 'Failed to load data'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -177,13 +198,13 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
     try {
       setSaving(true);
       
-      // Convert empty strings to null and prepare data for save
+      // Convert empty strings to null for database storage
       const dataToSave = {
         user_id: user.id,
         personal_note: knowledge.personal_note || null,
         role: knowledge.role || null,
         main_use: knowledge.main_use || null,
-        interests: knowledge.interests || [],
+        interests: knowledge.interests && knowledge.interests.length > 0 ? knowledge.interests : [],
         communication_style: knowledge.communication_style || null,
         response_length: knowledge.response_length || null
       };
@@ -197,6 +218,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
       if (error) throw error;
 
       console.log('Knowledge saved successfully');
+      setHasExistingData(true);
 
       // Show success confirmation
       setSavedConfirmation(true);
@@ -234,6 +256,17 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
   };
 
   const MainContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-muted-foreground">
+            {language === 'ar' ? 'جاري التحميل...' : 'Loading...'}
+          </p>
+        </div>
+      );
+    }
+
     if (savedConfirmation) {
       return (
         <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
@@ -280,7 +313,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </label>
             </div>
             <Textarea
-              value={knowledge.personal_note}
+              value={knowledge.personal_note || ''}
               onChange={(e) => setKnowledge({ ...knowledge, personal_note: e.target.value })}
               placeholder={language === 'ar' 
                 ? 'مثال: اسمي أحمد، أعمل كمطور برمجيات، أحب التقنية والرياضة...'
@@ -302,7 +335,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.role || undefined}
+                value={knowledge.role || ''}
                 onValueChange={(value) => setKnowledge({ ...knowledge, role: value })}
               >
                 <SelectTrigger>
@@ -330,7 +363,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.main_use || undefined}
+                value={knowledge.main_use || ''}
                 onValueChange={(value) => setKnowledge({ ...knowledge, main_use: value })}
               >
                 <SelectTrigger>
@@ -358,7 +391,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.communication_style || undefined}
+                value={knowledge.communication_style || ''}
                 onValueChange={(value) => setKnowledge({ ...knowledge, communication_style: value })}
               >
                 <SelectTrigger>
@@ -383,7 +416,7 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
                 </label>
               </div>
               <Select
-                value={knowledge.response_length || undefined}
+                value={knowledge.response_length || ''}
                 onValueChange={(value) => setKnowledge({ ...knowledge, response_length: value })}
               >
                 <SelectTrigger>
@@ -409,8 +442,8 @@ export function KnowledgeModal({ open, onOpenChange }: KnowledgeModalProps) {
               </label>
             </div>
             <Select
-              value={knowledge.interests?.[0] || undefined}
-              onValueChange={(value) => setKnowledge({ ...knowledge, interests: [value] })}
+              value={knowledge.interests?.[0] || ''}
+              onValueChange={(value) => setKnowledge({ ...knowledge, interests: value ? [value] : [] })}
             >
               <SelectTrigger>
                 <SelectValue placeholder={language === 'ar' ? 'اختر اهتماماتك' : 'Select your interests'} />
