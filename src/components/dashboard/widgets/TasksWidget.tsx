@@ -5,6 +5,7 @@ import { CheckCircle, Hand } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
+import { useDashboardData } from "@/hooks/useDashboardData";
 
 interface TasksWidgetProps {
   isLoading: boolean;
@@ -37,14 +38,14 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
             {tasks.map((task: any) => (
               <div key={task.id} className="flex items-center">
                 <div className={`h-2 w-2 rounded-full mr-2 ${
-                  task.priority === 'urgent' ? 'bg-red-500' : 
-                  task.priority === 'high' ? 'bg-orange-400' : 
-                  task.priority === 'low' ? 'bg-blue-400' : 'bg-yellow-400'
+                  task.priority === 'high' ? 'bg-red-500' : 
+                  task.priority === 'urgent' ? 'bg-orange-400' : 
+                  task.priority === 'normal' ? 'bg-blue-400' : 'bg-blue-400'
                 }`}></div>
                 <span className="text-sm">{task.title}</span>
               </div>
             ))}
-            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/tasks-reminders')}>
+            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => navigate('/my-tasks')}>
               {t("tasks_view_all", language)}
             </Button>
           </div>
@@ -52,7 +53,7 @@ export const TasksWidget: React.FC<TasksWidgetProps> = ({ isLoading, tasks, lang
           <div className="text-center py-1">
             <CheckCircle className="mx-auto h-4 w-4 text-muted-foreground opacity-50 mb-1" />
             <p className="text-xs text-muted-foreground mb-1">{t("noTasksYet", language)}</p>
-            <Button variant="outline" size="sm" className="text-xs px-2 py-1 h-auto" onClick={() => navigate('/tasks-reminders')}>
+            <Button variant="outline" size="sm" className="text-xs px-2 py-1 h-auto" onClick={() => navigate('/my-tasks')}>
               {t("createTask", language)}
             </Button>
           </div>

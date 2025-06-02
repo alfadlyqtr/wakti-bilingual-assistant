@@ -1,75 +1,61 @@
+import React from 'react';
+import { Home, Calendar, Bot, PartyPopper, ListTodo } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { useTheme } from '@/providers/ThemeProvider';
+import { cn } from '@/lib/utils';
+import { t } from '@/utils/translations';
 
-import React from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "@/providers/ThemeProvider";
-import { cn } from "@/lib/utils";
-import { Calendar, CheckSquare, CalendarClock, Mic, Sparkles } from "lucide-react";
-
-export function MobileNav() {
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
+export default function MobileNav() {
+  const location = useLocation();
   const { language } = useTheme();
-  
-  // Navigation items - updated to include WAKTI AI
+
   const navItems = [
-    {
-      name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      path: '/tasks-reminders',
-      icon: 'check-square',
+    { 
+      path: '/dashboard', 
+      icon: Home, 
+      label: t('dashboard', language)
     },
-    {
-      name: language === 'ar' ? 'التقويم' : 'Calendar',
-      path: '/calendar',
-      icon: 'calendar',
+    { 
+      path: '/my-tasks', 
+      icon: ListTodo, 
+      label: t('myTasks', language)
     },
-    {
-      name: language === 'ar' ? 'مواعيد' : 'Maw3d',
-      path: '/maw3d',
-      icon: 'calendar-clock',
+    { 
+      path: '/calendar', 
+      icon: Calendar, 
+      label: t('calendar', language)
     },
-    {
-      name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
-      path: '/wakti-ai',
-      icon: 'sparkles',
+    { 
+      path: '/assistant', 
+      icon: Bot, 
+      label: t('assistant', language)
     },
-    {
-      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tasjeel',
-      icon: 'mic',
+    { 
+      path: '/maw3d', 
+      icon: PartyPopper, 
+      label: t('maw3d', language)
     }
   ];
-  
-  const iconMap: { [key: string]: React.ComponentType<any> } = {
-    calendar: Calendar,
-    'check-square': CheckSquare,
-    'calendar-clock': CalendarClock,
-    sparkles: Sparkles,
-    mic: Mic,
-  };
-  
+
   return (
-    <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
-      <ul className="flex justify-around items-center h-16">
-        {navItems.map((item) => {
-          const IconComponent = iconMap[item.icon] || CheckSquare;
-          const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d'));
-          
-          return (
-            <li key={item.path} className="flex-1 flex justify-center">
-              <button
-                onClick={() => navigate(item.path)}
-                className={cn(
-                  "flex flex-col items-center justify-center gap-1 p-2 rounded-md w-full",
-                  isActive ? "text-primary" : "text-muted-foreground hover:text-primary"
-                )}
-              >
-                <IconComponent className="h-5 w-5" />
-                <span className="text-xs">{item.name}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+    <nav className="fixed inset-x-0 bottom-0 border-t z-50 bg-card">
+      <div className="flex items-center justify-around w-full py-2">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            className={({ isActive }) =>
+              cn(
+                "flex flex-col items-center text-sm gap-1.5 opacity-60 hover:opacity-100 transition-opacity",
+                isActive && "opacity-100"
+              )
+            }
+          >
+            <item.icon className="h-5 w-5" />
+            {item.label}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   );
 }
