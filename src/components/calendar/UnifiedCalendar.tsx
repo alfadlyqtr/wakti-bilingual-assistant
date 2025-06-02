@@ -1,9 +1,10 @@
+
 import React, { useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import CalendarGrid from './CalendarGrid';
-import CalendarControls from './CalendarControls';
-import CalendarViewSwitcher from './CalendarViewSwitcher';
-import CalendarAgenda from './CalendarAgenda';
+import { CalendarGrid } from './CalendarGrid';
+import { CalendarControls } from './CalendarControls';
+import { CalendarViewSwitcher } from './CalendarViewSwitcher';
+import { CalendarAgenda } from './CalendarAgenda';
 import { useDashboardData } from '@/hooks/useDashboardData';
 
 interface UnifiedCalendarProps {

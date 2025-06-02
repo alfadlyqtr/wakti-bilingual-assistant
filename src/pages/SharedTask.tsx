@@ -71,7 +71,7 @@ const SharedTask: React.FC = () => {
 
   const getCompletorName = () => {
     if (user) {
-      return user.user_metadata?.display_name || user.email || t('waktiUser', language);
+      return user.user_metadata?.display_name || user.email || t('user', language);
     }
     return guestName.trim() || t('guest', language);
   };
@@ -111,7 +111,7 @@ const SharedTask: React.FC = () => {
       }
 
       setTask({ ...task, status: newStatus });
-      toast.success(t(newStatus === 'completed' ? 'taskCompleted' : 'taskUncompleted', language));
+      toast.success(t(newStatus === 'completed' ? 'completed' : 'pending', language));
     } catch (err: any) {
       console.error('Error updating task:', err);
       toast.error(t('errorUpdatingTask', language));
@@ -161,10 +161,10 @@ const SharedTask: React.FC = () => {
       }
 
       setTask({ ...task, subtasks: updatedSubtasks });
-      toast.success(t('subtaskUpdated', language));
+      toast.success(t('taskUpdatedSuccessfully', language));
     } catch (err: any) {
       console.error('Error updating subtask:', err);
-      toast.error(t('errorUpdatingSubtask', language));
+      toast.error(t('errorUpdatingTask', language));
     } finally {
       setSubmitting(false);
     }
@@ -212,7 +212,7 @@ const SharedTask: React.FC = () => {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive" />
-            <h1 className="text-xl font-semibold mb-2">{t('oops', language)}</h1>
+            <h1 className="text-xl font-semibold mb-2">{t('error', language)}</h1>
             <p className="text-muted-foreground">{error}</p>
           </CardContent>
         </Card>
@@ -235,7 +235,7 @@ const SharedTask: React.FC = () => {
               <Share2 className="h-5 w-5 text-primary" />
               <span className="text-sm text-muted-foreground">{t('sharedTask', language)}</span>
             </div>
-            <CardTitle>{t('wakti', language)}</CardTitle>
+            <CardTitle>{t('dashboard', language)}</CardTitle>
           </CardHeader>
         </Card>
 
@@ -362,7 +362,7 @@ const SharedTask: React.FC = () => {
 
         {/* Footer */}
         <div className="text-center text-xs text-muted-foreground">
-          {t('poweredBy', language)} {t('wakti', language)}
+          {t('poweredBy', language)} {t('dashboard', language)}
         </div>
       </div>
     </div>

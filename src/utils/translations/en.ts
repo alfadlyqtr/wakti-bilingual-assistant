@@ -1,4 +1,6 @@
-export const en = {
+import { Translation } from "./translationTypes";
+
+const en: Translation = {
   "dashboard": "Dashboard",
   "tasks": "Tasks",
   "reminders": "Reminders",
@@ -459,5 +461,22 @@ export const en = {
   "allItems": "All Items",
   "reminder": "Reminder",
   "overdue": "Overdue",
-  "pending": "Pending"
+  "pending": "Pending",
+  "taskNotFound": "Task not found",
+  "errorLoadingTask": "Error loading task",
+  "waktiUser": "Wakti User",
+  "guest": "Guest",
+  "enterNameToComplete": "Please enter your name to complete tasks",
+  "taskCompleted": "Task completed",
+  "taskUncompleted": "Task marked as incomplete",
+  "subtaskUpdated": "Subtask updated",
+  "errorUpdatingSubtask": "Error updating subtask",
+  "oops": "Oops!",
+  "wakti": "WAKTI",
+  "nameRequiredToComplete": "Your name is required to complete tasks",
+  "markIncomplete": "Mark as Incomplete",
+  "markComplete": "Mark as Complete",
+  "poweredBy": "Powered by"
 };
+
+export { en };

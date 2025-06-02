@@ -35,9 +35,11 @@ export const useDashboardData = () => {
       console.log('Fetching dashboard data (new my_tasks system)');
       
       // Update overdue tasks first
-      await supabase.rpc('update_overdue_tasks').catch(err => 
-        console.warn('Could not update overdue tasks:', err)
-      );
+      try {
+        await supabase.rpc('update_overdue_tasks');
+      } catch (err) {
+        console.warn('Could not update overdue tasks:', err);
+      }
 
       // Fetch tasks and reminders from new my_tasks table
       const { data: myTasksData, error: myTasksError } = await supabase

@@ -214,5 +214,22 @@ const ar: Translation = {
   "allItems": "كل العناصر",
   "reminder": "تذكير",
   "overdue": "متأخر",
-  "pending": "قيد الانتظار"
+  "pending": "قيد الانتظار",
+  "taskNotFound": "المهمة غير موجودة",
+  "errorLoadingTask": "خطأ في تحميل المهمة",
+  "waktiUser": "مستخدم وقتي",
+  "guest": "ضيف",
+  "enterNameToComplete": "يرجى إدخال اسمك لإكمال المهام",
+  "taskCompleted": "تم إكمال المهمة",
+  "taskUncompleted": "تم وضع علامة على المهمة كغير مكتملة",
+  "subtaskUpdated": "تم تحديث المهمة الفرعية",
+  "errorUpdatingSubtask": "خطأ في تحديث المهمة الفرعية",
+  "oops": "عذراً!",
+  "wakti": "وقتي",
+  "nameRequiredToComplete": "اسمك مطلوب لإكمال المهام",
+  "markIncomplete": "وضع علامة كغير مكتمل",
+  "markComplete": "وضع علامة كمكتمل",
+  "poweredBy": "مدعوم من"
 };
+
+export { ar };

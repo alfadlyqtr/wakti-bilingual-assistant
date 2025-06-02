@@ -82,7 +82,7 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const { data, error: fetchError } = await supabase
         .from('my_tasks')
         .select('*')
-        .order('due_date', { ascending: true, nullsLast: true });
+        .order('due_date', { ascending: true, nullsFirst: false });
 
       if (fetchError) throw fetchError;
 
@@ -94,7 +94,7 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setTasks(formattedTasks);
     } catch (err: any) {
       console.error('Error fetching tasks:', err);
-      setError(err.message || t('errorFetchingTasks', language));
+      setError(err.message || t('errorLoadingTasks', language));
     } finally {
       setLoading(false);
     }
@@ -116,7 +116,7 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (createError) throw createError;
 
-      toast.success(t(taskData.task_type === 'task' ? 'taskCreated' : 'reminderCreated', language));
+      toast.success(t(taskData.task_type === 'task' ? 'taskCreatedSuccessfully' : 'reminderCreatedSuccessfully', language));
       await fetchTasks();
     } catch (err: any) {
       console.error('Error creating task:', err);
@@ -153,7 +153,7 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       if (deleteError) throw deleteError;
 
-      toast.success(t('taskDeleted', language));
+      toast.success(t('taskDeletedSuccessfully', language));
       await fetchTasks();
     } catch (err: any) {
       console.error('Error deleting task:', err);
@@ -196,12 +196,12 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (updateError) throw updateError;
 
       await fetchTasks();
-      toast.success(t('taskSharingEnabled', language));
+      toast.success(t('shareLinkCopied', language));
       return data.short_id;
     } catch (err: any) {
       console.error('Error enabling sharing:', err);
-      setError(err.message || t('errorEnablingSharing', language));
-      toast.error(t('errorEnablingSharing', language));
+      setError(err.message || t('errorSendingMessage', language));
+      toast.error(t('errorSendingMessage', language));
       throw err;
     }
   };
@@ -217,11 +217,11 @@ export const MyTasksProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (updateError) throw updateError;
 
       await fetchTasks();
-      toast.success(t('taskSharingDisabled', language));
+      toast.success(t('success', language));
     } catch (err: any) {
       console.error('Error disabling sharing:', err);
-      setError(err.message || t('errorDisablingSharing', language));
-      toast.error(t('errorDisablingSharing', language));
+      setError(err.message || t('error', language));
+      toast.error(t('error', language));
     }
   };
 
