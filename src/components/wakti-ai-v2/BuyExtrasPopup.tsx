@@ -2,12 +2,13 @@
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/hooks/use-toast';
-import { ShoppingCart, Languages, Search, Mic, Loader2, CheckCircle } from 'lucide-react';
+import { ShoppingCart, Languages, Search, Mic, Loader2, CheckCircle, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface BuyExtrasPopupProps {
@@ -17,7 +18,13 @@ interface BuyExtrasPopupProps {
 
 export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
   const { language } = useTheme();
-  const { userQuota, isLoadingQuota, purchaseExtraTranslations } = useQuotaManagement(language);
+  const { userQuota, purchaseExtraTranslations } = useQuotaManagement(language);
+  const { 
+    userSearchQuota, 
+    userVoiceQuota, 
+    purchaseExtraSearches, 
+    purchaseExtraVoiceCredits 
+  } = useExtendedQuotaManagement(language);
   const [isPurchasing, setIsPurchasing] = useState<string | null>(null);
 
   const handleTranslatorPurchase = async () => {
@@ -25,12 +32,6 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
     try {
       const success = await purchaseExtraTranslations(100);
       if (success) {
-        toast({
-          title: language === 'ar' ? '✅ تم الشراء بنجاح' : '✅ Purchase Successful',
-          description: language === 'ar' 
-            ? 'تم إضافة 100 ترجمة إضافية لحسابك' 
-            : 'Added 100 extra translations to your account',
-        });
         onOpenChange(false);
       }
     } finally {
@@ -38,13 +39,28 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
     }
   };
 
-  const handleComingSoonPurchase = (type: string) => {
-    toast({
-      title: language === 'ar' ? 'قريباً' : 'Coming Soon',
-      description: language === 'ar' 
-        ? 'هذه الميزة ستكون متاحة قريباً' 
-        : 'This feature will be available soon',
-    });
+  const handleSearchPurchase = async () => {
+    setIsPurchasing('search');
+    try {
+      const success = await purchaseExtraSearches(50);
+      if (success) {
+        onOpenChange(false);
+      }
+    } finally {
+      setIsPurchasing(null);
+    }
+  };
+
+  const handleVoicePurchase = async () => {
+    setIsPurchasing('voice');
+    try {
+      const success = await purchaseExtraVoiceCredits(10000);
+      if (success) {
+        onOpenChange(false);
+      }
+    } finally {
+      setIsPurchasing(null);
+    }
   };
 
   const purchaseOptions = [
@@ -62,26 +78,26 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
     },
     {
       id: 'search',
-      icon: Search,
+      icon: Zap,
       title: language === 'ar' ? 'بحث متقدم' : 'Advanced Search Boost',
       quota: language === 'ar' ? '50 بحث متقدم' : '50 advanced searches',
       price: '10 QAR',
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
-      available: false,
-      current: 0,
-      onPurchase: () => handleComingSoonPurchase('search'),
+      available: true,
+      current: userSearchQuota.extra_searches,
+      onPurchase: handleSearchPurchase,
       color: 'from-green-500 to-emerald-500'
     },
     {
       id: 'voice',
       icon: Mic,
-      title: language === 'ar' ? 'أصوات إضافية' : 'Extra Voice Clone Credits',
-      quota: language === 'ar' ? 'قريباً' : 'Coming soon',
-      price: language === 'ar' ? 'قريباً' : 'TBA',
-      validity: language === 'ar' ? 'قريباً' : 'Coming soon',
-      available: false,
-      current: 0,
-      onPurchase: () => handleComingSoonPurchase('voice'),
+      title: language === 'ar' ? 'أصوات إضافية' : 'Extra Voice Credits',
+      quota: language === 'ar' ? '10,000 حرف' : '10,000 characters',
+      price: '10 QAR',
+      validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
+      available: true,
+      current: userVoiceQuota.extra_characters,
+      onPurchase: handleVoicePurchase,
       color: 'from-purple-500 to-violet-500'
     }
   ];
@@ -99,8 +115,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
         <div className="grid gap-4 mt-4">
           {purchaseOptions.map((option) => (
             <Card key={option.id} className={cn(
-              "transition-all duration-200",
-              option.available ? "hover:shadow-md border-border" : "opacity-75 border-dashed"
+              "transition-all duration-200 hover:shadow-md border-border"
             )}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -113,7 +128,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
                     </div>
                     <div>
                       <CardTitle className="text-lg">{option.title}</CardTitle>
-                      {option.available && option.current > 0 && (
+                      {option.current > 0 && (
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <CheckCircle className="h-3 w-3 text-green-500" />
                           {language === 'ar' ? `لديك ${option.current} متبقي` : `${option.current} remaining`}
@@ -121,11 +136,6 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
                       )}
                     </div>
                   </div>
-                  {!option.available && (
-                    <Badge variant="secondary" className="text-xs">
-                      {language === 'ar' ? 'قريباً' : 'Coming Soon'}
-                    </Badge>
-                  )}
                 </div>
               </CardHeader>
               
@@ -146,16 +156,14 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
                     
                     <Button
                       onClick={option.onPurchase}
-                      disabled={!option.available || isPurchasing === option.id || isLoadingQuota}
+                      disabled={isPurchasing === option.id}
                       size="sm"
                       className="min-w-[80px]"
                     >
                       {isPurchasing === option.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : option.available ? (
-                        language === 'ar' ? 'شراء' : 'Buy'
                       ) : (
-                        language === 'ar' ? 'قريباً' : 'Soon'
+                        language === 'ar' ? 'شراء' : 'Buy'
                       )}
                     </Button>
                   </div>

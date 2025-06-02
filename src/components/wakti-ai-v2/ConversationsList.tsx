@@ -60,7 +60,7 @@ export function ConversationsList({
             onClick={toggleLanguage}
             className="h-9 px-3 rounded-full text-sm"
           >
-            {language === "en" ? (language === 'ar' ? 'عربي' : 'العربية') : (language === 'ar' ? 'English' : 'إنجليزي')}
+            {language === 'ar' ? 'English' : 'العربية'}
           </Button>
           <Button
             variant="outline"

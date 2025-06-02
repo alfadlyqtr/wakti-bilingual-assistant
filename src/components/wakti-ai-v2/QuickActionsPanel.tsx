@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -97,7 +96,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             onClick={toggleLanguage}
             className="h-9 px-3 rounded-full text-sm"
           >
-            {language === "en" ? (language === 'ar' ? 'عربي' : 'العربية') : (language === 'ar' ? 'English' : 'إنجليزي')}
+            {language === 'ar' ? 'English' : 'العربية'}
           </Button>
         </div>
         

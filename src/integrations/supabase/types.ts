@@ -840,6 +840,39 @@ export type Database = {
           },
         ]
       }
+      user_search_quotas: {
+        Row: {
+          created_at: string
+          daily_count: number
+          daily_date: string
+          extra_searches: number
+          id: string
+          purchase_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_count?: number
+          daily_date?: string
+          extra_searches?: number
+          id?: string
+          purchase_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_count?: number
+          daily_date?: string
+          extra_searches?: number
+          id?: string
+          purchase_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_translation_quotas: {
         Row: {
           created_at: string
@@ -905,7 +938,9 @@ export type Database = {
           characters_limit: number
           characters_used: number
           created_at: string
+          extra_characters: number
           id: string
+          purchase_date: string | null
           updated_at: string
           user_id: string
         }
@@ -913,7 +948,9 @@ export type Database = {
           characters_limit?: number
           characters_used?: number
           created_at?: string
+          extra_characters?: number
           id?: string
+          purchase_date?: string | null
           updated_at?: string
           user_id: string
         }
@@ -921,7 +958,9 @@ export type Database = {
           characters_limit?: number
           characters_used?: number
           created_at?: string
+          extra_characters?: number
           id?: string
+          purchase_date?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -993,6 +1032,23 @@ export type Database = {
           purchase_date: string
         }[]
       }
+      get_or_create_user_search_quota: {
+        Args: { p_user_id: string }
+        Returns: {
+          daily_count: number
+          extra_searches: number
+          purchase_date: string
+        }[]
+      }
+      get_or_create_user_voice_quota: {
+        Args: { p_user_id: string }
+        Returns: {
+          characters_used: number
+          characters_limit: number
+          extra_characters: number
+          purchase_date: string
+        }[]
+      }
       gtrgm_compress: {
         Args: { "": unknown }
         Returns: unknown
@@ -1012,6 +1068,14 @@ export type Database = {
       gtrgm_out: {
         Args: { "": unknown }
         Returns: unknown
+      }
+      increment_search_usage: {
+        Args: { p_user_id: string }
+        Returns: {
+          success: boolean
+          daily_count: number
+          extra_searches: number
+        }[]
       }
       increment_translation_usage: {
         Args: { p_user_id: string }
@@ -1034,11 +1098,25 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: undefined
       }
+      purchase_extra_searches: {
+        Args: { p_user_id: string; p_count: number }
+        Returns: {
+          success: boolean
+          new_extra_count: number
+        }[]
+      }
       purchase_extra_translations: {
         Args: { p_user_id: string; p_count: number }
         Returns: {
           success: boolean
           new_extra_count: number
+        }[]
+      }
+      purchase_extra_voice_credits: {
+        Args: { p_user_id: string; p_characters: number }
+        Returns: {
+          success: boolean
+          new_extra_characters: number
         }[]
       }
       set_limit: {
