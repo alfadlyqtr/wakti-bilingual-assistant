@@ -183,36 +183,42 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
           <DialogTitle>
             {task ? t('editTask', language) : t('createTask', language)}
           </DialogTitle>
+          {task && (
+            <p className="text-blue-600 font-medium text-sm mt-1">
+              {task.title}
+            </p>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Task Title */}
-          <div className="space-y-2">
-            <Label htmlFor="title">{t('taskTitle', language)} *</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t('enterTaskTitle', language)}
-              required
-              disabled={!!task} // Disable when editing existing task
-              className={task ? 'bg-muted text-muted-foreground' : ''}
-            />
-          </div>
+          {/* Only show title and description for new tasks */}
+          {!task && (
+            <>
+              {/* Task Title */}
+              <div className="space-y-2">
+                <Label htmlFor="title">{t('taskTitle', language)} *</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={t('enterTaskTitle', language)}
+                  required
+                />
+              </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">{t('description', language)} ({t('optional', language)})</Label>
-            <Textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder={t('enterDescription', language)}
-              rows={3}
-              disabled={!!task} // Disable when editing existing task
-              className={task ? 'bg-muted text-muted-foreground' : ''}
-            />
-          </div>
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description">{t('description', language)} ({t('optional', language)})</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder={t('enterDescription', language)}
+                  rows={3}
+                />
+              </div>
+            </>
+          )}
 
           {/* Due Date and Time */}
           <div className="grid grid-cols-2 gap-4">
@@ -357,7 +363,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               </Button>
             </div>
             
-            <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
+            <Button type="submit" disabled={loading || (!task && !title.trim()) || !dueDate}>
               {loading ? t('loading', language) : task ? t('save', language) : t('create', language)}
             </Button>
           </div>
