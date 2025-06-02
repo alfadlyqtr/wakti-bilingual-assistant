@@ -33,7 +33,7 @@ import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
-import { MobileNav } from '@/components/MobileNav';
+import { PageContainer } from '@/components/PageContainer';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
@@ -739,303 +739,302 @@ export default function WaktiAIV2() {
   console.log('🔍 DEBUG: About to render input area');
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-      {/* Header - Updated layout */}
-      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setLeftDrawerOpen(true)}
-            className="hover:scale-110 transition-transform"
-          >
-            <Menu className="h-5 w-5" />
-          </Button>
-        </div>
-        
-        {/* Centered Mode Indicator */}
-        <div className="flex items-center justify-center gap-2 flex-1">
-          <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
-            <div className={cn("w-2 h-2 rounded-full", getTriggerModeColor(activeTrigger))}></div>
-            <span className="font-medium text-xs">
-              {getTriggerModeDisplay(activeTrigger)}
-            </span>
+    <PageContainer showHeader={false}>
+      <div className="flex flex-col h-full bg-gradient-to-br from-background to-muted/20 relative">
+        {/* Custom Wakti AI Header */}
+        <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setLeftDrawerOpen(true)}
+              className="hover:scale-110 transition-transform"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
           </div>
-
-          {/* Search Quota Indicator - Show for both search and advanced_search modes */}
-          {(activeTrigger === 'search' || activeTrigger === 'advanced_search') && (
+          
+          {/* Centered Mode Indicator */}
+          <div className="flex items-center justify-center gap-2 flex-1">
             <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
-              <Search className="h-3 w-3" />
-              <span className={cn(
-                "font-medium",
-                remainingFreeSearches <= 2 ? "text-orange-600" : "text-green-600"
-              )}>
-                {remainingFreeSearches}/{MAX_DAILY_SEARCHES}
+              <div className={cn("w-2 h-2 rounded-full", getTriggerModeColor(activeTrigger))}></div>
+              <span className="font-medium text-xs">
+                {getTriggerModeDisplay(activeTrigger)}
               </span>
-              {userSearchQuota.extra_searches > 0 && (
-                <>
-                  <span className="mx-1">•</span>
-                  <Zap className="h-3 w-3" />
-                  <span>+{userSearchQuota.extra_searches}</span>
-                </>
-              )}
             </div>
-          )}
-        </div>
-        
-        <div className="flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setRightDrawerOpen(true)}
-            className="hover:scale-110 transition-transform"
-          >
-            <Zap className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
 
-      {/* Hidden file inputs */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={processFileUpload}
-        className="hidden"
-        accept="*/*"
-      />
-      <input
-        type="file"
-        ref={cameraInputRef}
-        onChange={processFileUpload}
-        className="hidden"
-        accept="image/*"
-        capture="environment"
-      />
-
-      {/* Enhanced Messages Area with Search Confirmation */}
-      <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {messages.map((message) => (
-            <ChatBubble 
-              key={message.id} 
-              message={message} 
-              onSearchConfirm={handleSearchConfirmation}
-              activeTrigger={activeTrigger}
-              isTextGenerated={message.isTextGenerated}
-            />
-          ))}
+            {/* Search Quota Indicator - Show for both search and advanced_search modes */}
+            {(activeTrigger === 'search' || activeTrigger === 'advanced_search') && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
+                <Search className="h-3 w-3" />
+                <span className={cn(
+                  "font-medium",
+                  remainingFreeSearches <= 2 ? "text-orange-600" : "text-green-600"
+                )}>
+                  {remainingFreeSearches}/{MAX_DAILY_SEARCHES}
+                </span>
+                {userSearchQuota.extra_searches > 0 && (
+                  <>
+                    <span className="mx-1">•</span>
+                    <Zap className="h-3 w-3" />
+                    <span>+{userSearchQuota.extra_searches}</span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
           
-          {isTyping && <TypingIndicator />}
-          
-          <div ref={messagesEndRef} />
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setRightDrawerOpen(true)}
+              className="hover:scale-110 transition-transform"
+            >
+              <Zap className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
-      </ScrollArea>
 
-      {/* Left Drawer - Chat Archive with + icon moved here */}
-      <div className={cn(
-        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
-        leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-border/30">
-            <h3 className="font-semibold text-lg">
-              {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
-            </h3>
-            <div className="flex items-center gap-1">
+        {/* Hidden file inputs */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={processFileUpload}
+          className="hidden"
+          accept="*/*"
+        />
+        <input
+          type="file"
+          ref={cameraInputRef}
+          onChange={processFileUpload}
+          className="hidden"
+          accept="image/*"
+          capture="environment"
+        />
+
+        {/* Enhanced Messages Area with Search Confirmation */}
+        <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {messages.map((message) => (
+              <ChatBubble 
+                key={message.id} 
+                message={message} 
+                onSearchConfirm={handleSearchConfirmation}
+                activeTrigger={activeTrigger}
+                isTextGenerated={message.isTextGenerated}
+              />
+            ))}
+            
+            {isTyping && <TypingIndicator />}
+            
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+
+        {/* Left Drawer - Chat Archive with + icon moved here */}
+        <div className={cn(
+          "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
+          <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border/30">
+              <h3 className="font-semibold text-lg">
+                {language === 'ar' ? 'أرشيف المحادثات' : 'Chat Archive'}
+              </h3>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={startNewConversation}
+                  className="h-8 w-8 hover:scale-110 transition-transform"
+                  title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setLeftDrawerOpen(false)}
+                  className="h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            <div className="flex-1 p-4 overflow-y-auto">
+              <ConversationsList
+                conversations={conversations}
+                currentConversationId={currentConversationId}
+                onSelectConversation={loadConversation}
+                onDeleteConversation={deleteConversation}
+                onRefresh={loadConversations}
+                onClose={() => setLeftDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right Drawer - Quick Actions with Trigger Controls */}
+        <div className={cn(
+          "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          rightDrawerOpen ? "translate-x-0" : "translate-x-full"
+        )}>
+          <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border/30">
+              <h3 className="font-semibold text-lg">
+                {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+              </h3>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={startNewConversation}
-                className="h-8 w-8 hover:scale-110 transition-transform"
-                title={language === 'ar' ? 'محادثة جديدة' : 'New conversation'}
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLeftDrawerOpen(false)}
+                onClick={() => setRightDrawerOpen(false)}
                 className="h-8 w-8"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-          
-          <div className="flex-1 p-4 overflow-y-auto">
-            <ConversationsList
-              conversations={conversations}
-              currentConversationId={currentConversationId}
-              onSelectConversation={loadConversation}
-              onDeleteConversation={deleteConversation}
-              onRefresh={loadConversations}
-              onClose={() => setLeftDrawerOpen(false)}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Right Drawer - Quick Actions with Trigger Controls */}
-      <div className={cn(
-        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
-        rightDrawerOpen ? "translate-x-0" : "translate-x-full"
-      )}>
-        <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b border-border/30">
-            <h3 className="font-semibold text-lg">
-              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-            </h3>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setRightDrawerOpen(false)}
-              className="h-8 w-8"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          <div className="flex-1 p-4 overflow-y-auto">
-            <QuickActionsPanel 
-              onSendMessage={(message) => {
-                sendMessage(message);
-                setRightDrawerOpen(false);
-              }}
-              activeTrigger={activeTrigger}
-              onTriggerChange={handleTriggerChange}
-              onTextGenerated={handleTextGenerated}
-              onClose={() => setRightDrawerOpen(false)}
-            />
+            
+            <div className="flex-1 p-4 overflow-y-auto">
+              <QuickActionsPanel 
+                onSendMessage={(message) => {
+                  sendMessage(message);
+                  setRightDrawerOpen(false);
+                }}
+                activeTrigger={activeTrigger}
+                onTriggerChange={handleTriggerChange}
+                onTextGenerated={handleTextGenerated}
+                onClose={() => setRightDrawerOpen(false)}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Enhanced Knowledge Modal */}
-      <KnowledgeModal 
-        open={knowledgeModalOpen} 
-        onOpenChange={setKnowledgeModalOpen} 
-      />
-
-      {/* Overlay for both drawers */}
-      {(leftDrawerOpen || rightDrawerOpen) && (
-        <div 
-          className="fixed inset-0 bg-black/10 z-35" 
-          onClick={() => {
-            setLeftDrawerOpen(false);
-            setRightDrawerOpen(false);
-          }}
+        {/* Enhanced Knowledge Modal */}
+        <KnowledgeModal 
+          open={knowledgeModalOpen} 
+          onOpenChange={setKnowledgeModalOpen} 
         />
-      )}
 
-      {/* Enhanced Fixed Input Area with Voice Recognition */}
-      <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
-        <div className="max-w-4xl mx-auto">
-          {/* Listening Status Display */}
-          {isListening && (
-            <div className="mb-3 flex items-center justify-center">
-              <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
-                    {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
-                  </span>
+        {/* Overlay for both drawers */}
+        {(leftDrawerOpen || rightDrawerOpen) && (
+          <div 
+            className="fixed inset-0 bg-black/10 z-35" 
+            onClick={() => {
+              setLeftDrawerOpen(false);
+              setRightDrawerOpen(false);
+            }}
+          />
+        )}
+
+        {/* Enhanced Fixed Input Area with Voice Recognition */}
+        <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
+          <div className="max-w-4xl mx-auto">
+            {/* Listening Status Display */}
+            {isListening && (
+              <div className="mb-3 flex items-center justify-center">
+                <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
+                      {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Image Attachments Preview */}
-          {attachedImages.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {attachedImages.map((image, index) => (
-                <div key={index} className="relative">
-                  <img
-                    src={URL.createObjectURL(image)}
-                    alt={`Attachment ${index + 1}`}
-                    className="w-16 h-16 object-cover rounded-lg border-2 border-border"
+            {/* Image Attachments Preview */}
+            {attachedImages.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {attachedImages.map((image, index) => (
+                  <div key={index} className="relative">
+                    <img
+                      src={URL.createObjectURL(image)}
+                      alt={`Attachment ${index + 1}`}
+                      className="w-16 h-16 object-cover rounded-lg border-2 border-border"
+                    />
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => removeAttachedImage(index)}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input Container */}
+            <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 relative">
+                  <Textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={handleTextareaKeyPress}
+                    placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
+                    disabled={isLoading || isListening}
+                    className={cn(
+                      "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
+                      language === 'ar' ? 'text-right' : ''
+                    )}
+                    rows={1}
                   />
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => removeAttachedImage(index)}
-                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Input Container */}
-          <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 relative">
-                <Textarea
-                  ref={textareaRef}
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={handleTextareaKeyPress}
-                  placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
+                
+                {/* Combined Upload/Camera Button */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleFileUpload}
                   disabled={isLoading || isListening}
+                  className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
+                  title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
+                >
+                  <Upload className="h-5 w-5" />
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleSpeechRecognition}
+                  disabled={isLoading}
                   className={cn(
-                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
-                    language === 'ar' ? 'text-right' : ''
+                    "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
+                    isListening 
+                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
+                      : "hover:bg-muted"
                   )}
-                  rows={1}
-                />
+                >
+                  {isListening ? (
+                    <Square className="h-5 w-5" />
+                  ) : (
+                    <Mic className="h-5 w-5" />
+                  )}
+                </Button>
+                
+                <Button
+                  onClick={() => sendMessage(inputMessage)}
+                  disabled={!inputMessage.trim() || isLoading || isListening}
+                  size="icon"
+                  className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </Button>
               </div>
-              
-              {/* Combined Upload/Camera Button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleFileUpload}
-                disabled={isLoading || isListening}
-                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
-                title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
-              >
-                <Upload className="h-5 w-5" />
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleSpeechRecognition}
-                disabled={isLoading}
-                className={cn(
-                  "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
-                  isListening 
-                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
-                    : "hover:bg-muted"
-                )}
-              >
-                {isListening ? (
-                  <Square className="h-5 w-5" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
-              </Button>
-              
-              <Button
-                onClick={() => sendMessage(inputMessage)}
-                disabled={!inputMessage.trim() || isLoading || isListening}
-                size="icon"
-                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="h-5 w-5" />
-                )}
-              </Button>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Mobile Navigation */}
-      <MobileNav />
-    </div>
+    </PageContainer>
   );
 }
