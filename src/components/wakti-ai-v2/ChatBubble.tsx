@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
 import { AIMessage } from '@/services/WaktiAIV2Service';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatBubbleProps {
   message: AIMessage;
@@ -19,6 +19,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTrigger, isTextGenerated }: ChatBubbleProps) {
   const { theme, language } = useTheme();
+  const { toast } = useToast();
   const isUser = message.role === 'user';
   const isArabic = language === 'ar';
 
@@ -88,10 +89,18 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
       // Enhanced copy function with multiple fallbacks
       await copyToClipboard(message.content);
       
-      toast.success(language === 'ar' ? 'تم نسخ النص المولد' : 'Generated text copied');
+      toast({
+        title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
+        description: language === 'ar' ? 'تم نسخ النص المولد' : 'Generated text copied',
+        duration: 2000
+      });
     } catch (error) {
       console.error('❌ Error copying text generated:', error);
-      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
+      toast({
+        title: language === 'ar' ? 'فشل النسخ' : 'Copy Failed',
+        description: language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -161,13 +170,24 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     
     try {
       await copyToClipboard(message.content);
-      toast.success(language === 'ar' ? 'تم نسخ الرسالة' : 'Message copied');
+      
+      toast({
+        title: language === 'ar' ? '✅ تم النسخ' : '✅ Copied',
+        description: language === 'ar' ? 'تم نسخ الرسالة' : 'Message copied',
+        duration: 2000
+      });
+      
     } catch (error) {
       console.error('❌ Error copying message:', error);
-      toast.error(language === 'ar' 
-        ? 'تعذر نسخ النص. يرجى تحديد النص ونسخه يدوياً' 
-        : 'Unable to copy text. Please select and copy manually'
-      );
+      
+      toast({
+        title: language === 'ar' ? 'فشل النسخ' : 'Copy Failed',
+        description: language === 'ar' 
+          ? 'تعذر نسخ النص. يرجى تحديد النص ونسخه يدوياً' 
+          : 'Unable to copy text. Please select and copy manually',
+        variant: 'destructive',
+        duration: 4000
+      });
     }
   };
 

@@ -34,6 +34,7 @@ import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
+import { AppHeader } from '@/components/AppHeader';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
