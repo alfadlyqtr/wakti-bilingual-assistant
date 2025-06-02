@@ -1,114 +1,110 @@
 
 import React, { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { TRService, TRTask } from '@/services/trService';
-import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { TRService, TRTask, TRSubtask } from '@/services/trService';
+import { SubtaskManager } from './SubtaskManager';
+import { useToastHelper } from '@/hooks/use-toast-helper';
 
 interface TaskFormProps {
   isOpen: boolean;
   onClose: () => void;
   task?: TRTask | null;
-  onTaskSaved?: () => void;
+  onTaskSaved: () => void;
 }
 
-export const TaskForm: React.FC<TaskFormProps> = ({ 
-  isOpen, 
-  onClose, 
-  task, 
-  onTaskSaved 
-}) => {
+export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) {
   const { language } = useTheme();
+  const { showSuccess, showError } = useToastHelper();
+  
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [dueDate, setDueDate] = useState<Date>();
+  const [dueTime, setDueTime] = useState('');
+  const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
+  const [taskType, setTaskType] = useState<'one-time' | 'repeated'>('one-time');
+  const [shareTask, setShareTask] = useState(false);
+  const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    due_date: '',
-    due_time: '',
-    priority: 'normal' as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as 'one-time' | 'repeated',
-    is_shared: false
-  });
 
-  const isEditing = !!task;
-
+  // Reset form when dialog opens/closes or task changes
   useEffect(() => {
-    if (task) {
-      setFormData({
-        title: task.title,
-        description: task.description || '',
-        due_date: task.due_date,
-        due_time: task.due_time || '',
-        priority: task.priority,
-        task_type: task.task_type,
-        is_shared: task.is_shared
-      });
-    } else {
-      // Reset form for new task
-      setFormData({
-        title: '',
-        description: '',
-        due_date: format(new Date(), 'yyyy-MM-dd'),
-        due_time: '',
-        priority: 'normal',
-        task_type: 'one-time',
-        is_shared: false
-      });
+    if (isOpen) {
+      if (task) {
+        setTitle(task.title);
+        setDescription(task.description || '');
+        setDueDate(task.due_date ? new Date(task.due_date) : undefined);
+        setDueTime(task.due_time || '');
+        setPriority(task.priority);
+        setTaskType(task.task_type);
+        setShareTask(task.share_task || false);
+        setSubtasks(task.subtasks || []);
+      } else {
+        // Reset form for new task
+        setTitle('');
+        setDescription('');
+        setDueDate(undefined);
+        setDueTime('');
+        setPriority('normal');
+        setTaskType('one-time');
+        setShareTask(false);
+        setSubtasks([]);
+      }
     }
-  }, [task, isOpen]);
+  }, [isOpen, task]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim() || !formData.due_date) return;
+    if (!title.trim()) return;
 
     setLoading(true);
     try {
-      if (isEditing) {
-        await TRService.updateTask(task.id, formData);
-        toast.success(t('taskUpdated', language));
+      const taskData = {
+        title: title.trim(),
+        description: description.trim() || null,
+        due_date: dueDate ? format(dueDate, 'yyyy-MM-dd') : null,
+        due_time: dueTime || null,
+        priority,
+        task_type: taskType,
+        share_task: shareTask,
+        subtasks
+      };
+
+      if (task) {
+        await TRService.updateTask(task.id, taskData);
+        showSuccess(t('taskUpdated', language));
       } else {
-        console.log('Creating new task with data:', formData);
-        await TRService.createTask(formData);
-        toast.success(t('taskCreated', language));
+        await TRService.createTask(taskData);
+        showSuccess(t('taskCreated', language));
       }
-      onTaskSaved?.();
+
+      onTaskSaved();
       onClose();
     } catch (error) {
       console.error('Error saving task:', error);
-      toast.error(isEditing ? 'Error updating task' : 'Error creating task');
+      showError('Failed to save task');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClose = () => {
-    if (!loading) {
-      onClose();
-    }
-  };
-
-  const getButtonText = () => {
-    if (loading) {
-      return isEditing ? 'Saving...' : 'Creating...';
-    }
-    return isEditing ? t('save', language) : t('createTask', language);
-  };
-
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {isEditing ? t('editTask', language) : t('createTask', language)}
+            {task ? t('editTask', language) : t('createTask', language)}
           </DialogTitle>
         </DialogHeader>
 
@@ -118,8 +114,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             <Label htmlFor="title">{t('taskTitle', language)} *</Label>
             <Input
               id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               placeholder={t('enterTaskTitle', language)}
               required
             />
@@ -130,32 +126,45 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             <Label htmlFor="description">{t('description', language)} ({t('optional', language)})</Label>
             <Textarea
               id="description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder={t('enterDescription', language)}
               rows={3}
             />
           </div>
 
-          {/* Due Date & Time */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Due Date and Time */}
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="due_date">{t('dueDate', language)} *</Label>
-              <Input
-                id="due_date"
-                type="date"
-                value={formData.due_date}
-                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-                required
-              />
+              <Label>{t('dueDate', language)} *</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dueDate ? format(dueDate, 'dd/MM/yyyy') : t('selectDate', language)}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={dueDate}
+                    onSelect={setDueDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+
             <div className="space-y-2">
-              <Label htmlFor="due_time">{t('dueTime', language)} ({t('optional', language)})</Label>
+              <Label htmlFor="time">{t('dueTime', language)} ({t('optional', language)})</Label>
               <Input
-                id="due_time"
+                id="time"
                 type="time"
-                value={formData.due_time}
-                onChange={(e) => setFormData({ ...formData, due_time: e.target.value })}
+                value={dueTime}
+                onChange={(e) => setDueTime(e.target.value)}
               />
             </div>
           </div>
@@ -163,10 +172,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
           {/* Priority */}
           <div className="space-y-2">
             <Label>{t('priority', language)}</Label>
-            <Select 
-              value={formData.priority} 
-              onValueChange={(value) => setFormData({ ...formData, priority: value as any })}
-            >
+            <Select value={priority} onValueChange={(value: 'normal' | 'high' | 'urgent') => setPriority(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -181,10 +187,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
           {/* Task Type */}
           <div className="space-y-2">
             <Label>{t('taskType', language)}</Label>
-            <Select 
-              value={formData.task_type} 
-              onValueChange={(value) => setFormData({ ...formData, task_type: value as any })}
-            >
+            <Select value={taskType} onValueChange={(value: 'one-time' | 'repeated') => setTaskType(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -195,27 +198,37 @@ export const TaskForm: React.FC<TaskFormProps> = ({
             </Select>
           </div>
 
-          {/* Share Toggle */}
+          {/* Share Task */}
           <div className="flex items-center justify-between">
-            <Label htmlFor="is_shared">{t('shareTask', language)}</Label>
+            <Label htmlFor="share">{t('shareTask', language)}</Label>
             <Switch
-              id="is_shared"
-              checked={formData.is_shared}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_shared: checked })}
+              id="share"
+              checked={shareTask}
+              onCheckedChange={setShareTask}
+            />
+          </div>
+
+          {/* Subtasks Section */}
+          <div className="space-y-2">
+            <Label>{t('subtasks', language)}</Label>
+            <SubtaskManager
+              subtasks={subtasks}
+              onSubtasksChange={setSubtasks}
+              taskId={task?.id}
             />
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center gap-3 pt-4">
-            <Button type="submit" disabled={loading || !formData.title.trim() || !formData.due_date} className="flex-1">
-              {getButtonText()}
-            </Button>
-            <Button type="button" variant="outline" onClick={handleClose} disabled={loading} className="flex-1">
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
               {t('cancel', language)}
+            </Button>
+            <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
+              {loading ? t('loading', language) : t('save', language)}
             </Button>
           </div>
         </form>
       </DialogContent>
     </Dialog>
   );
-};
+}
