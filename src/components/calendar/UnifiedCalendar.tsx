@@ -5,7 +5,6 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth,
   setYear, getYear, addYears, subYears, parse } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { useTheme } from "@/providers/ThemeProvider";
-import { useTaskReminder } from "@/contexts/TaskReminderContext";
 import { t } from "@/utils/translations";
 import { CalendarControls } from "./CalendarControls";
 import { CalendarGrid } from "./CalendarGrid";
@@ -42,15 +41,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 
 export const UnifiedCalendar: React.FC = () => {
   const { language, theme } = useTheme();
-  const { tasks, reminders } = useTaskReminder();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
@@ -131,34 +124,23 @@ export const UnifiedCalendar: React.FC = () => {
     localStorage.setItem('calendarManualEntries', JSON.stringify(manualEntries));
   }, [manualEntries]);
 
-  // Calculate all calendar entries from tasks, reminders, events, maw3d events and manual entries
+  // Calculate all calendar entries from manual entries and maw3d events
   useEffect(() => {
     const fetchEntries = async () => {
       console.log('Calculating calendar entries with:', {
-        tasks: tasks.length,
-        reminders: reminders.length,
         maw3dEvents: maw3dEvents.length,
         manualEntries: manualEntries.length
       });
       
-      // Log manual entries for debugging
-      manualEntries.forEach((entry, index) => {
-        console.log(`Manual entry ${index}:`, entry);
-      });
-      
       try {
-        const entries = await getCalendarEntries(tasks, reminders, manualEntries, [], maw3dEvents);
+        const entries = await getCalendarEntries(manualEntries, [], maw3dEvents);
         console.log('Total calendar entries after combination:', entries.length);
         
         // Log entries by type for debugging
-        const taskEntries = entries.filter(e => e.type === EntryType.TASK);
-        const reminderEntries = entries.filter(e => e.type === EntryType.REMINDER);
         const manualEntriesFiltered = entries.filter(e => e.type === EntryType.MANUAL_NOTE);
         const maw3dEntriesFiltered = entries.filter(e => e.type === EntryType.MAW3D_EVENT);
         
         console.log('Entries breakdown:', {
-          tasks: taskEntries.length,
-          reminders: reminderEntries.length,
           manual: manualEntriesFiltered.length,
           maw3d: maw3dEntriesFiltered.length
         });
@@ -171,7 +153,7 @@ export const UnifiedCalendar: React.FC = () => {
     };
 
     fetchEntries();
-  }, [tasks, reminders, manualEntries, maw3dEvents]);
+  }, [manualEntries, maw3dEvents]);
 
   // Handle navigation between dates
   const navigatePrevious = () => {
@@ -213,7 +195,7 @@ export const UnifiedCalendar: React.FC = () => {
     setCurrentDate(newDate);
   };
 
-  // Handle touch gestures for view switching
+  // touch gesture handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
       // Single touch - track for double tap
@@ -278,15 +260,6 @@ export const UnifiedCalendar: React.FC = () => {
     setPinchStartDistance(null);
   };
 
-  // Cycle through calendar views
-  const cycleView = useCallback(() => {
-    setView(prev => {
-      if (prev === 'month') return 'week';
-      if (prev === 'week') return 'year';
-      return 'month';
-    });
-  }, []);
-
   // Handle day selection
   const handleDayClick = (date: Date) => {
     setSelectedDate(date);
@@ -341,6 +314,14 @@ export const UnifiedCalendar: React.FC = () => {
       setEntryDialogOpen(true);
     }
   };
+
+  const cycleView = useCallback(() => {
+    setView(prev => {
+      if (prev === 'month') return 'week';
+      if (prev === 'week') return 'year';
+      return 'month';
+    });
+  }, []);
 
   return (
     <div 
@@ -417,16 +398,8 @@ export const UnifiedCalendar: React.FC = () => {
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-green-500"></div>
-              <span>{t("tasks", language)}</span>
-            </div>
-            <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-purple-500"></div>
               <span>Maw3d</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-red-500"></div>
-              <span>{t("reminders", language)}</span>
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-yellow-500"></div>

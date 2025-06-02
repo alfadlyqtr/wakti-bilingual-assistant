@@ -52,47 +52,32 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   console.log('CalendarAgenda - Filtered day entries:', dayEntries);
   
   // Group entries by type
-  const tasks = dayEntries.filter(entry => entry.type === EntryType.TASK);
   const events = dayEntries.filter(entry => entry.type === EntryType.EVENT);
   const maw3dEvents = dayEntries.filter(entry => entry.type === EntryType.MAW3D_EVENT);
-  const reminders = dayEntries.filter(entry => entry.type === EntryType.REMINDER);
   const notes = dayEntries.filter(entry => entry.type === EntryType.MANUAL_NOTE);
   
   console.log('CalendarAgenda - Grouped entries:', {
-    tasks: tasks.length,
     events: events.length,
     maw3dEvents: maw3dEvents.length,
-    reminders: reminders.length,
     notes: notes.length
   });
   
-  // Sort function to order by priority and then alphabetically
+  // Sort function to order alphabetically
   const sortEntries = (a: CalendarEntry, b: CalendarEntry) => {
-    // Sort by priority if available
-    if (a.priority && b.priority) {
-      if (a.priority !== b.priority) {
-        const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-        return priorityOrder[a.priority] - priorityOrder[b.priority];
-      }
-    }
-    
-    // Then sort alphabetically
     return a.title.localeCompare(b.title);
   };
   
   // Helper function to render the icon for each entry type
   const renderIcon = (type: EntryType) => {
     switch (type) {
-      case EntryType.TASK:
-        return <CheckSquare className="h-4 w-4 text-green-500" />;
       case EntryType.EVENT:
         return <CalendarIcon className="h-4 w-4 text-blue-500" />;
       case EntryType.MAW3D_EVENT:
         return <Heart className="h-4 w-4 text-purple-500" />;
-      case EntryType.REMINDER:
-        return <Bell className="h-4 w-4 text-red-500" />;
       case EntryType.MANUAL_NOTE:
         return <PinIcon className="h-4 w-4 text-yellow-500" />;
+      default:
+        return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
   };
 
@@ -122,25 +107,6 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Tasks section */}
-          {tasks.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 flex items-center gap-2">
-                <CheckSquare className="h-4 w-4 text-green-500" />
-                {t("tasks", language)} ({tasks.length})
-              </h3>
-              <div className="space-y-1">
-                {tasks.sort(sortEntries).map(task => (
-                  <CompactAgendaItem 
-                    key={task.id}
-                    entry={task}
-                    onClick={() => setSelectedEntry(task)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          
           {/* Maw3d Events section */}
           {maw3dEvents.length > 0 && (
             <div>
@@ -173,25 +139,6 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                     key={event.id}
                     entry={event}
                     onClick={() => setSelectedEntry(event)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          
-          {/* Reminders section */}
-          {reminders.length > 0 && (
-            <div>
-              <h3 className="font-medium mb-2 flex items-center gap-2">
-                <Bell className="h-4 w-4 text-red-500" />
-                {t("reminders", language)} ({reminders.length})
-              </h3>
-              <div className="space-y-1">
-                {reminders.sort(sortEntries).map(reminder => (
-                  <CompactAgendaItem 
-                    key={reminder.id}
-                    entry={reminder}
-                    onClick={() => setSelectedEntry(reminder)}
                   />
                 ))}
               </div>
@@ -253,12 +200,6 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <p className="text-sm">All Day</p>
               </div>
             )}
-            {selectedEntry?.priority && (
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Priority</p>
-                <p className="text-sm capitalize">{selectedEntry.priority}</p>
-              </div>
-            )}
             {selectedEntry?.type === EntryType.MANUAL_NOTE && (
               <Button 
                 variant="outline" 
@@ -288,14 +229,10 @@ interface CompactAgendaItemProps {
 const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick }) => {
   const getColorClass = (type: EntryType) => {
     switch (type) {
-      case EntryType.TASK:
-        return "border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950/20";
       case EntryType.EVENT:
         return "border-l-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/20";
       case EntryType.MAW3D_EVENT:
         return "border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/20";
-      case EntryType.REMINDER:
-        return "border-l-red-500 hover:bg-red-50 dark:hover:bg-red-950/20";
       case EntryType.MANUAL_NOTE:
         return "border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/20";
       default:
@@ -305,16 +242,14 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
 
   const renderIcon = (type: EntryType) => {
     switch (type) {
-      case EntryType.TASK:
-        return <CheckSquare className="h-4 w-4 text-green-500" />;
       case EntryType.EVENT:
         return <CalendarIcon className="h-4 w-4 text-blue-500" />;
       case EntryType.MAW3D_EVENT:
         return <Heart className="h-4 w-4 text-purple-500" />;
-      case EntryType.REMINDER:
-        return <Bell className="h-4 w-4 text-red-500" />;
       case EntryType.MANUAL_NOTE:
         return <PinIcon className="h-4 w-4 text-yellow-500" />;
+      default:
+        return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
   };
   

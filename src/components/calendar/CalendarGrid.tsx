@@ -86,9 +86,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
   const getEntryCountByType = (date: Date) => {
     const entries = getEntriesForDate(date);
     const counts = {
-      [EntryType.TASK]: 0,
       [EntryType.EVENT]: 0,
-      [EntryType.REMINDER]: 0,
+      [EntryType.APPOINTMENT]: 0,
       [EntryType.MANUAL_NOTE]: 0,
       [EntryType.MAW3D_EVENT]: 0
     };
@@ -137,28 +136,16 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               
               {hasEntries && (
                 <div className="flex justify-center gap-1 mt-2 flex-wrap">
-                  {entryCounts[EntryType.TASK] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-green-500 text-green-500" />
-                      {entryCounts[EntryType.TASK] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.TASK]}</span>}
-                    </div>
-                  )}
-                  {entryCounts[EntryType.EVENT] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
-                      {entryCounts[EntryType.EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.EVENT]}</span>}
-                    </div>
-                  )}
                   {entryCounts[EntryType.MAW3D_EVENT] > 0 && (
                     <div className="flex items-center">
                       <Circle className="h-2 w-2 fill-purple-500 text-purple-500" />
                       {entryCounts[EntryType.MAW3D_EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MAW3D_EVENT]}</span>}
                     </div>
                   )}
-                  {entryCounts[EntryType.REMINDER] > 0 && (
+                  {entryCounts[EntryType.EVENT] > 0 && (
                     <div className="flex items-center">
-                      <Circle className="h-2 w-2 fill-red-500 text-red-500" />
-                      {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
+                      <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
+                      {entryCounts[EntryType.EVENT] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.EVENT]}</span>}
                     </div>
                   )}
                   {entryCounts[EntryType.MANUAL_NOTE] > 0 && (
@@ -239,14 +226,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
               
               {hasAnyEntries && (
                 <div className="flex flex-wrap justify-center gap-1 mt-1">
-                  {entryCounts[EntryType.TASK] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-green-500 text-green-500" />
-                      {entryCounts[EntryType.TASK] > 1 && 
-                        <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
-                      }
-                    </div>
-                  )}
                   {entryCounts[EntryType.MAW3D_EVENT] > 0 && (
                     <div className="flex items-center">
                       <Circle className="h-3 w-3 fill-purple-500 text-purple-500" />
@@ -260,14 +239,6 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       <Circle className="h-3 w-3 fill-blue-500 text-blue-500" />
                       {entryCounts[EntryType.EVENT] > 1 && 
                         <span className="text-xs ml-0.5">{entryCounts[EntryType.EVENT]}</span>
-                      }
-                    </div>
-                  )}
-                  {entryCounts[EntryType.REMINDER] > 0 && (
-                    <div className="flex items-center">
-                      <Circle className="h-3 w-3 fill-red-500 text-red-500" />
-                      {entryCounts[EntryType.REMINDER] > 1 && 
-                        <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
                       }
                     </div>
                   )}
