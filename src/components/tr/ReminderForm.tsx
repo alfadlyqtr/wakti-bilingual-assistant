@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -163,25 +161,47 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
                 className="rounded border-gray-300"
               />
               <Label htmlFor="recurring">{t('recurring', language)}</Label>
+              
+              {/* Inline Recurrence Options */}
+              {formData.recurring && (
+                <div className="flex items-center space-x-4 ml-4">
+                  <label className="flex items-center space-x-1">
+                    <input
+                      type="radio"
+                      name="recurrence"
+                      value="daily"
+                      checked={formData.recurrence === 'daily'}
+                      onChange={(e) => setFormData({ ...formData, recurrence: 'daily' })}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">Daily</span>
+                  </label>
+                  <label className="flex items-center space-x-1">
+                    <input
+                      type="radio"
+                      name="recurrence"
+                      value="weekly"
+                      checked={formData.recurrence === 'weekly'}
+                      onChange={(e) => setFormData({ ...formData, recurrence: 'weekly' })}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">Weekly</span>
+                  </label>
+                  <label className="flex items-center space-x-1">
+                    <input
+                      type="radio"
+                      name="recurrence"
+                      value="monthly"
+                      checked={formData.recurrence === 'monthly'}
+                      onChange={(e) => setFormData({ ...formData, recurrence: 'monthly' })}
+                      className="text-primary"
+                    />
+                    <span className="text-sm">Monthly</span>
+                  </label>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Recurrence Options - Show only when recurring is enabled */}
-          {formData.recurring && (
-            <div className="space-y-2">
-              <Label>{t('recurrence', language)}</Label>
-              <Select value={formData.recurrence} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setFormData({ ...formData, recurrence: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">1 Day</SelectItem>
-                  <SelectItem value="weekly">1 Week</SelectItem>
-                  <SelectItem value="monthly">1 Month</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           {/* Form Actions */}
           <div className="flex items-center gap-3 pt-4">
