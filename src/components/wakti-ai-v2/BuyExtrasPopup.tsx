@@ -54,7 +54,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
   const handleVoicePurchase = async () => {
     setIsPurchasing('voice');
     try {
-      const success = await purchaseExtraVoiceCredits(10000);
+      const success = await purchaseExtraVoiceCredits(5000);
       if (success) {
         onOpenChange(false);
       }
@@ -73,6 +73,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
       available: true,
       current: userQuota.extra_translations,
+      remaining: language === 'ar' ? `${userQuota.extra_translations} متبقي` : `${userQuota.extra_translations} remaining`,
       onPurchase: handleTranslatorPurchase,
       color: 'from-rose-500 to-pink-500'
     },
@@ -85,6 +86,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
       available: true,
       current: userSearchQuota.extra_searches,
+      remaining: language === 'ar' ? `${userSearchQuota.extra_searches} متبقي` : `${userSearchQuota.extra_searches} remaining`,
       onPurchase: handleSearchPurchase,
       color: 'from-green-500 to-emerald-500'
     },
@@ -92,11 +94,12 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       id: 'voice',
       icon: Mic,
       title: language === 'ar' ? 'أصوات إضافية' : 'Extra Voice Credits',
-      quota: language === 'ar' ? '10,000 حرف' : '10,000 characters',
+      quota: language === 'ar' ? '5,000 حرف' : '5,000 characters',
       price: '10 QAR',
       validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
       available: true,
       current: userVoiceQuota.extra_characters,
+      remaining: language === 'ar' ? `${userVoiceQuota.extra_characters} متبقي` : `${userVoiceQuota.extra_characters} remaining`,
       onPurchase: handleVoicePurchase,
       color: 'from-purple-500 to-violet-500'
     }
@@ -131,7 +134,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
                       {option.current > 0 && (
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <CheckCircle className="h-3 w-3 text-green-500" />
-                          {language === 'ar' ? `لديك ${option.current} متبقي` : `${option.current} remaining`}
+                          {option.remaining}
                         </div>
                       )}
                     </div>
