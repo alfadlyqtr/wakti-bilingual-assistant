@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Tasjeel as TasjeelComponent } from '@/components/tasjeel/Tasjeel';
+import Tasjeel from '@/components/tasjeel/Tasjeel';
 
-export default function Tasjeel() {
-  return <TasjeelComponent />;
+export default function TasjeelPage() {
+  return <Tasjeel />;
 }

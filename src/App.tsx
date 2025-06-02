@@ -10,7 +10,6 @@ import Maw3d from "@/pages/Maw3d";
 import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
-import { Knowledge } from "@/pages/Knowledge";
 import { PageContainer } from "@/components/PageContainer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import TasksReminders from "@/pages/TasksReminders";
@@ -83,16 +82,6 @@ function App() {
                     <ProtectedRoute>
                       <PageContainer>
                         <Settings />
-                      </PageContainer>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/knowledge"
-                  element={
-                    <ProtectedRoute>
-                      <PageContainer>
-                        <Knowledge />
                       </PageContainer>
                     </ProtectedRoute>
                   }

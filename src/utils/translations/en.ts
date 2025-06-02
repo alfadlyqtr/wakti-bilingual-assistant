@@ -1,3 +1,4 @@
+
 export const en = {
   "loading": "Loading...",
   "name": "Name",
@@ -22,7 +23,6 @@ export const en = {
   "tomorrow": "Tomorrow",
   "nothingScheduled": "Nothing scheduled",
   "event": "event",
-  "events": "events",
   "dailyQuote": "Daily Quote",
   "trialBannerTitle": "Start your free trial today",
   "trialBannerSubtitle": "Get the most out of our platform with a free trial. Experience all the features and benefits without any cost.",
@@ -31,8 +31,6 @@ export const en = {
   "voice_summary": "Voice Summary",
   "tr": "T & R",
   "tasksAndReminders": "Tasks & Reminders",
-  "tasks": "Tasks",
-  "reminders": "Reminders",
   "createTask": "Create Task",
   "createReminder": "Create Reminder",
   "editTask": "Edit Task",
