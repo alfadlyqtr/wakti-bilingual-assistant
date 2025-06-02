@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -740,8 +741,8 @@ export default function WaktiAIV2() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-      {/* Header - Updated layout */}
-      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
+      {/* Header - Updated to be sticky below AppHeader */}
+      <div className="sticky top-[64px] flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm z-30">
         <div className="flex items-center">
           <Button 
             variant="ghost" 
@@ -812,8 +813,8 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Enhanced Messages Area with Search Confirmation */}
-      <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
+      {/* Enhanced Messages Area with proper top padding for both headers */}
+      <ScrollArea className="flex-1 p-4 pb-40 pt-4 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatBubble 
@@ -831,9 +832,9 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Left Drawer - Chat Archive with + icon moved here */}
+      {/* Left Drawer - Chat Archive positioned below both headers */}
       <div className={cn(
-        "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+        "fixed top-[124px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
@@ -875,9 +876,9 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
-      {/* Right Drawer - Quick Actions with Trigger Controls */}
+      {/* Right Drawer - Quick Actions positioned below both headers */}
       <div className={cn(
-        "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+        "fixed top-[124px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
       )}>
         <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
