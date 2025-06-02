@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,9 +24,19 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { AudioControls } from './AudioControls';
-import { SavedRecordings } from './SavedRecordings';
-import { Recording } from './types';
+import AudioControls from './AudioControls';
+import SavedRecordings from './SavedRecordings';
+
+// Define Recording interface locally since it's not in types.ts
+interface Recording {
+  id: string;
+  title: string;
+  url: string;
+  duration: number;
+  created_at: Date;
+  blob?: Blob;
+  transcription?: string | null;
+}
 
 export default function Tasjeel() {
   const { theme, language } = useTheme();
