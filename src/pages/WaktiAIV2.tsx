@@ -742,7 +742,7 @@ export default function WaktiAIV2() {
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
       {/* App Header */}
-      <AppHeader />
+     
 
       {/* Header - Updated layout */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
