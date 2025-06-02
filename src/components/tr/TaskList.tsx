@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { MoreHorizontal, Edit, Trash2, Share2, CheckCircle2, Circle, Clock } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Share2, CheckCircle2, Circle, Clock, Moon } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -11,7 +11,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { SubtaskManager } from './SubtaskManager';
 import { toast } from 'sonner';
-import { format, isAfter, parseISO } from 'date-fns';
+import { format, isAfter, parseISO, addDays } from 'date-fns';
 
 interface TaskListProps {
   tasks: TRTask[];
@@ -55,6 +55,22 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
     } catch (error) {
       console.error('Error toggling task completion:', error);
       toast.error('Error updating task');
+    }
+  };
+
+  const handleSnoozeTask = async (task: TRTask) => {
+    try {
+      const tomorrow = addDays(new Date(), 1);
+      const updates: Partial<TRTask> = {
+        snoozed_until: tomorrow.toISOString()
+      };
+      
+      await TRService.updateTask(task.id, updates);
+      toast.success('Task snoozed until tomorrow');
+      onTasksChanged();
+    } catch (error) {
+      console.error('Error snoozing task:', error);
+      toast.error('Error snoozing task');
     }
   };
 
@@ -115,9 +131,17 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                    {task.title}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className={`font-medium ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                      {task.title}
+                    </h3>
+                    <PriorityBadge priority={task.priority} />
+                    {task.is_shared && (
+                      <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
+                        {t('sharedTask', language)}
+                      </span>
+                    )}
+                  </div>
                   
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -126,6 +150,16 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleToggleComplete(task)}>
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        {task.completed ? t('markIncomplete', language) : t('markComplete', language)}
+                      </DropdownMenuItem>
+                      {!task.completed && (
+                        <DropdownMenuItem onClick={() => handleSnoozeTask(task)}>
+                          <Moon className="h-4 w-4 mr-2" />
+                          {t('snooze', language)}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => onTaskEdit(task)}>
                         <Edit className="h-4 w-4 mr-2" />
                         {t('edit', language)}
@@ -151,20 +185,14 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                 <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                   <Clock className="w-4 h-4" />
                   <span>
-                    {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                    Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
                     {task.due_time && ` at ${task.due_time}`}
                   </span>
                 </div>
 
-                {/* Badges */}
-                <div className="flex items-center gap-2 mt-2">
-                  <PriorityBadge priority={task.priority} />
+                {/* Status Badge */}
+                <div className="mt-2">
                   <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
-                  {task.is_shared && (
-                    <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
-                      {t('sharedTask', language)}
-                    </span>
-                  )}
                 </div>
 
                 {/* Description */}
@@ -182,12 +210,13 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                   {expandedTasks.has(task.id) ? 'Hide' : 'Show'} {t('subtasks', language)}
                 </Button>
 
-                {/* Subtasks */}
+                {/* Subtasks - View Only */}
                 {expandedTasks.has(task.id) && (
                   <div className="mt-3 pt-3 border-t">
                     <SubtaskManager 
                       taskId={task.id} 
-                      onSubtasksChange={() => {}} 
+                      onSubtasksChange={() => {}}
+                      readOnly={true}
                     />
                   </div>
                 )}
