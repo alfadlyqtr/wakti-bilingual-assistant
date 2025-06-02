@@ -11,6 +11,7 @@ import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
 import { PageContainer } from "@/components/PageContainer";
+import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import TasksReminders from "@/pages/TasksReminders";
 import SharedTask from "@/pages/SharedTask";
@@ -105,6 +106,10 @@ function App() {
                 {/* 404 Route - Redirect to Dashboard */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
+              
+              {/* Mobile Navigation - appears on all protected routes */}
+              <MobileNav />
+              
               <Toaster />
             </div>
           </QueryClientProvider>
