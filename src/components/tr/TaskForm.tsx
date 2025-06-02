@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -303,13 +302,13 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             </div>
           )}
 
-          {/* Subtasks Section - Show for both new and existing tasks */}
+          {/* Subtasks Section */}
           <div className="space-y-2">
-            <Label>{t('subtasks', language)}</Label>
             {task ? (
               <SubtaskManager taskId={task.id} />
             ) : (
               <div className="space-y-2">
+                <Label>{t('subtasks', language)}</Label>
                 {subtasks.map((subtask) => (
                   <div key={subtask.id} className="flex items-center gap-2 p-2 bg-secondary/20 rounded-md">
                     <span className="flex-1 text-sm">{subtask.title}</span>
