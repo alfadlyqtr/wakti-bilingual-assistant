@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -30,7 +31,9 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
     title: '',
     description: '',
     due_date: '',
-    due_time: ''
+    due_time: '',
+    recurring: false,
+    recurrence: 'weekly' as 'daily' | 'weekly' | 'monthly'
   });
 
   useEffect(() => {
@@ -39,7 +42,9 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
         title: reminder.title,
         description: reminder.description || '',
         due_date: reminder.due_date,
-        due_time: reminder.due_time || ''
+        due_time: reminder.due_time || '',
+        recurring: false,
+        recurrence: 'weekly'
       });
     } else {
       // Reset form for new reminder
@@ -47,7 +52,9 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
         title: '',
         description: '',
         due_date: format(new Date(), 'yyyy-MM-dd'),
-        due_time: ''
+        due_time: '',
+        recurring: false,
+        recurrence: 'weekly'
       });
     }
   }, [reminder, isOpen]);
@@ -58,11 +65,18 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
 
     setLoading(true);
     try {
+      const reminderData = {
+        title: formData.title,
+        description: formData.description,
+        due_date: formData.due_date,
+        due_time: formData.due_time
+      };
+
       if (reminder) {
-        await TRService.updateReminder(reminder.id, formData);
+        await TRService.updateReminder(reminder.id, reminderData);
         toast.success(t('reminderUpdated', language));
       } else {
-        await TRService.createReminder(formData);
+        await TRService.createReminder(reminderData);
         toast.success(t('reminderCreated', language));
       }
       onReminderSaved?.();
@@ -138,10 +152,41 @@ export const ReminderForm: React.FC<ReminderFormProps> = ({
             </div>
           </div>
 
+          {/* Recurring Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                id="recurring"
+                type="checkbox"
+                checked={formData.recurring}
+                onChange={(e) => setFormData({ ...formData, recurring: e.target.checked })}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="recurring">{t('recurring', language)}</Label>
+            </div>
+          </div>
+
+          {/* Recurrence Options - Show only when recurring is enabled */}
+          {formData.recurring && (
+            <div className="space-y-2">
+              <Label>{t('recurrence', language)}</Label>
+              <Select value={formData.recurrence} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setFormData({ ...formData, recurrence: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">1 Day</SelectItem>
+                  <SelectItem value="weekly">1 Week</SelectItem>
+                  <SelectItem value="monthly">1 Month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           {/* Form Actions */}
           <div className="flex items-center gap-3 pt-4">
             <Button type="submit" disabled={loading || !formData.title.trim() || !formData.due_date} className="flex-1">
-              {loading ? 'Saving...' : t('save', language)}
+              {loading ? 'Saving...' : reminder ? t('save', language) : t('create', language)}
             </Button>
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading} className="flex-1">
               {t('cancel', language)}
