@@ -10,6 +10,11 @@ import Maw3d from "@/pages/Maw3d";
 import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
+import Home from "@/pages/Home";
+import Login from "@/pages/Login";
+import Signup from "@/pages/Signup";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import { PageContainer } from "@/components/PageContainer";
 import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -26,9 +31,19 @@ function App() {
           <QueryClientProvider client={queryClient}>
             <div className="min-h-screen bg-background text-foreground">
               <Routes>
-                {/* Core Routes */}
+                {/* Public Routes */}
+                <Route path="/home" element={<Home />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                
+                {/* Root Route - Redirect to Home for landing */}
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                
+                {/* Protected Routes */}
                 <Route
-                  path="/"
+                  path="/dashboard"
                   element={
                     <ProtectedRoute>
                       <PageContainer>
@@ -107,11 +122,11 @@ function App() {
                   } 
                 />
                 
-                {/* Public Shared Task Route - Fixed parameter name */}
+                {/* Public Shared Task Route */}
                 <Route path="/shared-task/:shareLink" element={<SharedTask />} />
                 
-                {/* 404 Route - Redirect to Dashboard */}
-                <Route path="*" element={<Navigate to="/" />} />
+                {/* 404 Route - Redirect to Home */}
+                <Route path="*" element={<Navigate to="/home" />} />
               </Routes>
               
               <Toaster />
