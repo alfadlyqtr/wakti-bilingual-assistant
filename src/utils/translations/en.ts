@@ -1,4 +1,3 @@
-
 export const en = {
   "loading": "Loading...",
   "name": "Name",
@@ -88,5 +87,7 @@ export const en = {
   "arabic": "العربية",
   "english": "English",
   "lightMode": "Light Mode",
-  "darkMode": "Dark Mode"
+  "darkMode": "Dark Mode",
+  "recurring": "Recurring",
+  "create": "Create"
 };

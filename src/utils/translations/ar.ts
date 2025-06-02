@@ -1,4 +1,3 @@
-
 export const ar = {
   "loading": "جار التحميل",
   "save": "حفظ",
@@ -60,8 +59,6 @@ export const ar = {
   "dragModeActivated": "تم تفعيل وضع السحب",
   "dragModeDeactivated": "تم إلغاء تفعيل وضع السحب",
   "widgetRearrangedAndSaved": "تم إعادة ترتيب الأداة وحفظها",
-
-  // T&R System translations
   "tr": "م & ت",
   "tasksAndReminders": "المهام والتذكيرات",
   "tasks": "المهام",
@@ -117,5 +114,6 @@ export const ar = {
   "subtaskUpdated": "تم تحديث المهمة الفرعية بنجاح",
   "subtaskDeleted": "تم حذف المهمة الفرعية بنجاح",
   "arabic": "العربية",
-  "english": "الإنجليزية"
+  "english": "الإنجليزية",
+  "recurring": "متكرر"
 };

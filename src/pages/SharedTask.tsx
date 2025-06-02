@@ -3,11 +3,16 @@ import { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, User, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Calendar, Clock, User, AlertTriangle, CheckCircle, XCircle, Pause } from 'lucide-react';
 import { TRService, TRTask } from '@/services/trService';
+import { TRSharedService, TRVisitorCompletion } from '@/services/trSharedService';
 import { PriorityBadge } from '@/components/tr/PriorityBadge';
 import { StatusBadge } from '@/components/tr/StatusBadge';
-import { SubtaskManager } from '@/components/tr/SubtaskManager';
+import { InteractiveSubtaskManager } from '@/components/tr/InteractiveSubtaskManager';
+import { VisitorNameModal } from '@/components/tr/VisitorNameModal';
+import { SnoozeRequestModal } from '@/components/tr/SnoozeRequestModal';
+import { LiveVisitorIndicator } from '@/components/tr/LiveVisitorIndicator';
 import { format, isAfter, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -19,12 +24,68 @@ export default function SharedTask() {
   const [task, setTask] = useState<TRTask | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Visitor state
+  const [visitorName, setVisitorName] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string>('');
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [showSnoozeModal, setShowSnoozeModal] = useState(false);
+  
+  // Task interaction state
+  const [taskCompletion, setTaskCompletion] = useState<TRVisitorCompletion | null>(null);
+  const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
 
   useEffect(() => {
     if (shareLink) {
       loadSharedTask();
     }
   }, [shareLink]);
+
+  useEffect(() => {
+    // Check if visitor has already entered their name
+    const storedName = localStorage.getItem(`visitor_name_${shareLink}`);
+    const storedSessionId = localStorage.getItem(`visitor_session_${shareLink}`);
+    
+    if (storedName && storedSessionId) {
+      setVisitorName(storedName);
+      setSessionId(storedSessionId);
+      if (task) {
+        recordVisitorAccess(storedName, storedSessionId);
+      }
+    } else {
+      setShowNameModal(true);
+    }
+  }, [task, shareLink]);
+
+  useEffect(() => {
+    if (task && sessionId) {
+      loadTaskCompletions();
+      
+      // Set up real-time subscription
+      const channel = TRSharedService.subscribeToTaskUpdates(task.id, () => {
+        loadTaskCompletions();
+      });
+
+      // Update visitor activity periodically
+      const activityInterval = setInterval(() => {
+        TRSharedService.updateVisitorActivity(sessionId, true);
+      }, 30000); // Every 30 seconds
+
+      // Mark visitor as inactive when leaving
+      const handleBeforeUnload = () => {
+        TRSharedService.updateVisitorActivity(sessionId, false);
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      return () => {
+        channel.unsubscribe();
+        clearInterval(activityInterval);
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        TRSharedService.updateVisitorActivity(sessionId, false);
+      };
+    }
+  }, [task, sessionId]);
 
   const loadSharedTask = async () => {
     try {
@@ -44,6 +105,92 @@ export default function SharedTask() {
     }
   };
 
+  const loadTaskCompletions = async () => {
+    if (!task) return;
+
+    try {
+      const [allCompletions, myTaskCompletion] = await Promise.all([
+        TRSharedService.getVisitorCompletions(task.id),
+        TRSharedService.getVisitorCompletion(task.id, sessionId)
+      ]);
+      
+      setCompletions(allCompletions);
+      setTaskCompletion(myTaskCompletion);
+    } catch (error) {
+      console.error('Error loading completions:', error);
+    }
+  };
+
+  const recordVisitorAccess = async (name: string, session: string) => {
+    if (!task) return;
+
+    try {
+      await TRSharedService.recordVisitorAccess(task.id, name, session);
+    } catch (error) {
+      console.error('Error recording visitor access:', error);
+    }
+  };
+
+  const handleNameSubmit = async (name: string) => {
+    const newSessionId = TRSharedService.generateSessionId();
+    
+    setVisitorName(name);
+    setSessionId(newSessionId);
+    setShowNameModal(false);
+    
+    // Store in localStorage
+    localStorage.setItem(`visitor_name_${shareLink}`, name);
+    localStorage.setItem(`visitor_session_${shareLink}`, newSessionId);
+    
+    if (task) {
+      await recordVisitorAccess(name, newSessionId);
+    }
+    
+    toast.success(`Welcome, ${name}!`);
+  };
+
+  const handleTaskToggle = async (completed: boolean) => {
+    if (!task) return;
+
+    try {
+      await TRSharedService.markTaskCompleted(task.id, visitorName, sessionId, completed);
+      
+      // Update local state
+      if (taskCompletion) {
+        setTaskCompletion({ ...taskCompletion, is_completed: completed });
+      } else {
+        const newCompletion: TRVisitorCompletion = {
+          id: `temp-${Date.now()}`,
+          task_id: task.id,
+          visitor_name: visitorName,
+          session_id: sessionId,
+          completion_type: 'task',
+          is_completed: completed,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+        setTaskCompletion(newCompletion);
+      }
+
+      toast.success(completed ? 'Task marked as complete' : 'Task marked as incomplete');
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      toast.error('Failed to update task');
+    }
+  };
+
+  const handleSnoozeRequest = async (reason?: string) => {
+    if (!task) return;
+
+    try {
+      await TRSharedService.requestSnooze(task.id, visitorName, sessionId, reason);
+      toast.success('Snooze request sent to task owner');
+    } catch (error) {
+      console.error('Error requesting snooze:', error);
+      toast.error('Failed to send snooze request');
+    }
+  };
+
   const isOverdue = (task: TRTask) => {
     if (task.completed) return false;
     const now = new Date();
@@ -51,6 +198,12 @@ export default function SharedTask() {
       ? parseISO(`${task.due_date}T${task.due_time}`)
       : parseISO(`${task.due_date}T23:59:59`);
     return isAfter(now, dueDateTime);
+  };
+
+  const getTaskCompletedBy = (): string[] => {
+    return completions
+      .filter(c => c.completion_type === 'task' && c.is_completed && !c.subtask_id)
+      .map(c => c.visitor_name);
   };
 
   if (!shareLink) {
@@ -86,16 +239,22 @@ export default function SharedTask() {
     );
   }
 
+  const taskCompletedBy = getTaskCompletedBy();
+  const isTaskCompleted = taskCompletion?.is_completed || false;
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-6">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-              <User className="h-4 w-4" />
-              <span>Shared Task</span>
+            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground mb-2">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span>Shared Task • {visitorName}</span>
+              </div>
+              <LiveVisitorIndicator taskId={task.id} currentSessionId={sessionId} />
             </div>
-            <h1 className="text-2xl font-bold">Shared Task View</h1>
+            <h1 className="text-2xl font-bold">Interactive Task View</h1>
           </div>
 
           <Card>
@@ -112,7 +271,7 @@ export default function SharedTask() {
                     </Badge>
                   </div>
                   
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                     <Clock className="w-4 h-4" />
                     <span>
                       Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
@@ -120,8 +279,13 @@ export default function SharedTask() {
                     </span>
                   </div>
 
-                  <div className="mt-2">
+                  <div className="flex items-center gap-2">
                     <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
+                    {taskCompletedBy.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        ✓ Completed by: {taskCompletedBy.join(', ')}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
@@ -135,12 +299,47 @@ export default function SharedTask() {
                 </div>
               )}
 
+              {/* Task Completion Actions */}
+              <div className="mb-6 p-4 border rounded-lg">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {isTaskCompleted ? (
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <span className="font-medium">
+                      {isTaskCompleted ? 'You marked this task as complete' : 'Mark this task as complete'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant={isTaskCompleted ? "secondary" : "default"}
+                      size="sm"
+                      onClick={() => handleTaskToggle(!isTaskCompleted)}
+                    >
+                      {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowSnoozeModal(true)}
+                    >
+                      <Pause className="h-4 w-4 mr-1" />
+                      Request Snooze
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Subtasks */}
               <div className="mb-4">
-                <h3 className="font-medium mb-3">{t('subtasks', language)}</h3>
-                <SubtaskManager 
-                  taskId={task.id} 
-                  onSubtasksChange={() => {}}
-                  readOnly={true}
+                <InteractiveSubtaskManager 
+                  taskId={task.id}
+                  visitorName={visitorName}
+                  sessionId={sessionId}
                 />
               </div>
 
@@ -156,6 +355,20 @@ export default function SharedTask() {
           </Card>
         </div>
       </div>
+
+      {/* Modals */}
+      <VisitorNameModal
+        isOpen={showNameModal}
+        onSubmit={handleNameSubmit}
+        taskTitle={task?.title || ''}
+      />
+
+      <SnoozeRequestModal
+        isOpen={showSnoozeModal}
+        onClose={() => setShowSnoozeModal(false)}
+        onSubmit={handleSnoozeRequest}
+        taskTitle={task?.title || ''}
+      />
     </div>
   );
 }
