@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -741,8 +740,8 @@ export default function WaktiAIV2() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-      {/* Header - Updated to fixed positioning */}
-      <div className="fixed top-0 left-0 right-0 flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm z-30">
+      {/* Header - Updated layout */}
+      <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">
           <Button 
             variant="ghost" 
@@ -813,8 +812,8 @@ export default function WaktiAIV2() {
         capture="environment"
       />
 
-      {/* Enhanced Messages Area with Search Confirmation - Added top padding for fixed header */}
-      <ScrollArea className="flex-1 p-4 pb-40 pt-20 relative z-10">
+      {/* Enhanced Messages Area with Search Confirmation */}
+      <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
         <div className="space-y-4 max-w-4xl mx-auto">
           {messages.map((message) => (
             <ChatBubble 
@@ -832,7 +831,7 @@ export default function WaktiAIV2() {
         </div>
       </ScrollArea>
 
-      {/* Left Drawer - Chat Archive with + icon moved here - Updated top position for fixed header */}
+      {/* Left Drawer - Chat Archive with + icon moved here */}
       <div className={cn(
         "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
@@ -876,7 +875,7 @@ export default function WaktiAIV2() {
         </div>
       </div>
 
-      {/* Right Drawer - Quick Actions with Trigger Controls - Updated top position for fixed header */}
+      {/* Right Drawer - Quick Actions with Trigger Controls */}
       <div className={cn(
         "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
         rightDrawerOpen ? "translate-x-0" : "translate-x-full"
