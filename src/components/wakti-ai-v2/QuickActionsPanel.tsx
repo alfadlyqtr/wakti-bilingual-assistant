@@ -9,6 +9,7 @@ import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
 import { VoiceClonePopup } from './VoiceClonePopup';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
+import { KnowledgeModal } from './KnowledgeModal';
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
@@ -25,6 +26,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
   const [voiceCloneOpen, setVoiceCloneOpen] = useState(false);
   const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
+  const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
 
   // Save trigger state to localStorage and dispatch event for header
   React.useEffect(() => {
@@ -139,7 +141,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             </span>
           </Button>
           
-          {/* Text Generation Button - Updated to open popup */}
+          {/* Text Generation Button */}
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
@@ -153,11 +155,11 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             </span>
           </Button>
           
-          {/* Improve AI Button */}
+          {/* Improve AI Button - Updated to open KnowledgeModal */}
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => onSendMessage(language === 'ar' ? 'كيف يمكنني تحسين استخدام الذكاء الاصطناعي؟' : 'How can I improve my AI usage?')}
+            onClick={() => setKnowledgeModalOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
               <Brain className="h-3 w-3 text-white" />
@@ -246,6 +248,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
         open={textGeneratorOpen} 
         onOpenChange={setTextGeneratorOpen}
         onGenerated={handleTextGenerated}
+      />
+
+      {/* Knowledge Modal */}
+      <KnowledgeModal 
+        open={knowledgeModalOpen} 
+        onOpenChange={setKnowledgeModalOpen} 
       />
     </div>
   );
