@@ -1,54 +1,44 @@
 
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Clock, Users } from 'lucide-react';
-import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { TRService, TRTask, TRSharedAccess } from '@/services/trService';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, Clock, User, AlertTriangle } from 'lucide-react';
+import { TRService, TRTask } from '@/services/trService';
 import { PriorityBadge } from '@/components/tr/PriorityBadge';
 import { StatusBadge } from '@/components/tr/StatusBadge';
 import { SubtaskManager } from '@/components/tr/SubtaskManager';
+import { format, isAfter, parseISO } from 'date-fns';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 import { toast } from 'sonner';
-import { format, parseISO, isAfter } from 'date-fns';
 
 export default function SharedTask() {
-  const { shareId } = useParams<{ shareId: string }>();
+  const { shareLink } = useParams<{ shareLink: string }>();
   const { language } = useTheme();
   const [task, setTask] = useState<TRTask | null>(null);
-  const [sharedAccess, setSharedAccess] = useState<TRSharedAccess[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (shareId) {
+    if (shareLink) {
       loadSharedTask();
     }
-  }, [shareId]);
+  }, [shareLink]);
 
   const loadSharedTask = async () => {
-    if (!shareId) return;
-    
-    setLoading(true);
     try {
-      const taskData = await TRService.getTaskByShareLink(shareId);
-      if (!taskData) {
+      setLoading(true);
+      const sharedTask = await TRService.getSharedTask(shareLink!);
+      if (sharedTask) {
+        setTask(sharedTask);
+      } else {
         setError('Task not found or no longer shared');
-        return;
       }
-      
-      setTask(taskData);
-      
-      // Record access
-      await TRService.recordSharedAccess(taskData.id);
-      
-      // Load shared access records
-      const accessData = await TRService.getSharedAccess(taskData.id);
-      setSharedAccess(accessData);
     } catch (error) {
       console.error('Error loading shared task:', error);
-      setError('Error loading task');
+      setError('Failed to load shared task');
+      toast.error('Failed to load shared task');
     } finally {
       setLoading(false);
     }
@@ -63,138 +53,107 @@ export default function SharedTask() {
     return isAfter(now, dueDateTime);
   };
 
-  const handleToggleComplete = async () => {
-    if (!task) return;
-    
-    try {
-      const updates: Partial<TRTask> = {
-        completed: !task.completed,
-        completed_at: !task.completed ? new Date().toISOString() : undefined
-      };
-      
-      const updatedTask = await TRService.updateTask(task.id, updates);
-      setTask(updatedTask);
-      toast.success(t(task.completed ? 'taskIncomplete' : 'taskCompleted', language));
-    } catch (error) {
-      console.error('Error toggling task completion:', error);
-      toast.error('Error updating task');
-    }
-  };
+  if (!shareLink) {
+    return <Navigate to="/tr" replace />;
+  }
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading shared task...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !task) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-2">Task Not Found</h1>
-          <p className="text-muted-foreground">{error || 'This task is no longer available.'}</p>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+              <h2 className="text-lg font-semibold mb-2">Task Not Found</h2>
+              <p className="text-muted-foreground mb-4">
+                {error || 'This task might have been removed or is no longer shared.'}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/95 p-4">
-      <div className="max-w-md mx-auto space-y-4">
-        {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold">{t('sharedTask', language)}</h1>
-          <p className="text-muted-foreground">View and interact with this shared task</p>
-        </div>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="mb-6">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <User className="h-4 w-4" />
+              <span>Shared Task</span>
+            </div>
+            <h1 className="text-2xl font-bold">Shared Task View</h1>
+          </div>
 
-        {/* Task Card */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-start gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleComplete}
-                className="p-0 h-auto mt-1"
-              >
-                {task.completed ? (
-                  <CheckCircle2 className="w-6 h-6 text-green-600" />
-                ) : (
-                  <Circle className="w-6 h-6" />
-                )}
-              </Button>
-              
-              <div className="flex-1">
-                <CardTitle className={`${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                  {task.title}
-                </CardTitle>
-                
-                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <CardTitle className={task.completed ? 'line-through text-muted-foreground' : ''}>
+                      {task.title}
+                    </CardTitle>
+                    <PriorityBadge priority={task.priority} />
+                    <Badge variant="secondary" className="text-xs">
+                      {t('sharedTask', language)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                      {task.due_time && ` at ${task.due_time}`}
+                    </span>
+                  </div>
+
+                  <div className="mt-2">
+                    <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              {task.description && (
+                <div className="mb-6">
+                  <h3 className="font-medium mb-2">{t('description', language)}</h3>
+                  <p className="text-muted-foreground">{task.description}</p>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <h3 className="font-medium mb-3">{t('subtasks', language)}</h3>
+                <SubtaskManager 
+                  taskId={task.id} 
+                  onSubtasksChange={() => {}}
+                  readOnly={true}
+                />
+              </div>
+
+              <div className="pt-4 border-t">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
                   <span>
-                    {format(parseISO(task.due_date), 'MMM dd, yyyy')}
-                    {task.due_time && ` at ${task.due_time}`}
+                    Created on {format(parseISO(task.created_at), 'MMM dd, yyyy')}
                   </span>
                 </div>
-
-                <div className="flex items-center gap-2 mt-2">
-                  <PriorityBadge priority={task.priority} />
-                  <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
-                </div>
               </div>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            {task.description && (
-              <div className="mb-4">
-                <h4 className="font-medium mb-2">{t('description', language)}</h4>
-                <p className="text-sm text-muted-foreground">{task.description}</p>
-              </div>
-            )}
-
-            {/* Subtasks */}
-            <div className="mb-4">
-              <SubtaskManager 
-                taskId={task.id} 
-                isShared={true}
-                onSubtasksChange={() => {}}
-              />
-            </div>
-
-            {/* Viewed By */}
-            {sharedAccess.length > 0 && (
-              <div className="border-t pt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Users className="w-4 h-4" />
-                  <span className="text-sm font-medium">{t('viewedBy', language)}</span>
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  {sharedAccess.slice(0, 5).map((access) => (
-                    <div key={access.id}>
-                      {access.viewer_name || t('guest', language)} - {format(parseISO(access.last_accessed), 'MMM dd, HH:mm')}
-                    </div>
-                  ))}
-                  {sharedAccess.length > 5 && (
-                    <div>+{sharedAccess.length - 5} more</div>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <Button 
-            onClick={handleToggleComplete}
-            variant={task.completed ? "outline" : "default"}
-            className="flex-1"
-          >
-            {task.completed ? t('markIncomplete', language) : t('markComplete', language)}
-          </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

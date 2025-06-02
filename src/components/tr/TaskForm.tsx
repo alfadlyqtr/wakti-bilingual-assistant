@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [dueTime, setDueTime] = useState('');
   const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [taskType, setTaskType] = useState<'one-time' | 'repeated'>('one-time');
+  const [recurrence, setRecurrence] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
   const [shareTask, setShareTask] = useState(false);
   const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(false);
@@ -47,6 +49,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setDueTime(task.due_time || '');
         setPriority(task.priority);
         setTaskType(task.task_type);
+        setRecurrence('weekly'); // Default recurrence for existing tasks
         setShareTask(task.is_shared || false);
         // Load subtasks for existing task
         if (task.id) {
@@ -60,6 +63,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setDueTime('');
         setPriority('normal');
         setTaskType('one-time');
+        setRecurrence('weekly');
         setShareTask(false);
         setSubtasks([]);
         setSubtaskInput('');
@@ -89,11 +93,21 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         due_time: dueTime || null,
         priority,
         task_type: taskType,
+        recurrence: taskType === 'repeated' ? recurrence : null,
         is_shared: shareTask
       };
 
       if (task) {
-        await TRService.updateTask(task.id, taskData);
+        // For existing tasks, only update editable fields
+        const updateData = {
+          due_date: taskData.due_date,
+          due_time: taskData.due_time,
+          priority: taskData.priority,
+          task_type: taskData.task_type,
+          recurrence: taskData.recurrence,
+          is_shared: taskData.is_shared
+        };
+        await TRService.updateTask(task.id, updateData);
         showSuccess(t('taskUpdated', language));
       } else {
         // Create task first
@@ -181,6 +195,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('enterTaskTitle', language)}
               required
+              disabled={!!task} // Disable when editing existing task
+              className={task ? 'bg-muted text-muted-foreground' : ''}
             />
           </div>
 
@@ -193,6 +209,8 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('enterDescription', language)}
               rows={3}
+              disabled={!!task} // Disable when editing existing task
+              className={task ? 'bg-muted text-muted-foreground' : ''}
             />
           </div>
 
@@ -261,6 +279,23 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
               </Select>
             </div>
           </div>
+
+          {/* Recurrence Options - Show only when task type is repeated */}
+          {taskType === 'repeated' && (
+            <div className="space-y-2">
+              <Label>{t('recurrence', language)}</Label>
+              <Select value={recurrence} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setRecurrence(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Every Day</SelectItem>
+                  <SelectItem value="weekly">Every Week</SelectItem>
+                  <SelectItem value="monthly">Every Month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Subtasks Section - Show for both new and existing tasks */}
           <div className="space-y-2">
