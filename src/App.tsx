@@ -34,6 +34,7 @@ function App() {
                       <PageContainer>
                         <Dashboard />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -44,6 +45,7 @@ function App() {
                       <PageContainer>
                         <Calendar />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -54,6 +56,7 @@ function App() {
                       <PageContainer>
                         <Maw3d />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -64,6 +67,7 @@ function App() {
                       <PageContainer>
                         <Tasjeel />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -74,6 +78,7 @@ function App() {
                       <PageContainer>
                         <WaktiAi />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -84,6 +89,7 @@ function App() {
                       <PageContainer>
                         <Settings />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   }
                 />
@@ -96,19 +102,17 @@ function App() {
                       <PageContainer>
                         <TasksReminders />
                       </PageContainer>
+                      <MobileNav />
                     </ProtectedRoute>
                   } 
                 />
                 
-                {/* Public Shared Task Route */}
-                <Route path="/shared-task/:shareId" element={<SharedTask />} />
+                {/* Public Shared Task Route - Fixed parameter name */}
+                <Route path="/shared-task/:shareLink" element={<SharedTask />} />
                 
                 {/* 404 Route - Redirect to Dashboard */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
-              
-              {/* Mobile Navigation - appears on all protected routes */}
-              <MobileNav />
               
               <Toaster />
             </div>
