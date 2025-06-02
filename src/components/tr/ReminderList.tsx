@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreVertical, Calendar, Clock, Edit, Trash2, Snooze } from 'lucide-react';
+import { MoreVertical, Calendar, Clock, Edit, Trash2, Sleep } from 'lucide-react';
 import { format, isPast, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -154,7 +154,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({ onReminderUpdate }) 
                       {t('edit', language)}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleSnoozeReminder(reminder)}>
-                      <Snooze className="h-4 w-4 mr-2" />
+                      <Sleep className="h-4 w-4 mr-2" />
                       Snooze
                     </DropdownMenuItem>
                     <DropdownMenuItem 
