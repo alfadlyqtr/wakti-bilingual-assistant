@@ -1,14 +1,10 @@
 
 import React, { useEffect } from "react";
-import { useLocation, Navigate } from "react-router-dom";
+import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Loading from "@/components/ui/loading";
 
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-}
-
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
+export default function ProtectedRoute() {
   const { user, session, isLoading } = useAuth();
   const location = useLocation();
 
@@ -35,5 +31,5 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   console.log("ProtectedRoute: User authenticated, rendering protected content");
-  return <>{children}</>;
+  return <Outlet />;
 }

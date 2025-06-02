@@ -34,13 +34,13 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
             id: "calendar",
             title: "calendar" as TranslationKey,
             visible: widgetVisibility.calendar !== false, // Default to true if not set
-            component: React.createElement(CalendarWidget, { isLoading, events: [], tasks, language }),
+            component: React.createElement(CalendarWidget, { isLoading, events: legacyEvents, tasks, language }),
           },
           events: {
             id: "events",
             title: "events" as TranslationKey,
             visible: widgetVisibility.events !== false, // Default to true if not set
-            component: React.createElement(EventsWidget, { isLoading, events: [], language }),
+            component: React.createElement(EventsWidget, { isLoading, events: legacyEvents, language }),
           },
           reminders: {
             id: "reminders",
@@ -60,7 +60,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
         const savedOrder = getWidgetOrder();
         const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
         
-        console.log('Dashboard widgets configured with new my_tasks system:', orderedWidgets.map(w => w.id));
+        console.log('Dashboard widgets configured:', orderedWidgets.map(w => w.id));
         setWidgets(orderedWidgets);
       });
     });

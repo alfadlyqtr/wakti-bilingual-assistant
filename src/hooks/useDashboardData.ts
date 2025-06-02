@@ -2,14 +2,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-interface MyTask {
+interface Task {
   id: string;
   title: string;
   status: string;
   priority: string;
   due_date?: string;
   created_at: string;
-  task_type: string;
 }
 
 interface LegacyEvent {
@@ -20,10 +19,17 @@ interface LegacyEvent {
   created_at: string;
 }
 
+interface Reminder {
+  id: string;
+  title: string;
+  due_date: string;
+  created_at: string;
+}
+
 export const useDashboardData = () => {
-  const [tasks, setTasks] = useState<MyTask[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [events, setEvents] = useState<LegacyEvent[]>([]);
-  const [reminders, setReminders] = useState<MyTask[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -32,37 +38,40 @@ export const useDashboardData = () => {
 
   const fetchDashboardData = async () => {
     try {
-      console.log('Fetching dashboard data (new my_tasks system)');
+      console.log('Fetching dashboard data (legacy systems only)');
       
-      // Update overdue tasks first
-      try {
-        await supabase.rpc('update_overdue_tasks');
-      } catch (err) {
-        console.warn('Could not update overdue tasks:', err);
-      }
-
-      // Fetch tasks and reminders from new my_tasks table
-      const { data: myTasksData, error: myTasksError } = await supabase
-        .from('my_tasks')
-        .select('id, title, status, priority, due_date, created_at, task_type')
+      // Fetch tasks
+      const { data: tasksData, error: tasksError } = await supabase
+        .from('tasks')
+        .select('id, title, status, priority, due_date, created_at')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(5);
 
-      if (myTasksError) {
-        console.error('Error fetching my_tasks:', myTasksError);
+      if (tasksError) {
+        console.error('Error fetching tasks:', tasksError);
       } else {
-        console.log('Fetched my_tasks for dashboard:', myTasksData?.length || 0);
-        
-        const tasksList = myTasksData?.filter(item => item.task_type === 'task') || [];
-        const remindersList = myTasksData?.filter(item => item.task_type === 'reminder') || [];
-        
-        setTasks(tasksList.slice(0, 5));
-        setReminders(remindersList.slice(0, 5));
+        console.log('Fetched tasks for dashboard:', tasksData?.length || 0);
+        setTasks(tasksData || []);
       }
 
-      // Note: No events fetch since this is for the new system
-      console.log('Dashboard widgets updated with new my_tasks system');
+      // Note: We're NOT fetching any events here since this is for the legacy system
+      // The dashboard should show tasks and reminders, but no events to avoid conflicts
+      console.log('Skipping events fetch - using Maw3d system instead');
       setEvents([]);
+
+      // Fetch reminders
+      const { data: remindersData, error: remindersError } = await supabase
+        .from('reminders')
+        .select('id, title, due_date, created_at')
+        .order('due_date', { ascending: true })
+        .limit(5);
+
+      if (remindersError) {
+        console.error('Error fetching reminders:', remindersError);
+      } else {
+        console.log('Fetched reminders for dashboard:', remindersData?.length || 0);
+        setReminders(remindersData || []);
+      }
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -73,7 +82,7 @@ export const useDashboardData = () => {
 
   return {
     tasks,
-    events, // Empty array for legacy compatibility
+    events, // This will be empty array to avoid conflicts with Maw3d
     reminders,
     isLoading,
     refetch: fetchDashboardData

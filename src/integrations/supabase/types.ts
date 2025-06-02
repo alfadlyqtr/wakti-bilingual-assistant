@@ -618,57 +618,6 @@ export type Database = {
         }
         Relationships: []
       }
-      my_tasks: {
-        Row: {
-          created_at: string
-          description: string | null
-          due_date: string | null
-          id: string
-          is_repeated: boolean
-          is_shared: boolean
-          priority: string
-          short_id: string | null
-          status: string
-          subtasks: Json | null
-          task_type: string
-          title: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_repeated?: boolean
-          is_shared?: boolean
-          priority?: string
-          short_id?: string | null
-          status?: string
-          subtasks?: Json | null
-          task_type?: string
-          title: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          due_date?: string | null
-          id?: string
-          is_repeated?: boolean
-          is_shared?: boolean
-          priority?: string
-          short_id?: string | null
-          status?: string
-          subtasks?: Json | null
-          task_type?: string
-          title?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           auto_approve_contacts: boolean | null
@@ -704,44 +653,6 @@ export type Database = {
           username?: string | null
         }
         Relationships: []
-      }
-      shared_task_completions: {
-        Row: {
-          completed_at: string
-          completed_by_name: string | null
-          completed_by_user_id: string | null
-          completion_type: string
-          id: string
-          subtask_index: number | null
-          task_id: string
-        }
-        Insert: {
-          completed_at?: string
-          completed_by_name?: string | null
-          completed_by_user_id?: string | null
-          completion_type: string
-          id?: string
-          subtask_index?: number | null
-          task_id: string
-        }
-        Update: {
-          completed_at?: string
-          completed_by_name?: string | null
-          completed_by_user_id?: string | null
-          completion_type?: string
-          id?: string
-          subtask_index?: number | null
-          task_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "shared_task_completions_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "my_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       subtasks: {
         Row: {
@@ -1109,10 +1020,6 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
-      generate_task_short_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       get_current_user_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -1223,10 +1130,6 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
-      }
-      update_overdue_tasks: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
       }
       user_can_access_task: {
         Args: { task_id: string }
