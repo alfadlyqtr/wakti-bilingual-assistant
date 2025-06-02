@@ -19,6 +19,7 @@ interface ConversationsListProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   onRefresh: () => void;
+  onClose?: () => void;
 }
 
 export function ConversationsList({
@@ -26,13 +27,15 @@ export function ConversationsList({
   currentConversationId,
   onSelectConversation,
   onDeleteConversation,
-  onRefresh
+  onRefresh,
+  onClose
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
 
   const handleSelectConversation = (id: string) => {
     console.log('🔍 CONVERSATIONS: Selecting conversation:', id);
     onSelectConversation(id);
+    onClose?.();
   };
 
   const handleDeleteConversation = async (id: string) => {
@@ -41,9 +44,15 @@ export function ConversationsList({
       await onDeleteConversation(id);
       // Refresh the conversations list after deletion
       onRefresh();
+      onClose?.();
     } catch (error) {
       console.error('🔍 CONVERSATIONS: Error deleting conversation:', error);
     }
+  };
+
+  const handleRefresh = () => {
+    onRefresh();
+    onClose?.();
   };
 
   return (
@@ -65,7 +74,7 @@ export function ConversationsList({
           <Button
             variant="outline"
             size="sm"
-            onClick={onRefresh}
+            onClick={handleRefresh}
             className="text-xs"
           >
             {language === 'ar' ? 'تحديث' : 'Refresh'}

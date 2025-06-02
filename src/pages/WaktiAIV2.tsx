@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -856,6 +855,7 @@ export default function WaktiAIV2() {
               onSelectConversation={loadConversation}
               onDeleteConversation={deleteConversation}
               onRefresh={loadConversations}
+              onClose={() => setLeftDrawerOpen(false)}
             />
           </div>
         </div>
@@ -890,6 +890,7 @@ export default function WaktiAIV2() {
               activeTrigger={activeTrigger}
               onTriggerChange={handleTriggerChange}
               onTextGenerated={handleTextGenerated}
+              onClose={() => setRightDrawerOpen(false)}
             />
           </div>
         </div>
