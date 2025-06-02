@@ -35,6 +35,7 @@ export interface TRReminder {
   description?: string;
   due_date: string;
   due_time?: string;
+  snoozed_until?: string;
   created_at: string;
   updated_at: string;
 }
@@ -229,7 +230,7 @@ export class TRService {
     return data || [];
   }
 
-  static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at'>): Promise<TRReminder> {
+  static async createReminder(reminder: Omit<TRReminder, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'snoozed_until'>): Promise<TRReminder> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
@@ -252,6 +253,23 @@ export class TRService {
     const { data, error } = await supabase
       .from('tr_reminders')
       .update(sanitizedUpdates)
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data;
+  }
+
+  static async snoozeReminder(id: string): Promise<TRReminder> {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const { data, error } = await supabase
+      .from('tr_reminders')
+      .update({ 
+        snoozed_until: tomorrow.toISOString().split('T')[0]
+      })
       .eq('id', id)
       .select()
       .single();
