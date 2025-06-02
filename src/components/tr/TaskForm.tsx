@@ -39,6 +39,8 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     is_shared: false
   });
 
+  const isEditing = !!task;
+
   useEffect(() => {
     if (task) {
       setFormData({
@@ -70,10 +72,11 @@ export const TaskForm: React.FC<TaskFormProps> = ({
 
     setLoading(true);
     try {
-      if (task) {
+      if (isEditing) {
         await TRService.updateTask(task.id, formData);
         toast.success(t('taskUpdated', language));
       } else {
+        console.log('Creating new task with data:', formData);
         await TRService.createTask(formData);
         toast.success(t('taskCreated', language));
       }
@@ -81,7 +84,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
       onClose();
     } catch (error) {
       console.error('Error saving task:', error);
-      toast.error('Error saving task');
+      toast.error(isEditing ? 'Error updating task' : 'Error creating task');
     } finally {
       setLoading(false);
     }
@@ -93,12 +96,19 @@ export const TaskForm: React.FC<TaskFormProps> = ({
     }
   };
 
+  const getButtonText = () => {
+    if (loading) {
+      return isEditing ? 'Saving...' : 'Creating...';
+    }
+    return isEditing ? t('save', language) : t('createTask', language);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {task ? t('editTask', language) : t('createTask', language)}
+            {isEditing ? t('editTask', language) : t('createTask', language)}
           </DialogTitle>
         </DialogHeader>
 
@@ -198,7 +208,7 @@ export const TaskForm: React.FC<TaskFormProps> = ({
           {/* Form Actions */}
           <div className="flex items-center gap-3 pt-4">
             <Button type="submit" disabled={loading || !formData.title.trim() || !formData.due_date} className="flex-1">
-              {loading ? 'Saving...' : t('save', language)}
+              {getButtonText()}
             </Button>
             <Button type="button" variant="outline" onClick={handleClose} disabled={loading} className="flex-1">
               {t('cancel', language)}

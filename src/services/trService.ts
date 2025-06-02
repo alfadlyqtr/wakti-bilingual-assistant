@@ -61,16 +61,43 @@ export class TRService {
   }
 
   static async createTask(task: Omit<TRTask, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'share_link' | 'completed' | 'completed_at' | 'snoozed_until'>): Promise<TRTask> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    console.log('TRService.createTask: Starting task creation');
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.createTask: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.createTask: No user found');
+      throw new Error('User not authenticated. Please log in.');
+    }
+
+    console.log('TRService.createTask: User authenticated:', user.id);
+    console.log('TRService.createTask: Task data:', task);
+
+    const taskData = { 
+      ...task, 
+      user_id: user.id, 
+      completed: false 
+    };
+
+    console.log('TRService.createTask: Inserting task data:', taskData);
 
     const { data, error } = await supabase
       .from('tr_tasks')
-      .insert([{ ...task, user_id: user.id, completed: false }])
+      .insert([taskData])
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('TRService.createTask: Database error:', error);
+      throw new Error(`Failed to create task: ${error.message}`);
+    }
+
+    console.log('TRService.createTask: Task created successfully:', data);
     return data;
   }
 
