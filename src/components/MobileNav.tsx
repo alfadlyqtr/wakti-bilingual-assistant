@@ -3,14 +3,14 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - removed Tasks & Reminders
+  // Navigation items - Updated with T&R
   const navItems = [
     {
       name: language === 'ar' ? 'التقويم' : 'Calendar',
@@ -21,6 +21,11 @@ export function MobileNav() {
       name: language === 'ar' ? 'مواعيد' : 'Maw3d',
       path: '/maw3d',
       icon: 'calendar-clock',
+    },
+    {
+      name: language === 'ar' ? 'م & ت' : 'T & R',
+      path: '/tr',
+      icon: 'list-todo',
     },
     {
       name: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
@@ -37,6 +42,7 @@ export function MobileNav() {
   const iconMap: { [key: string]: React.ComponentType<any> } = {
     calendar: Calendar,
     'calendar-clock': CalendarClock,
+    'list-todo': ListTodo,
     sparkles: Sparkles,
     mic: Mic,
   };
@@ -46,7 +52,7 @@ export function MobileNav() {
       <ul className="flex justify-around items-center h-16">
         {navItems.map((item) => {
           const IconComponent = iconMap[item.icon] || Calendar;
-          const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d'));
+          const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || (item.path === '/tr' && pathname.startsWith('/tr'));
           
           return (
             <li key={item.path} className="flex-1 flex justify-center">

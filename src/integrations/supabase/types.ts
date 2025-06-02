@@ -900,6 +900,166 @@ export type Database = {
         }
         Relationships: []
       }
+      tr_reminders: {
+        Row: {
+          created_at: string
+          description: string | null
+          due_date: string
+          due_time: string | null
+          id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          due_date: string
+          due_time?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          due_time?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      tr_shared_access: {
+        Row: {
+          created_at: string
+          id: string
+          last_accessed: string
+          task_id: string
+          viewer_id: string | null
+          viewer_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_accessed?: string
+          task_id: string
+          viewer_id?: string | null
+          viewer_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_accessed?: string
+          task_id?: string
+          viewer_id?: string | null
+          viewer_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tr_shared_access_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tr_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tr_subtasks: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          order_index: number
+          task_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          order_index?: number
+          task_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          order_index?: number
+          task_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tr_subtasks_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tr_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tr_tasks: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          due_date: string
+          due_time: string | null
+          id: string
+          is_shared: boolean
+          priority: string
+          share_link: string | null
+          snoozed_until: string | null
+          task_type: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date: string
+          due_time?: string | null
+          id?: string
+          is_shared?: boolean
+          priority?: string
+          share_link?: string | null
+          snoozed_until?: string | null
+          task_type?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          due_date?: string
+          due_time?: string | null
+          id?: string
+          is_shared?: boolean
+          priority?: string
+          share_link?: string | null
+          snoozed_until?: string | null
+          task_type?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_event_links: {
         Row: {
           added_at: string
@@ -1110,6 +1270,10 @@ export type Database = {
         Returns: string
       }
       generate_task_short_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      generate_tr_share_link: {
         Args: Record<PropertyKey, never>
         Returns: string
       }
