@@ -1,10 +1,9 @@
+
 import React, { useEffect } from "react";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { ThemeProvider, useTheme } from "./providers/ThemeProvider";
 import { Toaster } from "@/components/ui/toaster"
-import { useTranslation } from "react-i18next";
-import i18n from "./utils/i18n";
 import { t } from './utils/translations';
 
 import Index from "./pages/Index";
@@ -31,25 +30,23 @@ import MyTasks from "@/pages/MyTasks";
 import SharedTask from "@/pages/SharedTask";
 
 function App() {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const { setLanguage } = useTheme();
-  const { i18n } = useTranslation();
 	const navigate = useNavigate();
 
   useEffect(() => {
     const storedLanguage = localStorage.getItem('language');
-    if (storedLanguage) {
-      i18n.changeLanguage(storedLanguage);
-      setLanguage(storedLanguage);
+    if (storedLanguage && (storedLanguage === 'en' || storedLanguage === 'ar')) {
+      setLanguage(storedLanguage as 'en' | 'ar');
     }
-  }, [i18n, setLanguage]);
+  }, [setLanguage]);
 
   useEffect(() => {
-    if (location.pathname === '/' && currentUser) {
+    if (location.pathname === '/' && user) {
       navigate('/dashboard');
     }
-  }, [location, currentUser, navigate]);
+  }, [location, user, navigate]);
 
   return (
     <>
