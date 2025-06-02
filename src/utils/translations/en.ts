@@ -1,4 +1,5 @@
-import { Translation } from "./translationTypes";
+
+import { Translation } from "../translationTypes";
 
 const en: Translation = {
   "dashboard": "Dashboard",
@@ -374,6 +375,7 @@ const en: Translation = {
   "shareEvent": "Share Event",
   "totalResponses": "Total Responses",
   "declined": "Declined",
+  "maw3d": "Events",
   "maw3dEvents": "Events",
   "createAndManageEvents": "Create and Manage Events",
   "yourEvent": "Your Event",
@@ -440,7 +442,6 @@ const en: Translation = {
   "somethingWentWrong": "Something went wrong",
   "tryAgain": "Try Again",
   "myTasks": "My Tasks",
-  "maw3d": "Events",
   "confirmDeleteTask": "Are you sure you want to delete this task?",
   "confirmDeleteReminder": "Are you sure you want to delete this reminder?",
   "shareLinkCopied": "Share link copied to clipboard",
@@ -455,12 +456,9 @@ const en: Translation = {
   "repeatedTask": "Repeated Task",
   "shareTask": "Share Task",
   "saving": "Saving...",
-  "shared": "Shared",
   "noItemsYet": "No items yet",
   "createFirstItem": "Create your first item",
   "allItems": "All Items",
-  "reminder": "Reminder",
-  "overdue": "Overdue",
   "pending": "Pending",
   "taskNotFound": "Task not found",
   "errorLoadingTask": "Error loading task",
@@ -476,7 +474,12 @@ const en: Translation = {
   "nameRequiredToComplete": "Your name is required to complete tasks",
   "markIncomplete": "Mark as Incomplete",
   "markComplete": "Mark as Complete",
-  "poweredBy": "Powered by"
+  "poweredBy": "Powered by",
+  "errorFetchingTasks": "Error fetching tasks",
+  "taskSharingEnabled": "Task sharing enabled",
+  "errorEnablingSharing": "Error enabling sharing",
+  "taskSharingDisabled": "Task sharing disabled",
+  "errorDisablingSharing": "Error disabling sharing"
 };
 
 export { en };
