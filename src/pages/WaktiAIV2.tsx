@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { WaktiAIV2Service, type AIResponse, type TranscriptionResponse, type AIMessage, type AIConversation } from '@/services/WaktiAIV2Service';
 import { Button } from '@/components/ui/button';
@@ -41,6 +42,16 @@ type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 export default function WaktiAIV2() {
   const { user } = useAuth();
   const { theme, language } = useTheme();
+  
+  // Add extended quota management hook
+  const { 
+    userSearchQuota, 
+    MAX_DAILY_SEARCHES, 
+    remainingFreeSearches,
+    isAtSearchHardLimit,
+    canSearch
+  } = useExtendedQuotaManagement(language);
+
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -755,16 +766,23 @@ export default function WaktiAIV2() {
             </span>
           </div>
 
-          {/* Search Quota Indicator - Only show in Search mode */}
-          {quotaStatus && activeTrigger === 'search' && (
+          {/* Search Quota Indicator - Show for both search and advanced_search modes */}
+          {(activeTrigger === 'search' || activeTrigger === 'advanced_search') && (
             <div className="flex items-center gap-1 px-2 py-1 bg-muted rounded-full text-xs">
-              <Globe className="h-3 w-3" />
+              <Search className="h-3 w-3" />
               <span className={cn(
                 "font-medium",
-                quotaStatus.usagePercentage >= 80 ? "text-orange-600" : "text-green-600"
+                remainingFreeSearches <= 2 ? "text-orange-600" : "text-green-600"
               )}>
-                {quotaStatus.count}/{quotaStatus.limit}
+                {remainingFreeSearches}/{MAX_DAILY_SEARCHES}
               </span>
+              {userSearchQuota.extra_searches > 0 && (
+                <>
+                  <span className="mx-1">•</span>
+                  <Zap className="h-3 w-3" />
+                  <span>+{userSearchQuota.extra_searches}</span>
+                </>
+              )}
             </div>
           )}
         </div>
