@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PenTool, MessageSquare, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface TextGeneratorPopupProps {
@@ -34,6 +35,7 @@ interface FormData {
 export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGeneratorPopupProps) {
   const { language } = useTheme();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     mode: 'compose',
@@ -158,12 +160,20 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
 
   const handleGenerate = async () => {
     if (!isFormValid()) {
-      toast.error(language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة' : 'Please fill all required fields',
+        variant: 'destructive',
+      });
       return;
     }
 
     if (!user?.id) {
-      toast.error(language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first');
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'يجب تسجيل الدخول أولاً' : 'Please log in first',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -238,7 +248,10 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
           replyType: ''
         });
 
-        toast.success(language === 'ar' ? 'تم إنشاء النص بالتنسيق والنبرة المطلوبة' : 'Text generated with requested format and tone');
+        toast({
+          title: language === 'ar' ? 'نجح!' : 'Success!',
+          description: language === 'ar' ? 'تم إنشاء النص بالتنسيق والنبرة المطلوبة' : 'Text generated with requested format and tone',
+        });
       } else if (data.success && data.response) {
         // Fallback: use the regular response if generatedText is not available
         onGenerated(data.response, formData.mode, true);
@@ -257,13 +270,20 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
           replyType: ''
         });
 
-        toast.success(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
+        toast({
+          title: language === 'ar' ? 'نجح!' : 'Success!',
+          description: language === 'ar' ? 'تم إنشاء النص' : 'Text generated',
+        });
       } else {
         throw new Error(data.error || 'No generated text received');
       }
     } catch (error: any) {
       console.error('📝 TextGeneratorPopup: Error generating text:', error);
-      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'));
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'),
+        variant: 'destructive',
+      });
     } finally {
       setIsGenerating(false);
     }

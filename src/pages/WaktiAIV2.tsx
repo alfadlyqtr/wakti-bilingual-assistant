@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 import { 
   Mic, 
   MicOff, 
@@ -33,6 +33,8 @@ import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
 import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
+import { MobileNav } from '@/components/MobileNav';
+import { AppHeader } from '@/components/AppHeader';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
