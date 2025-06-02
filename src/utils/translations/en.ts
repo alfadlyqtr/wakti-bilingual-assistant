@@ -84,5 +84,9 @@ export const en = {
   "taskIncomplete": "Task marked as incomplete",
   "subtaskAdded": "Subtask added successfully",
   "subtaskUpdated": "Subtask updated successfully",
-  "subtaskDeleted": "Subtask deleted successfully"
+  "subtaskDeleted": "Subtask deleted successfully",
+  "arabic": "العربية",
+  "english": "English",
+  "lightMode": "Light Mode",
+  "darkMode": "Dark Mode"
 };

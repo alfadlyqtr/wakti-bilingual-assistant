@@ -115,5 +115,7 @@ export const ar = {
   "taskIncomplete": "تم تحديد المهمة كغير مكتملة",
   "subtaskAdded": "تم إضافة المهمة الفرعية بنجاح",
   "subtaskUpdated": "تم تحديث المهمة الفرعية بنجاح",
-  "subtaskDeleted": "تم حذف المهمة الفرعية بنجاح"
+  "subtaskDeleted": "تم حذف المهمة الفرعية بنجاح",
+  "arabic": "العربية",
+  "english": "الإنجليزية"
 };
