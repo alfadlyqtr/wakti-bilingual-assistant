@@ -77,12 +77,6 @@ export default function TasksReminders() {
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
       <div className="max-w-md mx-auto space-y-4">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">{t('tr', language)}</h1>
-          <p className="text-muted-foreground">{t('tasksAndReminders', language)}</p>
-        </div>
-
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">

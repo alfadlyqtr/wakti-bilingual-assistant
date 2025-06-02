@@ -61,6 +61,7 @@ export function AppHeader() {
       '/account': language === 'ar' ? 'الحساب' : 'Account',
       '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
       '/tasjeel': language === 'ar' ? 'تسجيل' : 'Tasjeel',
+      '/tr': 'T & R',
       // Maw3d routes
       '/maw3d': t("maw3dEvents", language),
       '/maw3d/create': t("createEvent", language),
