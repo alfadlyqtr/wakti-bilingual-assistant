@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,7 +24,8 @@ import {
   Square,
   Search,
   CheckCircle,
-  Globe
+  Globe,
+  Zap
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
@@ -775,7 +777,7 @@ export default function WaktiAIV2() {
             onClick={() => setRightDrawerOpen(true)}
             className="hover:scale-110 transition-transform"
           >
-            <MessageSquare className="h-5 w-5" />
+            <Zap className="h-5 w-5" />
           </Button>
         </div>
       </div>

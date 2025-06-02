@@ -1,8 +1,9 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Languages } from 'lucide-react';
+import { Trash2, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Conversation {
@@ -54,13 +55,12 @@ export function ConversationsList({
         </h2>
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             onClick={toggleLanguage}
-            className="h-8 w-8 rounded-full"
-            title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+            className="h-9 px-3 rounded-full text-sm"
           >
-            <Languages className="h-4 w-4" />
+            {language === "en" ? (language === 'ar' ? 'عربي' : 'العربية') : (language === 'ar' ? 'English' : 'إنجليزي')}
           </Button>
           <Button
             variant="outline"

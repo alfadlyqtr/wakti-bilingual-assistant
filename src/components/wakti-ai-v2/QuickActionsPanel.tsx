@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -91,13 +92,12 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
             {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
           </h3>
           <Button
-            variant="ghost"
-            size="icon"
+            variant="outline"
+            size="sm"
             onClick={toggleLanguage}
-            className="h-6 w-6 rounded-full"
-            title={language === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}
+            className="h-9 px-3 rounded-full text-sm"
           >
-            <Languages className="h-3 w-3" />
+            {language === "en" ? (language === 'ar' ? 'عربي' : 'العربية') : (language === 'ar' ? 'English' : 'إنجليزي')}
           </Button>
         </div>
         
