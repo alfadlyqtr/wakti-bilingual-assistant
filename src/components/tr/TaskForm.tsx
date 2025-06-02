@@ -35,7 +35,6 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const [priority, setPriority] = useState<'normal' | 'high' | 'urgent'>('normal');
   const [taskType, setTaskType] = useState<'one-time' | 'repeated'>('one-time');
   const [shareTask, setShareTask] = useState(false);
-  const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Reset form when dialog opens/closes or task changes
@@ -48,8 +47,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setDueTime(task.due_time || '');
         setPriority(task.priority);
         setTaskType(task.task_type);
-        setShareTask(task.share_task || false);
-        setSubtasks(task.subtasks || []);
+        setShareTask(task.is_shared || false);
       } else {
         // Reset form for new task
         setTitle('');
@@ -59,7 +57,6 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         setPriority('normal');
         setTaskType('one-time');
         setShareTask(false);
-        setSubtasks([]);
       }
     }
   }, [isOpen, task]);
@@ -77,8 +74,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         due_time: dueTime || null,
         priority,
         task_type: taskType,
-        share_task: shareTask,
-        subtasks
+        is_shared: shareTask
       };
 
       if (task) {
@@ -208,15 +204,15 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             />
           </div>
 
-          {/* Subtasks Section */}
-          <div className="space-y-2">
-            <Label>{t('subtasks', language)}</Label>
-            <SubtaskManager
-              subtasks={subtasks}
-              onSubtasksChange={setSubtasks}
-              taskId={task?.id}
-            />
-          </div>
+          {/* Subtasks Section - Only show for existing tasks */}
+          {task && (
+            <div className="space-y-2">
+              <Label>{t('subtasks', language)}</Label>
+              <SubtaskManager
+                taskId={task.id}
+              />
+            </div>
+          )}
 
           {/* Form Actions */}
           <div className="flex justify-end space-x-2 pt-4">
