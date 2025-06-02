@@ -56,25 +56,15 @@ export function AppHeader() {
     const routes = {
       '/dashboard': language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
       '/calendar': language === 'ar' ? 'التقويم' : 'Calendar',
-      '/tasks-reminders': language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      '/tasks': language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      '/reminders': language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      '/events': language === 'ar' ? 'الأحداث' : 'Events',
       '/settings': language === 'ar' ? 'الإعدادات' : 'Settings',
       '/contacts': language === 'ar' ? 'جهات الاتصال' : 'Contacts',
       '/account': language === 'ar' ? 'الحساب' : 'Account',
       '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
       '/tasjeel': language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      '/event/create': language === 'ar' ? 'إنشاء حدث' : 'Create Event',
       // Maw3d routes
       '/maw3d': t("maw3dEvents", language),
       '/maw3d/create': t("createEvent", language),
     };
-    
-    // Check if path starts with '/event/' and is not '/event/create'
-    if (path.startsWith('/event/') && path !== '/event/create') {
-      return language === 'ar' ? 'تفاصيل الحدث' : 'Event Details';
-    }
     
     // Check for Maw3d edit and manage routes
     if (path.startsWith('/maw3d/edit/')) {

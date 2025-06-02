@@ -3,20 +3,15 @@ import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CheckSquare, CalendarClock, Mic, Sparkles } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles } from "lucide-react";
 
 export function MobileNav() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { language } = useTheme();
   
-  // Navigation items - updated to include WAKTI AI
+  // Navigation items - removed Tasks & Reminders
   const navItems = [
-    {
-      name: language === 'ar' ? 'المهام والتذكيرات' : 'Tasks & Reminders',
-      path: '/tasks-reminders',
-      icon: 'check-square',
-    },
     {
       name: language === 'ar' ? 'التقويم' : 'Calendar',
       path: '/calendar',
@@ -41,7 +36,6 @@ export function MobileNav() {
   
   const iconMap: { [key: string]: React.ComponentType<any> } = {
     calendar: Calendar,
-    'check-square': CheckSquare,
     'calendar-clock': CalendarClock,
     sparkles: Sparkles,
     mic: Mic,
@@ -51,7 +45,7 @@ export function MobileNav() {
     <nav className="fixed bottom-0 left-0 w-full bg-background border-t z-50">
       <ul className="flex justify-around items-center h-16">
         {navItems.map((item) => {
-          const IconComponent = iconMap[item.icon] || CheckSquare;
+          const IconComponent = iconMap[item.icon] || Calendar;
           const isActive = pathname === item.path || (item.path === '/maw3d' && pathname.startsWith('/maw3d'));
           
           return (

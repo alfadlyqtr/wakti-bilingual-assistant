@@ -1,4 +1,3 @@
-
 import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
@@ -7,9 +6,6 @@ import { ToastProvider } from "@/hooks/use-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
-import Tasks from "@/pages/Tasks";
-import Reminders from "@/pages/Reminders";
-import TasksReminders from "@/pages/TasksReminders";
 import Settings from "@/pages/Settings";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -123,9 +119,6 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route path="/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
                   <Route path="/calendar" element={<AppLayout><Calendar /></AppLayout>} />
-                  
-                  {/* New combined tasks and reminders route */}
-                  <Route path="/tasks-reminders" element={<AppLayout><TasksReminders /></AppLayout>} />
                   
                   {/* WAKTI AI V2.1 route - standalone without AppLayout wrapper */}
                   <Route path="/wakti-ai" element={<WaktiAIV2 />} />
