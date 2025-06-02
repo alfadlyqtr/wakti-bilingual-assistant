@@ -34,7 +34,6 @@ import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { KnowledgeModal } from '@/components/wakti-ai-v2/KnowledgeModal';
 import { TypingIndicator } from '@/components/wakti-ai-v2/TypingIndicator';
 import { MobileNav } from '@/components/MobileNav';
-import { AppHeader } from '@/components/AppHeader';
 
 // Add trigger types
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
@@ -741,9 +740,6 @@ export default function WaktiAIV2() {
 
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-      {/* App Header */}
-     
-
       {/* Header - Updated layout */}
       <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
         <div className="flex items-center">

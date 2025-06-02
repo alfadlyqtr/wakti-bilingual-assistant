@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -937,7 +936,7 @@ const Tasjeel: React.FC = () => {
   };
   
   return (
-    <PageContainer title={t.pageTitle} showBackButton={true}>
+    <PageContainer title={t.pageTitle} showBackButton={true} showHeader={false}>
       <div className="container py-4 space-y-6">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
           <TabsList className="grid grid-cols-3 w-full mb-6">
