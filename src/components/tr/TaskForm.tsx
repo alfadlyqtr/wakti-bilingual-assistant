@@ -290,24 +290,24 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
           {/* Form Actions */}
           <div className="flex justify-between items-center pt-4">
-            <Button
-              type="button"
-              variant={shareTask ? "default" : "outline"}
-              onClick={() => setShareTask(!shareTask)}
-              className="flex items-center gap-2"
-            >
-              <Share2 className="h-4 w-4" />
-              {shareTask ? t('shared', language) : t('shareTask', language)}
-            </Button>
-            
             <div className="flex space-x-2">
               <Button type="button" variant="outline" onClick={onClose}>
                 {t('cancel', language)}
               </Button>
-              <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
-                {loading ? t('loading', language) : task ? t('save', language) : t('create', language)}
+              <Button
+                type="button"
+                variant={shareTask ? "default" : "outline"}
+                onClick={() => setShareTask(!shareTask)}
+                className="flex items-center gap-2"
+              >
+                <Share2 className="h-4 w-4" />
+                {shareTask ? t('sharedTask', language) : t('shareTask', language)}
               </Button>
             </div>
+            
+            <Button type="submit" disabled={loading || !title.trim() || !dueDate}>
+              {loading ? t('loading', language) : task ? t('save', language) : t('create', language)}
+            </Button>
           </div>
         </form>
       </DialogContent>
