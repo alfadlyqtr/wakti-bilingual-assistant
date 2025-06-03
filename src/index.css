@@ -5,7 +5,7 @@
 
 @layer base {
   :root {
-    /* Light theme */
+    /* Light theme - Enhanced with artistic touches */
     --background: 180 4% 99%; /* #fcfefd */
     --foreground: 243 84% 14%; /* #060541 */
     --card: 180 4% 99%;
@@ -26,10 +26,23 @@
     --input: 214 32% 91%;
     --ring: 243 84% 14%;
     --radius: 0.75rem;
+
+    /* Light mode artistic enhancements */
+    --gradient-primary: linear-gradient(135deg, hsl(243 84% 14%) 0%, hsl(243 84% 18%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(36 67% 81%) 0%, hsl(36 67% 85%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(180 4% 99%) 0%, hsl(180 8% 97%) 100%);
+    --gradient-background: linear-gradient(135deg, hsl(180 4% 99%) 0%, hsl(200 20% 97%) 100%);
+    --accent-blue: 210 100% 92%;
+    --accent-green: 142 76% 92%;
+    --accent-orange: 25 95% 92%;
+    --accent-purple: 280 60% 92%;
+    --shadow-colored: 0 4px 12px hsla(243, 84%, 14%, 0.15);
+    --shadow-soft: 0 2px 8px hsla(220, 13%, 60%, 0.25);
+    --glow-primary: 0 0 20px hsla(243, 84%, 14%, 0.3);
   }
 
   .dark {
-    /* Dark theme */
+    /* Dark theme - Enhanced with artistic touches */
     --background: 222 20% 6%; /* #0c0f14 */
     --foreground: 0 0% 95%;
     --card: 222 20% 6%;
@@ -49,10 +62,23 @@
     --border: 240 3% 30%;
     --input: 240 3% 25%;
     --ring: 240 4% 65%;
+
+    /* Dark mode artistic enhancements */
+    --gradient-primary: linear-gradient(135deg, hsl(0 0% 95%) 0%, hsl(210 20% 85%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(240 1% 38%) 0%, hsl(240 5% 45%) 100%);
+    --gradient-card: linear-gradient(135deg, hsl(222 20% 6%) 0%, hsl(222 25% 8%) 100%);
+    --gradient-background: linear-gradient(135deg, hsl(222 20% 6%) 0%, hsl(235 20% 8%) 100%);
+    --accent-blue: 210 100% 70%;
+    --accent-green: 142 76% 60%;
+    --accent-orange: 25 95% 70%;
+    --accent-purple: 280 60% 70%;
+    --shadow-colored: 0 4px 24px hsla(0, 0%, 0%, 0.6);
+    --shadow-soft: 0 2px 16px hsla(0, 0%, 0%, 0.4);
+    --glow-primary: 0 0 30px hsla(210, 100%, 70%, 0.4);
   }
 }
 
-/* Mobile-specific styles */
+/* Mobile-specific styles with artistic enhancements */
 @layer base {
   * {
     @apply border-border;
@@ -60,35 +86,52 @@
   
   html, body {
     @apply h-full overflow-hidden antialiased;
+    background: var(--gradient-background);
   }
   
   body {
-    @apply bg-background text-foreground flex flex-col min-h-full;
+    @apply text-foreground flex flex-col min-h-full;
     font-feature-settings: "rlig" 1, "calt" 1;
+    background: var(--gradient-background);
   }
 
   #root {
     @apply flex flex-col h-full w-full max-w-md mx-auto min-h-screen;
+    background: var(--gradient-background);
   }
 
-  /* App container */
+  /* App container with enhanced background */
   .app-container {
     @apply flex flex-col max-w-md w-full mx-auto;
+    background: var(--gradient-background);
   }
 
-  /* Mobile container */
+  /* Mobile container with subtle gradient */
   .mobile-container {
     @apply max-w-md w-full mx-auto h-full flex flex-col overflow-hidden;
+    background: var(--gradient-background);
   }
 
-  /* Mobile-friendly buttons */
+  /* Enhanced mobile buttons with gradients */
   .mobile-btn {
     @apply py-3 px-6 text-base rounded-xl font-medium transition-all active:scale-95;
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-colored);
+    transition: all 0.3s ease;
   }
 
-  /* Mobile header */
+  .mobile-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: var(--glow-primary), var(--shadow-colored);
+  }
+
+  /* Enhanced mobile header with gradient */
   .mobile-header {
-    @apply sticky top-0 z-10 flex items-center justify-between p-4 bg-background border-b border-border;
+    @apply sticky top-0 z-10 flex items-center justify-between p-4 border-b;
+    background: var(--gradient-card);
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(10px);
   }
 
   /* Mobile safe area (for bottom nav) */
@@ -96,11 +139,14 @@
     @apply pb-28;
   }
 
-  /* Modern floating navigation */
+  /* Enhanced floating navigation with gradient and glow */
   .floating-nav {
     @apply fixed bottom-5 left-0 right-0 mx-auto max-w-sm z-10;
     @apply flex justify-around py-3 px-4 mx-4 rounded-full;
-    @apply bg-background/80 backdrop-blur-lg border border-border shadow-lg;
+    background: var(--gradient-card);
+    backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-colored), var(--glow-primary);
   }
 
   /* Language specific */
@@ -109,15 +155,24 @@
     text-align: right;
   }
   
-  /* Draggable widgets */
+  /* Enhanced draggable widgets */
   .widget-draggable {
     touch-action: none;
     user-select: none;
+    transition: all 0.3s ease;
   }
 
-  /* Widget styles */
+  .widget-draggable:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-colored);
+  }
+
+  /* Enhanced widget styles */
   .calendar-widget {
-    @apply rounded-lg border border-border overflow-hidden;
+    @apply rounded-lg border overflow-hidden;
+    background: var(--gradient-card);
+    border-color: hsl(var(--border));
+    box-shadow: var(--shadow-soft);
   }
   
   .events-widget {
@@ -125,7 +180,13 @@
   }
   
   .event-item {
-    @apply flex items-center justify-between p-2 rounded-md;
+    @apply flex items-center justify-between p-2 rounded-md transition-all duration-300;
+    background: var(--gradient-card);
+  }
+
+  .event-item:hover {
+    transform: translateX(4px);
+    box-shadow: var(--shadow-soft);
   }
 
   /* Hide scrollbar but keep functionality */
@@ -137,4 +198,113 @@
   .scrollbar-hide::-webkit-scrollbar { 
     display: none;  /* Safari and Chrome */
   }
+
+  /* Enhanced card styles with gradients */
+  .enhanced-card {
+    background: var(--gradient-card);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s ease;
+  }
+
+  .enhanced-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-colored);
+  }
+
+  /* Button enhancements */
+  .btn-enhanced {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s ease;
+  }
+
+  .btn-enhanced:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--glow-primary), var(--shadow-colored);
+  }
+
+  .btn-secondary-enhanced {
+    background: var(--gradient-secondary);
+    box-shadow: var(--shadow-soft);
+    transition: all 0.3s ease;
+  }
+
+  .btn-secondary-enhanced:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-colored);
+  }
+
+  /* Form enhancements */
+  .input-enhanced {
+    background: var(--gradient-card);
+    border: 1px solid hsl(var(--border));
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .input-enhanced:focus {
+    box-shadow: var(--glow-primary), var(--shadow-soft);
+    border-color: hsl(var(--primary));
+  }
+
+  /* Status indicators with enhanced colors */
+  .status-success {
+    background: linear-gradient(135deg, hsl(var(--accent-green)) 0%, hsl(142 76% 88%) 100%);
+  }
+
+  .status-warning {
+    background: linear-gradient(135deg, hsl(var(--accent-orange)) 0%, hsl(25 95% 88%) 100%);
+  }
+
+  .status-info {
+    background: linear-gradient(135deg, hsl(var(--accent-blue)) 0%, hsl(210 100% 88%) 100%);
+  }
+
+  .status-error {
+    background: linear-gradient(135deg, hsl(var(--destructive)) 0%, hsl(0 84% 55%) 100%);
+  }
+
+  /* Typography enhancements */
+  .text-enhanced-heading {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+  }
+
+  .text-shadow-soft {
+    text-shadow: 0 1px 3px hsla(0, 0%, 0%, 0.3);
+  }
+}
+
+/* Dark mode styles with enhanced visuals */
+.dark #root {
+  background: var(--gradient-background);
+}
+
+.dark .enhanced-card {
+  background: var(--gradient-card);
+  border-color: hsl(var(--border));
+}
+
+.dark .floating-nav {
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-colored), 0 0 40px hsla(210, 100%, 70%, 0.2);
+}
+
+/* Light mode styles with enhanced visuals */
+:root:not(.dark) #root {
+  background: var(--gradient-background);
+}
+
+:root:not(.dark) .enhanced-card {
+  background: var(--gradient-card);
+  border-color: hsl(var(--border));
+}
+
+:root:not(.dark) .floating-nav {
+  background: var(--gradient-card);
+  box-shadow: var(--shadow-soft), 0 0 20px hsla(243, 84%, 14%, 0.1);
 }

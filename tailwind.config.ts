@@ -32,6 +32,12 @@ export default {
         "light-primary": "#060541",
         "light-secondary": "#e9ceb0",
         
+        // Enhanced artistic accent colors
+        "accent-blue": "hsl(var(--accent-blue))",
+        "accent-green": "hsl(var(--accent-green))",
+        "accent-orange": "hsl(var(--accent-orange))",
+        "accent-purple": "hsl(var(--accent-purple))",
+        
         // UI Elements
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -67,6 +73,17 @@ export default {
           foreground: "hsl(var(--card-foreground))",
         },
       },
+      backgroundImage: {
+        "gradient-primary": "var(--gradient-primary)",
+        "gradient-secondary": "var(--gradient-secondary)",
+        "gradient-card": "var(--gradient-card)",
+        "gradient-background": "var(--gradient-background)",
+      },
+      boxShadow: {
+        "colored": "var(--shadow-colored)",
+        "soft": "var(--shadow-soft)",
+        "glow": "var(--glow-primary)",
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
@@ -89,12 +106,27 @@ export default {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
         },
+        "glow-pulse": {
+          "0%, 100%": { boxShadow: "var(--shadow-soft)" },
+          "50%": { boxShadow: "var(--glow-primary), var(--shadow-colored)" },
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-4px)" },
+        },
+        "shimmer": {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "fade-in": "fade-in 0.3s ease-out",
         "slide-in": "slide-in 0.3s ease-out",
+        "glow-pulse": "glow-pulse 2s ease-in-out infinite",
+        "float": "float 3s ease-in-out infinite",
+        "shimmer": "shimmer 2s linear infinite",
       },
     },
   },
