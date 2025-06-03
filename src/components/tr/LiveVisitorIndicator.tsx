@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Users, Eye } from 'lucide-react';
+import { Users, UserCheck } from 'lucide-react';
 import { TRSharedService, TRSharedAccessExtended } from '@/services/trSharedService';
 
 interface LiveVisitorIndicatorProps {
@@ -13,15 +13,15 @@ export const LiveVisitorIndicator: React.FC<LiveVisitorIndicatorProps> = ({
   taskId,
   currentSessionId
 }) => {
-  const [activeVisitors, setActiveVisitors] = useState<TRSharedAccessExtended[]>([]);
+  const [activeAssignees, setActiveAssignees] = useState<TRSharedAccessExtended[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadActiveVisitors();
+    loadActiveAssignees();
     
     // Set up real-time subscription
     const channel = TRSharedService.subscribeToTaskUpdates(taskId, () => {
-      loadActiveVisitors();
+      loadActiveAssignees();
     });
 
     // Cleanup
@@ -30,36 +30,36 @@ export const LiveVisitorIndicator: React.FC<LiveVisitorIndicatorProps> = ({
     };
   }, [taskId]);
 
-  const loadActiveVisitors = async () => {
+  const loadActiveAssignees = async () => {
     try {
-      const visitors = await TRSharedService.getActiveVisitors(taskId);
-      setActiveVisitors(visitors);
+      const assignees = await TRSharedService.getActiveVisitors(taskId);
+      setActiveAssignees(assignees);
     } catch (error) {
-      console.error('Error loading active visitors:', error);
+      console.error('Error loading active assignees:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const otherVisitors = activeVisitors.filter(v => v.session_id !== currentSessionId);
+  const otherAssignees = activeAssignees.filter(v => v.session_id !== currentSessionId);
   
   if (loading) {
     return (
       <Badge variant="secondary" className="text-xs">
-        <Eye className="h-3 w-3 mr-1" />
+        <UserCheck className="h-3 w-3 mr-1" />
         Loading...
       </Badge>
     );
   }
 
-  if (otherVisitors.length === 0) {
+  if (otherAssignees.length === 0) {
     return null;
   }
 
   return (
     <Badge variant="secondary" className="text-xs">
       <Users className="h-3 w-3 mr-1" />
-      {otherVisitors.length} other viewer{otherVisitors.length > 1 ? 's' : ''} online
+      {otherAssignees.length} other assignee{otherAssignees.length > 1 ? 's' : ''} active
     </Badge>
   );
 };

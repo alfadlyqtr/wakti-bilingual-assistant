@@ -17,7 +17,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
   tasks,
   onTasksChanged
 }) => {
-  const [activeVisitors, setActiveVisitors] = useState<TRSharedAccessExtended[]>([]);
+  const [activeAssignees, setActiveAssignees] = useState<TRSharedAccessExtended[]>([]);
   const [snoozeRequests, setSnoozeRequests] = useState<TRSnoozeRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -36,17 +36,17 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
     try {
       setLoading(true);
       
-      // Load visitors and snooze requests for all shared tasks
-      const [visitorsData, snoozeData] = await Promise.all([
+      // Load assignees and snooze requests for all shared tasks
+      const [assigneesData, snoozeData] = await Promise.all([
         Promise.all(sharedTasks.map(task => TRSharedService.getActiveVisitors(task.id))),
         Promise.all(sharedTasks.map(task => TRSharedService.getSnoozeRequests(task.id)))
       ]);
 
       // Flatten the arrays
-      const allVisitors = visitorsData.flat();
+      const allAssignees = assigneesData.flat();
       const allSnoozeRequests = snoozeData.flat();
 
-      setActiveVisitors(allVisitors);
+      setActiveAssignees(allAssignees);
       setSnoozeRequests(allSnoozeRequests.filter(req => req.status === 'pending'));
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -77,7 +77,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
     }
   };
 
-  const totalActiveVisitors = activeVisitors.length;
+  const totalActiveAssignees = activeAssignees.length;
   const pendingSnoozeRequests = snoozeRequests.length;
 
   if (loading) {
@@ -94,7 +94,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
       <div className="text-center py-8 text-muted-foreground">
         <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
         <p className="text-lg font-medium mb-2">No Shared Tasks</p>
-        <p className="text-sm">Share a task to start monitoring visitor activity</p>
+        <p className="text-sm">Share a task to start monitoring assignee activity</p>
       </div>
     );
   }
@@ -105,8 +105,8 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-secondary/20 rounded-lg p-3 text-center">
           <Users className="w-5 h-5 mx-auto mb-1 text-blue-600" />
-          <div className="text-lg font-semibold">{totalActiveVisitors}</div>
-          <div className="text-xs text-muted-foreground">Active Visitors</div>
+          <div className="text-lg font-semibold">{totalActiveAssignees}</div>
+          <div className="text-xs text-muted-foreground">Active Assignees</div>
         </div>
         
         <div className="bg-secondary/20 rounded-lg p-3 text-center">
@@ -137,7 +137,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
           <SharedTaskCard
             key={task.id}
             task={task}
-            visitors={activeVisitors.filter(v => v.task_id === task.id)}
+            assignees={activeAssignees.filter(v => v.task_id === task.id)}
             onTaskUpdated={onTasksChanged}
           />
         ))}

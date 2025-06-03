@@ -5,19 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TRTask } from '@/services/trService';
 import { TRSharedAccessExtended, TRSharedService, TRVisitorCompletion } from '@/services/trSharedService';
-import { Users, Eye, Copy, ExternalLink, CheckCircle, Circle } from 'lucide-react';
+import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 interface SharedTaskCardProps {
   task: TRTask;
-  visitors: TRSharedAccessExtended[];
+  assignees: TRSharedAccessExtended[];
   onTaskUpdated: () => void;
 }
 
 export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
   task,
-  visitors,
+  assignees,
   onTaskUpdated
 }) => {
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
@@ -74,14 +74,14 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
           </div>
           
           <div className="flex items-center gap-2">
-            {visitors.length > 0 ? (
+            {assignees.length > 0 ? (
               <Badge variant="secondary" className="text-xs">
-                <Eye className="h-3 w-3 mr-1" />
-                {visitors.length} viewing
+                <UserCheck className="h-3 w-3 mr-1" />
+                {assignees.length} assignee{assignees.length > 1 ? 's' : ''}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
-                No visitors
+                No assignees
               </Badge>
             )}
           </div>
@@ -110,10 +110,10 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
           </div>
         </div>
 
-        {/* Visitor Completions */}
+        {/* Assignee Completions */}
         {uniqueCompletionNames.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Completed by visitors:</p>
+            <p className="text-xs font-medium text-muted-foreground">Completed by assignees:</p>
             <div className="flex flex-wrap gap-1">
               {uniqueCompletionNames.map(name => (
                 <Badge key={name} variant="outline" className="text-xs">
@@ -124,14 +124,14 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
           </div>
         )}
 
-        {/* Current Visitors */}
-        {visitors.length > 0 && (
+        {/* Current Assignees */}
+        {assignees.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Currently viewing:</p>
+            <p className="text-xs font-medium text-muted-foreground">Assigned to:</p>
             <div className="flex flex-wrap gap-1">
-              {visitors.map(visitor => (
-                <Badge key={visitor.id} variant="secondary" className="text-xs">
-                  {visitor.viewer_name || 'Anonymous'}
+              {assignees.map(assignee => (
+                <Badge key={assignee.id} variant="secondary" className="text-xs">
+                  {assignee.viewer_name || 'Anonymous'}
                 </Badge>
               ))}
             </div>

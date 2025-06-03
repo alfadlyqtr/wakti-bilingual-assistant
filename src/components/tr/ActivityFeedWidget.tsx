@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRVisitorCompletion, TRSharedAccessExtended } from '@/services/trSharedService';
-import { Activity, CheckCircle, Eye, Clock, User } from 'lucide-react';
+import { Activity, CheckCircle, UserCheck, Clock, User } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 
 interface ActivityFeedWidgetProps {
@@ -13,9 +13,9 @@ interface ActivityFeedWidgetProps {
 
 interface ActivityItem {
   id: string;
-  type: 'completion' | 'visitor_join' | 'visitor_leave';
+  type: 'completion' | 'assignee_join' | 'assignee_leave';
   taskTitle: string;
-  visitorName: string;
+  assigneeName: string;
   timestamp: string;
   details?: string;
 }
@@ -42,7 +42,7 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
 
       // Load completions for all shared tasks
       for (const task of sharedTasks) {
-        const [completions, visitors] = await Promise.all([
+        const [completions, assignees] = await Promise.all([
           TRSharedService.getVisitorCompletions(task.id),
           TRSharedService.getActiveVisitors(task.id)
         ]);
@@ -53,20 +53,20 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
             id: completion.id,
             type: 'completion',
             taskTitle: task.title,
-            visitorName: completion.visitor_name,
+            assigneeName: completion.visitor_name,
             timestamp: completion.created_at,
             details: completion.completion_type === 'task' ? 'task' : 'subtask'
           });
         });
 
-        // Add recent visitor activities
-        visitors.forEach(visitor => {
+        // Add recent assignee activities
+        assignees.forEach(assignee => {
           allActivities.push({
-            id: `visitor-${visitor.id}`,
-            type: 'visitor_join',
+            id: `assignee-${assignee.id}`,
+            type: 'assignee_join',
             taskTitle: task.title,
-            visitorName: visitor.viewer_name || 'Anonymous',
-            timestamp: visitor.last_accessed
+            assigneeName: assignee.viewer_name || 'Anonymous',
+            timestamp: assignee.last_accessed
           });
         });
       }
@@ -111,9 +111,9 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     switch (type) {
       case 'completion':
         return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case 'visitor_join':
-        return <Eye className="h-4 w-4 text-blue-600" />;
-      case 'visitor_leave':
+      case 'assignee_join':
+        return <UserCheck className="h-4 w-4 text-blue-600" />;
+      case 'assignee_leave':
         return <User className="h-4 w-4 text-gray-600" />;
       default:
         return <Activity className="h-4 w-4 text-muted-foreground" />;
@@ -124,10 +124,10 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     switch (activity.type) {
       case 'completion':
         return `marked ${activity.details} as complete`;
-      case 'visitor_join':
-        return 'started viewing task';
-      case 'visitor_leave':
-        return 'stopped viewing task';
+      case 'assignee_join':
+        return 'was assigned to task';
+      case 'assignee_leave':
+        return 'was unassigned from task';
       default:
         return 'had activity';
     }
@@ -175,8 +175,8 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
                 
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="text-sm">
-                    <span className="font-medium">{activity.visitorName}</span>
-                    <span className="text-muted-foreground"> {getActivityDescription(activity)} in </span>
+                    <span className="font-medium">{activity.assigneeName}</span>
+                    <span className="text-muted-foreground"> {getActivityDescription(activity)} </span>
                     <span className="font-medium">"{activity.taskTitle}"</span>
                   </div>
                   
