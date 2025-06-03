@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TRSnoozeRequest {
@@ -97,6 +96,84 @@ export class TRSharedService {
     }
   }
 
+  // Check if task should be marked as completed based on visitor completions
+  private static async checkAndUpdateTaskCompletion(taskId: string): Promise<void> {
+    try {
+      // Get all visitor completions for the task
+      const { data: completions, error: completionsError } = await supabase
+        .from('tr_visitor_completions')
+        .select('*')
+        .eq('task_id', taskId)
+        .eq('completion_type', 'task')
+        .eq('is_completed', true);
+
+      if (completionsError) throw completionsError;
+
+      // Get all subtasks for the task
+      const { data: subtasks, error: subtasksError } = await supabase
+        .from('tr_subtasks')
+        .select('*')
+        .eq('task_id', taskId);
+
+      if (subtasksError) throw subtasksError;
+
+      // Get all subtask completions
+      const { data: subtaskCompletions, error: subtaskCompletionsError } = await supabase
+        .from('tr_visitor_completions')
+        .select('*')
+        .eq('task_id', taskId)
+        .eq('completion_type', 'subtask')
+        .eq('is_completed', true);
+
+      if (subtaskCompletionsError) throw subtaskCompletionsError;
+
+      // Check if at least one visitor has completed the main task
+      const hasTaskCompletion = completions && completions.length > 0;
+
+      // Check if all subtasks are completed by at least one visitor
+      let allSubtasksCompleted = true;
+      if (subtasks && subtasks.length > 0) {
+        for (const subtask of subtasks) {
+          const subtaskCompleted = subtaskCompletions?.some(
+            completion => completion.subtask_id === subtask.id
+          );
+          if (!subtaskCompleted) {
+            allSubtasksCompleted = false;
+            break;
+          }
+        }
+      }
+
+      // Update the original task if it should be completed
+      const shouldBeCompleted = hasTaskCompletion && allSubtasksCompleted;
+      
+      // Get current task status
+      const { data: currentTask, error: taskError } = await supabase
+        .from('tr_tasks')
+        .select('completed')
+        .eq('id', taskId)
+        .single();
+
+      if (taskError) throw taskError;
+
+      // Only update if the completion status needs to change
+      if (currentTask && currentTask.completed !== shouldBeCompleted) {
+        const { error: updateError } = await supabase
+          .from('tr_tasks')
+          .update({ 
+            completed: shouldBeCompleted,
+            completed_at: shouldBeCompleted ? new Date().toISOString() : null
+          })
+          .eq('id', taskId);
+
+        if (updateError) throw updateError;
+      }
+
+    } catch (error) {
+      console.error('Error checking and updating task completion:', error);
+    }
+  }
+
   // Mark task as completed by visitor
   static async markTaskCompleted(taskId: string, visitorName: string, sessionId: string, isCompleted: boolean): Promise<void> {
     try {
@@ -131,6 +208,10 @@ export class TRSharedService {
 
         if (error) throw error;
       }
+
+      // Check and update the original task completion status
+      await this.checkAndUpdateTaskCompletion(taskId);
+
     } catch (error) {
       console.error('Error marking task completed:', error);
       throw error;
@@ -173,6 +254,10 @@ export class TRSharedService {
 
         if (error) throw error;
       }
+
+      // Check and update the original task completion status
+      await this.checkAndUpdateTaskCompletion(taskId);
+
     } catch (error) {
       console.error('Error marking subtask completed:', error);
       throw error;
