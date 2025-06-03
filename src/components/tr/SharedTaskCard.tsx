@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,6 +59,24 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
   const taskCompletions = completions.filter(c => c.completion_type === 'task' && c.is_completed);
   const uniqueCompletionNames = [...new Set(taskCompletions.map(c => c.visitor_name))];
 
+  // Deduplicate assignees by name and get the most recent access time for each
+  const uniqueAssignees = assignees.reduce((acc, assignee) => {
+    const name = assignee.viewer_name || 'Anonymous';
+    const existing = acc.find(a => a.viewer_name === name);
+    
+    if (!existing) {
+      acc.push(assignee);
+    } else {
+      // Keep the one with the most recent last_accessed time
+      if (new Date(assignee.last_accessed) > new Date(existing.last_accessed)) {
+        const index = acc.indexOf(existing);
+        acc[index] = assignee;
+      }
+    }
+    
+    return acc;
+  }, [] as TRSharedAccessExtended[]);
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-3">
@@ -74,10 +91,10 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
           </div>
           
           <div className="flex items-center gap-2">
-            {assignees.length > 0 ? (
+            {uniqueAssignees.length > 0 ? (
               <Badge variant="secondary" className="text-xs">
                 <UserCheck className="h-3 w-3 mr-1" />
-                {assignees.length} assignee{assignees.length > 1 ? 's' : ''}
+                {uniqueAssignees.length} assignee{uniqueAssignees.length > 1 ? 's' : ''}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
@@ -125,14 +142,19 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
         )}
 
         {/* Current Assignees */}
-        {assignees.length > 0 && (
-          <div className="space-y-1">
+        {uniqueAssignees.length > 0 && (
+          <div className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">Assigned to:</p>
-            <div className="flex flex-wrap gap-1">
-              {assignees.map(assignee => (
-                <Badge key={assignee.id} variant="secondary" className="text-xs">
-                  {assignee.viewer_name || 'Anonymous'}
-                </Badge>
+            <div className="space-y-1">
+              {uniqueAssignees.map(assignee => (
+                <div key={assignee.id} className="flex items-center justify-between bg-secondary/20 rounded-md p-2">
+                  <span className="text-sm font-medium">
+                    {assignee.viewer_name || 'Anonymous'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(assignee.last_accessed), 'MMM dd, HH:mm')}
+                  </span>
+                </div>
               ))}
             </div>
           </div>
