@@ -32,11 +32,15 @@ export default {
         "light-primary": "#060541",
         "light-secondary": "#e9ceb0",
         
-        // Enhanced artistic accent colors
+        // Enhanced vibrant accent colors
         "accent-blue": "hsl(var(--accent-blue))",
         "accent-green": "hsl(var(--accent-green))",
         "accent-orange": "hsl(var(--accent-orange))",
         "accent-purple": "hsl(var(--accent-purple))",
+        "accent-pink": "hsl(var(--accent-pink))",
+        "accent-cyan": "hsl(var(--accent-cyan))",
+        "accent-amber": "hsl(var(--accent-amber))",
+        "accent-emerald": "hsl(var(--accent-emerald))",
         
         // UI Elements
         border: "hsl(var(--border))",
@@ -78,11 +82,20 @@ export default {
         "gradient-secondary": "var(--gradient-secondary)",
         "gradient-card": "var(--gradient-card)",
         "gradient-background": "var(--gradient-background)",
+        "gradient-nav": "var(--gradient-nav)",
+        "gradient-vibrant": "var(--gradient-vibrant)",
+        "gradient-warm": "var(--gradient-warm)",
+        "gradient-cool": "var(--gradient-cool)",
       },
       boxShadow: {
         "colored": "var(--shadow-colored)",
         "soft": "var(--shadow-soft)",
         "glow": "var(--glow-primary)",
+        "glow-blue": "var(--glow-blue)",
+        "glow-green": "var(--glow-green)",
+        "glow-orange": "var(--glow-orange)",
+        "glow-purple": "var(--glow-purple)",
+        "vibrant": "var(--shadow-vibrant)",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -118,6 +131,14 @@ export default {
           "0%": { backgroundPosition: "-200% 0" },
           "100%": { backgroundPosition: "200% 0" },
         },
+        "pulse-color": {
+          "0%, 100%": { transform: "scale(1)", filter: "brightness(1)" },
+          "50%": { transform: "scale(1.05)", filter: "brightness(1.2)" },
+        },
+        "bounce-subtle": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-2px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -127,6 +148,8 @@ export default {
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "float": "float 3s ease-in-out infinite",
         "shimmer": "shimmer 2s linear infinite",
+        "pulse-color": "pulse-color 2s ease-in-out infinite",
+        "bounce-subtle": "bounce-subtle 1s ease-in-out infinite",
       },
     },
   },
