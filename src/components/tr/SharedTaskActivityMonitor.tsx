@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRSharedAccessExtended, TRSnoozeRequest } from '@/services/trSharedService';
@@ -46,7 +45,27 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
       const allAssignees = assigneesData.flat();
       const allSnoozeRequests = snoozeData.flat();
 
-      setActiveAssignees(allAssignees);
+      // Deduplicate assignees globally by session_id and name
+      const uniqueAssignees = allAssignees.reduce((acc, assignee) => {
+        const key = `${assignee.task_id}-${assignee.session_id || assignee.viewer_name}`;
+        const existing = acc.find(a => 
+          `${a.task_id}-${a.session_id || a.viewer_name}` === key
+        );
+        
+        if (!existing) {
+          acc.push(assignee);
+        } else {
+          // Keep the one with the most recent last_accessed time
+          if (new Date(assignee.last_accessed) > new Date(existing.last_accessed)) {
+            const index = acc.indexOf(existing);
+            acc[index] = assignee;
+          }
+        }
+        
+        return acc;
+      }, [] as TRSharedAccessExtended[]);
+
+      setActiveAssignees(uniqueAssignees);
       setSnoozeRequests(allSnoozeRequests.filter(req => req.status === 'pending'));
     } catch (error) {
       console.error('Error loading activity data:', error);
