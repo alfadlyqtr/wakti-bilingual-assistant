@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
-import { Mic, Search, MessageSquare, Expand, Download, Copy, PenTool } from 'lucide-react';
+import { Mic, Search, MessageSquare, Expand, Download, Copy, PenTool, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
@@ -39,9 +40,6 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
   const isSearchResult = !isUser && 
     (activeTrigger === 'search' || activeTrigger === 'advanced_search') && 
     (message.browsingUsed || message.quotaStatus);
-
-  // Check if we should show the mini copy button for regular chat messages
-  const showMiniCopyButton = activeTrigger === 'chat' && !isTextGenerated;
 
   const handleSearchConfirm = () => {
     if (onSearchConfirm) {
@@ -175,6 +173,46 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     }
   };
 
+  const handleExportPDF = async () => {
+    try {
+      const { generatePDF } = await import('@/utils/pdfUtils');
+      
+      const pdfOptions = {
+        title: language === 'ar' ? 'نتيجة البحث' : 'Search Result',
+        content: {
+          text: message.content
+        },
+        metadata: {
+          createdAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          type: activeTrigger === 'advanced_search' 
+            ? (language === 'ar' ? 'بحث متقدم' : 'Advanced Search')
+            : (language === 'ar' ? 'بحث أساسي' : 'Basic Search'),
+          host: 'WAKTI AI'
+        },
+        language: language as 'en' | 'ar'
+      };
+
+      const pdfBlob = await generatePDF(pdfOptions);
+      
+      // Create download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `wakti-search-result-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success(language === 'ar' ? 'تم تصدير PDF بنجاح' : 'PDF exported successfully');
+    } catch (error) {
+      console.error('Failed to export PDF:', error);
+      toast.error(language === 'ar' ? 'فشل في تصدير PDF' : 'Failed to export PDF');
+    }
+  };
+
   return (
     <div className={cn(
       "flex gap-3 max-w-4xl",
@@ -187,7 +225,7 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
       )}>
         {/* Message Bubble */}
         <div className={cn(
-          "relative px-4 py-3 rounded-2xl shadow-sm group",
+          "relative px-4 py-3 rounded-2xl shadow-sm",
           isUser 
             ? "bg-primary text-primary-foreground ml-auto" 
             : "bg-muted/50 text-foreground border",
@@ -210,25 +248,6 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           )}>
             {message.content}
           </div>
-
-          {/* Enhanced Mini Copy Button for Regular Chat Messages - Always visible for better UX */}
-          {showMiniCopyButton && (
-            <div className={cn(
-              "absolute top-2 transition-opacity duration-200",
-              isUser ? "left-2" : "right-2",
-              "opacity-60 hover:opacity-100" // Always slightly visible, full opacity on hover
-            )}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopyMessage}
-                className="h-7 w-7 p-0 bg-black/10 hover:bg-black/20 dark:bg-white/10 dark:hover:bg-white/20 rounded-full transition-all duration-200 hover:scale-110"
-                title={language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
-              >
-                <Copy className="h-3 w-3" />
-              </Button>
-            </div>
-          )}
 
           {/* Intent Badge */}
           {message.intent && !isUser && (
@@ -337,24 +356,66 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
           </div>
         )}
 
-        {/* Search Result Actions - Copy Text and Export PDF */}
-        {isSearchResult && message.browsingUsed && (
+        {/* Mode-specific Copy and Export Actions - Outside the bubble */}
+        {!isUser && (
           <div className={cn(
-            "ml-2",
+            "flex items-center gap-2 ml-2",
             isUser && "mr-2"
           )}>
-            <SearchResultActions
-              content={message.content}
-              query={message.browsingData?.query || ''}
-              sources={message.browsingData?.sources}
-              metadata={{
-                searchMode: activeTrigger === 'advanced_search' 
-                  ? (language === 'ar' ? 'بحث متقدم' : 'Advanced Search')
-                  : (language === 'ar' ? 'بحث أساسي' : 'Basic Search'),
-                intent: message.intent,
-                timestamp: message.timestamp
-              }}
-            />
+            {/* Chat Mode - Simple Copy */}
+            {activeTrigger === 'chat' && !isTextGenerated && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyMessage}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-all duration-200"
+                title={language === 'ar' ? 'نسخ الرسالة' : 'Copy message'}
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'نسخ' : 'Copy'}
+              </Button>
+            )}
+
+            {/* Search Mode - Copy Only */}
+            {activeTrigger === 'search' && message.browsingUsed && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyMessage}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-all duration-200"
+                title={language === 'ar' ? 'نسخ نتيجة البحث' : 'Copy search result'}
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'نسخ' : 'Copy'}
+              </Button>
+            )}
+
+            {/* Advanced Search Mode - Copy and Export PDF */}
+            {activeTrigger === 'advanced_search' && message.browsingUsed && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopyMessage}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-all duration-200"
+                  title={language === 'ar' ? 'نسخ نتيجة البحث المتقدم' : 'Copy advanced search result'}
+                >
+                  <Copy className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'نسخ' : 'Copy'}
+                </Button>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleExportPDF}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-md transition-all duration-200"
+                  title={language === 'ar' ? 'تصدير PDF' : 'Export PDF'}
+                >
+                  <FileText className="h-3 w-3 mr-1" />
+                  {language === 'ar' ? 'PDF' : 'PDF'}
+                </Button>
+              </>
+            )}
           </div>
         )}
 
