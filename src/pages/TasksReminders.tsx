@@ -84,7 +84,7 @@ export default function TasksReminders() {
             <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>
             <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>
             <TabsTrigger value="shared">
-              {language === 'ar' ? 'مراقب النشاط' : 'Activity Monitor'}
+              {t('activityMonitor', language)}
             </TabsTrigger>
           </TabsList>
 
@@ -138,7 +138,7 @@ export default function TasksReminders() {
           <TabsContent value="shared" className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">
-                {language === 'ar' ? 'مراقب النشاط' : 'Activity Monitor'}
+                {t('activityMonitor', language)}
               </h2>
             </div>
 

@@ -115,5 +115,20 @@ export const ar = {
   "subtaskDeleted": "تم حذف المهمة الفرعية بنجاح",
   "arabic": "العربية",
   "english": "الإنجليزية",
-  "recurring": "متكرر"
+  "recurring": "متكرر",
+  "activityMonitor": "مراقب النشاط",
+  "activeAssignees": "المكلفون النشطون",
+  "sharedTasks": "المهام المشتركة",
+  "snoozeRequests": "طلبات التأجيل",
+  "yourSharedTasks": "مهامك المشتركة",
+  "recentActivity": "النشاط الأخير",
+  "noSharedTasks": "لا توجد مهام مشتركة",
+  "shareTaskToStartMonitoring": "شارك مهمة لبدء مراقبة نشاط المكلفين",
+  "assignedTo": "مكلف لـ",
+  "completedBy": "أكمله",
+  "status": "الحالة",
+  "pending": "معلق",
+  "copyLink": "نسخ الرابط",
+  "view": "عرض",
+  "noRecentActivity": "لا يوجد نشاط حديث"
 };

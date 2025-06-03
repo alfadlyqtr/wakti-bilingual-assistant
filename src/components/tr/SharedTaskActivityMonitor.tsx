@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRSharedAccessExtended, TRSnoozeRequest } from '@/services/trSharedService';
@@ -6,6 +7,8 @@ import { SnoozeRequestPanel } from './SnoozeRequestPanel';
 import { ActivityFeedWidget } from './ActivityFeedWidget';
 import { Badge } from '@/components/ui/badge';
 import { Users, Clock, Activity } from 'lucide-react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 interface SharedTaskActivityMonitorProps {
   tasks: TRTask[];
@@ -16,6 +19,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
   tasks,
   onTasksChanged
 }) => {
+  const { language } = useTheme();
   const [activeAssignees, setActiveAssignees] = useState<TRSharedAccessExtended[]>([]);
   const [snoozeRequests, setSnoozeRequests] = useState<TRSnoozeRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,7 +107,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
     return (
       <div className="text-center py-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-sm text-muted-foreground mt-2">Loading activity data...</p>
+        <p className="text-sm text-muted-foreground mt-2">{t('loading', language)}...</p>
       </div>
     );
   }
@@ -112,8 +116,8 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
     return (
       <div className="text-center py-8 text-muted-foreground">
         <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-        <p className="text-lg font-medium mb-2">No Shared Tasks</p>
-        <p className="text-sm">Share a task to start monitoring assignee activity</p>
+        <p className="text-lg font-medium mb-2">{t('noSharedTasks', language)}</p>
+        <p className="text-sm">{t('shareTaskToStartMonitoring', language)}</p>
       </div>
     );
   }
@@ -125,19 +129,19 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
         <div className="bg-secondary/20 rounded-lg p-3 text-center">
           <Users className="w-5 h-5 mx-auto mb-1 text-blue-600" />
           <div className="text-lg font-semibold">{totalActiveAssignees}</div>
-          <div className="text-xs text-muted-foreground">Active Assignees</div>
+          <div className="text-xs text-muted-foreground">{t('activeAssignees', language)}</div>
         </div>
         
         <div className="bg-secondary/20 rounded-lg p-3 text-center">
           <Activity className="w-5 h-5 mx-auto mb-1 text-green-600" />
           <div className="text-lg font-semibold">{sharedTasks.length}</div>
-          <div className="text-xs text-muted-foreground">Shared Tasks</div>
+          <div className="text-xs text-muted-foreground">{t('sharedTasks', language)}</div>
         </div>
         
         <div className="bg-secondary/20 rounded-lg p-3 text-center">
           <Clock className="w-5 h-5 mx-auto mb-1 text-orange-600" />
           <div className="text-lg font-semibold">{pendingSnoozeRequests}</div>
-          <div className="text-xs text-muted-foreground">Snooze Requests</div>
+          <div className="text-xs text-muted-foreground">{t('snoozeRequests', language)}</div>
         </div>
       </div>
 
@@ -151,7 +155,7 @@ export const SharedTaskActivityMonitor: React.FC<SharedTaskActivityMonitorProps>
 
       {/* Shared Tasks List */}
       <div className="space-y-3">
-        <h3 className="text-sm font-medium text-muted-foreground">Your Shared Tasks</h3>
+        <h3 className="text-sm font-medium text-muted-foreground">{t('yourSharedTasks', language)}</h3>
         {sharedTasks.map(task => (
           <SharedTaskCard
             key={task.id}

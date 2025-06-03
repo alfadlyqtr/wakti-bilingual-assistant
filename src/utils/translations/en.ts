@@ -89,5 +89,20 @@ export const en = {
   "lightMode": "Light Mode",
   "darkMode": "Dark Mode",
   "recurring": "Recurring",
-  "create": "Create"
+  "create": "Create",
+  "activityMonitor": "Activity Monitor",
+  "activeAssignees": "Active Assignees",
+  "sharedTasks": "Shared Tasks",
+  "snoozeRequests": "Snooze Requests",
+  "yourSharedTasks": "Your Shared Tasks",
+  "recentActivity": "Recent Activity",
+  "noSharedTasks": "No Shared Tasks",
+  "shareTaskToStartMonitoring": "Share a task to start monitoring assignee activity",
+  "assignedTo": "Assigned to",
+  "completedBy": "Completed by",
+  "status": "Status",
+  "pending": "Pending",
+  "copyLink": "Copy Link",
+  "view": "View",
+  "noRecentActivity": "No recent activity"
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,8 @@ import { TRSharedAccessExtended, TRSharedService, TRVisitorCompletion } from '@/
 import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 interface SharedTaskCardProps {
   task: TRTask;
@@ -19,6 +22,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
   assignees,
   onTaskUpdated
 }) => {
+  const { language } = useTheme();
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +46,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
       const shareUrl = `${window.location.origin}/shared-task/${task.share_link}`;
       try {
         await navigator.clipboard.writeText(shareUrl);
-        toast.success('Share link copied to clipboard');
+        toast.success(t('linkCopied', language));
       } catch (error) {
         toast.error('Failed to copy link');
       }
@@ -94,11 +98,11 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
             {uniqueAssignees.length > 0 ? (
               <Badge variant="secondary" className="text-xs">
                 <UserCheck className="h-3 w-3 mr-1" />
-                {uniqueAssignees.length} assignee{uniqueAssignees.length > 1 ? 's' : ''}
+                {uniqueAssignees.length} {language === 'ar' ? 'مكلف' : 'assignee'}{uniqueAssignees.length > 1 ? (language === 'ar' ? 'ين' : 's') : ''}
               </Badge>
             ) : (
               <Badge variant="outline" className="text-xs">
-                No assignees
+                {language === 'ar' ? 'لا يوجد مكلفون' : 'No assignees'}
               </Badge>
             )}
           </div>
@@ -108,7 +112,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">Completed by:</span>
+            <span className="text-muted-foreground">{t('completedBy', language)}:</span>
             <span className="font-medium">
               {uniqueCompletionNames.length > 0 ? uniqueCompletionNames.length : 0}
             </span>
@@ -120,9 +124,9 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
             ) : (
               <Circle className="h-4 w-4 text-muted-foreground" />
             )}
-            <span className="text-muted-foreground">Status:</span>
+            <span className="text-muted-foreground">{t('status', language)}:</span>
             <span className={`font-medium ${task.completed ? 'text-green-600' : ''}`}>
-              {task.completed ? 'Complete' : 'Pending'}
+              {task.completed ? t('completed', language) : t('pending', language)}
             </span>
           </div>
         </div>
@@ -130,7 +134,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
         {/* Assignee Completions */}
         {uniqueCompletionNames.length > 0 && (
           <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">Completed by assignees:</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('completedBy', language)} {language === 'ar' ? 'المكلفين' : 'assignees'}:</p>
             <div className="flex flex-wrap gap-1">
               {uniqueCompletionNames.map(name => (
                 <Badge key={name} variant="outline" className="text-xs">
@@ -144,7 +148,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
         {/* Current Assignees */}
         {uniqueAssignees.length > 0 && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">Assigned to:</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('assignedTo', language)}:</p>
             <div className="space-y-1">
               {uniqueAssignees.map(assignee => (
                 <div key={assignee.id} className="flex items-center justify-between bg-secondary/20 rounded-md p-2">
@@ -169,7 +173,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
             className="flex-1"
           >
             <Copy className="h-3 w-3 mr-1" />
-            Copy Link
+            {t('copyLink', language)}
           </Button>
           
           <Button 
@@ -179,7 +183,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
             className="flex-1"
           >
             <ExternalLink className="h-3 w-3 mr-1" />
-            View
+            {t('view', language)}
           </Button>
         </div>
       </CardContent>

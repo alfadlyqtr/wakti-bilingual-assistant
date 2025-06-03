@@ -6,6 +6,8 @@ import { TRTask } from '@/services/trService';
 import { TRSharedService, TRVisitorCompletion, TRSharedAccessExtended } from '@/services/trSharedService';
 import { Activity, CheckCircle, UserCheck, Clock, User } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
 
 interface ActivityFeedWidgetProps {
   sharedTasks: TRTask[];
@@ -23,6 +25,7 @@ interface ActivityItem {
 export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
   sharedTasks
 }) => {
+  const { language } = useTheme();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -99,9 +102,9 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     const date = new Date(timestamp);
     
     if (isToday(date)) {
-      return `Today at ${format(date, 'HH:mm')}`;
+      return `${t('today', language)} at ${format(date, 'HH:mm')}`;
     } else if (isYesterday(date)) {
-      return `Yesterday at ${format(date, 'HH:mm')}`;
+      return `${language === 'ar' ? 'أمس' : 'Yesterday'} at ${format(date, 'HH:mm')}`;
     } else {
       return format(date, 'MMM dd at HH:mm');
     }
@@ -123,13 +126,13 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
   const getActivityDescription = (activity: ActivityItem) => {
     switch (activity.type) {
       case 'completion':
-        return `marked ${activity.details} as complete`;
+        return language === 'ar' ? `قام بتحديد ${activity.details === 'task' ? 'المهمة' : 'المهمة الفرعية'} كمكتملة` : `marked ${activity.details} as complete`;
       case 'assignee_join':
-        return 'was assigned to task';
+        return language === 'ar' ? 'تم تكليفه بالمهمة' : 'was assigned to task';
       case 'assignee_leave':
-        return 'was unassigned from task';
+        return language === 'ar' ? 'تم إلغاء تكليفه من المهمة' : 'was unassigned from task';
       default:
-        return 'had activity';
+        return language === 'ar' ? 'كان له نشاط' : 'had activity';
     }
   };
 
@@ -139,7 +142,7 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5" />
-            Recent Activity
+            {t('recentActivity', language)}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -156,14 +159,14 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Activity className="h-5 w-5" />
-          Recent Activity
+          {t('recentActivity', language)}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {activities.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">No recent activity</p>
+            <p className="text-sm">{t('noRecentActivity', language)}</p>
           </div>
         ) : (
           <div className="space-y-3">
