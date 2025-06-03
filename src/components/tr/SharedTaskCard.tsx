@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TRTask } from '@/services/trService';
 import { TRSharedAccessExtended, TRSharedService, TRVisitorCompletion } from '@/services/trSharedService';
-import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle, ChevronDown, ChevronUp, List } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
+import { TRService, TRSubtask } from '@/services/trService';
 
 interface SharedTaskCardProps {
   task: TRTask;
@@ -24,19 +25,24 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
 }) => {
   const { language } = useTheme();
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
+  const [subtasks, setSubtasks] = useState<TRSubtask[]>([]);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
-    loadCompletions();
+    loadData();
   }, [task.id]);
 
-  const loadCompletions = async () => {
+  const loadData = async () => {
     try {
-      const completionsData = await TRSharedService.getVisitorCompletions(task.id);
+      const [completionsData, subtasksData] = await Promise.all([
+        TRSharedService.getVisitorCompletions(task.id),
+        TRService.getSubtasks(task.id)
+      ]);
       setCompletions(completionsData);
+      setSubtasks(subtasksData);
     } catch (error) {
-      console.error('Error loading completions:', error);
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
@@ -67,6 +73,23 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
 
   const taskCompletions = completions.filter(c => c.completion_type === 'task' && c.is_completed);
   const uniqueCompletionNames = [...new Set(taskCompletions.map(c => c.visitor_name))];
+
+  // Calculate subtask completion statistics
+  const getSubtaskCompletionStats = () => {
+    if (subtasks.length === 0) return { completed: 0, total: 0 };
+    
+    let completedSubtasks = 0;
+    subtasks.forEach(subtask => {
+      const hasCompletion = completions.some(
+        c => c.subtask_id === subtask.id && c.completion_type === 'subtask' && c.is_completed
+      );
+      if (hasCompletion) completedSubtasks++;
+    });
+    
+    return { completed: completedSubtasks, total: subtasks.length };
+  };
+
+  const subtaskStats = getSubtaskCompletionStats();
 
   // Deduplicate assignees by name and get the most recent access time for each
   const uniqueAssignees = assignees.reduce((acc, assignee) => {
@@ -146,6 +169,50 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
                 </span>
               </div>
             </div>
+
+            {/* Subtask Progress */}
+            {subtasks.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <List className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}:
+                  </span>
+                  <Badge variant={subtaskStats.completed === subtaskStats.total ? "default" : "secondary"} className="text-xs">
+                    {subtaskStats.completed}/{subtaskStats.total} {language === 'ar' ? 'مكتملة' : 'completed'}
+                  </Badge>
+                </div>
+                
+                {/* Individual Subtask Status */}
+                <div className="space-y-1 ml-6">
+                  {subtasks.map(subtask => {
+                    const completedByNames = completions
+                      .filter(c => c.subtask_id === subtask.id && c.completion_type === 'subtask' && c.is_completed)
+                      .map(c => c.visitor_name);
+                    
+                    return (
+                      <div key={subtask.id} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          {completedByNames.length > 0 ? (
+                            <CheckCircle className="h-3 w-3 text-green-600" />
+                          ) : (
+                            <Circle className="h-3 w-3 text-muted-foreground" />
+                          )}
+                          <span className={completedByNames.length > 0 ? 'text-green-600' : 'text-muted-foreground'}>
+                            {subtask.title}
+                          </span>
+                        </div>
+                        {completedByNames.length > 0 && (
+                          <span className="text-green-600 text-xs">
+                            ✓ {completedByNames.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Assignee Completions */}
             {uniqueCompletionNames.length > 0 && (
