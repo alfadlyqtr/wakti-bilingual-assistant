@@ -83,7 +83,9 @@ export default function TasksReminders() {
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>
             <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>
-            <TabsTrigger value="shared">Activity Monitor</TabsTrigger>
+            <TabsTrigger value="shared">
+              {language === 'ar' ? 'مراقب النشاط' : 'Activity Monitor'}
+            </TabsTrigger>
           </TabsList>
 
           {/* Tasks Tab */}
@@ -135,7 +137,9 @@ export default function TasksReminders() {
           {/* Shared Tasks Activity Monitor Tab */}
           <TabsContent value="shared" className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Activity Monitor</h2>
+              <h2 className="text-lg font-semibold">
+                {language === 'ar' ? 'مراقب النشاط' : 'Activity Monitor'}
+              </h2>
             </div>
 
             <SharedTaskActivityMonitor tasks={tasks} onTasksChanged={loadData} />
