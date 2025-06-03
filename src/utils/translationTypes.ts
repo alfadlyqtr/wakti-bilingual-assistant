@@ -490,4 +490,20 @@ export type TranslationKey =
   | "subtaskAdded"
   | "subtaskUpdated"
   | "subtaskDeleted"
-  | "recurrence";
+  | "recurrence"
+  // Activity Monitor keys
+  | "activityMonitor"
+  | "activeAssignees"
+  | "sharedTasks"
+  | "snoozeRequests"
+  | "yourSharedTasks"
+  | "recentActivity"
+  | "noSharedTasks"
+  | "shareTaskToStartMonitoring"
+  | "assignedTo"
+  | "completedBy"
+  | "status"
+  | "pending"
+  | "copyLink"
+  | "view"
+  | "noRecentActivity";
