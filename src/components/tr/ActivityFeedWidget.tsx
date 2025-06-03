@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRVisitorCompletion, TRSharedAccessExtended } from '@/services/trSharedService';
-import { Activity, CheckCircle, UserCheck, Clock, User } from 'lucide-react';
+import { Activity, CheckCircle, UserCheck, Clock, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -28,6 +29,7 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
   const { language } = useTheme();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
     if (sharedTasks.length > 0) {
@@ -136,6 +138,10 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     }
   };
 
+  const toggleExpanded = () => {
+    setIsExpanded(!isExpanded);
+  };
+
   if (loading) {
     return (
       <Card>
@@ -156,42 +162,57 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Activity className="h-5 w-5" />
-          {t('recentActivity', language)}
+      <CardHeader className="pb-2">
+        <CardTitle 
+          className="flex items-center justify-between cursor-pointer"
+          onClick={toggleExpanded}
+        >
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5" />
+            {t('recentActivity', language)}
+          </div>
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        {activities.length === 0 ? (
-          <div className="text-center py-6 text-muted-foreground">
-            <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">{t('noRecentActivity', language)}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {activities.map((activity) => (
-              <div key={activity.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-secondary/20 transition-colors">
-                <div className="mt-0.5">
-                  {getActivityIcon(activity.type)}
-                </div>
-                
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="text-sm">
-                    <span className="font-medium">{activity.assigneeName}</span>
-                    <span className="text-muted-foreground"> {getActivityDescription(activity)} </span>
-                    <span className="font-medium">"{activity.taskTitle}"</span>
+      
+      {isExpanded && (
+        <CardContent className="pt-0">
+          {activities.length === 0 ? (
+            <div className="text-center py-6 text-muted-foreground">
+              <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">{t('noRecentActivity', language)}</p>
+            </div>
+          ) : (
+            <ScrollArea className="h-64 w-full">
+              <div className="space-y-3 pr-4">
+                {activities.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-secondary/20 transition-colors">
+                    <div className="mt-0.5">
+                      {getActivityIcon(activity.type)}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="text-sm">
+                        <span className="font-medium">{activity.assigneeName}</span>
+                        <span className="text-muted-foreground"> {getActivityDescription(activity)} </span>
+                        <span className="font-medium">"{activity.taskTitle}"</span>
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground">
+                        {formatTimestamp(activity.timestamp)}
+                      </div>
+                    </div>
                   </div>
-                  
-                  <div className="text-xs text-muted-foreground">
-                    {formatTimestamp(activity.timestamp)}
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
+            </ScrollArea>
+          )}
+        </CardContent>
+      )}
     </Card>
   );
 };
