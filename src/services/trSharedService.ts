@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TRSnoozeRequest {
@@ -144,8 +145,11 @@ export class TRSharedService {
         }
       }
 
-      // Update the original task if it should be completed
-      const shouldBeCompleted = hasTaskCompletion && allSubtasksCompleted;
+      // Task should be completed if:
+      // 1. Main task is explicitly completed by someone, OR
+      // 2. All subtasks are completed (when there are subtasks)
+      // 3. If there are no subtasks, only main task completion matters
+      const shouldBeCompleted = hasTaskCompletion || (subtasks && subtasks.length > 0 && allSubtasksCompleted);
       
       // Get current task status
       const { data: currentTask, error: taskError } = await supabase
