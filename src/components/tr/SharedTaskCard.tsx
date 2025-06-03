@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TRTask } from '@/services/trService';
 import { TRSharedAccessExtended, TRSharedService, TRVisitorCompletion } from '@/services/trSharedService';
-import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle } from 'lucide-react';
+import { Users, UserCheck, Copy, ExternalLink, CheckCircle, Circle, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -25,6 +25,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
   const { language } = useTheme();
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     loadCompletions();
@@ -60,6 +61,10 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
     }
   };
 
+  const toggleExpanded = () => {
+    setIsExpanded(!isExpanded);
+  };
+
   const taskCompletions = completions.filter(c => c.completion_type === 'task' && c.is_completed);
   const uniqueCompletionNames = [...new Set(taskCompletions.map(c => c.visitor_name))];
 
@@ -84,8 +89,11 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-4 space-y-3">
-        {/* Task Header */}
-        <div className="flex items-start justify-between gap-2">
+        {/* Task Header - Always Visible */}
+        <div 
+          className="flex items-start justify-between gap-2 cursor-pointer"
+          onClick={toggleExpanded}
+        >
           <div className="flex-1 min-w-0">
             <h4 className="font-medium truncate">{task.title}</h4>
             <p className="text-sm text-muted-foreground">
@@ -105,87 +113,97 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
                 {language === 'ar' ? 'لا يوجد مكلفون' : 'No assignees'}
               </Badge>
             )}
-          </div>
-        </div>
-
-        {/* Activity Stats */}
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">{t('completedBy', language)}:</span>
-            <span className="font-medium">
-              {uniqueCompletionNames.length > 0 ? uniqueCompletionNames.length : 0}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            {task.completed ? (
-              <CheckCircle className="h-4 w-4 text-green-600" />
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <Circle className="h-4 w-4 text-muted-foreground" />
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
             )}
-            <span className="text-muted-foreground">{t('status', language)}:</span>
-            <span className={`font-medium ${task.completed ? 'text-green-600' : ''}`}>
-              {task.completed ? t('completed', language) : t('pending', language)}
-            </span>
           </div>
         </div>
 
-        {/* Assignee Completions */}
-        {uniqueCompletionNames.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-xs font-medium text-muted-foreground">{t('completedBy', language)} {language === 'ar' ? 'المكلفين' : 'assignees'}:</p>
-            <div className="flex flex-wrap gap-1">
-              {uniqueCompletionNames.map(name => (
-                <Badge key={name} variant="outline" className="text-xs">
-                  {name}
-                </Badge>
-              ))}
+        {/* Collapsible Content */}
+        {isExpanded && (
+          <>
+            {/* Activity Stats */}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">{t('completedBy', language)}:</span>
+                <span className="font-medium">
+                  {uniqueCompletionNames.length > 0 ? uniqueCompletionNames.length : 0}
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                {task.completed ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                )}
+                <span className="text-muted-foreground">{t('status', language)}:</span>
+                <span className={`font-medium ${task.completed ? 'text-green-600' : ''}`}>
+                  {task.completed ? t('completed', language) : t('pending', language)}
+                </span>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Current Assignees */}
-        {uniqueAssignees.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">{t('assignedTo', language)}:</p>
-            <div className="space-y-1">
-              {uniqueAssignees.map(assignee => (
-                <div key={assignee.id} className="flex items-center justify-between bg-secondary/20 rounded-md p-2">
-                  <span className="text-sm font-medium">
-                    {assignee.viewer_name || 'Anonymous'}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {format(new Date(assignee.last_accessed), 'MMM dd, HH:mm')}
-                  </span>
+            {/* Assignee Completions */}
+            {uniqueCompletionNames.length > 0 && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">{t('completedBy', language)} {language === 'ar' ? 'المكلفين' : 'assignees'}:</p>
+                <div className="flex flex-wrap gap-1">
+                  {uniqueCompletionNames.map(name => (
+                    <Badge key={name} variant="outline" className="text-xs">
+                      {name}
+                    </Badge>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleCopyLink}
-            className="flex-1"
-          >
-            <Copy className="h-3 w-3 mr-1" />
-            {t('copyLink', language)}
-          </Button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={handleOpenSharedTask}
-            className="flex-1"
-          >
-            <ExternalLink className="h-3 w-3 mr-1" />
-            {t('view', language)}
-          </Button>
-        </div>
+            {/* Current Assignees */}
+            {uniqueAssignees.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">{t('assignedTo', language)}:</p>
+                <div className="space-y-1">
+                  {uniqueAssignees.map(assignee => (
+                    <div key={assignee.id} className="flex items-center justify-between bg-secondary/20 rounded-md p-2">
+                      <span className="text-sm font-medium">
+                        {assignee.viewer_name || 'Anonymous'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {format(new Date(assignee.last_accessed), 'MMM dd, HH:mm')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleCopyLink}
+                className="flex-1"
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                {t('copyLink', language)}
+              </Button>
+              
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleOpenSharedTask}
+                className="flex-1"
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                {t('view', language)}
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );
