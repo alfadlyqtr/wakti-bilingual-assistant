@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -740,9 +741,9 @@ export default function WaktiAIV2() {
 
   return (
     <PageContainer showHeader={false}>
-      <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative">
-        {/* Custom Wakti AI Header */}
-        <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30 flex-shrink-0">
+      <div className="h-screen bg-gradient-to-br from-background to-muted/20 relative flex flex-col">
+        {/* Fixed Header */}
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center">
             <Button 
               variant="ghost" 
@@ -813,10 +814,10 @@ export default function WaktiAIV2() {
           capture="environment"
         />
 
-        {/* Enhanced Messages Area - Fixed container and spacing */}
-        <div className="flex-1 relative overflow-hidden">
+        {/* Fixed Messages Container - Independent scrolling */}
+        <div className="fixed top-[60px] bottom-[180px] left-0 right-0 z-10">
           <ScrollArea className="h-full">
-            <div className="px-4 pt-4 pb-[180px] min-h-full">
+            <div className="px-4 pt-4 pb-4 min-h-full">
               <div className="space-y-6 max-w-4xl mx-auto">
                 {messages.map((message) => (
                   <ChatBubble 
@@ -842,7 +843,7 @@ export default function WaktiAIV2() {
 
         {/* Left Drawer - Chat Archive with + icon moved here */}
         <div className={cn(
-          "fixed top-[60px] bottom-[96px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          "fixed top-[60px] bottom-[180px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
           leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
@@ -886,7 +887,7 @@ export default function WaktiAIV2() {
 
         {/* Right Drawer - Quick Actions with Trigger Controls */}
         <div className={cn(
-          "fixed top-[60px] bottom-[96px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          "fixed top-[60px] bottom-[180px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
           rightDrawerOpen ? "translate-x-0" : "translate-x-full"
         )}>
           <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
@@ -936,8 +937,8 @@ export default function WaktiAIV2() {
           />
         )}
 
-        {/* Enhanced Fixed Input Area with Voice Recognition */}
-        <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4 flex-shrink-0">
+        {/* Fixed Input Area at Bottom */}
+        <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
           <div className="max-w-4xl mx-auto">
             {/* Listening Status Display */}
             {isListening && (
