@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -743,7 +742,7 @@ export default function WaktiAIV2() {
     <PageContainer showHeader={false}>
       <div className="h-screen bg-gradient-to-br from-background to-muted/20 relative flex flex-col">
         {/* Fixed Header */}
-        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm">
+        <div className="fixed top-16 left-0 right-0 z-50 flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm">
           <div className="flex items-center">
             <Button 
               variant="ghost" 
@@ -814,8 +813,8 @@ export default function WaktiAIV2() {
           capture="environment"
         />
 
-        {/* Fixed Messages Container - Independent scrolling */}
-        <div className="fixed top-[60px] bottom-[180px] left-0 right-0 z-10">
+        {/* Fixed Messages Container - Positioned right below app header */}
+        <div className="fixed top-[124px] bottom-[180px] left-0 right-0 z-10">
           <ScrollArea className="h-full">
             <div className="px-4 pt-4 pb-4 min-h-full">
               <div className="space-y-6 max-w-4xl mx-auto">
@@ -843,7 +842,7 @@ export default function WaktiAIV2() {
 
         {/* Left Drawer - Chat Archive with + icon moved here */}
         <div className={cn(
-          "fixed top-[60px] bottom-[180px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          "fixed top-[124px] bottom-[180px] left-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
           leftDrawerOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-r border-border/50 rounded-r-xl flex flex-col">
@@ -887,7 +886,7 @@ export default function WaktiAIV2() {
 
         {/* Right Drawer - Quick Actions with Trigger Controls */}
         <div className={cn(
-          "fixed top-[60px] bottom-[180px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
+          "fixed top-[124px] bottom-[180px] right-0 w-[320px] z-40 transition-all duration-300 ease-in-out",
           rightDrawerOpen ? "translate-x-0" : "translate-x-full"
         )}>
           <div className="h-full bg-white/50 dark:bg-gray-900/50 backdrop-blur-md shadow-xl border-l border-border/50 rounded-l-xl flex flex-col">
@@ -939,107 +938,105 @@ export default function WaktiAIV2() {
 
         {/* Fixed Input Area at Bottom */}
         <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
-          <div className="max-w-4xl mx-auto">
-            {/* Listening Status Display */}
-            {isListening && (
-              <div className="mb-3 flex items-center justify-center">
-                <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-                    <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
-                      {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
-                    </span>
-                  </div>
+          {/* Listening Status Display */}
+          {isListening && (
+            <div className="mb-3 flex items-center justify-center">
+              <div className="bg-blue-100 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-blue-600 dark:text-blue-400 font-medium text-sm">
+                    {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
+                  </span>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Image Attachments Preview */}
-            {attachedImages.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {attachedImages.map((image, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={URL.createObjectURL(image)}
-                      alt={`Attachment ${index + 1}`}
-                      className="w-16 h-16 object-cover rounded-lg border-2 border-border"
-                    />
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => removeAttachedImage(index)}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Input Container */}
-            <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 relative">
-                  <Textarea
-                    ref={textareaRef}
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyPress={handleTextareaKeyPress}
-                    placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
-                    disabled={isLoading || isListening}
-                    className={cn(
-                      "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
-                      language === 'ar' ? 'text-right' : ''
-                    )}
-                    rows={1}
+          {/* Image Attachments Preview */}
+          {attachedImages.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachedImages.map((image, index) => (
+                <div key={index} className="relative">
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt={`Attachment ${index + 1}`}
+                    className="w-16 h-16 object-cover rounded-lg border-2 border-border"
                   />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    onClick={() => removeAttachedImage(index)}
+                    className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
                 </div>
-                
-                {/* Combined Upload/Camera Button */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleFileUpload}
+              ))}
+            </div>
+          )}
+
+          {/* Input Container */}
+          <div className="bg-background/95 backdrop-blur-md border border-border/50 rounded-2xl shadow-xl p-3">
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 relative">
+                <Textarea
+                  ref={textareaRef}
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleTextareaKeyPress}
+                  placeholder={language === 'ar' ? 'اكتب رسالتك أو استخدم الصوت...' : 'Type your message or use voice...'}
                   disabled={isLoading || isListening}
-                  className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
-                  title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
-                >
-                  <Upload className="h-5 w-5" />
-                </Button>
-                
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={toggleSpeechRecognition}
-                  disabled={isLoading}
                   className={cn(
-                    "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
-                    isListening 
-                      ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
-                      : "hover:bg-muted"
+                    "border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base resize-none min-h-[44px] max-h-[140px] overflow-y-auto",
+                    language === 'ar' ? 'text-right' : ''
                   )}
-                >
-                  {isListening ? (
-                    <Square className="h-5 w-5" />
-                  ) : (
-                    <Mic className="h-5 w-5" />
-                  )}
-                </Button>
-                
-                <Button
-                  onClick={() => sendMessage(inputMessage)}
-                  disabled={!inputMessage.trim() || isLoading || isListening}
-                  size="icon"
-                  className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Send className="h-5 w-5" />
-                  )}
-                </Button>
+                  rows={1}
+                />
               </div>
+              
+              {/* Combined Upload/Camera Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleFileUpload}
+                disabled={isLoading || isListening}
+                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:bg-muted"
+                title={language === 'ar' ? 'رفع ملف أو التقاط صورة' : 'Upload file or take photo'}
+              >
+                <Upload className="h-5 w-5" />
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSpeechRecognition}
+                disabled={isLoading}
+                className={cn(
+                  "shrink-0 h-11 w-11 rounded-xl transition-all duration-200",
+                  isListening 
+                    ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 scale-105" 
+                    : "hover:bg-muted"
+                )}
+              >
+                {isListening ? (
+                  <Square className="h-5 w-5" />
+                ) : (
+                  <Mic className="h-5 w-5" />
+                )}
+              </Button>
+              
+              <Button
+                onClick={() => sendMessage(inputMessage)}
+                disabled={!inputMessage.trim() || isLoading || isListening}
+                size="icon"
+                className="shrink-0 h-11 w-11 rounded-xl transition-all duration-200 hover:scale-105"
+              >
+                {isLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
             </div>
           </div>
         </div>
