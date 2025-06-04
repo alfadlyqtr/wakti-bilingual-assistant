@@ -740,9 +740,9 @@ export default function WaktiAIV2() {
 
   return (
     <PageContainer showHeader={false}>
-      <div className="flex flex-col h-screen bg-gradient-to-br from-background to-muted/20 relative overflow-hidden">
+      <div className="flex flex-col h-full bg-gradient-to-br from-background to-muted/20 relative">
         {/* Custom Wakti AI Header */}
-        <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 border-b bg-background/80 backdrop-blur-sm relative z-30">
           <div className="flex items-center">
             <Button 
               variant="ghost" 
@@ -813,26 +813,24 @@ export default function WaktiAIV2() {
           capture="environment"
         />
 
-        {/* Fixed Messages Area with proper height calculation */}
-        <div className="flex-1 relative overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-4 pb-48 space-y-4 max-w-4xl mx-auto min-h-full">
-              {messages.map((message) => (
-                <ChatBubble 
-                  key={message.id} 
-                  message={message} 
-                  onSearchConfirm={handleSearchConfirmation}
-                  activeTrigger={activeTrigger}
-                  isTextGenerated={message.isTextGenerated}
-                />
-              ))}
-              
-              {isTyping && <TypingIndicator />}
-              
-              <div ref={messagesEndRef} className="h-4" />
-            </div>
-          </ScrollArea>
-        </div>
+        {/* Enhanced Messages Area with Search Confirmation */}
+        <ScrollArea className="flex-1 p-4 pb-40 relative z-10">
+          <div className="space-y-4 max-w-4xl mx-auto">
+            {messages.map((message) => (
+              <ChatBubble 
+                key={message.id} 
+                message={message} 
+                onSearchConfirm={handleSearchConfirmation}
+                activeTrigger={activeTrigger}
+                isTextGenerated={message.isTextGenerated}
+              />
+            ))}
+            
+            {isTyping && <TypingIndicator />}
+            
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
 
         {/* Left Drawer - Chat Archive with + icon moved here */}
         <div className={cn(
@@ -930,8 +928,8 @@ export default function WaktiAIV2() {
           />
         )}
 
-        {/* Enhanced Fixed Input Area - Now properly positioned */}
-        <div className="absolute bottom-[84px] left-0 right-0 z-30 p-4 bg-gradient-to-t from-background via-background/95 to-transparent backdrop-blur-sm">
+        {/* Enhanced Fixed Input Area with Voice Recognition */}
+        <div className="fixed bottom-[84px] left-0 right-0 z-30 p-4">
           <div className="max-w-4xl mx-auto">
             {/* Listening Status Display */}
             {isListening && (
