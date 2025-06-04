@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Globe, Moon, Sun } from "lucide-react";
+import { Globe, Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
@@ -49,45 +49,103 @@ export function AppHeader() {
     { title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', onClick: handleLogout }
   ];
   
-  // Function to get page title based on current path
-  const getPageTitle = () => {
+  // Function to get page title and icon with matching colors from MobileNav
+  const getPageTitleWithIcon = () => {
     const path = location.pathname;
     
     const routes = {
-      '/dashboard': language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
-      '/calendar': language === 'ar' ? 'التقويم' : 'Calendar',
-      '/settings': language === 'ar' ? 'الإعدادات' : 'Settings',
-      '/contacts': language === 'ar' ? 'جهات الاتصال' : 'Contacts',
-      '/account': language === 'ar' ? 'الحساب' : 'Account',
-      '/wakti-ai': language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
-      '/tasjeel': language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      '/tr': 'T & R',
-      // Maw3d routes
-      '/maw3d': t("maw3dEvents", language),
-      '/maw3d/create': t("createEvent", language),
+      '/dashboard': {
+        title: language === 'ar' ? 'لوحة التحكم' : 'Dashboard',
+        icon: null,
+        colorClass: ''
+      },
+      '/calendar': {
+        title: language === 'ar' ? 'التقويم' : 'Calendar',
+        icon: Calendar,
+        colorClass: 'nav-icon-calendar'
+      },
+      '/settings': {
+        title: language === 'ar' ? 'الإعدادات' : 'Settings',
+        icon: null,
+        colorClass: ''
+      },
+      '/contacts': {
+        title: language === 'ar' ? 'جهات الاتصال' : 'Contacts',
+        icon: null,
+        colorClass: ''
+      },
+      '/account': {
+        title: language === 'ar' ? 'الحساب' : 'Account',
+        icon: null,
+        colorClass: ''
+      },
+      '/wakti-ai': {
+        title: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
+        icon: Sparkles,
+        colorClass: 'nav-icon-ai'
+      },
+      '/tasjeel': {
+        title: language === 'ar' ? 'تسجيل' : 'Tasjeel',
+        icon: Mic,
+        colorClass: 'nav-icon-tasjeel'
+      },
+      '/tr': {
+        title: 'T & R',
+        icon: ListTodo,
+        colorClass: 'nav-icon-tr'
+      },
+      '/maw3d': {
+        title: t("maw3dEvents", language),
+        icon: CalendarClock,
+        colorClass: 'nav-icon-maw3d'
+      }
     };
     
     // Check for Maw3d edit and manage routes
     if (path.startsWith('/maw3d/edit/')) {
-      return t("editEvent", language);
+      return {
+        title: t("editEvent", language),
+        icon: CalendarClock,
+        colorClass: 'nav-icon-maw3d'
+      };
     }
     
     if (path.startsWith('/maw3d/manage/')) {
-      return t("manageEvent", language);
+      return {
+        title: t("manageEvent", language),
+        icon: CalendarClock,
+        colorClass: 'nav-icon-maw3d'
+      };
+    }
+
+    if (path.startsWith('/maw3d/create')) {
+      return {
+        title: t("createEvent", language),
+        icon: CalendarClock,
+        colorClass: 'nav-icon-maw3d'
+      };
     }
     
-    return routes[path] || '';
+    return routes[path] || { title: '', icon: null, colorClass: '' };
   };
+  
+  const pageInfo = getPageTitleWithIcon();
+  const IconComponent = pageInfo.icon;
   
   return (
     <div className="bg-background border-b sticky top-0 z-50">
       <div className="container flex h-16 items-center justify-between py-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Link to="/dashboard" className="flex items-center">
             <Logo3D size="sm" />
           </Link>
-          {getPageTitle() && (
-            <h1 className="text-lg font-medium">{getPageTitle()}</h1>
+          {pageInfo.title && (
+            <div className="flex items-center gap-2">
+              {IconComponent && (
+                <IconComponent className={cn("h-5 w-5", pageInfo.colorClass)} />
+              )}
+              <h1 className="text-lg font-medium">{pageInfo.title}</h1>
+            </div>
           )}
         </div>
         <div className="flex items-center space-x-4">
