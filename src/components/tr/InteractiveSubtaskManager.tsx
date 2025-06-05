@@ -126,7 +126,7 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
       .map(c => c.visitor_name);
   };
 
-  // Fix: Count only MY completed subtasks for the progress indicator
+  // Count only MY completed subtasks for the progress indicator
   const getMyCompletedCount = (): number => {
     return subtasks.filter(subtask => isSubtaskCompleted(subtask.id)).length;
   };
@@ -152,116 +152,114 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
   const totalUniqueCompletions = getTotalUniqueCompletions();
 
   return (
-    <div 
-      className="space-y-3"
-      style={{
-        maxHeight: '400px',
-        overflowY: 'auto !important',
-        overflowX: 'hidden !important'
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />
-            You: {myCompletedCount} of {subtasks.length} completed
-          </div>
-          {totalUniqueCompletions > 0 && (
-            <div className="text-xs text-blue-600 flex items-center gap-1">
-              <User className="h-3 w-3" />
-              Overall: {totalUniqueCompletions} of {subtasks.length} done
-            </div>
-          )}
-        </div>
-      </div>
+    <>
+      <style>
+        {`
+          .subtask-scroll-container {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+          }
+          .subtask-scroll-container::-webkit-scrollbar {
+            width: 6px;
+          }
+          .subtask-scroll-container::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .subtask-scroll-container::-webkit-scrollbar-thumb {
+            background: rgba(155, 155, 155, 0.5);
+            border-radius: 3px;
+          }
+          .subtask-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: rgba(155, 155, 155, 0.7);
+          }
+        `}
+      </style>
       
-      <div 
-        className="space-y-2 pr-2"
-        style={{
-          maxHeight: '300px',
-          overflowY: 'scroll',
-          scrollbarWidth: 'thin',
-          scrollbarColor: 'rgba(155, 155, 155, 0.5) transparent'
-        }}
-      >
-        {subtasks.map((subtask) => {
-          const isCompleted = isSubtaskCompleted(subtask.id);
-          const completedBy = getSubtaskCompletedBy(subtask.id);
-          const isUpdating = updatingSubtasks.has(subtask.id);
-          
-          return (
-            <div 
-              key={subtask.id} 
-              className={`group relative transition-all duration-200 ${
-                isUpdating ? 'opacity-50' : ''
-              }`}
-            >
+      <div className="space-y-3" style={{ maxHeight: '400px' }}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <CheckCircle className="h-3 w-3" />
+              You: {myCompletedCount} of {subtasks.length} completed
+            </div>
+            {totalUniqueCompletions > 0 && (
+              <div className="text-xs text-blue-600 flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Overall: {totalUniqueCompletions} of {subtasks.length} done
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div 
+          className="subtask-scroll-container space-y-2 pr-2"
+          style={{ maxHeight: '300px' }}
+        >
+          {subtasks.map((subtask) => {
+            const isCompleted = isSubtaskCompleted(subtask.id);
+            const completedBy = getSubtaskCompletedBy(subtask.id);
+            const isUpdating = updatingSubtasks.has(subtask.id);
+            
+            return (
               <div 
-                className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
-                  isCompleted 
-                    ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                    : 'bg-card border-border hover:bg-accent/20'
-                } ${!readOnly ? 'active:scale-[0.98]' : ''}`}
-                onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompleted)}
+                key={subtask.id} 
+                className={`group relative transition-all duration-200 ${
+                  isUpdating ? 'opacity-50' : ''
+                }`}
               >
-                <div className="flex items-center gap-3">
-                  <Checkbox
-                    checked={isCompleted}
-                    onCheckedChange={(checked) => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, checked as boolean)}
-                    disabled={readOnly || isUpdating}
-                    className="transition-all duration-200"
-                  />
-                  
-                  <span className={`flex-1 text-sm transition-all duration-200 select-none ${
+                <div 
+                  className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
                     isCompleted 
-                      ? 'line-through text-muted-foreground font-medium decoration-2' 
-                      : 'text-foreground'
-                  }`}>
-                    {subtask.title}
-                  </span>
+                      ? 'bg-green-50 border-green-200 hover:bg-green-100' 
+                      : 'bg-card border-border hover:bg-accent/20'
+                  } ${!readOnly ? 'active:scale-[0.98]' : ''}`}
+                  onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompleted)}
+                >
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={isCompleted}
+                      onCheckedChange={(checked) => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, checked as boolean)}
+                      disabled={readOnly || isUpdating}
+                      className="transition-all duration-200"
+                    />
+                    
+                    <span className={`flex-1 text-sm transition-all duration-200 select-none ${
+                      isCompleted 
+                        ? 'line-through text-muted-foreground font-medium decoration-2' 
+                        : 'text-foreground'
+                    }`}>
+                      {subtask.title}
+                    </span>
 
-                  {isUpdating && (
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  )}
-                </div>
-                
-                {completedBy.length > 0 && (
-                  <div className="ml-7 flex items-center gap-2 text-xs">
-                    <div className="flex items-center gap-1 text-green-600">
-                      <User className="h-3 w-3" />
-                      <span className="font-medium">
-                        Completed by: {completedBy.join(', ')}
-                      </span>
-                    </div>
-                    {completedBy.length > 1 && (
-                      <span className="text-muted-foreground">
-                        ({completedBy.length} people)
-                      </span>
+                    {isUpdating && (
+                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                     )}
                   </div>
-                )}
+                  
+                  {completedBy.length > 0 && (
+                    <div className="ml-7 flex items-center gap-2 text-xs">
+                      <div className="flex items-center gap-1 text-green-600">
+                        <User className="h-3 w-3" />
+                        <span className="font-medium">
+                          Completed by: {completedBy.join(', ')}
+                        </span>
+                      </div>
+                      {completedBy.length > 1 && (
+                        <span className="text-muted-foreground">
+                          ({completedBy.length} people)
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
-
-      <style jsx>{`
-        div::-webkit-scrollbar {
-          width: 6px;
-        }
-        div::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        div::-webkit-scrollbar-thumb {
-          background: rgba(155, 155, 155, 0.5);
-          border-radius: 3px;
-        }
-        div::-webkit-scrollbar-thumb:hover {
-          background: rgba(155, 155, 155, 0.7);
-        }
-      `}</style>
-    </div>
+    </>
   );
 };
