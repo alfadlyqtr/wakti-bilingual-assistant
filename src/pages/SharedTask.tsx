@@ -31,10 +31,32 @@ export default function SharedTask() {
   const [sessionId, setSessionId] = useState<string>('');
   const [showNameModal, setShowNameModal] = useState(false);
   const [showSnoozeModal, setShowSnoozeModal] = useState(false);
+  const [visitorAuthChecked, setVisitorAuthChecked] = useState(false);
   
   // Task interaction state
   const [taskCompletion, setTaskCompletion] = useState<TRVisitorCompletion | null>(null);
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
+
+  // Check visitor authentication immediately when shareLink is available
+  useEffect(() => {
+    if (shareLink && !visitorAuthChecked) {
+      console.log('Checking visitor auth for shareLink:', shareLink);
+      const storedName = localStorage.getItem(`visitor_name_${shareLink}`);
+      const storedSessionId = localStorage.getItem(`visitor_session_${shareLink}`);
+      
+      console.log('Stored visitor data:', { storedName, storedSessionId });
+      
+      if (storedName && storedSessionId) {
+        setVisitorName(storedName);
+        setSessionId(storedSessionId);
+        console.log('Found stored visitor credentials');
+      } else {
+        console.log('No stored visitor credentials, showing name modal');
+        setShowNameModal(true);
+      }
+      setVisitorAuthChecked(true);
+    }
+  }, [shareLink, visitorAuthChecked]);
 
   useEffect(() => {
     if (shareLink) {
@@ -43,23 +65,15 @@ export default function SharedTask() {
   }, [shareLink]);
 
   useEffect(() => {
-    // Check if visitor has already entered their name
-    const storedName = localStorage.getItem(`visitor_name_${shareLink}`);
-    const storedSessionId = localStorage.getItem(`visitor_session_${shareLink}`);
-    
-    if (storedName && storedSessionId) {
-      setVisitorName(storedName);
-      setSessionId(storedSessionId);
-      if (task) {
-        recordVisitorAccess(storedName, storedSessionId);
-      }
-    } else {
-      setShowNameModal(true);
+    // Record visitor access once we have both task and visitor info
+    if (task && visitorName && sessionId && !showNameModal) {
+      console.log('Recording visitor access for:', visitorName);
+      recordVisitorAccess(visitorName, sessionId);
     }
-  }, [task, shareLink]);
+  }, [task, visitorName, sessionId, showNameModal]);
 
   useEffect(() => {
-    if (task && sessionId) {
+    if (task && sessionId && !showNameModal) {
       loadTaskCompletions();
       
       // Set up real-time subscription
@@ -86,7 +100,7 @@ export default function SharedTask() {
         TRSharedService.updateVisitorActivity(sessionId, false);
       };
     }
-  }, [task, sessionId]);
+  }, [task, sessionId, showNameModal]);
 
   const loadSharedTask = async () => {
     try {
@@ -135,6 +149,8 @@ export default function SharedTask() {
   const handleNameSubmit = async (name: string) => {
     const newSessionId = TRSharedService.generateSessionId();
     
+    console.log('Submitting visitor name:', name, 'with sessionId:', newSessionId);
+    
     setVisitorName(name);
     setSessionId(newSessionId);
     setShowNameModal(false);
@@ -143,9 +159,7 @@ export default function SharedTask() {
     localStorage.setItem(`visitor_name_${shareLink}`, name);
     localStorage.setItem(`visitor_session_${shareLink}`, newSessionId);
     
-    if (task) {
-      await recordVisitorAccess(name, newSessionId);
-    }
+    console.log('Stored visitor credentials in localStorage');
     
     toast.success(`Welcome, ${name}!`);
   };
@@ -213,10 +227,24 @@ export default function SharedTask() {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 w-full h-full bg-background flex items-center justify-center p-4 overflow-hidden">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading shared task...</p>
+      <div 
+        className="fixed inset-0 w-full h-full bg-background overflow-y-auto"
+        style={{ 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1000,
+          overflowY: 'auto',
+          overflowX: 'hidden'
+        }}
+      >
+        <div className="flex items-center justify-center min-h-full p-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading shared task...</p>
+          </div>
         </div>
       </div>
     );
@@ -224,18 +252,32 @@ export default function SharedTask() {
 
   if (error || !task) {
     return (
-      <div className="fixed inset-0 w-full h-full bg-background flex items-center justify-center p-4 overflow-hidden">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Task Not Found</h2>
-              <p className="text-muted-foreground mb-4">
-                {error || 'This task might have been removed or is no longer shared.'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+      <div 
+        className="fixed inset-0 w-full h-full bg-background overflow-y-auto"
+        style={{ 
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1000,
+          overflowY: 'auto',
+          overflowX: 'hidden'
+        }}
+      >
+        <div className="flex items-center justify-center min-h-full p-4">
+          <Card className="w-full max-w-md">
+            <CardContent className="pt-6">
+              <div className="text-center">
+                <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
+                <h2 className="text-lg font-semibold mb-2">Task Not Found</h2>
+                <p className="text-muted-foreground mb-4">
+                  {error || 'This task might have been removed or is no longer shared.'}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -244,8 +286,20 @@ export default function SharedTask() {
   const isTaskCompleted = taskCompletion?.is_completed || false;
 
   return (
-    <div className="w-full min-h-screen bg-background">
-      <div className="w-full h-full overflow-y-auto scrollbar-hide">
+    <div 
+      className="fixed inset-0 w-full h-full bg-background overflow-y-auto"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+        overflowY: 'auto',
+        overflowX: 'hidden'
+      }}
+    >
+      <div className="min-h-full">
         <div className="w-full max-w-none mx-auto px-4 py-6 sm:max-w-2xl lg:max-w-4xl">
           <div className="space-y-6">
             {/* Header Section */}
