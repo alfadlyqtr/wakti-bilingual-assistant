@@ -212,7 +212,7 @@ export default function SharedTask() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Loading shared task...</p>
@@ -223,7 +223,7 @@ export default function SharedTask() {
 
   if (error || !task) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center">
@@ -244,10 +244,11 @@ export default function SharedTask() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="mb-6">
-            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground mb-2">
+      <div className="container mx-auto px-4 py-4 pb-20">
+        <div className="max-w-2xl mx-auto space-y-4">
+          {/* Header Section */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4" />
                 <span>Shared Task • {visitorName}</span>
@@ -257,85 +258,90 @@ export default function SharedTask() {
             <h1 className="text-2xl font-bold">Interactive Task View</h1>
           </div>
 
+          {/* Main Task Card */}
           <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <CardTitle className={task.completed ? 'line-through text-muted-foreground' : ''}>
+            <CardHeader className="pb-4">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className={`text-lg leading-tight ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                       {task.title}
                     </CardTitle>
-                    <PriorityBadge priority={task.priority} />
-                    <Badge variant="secondary" className="text-xs">
-                      {t('sharedTask', language)}
-                    </Badge>
                   </div>
-                  
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                </div>
+                
+                <div className="flex items-center gap-2 flex-wrap">
+                  <PriorityBadge priority={task.priority} />
+                  <Badge variant="secondary" className="text-xs">
+                    {t('sharedTask', language)}
+                  </Badge>
+                  <StatusBadge completed={task.completed} isOverdue={task.due_date ? isOverdue(task) : false} />
+                </div>
+                
+                {task.due_date && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="w-4 h-4" />
                     <span>
                       Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
                       {task.due_time && ` at ${task.due_time}`}
                     </span>
                   </div>
+                )}
 
-                  <div className="flex items-center gap-2">
-                    <StatusBadge completed={task.completed} isOverdue={isOverdue(task)} />
-                    {taskCompletedBy.length > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        ✓ Completed by: {taskCompletedBy.join(', ')}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                {taskCompletedBy.length > 0 && (
+                  <Badge variant="outline" className="text-xs w-fit">
+                    ✓ Completed by: {taskCompletedBy.join(', ')}
+                  </Badge>
+                )}
               </div>
             </CardHeader>
 
-            <CardContent>
+            <CardContent className="space-y-6">
+              {/* Description */}
               {task.description && (
-                <div className="mb-6">
+                <div>
                   <h3 className="font-medium mb-2">{t('description', language)}</h3>
-                  <p className="text-muted-foreground">{task.description}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{task.description}</p>
                 </div>
               )}
 
-              {/* Task Completion Actions */}
-              <div className="mb-6 p-4 border rounded-lg">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    {isTaskCompleted ? (
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    <span className="font-medium">
-                      {isTaskCompleted ? 'You marked this task as complete' : 'Mark this task as complete'}
-                    </span>
-                  </div>
+              {/* Task Completion Actions - Improved Layout */}
+              <div className="border rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-3">
+                  {isTaskCompleted ? (
+                    <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  )}
+                  <span className="font-medium text-sm">
+                    {isTaskCompleted ? 'You marked this task as complete' : 'Mark this task as complete'}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant={isTaskCompleted ? "secondary" : "default"}
+                    size="sm"
+                    onClick={() => handleTaskToggle(!isTaskCompleted)}
+                    className="flex-1"
+                  >
+                    {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
+                  </Button>
                   
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant={isTaskCompleted ? "secondary" : "default"}
-                      size="sm"
-                      onClick={() => handleTaskToggle(!isTaskCompleted)}
-                    >
-                      {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
-                    </Button>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSnoozeModal(true)}
-                    >
-                      <Pause className="h-4 w-4 mr-1" />
-                      Request Snooze
-                    </Button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSnoozeModal(true)}
+                    className="flex-1 sm:flex-initial"
+                  >
+                    <Pause className="h-4 w-4 mr-2" />
+                    Request Snooze
+                  </Button>
                 </div>
               </div>
 
               {/* Interactive Subtasks */}
-              <div className="mb-4">
+              <div>
                 <InteractiveSubtaskManager 
                   taskId={task.id}
                   visitorName={visitorName}
@@ -343,6 +349,7 @@ export default function SharedTask() {
                 />
               </div>
 
+              {/* Footer Info */}
               <div className="pt-4 border-t">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Calendar className="h-4 w-4" />
