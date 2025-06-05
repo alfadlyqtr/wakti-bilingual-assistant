@@ -40,7 +40,7 @@ export function MobileNav() {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
       path: '/tasjeel',
       icon: 'mic',
-      colorClass: 'nav-icon-tasjeel',
+      colorClass: 'text-cyan-500', // Changed to cyan color
     }
   ];
   
@@ -91,6 +91,7 @@ export function MobileNav() {
                   </div>
                   <span className={cn(
                     "text-xs font-medium transition-all duration-300",
+                    item.path === '/tasjeel' ? "text-cyan-500" : "", // Added cyan color for Tasjeel text
                     isActive 
                       ? "text-foreground font-semibold" 
                       : "text-muted-foreground group-hover:text-foreground"

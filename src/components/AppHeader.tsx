@@ -87,7 +87,7 @@ export function AppHeader() {
       '/tasjeel': {
         title: language === 'ar' ? 'تسجيل' : 'Tasjeel',
         icon: Mic,
-        colorClass: 'nav-icon-tasjeel'
+        colorClass: 'text-cyan-500' // Changed to cyan color
       },
       '/tr': {
         title: 'T & R',
