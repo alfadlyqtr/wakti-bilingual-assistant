@@ -13,7 +13,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-background p-2 text-muted-foreground",
+      "inline-flex h-12 items-center justify-center gap-1 rounded-xl bg-muted/30 p-1 text-muted-foreground",
       className
     )}
     {...props}
@@ -29,10 +29,10 @@ const TabsTrigger = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex items-center justify-center whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-      "bg-muted/50 border border-border/20 shadow-sm hover:shadow-md hover:bg-accent/50 hover:text-foreground hover:scale-[1.02] active:scale-[0.98]",
-      "data-[state=active]:bg-gradient-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-colored data-[state=active]:scale-[1.02] data-[state=active]:border-primary/20",
+      "bg-background border border-border shadow-sm hover:shadow-md hover:bg-accent hover:text-accent-foreground hover:scale-[1.02] active:scale-[0.98]",
+      "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-lg data-[state=active]:scale-[1.02] data-[state=active]:border-primary",
       "touch-manipulation select-none cursor-pointer",
-      "min-h-[44px] min-w-[44px]", // iOS/Android recommended touch target size
+      "min-h-[40px] min-w-[80px]", // Better button-like dimensions
       className
     )}
     {...props}
