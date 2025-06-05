@@ -904,7 +904,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
-          due_date: string
+          due_date: string | null
           due_time: string | null
           id: string
           title: string
@@ -914,7 +914,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
-          due_date: string
+          due_date?: string | null
           due_time?: string | null
           id?: string
           title: string
@@ -924,7 +924,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
-          due_date?: string
+          due_date?: string | null
           due_time?: string | null
           id?: string
           title?: string
@@ -1062,7 +1062,7 @@ export type Database = {
           completed_at: string | null
           created_at: string
           description: string | null
-          due_date: string
+          due_date: string | null
           due_time: string | null
           id: string
           is_shared: boolean
@@ -1079,7 +1079,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           description?: string | null
-          due_date: string
+          due_date?: string | null
           due_time?: string | null
           id?: string
           is_shared?: boolean
@@ -1096,7 +1096,7 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           description?: string | null
-          due_date?: string
+          due_date?: string | null
           due_time?: string | null
           id?: string
           is_shared?: boolean
