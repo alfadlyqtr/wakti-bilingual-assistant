@@ -1015,6 +1015,54 @@ export type Database = {
           },
         ]
       }
+      tr_task_comments: {
+        Row: {
+          commenter_name: string
+          content: string
+          created_at: string
+          id: string
+          parent_id: string | null
+          session_id: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          commenter_name: string
+          content: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          session_id: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          commenter_name?: string
+          content?: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          session_id?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_tr_task_comments_task_id"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tr_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tr_task_comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "tr_task_comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tr_task_snooze_requests: {
         Row: {
           created_at: string

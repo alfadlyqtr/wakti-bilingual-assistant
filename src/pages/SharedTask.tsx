@@ -243,11 +243,11 @@ export default function SharedTask() {
   const isTaskCompleted = taskCompletion?.is_completed || false;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-4 pb-20">
-        <div className="max-w-2xl mx-auto space-y-4">
+    <div className="min-h-screen bg-background overflow-y-auto">
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+        <div className="space-y-6">
           {/* Header Section */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4" />
@@ -259,12 +259,12 @@ export default function SharedTask() {
           </div>
 
           {/* Main Task Card */}
-          <Card>
+          <Card className="w-full">
             <CardHeader className="pb-4">
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
-                    <CardTitle className={`text-lg leading-tight ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                    <CardTitle className={`text-lg leading-tight break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
                       {task.title}
                     </CardTitle>
                   </div>
@@ -301,7 +301,7 @@ export default function SharedTask() {
               {task.description && (
                 <div>
                   <h3 className="font-medium mb-2">{t('description', language)}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{task.description}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed break-words">{task.description}</p>
                 </div>
               )}
 
@@ -318,12 +318,12 @@ export default function SharedTask() {
                   </span>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <Button
                     variant={isTaskCompleted ? "secondary" : "default"}
                     size="sm"
                     onClick={() => handleTaskToggle(!isTaskCompleted)}
-                    className="flex-1"
+                    className="flex-1 w-full"
                   >
                     {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
                   </Button>
@@ -332,7 +332,7 @@ export default function SharedTask() {
                     variant="outline"
                     size="sm"
                     onClick={() => setShowSnoozeModal(true)}
-                    className="flex-1 sm:flex-initial"
+                    className="flex-1 w-full sm:flex-initial sm:min-w-[140px]"
                   >
                     <Pause className="h-4 w-4 mr-2" />
                     Request Snooze
