@@ -85,11 +85,19 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
   const onSubmit = async (data: ReminderFormData) => {
     setIsLoading(true);
     try {
+      // Prepare data for service - ensure title is always provided
+      const reminderData = {
+        title: data.title, // Required field
+        description: data.description || undefined,
+        due_date: data.due_date || undefined,
+        due_time: data.due_time || undefined,
+      };
+
       if (reminder) {
-        await TRService.updateReminder(reminder.id, data);
+        await TRService.updateReminder(reminder.id, reminderData);
         toast.success(t('reminderUpdatedSuccessfully', language));
       } else {
-        await TRService.createReminder(data);
+        await TRService.createReminder(reminderData);
         toast.success(t('reminderCreatedSuccessfully', language));
       }
       

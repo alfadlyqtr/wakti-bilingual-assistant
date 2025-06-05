@@ -108,13 +108,24 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
     
     setIsLoading(true);
     try {
+      // Prepare data for service - ensure title is always provided
+      const taskData = {
+        title: data.title, // Required field
+        description: data.description || undefined,
+        due_date: data.due_date || undefined,
+        due_time: data.due_time || undefined,
+        priority: data.priority,
+        task_type: data.task_type,
+        is_shared: data.is_shared,
+      };
+
       if (task) {
         console.log('TaskForm.onSubmit: Updating existing task');
-        await TRService.updateTask(task.id, data);
+        await TRService.updateTask(task.id, taskData);
         toast.success(t('taskUpdatedSuccessfully', language));
       } else {
         console.log('TaskForm.onSubmit: Creating new task');
-        const newTask = await TRService.createTask(data);
+        const newTask = await TRService.createTask(taskData);
         console.log('TaskForm.onSubmit: Task created:', newTask);
         
         // Create subtasks if any
