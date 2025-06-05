@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRVisitorCompletion, TRSharedAccessExtended } from '@/services/trSharedService';
-import { Activity, CheckCircle, UserCheck, Clock, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, CheckCircle, UserCheck, Clock, User, ChevronDown, ChevronUp, MessageCircle, Reply } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -16,11 +15,12 @@ interface ActivityFeedWidgetProps {
 
 interface ActivityItem {
   id: string;
-  type: 'completion' | 'assignee_join' | 'assignee_leave';
+  type: 'completion' | 'assignee_join' | 'assignee_leave' | 'comment' | 'reply';
   taskTitle: string;
   assigneeName: string;
   timestamp: string;
   details?: string;
+  content?: string;
 }
 
 export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
@@ -45,11 +45,12 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
       setLoading(true);
       const allActivities: ActivityItem[] = [];
 
-      // Load completions for all shared tasks
+      // Load completions and comments for all shared tasks
       for (const task of sharedTasks) {
-        const [completions, assignees] = await Promise.all([
+        const [completions, assignees, comments] = await Promise.all([
           TRSharedService.getVisitorCompletions(task.id),
-          TRSharedService.getActiveVisitors(task.id)
+          TRSharedService.getActiveVisitors(task.id),
+          TRSharedService.getTaskComments(task.id)
         ]);
 
         // Add completion activities
@@ -61,6 +62,18 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
             assigneeName: completion.visitor_name,
             timestamp: completion.created_at,
             details: completion.completion_type === 'task' ? 'task' : 'subtask'
+          });
+        });
+
+        // Add comment activities
+        comments.forEach(comment => {
+          allActivities.push({
+            id: comment.id,
+            type: comment.parent_id ? 'reply' : 'comment',
+            taskTitle: task.title,
+            assigneeName: comment.commenter_name,
+            timestamp: comment.created_at,
+            content: comment.content.substring(0, 50) + (comment.content.length > 50 ? '...' : '')
           });
         });
 
@@ -116,6 +129,10 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     switch (type) {
       case 'completion':
         return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'comment':
+        return <MessageCircle className="h-4 w-4 text-blue-600" />;
+      case 'reply':
+        return <Reply className="h-4 w-4 text-purple-600" />;
       case 'assignee_join':
         return <UserCheck className="h-4 w-4 text-blue-600" />;
       case 'assignee_leave':
@@ -129,6 +146,10 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
     switch (activity.type) {
       case 'completion':
         return language === 'ar' ? `قام بتحديد ${activity.details === 'task' ? 'المهمة' : 'المهمة الفرعية'} كمكتملة` : `marked ${activity.details} as complete`;
+      case 'comment':
+        return language === 'ar' ? 'أضاف تعليقاً' : 'added a comment';
+      case 'reply':
+        return language === 'ar' ? 'رد على تعليق' : 'replied to a comment';
       case 'assignee_join':
         return language === 'ar' ? 'تم تكليفه بالمهمة' : 'was assigned to task';
       case 'assignee_leave':
@@ -200,6 +221,11 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({
                         <span className="font-medium">{activity.assigneeName}</span>
                         <span className="text-muted-foreground"> {getActivityDescription(activity)} </span>
                         <span className="font-medium">"{activity.taskTitle}"</span>
+                        {activity.content && (
+                          <div className="text-xs text-muted-foreground mt-1 italic">
+                            "{activity.content}"
+                          </div>
+                        )}
                       </div>
                       
                       <div className="text-xs text-muted-foreground">

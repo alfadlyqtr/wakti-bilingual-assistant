@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +16,7 @@ import { format, isAfter, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { toast } from 'sonner';
+import { TaskComments } from '@/components/tr/TaskComments';
 
 export default function SharedTask() {
   const { shareLink } = useParams<{ shareLink: string }>();
@@ -305,7 +305,7 @@ export default function SharedTask() {
                 </div>
               )}
 
-              {/* Task Completion Actions - Improved Layout */}
+              {/* Task Completion Actions */}
               <div className="border rounded-lg p-4 space-y-4">
                 <div className="flex items-center gap-3">
                   {isTaskCompleted ? (
@@ -343,6 +343,15 @@ export default function SharedTask() {
               {/* Interactive Subtasks */}
               <div>
                 <InteractiveSubtaskManager 
+                  taskId={task.id}
+                  visitorName={visitorName}
+                  sessionId={sessionId}
+                />
+              </div>
+
+              {/* Comments Section */}
+              <div className="border-t pt-6">
+                <TaskComments
                   taskId={task.id}
                   visitorName={visitorName}
                   sessionId={sessionId}

@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TRSnoozeRequest {
@@ -34,6 +33,17 @@ export interface TRSharedAccessExtended {
   is_active: boolean;
   last_accessed: string;
   created_at: string;
+}
+
+export interface TRTaskComment {
+  id: string;
+  task_id: string;
+  commenter_name: string;
+  session_id: string;
+  content: string;
+  parent_id?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export class TRSharedService {
@@ -399,5 +409,55 @@ export class TRSharedService {
       .subscribe();
 
     return channel;
+  }
+
+  static async getTaskComments(taskId: string): Promise<TRTaskComment[]> {
+    const { data, error } = await supabase
+      .from('tr_task_comments')
+      .select('*')
+      .eq('task_id', taskId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  static async addTaskComment(
+    taskId: string,
+    commenterName: string,
+    sessionId: string,
+    content: string,
+    parentId?: string
+  ): Promise<TRTaskComment> {
+    const { data, error } = await supabase
+      .from('tr_task_comments')
+      .insert({
+        task_id: taskId,
+        commenter_name: commenterName,
+        session_id: sessionId,
+        content,
+        parent_id: parentId || null
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  static subscribeToTaskComments(taskId: string, callback: () => void) {
+    return supabase
+      .channel(`task-comments-${taskId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tr_task_comments',
+          filter: `task_id=eq.${taskId}`
+        },
+        callback
+      )
+      .subscribe();
   }
 }
