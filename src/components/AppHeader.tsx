@@ -144,7 +144,7 @@ export function AppHeader() {
               {IconComponent && (
                 <IconComponent className={cn("h-5 w-5", pageInfo.colorClass)} />
               )}
-              <h1 className="text-lg font-medium">{pageInfo.title}</h1>
+              <h1 className={cn("text-lg font-medium", pageInfo.colorClass)}>{pageInfo.title}</h1>
             </div>
           )}
         </div>
