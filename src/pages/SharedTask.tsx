@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,9 +9,10 @@ import { TRSharedService, TRVisitorCompletion } from '@/services/trSharedService
 import { PriorityBadge } from '@/components/tr/PriorityBadge';
 import { StatusBadge } from '@/components/tr/StatusBadge';
 import { InteractiveSubtaskManager } from '@/components/tr/InteractiveSubtaskManager';
-import { VisitorNameModal } from '@/components/tr/VisitorNameModal';
+import { EnhancedVisitorNameModal } from '@/components/tr/EnhancedVisitorNameModal';
 import { SnoozeRequestModal } from '@/components/tr/SnoozeRequestModal';
 import { LiveVisitorIndicator } from '@/components/tr/LiveVisitorIndicator';
+import { VisitorIdentityService, VisitorIdentity } from '@/services/visitorIdentityService';
 import { format, isAfter, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -26,9 +26,8 @@ export default function SharedTask() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Visitor state
-  const [visitorName, setVisitorName] = useState<string>('');
-  const [sessionId, setSessionId] = useState<string>('');
+  // Visitor state - using new identity system
+  const [visitorIdentity, setVisitorIdentity] = useState<VisitorIdentity | null>(null);
   const [showNameModal, setShowNameModal] = useState(false);
   const [showSnoozeModal, setShowSnoozeModal] = useState(false);
   const [visitorAuthChecked, setVisitorAuthChecked] = useState(false);
@@ -37,26 +36,29 @@ export default function SharedTask() {
   const [taskCompletion, setTaskCompletion] = useState<TRVisitorCompletion | null>(null);
   const [completions, setCompletions] = useState<TRVisitorCompletion[]>([]);
 
-  // Check visitor authentication immediately when shareLink is available
+  // Check visitor authentication with enhanced system
   useEffect(() => {
-    if (shareLink && !visitorAuthChecked) {
+    if (shareLink && !visitorAuthChecked && task) {
       console.log('Checking visitor auth for shareLink:', shareLink);
-      const storedName = localStorage.getItem(`visitor_name_${shareLink}`);
-      const storedSessionId = localStorage.getItem(`visitor_session_${shareLink}`);
-      
-      console.log('Stored visitor data:', { storedName, storedSessionId });
-      
-      if (storedName && storedSessionId) {
-        setVisitorName(storedName);
-        setSessionId(storedSessionId);
-        console.log('Found stored visitor credentials');
-      } else {
-        console.log('No stored visitor credentials, showing name modal');
-        setShowNameModal(true);
-      }
+      checkVisitorAuth();
       setVisitorAuthChecked(true);
     }
-  }, [shareLink, visitorAuthChecked]);
+  }, [shareLink, visitorAuthChecked, task]);
+
+  const checkVisitorAuth = async () => {
+    if (!task) return;
+    
+    const storedIdentity = await VisitorIdentityService.getStoredIdentity(task.id);
+    
+    if (storedIdentity) {
+      console.log('Found stored visitor identity:', storedIdentity.name);
+      setVisitorIdentity(storedIdentity);
+      await recordVisitorAccess(storedIdentity);
+    } else {
+      console.log('No stored visitor identity, showing name modal');
+      setShowNameModal(true);
+    }
+  };
 
   useEffect(() => {
     if (shareLink) {
@@ -65,15 +67,7 @@ export default function SharedTask() {
   }, [shareLink]);
 
   useEffect(() => {
-    // Record visitor access once we have both task and visitor info
-    if (task && visitorName && sessionId && !showNameModal) {
-      console.log('Recording visitor access for:', visitorName);
-      recordVisitorAccess(visitorName, sessionId);
-    }
-  }, [task, visitorName, sessionId, showNameModal]);
-
-  useEffect(() => {
-    if (task && sessionId && !showNameModal) {
+    if (task && visitorIdentity && !showNameModal) {
       loadTaskCompletions();
       
       // Set up real-time subscription
@@ -83,12 +77,13 @@ export default function SharedTask() {
 
       // Update visitor activity periodically
       const activityInterval = setInterval(() => {
-        TRSharedService.updateVisitorActivity(sessionId, true);
+        TRSharedService.updateVisitorActivity(visitorIdentity.sessionId, true);
+        VisitorIdentityService.updateLastActive(task.id, visitorIdentity);
       }, 30000); // Every 30 seconds
 
       // Mark visitor as inactive when leaving
       const handleBeforeUnload = () => {
-        TRSharedService.updateVisitorActivity(sessionId, false);
+        TRSharedService.updateVisitorActivity(visitorIdentity.sessionId, false);
       };
 
       window.addEventListener('beforeunload', handleBeforeUnload);
@@ -97,10 +92,10 @@ export default function SharedTask() {
         channel.unsubscribe();
         clearInterval(activityInterval);
         window.removeEventListener('beforeunload', handleBeforeUnload);
-        TRSharedService.updateVisitorActivity(sessionId, false);
+        TRSharedService.updateVisitorActivity(visitorIdentity.sessionId, false);
       };
     }
-  }, [task, sessionId, showNameModal]);
+  }, [task, visitorIdentity, showNameModal]);
 
   const loadSharedTask = async () => {
     try {
@@ -121,12 +116,12 @@ export default function SharedTask() {
   };
 
   const loadTaskCompletions = async () => {
-    if (!task) return;
+    if (!task || !visitorIdentity) return;
 
     try {
       const [allCompletions, myTaskCompletion] = await Promise.all([
         TRSharedService.getVisitorCompletions(task.id),
-        TRSharedService.getVisitorCompletion(task.id, sessionId)
+        TRSharedService.getVisitorCompletion(task.id, visitorIdentity.sessionId)
       ]);
       
       setCompletions(allCompletions);
@@ -136,39 +131,31 @@ export default function SharedTask() {
     }
   };
 
-  const recordVisitorAccess = async (name: string, session: string) => {
+  const recordVisitorAccess = async (identity: VisitorIdentity) => {
     if (!task) return;
 
     try {
-      await TRSharedService.recordVisitorAccess(task.id, name, session);
+      await TRSharedService.recordVisitorAccess(task.id, identity.name, identity.sessionId);
     } catch (error) {
       console.error('Error recording visitor access:', error);
     }
   };
 
-  const handleNameSubmit = async (name: string) => {
-    const newSessionId = TRSharedService.generateSessionId();
+  const handleIdentitySubmit = async (identity: VisitorIdentity) => {
+    console.log('Submitting visitor identity:', identity.name);
     
-    console.log('Submitting visitor name:', name, 'with sessionId:', newSessionId);
-    
-    setVisitorName(name);
-    setSessionId(newSessionId);
+    setVisitorIdentity(identity);
     setShowNameModal(false);
     
-    // Store in localStorage
-    localStorage.setItem(`visitor_name_${shareLink}`, name);
-    localStorage.setItem(`visitor_session_${shareLink}`, newSessionId);
-    
-    console.log('Stored visitor credentials in localStorage');
-    
-    toast.success(`Welcome, ${name}!`);
+    await recordVisitorAccess(identity);
+    toast.success(`Welcome, ${identity.name}!`);
   };
 
   const handleTaskToggle = async (completed: boolean) => {
-    if (!task) return;
+    if (!task || !visitorIdentity) return;
 
     try {
-      await TRSharedService.markTaskCompleted(task.id, visitorName, sessionId, completed);
+      await TRSharedService.markTaskCompleted(task.id, visitorIdentity.name, visitorIdentity.sessionId, completed);
       
       // Update local state
       if (taskCompletion) {
@@ -177,8 +164,8 @@ export default function SharedTask() {
         const newCompletion: TRVisitorCompletion = {
           id: `temp-${Date.now()}`,
           task_id: task.id,
-          visitor_name: visitorName,
-          session_id: sessionId,
+          visitor_name: visitorIdentity.name,
+          session_id: visitorIdentity.sessionId,
           completion_type: 'task',
           is_completed: completed,
           created_at: new Date().toISOString(),
@@ -195,10 +182,10 @@ export default function SharedTask() {
   };
 
   const handleSnoozeRequest = async (reason?: string) => {
-    if (!task) return;
+    if (!task || !visitorIdentity) return;
 
     try {
-      await TRSharedService.requestSnooze(task.id, visitorName, sessionId, reason);
+      await TRSharedService.requestSnooze(task.id, visitorIdentity.name, visitorIdentity.sessionId, reason);
       toast.success('Snooze request sent to task owner');
     } catch (error) {
       console.error('Error requesting snooze:', error);
@@ -218,7 +205,8 @@ export default function SharedTask() {
   const getTaskCompletedBy = (): string[] => {
     return completions
       .filter(c => c.completion_type === 'task' && c.is_completed && !c.subtask_id)
-      .map(c => c.visitor_name);
+      .map(c => c.visitor_name)
+      .filter((name, index, array) => array.indexOf(name) === index); // Remove duplicates
   };
 
   if (!shareLink) {
@@ -299,6 +287,9 @@ export default function SharedTask() {
         overflowX: 'hidden'
       }}
     >
+      {/* Portal root for subtasks to ensure proper scrolling */}
+      <div id="subtask-portal-root" className="contents" />
+      
       <div className="min-h-full">
         <div className="w-full max-w-none mx-auto px-4 py-6 sm:max-w-2xl lg:max-w-4xl">
           <div className="space-y-6">
@@ -307,9 +298,11 @@ export default function SharedTask() {
               <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4" />
-                  <span>Shared Task • {visitorName}</span>
+                  <span>Shared Task • {visitorIdentity?.name || 'Loading...'}</span>
                 </div>
-                <LiveVisitorIndicator taskId={task.id} currentSessionId={sessionId} />
+                {visitorIdentity && (
+                  <LiveVisitorIndicator taskId={task.id} currentSessionId={visitorIdentity.sessionId} />
+                )}
               </div>
               <h1 className="text-2xl font-bold">Interactive Task View</h1>
             </div>
@@ -397,22 +390,26 @@ export default function SharedTask() {
                 </div>
 
                 {/* Interactive Subtasks */}
-                <div>
-                  <InteractiveSubtaskManager 
-                    taskId={task.id}
-                    visitorName={visitorName}
-                    sessionId={sessionId}
-                  />
-                </div>
+                {visitorIdentity && (
+                  <div>
+                    <InteractiveSubtaskManager 
+                      taskId={task.id}
+                      visitorName={visitorIdentity.name}
+                      sessionId={visitorIdentity.sessionId}
+                    />
+                  </div>
+                )}
 
                 {/* Comments Section */}
-                <div className="border-t pt-6">
-                  <TaskComments
-                    taskId={task.id}
-                    visitorName={visitorName}
-                    sessionId={sessionId}
-                  />
-                </div>
+                {visitorIdentity && (
+                  <div className="border-t pt-6">
+                    <TaskComments
+                      taskId={task.id}
+                      visitorName={visitorIdentity.name}
+                      sessionId={visitorIdentity.sessionId}
+                    />
+                  </div>
+                )}
 
                 {/* Footer Info */}
                 <div className="pt-4 border-t">
@@ -430,18 +427,23 @@ export default function SharedTask() {
       </div>
 
       {/* Modals */}
-      <VisitorNameModal
-        isOpen={showNameModal}
-        onSubmit={handleNameSubmit}
-        taskTitle={task?.title || ''}
-      />
+      {task && (
+        <EnhancedVisitorNameModal
+          isOpen={showNameModal}
+          onSubmit={handleIdentitySubmit}
+          taskTitle={task.title}
+          taskId={task.id}
+        />
+      )}
 
-      <SnoozeRequestModal
-        isOpen={showSnoozeModal}
-        onClose={() => setShowSnoozeModal(false)}
-        onSubmit={handleSnoozeRequest}
-        taskTitle={task?.title || ''}
-      />
+      {task && (
+        <SnoozeRequestModal
+          isOpen={showSnoozeModal}
+          onClose={() => setShowSnoozeModal(false)}
+          onSubmit={handleSnoozeRequest}
+          taskTitle={task.title}
+        />
+      )}
     </div>
   );
 }

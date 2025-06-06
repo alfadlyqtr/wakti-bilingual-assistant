@@ -107,18 +107,27 @@ export class TRSharedService {
     }
   }
 
-  // Check if task should be marked as completed based on visitor completions
+  // Enhanced task completion check that consolidates completions by visitor name
   private static async checkAndUpdateTaskCompletion(taskId: string): Promise<void> {
     try {
-      // Get all visitor completions for the task
+      // Get unique visitor completions for the task (latest per visitor)
       const { data: completions, error: completionsError } = await supabase
         .from('tr_visitor_completions')
         .select('*')
         .eq('task_id', taskId)
         .eq('completion_type', 'task')
-        .eq('is_completed', true);
+        .eq('is_completed', true)
+        .order('created_at', { ascending: false });
 
       if (completionsError) throw completionsError;
+
+      // Get unique completions by visitor name (only the latest per visitor)
+      const uniqueCompletions = completions?.reduce((acc, completion) => {
+        if (!acc.find(c => c.visitor_name === completion.visitor_name)) {
+          acc.push(completion);
+        }
+        return acc;
+      }, [] as typeof completions) || [];
 
       // Get all subtasks for the task
       const { data: subtasks, error: subtasksError } = await supabase
@@ -128,18 +137,19 @@ export class TRSharedService {
 
       if (subtasksError) throw subtasksError;
 
-      // Get all subtask completions
+      // Get all subtask completions (latest per visitor per subtask)
       const { data: subtaskCompletions, error: subtaskCompletionsError } = await supabase
         .from('tr_visitor_completions')
         .select('*')
         .eq('task_id', taskId)
         .eq('completion_type', 'subtask')
-        .eq('is_completed', true);
+        .eq('is_completed', true)
+        .order('created_at', { ascending: false });
 
       if (subtaskCompletionsError) throw subtaskCompletionsError;
 
       // Check if at least one visitor has completed the main task
-      const hasTaskCompletion = completions && completions.length > 0;
+      const hasTaskCompletion = uniqueCompletions.length > 0;
 
       // Check if all subtasks are completed by at least one visitor
       let allSubtasksCompleted = true;
@@ -158,7 +168,6 @@ export class TRSharedService {
       // Task should be completed if:
       // 1. Main task is explicitly completed by someone, OR
       // 2. All subtasks are completed (when there are subtasks)
-      // 3. If there are no subtasks, only main task completion matters
       const shouldBeCompleted = hasTaskCompletion || (subtasks && subtasks.length > 0 && allSubtasksCompleted);
       
       // Get current task status
@@ -188,28 +197,20 @@ export class TRSharedService {
     }
   }
 
-  // Mark task as completed by visitor
+  // Enhanced mark task completed that handles visitor name consolidation
   static async markTaskCompleted(taskId: string, visitorName: string, sessionId: string, isCompleted: boolean): Promise<void> {
     try {
-      // Check if visitor has already completed this task
-      const { data: existing } = await supabase
+      // First, remove any existing completions for this visitor (to prevent duplicates)
+      await supabase
         .from('tr_visitor_completions')
-        .select('*')
+        .delete()
         .eq('task_id', taskId)
-        .eq('session_id', sessionId)
+        .eq('visitor_name', visitorName)
         .eq('completion_type', 'task')
-        .single();
+        .is('subtask_id', null);
 
-      if (existing) {
-        // Update existing completion
-        const { error } = await supabase
-          .from('tr_visitor_completions')
-          .update({ is_completed: isCompleted })
-          .eq('id', existing.id);
-
-        if (error) throw error;
-      } else {
-        // Create new completion record
+      // Create new completion record if marking as completed
+      if (isCompleted) {
         const { error } = await supabase
           .from('tr_visitor_completions')
           .insert({
@@ -217,7 +218,7 @@ export class TRSharedService {
             visitor_name: visitorName,
             session_id: sessionId,
             completion_type: 'task',
-            is_completed: isCompleted
+            is_completed: true
           });
 
         if (error) throw error;
@@ -232,29 +233,20 @@ export class TRSharedService {
     }
   }
 
-  // Mark subtask as completed by visitor
+  // Enhanced mark subtask completed that handles visitor name consolidation
   static async markSubtaskCompleted(taskId: string, subtaskId: string, visitorName: string, sessionId: string, isCompleted: boolean): Promise<void> {
     try {
-      // Check if visitor has already completed this subtask
-      const { data: existing } = await supabase
+      // First, remove any existing completions for this visitor/subtask (to prevent duplicates)
+      await supabase
         .from('tr_visitor_completions')
-        .select('*')
+        .delete()
         .eq('task_id', taskId)
         .eq('subtask_id', subtaskId)
-        .eq('session_id', sessionId)
-        .eq('completion_type', 'subtask')
-        .single();
+        .eq('visitor_name', visitorName)
+        .eq('completion_type', 'subtask');
 
-      if (existing) {
-        // Update existing completion
-        const { error } = await supabase
-          .from('tr_visitor_completions')
-          .update({ is_completed: isCompleted })
-          .eq('id', existing.id);
-
-        if (error) throw error;
-      } else {
-        // Create new completion record
+      // Create new completion record if marking as completed
+      if (isCompleted) {
         const { error } = await supabase
           .from('tr_visitor_completions')
           .insert({
@@ -263,7 +255,7 @@ export class TRSharedService {
             visitor_name: visitorName,
             session_id: sessionId,
             completion_type: 'subtask',
-            is_completed: isCompleted
+            is_completed: true
           });
 
         if (error) throw error;

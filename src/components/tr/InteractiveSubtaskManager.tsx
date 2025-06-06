@@ -1,10 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { TRService, TRSubtask } from '@/services/trService';
 import { TRSharedService, TRVisitorCompletion } from '@/services/trSharedService';
 import { toast } from 'sonner';
-import { CheckCircle, User } from 'lucide-react';
+import { CheckCircle, User, Users } from 'lucide-react';
 
 interface InteractiveSubtaskManagerProps {
   taskId: string;
@@ -74,7 +76,7 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
       
       // Update local completions state optimistically
       const existingIndex = completions.findIndex(
-        c => c.subtask_id === subtaskId && c.session_id === sessionId
+        c => c.subtask_id === subtaskId && c.visitor_name === visitorName
       );
 
       if (existingIndex >= 0) {
@@ -113,31 +115,45 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
     }
   };
 
-  const isSubtaskCompleted = (subtaskId: string): boolean => {
+  // Check if this specific visitor has completed a subtask
+  const isSubtaskCompletedByMe = (subtaskId: string): boolean => {
     const completion = completions.find(
-      c => c.subtask_id === subtaskId && c.session_id === sessionId && c.completion_type === 'subtask'
+      c => c.subtask_id === subtaskId && 
+          c.visitor_name === visitorName && 
+          c.completion_type === 'subtask'
     );
     return completion?.is_completed || false;
   };
 
+  // Get all visitors who completed this subtask
   const getSubtaskCompletedBy = (subtaskId: string): string[] => {
     return completions
       .filter(c => c.subtask_id === subtaskId && c.is_completed && c.completion_type === 'subtask')
-      .map(c => c.visitor_name);
+      .map(c => c.visitor_name)
+      .filter((name, index, array) => array.indexOf(name) === index); // Remove duplicates
   };
 
-  // Count only MY completed subtasks for the progress indicator
+  // Count MY completed subtasks for personal progress
   const getMyCompletedCount = (): number => {
-    return subtasks.filter(subtask => isSubtaskCompleted(subtask.id)).length;
+    return subtasks.filter(subtask => isSubtaskCompletedByMe(subtask.id)).length;
   };
 
-  // Get total unique completions across all visitors for each subtask
+  // Get total unique subtasks completed by anyone
   const getTotalUniqueCompletions = (): number => {
     const uniqueCompletedSubtasks = new Set();
     completions
       .filter(c => c.is_completed && c.completion_type === 'subtask')
       .forEach(c => uniqueCompletedSubtasks.add(c.subtask_id));
     return uniqueCompletedSubtasks.size;
+  };
+
+  // Get total number of unique visitors who have completed any subtask
+  const getTotalActiveVisitors = (): number => {
+    const uniqueVisitors = new Set();
+    completions
+      .filter(c => c.is_completed && c.completion_type === 'subtask')
+      .forEach(c => uniqueVisitors.add(c.visitor_name));
+    return uniqueVisitors.size;
   };
 
   if (loading) {
@@ -150,56 +166,31 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
 
   const myCompletedCount = getMyCompletedCount();
   const totalUniqueCompletions = getTotalUniqueCompletions();
+  const totalActiveVisitors = getTotalActiveVisitors();
 
-  return (
-    <>
-      <style>
-        {`
-          .subtask-scroll-container {
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
-          }
-          .subtask-scroll-container::-webkit-scrollbar {
-            width: 6px;
-          }
-          .subtask-scroll-container::-webkit-scrollbar-track {
-            background: transparent;
-          }
-          .subtask-scroll-container::-webkit-scrollbar-thumb {
-            background: rgba(155, 155, 155, 0.5);
-            border-radius: 3px;
-          }
-          .subtask-scroll-container::-webkit-scrollbar-thumb:hover {
-            background: rgba(155, 155, 155, 0.7);
-          }
-        `}
-      </style>
-      
-      <div className="space-y-3" style={{ maxHeight: '400px' }}>
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
-          <div className="flex flex-col items-end gap-1">
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <CheckCircle className="h-3 w-3" />
-              You: {myCompletedCount} of {subtasks.length} completed
-            </div>
-            {totalUniqueCompletions > 0 && (
-              <div className="text-xs text-blue-600 flex items-center gap-1">
-                <User className="h-3 w-3" />
-                Overall: {totalUniqueCompletions} of {subtasks.length} done
-              </div>
-            )}
+  const SubtaskList = () => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />
+            You: {myCompletedCount} of {subtasks.length} completed
           </div>
+          {totalUniqueCompletions > 0 && (
+            <div className="text-xs text-blue-600 flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              Team: {totalUniqueCompletions} of {subtasks.length} done
+              {totalActiveVisitors > 1 && ` (${totalActiveVisitors} people)`}
+            </div>
+          )}
         </div>
-        
-        <div 
-          className="subtask-scroll-container space-y-2 pr-2"
-          style={{ maxHeight: '300px' }}
-        >
+      </div>
+      
+      <ScrollArea className="h-[300px] w-full rounded-md border p-2">
+        <div className="space-y-2">
           {subtasks.map((subtask) => {
-            const isCompleted = isSubtaskCompleted(subtask.id);
+            const isCompletedByMe = isSubtaskCompletedByMe(subtask.id);
             const completedBy = getSubtaskCompletedBy(subtask.id);
             const isUpdating = updatingSubtasks.has(subtask.id);
             
@@ -212,22 +203,22 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
               >
                 <div 
                   className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
-                    isCompleted 
+                    isCompletedByMe 
                       ? 'bg-green-50 border-green-200 hover:bg-green-100' 
                       : 'bg-card border-border hover:bg-accent/20'
                   } ${!readOnly ? 'active:scale-[0.98]' : ''}`}
-                  onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompleted)}
+                  onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompletedByMe)}
                 >
                   <div className="flex items-center gap-3">
                     <Checkbox
-                      checked={isCompleted}
+                      checked={isCompletedByMe}
                       onCheckedChange={(checked) => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, checked as boolean)}
                       disabled={readOnly || isUpdating}
                       className="transition-all duration-200"
                     />
                     
                     <span className={`flex-1 text-sm transition-all duration-200 select-none ${
-                      isCompleted 
+                      isCompletedByMe 
                         ? 'line-through text-muted-foreground font-medium decoration-2' 
                         : 'text-foreground'
                     }`}>
@@ -259,7 +250,16 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
             );
           })}
         </div>
-      </div>
-    </>
+      </ScrollArea>
+    </div>
   );
+
+  // Use portal to render outside any constrained containers
+  const portalRoot = document.getElementById('subtask-portal-root');
+  if (portalRoot) {
+    return createPortal(<SubtaskList />, portalRoot);
+  }
+
+  // Fallback to normal rendering if portal root doesn't exist
+  return <SubtaskList />;
 };
