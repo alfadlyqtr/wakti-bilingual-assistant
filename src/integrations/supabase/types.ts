@@ -933,43 +933,47 @@ export type Database = {
         }
         Relationships: []
       }
-      tr_shared_access: {
+      tr_shared_responses: {
         Row: {
+          content: string | null
           created_at: string
           id: string
-          is_active: boolean | null
-          last_accessed: string
-          session_id: string | null
+          is_completed: boolean | null
+          response_type: string
+          subtask_id: string | null
           task_id: string
-          viewer_id: string | null
-          viewer_name: string | null
-          visitor_ip: string | null
+          visitor_name: string
         }
         Insert: {
+          content?: string | null
           created_at?: string
           id?: string
-          is_active?: boolean | null
-          last_accessed?: string
-          session_id?: string | null
+          is_completed?: boolean | null
+          response_type: string
+          subtask_id?: string | null
           task_id: string
-          viewer_id?: string | null
-          viewer_name?: string | null
-          visitor_ip?: string | null
+          visitor_name: string
         }
         Update: {
+          content?: string | null
           created_at?: string
           id?: string
-          is_active?: boolean | null
-          last_accessed?: string
-          session_id?: string | null
+          is_completed?: boolean | null
+          response_type?: string
+          subtask_id?: string | null
           task_id?: string
-          viewer_id?: string | null
-          viewer_name?: string | null
-          visitor_ip?: string | null
+          visitor_name?: string
         }
         Relationships: [
           {
-            foreignKeyName: "tr_shared_access_task_id_fkey"
+            foreignKeyName: "tr_shared_responses_subtask_id_fkey"
+            columns: ["subtask_id"]
+            isOneToOne: false
+            referencedRelation: "tr_subtasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tr_shared_responses_task_id_fkey"
             columns: ["task_id"]
             isOneToOne: false
             referencedRelation: "tr_tasks"
@@ -1063,47 +1067,6 @@ export type Database = {
           },
         ]
       }
-      tr_task_snooze_requests: {
-        Row: {
-          created_at: string
-          id: string
-          reason: string | null
-          session_id: string | null
-          status: string
-          task_id: string
-          updated_at: string
-          visitor_name: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          reason?: string | null
-          session_id?: string | null
-          status?: string
-          task_id: string
-          updated_at?: string
-          visitor_name: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          reason?: string | null
-          session_id?: string | null
-          status?: string
-          task_id?: string
-          updated_at?: string
-          visitor_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tr_task_snooze_requests_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tr_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       tr_tasks: {
         Row: {
           completed: boolean
@@ -1157,57 +1120,6 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
-      }
-      tr_visitor_completions: {
-        Row: {
-          completion_type: string
-          created_at: string
-          id: string
-          is_completed: boolean
-          session_id: string
-          subtask_id: string | null
-          task_id: string
-          updated_at: string
-          visitor_name: string
-        }
-        Insert: {
-          completion_type: string
-          created_at?: string
-          id?: string
-          is_completed?: boolean
-          session_id: string
-          subtask_id?: string | null
-          task_id: string
-          updated_at?: string
-          visitor_name: string
-        }
-        Update: {
-          completion_type?: string
-          created_at?: string
-          id?: string
-          is_completed?: boolean
-          session_id?: string
-          subtask_id?: string | null
-          task_id?: string
-          updated_at?: string
-          visitor_name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tr_visitor_completions_subtask_id_fkey"
-            columns: ["subtask_id"]
-            isOneToOne: false
-            referencedRelation: "tr_subtasks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tr_visitor_completions_task_id_fkey"
-            columns: ["task_id"]
-            isOneToOne: false
-            referencedRelation: "tr_tasks"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_event_links: {
         Row: {
