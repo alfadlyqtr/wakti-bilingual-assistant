@@ -43,8 +43,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [selectedVisitor, setSelectedVisitor] = useState<string | null>(null);
-  const [approvedRequests, setApprovedRequests] = useState<Set<string>>(new Set());
-  const [deniedRequests, setDeniedRequests] = useState<Set<string>>(new Set());
+  const [processingRequests, setProcessingRequests] = useState<Set<string>>(new Set());
   const loadingRef = useRef(false);
   
   // Active view for each task
@@ -55,6 +54,17 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const shared = tasks.filter(task => task.is_shared && task.share_link);
     return shared;
   }, [tasks]);
+
+  // Parse snooze request status from content
+  const parseSnoozeStatus = useCallback((content: string | undefined) => {
+    if (!content) return null;
+    try {
+      const parsed = JSON.parse(content);
+      return parsed.status;
+    } catch {
+      return null;
+    }
+  }, []);
 
   // Load all responses and subtasks for shared tasks
   const loadAllData = useCallback(async (isRefresh = false) => {
@@ -120,7 +130,10 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     
     sharedTasks.forEach(task => {
       const channel = TRSharedService.subscribeToTaskUpdates(task.id, () => {
-        loadAllData(true);
+        // Add a small delay to ensure database changes are committed
+        setTimeout(() => {
+          loadAllData(true);
+        }, 500);
       });
       channels.push(channel);
     });
@@ -274,22 +287,43 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     requestId: string, 
     action: 'approved' | 'denied'
   ) => {
+    // Add to processing set to show loading state
+    setProcessingRequests(prev => new Set(prev).add(requestId));
+    
     try {
       if (action === 'approved') {
         await TRSharedService.approveSnoozeRequest(requestId, taskId);
-        setApprovedRequests(prev => new Set(prev).add(requestId));
-        toast.success('Snooze request approved');
+        toast.success('Snooze request approved - task has been snoozed until tomorrow', {
+          duration: 4000,
+          position: 'bottom-center'
+        });
         onTasksChanged(); // Refresh task list to show snoozed status
       } else {
         await TRSharedService.denySnoozeRequest(requestId);
-        setDeniedRequests(prev => new Set(prev).add(requestId));
-        toast.success('Snooze request denied');
+        toast.success('Snooze request denied', {
+          duration: 3000,
+          position: 'bottom-center'
+        });
       }
       
-      loadAllData(true); // Refresh data
+      // Force immediate refresh with a delay to ensure database changes are committed
+      setTimeout(() => {
+        loadAllData(true);
+      }, 1000);
+      
     } catch (error) {
       console.error(`Error ${action} snooze request:`, error);
-      toast.error(`Failed to ${action === 'approved' ? 'approve' : 'deny'} snooze request`);
+      toast.error(`Failed to ${action === 'approved' ? 'approve' : 'deny'} snooze request`, {
+        duration: 3000,
+        position: 'bottom-center'
+      });
+    } finally {
+      // Remove from processing set
+      setProcessingRequests(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(requestId);
+        return newSet;
+      });
     }
   };
 
@@ -300,6 +334,63 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       .join('')
       .toUpperCase()
       .substring(0, 2);
+  };
+
+  // Render snooze request status badge
+  const renderSnoozeRequestStatus = (request: TRSharedResponse) => {
+    const status = parseSnoozeStatus(request.content);
+    const isProcessing = processingRequests.has(request.id);
+    
+    if (isProcessing) {
+      return (
+        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+          <Clock className="h-3 w-3 mr-1 animate-spin" />
+          Processing...
+        </Badge>
+      );
+    }
+    
+    if (status === 'approved') {
+      return (
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          <Check className="h-3 w-3 mr-1" />
+          Approved
+        </Badge>
+      );
+    }
+    
+    if (status === 'denied') {
+      return (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          <X className="h-3 w-3 mr-1" />
+          Denied
+        </Badge>
+      );
+    }
+    
+    return (
+      <div className="flex gap-2">
+        <Button 
+          size="sm" 
+          onClick={() => handleSnoozeRequest(request.task_id, request.id, 'approved')}
+          className="h-7 px-2 text-xs"
+          disabled={isProcessing}
+        >
+          <Check className="h-3 w-3 mr-1" />
+          Approve
+        </Button>
+        <Button 
+          size="sm" 
+          variant="outline"
+          onClick={() => handleSnoozeRequest(request.task_id, request.id, 'denied')}
+          className="h-7 px-2 text-xs"
+          disabled={isProcessing}
+        >
+          <X className="h-3 w-3 mr-1" />
+          Deny
+        </Button>
+      </div>
+    );
   };
 
   if (loading) {
@@ -446,7 +537,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base leading-tight break-words">
+                  <CardTitle className="text-base leading-tight break-words" dir="auto">
                     {task.title}
                   </CardTitle>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -464,7 +555,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             </CardHeader>
 
             <CardContent className="pt-0 space-y-4">
-              {/* Activity Stats - Responsive grid that stacks on mobile */}
+              {/* Activity Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <button 
                   className={`${
@@ -509,13 +600,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   className={`${
                     activeView === 'requests' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
                   } ${
-                    stats.snoozeRequests.length > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
+                    stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
                   } transition-colors rounded-lg p-3 text-center border-2 border-transparent relative`}
                   onClick={() => handleViewChange(task.id, 'requests')}
                 >
-                  {stats.snoozeRequests.length > 0 && (
+                  {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 && (
                     <Badge className="absolute -top-2 -right-2 bg-orange-500 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs">
-                      {stats.snoozeRequests.length}
+                      {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length}
                     </Badge>
                   )}
                   <div className="text-lg font-semibold">{stats.snoozeRequests.length}</div>
@@ -549,54 +640,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                               {getActivityIcon(activity.response_type)}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium">{activity.visitor_name}</span>
+                                  <span className="font-medium" dir="auto">{activity.visitor_name}</span>
                                   <span className="text-xs text-muted-foreground">
                                     {format(parseISO(activity.created_at), 'MMM dd, HH:mm')}
                                   </span>
                                 </div>
-                                <p className="text-muted-foreground">
+                                <p className="text-muted-foreground" dir="auto">
                                   {getActivityDescription(activity, stats.subtasks)}
                                 </p>
                                 
                                 {activity.response_type === 'comment' && activity.content && (
-                                  <div className="bg-background mt-2 p-2 rounded border text-sm">
+                                  <div className="bg-background mt-2 p-2 rounded border text-sm" dir="auto">
                                     {activity.content}
                                   </div>
                                 )}
                                 
                                 {activity.response_type === 'snooze_request' && (
-                                  <div className="mt-2 flex gap-2">
-                                    {approvedRequests.has(activity.id) ? (
-                                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                        <Check className="h-3 w-3 mr-1" />
-                                        Approved
-                                      </Badge>
-                                    ) : deniedRequests.has(activity.id) ? (
-                                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                        <X className="h-3 w-3 mr-1" />
-                                        Denied
-                                      </Badge>
-                                    ) : (
-                                      <>
-                                        <Button 
-                                          size="sm" 
-                                          onClick={() => handleSnoozeRequest(task.id, activity.id, 'approved')}
-                                          className="h-7 px-2 text-xs"
-                                        >
-                                          <Check className="h-3 w-3 mr-1" />
-                                          Approve
-                                        </Button>
-                                        <Button 
-                                          size="sm" 
-                                          variant="outline"
-                                          onClick={() => handleSnoozeRequest(task.id, activity.id, 'denied')}
-                                          className="h-7 px-2 text-xs"
-                                        >
-                                          <X className="h-3 w-3 mr-1" />
-                                          Deny
-                                        </Button>
-                                      </>
-                                    )}
+                                  <div className="mt-2">
+                                    {renderSnoozeRequestStatus(activity)}
                                   </div>
                                 )}
                               </div>
@@ -653,7 +714,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                               </Avatar>
                               
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-sm truncate">{assignee}</p>
+                                <p className="font-medium text-sm truncate" dir="auto">{assignee}</p>
                                 <div className="flex items-center text-xs text-muted-foreground space-x-3 mt-1">
                                   <span className="flex items-center">
                                     <Clock className="h-3 w-3 mr-1" />
@@ -702,13 +763,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             <div key={comment.id} className="bg-muted/30 rounded-lg p-4">
                               <div className="flex items-center gap-2 mb-2">
                                 <MessageCircle className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium">{comment.visitor_name}</span>
+                                <span className="font-medium" dir="auto">{comment.visitor_name}</span>
                                 <span className="text-xs text-muted-foreground">
                                   {formatRelativeTime(comment.created_at)}
                                 </span>
                               </div>
                               
-                              <div className="bg-background p-3 rounded border mb-2">
+                              <div className="bg-background p-3 rounded border mb-2" dir="auto">
                                 {comment.content}
                               </div>
                               
@@ -801,12 +862,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                     </div>
                                     
                                     <div className="flex-1 min-w-0">
-                                      <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                      <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`} dir="auto">
                                         {subtask.title}
                                       </p>
                                       
                                       {isCompleted && (
-                                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1" dir="auto">
                                           <User className="h-3 w-3" />
                                           {completedBy.join(', ')}
                                         </p>
@@ -836,13 +897,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                   <div key={completion.id} className="bg-muted/30 rounded-lg p-3">
                                     <div className="flex items-center gap-2 mb-1">
                                       <CheckCircle className={`h-4 w-4 ${completion.is_completed ? 'text-green-600' : 'text-muted-foreground'}`} />
-                                      <span className="font-medium text-sm">{completion.visitor_name}</span>
+                                      <span className="font-medium text-sm" dir="auto">{completion.visitor_name}</span>
                                       <span className="text-xs text-muted-foreground">
                                         {format(parseISO(completion.created_at), 'MMM dd, HH:mm')}
                                       </span>
                                     </div>
                                     
-                                    <p className="text-sm text-muted-foreground ml-6">
+                                    <p className="text-sm text-muted-foreground ml-6" dir="auto">
                                       {completion.subtask_id 
                                         ? `${completion.is_completed ? 'Completed' : 'Marked incomplete'}: "${subtaskInfo?.title || 'subtask'}"` 
                                         : `${completion.is_completed ? 'Marked main task as complete' : 'Marked main task as incomplete'}`}
@@ -877,7 +938,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                               <div className="flex items-center gap-2 mb-2">
                                 <Pause className="h-4 w-4 text-orange-600" />
-                                <span className="font-medium">{request.visitor_name}</span>
+                                <span className="font-medium" dir="auto">{request.visitor_name}</span>
                                 <Badge variant="secondary" className="text-xs">Snooze Request</Badge>
                               </div>
                               
@@ -885,44 +946,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
                               </div>
                               
-                              {request.content && (
-                                <div className="bg-background/50 p-3 rounded border mb-3">
+                              {request.content && !parseSnoozeStatus(request.content) && (
+                                <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
                                   <p className="text-sm">Reason: {request.content}</p>
                                 </div>
                               )}
                               
                               <div className="flex gap-2">
-                                {approvedRequests.has(request.id) ? (
-                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex-1 justify-center py-2">
-                                    <Check className="h-4 w-4 mr-1" />
-                                    Approved
-                                  </Badge>
-                                ) : deniedRequests.has(request.id) ? (
-                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 flex-1 justify-center py-2">
-                                    <X className="h-4 w-4 mr-1" />
-                                    Denied
-                                  </Badge>
-                                ) : (
-                                  <>
-                                    <Button 
-                                      className="flex-1"
-                                      size="sm" 
-                                      onClick={() => handleSnoozeRequest(task.id, request.id, 'approved')}
-                                    >
-                                      <Check className="h-4 w-4 mr-1" />
-                                      Approve
-                                    </Button>
-                                    <Button 
-                                      className="flex-1"
-                                      variant="outline"
-                                      size="sm" 
-                                      onClick={() => handleSnoozeRequest(task.id, request.id, 'denied')}
-                                    >
-                                      <X className="h-4 w-4 mr-1" />
-                                      Deny
-                                    </Button>
-                                  </>
-                                )}
+                                {renderSnoozeRequestStatus(request)}
                               </div>
                             </div>
                           ))}
