@@ -423,10 +423,6 @@ const WaktiAIV2 = () => {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <TextGenModal
-              onTriggerChange={handleTriggerChange}
-              onTextGenParams={handleTextGenParams}
-            />
             <Button variant="ghost" size="icon" onClick={() => setShowQuickActions(true)}>
               <Menu className="h-5 w-5" />
             </Button>
