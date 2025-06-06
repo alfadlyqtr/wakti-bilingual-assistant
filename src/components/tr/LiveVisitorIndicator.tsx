@@ -1,65 +1,76 @@
 
 import React, { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Users, UserCheck } from 'lucide-react';
-import { TRSharedService, TRSharedAccessExtended } from '@/services/trSharedService';
+import { Users, User } from 'lucide-react';
+import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
 
 interface LiveVisitorIndicatorProps {
   taskId: string;
-  currentSessionId?: string;
+  className?: string;
 }
 
 export const LiveVisitorIndicator: React.FC<LiveVisitorIndicatorProps> = ({
   taskId,
-  currentSessionId
+  className = ""
 }) => {
-  const [activeAssignees, setActiveAssignees] = useState<TRSharedAccessExtended[]>([]);
+  const [responses, setResponses] = useState<TRSharedResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadActiveAssignees();
+    loadResponses();
     
     // Set up real-time subscription
-    const channel = TRSharedService.subscribeToTaskUpdates(taskId, () => {
-      loadActiveAssignees();
-    });
-
-    // Cleanup
+    const channel = TRSharedService.subscribeToTaskUpdates(taskId, loadResponses);
+    
     return () => {
       channel.unsubscribe();
     };
   }, [taskId]);
 
-  const loadActiveAssignees = async () => {
+  const loadResponses = async () => {
     try {
-      const assignees = await TRSharedService.getActiveVisitors(taskId);
-      setActiveAssignees(assignees);
+      const responsesData = await TRSharedService.getTaskResponses(taskId);
+      setResponses(responsesData);
     } catch (error) {
-      console.error('Error loading active assignees:', error);
+      console.error('Error loading responses:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const otherAssignees = activeAssignees.filter(v => v.session_id !== currentSessionId);
-  
-  if (loading) {
-    return (
-      <Badge variant="secondary" className="text-xs">
-        <UserCheck className="h-3 w-3 mr-1" />
-        Loading...
-      </Badge>
+  // Get unique active visitors based on recent responses
+  const getActiveVisitors = (): string[] => {
+    const recentResponses = responses.filter(
+      r => new Date(r.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
     );
+    
+    const uniqueVisitors = [...new Set(recentResponses.map(r => r.visitor_name))];
+    return uniqueVisitors;
+  };
+
+  if (loading) {
+    return null;
   }
 
-  if (otherAssignees.length === 0) {
+  const activeVisitors = getActiveVisitors();
+  
+  if (activeVisitors.length === 0) {
     return null;
   }
 
   return (
-    <Badge variant="secondary" className="text-xs">
-      <Users className="h-3 w-3 mr-1" />
-      {otherAssignees.length} other assignee{otherAssignees.length > 1 ? 's' : ''} active
+    <Badge variant="secondary" className={`flex items-center gap-1 ${className}`}>
+      {activeVisitors.length === 1 ? (
+        <User className="h-3 w-3" />
+      ) : (
+        <Users className="h-3 w-3" />
+      )}
+      <span className="text-xs">
+        {activeVisitors.length === 1 
+          ? `${activeVisitors[0]} active`
+          : `${activeVisitors.length} people active`
+        }
+      </span>
     </Badge>
   );
 };

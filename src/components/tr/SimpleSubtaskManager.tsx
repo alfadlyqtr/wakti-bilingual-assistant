@@ -23,9 +23,11 @@ export const SimpleSubtaskManager: React.FC<SimpleSubtaskManagerProps> = ({
   useEffect(() => {
     loadData();
     
-    // Real-time subscription
+    // Real-time subscription - fix the cleanup function
     const channel = TRSharedService.subscribeToTaskUpdates(taskId, loadResponses);
-    return () => channel.unsubscribe();
+    return () => {
+      channel.unsubscribe();
+    };
   }, [taskId]);
 
   const loadData = async () => {

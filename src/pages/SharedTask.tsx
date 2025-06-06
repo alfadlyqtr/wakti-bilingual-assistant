@@ -45,9 +45,11 @@ export default function SharedTask() {
     if (task && visitorName) {
       loadResponses();
       
-      // Real-time subscription
+      // Real-time subscription - fix the cleanup function
       const channel = TRSharedService.subscribeToTaskUpdates(task.id, loadResponses);
-      return () => channel.unsubscribe();
+      return () => {
+        channel.unsubscribe();
+      };
     }
   }, [task, visitorName]);
 
