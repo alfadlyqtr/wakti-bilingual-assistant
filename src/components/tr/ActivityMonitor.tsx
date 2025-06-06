@@ -249,11 +249,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   }, []);
 
   const openSharedTask = useCallback((shareLink: string) => {
-    window.open(`/shared/${shareLink}`, '_blank');
+    window.open(`/shared-task/${shareLink}`, '_blank');
   }, []);
 
   const copyShareLink = useCallback((shareLink: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/shared/${shareLink}`);
+    navigator.clipboard.writeText(`${window.location.origin}/shared-task/${shareLink}`);
     toast.success(t('linkCopied', language));
   }, [language]);
 
