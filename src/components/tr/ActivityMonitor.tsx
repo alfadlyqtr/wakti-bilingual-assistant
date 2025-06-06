@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,35 +25,50 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const loadingRef = useRef(false);
 
   // Memoize shared tasks to prevent unnecessary re-calculations
   const sharedTasks = useMemo(() => {
-    return tasks.filter(task => task.is_shared && task.share_link);
+    console.log('All tasks:', tasks);
+    const shared = tasks.filter(task => task.is_shared && task.share_link);
+    console.log('Shared tasks found:', shared);
+    return shared;
   }, [tasks]);
 
   // Load all responses for shared tasks
   const loadAllResponses = useCallback(async (isRefresh = false) => {
-    if (!isRefresh && loading) return;
+    // Prevent concurrent loading
+    if (loadingRef.current) {
+      console.log('Already loading, skipping...');
+      return;
+    }
+
+    console.log('Loading responses for shared tasks:', sharedTasks.length);
+
     if (sharedTasks.length === 0) {
+      console.log('No shared tasks, setting empty state');
       setLoading(false);
       setResponses({});
       return;
     }
 
+    loadingRef.current = true;
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
     try {
       const allResponses: { [taskId: string]: TRSharedResponse[] } = {};
       
+      console.log('Fetching responses for tasks:', sharedTasks.map(t => t.id));
+      
       for (const task of sharedTasks) {
+        console.log(`Fetching responses for task ${task.id}`);
         const taskResponses = await TRSharedService.getTaskResponses(task.id);
-        // Sort by created_at descending to get newest first
-        allResponses[task.id] = taskResponses.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        console.log(`Got ${taskResponses.length} responses for task ${task.id}:`, taskResponses);
+        allResponses[task.id] = taskResponses;
       }
       
+      console.log('All responses loaded:', allResponses);
       setResponses(allResponses);
       setLastUpdate(new Date());
     } catch (error) {
@@ -62,26 +77,28 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     } finally {
       setLoading(false);
       setRefreshing(false);
+      loadingRef.current = false;
     }
-  }, [sharedTasks, loading]);
+  }, [sharedTasks]);
 
-  // Set up real-time subscriptions for all shared tasks
+  // Initial load and real-time subscriptions
   useEffect(() => {
-    if (sharedTasks.length === 0) {
-      setLoading(false);
-      setResponses({});
-      return;
-    }
-
+    console.log('ActivityMonitor useEffect triggered, shared tasks:', sharedTasks.length);
+    
     // Initial load
     loadAllResponses();
 
-    // Set up real-time subscriptions
+    // Set up real-time subscriptions if we have shared tasks
+    if (sharedTasks.length === 0) {
+      return;
+    }
+
     const channels: any[] = [];
     
     sharedTasks.forEach(task => {
+      console.log(`Setting up real-time subscription for task ${task.id}`);
       const channel = TRSharedService.subscribeToTaskUpdates(task.id, () => {
-        console.log(`Real-time update for task ${task.id}`);
+        console.log(`Real-time update received for task ${task.id}`);
         loadAllResponses(true);
       });
       channels.push(channel);
@@ -89,14 +106,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
     // Auto-refresh every 30 seconds as fallback
     const interval = setInterval(() => {
+      console.log('Auto-refresh triggered');
       loadAllResponses(true);
     }, 30000);
 
     return () => {
+      console.log('Cleaning up subscriptions and interval');
       channels.forEach(channel => channel.unsubscribe());
       clearInterval(interval);
     };
-  }, [sharedTasks, loadAllResponses]);
+  }, [sharedTasks.length]); // Only depend on the count, not the full array
 
   const getTaskStats = useCallback((taskId: string) => {
     const taskResponses = responses[taskId] || [];
@@ -158,8 +177,11 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   }, [language]);
 
   const handleRefresh = () => {
+    console.log('Manual refresh triggered');
     loadAllResponses(true);
   };
+
+  console.log('Rendering ActivityMonitor - loading:', loading, 'sharedTasks:', sharedTasks.length);
 
   if (loading) {
     return (
