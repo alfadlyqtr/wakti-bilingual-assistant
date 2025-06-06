@@ -145,7 +145,7 @@ export const ar = {
   "clickOnAssignee": "انقر على مكلف لعرض النشاط التفصيلي",
   "noCommentsYet": "لا توجد تعليقات بعد",
   "reply": "رد",
-  "typeYourReply": "اكتب ردك...",
+  "typeYourReply": "اكتب ردك",
   "noCompletionsYet": "لا توجد إنجازات بعد",
   "subtaskStatus": "حالة المهام الفرعية",
   "completionHistory": "تاريخ الإنجازات",
@@ -161,5 +161,9 @@ export const ar = {
   "activityInformation": "معلومات النشاط",
   "lastSeen": "آخر ظهور",
   "noAccessData": "لا توجد بيانات وصول",
-  "noActivityRecorded": "لم يتم تسجيل نشاط"
+  "noActivityRecorded": "لم يتم تسجيل نشاط",
+  "shared": "مشترك",
+  "visitors": "الزوار",
+  "openSharedView": "فتح العرض المشترك",
+  "pendingSnoozeRequests": "طلبات التأجيل المعلقة"
 };
