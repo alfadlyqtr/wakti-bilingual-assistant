@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface TRSharedResponse {
@@ -13,14 +12,14 @@ export interface TRSharedResponse {
 }
 
 export class TRSharedService {
-  // Get all responses for a task
+  // Get all responses for a task - now ordered by newest first
   static async getTaskResponses(taskId: string): Promise<TRSharedResponse[]> {
     try {
       const { data, error } = await supabase
         .from('tr_shared_responses')
         .select('*')
         .eq('task_id', taskId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false }); // Changed to descending for newest first
 
       if (error) throw error;
       return data || [];
@@ -147,7 +146,10 @@ export class TRSharedService {
           table: 'tr_shared_responses',
           filter: `task_id=eq.${taskId}`
         },
-        onUpdate
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          onUpdate();
+        }
       )
       .subscribe();
 
