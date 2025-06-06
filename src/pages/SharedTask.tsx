@@ -14,6 +14,7 @@ import { StatusBadge } from '@/components/tr/StatusBadge';
 import { SimpleSubtaskManager } from '@/components/tr/SimpleSubtaskManager';
 import { SimpleVisitorModal } from '@/components/tr/SimpleVisitorModal';
 import { SimpleComments } from '@/components/tr/SimpleComments';
+import { VisitorIdentityService } from '@/services/visitorIdentityService';
 import { format, isAfter, parseISO } from 'date-fns';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -42,10 +43,27 @@ export default function SharedTask() {
   }, [shareLink]);
 
   useEffect(() => {
+    if (task) {
+      // Check for stored visitor name using the correct task ID
+      const storedName = VisitorIdentityService.getStoredName(task.id);
+      console.log('Stored name for task', task.id, ':', storedName);
+      
+      if (storedName) {
+        setVisitorName(storedName);
+        // Don't show name modal if we have a stored name
+        setShowNameModal(false);
+      } else {
+        // Show name modal if no stored name
+        setShowNameModal(true);
+      }
+    }
+  }, [task]);
+
+  useEffect(() => {
     if (task && visitorName) {
       loadResponses();
       
-      // Real-time subscription - fix the cleanup function
+      // Real-time subscription
       const channel = TRSharedService.subscribeToTaskUpdates(task.id, loadResponses);
       return () => {
         channel.unsubscribe();
@@ -59,7 +77,6 @@ export default function SharedTask() {
       const sharedTask = await TRService.getSharedTask(shareLink!);
       if (sharedTask) {
         setTask(sharedTask);
-        setShowNameModal(true);
       } else {
         setError('Task not found or no longer shared');
       }
@@ -77,6 +94,7 @@ export default function SharedTask() {
     
     try {
       const responsesData = await TRSharedService.getTaskResponses(task.id);
+      console.log('Loaded responses:', responsesData);
       setResponses(responsesData);
     } catch (error) {
       console.error('Error loading responses:', error);
@@ -84,6 +102,11 @@ export default function SharedTask() {
   };
 
   const handleNameSubmit = (name: string) => {
+    if (task) {
+      // Store the name using the task ID
+      VisitorIdentityService.storeName(task.id, name);
+      console.log('Stored name for task', task.id, ':', name);
+    }
     setVisitorName(name);
     setShowNameModal(false);
     toast.success(`Welcome, ${name}!`);

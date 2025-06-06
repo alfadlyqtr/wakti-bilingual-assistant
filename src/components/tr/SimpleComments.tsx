@@ -38,7 +38,10 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
     }
   };
 
+  // Filter and log comments for debugging
   const comments = responses.filter(r => r.response_type === 'comment');
+  console.log('All responses:', responses);
+  console.log('Filtered comments:', comments);
 
   return (
     <div className="space-y-4">
@@ -62,6 +65,13 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
               <p className="text-sm">{comment.content}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* No comments message */}
+      {comments.length === 0 && (
+        <div className="text-center py-4 text-muted-foreground text-sm">
+          No comments yet. Be the first to add one!
         </div>
       )}
 

@@ -10,6 +10,7 @@ import { TaskForm } from '@/components/tr/TaskForm';
 import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
+import { ActivityMonitor } from '@/components/tr/ActivityMonitor';
 
 export default function TasksReminders() {
   const { language } = useTheme();
@@ -79,9 +80,10 @@ export default function TasksReminders() {
       <div className="max-w-md mx-auto space-y-4">
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>
             <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>
+            <TabsTrigger value="activity">{t('activityMonitor', language)}</TabsTrigger>
           </TabsList>
 
           {/* Tasks Tab */}
@@ -127,6 +129,21 @@ export default function TasksReminders() {
                 onReminderEdit={handleEditReminder}
                 onRemindersChanged={loadData}
               />
+            )}
+          </TabsContent>
+
+          {/* Activity Monitor Tab */}
+          <TabsContent value="activity" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">{t('activityMonitor', language)}</h2>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              </div>
+            ) : (
+              <ActivityMonitor tasks={tasks} onTasksChanged={loadData} />
             )}
           </TabsContent>
         </Tabs>
