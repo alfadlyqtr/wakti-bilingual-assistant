@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { TRSubtask } from "./trService";
 
@@ -178,29 +177,39 @@ export class TRSharedService {
     }
   }
 
-  // Approve snooze request
+  // Approve snooze request - updated to keep the request record with a status flag
   static async approveSnoozeRequest(requestId: string, taskId: string): Promise<void> {
-    // First delete the request
     try {
-      const { error } = await supabase
+      // Update the snooze request with an approval flag in the content
+      const { error: updateError } = await supabase
         .from('tr_shared_responses')
-        .delete()
+        .update({
+          content: JSON.stringify({
+            status: 'approved',
+            originalContent: (await supabase
+              .from('tr_shared_responses')
+              .select('content')
+              .eq('id', requestId)
+              .single()).data?.content,
+            actionTime: new Date().toISOString()
+          })
+        })
         .eq('id', requestId);
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       // Then update the task with a snooze
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const { error: updateError } = await supabase
+      const { error: taskUpdateError } = await supabase
         .from('tr_tasks')
         .update({
           snoozed_until: tomorrow.toISOString(),
         })
         .eq('id', taskId);
 
-      if (updateError) throw updateError;
+      if (taskUpdateError) throw taskUpdateError;
       
     } catch (error) {
       console.error('Error approving snooze request:', error);
@@ -208,12 +217,23 @@ export class TRSharedService {
     }
   }
 
-  // Deny snooze request
+  // Deny snooze request - updated to keep the request record with a status flag
   static async denySnoozeRequest(requestId: string): Promise<void> {
     try {
+      // Update the snooze request with a denial flag in the content
       const { error } = await supabase
         .from('tr_shared_responses')
-        .delete()
+        .update({
+          content: JSON.stringify({
+            status: 'denied',
+            originalContent: (await supabase
+              .from('tr_shared_responses')
+              .select('content')
+              .eq('id', requestId)
+              .single()).data?.content,
+            actionTime: new Date().toISOString()
+          })
+        })
         .eq('id', requestId);
 
       if (error) throw error;

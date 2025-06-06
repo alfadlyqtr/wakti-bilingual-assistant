@@ -1,10 +1,8 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Dialog,
   DialogContent,
@@ -45,10 +43,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
   const [selectedVisitor, setSelectedVisitor] = useState<string | null>(null);
+  const [approvedRequests, setApprovedRequests] = useState<Set<string>>(new Set());
+  const [deniedRequests, setDeniedRequests] = useState<Set<string>>(new Set());
   const loadingRef = useRef(false);
   
-  // Default active tab for all tasks
-  const [activeTabsState, setActiveTabsState] = useState<{ [taskId: string]: string }>({});
+  // Active view for each task
+  const [activeViews, setActiveViews] = useState<{ [taskId: string]: string }>({});
 
   // Memoize shared tasks to prevent unnecessary re-calculations
   const sharedTasks = useMemo(() => {
@@ -136,20 +136,20 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     };
   }, [sharedTasks.length, loadAllData]);
 
-  // Set active tab for a task if not already set
+  // Set default active view for each task
   useEffect(() => {
-    const initialTabs: { [taskId: string]: string } = {};
+    const initialViews: { [taskId: string]: string } = {};
     
     sharedTasks.forEach(task => {
-      if (!activeTabsState[task.id]) {
-        initialTabs[task.id] = 'all';
+      if (!activeViews[task.id]) {
+        initialViews[task.id] = 'all';
       }
     });
     
-    if (Object.keys(initialTabs).length > 0) {
-      setActiveTabsState(prev => ({...prev, ...initialTabs}));
+    if (Object.keys(initialViews).length > 0) {
+      setActiveViews(prev => ({...prev, ...initialViews}));
     }
-  }, [sharedTasks, activeTabsState]);
+  }, [sharedTasks, activeViews]);
 
   const getTaskStats = useCallback((taskId: string) => {
     const taskResponses = responses[taskId] || [];
@@ -265,8 +265,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     loadAllData(true);
   };
 
-  const handleTabChange = (taskId: string, value: string) => {
-    setActiveTabsState(prev => ({...prev, [taskId]: value}));
+  const handleViewChange = (taskId: string, view: string) => {
+    setActiveViews(prev => ({...prev, [taskId]: view}));
   };
 
   const handleSnoozeRequest = async (
@@ -277,10 +277,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     try {
       if (action === 'approved') {
         await TRSharedService.approveSnoozeRequest(requestId, taskId);
+        setApprovedRequests(prev => new Set(prev).add(requestId));
         toast.success('Snooze request approved');
         onTasksChanged(); // Refresh task list to show snoozed status
       } else {
         await TRSharedService.denySnoozeRequest(requestId);
+        setDeniedRequests(prev => new Set(prev).add(requestId));
         toast.success('Snooze request denied');
       }
       
@@ -437,7 +439,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
 
       {sharedTasks.map((task) => {
         const stats = getTaskStats(task.id);
-        const activeTab = activeTabsState[task.id] || 'all';
+        const activeView = activeViews[task.id] || 'all';
         
         return (
           <Card key={task.id} className="overflow-hidden">
@@ -462,15 +464,15 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             </CardHeader>
 
             <CardContent className="pt-0 space-y-4">
-              {/* Activity Stats - Single row of cards that can be clicked */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {/* Activity Stats - Responsive grid that stacks on mobile */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 <button 
-                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
-                  onClick={() => {
-                    handleTabChange(task.id, 'assignees');
-                  }}
+                  className={`${
+                    activeView === 'assignees' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
+                  } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
+                  onClick={() => handleViewChange(task.id, 'assignees')}
                 >
-                  <div className="text-sm font-semibold">{stats.assignees.length}</div>
+                  <div className="text-lg font-semibold">{stats.assignees.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <Users className="h-3 w-3" />
                     Assignees
@@ -478,12 +480,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </button>
                 
                 <button 
-                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
-                  onClick={() => {
-                    handleTabChange(task.id, 'completions');
-                  }}
+                  className={`${
+                    activeView === 'completions' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
+                  } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
+                  onClick={() => handleViewChange(task.id, 'completions')}
                 >
-                  <div className="text-sm font-semibold">{stats.completedSubtasksCount}</div>
+                  <div className="text-lg font-semibold">{stats.completedSubtasksCount}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <CheckCircle className="h-3 w-3" />
                     Completions
@@ -491,12 +493,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </button>
                 
                 <button 
-                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
-                  onClick={() => {
-                    handleTabChange(task.id, 'comments');
-                  }}
+                  className={`${
+                    activeView === 'comments' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
+                  } transition-colors rounded-lg p-3 text-center border-2 border-transparent`}
+                  onClick={() => handleViewChange(task.id, 'comments')}
                 >
-                  <div className="text-sm font-semibold">{stats.comments.length}</div>
+                  <div className="text-lg font-semibold">{stats.comments.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <MessageCircle className="h-3 w-3" />
                     Comments
@@ -504,19 +506,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </button>
                 
                 <button 
-                  className={`bg-secondary/20 ${
-                    stats.snoozeRequests.length > 0 ? 'border border-orange-400' : ''
-                  } hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center relative`}
-                  onClick={() => {
-                    handleTabChange(task.id, 'requests');
-                  }}
+                  className={`${
+                    activeView === 'requests' ? 'bg-primary/20 border-primary/30' : 'bg-secondary/20 hover:bg-secondary/30'
+                  } ${
+                    stats.snoozeRequests.length > 0 ? 'ring-2 ring-orange-400 ring-offset-2' : ''
+                  } transition-colors rounded-lg p-3 text-center border-2 border-transparent relative`}
+                  onClick={() => handleViewChange(task.id, 'requests')}
                 >
                   {stats.snoozeRequests.length > 0 && (
-                    <Badge className="absolute -top-2 -right-2 bg-orange-500">
+                    <Badge className="absolute -top-2 -right-2 bg-orange-500 h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs">
                       {stats.snoozeRequests.length}
                     </Badge>
                   )}
-                  <div className="text-sm font-semibold">{stats.snoozeRequests.length}</div>
+                  <div className="text-lg font-semibold">{stats.snoozeRequests.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <AlertCircle className="h-3 w-3" />
                     Requests
@@ -524,93 +526,102 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 </button>
               </div>
 
-              {/* Activity Tabs */}
-              <Tabs 
-                value={activeTab} 
-                onValueChange={(value) => handleTabChange(task.id, value)}
-                className="w-full border rounded-md"
-              >
-                <TabsList className="w-full grid grid-cols-5">
-                  <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="assignees">Assignees</TabsTrigger>
-                  <TabsTrigger value="comments">Comments</TabsTrigger>
-                  <TabsTrigger value="completions">Completions</TabsTrigger>
-                  <TabsTrigger value="requests">Requests</TabsTrigger>
-                </TabsList>
-
-                {/* All Activities Tab */}
-                <TabsContent value="all" className="p-3">
-                  {stats.allResponses.length > 0 ? (
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {stats.allResponses
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .slice(0, 10)
-                        .map((activity) => (
-                          <div key={activity.id} className="flex items-start gap-2 text-sm bg-muted/30 rounded p-3">
-                            {getActivityIcon(activity.response_type)}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1">
-                                <span className="font-medium">{activity.visitor_name}</span>
-                                <span className="text-xs text-muted-foreground">
-                                  {format(parseISO(activity.created_at), 'MMM dd, HH:mm')}
-                                </span>
+              {/* Content based on active view */}
+              <div className="border rounded-lg p-4 min-h-[300px]">
+                {/* All Activities View */}
+                {activeView === 'all' && (
+                  <>
+                    <button 
+                      className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-3 text-center border-2 border-transparent w-full mb-4"
+                      onClick={() => handleViewChange(task.id, 'all')}
+                    >
+                      <div className="text-lg font-semibold">{stats.allResponses.length}</div>
+                      <div className="text-xs text-muted-foreground">All Activities</div>
+                    </button>
+                    
+                    {stats.allResponses.length > 0 ? (
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                        {stats.allResponses
+                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                          .slice(0, 10)
+                          .map((activity) => (
+                            <div key={activity.id} className="flex items-start gap-3 text-sm bg-muted/30 rounded-lg p-3">
+                              {getActivityIcon(activity.response_type)}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-medium">{activity.visitor_name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {format(parseISO(activity.created_at), 'MMM dd, HH:mm')}
+                                  </span>
+                                </div>
+                                <p className="text-muted-foreground">
+                                  {getActivityDescription(activity, stats.subtasks)}
+                                </p>
+                                
+                                {activity.response_type === 'comment' && activity.content && (
+                                  <div className="bg-background mt-2 p-2 rounded border text-sm">
+                                    {activity.content}
+                                  </div>
+                                )}
+                                
+                                {activity.response_type === 'snooze_request' && (
+                                  <div className="mt-2 flex gap-2">
+                                    {approvedRequests.has(activity.id) ? (
+                                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                        <Check className="h-3 w-3 mr-1" />
+                                        Approved
+                                      </Badge>
+                                    ) : deniedRequests.has(activity.id) ? (
+                                      <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+                                        <X className="h-3 w-3 mr-1" />
+                                        Denied
+                                      </Badge>
+                                    ) : (
+                                      <>
+                                        <Button 
+                                          size="sm" 
+                                          onClick={() => handleSnoozeRequest(task.id, activity.id, 'approved')}
+                                          className="h-7 px-2 text-xs"
+                                        >
+                                          <Check className="h-3 w-3 mr-1" />
+                                          Approve
+                                        </Button>
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          onClick={() => handleSnoozeRequest(task.id, activity.id, 'denied')}
+                                          className="h-7 px-2 text-xs"
+                                        >
+                                          <X className="h-3 w-3 mr-1" />
+                                          Deny
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <p className="text-muted-foreground mt-1">
-                                {getActivityDescription(activity, stats.subtasks)}
-                              </p>
-                              
-                              {/* Show full content for comments */}
-                              {activity.response_type === 'comment' && activity.content && (
-                                <div className="bg-background mt-2 p-2 rounded border text-sm">
-                                  {activity.content}
-                                </div>
-                              )}
-                              
-                              {/* For snooze requests, show approve/deny buttons */}
-                              {activity.response_type === 'snooze_request' && (
-                                <div className="mt-2 flex gap-2">
-                                  <Button 
-                                    size="sm" 
-                                    onClick={() => handleSnoozeRequest(task.id, activity.id, 'approved')}
-                                    className="h-7 px-2 text-xs"
-                                  >
-                                    <Check className="h-3 w-3 mr-1" />
-                                    Approve
-                                  </Button>
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => handleSnoozeRequest(task.id, activity.id, 'denied')}
-                                    className="h-7 px-2 text-xs"
-                                  >
-                                    <X className="h-3 w-3 mr-1" />
-                                    Deny
-                                  </Button>
-                                </div>
-                              )}
                             </div>
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      No activity yet
-                    </div>
-                  )}
-                </TabsContent>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No activity yet
+                      </div>
+                    )}
+                  </>
+                )}
                 
-                {/* Assignees Tab */}
-                <TabsContent value="assignees" className="p-3">
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-medium">Assignees ({stats.assignees.length})</h3>
+                {/* Assignees View */}
+                {activeView === 'assignees' && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Assignees ({stats.assignees.length})</h3>
                     
                     {stats.assignees.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {stats.assignees.map(assignee => {
                           const assigneeInfo = stats.visitors.find(v => v.viewer_name === assignee);
                           const assigneeActivities = stats.allResponses.filter(r => r.visitor_name === assignee);
                           
-                          // Count different types of activities
                           const completions = assigneeActivities.filter(a => 
                             a.response_type === 'completion' && a.is_completed
                           ).length;
@@ -619,7 +630,6 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             a.response_type === 'comment'
                           ).length;
                           
-                          // Find last activity
                           let lastActivity = '';
                           if (assigneeActivities.length > 0) {
                             const mostRecent = assigneeActivities.sort((a, b) => 
@@ -635,16 +645,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           return (
                             <div 
                               key={assignee} 
-                              className="border rounded-lg p-3 flex items-center space-x-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                              className="border rounded-lg p-4 flex items-center space-x-3 cursor-pointer hover:bg-muted/50 transition-colors"
                               onClick={() => setSelectedVisitor(assignee)}
                             >
-                              <Avatar>
+                              <Avatar className="h-10 w-10">
                                 <AvatarFallback>{getInitials(assignee)}</AvatarFallback>
                               </Avatar>
                               
                               <div className="flex-1 min-w-0">
                                 <p className="font-medium text-sm truncate">{assignee}</p>
-                                <div className="flex items-center text-xs text-muted-foreground space-x-2">
+                                <div className="flex items-center text-xs text-muted-foreground space-x-3 mt-1">
                                   <span className="flex items-center">
                                     <Clock className="h-3 w-3 mr-1" />
                                     {lastActivity}
@@ -668,238 +678,263 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         })}
                       </div>
                     ) : (
-                      <div className="text-center py-4 text-muted-foreground text-sm">
+                      <div className="text-center py-8 text-muted-foreground text-sm">
                         No assignees yet
                       </div>
                     )}
                     
-                    <div className="text-xs text-muted-foreground mt-2">
+                    <div className="text-xs text-muted-foreground">
                       <p>Click on an assignee to view detailed activity</p>
                     </div>
                   </div>
-                </TabsContent>
+                )}
 
-                {/* Comments Tab */}
-                <TabsContent value="comments" className="p-3 space-y-3">
-                  {stats.comments.length > 0 ? (
-                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                      {stats.comments
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((comment) => (
-                          <div key={comment.id} className="bg-muted/30 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <MessageCircle className="h-4 w-4 text-blue-600" />
-                              <span className="font-medium">{comment.visitor_name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatRelativeTime(comment.created_at)}
-                              </span>
-                            </div>
-                            
-                            <div className="bg-background p-2 rounded border my-2">
-                              {comment.content}
-                            </div>
-                            
-                            {replyingTo === comment.id ? (
-                              <div className="mt-2 space-y-2">
-                                <Textarea
-                                  value={replyContent}
-                                  onChange={(e) => setReplyContent(e.target.value)}
-                                  placeholder="Type your reply..."
-                                  rows={2}
-                                  className="text-sm"
-                                />
-                                <div className="flex gap-2 justify-end">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => {
-                                      setReplyingTo(null);
-                                      setReplyContent('');
-                                    }}
-                                  >
-                                    Cancel
-                                  </Button>
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => handleReply(task.id)}
-                                    disabled={!replyContent.trim()}
-                                  >
-                                    Reply
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="ghost" 
-                                size="sm" 
-                                className="text-xs mt-1"
-                                onClick={() => setReplyingTo(comment.id)}
-                              >
-                                <Mail className="h-3 w-3 mr-1" />
-                                Reply
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      No comments yet
-                    </div>
-                  )}
-                </TabsContent>
-
-                {/* Completions Tab */}
-                <TabsContent value="completions" className="p-3 space-y-3">
-                  {stats.allResponses.filter(r => r.response_type === 'completion').length > 0 ? (
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {/* Subtask completion status */}
-                      {stats.totalSubtasksCount > 0 && (
-                        <div className="space-y-4 mb-4">
-                          <h4 className="text-sm font-medium">Subtask Status</h4>
-                          <div className="space-y-2">
-                            {stats.subtasks.map(subtask => {
-                              const completions = stats.allResponses.filter(r => 
-                                r.response_type === 'completion' && 
-                                r.subtask_id === subtask.id &&
-                                r.is_completed
-                              );
-                              
-                              const completedBy = [...new Set(completions.map(c => c.visitor_name))];
-                              const isCompleted = completedBy.length > 0;
-                              
-                              return (
-                                <div 
-                                  key={subtask.id} 
-                                  className={`p-2 rounded-lg flex items-center ${
-                                    isCompleted ? 'bg-green-50 border border-green-200' : 'bg-muted/30'
-                                  }`}
-                                >
-                                  <div className="mr-2">
-                                    {isCompleted ? (
-                                      <CheckCircle className="h-4 w-4 text-green-600" />
-                                    ) : (
-                                      <div className="h-4 w-4 border rounded-full" />
-                                    )}
-                                  </div>
-                                  
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
-                                      {subtask.title}
-                                    </p>
-                                    
-                                    {isCompleted && (
-                                      <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
-                                        <User className="h-3 w-3" />
-                                        {completedBy.join(', ')}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Completion activity history */}
-                      <h4 className="text-sm font-medium">Completion History</h4>
-                      {stats.allResponses
-                        .filter(r => r.response_type === 'completion')
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((completion) => {
-                          // Find subtask info
-                          let subtaskInfo = null;
-                          if (completion.subtask_id) {
-                            subtaskInfo = stats.subtasks.find(s => s.id === completion.subtask_id);
-                          }
-                          
-                          return (
-                            <div key={completion.id} className="bg-muted/30 rounded-lg p-3">
-                              <div className="flex items-center gap-2">
-                                <CheckCircle className={`h-4 w-4 ${completion.is_completed ? 'text-green-600' : 'text-muted-foreground'}`} />
-                                <span className="font-medium">{completion.visitor_name}</span>
+                {/* Comments View */}
+                {activeView === 'comments' && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Comments ({stats.comments.length})</h3>
+                    
+                    {stats.comments.length > 0 ? (
+                      <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                        {stats.comments
+                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                          .map((comment) => (
+                            <div key={comment.id} className="bg-muted/30 rounded-lg p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageCircle className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium">{comment.visitor_name}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {format(parseISO(completion.created_at), 'MMM dd, HH:mm')}
+                                  {formatRelativeTime(comment.created_at)}
                                 </span>
                               </div>
                               
-                              <p className="text-sm mt-1 ml-6">
-                                {completion.subtask_id 
-                                  ? `${completion.is_completed ? 'Completed' : 'Marked incomplete'}: "${subtaskInfo?.title || 'subtask'}"` 
-                                  : `${completion.is_completed ? 'Marked main task as complete' : 'Marked main task as incomplete'}`}
-                              </p>
+                              <div className="bg-background p-3 rounded border mb-2">
+                                {comment.content}
+                              </div>
+                              
+                              {replyingTo === comment.id ? (
+                                <div className="mt-3 space-y-2">
+                                  <Textarea
+                                    value={replyContent}
+                                    onChange={(e) => setReplyContent(e.target.value)}
+                                    placeholder="Type your reply..."
+                                    rows={2}
+                                    className="text-sm"
+                                  />
+                                  <div className="flex gap-2 justify-end">
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      onClick={() => {
+                                        setReplyingTo(null);
+                                        setReplyContent('');
+                                      }}
+                                    >
+                                      Cancel
+                                    </Button>
+                                    <Button 
+                                      size="sm"
+                                      onClick={() => handleReply(task.id)}
+                                      disabled={!replyContent.trim()}
+                                    >
+                                      Reply
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Button
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-xs"
+                                  onClick={() => setReplyingTo(comment.id)}
+                                >
+                                  <Mail className="h-3 w-3 mr-1" />
+                                  Reply
+                                </Button>
+                              )}
                             </div>
-                          );
-                        })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      No completions yet
-                    </div>
-                  )}
-                </TabsContent>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No comments yet
+                      </div>
+                    )}
+                  </div>
+                )}
 
-                {/* Requests Tab */}
-                <TabsContent value="requests" className="p-3 space-y-3">
-                  {stats.snoozeRequests.length > 0 ? (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-medium flex items-center gap-1 text-orange-600">
-                        <AlertCircle className="h-4 w-4" />
-                        Pending Snooze Requests ({stats.snoozeRequests.length})
-                      </h3>
-                      
-                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                {/* Completions View */}
+                {activeView === 'completions' && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium">Completions</h3>
+                    
+                    {stats.allResponses.filter(r => r.response_type === 'completion').length > 0 ? (
+                      <div className="space-y-4">
+                        {/* Subtask completion status */}
+                        {stats.totalSubtasksCount > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-base font-medium">Subtask Status</h4>
+                            <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                              {stats.subtasks.map(subtask => {
+                                const completions = stats.allResponses.filter(r => 
+                                  r.response_type === 'completion' && 
+                                  r.subtask_id === subtask.id &&
+                                  r.is_completed
+                                );
+                                
+                                const completedBy = [...new Set(completions.map(c => c.visitor_name))];
+                                const isCompleted = completedBy.length > 0;
+                                
+                                return (
+                                  <div 
+                                    key={subtask.id} 
+                                    className={`p-3 rounded-lg flex items-center gap-3 ${
+                                      isCompleted ? 'bg-green-50 border border-green-200' : 'bg-muted/30'
+                                    }`}
+                                  >
+                                    <div>
+                                      {isCompleted ? (
+                                        <CheckCircle className="h-5 w-5 text-green-600" />
+                                      ) : (
+                                        <div className="h-5 w-5 border-2 rounded-full" />
+                                      )}
+                                    </div>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                        {subtask.title}
+                                      </p>
+                                      
+                                      {isCompleted && (
+                                        <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                          <User className="h-3 w-3" />
+                                          {completedBy.join(', ')}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Completion activity history */}
+                        <div className="space-y-3">
+                          <h4 className="text-base font-medium">Completion History</h4>
+                          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                            {stats.allResponses
+                              .filter(r => r.response_type === 'completion')
+                              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                              .map((completion) => {
+                                let subtaskInfo = null;
+                                if (completion.subtask_id) {
+                                  subtaskInfo = stats.subtasks.find(s => s.id === completion.subtask_id);
+                                }
+                                
+                                return (
+                                  <div key={completion.id} className="bg-muted/30 rounded-lg p-3">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <CheckCircle className={`h-4 w-4 ${completion.is_completed ? 'text-green-600' : 'text-muted-foreground'}`} />
+                                      <span className="font-medium text-sm">{completion.visitor_name}</span>
+                                      <span className="text-xs text-muted-foreground">
+                                        {format(parseISO(completion.created_at), 'MMM dd, HH:mm')}
+                                      </span>
+                                    </div>
+                                    
+                                    <p className="text-sm text-muted-foreground ml-6">
+                                      {completion.subtask_id 
+                                        ? `${completion.is_completed ? 'Completed' : 'Marked incomplete'}: "${subtaskInfo?.title || 'subtask'}"` 
+                                        : `${completion.is_completed ? 'Marked main task as complete' : 'Marked main task as incomplete'}`}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No completions yet
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Requests View */}
+                {activeView === 'requests' && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
+                      <AlertCircle className="h-5 w-5" />
+                      Snooze Requests ({stats.snoozeRequests.length})
+                    </h3>
+                    
+                    {stats.snoozeRequests.length > 0 ? (
+                      <div className="space-y-4 max-h-[400px] overflow-y-auto">
                         {stats.snoozeRequests
                           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                           .map((request) => (
-                            <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                              <div className="flex items-center gap-2">
+                            <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                              <div className="flex items-center gap-2 mb-2">
                                 <Pause className="h-4 w-4 text-orange-600" />
                                 <span className="font-medium">{request.visitor_name}</span>
                                 <Badge variant="secondary" className="text-xs">Snooze Request</Badge>
                               </div>
                               
-                              <div className="text-xs text-muted-foreground mt-1">
+                              <div className="text-xs text-muted-foreground mb-2">
                                 {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
                               </div>
                               
                               {request.content && (
-                                <div className="bg-background/50 p-2 rounded border mt-2">
+                                <div className="bg-background/50 p-3 rounded border mb-3">
                                   <p className="text-sm">Reason: {request.content}</p>
                                 </div>
                               )}
                               
-                              <div className="flex gap-2 mt-3">
-                                <Button 
-                                  className="flex-1"
-                                  size="sm" 
-                                  onClick={() => handleSnoozeRequest(task.id, request.id, 'approved')}
-                                >
-                                  <Check className="h-4 w-4 mr-1" />
-                                  Approve
-                                </Button>
-                                <Button 
-                                  className="flex-1"
-                                  variant="outline" 
-                                  size="sm" 
-                                  onClick={() => handleSnoozeRequest(task.id, request.id, 'denied')}
-                                >
-                                  <X className="h-4 w-4 mr-1" />
-                                  Deny
-                                </Button>
+                              <div className="flex gap-2">
+                                {approvedRequests.has(request.id) ? (
+                                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 flex-1 justify-center py-2">
+                                    <Check className="h-4 w-4 mr-1" />
+                                    Approved
+                                  </Badge>
+                                ) : deniedRequests.has(request.id) ? (
+                                  <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 flex-1 justify-center py-2">
+                                    <X className="h-4 w-4 mr-1" />
+                                    Denied
+                                  </Badge>
+                                ) : (
+                                  <>
+                                    <Button 
+                                      className="flex-1"
+                                      size="sm" 
+                                      onClick={() => handleSnoozeRequest(task.id, request.id, 'approved')}
+                                    >
+                                      <Check className="h-4 w-4 mr-1" />
+                                      Approve
+                                    </Button>
+                                    <Button 
+                                      className="flex-1"
+                                      variant="outline"
+                                      size="sm" 
+                                      onClick={() => handleSnoozeRequest(task.id, request.id, 'denied')}
+                                    >
+                                      <X className="h-4 w-4 mr-1" />
+                                      Deny
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           ))}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      No snooze requests
-                    </div>
-                  )}
-                </TabsContent>
-              </Tabs>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground text-sm">
+                        No snooze requests
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2">
