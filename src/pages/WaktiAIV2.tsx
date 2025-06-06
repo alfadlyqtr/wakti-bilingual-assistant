@@ -368,6 +368,21 @@ const WaktiAIV2 = () => {
     console.log('✨ Text gen params set to:', params);
   };
 
+  const getTriggerDisplayName = () => {
+    switch (activeTrigger) {
+      case 'chat':
+        return language === 'ar' ? 'محادثة' : 'Chat';
+      case 'search':
+        return language === 'ar' ? 'بحث' : 'Search';
+      case 'image':
+        return language === 'ar' ? 'صورة' : 'Image';
+      case 'advanced_search':
+        return language === 'ar' ? 'بحث متقدم' : 'Advanced';
+      default:
+        return language === 'ar' ? 'محادثة' : 'Chat';
+    }
+  };
+
   return (
     <div className="flex h-screen bg-background">
       {/* Left Drawer - Conversations */}
@@ -406,25 +421,24 @@ const WaktiAIV2 = () => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Single Header */}
-        <div className="border-b p-4 flex items-center justify-between bg-background">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setShowConversations(true)}>
-              <MessageSquare className="h-5 w-5" />
+        {/* Thin Header */}
+        <div className="border-b p-2 flex items-center justify-between bg-background">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowConversations(true)}>
+              <MessageSquare className="h-4 w-4" />
             </Button>
-            {currentConversationId ? (
-              <Button variant="ghost" onClick={handleNewConversation}>
-                {language === 'ar' ? 'محادثة جديدة' : 'New Conversation'}
+            {currentConversationId && (
+              <Button variant="ghost" size="sm" onClick={handleNewConversation}>
+                {language === 'ar' ? 'جديد' : 'New'}
               </Button>
-            ) : (
-              <h1 className="text-lg font-semibold">
-                {language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}
-              </h1>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => setShowQuickActions(true)}>
-              <Menu className="h-5 w-5" />
+          <div className="text-xs font-medium text-muted-foreground">
+            {getTriggerDisplayName()}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowQuickActions(true)}>
+              <Menu className="h-4 w-4" />
             </Button>
           </div>
         </div>
