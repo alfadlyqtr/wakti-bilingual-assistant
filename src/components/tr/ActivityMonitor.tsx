@@ -271,7 +271,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       await TRSharedService.addComment(taskId, 'Owner (You)', replyContent.trim());
       setReplyContent('');
       setReplyingTo(null);
-      toast.success('Reply sent');
+      toast.success(t('reply', language) + ' sent');
       loadAllData(true);
     } catch (error) {
       console.error('Error replying to comment:', error);
@@ -350,7 +350,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return (
         <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
           <Clock className="h-3 w-3 mr-1 animate-spin" />
-          Processing...
+          {t('processing', language)}...
         </Badge>
       );
     }
@@ -359,7 +359,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return (
         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
           <Check className="h-3 w-3 mr-1" />
-          Approved
+          {t('approved', language)}
         </Badge>
       );
     }
@@ -368,7 +368,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       return (
         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
           <X className="h-3 w-3 mr-1" />
-          Denied
+          {t('denied', language)}
         </Badge>
       );
     }
@@ -382,7 +382,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           disabled={isProcessing}
         >
           <Check className="h-3 w-3 mr-1" />
-          Approve
+          {t('approve', language)}
         </Button>
         <Button 
           size="sm" 
@@ -392,7 +392,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           disabled={isProcessing}
         >
           <X className="h-3 w-3 mr-1" />
-          Deny
+          {t('deny', language)}
         </Button>
       </div>
     );
@@ -425,8 +425,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         <CardContent className="pt-6">
           <div className="text-center py-8">
             <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No Shared Tasks</h3>
-            <p className="text-muted-foreground">Share a task to start monitoring assignee activity</p>
+            <h3 className="text-lg font-semibold mb-2">{t('noSharedTasks', language)}</h3>
+            <p className="text-muted-foreground">{t('shareTaskToStartMonitoring', language)}</p>
           </div>
         </CardContent>
       </Card>
@@ -438,7 +438,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Last updated: {formatRelativeTime(lastUpdate.toISOString())}
+          {t('lastUpdated', language)}: {formatRelativeTime(lastUpdate.toISOString())}
         </div>
         <Button
           onClick={handleRefresh}
@@ -447,7 +447,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           variant="outline"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? 'Refreshing...' : 'Refresh'}
+          {refreshing ? t('refreshing', language)... : t('refresh', language)}
         </Button>
       </div>
 
@@ -455,9 +455,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       <Dialog open={!!selectedVisitor} onOpenChange={() => setSelectedVisitor(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Assignee Details</DialogTitle>
+            <DialogTitle>{t('assigneeDetails', language)}</DialogTitle>
             <DialogDescription>
-              Activity information for this assignee
+              {t('activityInformation', language)}
             </DialogDescription>
           </DialogHeader>
           
@@ -483,7 +483,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div>
                         <CardTitle className="text-base">{selectedVisitor}</CardTitle>
                         <p className="text-xs text-muted-foreground">
-                          {visitorInfo ? `Last seen ${formatRelativeTime(visitorInfo.last_accessed)}` : 'No access data'}
+                          {visitorInfo ? `${t('lastSeen', language)} ${formatRelativeTime(visitorInfo.last_accessed)}` : t('noAccessData', language)}
                         </p>
                       </div>
                     </div>
@@ -495,24 +495,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         <div className="text-sm font-semibold">
                           {visitorActivities.filter(a => a.response_type === 'completion' && a.is_completed).length}
                         </div>
-                        <div className="text-xs text-muted-foreground">Completions</div>
+                        <div className="text-xs text-muted-foreground">{t('completions', language)}</div>
                       </div>
                       <div className="bg-secondary/20 rounded p-2 text-center">
                         <div className="text-sm font-semibold">
                           {visitorActivities.filter(a => a.response_type === 'comment').length}
                         </div>
-                        <div className="text-xs text-muted-foreground">Comments</div>
+                        <div className="text-xs text-muted-foreground">{t('comments', language)}</div>
                       </div>
                       <div className="bg-secondary/20 rounded p-2 text-center">
                         <div className="text-sm font-semibold">
                           {visitorActivities.filter(a => a.response_type === 'snooze_request').length}
                         </div>
-                        <div className="text-xs text-muted-foreground">Requests</div>
+                        <div className="text-xs text-muted-foreground">{t('requests', language)}</div>
                       </div>
                     </div>
                     
                     <div className="space-y-1">
-                      <h4 className="text-sm font-medium">Recent Activity</h4>
+                      <h4 className="text-sm font-medium">{t('recentActivity', language)}</h4>
                       <ScrollArea className="h-[200px]">
                         <div className="space-y-2">
                           {visitorActivities.slice(0, 10).map(activity => (
@@ -531,7 +531,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           
                           {visitorActivities.length === 0 && (
                             <div className="text-center py-2 text-muted-foreground text-xs">
-                              No activity recorded
+                              {t('noActivityRecorded', language)}
                             </div>
                           )}
                         </div>
@@ -569,12 +569,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-2">
                         <Badge variant="outline" className="text-xs">
-                          Shared Task
+                          {t('sharedTask', language)}
                         </Badge>
                         <Badge variant="secondary" className="text-xs">
                           {stats.totalSubtasksCount > 0 
-                            ? `${stats.completedSubtasksCount} of ${stats.totalSubtasksCount} subtasks completed`
-                            : stats.taskCompletionsCount > 0 ? 'Task completed' : 'Not completed'}
+                            ? `${stats.completedSubtasksCount} ${language === 'ar' ? 'من' : 'of'} ${stats.totalSubtasksCount} ${language === 'ar' ? 'مهمة فرعية مكتملة' : 'subtasks completed'}`
+                            : stats.taskCompletionsCount > 0 ? (language === 'ar' ? 'المهمة مكتملة' : 'Task completed') : (language === 'ar' ? 'غير مكتملة' : 'Not completed')}
                         </Badge>
                         {/* Show activity indicators when collapsed */}
                         {isCollapsed && (
@@ -590,7 +590,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length > 0 && (
                               <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-200">
                                 <AlertCircle className="h-3 w-3 mr-1" />
-                                {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length} pending
+                                {stats.snoozeRequests.filter(r => !parseSnoozeStatus(r.content)).length} {t('pending', language)}
                               </Badge>
                             )}
                           </>
@@ -614,7 +614,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div className="text-lg font-semibold">{stats.assignees.length}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <Users className="h-3 w-3" />
-                        Assignees
+                        {t('assignees', language)}
                       </div>
                     </button>
                     
@@ -627,7 +627,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div className="text-lg font-semibold">{stats.completedSubtasksCount}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <CheckCircle className="h-3 w-3" />
-                        Completions
+                        {t('completions', language)}
                       </div>
                     </button>
                     
@@ -640,7 +640,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div className="text-lg font-semibold">{stats.comments.length}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <MessageCircle className="h-3 w-3" />
-                        Comments
+                        {t('comments', language)}
                       </div>
                     </button>
                     
@@ -660,7 +660,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       <div className="text-lg font-semibold">{stats.snoozeRequests.length}</div>
                       <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                         <AlertCircle className="h-3 w-3" />
-                        Requests
+                        {t('requests', language)}
                       </div>
                     </button>
                   </div>
@@ -674,7 +674,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         onClick={() => handleViewChange(task.id, 'all')}
                       >
                         <div className="text-lg font-semibold">{stats.allResponses.length}</div>
-                        <div className="text-xs text-muted-foreground">All Activities</div>
+                        <div className="text-xs text-muted-foreground">{t('allActivities', language)}</div>
                       </button>
                       
                       {stats.allResponses.length > 0 ? (
@@ -713,7 +713,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
-                          No activity yet
+                          {t('noActivityYet', language)}
                         </div>
                       )}
                     </>
@@ -722,7 +722,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   {/* Assignees View */}
                   {activeView === 'assignees' && (
                     <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Assignees ({stats.assignees.length})</h3>
+                      <h3 className="text-lg font-medium">{t('assignees', language)} ({stats.assignees.length})</h3>
                       
                       {stats.assignees.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -747,7 +747,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                             } else if (assigneeInfo) {
                               lastActivity = formatRelativeTime(assigneeInfo.last_accessed);
                             } else {
-                              lastActivity = 'No activity recorded';
+                              lastActivity = t('noActivityRecorded', language);
                             }
                             
                             return (
@@ -787,12 +787,12 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
-                          No assignees yet
+                          {t('noAssigneesYet', language)}
                         </div>
                       )}
                       
                       <div className="text-xs text-muted-foreground">
-                        <p>Click on an assignee to view detailed activity</p>
+                        <p>{t('clickOnAssignee', language)}</p>
                       </div>
                     </div>
                   )}
@@ -800,7 +800,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   {/* Comments View */}
                   {activeView === 'comments' && (
                     <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Comments ({stats.comments.length})</h3>
+                      <h3 className="text-lg font-medium">{t('comments', language)} ({stats.comments.length})</h3>
                       
                       {stats.comments.length > 0 ? (
                         <div className="space-y-3 max-h-[400px] overflow-y-auto">
@@ -825,7 +825,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                     <Textarea
                                       value={replyContent}
                                       onChange={(e) => setReplyContent(e.target.value)}
-                                      placeholder="Type your reply..."
+                                      placeholder={t('typeYourReply', language) + '...'}
                                       rows={2}
                                       className="text-sm"
                                     />
@@ -838,14 +838,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                           setReplyContent('');
                                         }}
                                       >
-                                        Cancel
+                                        {t('cancel', language)}
                                       </Button>
                                       <Button 
                                         size="sm"
                                         onClick={() => handleReply(task.id)}
                                         disabled={!replyContent.trim()}
                                       >
-                                        Reply
+                                        {t('reply', language)}
                                       </Button>
                                     </div>
                                   </div>
@@ -857,7 +857,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                     onClick={() => setReplyingTo(comment.id)}
                                   >
                                     <Mail className="h-3 w-3 mr-1" />
-                                    Reply
+                                    {t('reply', language)}
                                   </Button>
                                 )}
                               </div>
@@ -865,7 +865,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
-                          No comments yet
+                          {t('noCommentsYet', language)}
                         </div>
                       )}
                     </div>
@@ -874,14 +874,14 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   {/* Completions View */}
                   {activeView === 'completions' && (
                     <div className="space-y-4">
-                      <h3 className="text-lg font-medium">Completions</h3>
+                      <h3 className="text-lg font-medium">{t('completions', language)}</h3>
                       
                       {stats.allResponses.filter(r => r.response_type === 'completion').length > 0 ? (
                         <div className="space-y-4">
                           {/* Subtask completion status */}
                           {stats.totalSubtasksCount > 0 && (
                             <div className="space-y-3">
-                              <h4 className="text-base font-medium">Subtask Status</h4>
+                              <h4 className="text-base font-medium">{t('subtaskStatus', language)}</h4>
                               <div className="space-y-2 max-h-[200px] overflow-y-auto">
                                 {stats.subtasks.map(subtask => {
                                   const completions = stats.allResponses.filter(r => 
@@ -929,7 +929,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                           
                           {/* Completion activity history */}
                           <div className="space-y-3">
-                            <h4 className="text-base font-medium">Completion History</h4>
+                            <h4 className="text-base font-medium">{t('completionHistory', language)}</h4>
                             <div className="space-y-2 max-h-[200px] overflow-y-auto">
                               {stats.allResponses
                                 .filter(r => r.response_type === 'completion')
@@ -952,8 +952,8 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                       
                                       <p className="text-sm text-muted-foreground ml-6" dir="auto">
                                         {completion.subtask_id 
-                                          ? `${completion.is_completed ? 'Completed' : 'Marked incomplete'}: "${subtaskInfo?.title || 'subtask'}"` 
-                                          : `${completion.is_completed ? 'Marked main task as complete' : 'Marked main task as incomplete'}`}
+                                          ? `${completion.is_completed ? (language === 'ar' ? 'أكمل' : 'Completed') : (language === 'ar' ? 'وضع علامة كغير مكتمل' : 'Marked incomplete')}: "${subtaskInfo?.title || 'subtask'}"` 
+                                          : `${completion.is_completed ? (language === 'ar' ? 'وضع علامة على المهمة الرئيسية كمكتملة' : 'Marked main task as complete') : (language === 'ar' ? 'وضع علامة على المهمة الرئيسية كغير مكتملة' : 'Marked main task as incomplete')}`}
                                       </p>
                                     </div>
                                   );
@@ -963,7 +963,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
-                          No completions yet
+                          {t('noCompletionsYet', language)}
                         </div>
                       )}
                     </div>
@@ -974,7 +974,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     <div className="space-y-4">
                       <h3 className="text-lg font-medium flex items-center gap-2 text-orange-600">
                         <AlertCircle className="h-5 w-5" />
-                        Snooze Requests ({stats.snoozeRequests.length})
+                        {t('snoozeRequestsTitle', language)} ({stats.snoozeRequests.length})
                       </h3>
                       
                       {stats.snoozeRequests.length > 0 ? (
@@ -986,7 +986,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 <div className="flex items-center gap-2 mb-2">
                                   <Pause className="h-4 w-4 text-orange-600" />
                                   <span className="font-medium" dir="auto">{request.visitor_name}</span>
-                                  <Badge variant="secondary" className="text-xs">Snooze Request</Badge>
+                                  <Badge variant="secondary" className="text-xs">{t('snoozeRequests', language)}</Badge>
                                 </div>
                                 
                                 <div className="text-xs text-muted-foreground mb-2">
@@ -995,7 +995,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 
                                 {request.content && !parseSnoozeStatus(request.content) && (
                                   <div className="bg-background/50 p-3 rounded border mb-3" dir="auto">
-                                    <p className="text-sm">Reason: {request.content}</p>
+                                    <p className="text-sm">{t('reason', language)}: {request.content}</p>
                                   </div>
                                 )}
                                 
@@ -1007,7 +1007,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                         </div>
                       ) : (
                         <div className="text-center py-8 text-muted-foreground text-sm">
-                          No snooze requests
+                          {t('noSnoozeRequests', language)}
                         </div>
                       )}
                     </div>
