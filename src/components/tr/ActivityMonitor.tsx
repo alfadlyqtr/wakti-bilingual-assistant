@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -447,7 +448,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
           variant="outline"
         >
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-          {refreshing ? t('refreshing', language)... : t('refresh', language)}
+          {refreshing ? `${t('refreshing', language)}...` : t('refresh', language)}
         </Button>
       </div>
 
@@ -825,7 +826,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                     <Textarea
                                       value={replyContent}
                                       onChange={(e) => setReplyContent(e.target.value)}
-                                      placeholder={t('typeYourReply', language) + '...'}
+                                      placeholder={`${t('typeYourReply', language)}...`}
                                       rows={2}
                                       className="text-sm"
                                     />
