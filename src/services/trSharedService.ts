@@ -1,4 +1,6 @@
+
 import { supabase } from "@/integrations/supabase/client";
+import { TRSubtask } from "./trService";
 
 export interface TRSharedResponse {
   id: string;
@@ -25,6 +27,23 @@ export class TRSharedService {
       return data || [];
     } catch (error) {
       console.error('Error getting task responses:', error);
+      return [];
+    }
+  }
+
+  // Get subtasks for a task
+  static async getTaskSubtasks(taskId: string): Promise<TRSubtask[]> {
+    try {
+      const { data, error } = await supabase
+        .from('tr_subtasks')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('order_index', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting task subtasks:', error);
       return [];
     }
   }

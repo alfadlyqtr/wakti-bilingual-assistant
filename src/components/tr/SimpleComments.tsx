@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
 import { toast } from 'sonner';
-import { MessageCircle, User } from 'lucide-react';
+import { MessageCircle, User, Mail } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
 interface SimpleCommentsProps {
@@ -20,6 +20,8 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
 }) => {
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,13 +40,27 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
     }
   };
 
+  const handleReply = async () => {
+    if (!replyContent.trim() || !replyingTo) return;
+
+    setSubmitting(true);
+    try {
+      await TRSharedService.addComment(taskId, visitorName, `Reply: ${replyContent.trim()}`);
+      setReplyContent('');
+      setReplyingTo(null);
+      toast.success('Reply sent');
+    } catch (error) {
+      console.error('Error sending reply:', error);
+      toast.error('Failed to send reply');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Filter and sort comments by newest first
   const comments = responses
     .filter(r => r.response_type === 'comment')
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  
-  console.log('All responses:', responses);
-  console.log('Filtered comments:', comments);
 
   return (
     <div className="space-y-4">
@@ -75,14 +91,60 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
         <div className="space-y-3 max-h-[300px] overflow-y-auto">
           {comments.map((comment) => (
             <div key={comment.id} className="bg-muted/50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="h-3 w-3" />
-                <span className="text-sm font-medium">{comment.visitor_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {format(parseISO(comment.created_at), 'MMM dd, HH:mm')}
-                </span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-3 w-3" />
+                  <span className="text-sm font-medium">{comment.visitor_name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {format(parseISO(comment.created_at), 'MMM dd, HH:mm')}
+                  </span>
+                </div>
+                
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setReplyingTo(comment.id === replyingTo ? null : comment.id)}
+                >
+                  <Mail className="h-3 w-3 mr-1" />
+                  Reply
+                </Button>
               </div>
-              <p className="text-sm break-words">{comment.content}</p>
+
+              <div className="bg-background/50 p-2 rounded border">
+                <p className="text-sm break-words">{comment.content}</p>
+              </div>
+
+              {replyingTo === comment.id && (
+                <div className="mt-3 space-y-2">
+                  <Textarea
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    placeholder="Write your reply..."
+                    rows={2}
+                    className="text-sm"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setReplyingTo(null);
+                        setReplyContent('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={handleReply}
+                      disabled={!replyContent.trim() || submitting}
+                    >
+                      {submitting ? 'Sending...' : 'Send Reply'}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
