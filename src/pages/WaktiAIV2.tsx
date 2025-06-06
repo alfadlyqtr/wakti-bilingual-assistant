@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare } from 'lucide-react';
+import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   Sheet,
@@ -15,6 +15,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { ConversationsList } from '@/components/wakti-ai-v2/ConversationsList';
+import { QuickActionsPanel } from '@/components/wakti-ai-v2/QuickActionsPanel';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { QuotaDisplay } from '@/components/wakti-ai-v2/QuotaDisplay';
@@ -30,6 +31,7 @@ const WaktiAIV2 = () => {
   const [error, setError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<AIConversation[]>([]);
   const [showConversations, setShowConversations] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
@@ -367,26 +369,18 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <PageContainer>
-      {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between p-4 border-b">
-        <Button variant="ghost" size="icon" onClick={() => setShowConversations(true)}>
-          <MessageSquare className="h-5 w-5" />
-        </Button>
-        <h1 className="text-lg font-semibold">{language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}</h1>
-        <div>
-          <QuotaDisplay quotaStatus={quotaStatus} />
-        </div>
-      </div>
-
-      <div className="hidden md:flex w-80 border-r bg-background">
-        <div className="flex flex-col h-full w-full">
-          <div className="flex items-center justify-between p-4">
-            <h2 className="text-lg font-semibold">{language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}</h2>
-            <div>
-              <QuotaDisplay quotaStatus={quotaStatus} />
-            </div>
-          </div>
+    <div className="flex h-screen bg-background">
+      {/* Left Drawer - Conversations */}
+      <Sheet open={showConversations} onOpenChange={setShowConversations}>
+        <SheetContent side="left" className="w-80 p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle>{language === 'ar' ? 'المحادثات' : 'Conversations'}</SheetTitle>
+            <SheetDescription>
+              {language === 'ar'
+                ? 'اختر محادثة موجودة أو ابدأ واحدة جديدة.'
+                : 'Select an existing conversation or start a new one.'}
+            </SheetDescription>
+          </SheetHeader>
           <ConversationsList
             conversations={conversations}
             currentConversationId={currentConversationId}
@@ -395,28 +389,48 @@ const WaktiAIV2 = () => {
             onRefresh={fetchConversations}
             onClose={() => setShowConversations(false)}
           />
-        </div>
-      </div>
-      
-      <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] md:h-screen">
-        {/* Header Section */}
-        <div className="border-b p-4 md:px-6 flex items-center justify-between">
+        </SheetContent>
+      </Sheet>
+
+      {/* Right Drawer - Quick Actions */}
+      <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
+        <SheetContent side="right" className="w-80 p-4">
+          <QuickActionsPanel
+            onSendMessage={handleSendMessage}
+            activeTrigger={activeTrigger as any}
+            onTriggerChange={handleTriggerChange}
+            onClose={() => setShowQuickActions(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
+        {/* Single Header */}
+        <div className="border-b p-4 flex items-center justify-between bg-background">
           <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => setShowConversations(true)}>
+              <MessageSquare className="h-5 w-5" />
+            </Button>
             {currentConversationId ? (
               <Button variant="ghost" onClick={handleNewConversation}>
                 {language === 'ar' ? 'محادثة جديدة' : 'New Conversation'}
               </Button>
             ) : (
-              <h3 className="text-md font-medium">
-                {language === 'ar' ? 'محادثة جديدة' : 'New Conversation'}
-              </h3>
+              <h1 className="text-lg font-semibold">
+                {language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}
+              </h1>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            <QuotaDisplay quotaStatus={quotaStatus} />
             <TextGenModal
               onTriggerChange={handleTriggerChange}
               onTextGenParams={handleTextGenParams}
             />
+            <Button variant="ghost" size="icon" onClick={() => setShowQuickActions(true)}>
+              <Menu className="h-5 w-5" />
+            </Button>
             <Avatar className="h-8 w-8">
               <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
               <AvatarFallback>CN</AvatarFallback>
@@ -428,7 +442,7 @@ const WaktiAIV2 = () => {
         <div className="flex-1 flex flex-col min-h-0">
           {/* Search Confirmation */}
           {searchConfirmationRequired && (
-            <div className="bg-yellow-100 border-b p-4 md:px-6">
+            <div className="bg-yellow-100 border-b p-4">
               <p className="text-sm text-yellow-800">
                 {language === 'ar'
                   ? 'هل تريد إجراء بحث على الإنترنت؟'
@@ -451,14 +465,14 @@ const WaktiAIV2 = () => {
           
           {/* Error Display */}
           {error && (
-            <div className="bg-red-100 border-b p-4 md:px-6">
+            <div className="bg-red-100 border-b p-4">
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
           
           {/* Chat Messages */}
           <ScrollArea 
-            className="flex-1 px-4 md:px-6"
+            className="flex-1 px-4"
             ref={scrollAreaRef}
           >
             <div className="max-w-4xl mx-auto py-4 space-y-6">
@@ -523,7 +537,7 @@ const WaktiAIV2 = () => {
           <div className="border-t bg-background/95 backdrop-blur">
             {/* Clear Chat Button */}
             {sessionMessages.length > 0 && (
-              <div className="px-4 md:px-6 py-2 border-b">
+              <div className="px-4 py-2 border-b">
                 <div className="max-w-4xl mx-auto">
                   <Button
                     variant="outline"
@@ -539,7 +553,7 @@ const WaktiAIV2 = () => {
             )}
 
             {/* Input Area */}
-            <div className="px-4 md:px-6 py-4">
+            <div className="px-4 py-4">
               <div className="max-w-4xl mx-auto flex items-center gap-4">
                 <Textarea
                   value={message}
@@ -577,29 +591,7 @@ const WaktiAIV2 = () => {
           </div>
         </div>
       </div>
-
-      {/* Conversations Drawer (Mobile) */}
-      <Sheet open={showConversations} onOpenChange={setShowConversations}>
-        <SheetContent className="sm:max-w-sm">
-          <SheetHeader>
-            <SheetTitle>{language === 'ar' ? 'المحادثات' : 'Conversations'}</SheetTitle>
-            <SheetDescription>
-              {language === 'ar'
-                ? 'اختر محادثة موجودة أو ابدأ واحدة جديدة.'
-                : 'Select an existing conversation or start a new one.'}
-            </SheetDescription>
-          </SheetHeader>
-          <ConversationsList
-            conversations={conversations}
-            currentConversationId={currentConversationId}
-            onSelectConversation={handleSelectConversation}
-            onDeleteConversation={handleDeleteConversation}
-            onRefresh={fetchConversations}
-            onClose={() => setShowConversations(false)}
-          />
-        </SheetContent>
-      </Sheet>
-    </PageContainer>
+    </div>
   );
 };
 
