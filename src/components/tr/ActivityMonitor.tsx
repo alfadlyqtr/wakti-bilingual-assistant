@@ -5,13 +5,26 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 import { TRTask, TRSubtask } from '@/services/trService';
-import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
-import { Users, MessageCircle, CheckCircle, ExternalLink, Clock, RefreshCw, Pause, AlertCircle, Mail } from 'lucide-react';
+import { TRSharedService, TRSharedResponse, TRSharedAccess } from '@/services/trSharedService';
+import { 
+  Users, MessageCircle, CheckCircle, ExternalLink, Clock, 
+  RefreshCw, Pause, AlertCircle, Mail, User, 
+  Calendar, Check, X, EyeIcon
+} from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format, parseISO } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface ActivityMonitorProps {
   tasks: TRTask[];
@@ -25,11 +38,13 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const { language } = useTheme();
   const [responses, setResponses] = useState<{ [taskId: string]: TRSharedResponse[] }>({});
   const [subtasks, setSubtasks] = useState<{ [taskId: string]: TRSubtask[] }>({});
+  const [visitors, setVisitors] = useState<{ [taskId: string]: TRSharedAccess[] }>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyContent, setReplyContent] = useState('');
+  const [selectedVisitor, setSelectedVisitor] = useState<string | null>(null);
   const loadingRef = useRef(false);
   
   // Default active tab for all tasks
@@ -52,6 +67,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       setLoading(false);
       setResponses({});
       setSubtasks({});
+      setVisitors({});
       return;
     }
 
@@ -62,20 +78,24 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     try {
       const allResponses: { [taskId: string]: TRSharedResponse[] } = {};
       const allSubtasks: { [taskId: string]: TRSubtask[] } = {};
+      const allVisitors: { [taskId: string]: TRSharedAccess[] } = {};
       
       for (const task of sharedTasks) {
-        // Load both responses and subtasks in parallel for each task
-        const [taskResponses, taskSubtasks] = await Promise.all([
+        // Load all data in parallel for each task
+        const [taskResponses, taskSubtasks, taskVisitors] = await Promise.all([
           TRSharedService.getTaskResponses(task.id),
-          TRSharedService.getTaskSubtasks(task.id)
+          TRSharedService.getTaskSubtasks(task.id),
+          TRSharedService.getTaskVisitors(task.id)
         ]);
         
         allResponses[task.id] = taskResponses;
         allSubtasks[task.id] = taskSubtasks;
+        allVisitors[task.id] = taskVisitors;
       }
       
       setResponses(allResponses);
       setSubtasks(allSubtasks);
+      setVisitors(allVisitors);
       setLastUpdate(new Date());
     } catch (error) {
       console.error('Error loading activity data:', error);
@@ -134,6 +154,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const getTaskStats = useCallback((taskId: string) => {
     const taskResponses = responses[taskId] || [];
     const taskSubtaskList = subtasks[taskId] || [];
+    const taskVisitors = visitors[taskId] || [];
     
     // Get unique assignees
     const uniqueAssignees = [...new Set(taskResponses.map(r => r.visitor_name))];
@@ -156,16 +177,17 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     const snoozeRequests = taskResponses.filter(r => r.response_type === 'snooze_request');
     
     return {
-      assignees: uniqueAssignees.length,
+      assignees: uniqueAssignees,
       completedSubtasksCount: completedSubtaskIds.size,
       taskCompletionsCount: taskCompletions.length,
       totalSubtasksCount: taskSubtaskList.length,
       comments: comments,
       snoozeRequests: snoozeRequests,
       allResponses: taskResponses,
-      subtasks: taskSubtaskList
+      subtasks: taskSubtaskList,
+      visitors: taskVisitors
     };
-  }, [responses, subtasks]);
+  }, [responses, subtasks, visitors]);
 
   const formatRelativeTime = useCallback((dateString: string) => {
     try {
@@ -247,6 +269,37 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     setActiveTabsState(prev => ({...prev, [taskId]: value}));
   };
 
+  const handleSnoozeRequest = async (
+    taskId: string, 
+    requestId: string, 
+    action: 'approved' | 'denied'
+  ) => {
+    try {
+      if (action === 'approved') {
+        await TRSharedService.approveSnoozeRequest(requestId, taskId);
+        toast.success('Snooze request approved');
+        onTasksChanged(); // Refresh task list to show snoozed status
+      } else {
+        await TRSharedService.denySnoozeRequest(requestId);
+        toast.success('Snooze request denied');
+      }
+      
+      loadAllData(true); // Refresh data
+    } catch (error) {
+      console.error(`Error ${action} snooze request:`, error);
+      toast.error(`Failed to ${action === 'approved' ? 'approve' : 'deny'} snooze request`);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
   if (loading) {
     return (
       <div className="text-center py-8">
@@ -288,6 +341,100 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
         </Button>
       </div>
 
+      {/* Dialog for assignee details */}
+      <Dialog open={!!selectedVisitor} onOpenChange={() => setSelectedVisitor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assignee Details</DialogTitle>
+            <DialogDescription>
+              Activity information for this assignee
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {selectedVisitor && sharedTasks.map(task => {
+              const stats = getTaskStats(task.id);
+              // Find activities for this visitor
+              const visitorActivities = stats.allResponses.filter(r => 
+                r.visitor_name === selectedVisitor
+              );
+              // Find visitor access info
+              const visitorInfo = stats.visitors.find(v => v.viewer_name === selectedVisitor);
+              
+              if (!visitorActivities.length && !visitorInfo) return null;
+              
+              return (
+                <Card key={`visitor-${task.id}`} className="overflow-hidden">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center space-x-2">
+                      <Avatar>
+                        <AvatarFallback>{getInitials(selectedVisitor)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <CardTitle className="text-base">{selectedVisitor}</CardTitle>
+                        <p className="text-xs text-muted-foreground">
+                          {visitorInfo ? `Last seen ${formatRelativeTime(visitorInfo.last_accessed)}` : 'No access data'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="bg-secondary/20 rounded p-2 text-center">
+                        <div className="text-sm font-semibold">
+                          {visitorActivities.filter(a => a.response_type === 'completion' && a.is_completed).length}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Completions</div>
+                      </div>
+                      <div className="bg-secondary/20 rounded p-2 text-center">
+                        <div className="text-sm font-semibold">
+                          {visitorActivities.filter(a => a.response_type === 'comment').length}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Comments</div>
+                      </div>
+                      <div className="bg-secondary/20 rounded p-2 text-center">
+                        <div className="text-sm font-semibold">
+                          {visitorActivities.filter(a => a.response_type === 'snooze_request').length}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Requests</div>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-medium">Recent Activity</h4>
+                      <ScrollArea className="h-[200px]">
+                        <div className="space-y-2">
+                          {visitorActivities.slice(0, 10).map(activity => (
+                            <div key={activity.id} className="flex items-start gap-2 text-xs bg-muted/30 rounded p-2">
+                              {getActivityIcon(activity.response_type)}
+                              <div>
+                                <div className="text-xs text-muted-foreground">
+                                  {formatRelativeTime(activity.created_at)}
+                                </div>
+                                <p className="text-xs mt-1">
+                                  {getActivityDescription(activity, stats.subtasks)}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {visitorActivities.length === 0 && (
+                            <div className="text-center py-2 text-muted-foreground text-xs">
+                              No activity recorded
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {sharedTasks.map((task) => {
         const stats = getTaskStats(task.id);
         const activeTab = activeTabsState[task.id] || 'all';
@@ -300,7 +447,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                   <CardTitle className="text-base leading-tight break-words">
                     {task.title}
                   </CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
                     <Badge variant="outline" className="text-xs">
                       Shared Task
                     </Badge>
@@ -315,39 +462,66 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
             </CardHeader>
 
             <CardContent className="pt-0 space-y-4">
-              {/* Activity Stats */}
-              <div className="grid grid-cols-4 gap-2">
-                <div className="bg-secondary/20 rounded-lg p-2 text-center">
-                  <div className="text-sm font-semibold">{stats.assignees}</div>
+              {/* Activity Stats - Single row of cards that can be clicked */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <button 
+                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
+                  onClick={() => {
+                    handleTabChange(task.id, 'assignees');
+                  }}
+                >
+                  <div className="text-sm font-semibold">{stats.assignees.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <Users className="h-3 w-3" />
                     Assignees
                   </div>
-                </div>
+                </button>
                 
-                <div className="bg-secondary/20 rounded-lg p-2 text-center">
+                <button 
+                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
+                  onClick={() => {
+                    handleTabChange(task.id, 'completions');
+                  }}
+                >
                   <div className="text-sm font-semibold">{stats.completedSubtasksCount}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <CheckCircle className="h-3 w-3" />
                     Completions
                   </div>
-                </div>
+                </button>
                 
-                <div className="bg-secondary/20 rounded-lg p-2 text-center">
+                <button 
+                  className="bg-secondary/20 hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center"
+                  onClick={() => {
+                    handleTabChange(task.id, 'comments');
+                  }}
+                >
                   <div className="text-sm font-semibold">{stats.comments.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <MessageCircle className="h-3 w-3" />
                     Comments
                   </div>
-                </div>
+                </button>
                 
-                <div className="bg-secondary/20 rounded-lg p-2 text-center">
+                <button 
+                  className={`bg-secondary/20 ${
+                    stats.snoozeRequests.length > 0 ? 'border border-orange-400' : ''
+                  } hover:bg-secondary/30 transition-colors rounded-lg p-2 text-center relative`}
+                  onClick={() => {
+                    handleTabChange(task.id, 'requests');
+                  }}
+                >
+                  {stats.snoozeRequests.length > 0 && (
+                    <Badge className="absolute -top-2 -right-2 bg-orange-500">
+                      {stats.snoozeRequests.length}
+                    </Badge>
+                  )}
                   <div className="text-sm font-semibold">{stats.snoozeRequests.length}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
                     <AlertCircle className="h-3 w-3" />
                     Requests
                   </div>
-                </div>
+                </button>
               </div>
 
               {/* Activity Tabs */}
@@ -356,18 +530,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 onValueChange={(value) => handleTabChange(task.id, value)}
                 className="w-full border rounded-md"
               >
-                <TabsList className="w-full grid grid-cols-4">
+                <TabsList className="w-full grid grid-cols-5">
                   <TabsTrigger value="all">All</TabsTrigger>
-                  <TabsTrigger value="comments">
-                    Comments
-                    {stats.comments.length > 0 && <Badge variant="secondary" className="ml-1">{stats.comments.length}</Badge>}
-                  </TabsTrigger>
+                  <TabsTrigger value="assignees">Assignees</TabsTrigger>
+                  <TabsTrigger value="comments">Comments</TabsTrigger>
                   <TabsTrigger value="completions">Completions</TabsTrigger>
                   <TabsTrigger value="requests">Requests</TabsTrigger>
                 </TabsList>
 
                 {/* All Activities Tab */}
-                <TabsContent value="all" className="p-3 space-y-3">
+                <TabsContent value="all" className="p-3">
                   {stats.allResponses.length > 0 ? (
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
                       {stats.allResponses
@@ -380,7 +552,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                               <div className="flex items-center gap-1">
                                 <span className="font-medium">{activity.visitor_name}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatRelativeTime(activity.created_at)}
+                                  {format(parseISO(activity.created_at), 'MMM dd, HH:mm')}
                                 </span>
                               </div>
                               <p className="text-muted-foreground mt-1">
@@ -393,6 +565,29 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                   {activity.content}
                                 </div>
                               )}
+                              
+                              {/* For snooze requests, show approve/deny buttons */}
+                              {activity.response_type === 'snooze_request' && (
+                                <div className="mt-2 flex gap-2">
+                                  <Button 
+                                    size="sm" 
+                                    onClick={() => handleSnoozeRequest(task.id, activity.id, 'approved')}
+                                    className="h-7 px-2 text-xs"
+                                  >
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Approve
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => handleSnoozeRequest(task.id, activity.id, 'denied')}
+                                    className="h-7 px-2 text-xs"
+                                  >
+                                    <X className="h-3 w-3 mr-1" />
+                                    Deny
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -402,6 +597,86 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                       No activity yet
                     </div>
                   )}
+                </TabsContent>
+                
+                {/* Assignees Tab */}
+                <TabsContent value="assignees" className="p-3">
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-medium">Assignees ({stats.assignees.length})</h3>
+                    
+                    {stats.assignees.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {stats.assignees.map(assignee => {
+                          const assigneeInfo = stats.visitors.find(v => v.viewer_name === assignee);
+                          const assigneeActivities = stats.allResponses.filter(r => r.visitor_name === assignee);
+                          
+                          // Count different types of activities
+                          const completions = assigneeActivities.filter(a => 
+                            a.response_type === 'completion' && a.is_completed
+                          ).length;
+                          
+                          const comments = assigneeActivities.filter(a => 
+                            a.response_type === 'comment'
+                          ).length;
+                          
+                          // Find last activity
+                          let lastActivity = '';
+                          if (assigneeActivities.length > 0) {
+                            const mostRecent = assigneeActivities.sort((a, b) => 
+                              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                            )[0];
+                            lastActivity = formatRelativeTime(mostRecent.created_at);
+                          } else if (assigneeInfo) {
+                            lastActivity = formatRelativeTime(assigneeInfo.last_accessed);
+                          } else {
+                            lastActivity = 'No activity recorded';
+                          }
+                          
+                          return (
+                            <div 
+                              key={assignee} 
+                              className="border rounded-lg p-3 flex items-center space-x-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                              onClick={() => setSelectedVisitor(assignee)}
+                            >
+                              <Avatar>
+                                <AvatarFallback>{getInitials(assignee)}</AvatarFallback>
+                              </Avatar>
+                              
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">{assignee}</p>
+                                <div className="flex items-center text-xs text-muted-foreground space-x-2">
+                                  <span className="flex items-center">
+                                    <Clock className="h-3 w-3 mr-1" />
+                                    {lastActivity}
+                                  </span>
+                                  
+                                  <span className="flex items-center">
+                                    <CheckCircle className="h-3 w-3 mr-1 text-green-600" />
+                                    {completions}
+                                  </span>
+                                  
+                                  <span className="flex items-center">
+                                    <MessageCircle className="h-3 w-3 mr-1 text-blue-600" />
+                                    {comments}
+                                  </span>
+                                </div>
+                              </div>
+                              
+                              <EyeIcon className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 text-muted-foreground text-sm">
+                        No assignees yet
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-muted-foreground mt-2">
+                      <p>Click on an assignee to view detailed activity</p>
+                    </div>
+                  </div>
                 </TabsContent>
 
                 {/* Comments Tab */}
@@ -478,6 +753,57 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <TabsContent value="completions" className="p-3 space-y-3">
                   {stats.allResponses.filter(r => r.response_type === 'completion').length > 0 ? (
                     <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {/* Subtask completion status */}
+                      {stats.totalSubtasksCount > 0 && (
+                        <div className="space-y-4 mb-4">
+                          <h4 className="text-sm font-medium">Subtask Status</h4>
+                          <div className="space-y-2">
+                            {stats.subtasks.map(subtask => {
+                              const completions = stats.allResponses.filter(r => 
+                                r.response_type === 'completion' && 
+                                r.subtask_id === subtask.id &&
+                                r.is_completed
+                              );
+                              
+                              const completedBy = [...new Set(completions.map(c => c.visitor_name))];
+                              const isCompleted = completedBy.length > 0;
+                              
+                              return (
+                                <div 
+                                  key={subtask.id} 
+                                  className={`p-2 rounded-lg flex items-center ${
+                                    isCompleted ? 'bg-green-50 border border-green-200' : 'bg-muted/30'
+                                  }`}
+                                >
+                                  <div className="mr-2">
+                                    {isCompleted ? (
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                    ) : (
+                                      <div className="h-4 w-4 border rounded-full" />
+                                    )}
+                                  </div>
+                                  
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-sm ${isCompleted ? 'line-through text-muted-foreground' : ''}`}>
+                                      {subtask.title}
+                                    </p>
+                                    
+                                    {isCompleted && (
+                                      <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                                        <User className="h-3 w-3" />
+                                        {completedBy.join(', ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Completion activity history */}
+                      <h4 className="text-sm font-medium">Completion History</h4>
                       {stats.allResponses
                         .filter(r => r.response_type === 'completion')
                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -494,7 +820,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                                 <CheckCircle className={`h-4 w-4 ${completion.is_completed ? 'text-green-600' : 'text-muted-foreground'}`} />
                                 <span className="font-medium">{completion.visitor_name}</span>
                                 <span className="text-xs text-muted-foreground">
-                                  {formatRelativeTime(completion.created_at)}
+                                  {format(parseISO(completion.created_at), 'MMM dd, HH:mm')}
                                 </span>
                               </div>
                               
@@ -517,31 +843,59 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 {/* Requests Tab */}
                 <TabsContent value="requests" className="p-3 space-y-3">
                   {stats.snoozeRequests.length > 0 ? (
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                      {stats.snoozeRequests
-                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-                        .map((request) => (
-                          <div key={request.id} className="bg-muted/30 rounded-lg p-3">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Pause className="h-4 w-4 text-orange-600" />
-                              <span className="font-medium">{request.visitor_name}</span>
-                              <Badge variant="secondary" className="text-xs">Snooze Request</Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {formatRelativeTime(request.created_at)}
-                              </span>
-                            </div>
-                            
-                            {request.content && (
-                              <div className="bg-background/50 p-2 rounded border mt-2">
-                                <p className="text-sm">Reason: {request.content}</p>
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-medium flex items-center gap-1 text-orange-600">
+                        <AlertCircle className="h-4 w-4" />
+                        Pending Snooze Requests ({stats.snoozeRequests.length})
+                      </h3>
+                      
+                      <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                        {stats.snoozeRequests
+                          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                          .map((request) => (
+                            <div key={request.id} className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                              <div className="flex items-center gap-2">
+                                <Pause className="h-4 w-4 text-orange-600" />
+                                <span className="font-medium">{request.visitor_name}</span>
+                                <Badge variant="secondary" className="text-xs">Snooze Request</Badge>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                              
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {format(parseISO(request.created_at), 'MMM dd, HH:mm')}
+                              </div>
+                              
+                              {request.content && (
+                                <div className="bg-background/50 p-2 rounded border mt-2">
+                                  <p className="text-sm">Reason: {request.content}</p>
+                                </div>
+                              )}
+                              
+                              <div className="flex gap-2 mt-3">
+                                <Button 
+                                  className="flex-1"
+                                  size="sm" 
+                                  onClick={() => handleSnoozeRequest(task.id, request.id, 'approved')}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button 
+                                  className="flex-1"
+                                  variant="outline" 
+                                  size="sm" 
+                                  onClick={() => handleSnoozeRequest(task.id, request.id, 'denied')}
+                                >
+                                  <X className="h-4 w-4 mr-1" />
+                                  Deny
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
                     </div>
                   ) : (
                     <div className="text-center py-4 text-muted-foreground text-sm">
-                      No requests yet
+                      No snooze requests
                     </div>
                   )}
                 </TabsContent>

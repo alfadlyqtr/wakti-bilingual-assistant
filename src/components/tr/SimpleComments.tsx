@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
 import { toast } from 'sonner';
-import { MessageCircle, User, Mail } from 'lucide-react';
+import { MessageCircle, User, Mail, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface SimpleCommentsProps {
   taskId: string;
@@ -57,6 +58,15 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
     }
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+
   // Filter and sort comments by newest first
   const comments = responses
     .filter(r => r.response_type === 'comment')
@@ -76,6 +86,7 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
           onChange={(e) => setComment(e.target.value)}
           placeholder="Add a comment..."
           rows={3}
+          className="resize-none"
         />
         <Button 
           type="submit" 
@@ -88,16 +99,19 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
 
       {/* Comments list */}
       {comments.length > 0 && (
-        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+        <div className="space-y-3 max-h-[350px] overflow-y-auto">
           {comments.map((comment) => (
-            <div key={comment.id} className="bg-muted/50 rounded-lg p-3">
+            <div key={comment.id} className="bg-muted/50 rounded-lg p-3 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <User className="h-3 w-3" />
+                  <Avatar className="h-6 w-6">
+                    <AvatarFallback className="text-xs">{getInitials(comment.visitor_name)}</AvatarFallback>
+                  </Avatar>
                   <span className="text-sm font-medium">{comment.visitor_name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <div className="flex items-center text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3 mr-1" />
                     {format(parseISO(comment.created_at), 'MMM dd, HH:mm')}
-                  </span>
+                  </div>
                 </div>
                 
                 <Button 
@@ -122,7 +136,7 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
                     onChange={(e) => setReplyContent(e.target.value)}
                     placeholder="Write your reply..."
                     rows={2}
-                    className="text-sm"
+                    className="text-sm resize-none"
                   />
                   <div className="flex justify-end gap-2">
                     <Button
@@ -152,8 +166,9 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
 
       {/* No comments message */}
       {comments.length === 0 && (
-        <div className="text-center py-4 text-muted-foreground text-sm">
-          No comments yet. Be the first to add one!
+        <div className="text-center py-6 bg-muted/30 rounded-lg">
+          <MessageCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-muted-foreground">No comments yet. Be the first to add one!</p>
         </div>
       )}
     </div>

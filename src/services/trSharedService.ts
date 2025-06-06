@@ -13,6 +13,14 @@ export interface TRSharedResponse {
   created_at: string;
 }
 
+export interface TRSharedAccess {
+  id: string;
+  task_id: string;
+  viewer_name: string;
+  last_accessed: string;
+  created_at: string;
+}
+
 export class TRSharedService {
   // Get all responses for a task - now ordered by newest first
   static async getTaskResponses(taskId: string): Promise<TRSharedResponse[]> {
@@ -27,6 +35,23 @@ export class TRSharedService {
       return data || [];
     } catch (error) {
       console.error('Error getting task responses:', error);
+      return [];
+    }
+  }
+
+  // Get visitor access information for a task
+  static async getTaskVisitors(taskId: string): Promise<TRSharedAccess[]> {
+    try {
+      const { data, error } = await supabase
+        .from('tr_shared_access')
+        .select('*')
+        .eq('task_id', taskId)
+        .order('last_accessed', { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error getting task visitors:', error);
       return [];
     }
   }
@@ -149,6 +174,51 @@ export class TRSharedService {
       if (error) throw error;
     } catch (error) {
       console.error('Error requesting snooze:', error);
+      throw error;
+    }
+  }
+
+  // Approve snooze request
+  static async approveSnoozeRequest(requestId: string, taskId: string): Promise<void> {
+    // First delete the request
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      // Then update the task with a snooze
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const { error: updateError } = await supabase
+        .from('tr_tasks')
+        .update({
+          snoozed_until: tomorrow.toISOString(),
+        })
+        .eq('id', taskId);
+
+      if (updateError) throw updateError;
+      
+    } catch (error) {
+      console.error('Error approving snooze request:', error);
+      throw error;
+    }
+  }
+
+  // Deny snooze request
+  static async denySnoozeRequest(requestId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('tr_shared_responses')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error denying snooze request:', error);
       throw error;
     }
   }
