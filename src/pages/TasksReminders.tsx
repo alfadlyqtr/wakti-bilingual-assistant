@@ -10,7 +10,6 @@ import { TaskForm } from '@/components/tr/TaskForm';
 import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
 import { ReminderList } from '@/components/tr/ReminderList';
-import { SharedTaskActivityMonitor } from '@/components/tr/SharedTaskActivityMonitor';
 
 export default function TasksReminders() {
   const { language } = useTheme();
@@ -80,12 +79,9 @@ export default function TasksReminders() {
       <div className="max-w-md mx-auto space-y-4">
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="tasks">{t('tasks', language)}</TabsTrigger>
             <TabsTrigger value="reminders">{t('reminders', language)}</TabsTrigger>
-            <TabsTrigger value="shared">
-              {t('activityMonitor', language)}
-            </TabsTrigger>
           </TabsList>
 
           {/* Tasks Tab */}
@@ -132,17 +128,6 @@ export default function TasksReminders() {
                 onRemindersChanged={loadData}
               />
             )}
-          </TabsContent>
-
-          {/* Shared Tasks Activity Monitor Tab */}
-          <TabsContent value="shared" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">
-                {t('activityMonitor', language)}
-              </h2>
-            </div>
-
-            <SharedTaskActivityMonitor tasks={tasks} onTasksChanged={loadData} />
           </TabsContent>
         </Tabs>
 

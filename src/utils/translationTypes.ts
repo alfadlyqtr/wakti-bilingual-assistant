@@ -515,4 +515,13 @@ export type TranslationKey =
   | "pending"
   | "copyLink"
   | "view"
-  | "noRecentActivity";
+  | "noRecentActivity"
+  // Missing translation keys that were causing errors
+  | "shared"
+  | "visitors"
+  | "completions"
+  | "comments"
+  | "openSharedView"
+  | "pendingSnoozeRequests"
+  | "approve"
+  | "deny";
