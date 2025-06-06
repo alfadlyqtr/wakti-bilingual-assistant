@@ -38,8 +38,11 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
     }
   };
 
-  // Filter and log comments for debugging
-  const comments = responses.filter(r => r.response_type === 'comment');
+  // Filter and sort comments by newest first
+  const comments = responses
+    .filter(r => r.response_type === 'comment')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  
   console.log('All responses:', responses);
   console.log('Filtered comments:', comments);
 
@@ -49,31 +52,6 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
         <MessageCircle className="h-4 w-4" />
         <span className="font-medium">Comments ({comments.length})</span>
       </div>
-
-      {/* Comments list */}
-      {comments.length > 0 && (
-        <div className="space-y-3 max-h-[200px] overflow-y-auto">
-          {comments.map((comment) => (
-            <div key={comment.id} className="bg-muted/50 rounded-lg p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <User className="h-3 w-3" />
-                <span className="text-sm font-medium">{comment.visitor_name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {format(parseISO(comment.created_at), 'MMM dd, HH:mm')}
-                </span>
-              </div>
-              <p className="text-sm">{comment.content}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* No comments message */}
-      {comments.length === 0 && (
-        <div className="text-center py-4 text-muted-foreground text-sm">
-          No comments yet. Be the first to add one!
-        </div>
-      )}
 
       {/* Add comment form */}
       <form onSubmit={handleSubmit} className="space-y-3">
@@ -91,6 +69,31 @@ export const SimpleComments: React.FC<SimpleCommentsProps> = ({
           {submitting ? 'Adding...' : 'Add Comment'}
         </Button>
       </form>
+
+      {/* Comments list */}
+      {comments.length > 0 && (
+        <div className="space-y-3 max-h-[300px] overflow-y-auto">
+          {comments.map((comment) => (
+            <div key={comment.id} className="bg-muted/50 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <User className="h-3 w-3" />
+                <span className="text-sm font-medium">{comment.visitor_name}</span>
+                <span className="text-xs text-muted-foreground">
+                  {format(parseISO(comment.created_at), 'MMM dd, HH:mm')}
+                </span>
+              </div>
+              <p className="text-sm break-words">{comment.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* No comments message */}
+      {comments.length === 0 && (
+        <div className="text-center py-4 text-muted-foreground text-sm">
+          No comments yet. Be the first to add one!
+        </div>
+      )}
     </div>
   );
 };

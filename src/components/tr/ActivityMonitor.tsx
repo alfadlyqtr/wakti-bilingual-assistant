@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TRTask } from '@/services/trService';
 import { TRSharedService, TRSharedResponse } from '@/services/trSharedService';
-import { Users, MessageCircle, CheckCircle, ExternalLink, Clock, RefreshCw, Pause } from 'lucide-react';
+import { Users, MessageCircle, CheckCircle, ExternalLink, Clock, RefreshCw, Pause, AlertCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { toast } from 'sonner';
@@ -129,7 +128,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       completions: completions.length,
       comments: comments.length,
       snoozeRequests: snoozeRequests.length,
-      recentActivity: taskResponses.slice(0, 3) // First 3 activities (newest)
+      recentActivity: taskResponses.slice(0, 5) // Show more recent activities
     };
   }, [responses]);
 
@@ -157,6 +156,9 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const getActivityDescription = useCallback((activity: TRSharedResponse) => {
     switch (activity.response_type) {
       case 'completion':
+        if (activity.subtask_id) {
+          return activity.is_completed ? 'completed a subtask' : 'marked a subtask as incomplete';
+        }
         return activity.is_completed ? 'marked task as complete' : 'marked task as incomplete';
       case 'comment':
         return `commented: "${activity.content?.substring(0, 50)}${activity.content && activity.content.length > 50 ? '...' : ''}"`;
@@ -279,7 +281,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                 <div className="bg-secondary/20 rounded-lg p-2 text-center">
                   <div className="text-sm font-semibold">{stats.snoozeRequests}</div>
                   <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    <Pause className="h-3 w-3" />
+                    <AlertCircle className="h-3 w-3" />
                     Requests
                   </div>
                 </div>
@@ -292,7 +294,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
                     Recent Activity
                     <Badge variant="secondary" className="text-xs">Live</Badge>
                   </h4>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
                     {stats.recentActivity.map((activity, index) => (
                       <div key={`${activity.id}-${index}`} className="flex items-start gap-2 text-xs bg-muted/30 rounded p-2">
                         {getActivityIcon(activity.response_type)}
