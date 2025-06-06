@@ -423,7 +423,6 @@ const WaktiAIV2 = () => {
             )}
           </div>
           <div className="flex items-center gap-4">
-            <QuotaDisplay quotaStatus={quotaStatus} />
             <TextGenModal
               onTriggerChange={handleTriggerChange}
               onTextGenParams={handleTextGenParams}
@@ -431,10 +430,6 @@ const WaktiAIV2 = () => {
             <Button variant="ghost" size="icon" onClick={() => setShowQuickActions(true)}>
               <Menu className="h-5 w-5" />
             </Button>
-            <Avatar className="h-8 w-8">
-              <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
-              <AvatarFallback>CN</AvatarFallback>
-            </Avatar>
           </div>
         </div>
         
