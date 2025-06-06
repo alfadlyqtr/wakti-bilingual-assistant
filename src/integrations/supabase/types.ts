@@ -19,6 +19,7 @@ export type Database = {
           content: string
           conversation_id: string
           created_at: string
+          expires_at: string | null
           id: string
           input_type: string
           intent: string | null
@@ -37,6 +38,7 @@ export type Database = {
           content: string
           conversation_id: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           input_type?: string
           intent?: string | null
@@ -55,6 +57,7 @@ export type Database = {
           content?: string
           conversation_id?: string
           created_at?: string
+          expires_at?: string | null
           id?: string
           input_type?: string
           intent?: string | null
@@ -77,6 +80,7 @@ export type Database = {
       ai_conversations: {
         Row: {
           created_at: string
+          expires_at: string | null
           id: string
           last_message_at: string
           title: string
@@ -85,6 +89,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          expires_at?: string | null
           id?: string
           last_message_at?: string
           title?: string
@@ -93,6 +98,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          expires_at?: string | null
           id?: string
           last_message_at?: string
           title?: string
@@ -1302,6 +1308,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      cleanup_expired_ai_data: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_expired_chat_history: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1410,6 +1420,10 @@ export type Database = {
           p_has_browsing?: boolean
           p_tokens_used?: number
         }
+        Returns: undefined
+      }
+      maintain_conversation_limit: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       mark_messages_as_read: {

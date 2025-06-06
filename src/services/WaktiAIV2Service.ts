@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIResponse {
@@ -52,7 +53,7 @@ export interface AIMessage {
   };
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
-  isTextGenerated?: boolean; // Add this new field
+  isTextGenerated?: boolean;
 }
 
 export interface AIConversation {
@@ -64,7 +65,78 @@ export interface AIConversation {
 
 type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
 
+// Session storage keys
+const CHAT_SESSION_KEY = 'wakti_ai_chat_session';
+const CURRENT_CONVERSATION_KEY = 'wakti_ai_current_conversation';
+const MAX_CHAT_MESSAGES = 20;
+
 export class WaktiAIV2Service {
+  // Session management for current chat
+  static saveChatSession(messages: AIMessage[], conversationId?: string): void {
+    try {
+      // Limit to 20 messages
+      const limitedMessages = messages.slice(-MAX_CHAT_MESSAGES);
+      
+      const sessionData = {
+        messages: limitedMessages,
+        conversationId,
+        timestamp: Date.now()
+      };
+      
+      sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify(sessionData));
+      
+      if (conversationId) {
+        sessionStorage.setItem(CURRENT_CONVERSATION_KEY, conversationId);
+      }
+      
+      console.log('💾 Chat session saved:', limitedMessages.length, 'messages');
+    } catch (error) {
+      console.error('❌ Error saving chat session:', error);
+    }
+  }
+
+  static loadChatSession(): { messages: AIMessage[]; conversationId?: string } | null {
+    try {
+      const sessionData = sessionStorage.getItem(CHAT_SESSION_KEY);
+      if (!sessionData) return null;
+
+      const parsed = JSON.parse(sessionData);
+      
+      // Convert timestamp strings back to Date objects
+      if (parsed.messages) {
+        parsed.messages = parsed.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      }
+      
+      console.log('📂 Chat session loaded:', parsed.messages?.length || 0, 'messages');
+      return parsed;
+    } catch (error) {
+      console.error('❌ Error loading chat session:', error);
+      return null;
+    }
+  }
+
+  static clearChatSession(): void {
+    try {
+      sessionStorage.removeItem(CHAT_SESSION_KEY);
+      sessionStorage.removeItem(CURRENT_CONVERSATION_KEY);
+      console.log('🗑️ Chat session cleared');
+    } catch (error) {
+      console.error('❌ Error clearing chat session:', error);
+    }
+  }
+
+  static getCurrentConversationId(): string | null {
+    try {
+      return sessionStorage.getItem(CURRENT_CONVERSATION_KEY);
+    } catch (error) {
+      console.error('❌ Error getting current conversation ID:', error);
+      return null;
+    }
+  }
+
   static async testConnection(): Promise<{ success: boolean; error?: string }> {
     try {
       console.log('🔍 WaktiAIV2Service: Testing connection...');
@@ -75,7 +147,6 @@ export class WaktiAIV2Service {
         throw new Error('No active session found');
       }
       
-      // Test with a simple echo message
       const testPayload = {
         message: "Connection test",
         userId: session.user.id,
@@ -132,7 +203,7 @@ export class WaktiAIV2Service {
         inputType,
         conversationHistory,
         confirmSearch,
-        activeTrigger, // CRITICAL: Ensure this is passed through
+        activeTrigger,
         textGenParams
       };
 
@@ -272,7 +343,7 @@ export class WaktiAIV2Service {
         conversationId,
         inputType,
         confirmSearch: true,
-        activeTrigger: 'search' // Force search mode for confirmation
+        activeTrigger: 'search'
       };
       
       console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with search confirmation:', payload);
@@ -313,6 +384,7 @@ export class WaktiAIV2Service {
     }
   }
 
+  // Updated to limit to 5 conversations and ensure proper ordering
   static async getConversations(): Promise<AIConversation[]> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -321,16 +393,20 @@ export class WaktiAIV2Service {
         throw new Error('User not authenticated');
       }
       
+      console.log('📋 Fetching recent conversations (max 5)...');
+      
       const { data, error } = await supabase
         .from('ai_conversations')
         .select('*')
         .eq('user_id', session.user.id)
-        .order('last_message_at', { ascending: false });
+        .order('last_message_at', { ascending: false })
+        .limit(5); // Limit to 5 most recent conversations
       
       if (error) {
         throw error;
       }
       
+      console.log(`📋 Retrieved ${data?.length || 0} conversations`);
       return data || [];
     } catch (error) {
       console.error('Error fetching conversations:', error);
@@ -372,7 +448,9 @@ export class WaktiAIV2Service {
         throw new Error('User not authenticated');
       }
       
-      // Delete chat history first
+      console.log('🗑️ Deleting conversation:', conversationId);
+      
+      // Delete chat history first (foreign key constraint)
       await supabase
         .from('ai_chat_history')
         .delete()
@@ -389,8 +467,34 @@ export class WaktiAIV2Service {
       if (error) {
         throw error;
       }
+      
+      // Clear session if this was the current conversation
+      const currentConversationId = this.getCurrentConversationId();
+      if (currentConversationId === conversationId) {
+        this.clearChatSession();
+      }
+      
+      console.log('✅ Conversation deleted successfully');
     } catch (error) {
       console.error('Error deleting conversation:', error);
+      throw error;
+    }
+  }
+
+  // Cleanup old conversations manually
+  static async cleanupExpiredConversations(): Promise<void> {
+    try {
+      console.log('🧹 Starting manual conversation cleanup...');
+      
+      const { error } = await supabase.functions.invoke('cleanup-ai-conversations');
+      
+      if (error) {
+        throw error;
+      }
+      
+      console.log('✅ Manual cleanup completed');
+    } catch (error) {
+      console.error('❌ Manual cleanup failed:', error);
       throw error;
     }
   }
