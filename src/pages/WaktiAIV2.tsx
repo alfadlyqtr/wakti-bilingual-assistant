@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/PageContainer';
-import { Sidebar } from '@/components/Sidebar';
+import { Sidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,7 +20,7 @@ import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { QuotaDisplay } from '@/components/wakti-ai-v2/QuotaDisplay';
 import { TextGenModal } from '@/components/wakti-ai-v2/TextGenModal';
-import { useToast } from "@/components/ui/use-toast"
+import { useToastHelper } from "@/hooks/use-toast-helper";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { supabase } from '@/integrations/supabase/client';
 
@@ -38,7 +38,7 @@ const WaktiAIV2 = () => {
   const [textGenParams, setTextGenParams] = useState<any>(null);
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
-  const { toast } = useToast()
+  const { showSuccess, showError } = useToastHelper();
 
   // Enhanced state for session management
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
@@ -345,18 +345,15 @@ const WaktiAIV2 = () => {
         setCurrentConversationId(null);
         setSessionMessages([]);
       }
-      toast({
-        title: language === 'ar' ? 'تم حذف المحادثة' : 'Conversation deleted',
-        description: language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully',
-      });
+      showSuccess(
+        language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully'
+      );
     } catch (error: any) {
       console.error('Error deleting conversation:', error);
       setError(error.message || 'Failed to delete conversation');
-      toast({
-        variant: "destructive",
-        title: language === 'ar' ? 'خطأ في حذف المحادثة' : 'Error deleting conversation',
-        description: error.message || 'Failed to delete conversation',
-      });
+      showError(
+        error.message || (language === 'ar' ? 'فشل في حذف المحادثة' : 'Failed to delete conversation')
+      );
     }
   };
 
@@ -383,8 +380,8 @@ const WaktiAIV2 = () => {
         </div>
       </div>
 
-      <Sidebar>
-        <div className="hidden md:flex flex-col h-full">
+      <div className="hidden md:flex w-80 border-r bg-background">
+        <div className="flex flex-col h-full w-full">
           <div className="flex items-center justify-between p-4">
             <h2 className="text-lg font-semibold">{language === 'ar' ? 'WAKTI AI' : 'WAKTI AI'}</h2>
             <div>
@@ -400,7 +397,7 @@ const WaktiAIV2 = () => {
             onClose={() => setShowConversations(false)}
           />
         </div>
-      </Sidebar>
+      </div>
       
       <div className="flex-1 flex flex-col h-[calc(100vh-4rem)] md:h-screen">
         {/* Header Section */}
@@ -508,7 +505,6 @@ const WaktiAIV2 = () => {
                 <ChatBubble
                   key={message.id}
                   message={message}
-                  language={language}
                   activeTrigger={activeTrigger}
                 />
               ))}

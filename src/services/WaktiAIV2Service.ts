@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIResponse {
@@ -173,6 +172,64 @@ export class WaktiAIV2Service {
     } catch (error) {
       console.error('🔍 WaktiAIV2Service: Connection test error:', error);
       return { success: false, error: error.message };
+    }
+  }
+
+  static async getOrFetchQuota(userId: string): Promise<any> {
+    try {
+      console.log('📊 Fetching quota for user:', userId);
+      
+      const { data, error } = await supabase
+        .from('ai_quotas')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
+        throw error;
+      }
+      
+      if (!data) {
+        // Create default quota if none exists
+        const defaultQuota = {
+          user_id: userId,
+          daily_limit: 100,
+          daily_count: 0,
+          last_reset: new Date().toISOString().split('T')[0]
+        };
+        
+        const { data: newQuota, error: insertError } = await supabase
+          .from('ai_quotas')
+          .insert(defaultQuota)
+          .select()
+          .single();
+        
+        if (insertError) {
+          throw insertError;
+        }
+        
+        return {
+          count: 0,
+          limit: 100,
+          usagePercentage: 0,
+          remaining: 100
+        };
+      }
+      
+      return {
+        count: data.daily_count || 0,
+        limit: data.daily_limit || 100,
+        usagePercentage: Math.round(((data.daily_count || 0) / (data.daily_limit || 100)) * 100),
+        remaining: (data.daily_limit || 100) - (data.daily_count || 0)
+      };
+    } catch (error) {
+      console.error('❌ Error fetching quota:', error);
+      return {
+        count: 0,
+        limit: 100,
+        usagePercentage: 0,
+        remaining: 100
+      };
     }
   }
 
