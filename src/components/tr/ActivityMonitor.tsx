@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,14 +23,18 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   const [responses, setResponses] = useState<{ [taskId: string]: TRSharedResponse[] }>({});
   const [loading, setLoading] = useState(true);
 
-  const sharedTasks = tasks.filter(task => task.is_shared && task.share_link);
+  // Memoize shared tasks to prevent unnecessary re-calculations
+  const sharedTasks = useMemo(() => {
+    return tasks.filter(task => task.is_shared && task.share_link);
+  }, [tasks]);
 
-  useEffect(() => {
-    loadAllResponses();
-  }, [sharedTasks]);
+  // Memoize the load function to prevent recreating it on every render
+  const loadAllResponses = useCallback(async () => {
+    if (loading || sharedTasks.length === 0) {
+      setLoading(false);
+      return;
+    }
 
-  const loadAllResponses = async () => {
-    setLoading(true);
     try {
       const allResponses: { [taskId: string]: TRSharedResponse[] } = {};
       
@@ -45,9 +49,19 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [sharedTasks, loading]);
 
-  const getTaskStats = (taskId: string) => {
+  useEffect(() => {
+    if (sharedTasks.length > 0) {
+      setLoading(true);
+      loadAllResponses();
+    } else {
+      setLoading(false);
+      setResponses({});
+    }
+  }, [sharedTasks.length]); // Only depend on the length to avoid unnecessary calls
+
+  const getTaskStats = useCallback((taskId: string) => {
     const taskResponses = responses[taskId] || [];
     const uniqueVisitors = [...new Set(taskResponses.map(r => r.visitor_name))];
     const completions = taskResponses.filter(r => r.response_type === 'completion' && r.is_completed);
@@ -61,16 +75,16 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       snoozeRequests: snoozeRequests.length,
       recentActivity: taskResponses.slice(-3) // Last 3 activities
     };
-  };
+  }, [responses]);
 
-  const openSharedTask = (shareLink: string) => {
+  const openSharedTask = useCallback((shareLink: string) => {
     window.open(`/shared/${shareLink}`, '_blank');
-  };
+  }, []);
 
-  const copyShareLink = (shareLink: string) => {
+  const copyShareLink = useCallback((shareLink: string) => {
     navigator.clipboard.writeText(`${window.location.origin}/shared/${shareLink}`);
     toast.success(t('linkCopied', language));
-  };
+  }, [language]);
 
   if (loading) {
     return (
