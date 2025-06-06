@@ -157,10 +157,8 @@ export default function SharedTask() {
     try {
       await TRSharedService.markTaskCompleted(task.id, visitorIdentity.name, visitorIdentity.sessionId, completed);
       
-      // Update local state
-      if (taskCompletion) {
-        setTaskCompletion({ ...taskCompletion, is_completed: completed });
-      } else {
+      // Update local state optimistically
+      if (completed) {
         const newCompletion: TRVisitorCompletion = {
           id: `temp-${Date.now()}`,
           task_id: task.id,
@@ -172,6 +170,8 @@ export default function SharedTask() {
           updated_at: new Date().toISOString()
         };
         setTaskCompletion(newCompletion);
+      } else {
+        setTaskCompletion(null);
       }
 
       toast.success(completed ? 'Task marked as complete' : 'Task marked as incomplete');
@@ -275,7 +275,7 @@ export default function SharedTask() {
 
   return (
     <div 
-      className="fixed inset-0 w-full h-full bg-background overflow-y-auto"
+      className="fixed inset-0 w-full h-full bg-background"
       style={{ 
         position: 'fixed',
         top: 0,
@@ -283,145 +283,150 @@ export default function SharedTask() {
         right: 0,
         bottom: 0,
         zIndex: 1000,
-        overflowY: 'auto',
-        overflowX: 'hidden'
+        overflow: 'hidden'
       }}
     >
-      {/* Portal root for subtasks to ensure proper scrolling */}
-      <div id="subtask-portal-root" className="contents" />
-      
-      <div className="min-h-full">
-        <div className="w-full max-w-none mx-auto px-4 py-6 sm:max-w-2xl lg:max-w-4xl">
-          <div className="space-y-6">
-            {/* Header Section */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  <span>Shared Task • {visitorIdentity?.name || 'Loading...'}</span>
+      <div 
+        className="w-full h-full overflow-y-auto overflow-x-hidden"
+        style={{
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden'
+        }}
+      >
+        <div className="min-h-full">
+          <div className="w-full max-w-none mx-auto px-4 py-6 sm:max-w-2xl lg:max-w-4xl">
+            <div className="space-y-6">
+              {/* Header Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    <span>Shared Task • {visitorIdentity?.name || 'Loading...'}</span>
+                  </div>
+                  {visitorIdentity && (
+                    <LiveVisitorIndicator taskId={task.id} currentSessionId={visitorIdentity.sessionId} />
+                  )}
                 </div>
-                {visitorIdentity && (
-                  <LiveVisitorIndicator taskId={task.id} currentSessionId={visitorIdentity.sessionId} />
-                )}
+                <h1 className="text-2xl font-bold">Interactive Task View</h1>
               </div>
-              <h1 className="text-2xl font-bold">Interactive Task View</h1>
-            </div>
 
-            {/* Main Task Card */}
-            <Card className="w-full">
-              <CardHeader className="pb-4">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className={`text-lg leading-tight break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
-                        {task.title}
-                      </CardTitle>
+              {/* Main Task Card */}
+              <Card className="w-full">
+                <CardHeader className="pb-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <CardTitle className={`text-lg leading-tight break-words ${task.completed ? 'line-through text-muted-foreground' : ''}`}>
+                          {task.title}
+                        </CardTitle>
+                      </div>
                     </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <PriorityBadge priority={task.priority} />
+                      <Badge variant="secondary" className="text-xs">
+                        {t('sharedTask', language)}
+                      </Badge>
+                      <StatusBadge completed={task.completed} isOverdue={task.due_date ? isOverdue(task) : false} />
+                    </div>
+                    
+                    {task.due_date && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="w-4 h-4" />
+                        <span>
+                          Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                          {task.due_time && ` at ${task.due_time}`}
+                        </span>
+                      </div>
+                    )}
+
+                    {taskCompletedBy.length > 0 && (
+                      <Badge variant="outline" className="text-xs w-fit">
+                        ✓ Completed by: {taskCompletedBy.join(', ')}
+                      </Badge>
+                    )}
                   </div>
-                  
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <PriorityBadge priority={task.priority} />
-                    <Badge variant="secondary" className="text-xs">
-                      {t('sharedTask', language)}
-                    </Badge>
-                    <StatusBadge completed={task.completed} isOverdue={task.due_date ? isOverdue(task) : false} />
-                  </div>
-                  
-                  {task.due_date && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      <span>
-                        Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
-                        {task.due_time && ` at ${task.due_time}`}
+                </CardHeader>
+
+                <CardContent className="space-y-6">
+                  {/* Description */}
+                  {task.description && (
+                    <div>
+                      <h3 className="font-medium mb-2">{t('description', language)}</h3>
+                      <p className="text-muted-foreground text-sm leading-relaxed break-words">{task.description}</p>
+                    </div>
+                  )}
+
+                  {/* Task Completion Actions */}
+                  <div className="border rounded-lg p-4 space-y-4">
+                    <div className="flex items-center gap-3">
+                      {isTaskCompleted ? (
+                        <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
+                      ) : (
+                        <XCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <span className="font-medium text-sm">
+                        {isTaskCompleted ? 'You marked this task as complete' : 'Mark this task as complete'}
                       </span>
                     </div>
-                  )}
-
-                  {taskCompletedBy.length > 0 && (
-                    <Badge variant="outline" className="text-xs w-fit">
-                      ✓ Completed by: {taskCompletedBy.join(', ')}
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-6">
-                {/* Description */}
-                {task.description && (
-                  <div>
-                    <h3 className="font-medium mb-2">{t('description', language)}</h3>
-                    <p className="text-muted-foreground text-sm leading-relaxed break-words">{task.description}</p>
-                  </div>
-                )}
-
-                {/* Task Completion Actions */}
-                <div className="border rounded-lg p-4 space-y-4">
-                  <div className="flex items-center gap-3">
-                    {isTaskCompleted ? (
-                      <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                    )}
-                    <span className="font-medium text-sm">
-                      {isTaskCompleted ? 'You marked this task as complete' : 'Mark this task as complete'}
-                    </span>
-                  </div>
-                  
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <Button
-                      variant={isTaskCompleted ? "secondary" : "default"}
-                      size="sm"
-                      onClick={() => handleTaskToggle(!isTaskCompleted)}
-                      className="flex-1 w-full"
-                    >
-                      {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
-                    </Button>
                     
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowSnoozeModal(true)}
-                      className="flex-1 w-full sm:flex-initial sm:min-w-[140px]"
-                    >
-                      <Pause className="h-4 w-4 mr-2" />
-                      Request Snooze
-                    </Button>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Button
+                        variant={isTaskCompleted ? "secondary" : "default"}
+                        size="sm"
+                        onClick={() => handleTaskToggle(!isTaskCompleted)}
+                        className="flex-1 w-full"
+                      >
+                        {isTaskCompleted ? 'Mark Incomplete' : 'Mark Complete'}
+                      </Button>
+                      
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowSnoozeModal(true)}
+                        className="flex-1 w-full sm:flex-initial sm:min-w-[140px]"
+                      >
+                        <Pause className="h-4 w-4 mr-2" />
+                        Request Snooze
+                      </Button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Interactive Subtasks */}
-                {visitorIdentity && (
-                  <div>
-                    <InteractiveSubtaskManager 
-                      taskId={task.id}
-                      visitorName={visitorIdentity.name}
-                      sessionId={visitorIdentity.sessionId}
-                    />
-                  </div>
-                )}
+                  {/* Interactive Subtasks */}
+                  {visitorIdentity && (
+                    <div>
+                      <InteractiveSubtaskManager 
+                        taskId={task.id}
+                        visitorName={visitorIdentity.name}
+                        sessionId={visitorIdentity.sessionId}
+                      />
+                    </div>
+                  )}
 
-                {/* Comments Section */}
-                {visitorIdentity && (
-                  <div className="border-t pt-6">
-                    <TaskComments
-                      taskId={task.id}
-                      visitorName={visitorIdentity.name}
-                      sessionId={visitorIdentity.sessionId}
-                    />
-                  </div>
-                )}
+                  {/* Comments Section */}
+                  {visitorIdentity && (
+                    <div className="border-t pt-6">
+                      <TaskComments
+                        taskId={task.id}
+                        visitorName={visitorIdentity.name}
+                        sessionId={visitorIdentity.sessionId}
+                      />
+                    </div>
+                  )}
 
-                {/* Footer Info */}
-                <div className="pt-4 border-t">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Calendar className="h-4 w-4" />
-                    <span>
-                      Created on {format(parseISO(task.created_at), 'MMM dd, yyyy')}
-                    </span>
+                  {/* Footer Info */}
+                  <div className="pt-4 border-t">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4" />
+                      <span>
+                        Created on {format(parseISO(task.created_at), 'MMM dd, yyyy')}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </div>
       </div>

@@ -197,29 +197,35 @@ export class TRSharedService {
     }
   }
 
-  // Enhanced mark task completed that handles visitor name consolidation
+  // Enhanced mark task completed with proper upsert logic
   static async markTaskCompleted(taskId: string, visitorName: string, sessionId: string, isCompleted: boolean): Promise<void> {
     try {
-      // First, remove any existing completions for this visitor (to prevent duplicates)
-      await supabase
-        .from('tr_visitor_completions')
-        .delete()
-        .eq('task_id', taskId)
-        .eq('visitor_name', visitorName)
-        .eq('completion_type', 'task')
-        .is('subtask_id', null);
-
-      // Create new completion record if marking as completed
       if (isCompleted) {
+        // Use upsert to handle the unique constraint properly
         const { error } = await supabase
           .from('tr_visitor_completions')
-          .insert({
+          .upsert({
             task_id: taskId,
             visitor_name: visitorName,
             session_id: sessionId,
             completion_type: 'task',
-            is_completed: true
+            subtask_id: null,
+            is_completed: true,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'task_id,visitor_name,subtask_id,completion_type'
           });
+
+        if (error) throw error;
+      } else {
+        // Delete the completion record when marking as incomplete
+        const { error } = await supabase
+          .from('tr_visitor_completions')
+          .delete()
+          .eq('task_id', taskId)
+          .eq('visitor_name', visitorName)
+          .eq('completion_type', 'task')
+          .is('subtask_id', null);
 
         if (error) throw error;
       }
@@ -233,30 +239,35 @@ export class TRSharedService {
     }
   }
 
-  // Enhanced mark subtask completed that handles visitor name consolidation
+  // Enhanced mark subtask completed with proper upsert logic
   static async markSubtaskCompleted(taskId: string, subtaskId: string, visitorName: string, sessionId: string, isCompleted: boolean): Promise<void> {
     try {
-      // First, remove any existing completions for this visitor/subtask (to prevent duplicates)
-      await supabase
-        .from('tr_visitor_completions')
-        .delete()
-        .eq('task_id', taskId)
-        .eq('subtask_id', subtaskId)
-        .eq('visitor_name', visitorName)
-        .eq('completion_type', 'subtask');
-
-      // Create new completion record if marking as completed
       if (isCompleted) {
+        // Use upsert to handle the unique constraint properly
         const { error } = await supabase
           .from('tr_visitor_completions')
-          .insert({
+          .upsert({
             task_id: taskId,
             subtask_id: subtaskId,
             visitor_name: visitorName,
             session_id: sessionId,
             completion_type: 'subtask',
-            is_completed: true
+            is_completed: true,
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'task_id,visitor_name,subtask_id,completion_type'
           });
+
+        if (error) throw error;
+      } else {
+        // Delete the completion record when marking as incomplete
+        const { error } = await supabase
+          .from('tr_visitor_completions')
+          .delete()
+          .eq('task_id', taskId)
+          .eq('subtask_id', subtaskId)
+          .eq('visitor_name', visitorName)
+          .eq('completion_type', 'subtask');
 
         if (error) throw error;
       }

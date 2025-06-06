@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TRService, TRSubtask } from '@/services/trService';
@@ -81,10 +80,15 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
 
       if (existingIndex >= 0) {
         const updatedCompletions = [...completions];
-        updatedCompletions[existingIndex] = {
-          ...updatedCompletions[existingIndex],
-          is_completed: completed
-        };
+        if (completed) {
+          updatedCompletions[existingIndex] = {
+            ...updatedCompletions[existingIndex],
+            is_completed: completed
+          };
+        } else {
+          // Remove the completion entirely if marking as incomplete
+          updatedCompletions.splice(existingIndex, 1);
+        }
         setCompletions(updatedCompletions);
       } else if (completed) {
         const newCompletion: TRVisitorCompletion = {
@@ -115,22 +119,24 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
     }
   };
 
-  // Check if this specific visitor has completed a subtask
+  // Check if THIS specific visitor has completed a subtask
   const isSubtaskCompletedByMe = (subtaskId: string): boolean => {
-    const completion = completions.find(
+    return completions.some(
       c => c.subtask_id === subtaskId && 
           c.visitor_name === visitorName && 
-          c.completion_type === 'subtask'
+          c.completion_type === 'subtask' &&
+          c.is_completed
     );
-    return completion?.is_completed || false;
   };
 
-  // Get all visitors who completed this subtask
+  // Get all visitors who completed this subtask (deduplicated by name)
   const getSubtaskCompletedBy = (subtaskId: string): string[] => {
-    return completions
+    const completedVisitors = completions
       .filter(c => c.subtask_id === subtaskId && c.is_completed && c.completion_type === 'subtask')
-      .map(c => c.visitor_name)
-      .filter((name, index, array) => array.indexOf(name) === index); // Remove duplicates
+      .map(c => c.visitor_name);
+    
+    // Remove duplicates while preserving order
+    return [...new Set(completedVisitors)];
   };
 
   // Count MY completed subtasks for personal progress
@@ -168,98 +174,95 @@ export const InteractiveSubtaskManager: React.FC<InteractiveSubtaskManagerProps>
   const totalUniqueCompletions = getTotalUniqueCompletions();
   const totalActiveVisitors = getTotalActiveVisitors();
 
-  const SubtaskList = () => (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <CheckCircle className="h-3 w-3" />
-            You: {myCompletedCount} of {subtasks.length} completed
-          </div>
-          {totalUniqueCompletions > 0 && (
-            <div className="text-xs text-blue-600 flex items-center gap-1">
-              <Users className="h-3 w-3" />
-              Team: {totalUniqueCompletions} of {subtasks.length} done
-              {totalActiveVisitors > 1 && ` (${totalActiveVisitors} people)`}
+  return (
+    <div className="w-full max-w-none">
+      <div className="space-y-3">
+        {/* Header with progress stats */}
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-medium">Subtasks ({subtasks.length})</div>
+          <div className="flex flex-col items-end gap-1">
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <CheckCircle className="h-3 w-3" />
+              You: {myCompletedCount} of {subtasks.length} completed
             </div>
-          )}
+            {totalUniqueCompletions > 0 && (
+              <div className="text-xs text-blue-600 flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                Team: {totalUniqueCompletions} of {subtasks.length} done
+                {totalActiveVisitors > 1 && ` (${totalActiveVisitors} people)`}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      
-      <ScrollArea className="h-[300px] w-full rounded-md border p-2">
-        <div className="space-y-2">
-          {subtasks.map((subtask) => {
-            const isCompletedByMe = isSubtaskCompletedByMe(subtask.id);
-            const completedBy = getSubtaskCompletedBy(subtask.id);
-            const isUpdating = updatingSubtasks.has(subtask.id);
-            
-            return (
-              <div 
-                key={subtask.id} 
-                className={`group relative transition-all duration-200 ${
-                  isUpdating ? 'opacity-50' : ''
-                }`}
-              >
-                <div 
-                  className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
-                    isCompletedByMe 
-                      ? 'bg-green-50 border-green-200 hover:bg-green-100' 
-                      : 'bg-card border-border hover:bg-accent/20'
-                  } ${!readOnly ? 'active:scale-[0.98]' : ''}`}
-                  onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompletedByMe)}
-                >
-                  <div className="flex items-center gap-3">
-                    <Checkbox
-                      checked={isCompletedByMe}
-                      onCheckedChange={(checked) => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, checked as boolean)}
-                      disabled={readOnly || isUpdating}
-                      className="transition-all duration-200"
-                    />
-                    
-                    <span className={`flex-1 text-sm transition-all duration-200 select-none ${
-                      isCompletedByMe 
-                        ? 'line-through text-muted-foreground font-medium decoration-2' 
-                        : 'text-foreground'
-                    }`}>
-                      {subtask.title}
-                    </span>
+        
+        {/* Scrollable subtasks list with proper isolation */}
+        <div className="relative w-full">
+          <ScrollArea className="h-[300px] w-full rounded-md border">
+            <div className="p-3 space-y-2">
+              {subtasks.map((subtask) => {
+                const isCompletedByMe = isSubtaskCompletedByMe(subtask.id);
+                const completedBy = getSubtaskCompletedBy(subtask.id);
+                const isUpdating = updatingSubtasks.has(subtask.id);
+                
+                return (
+                  <div 
+                    key={subtask.id} 
+                    className={`group relative transition-all duration-200 ${
+                      isUpdating ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <div 
+                      className={`flex flex-col gap-2 p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
+                        isCompletedByMe 
+                          ? 'bg-green-50 border-green-200 hover:bg-green-100' 
+                          : 'bg-card border-border hover:bg-accent/20'
+                      } ${!readOnly ? 'active:scale-[0.98]' : ''}`}
+                      onClick={() => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, !isCompletedByMe)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={isCompletedByMe}
+                          onCheckedChange={(checked) => !readOnly && !isUpdating && handleToggleSubtask(subtask.id, checked as boolean)}
+                          disabled={readOnly || isUpdating}
+                          className="transition-all duration-200"
+                        />
+                        
+                        <span className={`flex-1 text-sm transition-all duration-200 select-none ${
+                          isCompletedByMe 
+                            ? 'line-through text-muted-foreground font-medium decoration-2' 
+                            : 'text-foreground'
+                        }`}>
+                          {subtask.title}
+                        </span>
 
-                    {isUpdating && (
-                      <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    )}
-                  </div>
-                  
-                  {completedBy.length > 0 && (
-                    <div className="ml-7 flex items-center gap-2 text-xs">
-                      <div className="flex items-center gap-1 text-green-600">
-                        <User className="h-3 w-3" />
-                        <span className="font-medium">
-                          Completed by: {completedBy.join(', ')}
-                        </span>
+                        {isUpdating && (
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        )}
                       </div>
-                      {completedBy.length > 1 && (
-                        <span className="text-muted-foreground">
-                          ({completedBy.length} people)
-                        </span>
+                      
+                      {completedBy.length > 0 && (
+                        <div className="ml-7 flex items-center gap-2 text-xs">
+                          <div className="flex items-center gap-1 text-green-600">
+                            <User className="h-3 w-3" />
+                            <span className="font-medium">
+                              Completed by: {completedBy.join(', ')}
+                            </span>
+                          </div>
+                          {completedBy.length > 1 && (
+                            <span className="text-muted-foreground">
+                              ({completedBy.length} people)
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </div>
+          </ScrollArea>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
-
-  // Use portal to render outside any constrained containers
-  const portalRoot = document.getElementById('subtask-portal-root');
-  if (portalRoot) {
-    return createPortal(<SubtaskList />, portalRoot);
-  }
-
-  // Fallback to normal rendering if portal root doesn't exist
-  return <SubtaskList />;
 };
