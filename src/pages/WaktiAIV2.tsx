@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X, Upload, Mic } from 'lucide-react';
+import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X, Upload, Mic, Send } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   Sheet,
@@ -422,8 +422,8 @@ const WaktiAIV2 = () => {
       {/* Main Content */}
       <div className="flex-1 flex flex-col relative">
         {/* Active Mode Background Indicator */}
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
-          <div className="px-3 py-1 bg-muted/20 text-muted-foreground text-xs font-medium rounded-full border border-border/10 backdrop-blur-sm opacity-60">
+        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
+          <div className="px-2 py-0.5 bg-muted/10 text-muted-foreground text-xs font-medium rounded-full border border-border/5 backdrop-blur-sm opacity-40">
             {getTriggerDisplayName()}
           </div>
         </div>
@@ -523,17 +523,17 @@ const WaktiAIV2 = () => {
             </div>
           </ScrollArea>
 
-          {/* Input Area */}
-          <div className="border-t bg-background/95 backdrop-blur">
+          {/* Enhanced Input Area */}
+          <div className="border-t bg-gradient-to-t from-background/95 to-background/90 backdrop-blur-md">
             {/* Clear Chat Button */}
             {sessionMessages.length > 0 && (
-              <div className="px-4 py-2 border-b">
+              <div className="px-6 py-3 border-b border-border/50">
                 <div className="max-w-4xl mx-auto">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
                     onClick={handleClearChat}
-                    className="text-xs"
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Trash2 className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'مسح المحادثة' : 'Clear Chat'}
@@ -542,66 +542,78 @@ const WaktiAIV2 = () => {
               </div>
             )}
 
-            {/* Input Area with Icons */}
-            <div className="px-4 py-4">
+            {/* Main Input Container */}
+            <div className="px-6 py-6">
               <div className="max-w-4xl mx-auto">
-                {/* Icons Above Send Button */}
-                <div className="flex items-center justify-center gap-6 mb-3">
-                  <div className="flex items-center gap-4">
-                    <MessageSquare 
-                      className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
-                      onClick={() => setShowConversations(true)}
-                    />
-                    {currentConversationId && (
-                      <X 
-                        className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
-                        onClick={handleNewConversation}
-                      />
-                    )}
-                    <Menu 
-                      className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
-                      onClick={() => setShowQuickActions(true)}
-                    />
+                {/* Action Icons Above Input */}
+                <div className="flex items-center justify-center gap-8 mb-4">
+                  <div 
+                    className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
+                    onClick={() => setShowConversations(true)}
+                  >
+                    <MessageSquare className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                  </div>
+                  {currentConversationId && (
+                    <div 
+                      className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
+                      onClick={handleNewConversation}
+                    >
+                      <X className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                    </div>
+                  )}
+                  <div 
+                    className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
+                    onClick={() => setShowQuickActions(true)}
+                  >
+                    <Menu className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
                   </div>
                 </div>
 
-                {/* Input and Send Button */}
-                <div className="flex items-center gap-4">
-                  <Textarea
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder={
-                      language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
-                    }
-                    rows={1}
-                    className="resize-none flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage(message);
-                        setMessage('');
+                {/* Input Row with Send Button */}
+                <div className="flex items-end gap-4 mb-4">
+                  <div className="flex-1 relative">
+                    <Textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder={
+                        language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'
                       }
-                    }}
-                  />
+                      rows={1}
+                      className="resize-none border-2 border-border/50 rounded-2xl px-4 py-3 pr-12 bg-muted/20 focus:bg-background focus:border-primary/50 transition-all duration-200 shadow-sm hover:shadow-md"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage(message);
+                          setMessage('');
+                        }
+                      }}
+                    />
+                  </div>
                   <Button
                     onClick={() => {
                       handleSendMessage(message);
                       setMessage('');
                     }}
-                    disabled={isLoading}
+                    disabled={isLoading || !message.trim()}
+                    className="h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
+                    size="icon"
                   >
                     {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      language === 'ar' ? 'إرسال' : 'Send'
+                      <Send className="h-5 w-5" />
                     )}
                   </Button>
                 </div>
 
-                {/* Icons Below Send Button */}
-                <div className="flex items-center justify-center gap-6 mt-3">
-                  <Upload className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
-                  <Mic className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+                {/* Action Icons Below Input */}
+                <div className="flex items-center justify-center gap-8">
+                  <div className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95">
+                    <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                  </div>
+                  <div className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95">
+                    <Mic className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                  </div>
                 </div>
               </div>
             </div>
