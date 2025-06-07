@@ -423,7 +423,7 @@ const WaktiAIV2 = () => {
       <div className="flex-1 flex flex-col relative">
         {/* Active Mode Background Indicator */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
-          <div className="px-3 py-1 bg-muted/30 text-muted-foreground text-xs font-medium rounded-full border border-border/20">
+          <div className="px-3 py-1 bg-muted/20 text-muted-foreground text-xs font-medium rounded-full border border-border/10 backdrop-blur-sm opacity-60">
             {getTriggerDisplayName()}
           </div>
         </div>
@@ -542,47 +542,47 @@ const WaktiAIV2 = () => {
               </div>
             )}
 
-            {/* Drawer Controls Above Input */}
-            <div className="px-4 py-2 border-b">
-              <div className="max-w-4xl mx-auto flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setShowConversations(true)}>
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    {language === 'ar' ? 'المحادثات' : 'Conversations'}
-                  </Button>
-                  {currentConversationId && (
-                    <Button variant="ghost" size="sm" onClick={handleNewConversation}>
-                      {language === 'ar' ? 'جديد' : 'New'}
-                    </Button>
-                  )}
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setShowQuickActions(true)}>
-                  <Menu className="h-4 w-4 mr-1" />
-                  {language === 'ar' ? 'الأدوات' : 'Tools'}
-                </Button>
-              </div>
-            </div>
-
-            {/* Input Area */}
+            {/* Input Area with Icons */}
             <div className="px-4 py-4">
-              <div className="max-w-4xl mx-auto flex items-center gap-4">
-                <Textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder={
-                    language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
-                  }
-                  rows={1}
-                  className="resize-none flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage(message);
-                      setMessage('');
+              <div className="max-w-4xl mx-auto">
+                {/* Icons Above Send Button */}
+                <div className="flex items-center justify-center gap-6 mb-3">
+                  <div className="flex items-center gap-4">
+                    <MessageSquare 
+                      className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
+                      onClick={() => setShowConversations(true)}
+                    />
+                    {currentConversationId && (
+                      <X 
+                        className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
+                        onClick={handleNewConversation}
+                      />
+                    )}
+                    <Menu 
+                      className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" 
+                      onClick={() => setShowQuickActions(true)}
+                    />
+                  </div>
+                </div>
+
+                {/* Input and Send Button */}
+                <div className="flex items-center gap-4">
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={
+                      language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
                     }
-                  }}
-                />
-                <div className="flex items-center gap-2">
+                    rows={1}
+                    className="resize-none flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage(message);
+                        setMessage('');
+                      }
+                    }}
+                  />
                   <Button
                     onClick={() => {
                       handleSendMessage(message);
@@ -597,20 +597,12 @@ const WaktiAIV2 = () => {
                     )}
                   </Button>
                 </div>
-              </div>
-            </div>
 
-            {/* Upload and Mic Controls Below Input */}
-            <div className="px-4 py-2">
-              <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
-                <Button variant="outline" size="sm">
-                  <Upload className="h-4 w-4 mr-1" />
-                  {language === 'ar' ? 'رفع' : 'Upload'}
-                </Button>
-                <Button variant="outline" size="sm">
-                  <Mic className="h-4 w-4 mr-1" />
-                  {language === 'ar' ? 'صوت' : 'Voice'}
-                </Button>
+                {/* Icons Below Send Button */}
+                <div className="flex items-center justify-center gap-6 mt-3">
+                  <Upload className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+                  <Mic className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-foreground transition-colors" />
+                </div>
               </div>
             </div>
           </div>
