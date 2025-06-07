@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { PageContainer } from '@/components/PageContainer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X, Upload, Mic, Send } from 'lucide-react';
+import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X, Upload, Mic, Send, Plus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   Sheet,
@@ -420,200 +421,221 @@ const WaktiAIV2 = () => {
       </Sheet>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col relative">
-        {/* Active Mode Background Indicator */}
-        <div className="absolute top-6 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
-          <div className="px-2 py-0.5 bg-muted/10 text-muted-foreground text-xs font-medium rounded-full border border-border/5 backdrop-blur-sm opacity-40">
+      <div className="flex-1 flex flex-col">
+        {/* Top Navigation Bar */}
+        <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowConversations(true)}
+              className="h-9 w-9"
+            >
+              <MessageSquare className="h-5 w-5" />
+            </Button>
+            {currentConversationId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleNewConversation}
+                className="h-9 w-9"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            )}
+          </div>
+
+          {/* Active Mode Indicator */}
+          <div className="px-3 py-1 bg-muted rounded-full text-sm font-medium text-muted-foreground">
             {getTriggerDisplayName()}
           </div>
-        </div>
-        
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Search Confirmation */}
-          {searchConfirmationRequired && (
-            <div className="bg-yellow-100 border-b p-4">
-              <p className="text-sm text-yellow-800">
-                {language === 'ar'
-                  ? 'هل تريد إجراء بحث على الإنترنت؟'
-                  : 'Do you want to perform an internet search?'}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Button size="sm" onClick={handleSearchConfirmation}>
-                  {language === 'ar' ? 'نعم، ابحث' : 'Yes, Search'}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSearchConfirmationRequired(false)}
-                >
-                  {language === 'ar' ? 'لا، شكراً' : 'No, Thanks'}
-                </Button>
-              </div>
-            </div>
-          )}
-          
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-100 border-b p-4">
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
-          
-          {/* Chat Messages */}
-          <ScrollArea 
-            className="flex-1 px-4"
-            ref={scrollAreaRef}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowQuickActions(true)}
+            className="h-9 w-9"
           >
-            <div className="max-w-4xl mx-auto py-4 space-y-6">
-              {sessionMessages.length === 0 && !isLoading && (
-                <div className="text-center py-12">
-                  <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-medium mb-2">
-                    {language === 'ar' ? 'مرحباً بك في WAKTI AI' : 'Welcome to WAKTI AI'}
-                  </h3>
-                  <p className="text-muted-foreground max-w-md mx-auto">
-                    {language === 'ar' 
-                      ? 'ابدأ محادثة جديدة. يمكنني مساعدتك في المهام، البحث، إنشاء الصور والمزيد.'
-                      : 'Start a new conversation. I can help with tasks, search, image generation, and more.'
-                    }
-                  </p>
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    {language === 'ar' 
-                      ? 'المحادثة الحالية تحتفظ بآخر 20 رسالة'
-                      : 'Current chat keeps last 20 messages'
-                    }
-                  </div>
-                </div>
-              )}
+            <Menu className="h-5 w-5" />
+          </Button>
+        </div>
 
-              {/* Message Count Indicator */}
-              {sessionMessages.length > 15 && (
-                <div className="text-center py-2">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-xs text-muted-foreground">
-                    <MessageSquare className="h-3 w-3" />
-                    <span>
-                      {sessionMessages.length}/20 {language === 'ar' ? 'رسالة' : 'messages'}
-                    </span>
-                    {sessionMessages.length >= 20 && (
-                      <span className="text-orange-500">
-                        {language === 'ar' ? '(ممتلئ)' : '(full)'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {sessionMessages.map((message) => (
-                <ChatBubble
-                  key={message.id}
-                  message={message}
-                  activeTrigger={activeTrigger}
-                />
-              ))}
-
-              {isLoading && (
-                <div className="flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-sm text-muted-foreground">
-                    {language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}
-                  </span>
-                </div>
-              )}
+        {/* Search Confirmation */}
+        {searchConfirmationRequired && (
+          <div className="bg-yellow-100 border-b p-4">
+            <p className="text-sm text-yellow-800">
+              {language === 'ar'
+                ? 'هل تريد إجراء بحث على الإنترنت؟'
+                : 'Do you want to perform an internet search?'}
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={handleSearchConfirmation}>
+                {language === 'ar' ? 'نعم، ابحث' : 'Yes, Search'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSearchConfirmationRequired(false)}
+              >
+                {language === 'ar' ? 'لا، شكراً' : 'No, Thanks'}
+              </Button>
             </div>
-          </ScrollArea>
-
-          {/* Enhanced Input Area */}
-          <div className="border-t bg-gradient-to-t from-background/95 to-background/90 backdrop-blur-md">
-            {/* Clear Chat Button */}
-            {sessionMessages.length > 0 && (
-              <div className="px-6 py-3 border-b border-border/50">
-                <div className="max-w-4xl mx-auto">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearChat}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <Trash2 className="h-3 w-3 mr-1" />
-                    {language === 'ar' ? 'مسح المحادثة' : 'Clear Chat'}
-                  </Button>
+          </div>
+        )}
+        
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-100 border-b p-4">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
+        
+        {/* Chat Messages */}
+        <ScrollArea 
+          className="flex-1 px-4"
+          ref={scrollAreaRef}
+        >
+          <div className="max-w-4xl mx-auto py-4 space-y-6">
+            {sessionMessages.length === 0 && !isLoading && (
+              <div className="text-center py-12">
+                <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-medium mb-2">
+                  {language === 'ar' ? 'مرحباً بك في WAKTI AI' : 'Welcome to WAKTI AI'}
+                </h3>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  {language === 'ar' 
+                    ? 'ابدأ محادثة جديدة. يمكنني مساعدتك في المهام، البحث، إنشاء الصور والمزيد.'
+                    : 'Start a new conversation. I can help with tasks, search, image generation, and more.'
+                  }
+                </p>
+                <div className="mt-4 text-xs text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'المحادثة الحالية تحتفظ بآخر 20 رسالة'
+                    : 'Current chat keeps last 20 messages'
+                  }
                 </div>
               </div>
             )}
 
-            {/* Main Input Container */}
-            <div className="px-6 py-6">
-              <div className="max-w-4xl mx-auto">
-                {/* Action Icons Above Input */}
-                <div className="flex items-center justify-center gap-8 mb-4">
-                  <div 
-                    className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
-                    onClick={() => setShowConversations(true)}
-                  >
-                    <MessageSquare className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                  </div>
-                  {currentConversationId && (
-                    <div 
-                      className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
-                      onClick={handleNewConversation}
-                    >
-                      <X className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                    </div>
+            {/* Message Count Indicator */}
+            {sessionMessages.length > 15 && (
+              <div className="text-center py-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-xs text-muted-foreground">
+                  <MessageSquare className="h-3 w-3" />
+                  <span>
+                    {sessionMessages.length}/20 {language === 'ar' ? 'رسالة' : 'messages'}
+                  </span>
+                  {sessionMessages.length >= 20 && (
+                    <span className="text-orange-500">
+                      {language === 'ar' ? '(ممتلئ)' : '(full)'}
+                    </span>
                   )}
-                  <div 
-                    className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95" 
-                    onClick={() => setShowQuickActions(true)}
-                  >
-                    <Menu className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                  </div>
                 </div>
+              </div>
+            )}
 
-                {/* Input Row with Send Button */}
-                <div className="flex items-end gap-4 mb-4">
-                  <div className="flex-1 relative">
-                    <Textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder={
-                        language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'
-                      }
-                      rows={1}
-                      className="resize-none border-2 border-border/50 rounded-2xl px-4 py-3 pr-12 bg-muted/20 focus:bg-background focus:border-primary/50 transition-all duration-200 shadow-sm hover:shadow-md"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
+            {sessionMessages.map((message) => (
+              <ChatBubble
+                key={message.id}
+                message={message}
+                activeTrigger={activeTrigger}
+              />
+            ))}
+
+            {isLoading && (
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-sm text-muted-foreground">
+                  {language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}
+                </span>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Clear Chat Button */}
+        {sessionMessages.length > 0 && (
+          <div className="px-6 py-2 border-b border-border/30">
+            <div className="max-w-4xl mx-auto">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearChat}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'مسح المحادثة' : 'Clear Chat'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Modern Chat Input Area */}
+        <div className="p-4 bg-background border-t">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end gap-3">
+              {/* Upload Button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-full hover:bg-muted"
+              >
+                <Upload className="h-5 w-5" />
+              </Button>
+
+              {/* Input Container */}
+              <div className="flex-1 relative">
+                <div className="flex items-end bg-muted/50 rounded-2xl border border-border/30 overflow-hidden">
+                  {/* Mic Button (when input is empty) */}
+                  {!message.trim() && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-10 w-10 m-1 rounded-xl hover:bg-background/80"
+                    >
+                      <Mic className="h-5 w-5" />
+                    </Button>
+                  )}
+
+                  {/* Text Input */}
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={
+                      language === 'ar' ? 'اكتب رسالتك...' : 'Type a message...'
+                    }
+                    rows={1}
+                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 max-h-24 overflow-y-auto"
+                    style={{ minHeight: '40px' }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (message.trim()) {
                           handleSendMessage(message);
                           setMessage('');
                         }
-                      }}
-                    />
-                  </div>
-                  <Button
-                    onClick={() => {
-                      handleSendMessage(message);
-                      setMessage('');
+                      }
                     }}
-                    disabled={isLoading || !message.trim()}
-                    className="h-12 w-12 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
-                    size="icon"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </Button>
-                </div>
+                  />
 
-                {/* Action Icons Below Input */}
-                <div className="flex items-center justify-center gap-8">
-                  <div className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95">
-                    <Upload className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                  </div>
-                  <div className="p-2 rounded-full bg-muted/50 hover:bg-muted cursor-pointer transition-all duration-200 hover:scale-110 active:scale-95">
-                    <Mic className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
-                  </div>
+                  {/* Send Button (when there's text) */}
+                  {message.trim() && (
+                    <Button
+                      onClick={() => {
+                        handleSendMessage(message);
+                        setMessage('');
+                      }}
+                      disabled={isLoading}
+                      className="h-8 w-8 m-2 rounded-full p-0"
+                      size="icon"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
