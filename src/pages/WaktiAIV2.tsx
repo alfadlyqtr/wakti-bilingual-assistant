@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X } from 'lucide-react';
+import { Bot, Loader2, Search, ImagePlus, Trash2, MessageSquare, Menu, X, Upload, Mic } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import {
   Sheet,
@@ -420,26 +420,11 @@ const WaktiAIV2 = () => {
       </Sheet>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Thin Header */}
-        <div className="border-b p-2 flex items-center justify-between bg-background">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowConversations(true)}>
-              <MessageSquare className="h-4 w-4" />
-            </Button>
-            {currentConversationId && (
-              <Button variant="ghost" size="sm" onClick={handleNewConversation}>
-                {language === 'ar' ? 'جديد' : 'New'}
-              </Button>
-            )}
-          </div>
-          <div className="text-xs font-medium text-muted-foreground">
+      <div className="flex-1 flex flex-col relative">
+        {/* Active Mode Background Indicator */}
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
+          <div className="px-3 py-1 bg-muted/30 text-muted-foreground text-xs font-medium rounded-full border border-border/20">
             {getTriggerDisplayName()}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowQuickActions(true)}>
-              <Menu className="h-4 w-4" />
-            </Button>
           </div>
         </div>
         
@@ -557,6 +542,27 @@ const WaktiAIV2 = () => {
               </div>
             )}
 
+            {/* Drawer Controls Above Input */}
+            <div className="px-4 py-2 border-b">
+              <div className="max-w-4xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setShowConversations(true)}>
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                  </Button>
+                  {currentConversationId && (
+                    <Button variant="ghost" size="sm" onClick={handleNewConversation}>
+                      {language === 'ar' ? 'جديد' : 'New'}
+                    </Button>
+                  )}
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setShowQuickActions(true)}>
+                  <Menu className="h-4 w-4 mr-1" />
+                  {language === 'ar' ? 'الأدوات' : 'Tools'}
+                </Button>
+              </div>
+            </div>
+
             {/* Input Area */}
             <div className="px-4 py-4">
               <div className="max-w-4xl mx-auto flex items-center gap-4">
@@ -591,6 +597,20 @@ const WaktiAIV2 = () => {
                     )}
                   </Button>
                 </div>
+              </div>
+            </div>
+
+            {/* Upload and Mic Controls Below Input */}
+            <div className="px-4 py-2">
+              <div className="max-w-4xl mx-auto flex items-center justify-center gap-4">
+                <Button variant="outline" size="sm">
+                  <Upload className="h-4 w-4 mr-1" />
+                  {language === 'ar' ? 'رفع' : 'Upload'}
+                </Button>
+                <Button variant="outline" size="sm">
+                  <Mic className="h-4 w-4 mr-1" />
+                  {language === 'ar' ? 'صوت' : 'Voice'}
+                </Button>
               </div>
             </div>
           </div>
