@@ -369,6 +369,23 @@ const WaktiAIV2 = () => {
     console.log('✨ Text gen params set to:', params);
   };
 
+  // Handle text generated from tools
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
+    console.log('📝 Text generated from tool:', { text, mode });
+    
+    if (mode === 'compose') {
+      // Replace the current message input with generated text
+      setMessage(text);
+    } else {
+      // For reply mode, send the generated text immediately
+      handleSendMessage(text);
+    }
+    
+    showSuccess(
+      language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully'
+    );
+  };
+
   const getTriggerDisplayName = () => {
     switch (activeTrigger) {
       case 'chat':
@@ -415,6 +432,7 @@ const WaktiAIV2 = () => {
             onSendMessage={handleSendMessage}
             activeTrigger={activeTrigger as any}
             onTriggerChange={handleTriggerChange}
+            onTextGenerated={handleTextGenerated}
             onClose={() => setShowQuickActions(false)}
           />
         </SheetContent>

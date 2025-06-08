@@ -82,6 +82,8 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     if (onTextGenerated) {
       onTextGenerated(text, mode);
     }
+    // Close drawer after text is generated and applied
+    onClose?.();
   };
 
   const handleTriggerChange = (trigger: TriggerMode) => {
@@ -89,9 +91,41 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     onClose?.();
   };
 
-  const handleToolClick = (toolAction: () => void) => {
-    toolAction();
-    onClose?.();
+  // Handle tool state changes - don't close drawer immediately
+  const handleVoiceTranslatorChange = (open: boolean) => {
+    setVoiceTranslatorOpen(open);
+    // Only close drawer if tool was closed
+    if (!open) {
+      setTimeout(() => onClose?.(), 100);
+    }
+  };
+
+  const handleBuyExtrasChange = (open: boolean) => {
+    setBuyExtrasOpen(open);
+    if (!open) {
+      setTimeout(() => onClose?.(), 100);
+    }
+  };
+
+  const handleVoiceCloneChange = (open: boolean) => {
+    setVoiceCloneOpen(open);
+    if (!open) {
+      setTimeout(() => onClose?.(), 100);
+    }
+  };
+
+  const handleTextGeneratorChange = (open: boolean) => {
+    setTextGeneratorOpen(open);
+    if (!open) {
+      setTimeout(() => onClose?.(), 100);
+    }
+  };
+
+  const handleKnowledgeModalChange = (open: boolean) => {
+    setKnowledgeModalOpen(open);
+    if (!open) {
+      setTimeout(() => onClose?.(), 100);
+    }
   };
 
   return (
@@ -154,7 +188,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => handleToolClick(() => setVoiceTranslatorOpen(true))}
+            onClick={() => setVoiceTranslatorOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
               <Languages className="h-3 w-3 text-white" />
@@ -168,7 +202,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => handleToolClick(() => setTextGeneratorOpen(true))}
+            onClick={() => setTextGeneratorOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
               <PenTool className="h-3 w-3 text-white" />
@@ -182,7 +216,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => handleToolClick(() => setKnowledgeModalOpen(true))}
+            onClick={() => setKnowledgeModalOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
               <Brain className="h-3 w-3 text-white" />
@@ -196,7 +230,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           <Button
             variant="ghost"
             className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => handleToolClick(() => setVoiceCloneOpen(true))}
+            onClick={() => setVoiceCloneOpen(true)}
           >
             <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
               <Mic2 className="h-3 w-3 text-white" />
@@ -237,7 +271,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       {/* Buy Extras Button - Fixed at bottom */}
       <div className="flex-shrink-0 pt-3 border-t border-border/30">
         <Button
-          onClick={() => handleToolClick(() => setBuyExtrasOpen(true))}
+          onClick={() => setBuyExtrasOpen(true)}
           variant="outline"
           className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200"
         >
@@ -251,32 +285,32 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       {/* Voice Translator Popup */}
       <VoiceTranslatorPopup 
         open={voiceTranslatorOpen} 
-        onOpenChange={setVoiceTranslatorOpen} 
+        onOpenChange={handleVoiceTranslatorChange} 
       />
 
       {/* Buy Extras Popup */}
       <BuyExtrasPopup 
         open={buyExtrasOpen} 
-        onOpenChange={setBuyExtrasOpen} 
+        onOpenChange={handleBuyExtrasChange} 
       />
 
       {/* Voice Clone Popup */}
       <VoiceClonePopup 
         open={voiceCloneOpen} 
-        onOpenChange={setVoiceCloneOpen} 
+        onOpenChange={handleVoiceCloneChange} 
       />
 
       {/* Text Generator Popup */}
       <TextGeneratorPopup 
         open={textGeneratorOpen} 
-        onOpenChange={setTextGeneratorOpen}
+        onOpenChange={handleTextGeneratorChange}
         onGenerated={handleTextGenerated}
       />
 
       {/* Knowledge Modal */}
       <KnowledgeModal 
         open={knowledgeModalOpen} 
-        onOpenChange={setKnowledgeModalOpen} 
+        onOpenChange={handleKnowledgeModalChange} 
       />
     </div>
   );
