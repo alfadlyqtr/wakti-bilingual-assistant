@@ -242,15 +242,18 @@ export class WaktiAIV2Service {
     conversationHistory: AIMessage[] = [],
     confirmSearch: boolean = false,
     activeTrigger: string = 'chat',
-    textGenParams?: any
+    textGenParams?: any,
+    attachedFiles?: any[]
   ): Promise<AIResponse> {
     try {
       console.log('🔄 WaktiAIV2Service: === SEND MESSAGE START ===');
       console.log('🔄 WaktiAIV2Service: Message:', message);
       console.log('🔄 WaktiAIV2Service: Active Trigger (SERVICE):', activeTrigger);
-      console.log('🔄 WaktiAIV2Service: Text Gen Params:', textGenParams);
-      console.log('🔄 WaktiAIV2Service: Confirm Search:', confirmSearch);
-      console.log('🔄 WaktiAIV2Service: Language:', language);
+      console.log('🔄 WaktiAIV2Service: Conversation History Length:', conversationHistory.length);
+      console.log('🔄 WaktiAIV2Service: Attached Files:', attachedFiles?.length || 0);
+
+      // Increase context window - send last 15 messages instead of 10
+      const contextMessages = conversationHistory.slice(-15);
 
       const payload = {
         message,
@@ -258,15 +261,16 @@ export class WaktiAIV2Service {
         language,
         conversationId,
         inputType,
-        conversationHistory,
+        conversationHistory: contextMessages,
         confirmSearch,
         activeTrigger,
-        textGenParams
+        textGenParams,
+        attachedFiles
       };
 
       console.log('🔄 WaktiAIV2Service: === PAYLOAD TO EDGE FUNCTION ===');
-      console.log('🔄 WaktiAIV2Service: Active Trigger in payload:', payload.activeTrigger);
-      console.log('🔄 WaktiAIV2Service: Full payload:', JSON.stringify(payload, null, 2));
+      console.log('🔄 WaktiAIV2Service: Context messages count:', contextMessages.length);
+      console.log('🔄 WaktiAIV2Service: Full payload keys:', Object.keys(payload));
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: payload
@@ -275,9 +279,7 @@ export class WaktiAIV2Service {
       console.log('🔄 WaktiAIV2Service: === EDGE FUNCTION RESPONSE ===');
       console.log('🔄 WaktiAIV2Service: Error:', error);
       console.log('🔄 WaktiAIV2Service: Data success:', data?.success);
-      console.log('🔄 WaktiAIV2Service: Browsing used:', data?.browsingUsed);
-      console.log('🔄 WaktiAIV2Service: Trigger mode returned:', data?.triggerMode);
-      console.log('🔄 WaktiAIV2Service: Strict mode returned:', data?.strictMode);
+      console.log('🔄 WaktiAIV2Service: Response length:', data?.response?.length);
 
       if (error) {
         console.error('🔄 WaktiAIV2Service: ❌ Edge function error:', error);
@@ -290,7 +292,6 @@ export class WaktiAIV2Service {
       }
 
       console.log('🔄 WaktiAIV2Service: ✅ Message sent successfully');
-      console.log('🔄 WaktiAIV2Service: Response length:', data.response?.length);
 
       return {
         response: data.response,

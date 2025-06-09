@@ -93,8 +93,12 @@ const WaktiAIV2 = () => {
     }
   };
 
-  const handleSendMessage = async (message: string, inputType: 'text' | 'voice' = 'text') => {
-    if (!message.trim() || isLoading) return;
+  const handleSendMessage = async (
+    message: string, 
+    inputType: 'text' | 'voice' = 'text',
+    attachedFiles?: any[]
+  ) => {
+    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
 
     setIsLoading(true);
     setError(null);
@@ -102,14 +106,17 @@ const WaktiAIV2 = () => {
     try {
       console.log('🔄 WAKTI AI V2: === SEND MESSAGE START ===');
       console.log('🔄 WAKTI AI V2: Message:', message);
+      console.log('🔄 WAKTI AI V2: Input Type:', inputType);
+      console.log('🔄 WAKTI AI V2: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2: Active Trigger (MAIN):', activeTrigger);
       console.log('🔄 WAKTI AI V2: Current Conversation ID:', currentConversationId);
+      console.log('🔄 WAKTI AI V2: Session Messages Count:', sessionMessages.length);
 
       // Create user message
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
-        content: message,
+        content: message || '[File attachment]',
         timestamp: new Date(),
         inputType
       };
@@ -121,21 +128,22 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Send message
+      // Send message with enhanced context (15 messages instead of 10)
       const response = await WaktiAIV2Service.sendMessage(
         message,
         user.id,
         language,
         currentConversationId,
         inputType,
-        updatedMessages.slice(-10), // Send last 10 messages for context
+        updatedMessages.slice(-15), // Send last 15 messages for better context
         false, // confirmSearch
         activeTrigger,
-        textGenParams
+        textGenParams,
+        attachedFiles
       );
 
       console.log('🔄 WAKTI AI V2: === RESPONSE RECEIVED ===');
-      console.log('🔄 WAKTI AI V2: Response:', response.response?.substring(0, 100) + '...');
+      console.log('🔄 WAKTI AI V2: Response length:', response.response?.length);
       console.log('🔄 WAKTI AI V2: Conversation ID:', response.conversationId);
 
       if (response.error) {
