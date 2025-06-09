@@ -1,5 +1,5 @@
-
 import { supabase } from '@/integrations/supabase/client';
+import { UploadedFile } from '@/hooks/useFileUpload';
 
 export interface AIMessage {
   id: string;
@@ -16,6 +16,7 @@ export interface AIMessage {
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
   isTextGenerated?: boolean;
+  attachedFiles?: UploadedFile[];
 }
 
 export interface AIConversation {
