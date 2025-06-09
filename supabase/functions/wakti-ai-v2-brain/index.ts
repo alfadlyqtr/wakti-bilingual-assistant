@@ -128,7 +128,7 @@ serve(async (req) => {
   }
 });
 
-// Fixed image analysis function - removed recursion
+// Fixed image analysis with proper DeepSeek vision model and authenticated file access
 async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Promise<string> {
   try {
     console.log("🖼️ Analyzing image with DeepSeek vision:", fileName);
@@ -138,21 +138,16 @@ async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Pro
       return await analyzeImageWithOpenAI(fileName, imageUrl);
     }
 
-    // Download the image with timeout
-    const imageResponse = await fetch(imageUrl, {
-      signal: AbortSignal.timeout(10000) // 10 second timeout
-    });
-    
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download image: ${imageResponse.status}`);
+    // Download image using authenticated Supabase client
+    const imageData = await downloadImageFromSupabase(imageUrl);
+    if (!imageData) {
+      throw new Error('Failed to download image from Supabase storage');
     }
 
-    const imageBuffer = await imageResponse.arrayBuffer();
+    // Convert to base64 efficiently
+    const base64Image = await optimizedArrayBufferToBase64(imageData);
     
-    // Convert to base64 efficiently for large images
-    const base64Image = await arrayBufferToBase64(imageBuffer);
-    
-    // Call DeepSeek vision API
+    // Use correct DeepSeek vision API - they use deepseek-vl model for vision
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -160,7 +155,7 @@ async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Pro
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-vl', // Fixed: Use vision model instead of chat model
         messages: [
           {
             role: 'user',
@@ -181,11 +176,12 @@ async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Pro
         max_tokens: 1000,
         temperature: 0.7
       }),
-      signal: AbortSignal.timeout(30000) // 30 second timeout
+      signal: AbortSignal.timeout(30000)
     });
 
     if (!response.ok) {
-      console.log("🖼️ DeepSeek vision failed, falling back to OpenAI");
+      const errorText = await response.text();
+      console.log("🖼️ DeepSeek vision failed:", errorText, "falling back to OpenAI");
       return await analyzeImageWithOpenAI(fileName, imageUrl);
     }
 
@@ -193,7 +189,7 @@ async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Pro
     const analysis = result.choices?.[0]?.message?.content;
     
     if (!analysis) {
-      throw new Error('No analysis received from DeepSeek');
+      throw new Error('No analysis received from DeepSeek vision');
     }
 
     console.log("🖼️ DeepSeek vision analysis completed successfully");
@@ -201,12 +197,11 @@ async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Pro
 
   } catch (error) {
     console.error("🖼️ Error analyzing image with DeepSeek:", error);
-    // Fallback to OpenAI if DeepSeek fails
     return await analyzeImageWithOpenAI(fileName, imageUrl);
   }
 }
 
-// OpenAI vision fallback
+// Fixed OpenAI vision with proper authenticated file access
 async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promise<string> {
   try {
     console.log("🖼️ Analyzing image with OpenAI vision:", fileName);
@@ -214,6 +209,15 @@ async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promi
     if (!OPENAI_API_KEY) {
       return `📸 **Image uploaded: ${fileName}**\n\nImage analysis is currently unavailable. The image has been received but cannot be analyzed at this time.`;
     }
+
+    // Download image using authenticated Supabase client
+    const imageData = await downloadImageFromSupabase(imageUrl);
+    if (!imageData) {
+      throw new Error('Failed to download image from Supabase storage');
+    }
+
+    // Convert to base64 efficiently
+    const base64Image = await optimizedArrayBufferToBase64(imageData);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -234,7 +238,7 @@ async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promi
               {
                 type: 'image_url',
                 image_url: {
-                  url: imageUrl
+                  url: `data:image/jpeg;base64,${base64Image}`
                 }
               }
             ]
@@ -242,11 +246,13 @@ async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promi
         ],
         max_tokens: 1000
       }),
-      signal: AbortSignal.timeout(30000) // 30 second timeout
+      signal: AbortSignal.timeout(30000)
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error("🖼️ OpenAI API failed:", errorText);
+      throw new Error(`OpenAI API failed: ${response.status} - ${errorText}`);
     }
 
     const result = await response.json();
@@ -261,28 +267,139 @@ async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promi
 
   } catch (error) {
     console.error("🖼️ Error analyzing image with OpenAI:", error);
-    return `📸 **Image uploaded: ${fileName}**\n\nUnable to analyze the image content at this time, but the image has been successfully received.`;
+    return `📸 **Image uploaded: ${fileName}**\n\nUnable to analyze the image content at this time due to: ${error.message}. The image has been received.`;
   }
 }
 
-// Efficient base64 conversion for large images
-async function arrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
-  // For smaller images, use the direct method
-  if (buffer.byteLength < 1024 * 1024) { // Less than 1MB
-    return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+// New function to download images from Supabase storage with authentication
+async function downloadImageFromSupabase(imageUrl: string): Promise<ArrayBuffer | null> {
+  try {
+    console.log("📥 Downloading image from Supabase storage:", imageUrl);
+    
+    // Extract bucket and path from the URL
+    const urlParts = imageUrl.split('/');
+    const bucketIndex = urlParts.findIndex(part => part === 'message-media');
+    
+    if (bucketIndex === -1) {
+      // If it's not a Supabase storage URL, try direct download
+      console.log("📥 Not a Supabase storage URL, trying direct download");
+      const response = await fetch(imageUrl, {
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download image: ${response.status}`);
+      }
+      
+      return await response.arrayBuffer();
+    }
+    
+    const bucket = urlParts[bucketIndex];
+    const filePath = urlParts.slice(bucketIndex + 1).join('/');
+    
+    console.log("📥 Downloading from bucket:", bucket, "path:", filePath);
+    
+    // Use Supabase storage client to download with authentication
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .download(filePath);
+    
+    if (error) {
+      console.error("📥 Supabase storage download error:", error);
+      throw new Error(`Supabase storage error: ${error.message}`);
+    }
+    
+    if (!data) {
+      throw new Error('No data received from Supabase storage');
+    }
+    
+    console.log("📥 Successfully downloaded image, size:", data.size);
+    return await data.arrayBuffer();
+    
+  } catch (error) {
+    console.error("📥 Error downloading image from Supabase:", error);
+    return null;
   }
-  
-  // For larger images, process in chunks to avoid memory issues
-  const bytes = new Uint8Array(buffer);
-  let result = '';
-  const chunkSize = 8192;
-  
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.slice(i, i + chunkSize);
-    result += String.fromCharCode(...chunk);
+}
+
+// Optimized base64 conversion that prevents stack overflow
+async function optimizedArrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
+  try {
+    console.log("🔄 Converting image to base64, size:", buffer.byteLength);
+    
+    // For very large images, resize them first to prevent memory issues
+    if (buffer.byteLength > 5 * 1024 * 1024) { // 5MB
+      console.log("🔄 Large image detected, will resize before conversion");
+      buffer = await resizeImage(buffer);
+    }
+    
+    // Use efficient conversion method
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    
+    // Process in chunks to prevent stack overflow
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    
+    const base64 = btoa(binary);
+    console.log("🔄 Base64 conversion completed, length:", base64.length);
+    return base64;
+    
+  } catch (error) {
+    console.error("🔄 Error in base64 conversion:", error);
+    throw new Error(`Base64 conversion failed: ${error.message}`);
   }
-  
-  return btoa(result);
+}
+
+// Simple image resizing function to prevent memory issues
+async function resizeImage(buffer: ArrayBuffer, maxSize: number = 2048): Promise<ArrayBuffer> {
+  try {
+    console.log("🖼️ Resizing large image to prevent memory issues");
+    
+    // Create a blob from the buffer
+    const blob = new Blob([buffer]);
+    
+    // Create an image element
+    const img = new Image();
+    const canvas = new OffscreenCanvas(maxSize, maxSize);
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx) {
+      throw new Error('Cannot get canvas context');
+    }
+    
+    // Load the image
+    const imageBitmap = await createImageBitmap(blob);
+    
+    // Calculate new dimensions while maintaining aspect ratio
+    let { width, height } = imageBitmap;
+    
+    if (width > maxSize || height > maxSize) {
+      const ratio = Math.min(maxSize / width, maxSize / height);
+      width = Math.floor(width * ratio);
+      height = Math.floor(height * ratio);
+    }
+    
+    // Resize canvas and draw
+    canvas.width = width;
+    canvas.height = height;
+    ctx.drawImage(imageBitmap, 0, 0, width, height);
+    
+    // Convert back to buffer
+    const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+    const resizedBuffer = await resizedBlob.arrayBuffer();
+    
+    console.log("🖼️ Image resized from", buffer.byteLength, "to", resizedBuffer.byteLength, "bytes");
+    return resizedBuffer;
+    
+  } catch (error) {
+    console.error("🖼️ Error resizing image:", error);
+    // If resizing fails, return original buffer
+    return buffer;
+  }
 }
 
 // Process attached files without recursion
@@ -323,7 +440,7 @@ async function processAttachedFiles(attachedFiles: any[]): Promise<string> {
       }
     } catch (error) {
       console.error("Error processing file:", file.name, error);
-      fileAnalysis.push(`❌ **Error processing ${file.name}**\n\nUnable to analyze this file.`);
+      fileAnalysis.push(`❌ **Error processing ${file.name}**\n\nUnable to analyze this file: ${error.message}`);
     }
   }
 
