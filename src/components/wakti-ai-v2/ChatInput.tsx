@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, Mic, Send, Loader2, Trash2, X, Image, FileText } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useVoiceRecording } from '@/hooks/useVoiceRecording';
+import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface ChatInputProps {
@@ -27,15 +27,16 @@ export function ChatInput({
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Voice recording hook
+  // Browser speech recognition hook
   const {
-    isRecording,
-    isProcessing,
+    isListening,
     transcript,
-    startRecording,
-    stopRecording,
-    clearRecording
-  } = useVoiceRecording();
+    error: speechError,
+    isSupported: speechSupported,
+    startListening,
+    stopListening,
+    clearTranscript
+  } = useBrowserSpeechRecognition();
 
   // File upload hook
   const {
@@ -54,21 +55,21 @@ export function ChatInput({
     }
   };
 
-  const handleVoiceMessage = async () => {
-    if (isRecording) {
-      stopRecording();
+  const handleVoiceInput = async () => {
+    if (isListening) {
+      stopListening();
     } else {
-      await startRecording();
+      await startListening();
     }
   };
 
-  // Handle voice transcription - FIXED: Properly handle the state update
+  // Handle speech recognition transcript
   React.useEffect(() => {
     if (transcript) {
       setMessage(message ? `${message} ${transcript}` : transcript);
-      clearRecording();
+      clearTranscript();
     }
-  }, [transcript, message, setMessage, clearRecording]);
+  }, [transcript, message, setMessage, clearTranscript]);
 
   const handleFileUpload = () => {
     fileInputRef.current?.click();
@@ -169,21 +170,17 @@ export function ChatInput({
             <div className="flex-1 relative">
               <div className="flex items-end bg-muted/50 rounded-2xl border border-border/30 overflow-hidden">
                 {/* Mic Button (when input is empty) */}
-                {!message.trim() && !uploadedFiles.length && (
+                {!message.trim() && !uploadedFiles.length && speechSupported && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className={`h-10 w-10 m-1 rounded-xl hover:bg-background/80 ${
-                      isRecording ? 'bg-red-500 text-white hover:bg-red-600' : ''
+                      isListening ? 'bg-red-500 text-white hover:bg-red-600' : ''
                     }`}
-                    onClick={handleVoiceMessage}
-                    disabled={isProcessing}
+                    onClick={handleVoiceInput}
+                    disabled={!speechSupported}
                   >
-                    {isProcessing ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Mic className="h-5 w-5" />
-                    )}
+                    <Mic className="h-5 w-5" />
                   </Button>
                 )}
 
@@ -192,10 +189,10 @@ export function ChatInput({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={
-                    isRecording
-                      ? language === 'ar' ? 'جاري التسجيل...' : 'Recording...'
-                      : isProcessing
-                      ? language === 'ar' ? 'جاري المعالجة...' : 'Processing...'
+                    isListening
+                      ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
+                      : !speechSupported
+                      ? language === 'ar' ? 'التعرف على الصوت غير مدعوم' : 'Voice input not supported'
                       : language === 'ar' ? 'اكتب رسالتك...' : 'Type a message...'
                   }
                   rows={1}
@@ -207,14 +204,14 @@ export function ChatInput({
                       handleSend();
                     }
                   }}
-                  disabled={isRecording || isProcessing}
+                  disabled={isListening}
                 />
 
                 {/* Send Button (when there's text or files) */}
                 {(message.trim() || uploadedFiles.length > 0) && (
                   <Button
                     onClick={handleSend}
-                    disabled={isLoading || isRecording || isProcessing}
+                    disabled={isLoading || isListening}
                     className="h-8 w-8 m-2 rounded-full p-0"
                     size="icon"
                   >
@@ -229,12 +226,21 @@ export function ChatInput({
             </div>
           </div>
 
-          {/* Recording indicator */}
-          {isRecording && (
+          {/* Listening indicator */}
+          {isListening && (
             <div className="mt-2 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs">
                 <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
-                {language === 'ar' ? 'جاري التسجيل...' : 'Recording...'}
+                {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
+              </div>
+            </div>
+          )}
+
+          {/* Speech error indicator */}
+          {speechError && (
+            <div className="mt-2 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs">
+                {language === 'ar' ? 'خطأ في التعرف على الصوت' : 'Speech recognition error'}
               </div>
             </div>
           )}
