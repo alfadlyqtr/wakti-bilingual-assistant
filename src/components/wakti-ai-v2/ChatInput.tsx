@@ -62,13 +62,13 @@ export function ChatInput({
     }
   };
 
-  // Handle voice transcription
+  // Handle voice transcription - FIXED: Properly handle the state update
   React.useEffect(() => {
     if (transcript) {
-      setMessage(prev => prev ? `${prev} ${transcript}` : transcript);
+      setMessage(message ? `${message} ${transcript}` : transcript);
       clearRecording();
     }
-  }, [transcript, setMessage, clearRecording]);
+  }, [transcript, message, setMessage, clearRecording]);
 
   const handleFileUpload = () => {
     fileInputRef.current?.click();
