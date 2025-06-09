@@ -402,7 +402,7 @@ const WaktiAIV2 = () => {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         <ChatHeader
           currentConversationId={currentConversationId}
           activeTrigger={activeTrigger}
@@ -418,21 +418,25 @@ const WaktiAIV2 = () => {
           onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
         />
         
-        <ChatMessages
-          sessionMessages={sessionMessages}
-          isLoading={isLoading}
-          activeTrigger={activeTrigger}
-          scrollAreaRef={scrollAreaRef}
-        />
+        <div className="flex-1 flex flex-col min-h-0">
+          <ChatMessages
+            sessionMessages={sessionMessages}
+            isLoading={isLoading}
+            activeTrigger={activeTrigger}
+            scrollAreaRef={scrollAreaRef}
+          />
 
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading}
-          sessionMessages={sessionMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-        />
+          <div className="mt-auto">
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={isLoading}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
