@@ -2,10 +2,12 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Mic, Send, Loader2, Trash2, X, Image, FileText } from 'lucide-react';
+import { Upload, Mic, Send, Loader2, Trash2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
+import { FilePreview } from './FilePreview';
+import { DragDropUpload } from './DragDropUpload';
 
 interface ChatInputProps {
   message: string;
@@ -86,13 +88,12 @@ export function ChatInput({
     }
   };
 
-  const getFileIcon = (type: string) => {
-    if (type.startsWith('image/')) return <Image className="h-4 w-4" />;
-    return <FileText className="h-4 w-4" />;
+  const handleFilesSelected = async (files: FileList) => {
+    await uploadFiles(files);
   };
 
   return (
-    <>
+    <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
       {/* Clear Chat Button */}
       {sessionMessages.length > 0 && (
         <div className="px-6 py-2 border-b border-border/30">
@@ -112,25 +113,25 @@ export function ChatInput({
 
       {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
-        <div className="px-4 py-2 bg-muted/30">
+        <div className="px-4 py-3 bg-muted/30 border-b">
           <div className="max-w-4xl mx-auto">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-medium">
+                {language === 'ar' ? 'الملفات المرفقة:' : 'Attached Files:'}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                ({uploadedFiles.length})
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-3">
               {uploadedFiles.map((file, index) => (
-                <div
+                <FilePreview
                   key={index}
-                  className="flex items-center gap-2 bg-background border rounded-lg px-3 py-2 text-sm"
-                >
-                  {getFileIcon(file.type)}
-                  <span className="truncate max-w-[200px]">{file.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-4 w-4 p-0"
-                    onClick={() => removeFile(index)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
+                  file={file}
+                  index={index}
+                  onRemove={removeFile}
+                  size="sm"
+                />
               ))}
             </div>
           </div>
@@ -147,7 +148,7 @@ export function ChatInput({
               size="icon"
               className="h-10 w-10 rounded-full hover:bg-muted"
               onClick={handleFileUpload}
-              disabled={isUploading}
+              disabled={isUploading || isLoading}
             >
               {isUploading ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
@@ -178,7 +179,7 @@ export function ChatInput({
                       isListening ? 'bg-red-500 text-white hover:bg-red-600' : ''
                     }`}
                     onClick={handleVoiceInput}
-                    disabled={!speechSupported}
+                    disabled={!speechSupported || isLoading}
                   >
                     <Mic className="h-5 w-5" />
                   </Button>
@@ -193,7 +194,7 @@ export function ChatInput({
                       ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
                       : !speechSupported
                       ? language === 'ar' ? 'التعرف على الصوت غير مدعوم' : 'Voice input not supported'
-                      : language === 'ar' ? 'اكتب رسالتك...' : 'Type a message...'
+                      : language === 'ar' ? 'اكتب رسالتك أو اسحب الملفات...' : 'Type a message or drag files...'
                   }
                   rows={1}
                   className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 max-h-24 overflow-y-auto"
@@ -204,14 +205,14 @@ export function ChatInput({
                       handleSend();
                     }
                   }}
-                  disabled={isListening}
+                  disabled={isListening || isLoading}
                 />
 
                 {/* Send Button (when there's text or files) */}
                 {(message.trim() || uploadedFiles.length > 0) && (
                   <Button
                     onClick={handleSend}
-                    disabled={isLoading || isListening}
+                    disabled={isLoading || isListening || isUploading}
                     className="h-8 w-8 m-2 rounded-full p-0"
                     size="icon"
                   >
@@ -244,8 +245,18 @@ export function ChatInput({
               </div>
             </div>
           )}
+
+          {/* Upload progress indicator */}
+          {isUploading && (
+            <div className="mt-2 text-center">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {language === 'ar' ? 'جاري رفع الملفات...' : 'Uploading files...'}
+              </div>
+            </div>
+          )}
         </div>
       </div>
-    </>
+    </DragDropUpload>
   );
 }

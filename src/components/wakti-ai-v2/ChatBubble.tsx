@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { BrowsingIndicator } from './BrowsingIndicator';
 import { SearchResultActions } from './SearchResultActions';
+import { FilePreview } from './FilePreview';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { toast } from 'sonner';
 
@@ -213,6 +214,9 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
     }
   };
 
+  // Extract attached files from user messages (if any)
+  const attachedFiles = isUser && message.attachedFiles ? message.attachedFiles : [];
+
   return (
     <div className={cn(
       "flex gap-3 max-w-4xl",
@@ -223,6 +227,22 @@ export function ChatBubble({ message, onSearchConfirm, onSwitchToChat, activeTri
         "flex-1 space-y-2",
         isUser ? "max-w-[80%]" : "max-w-[85%]"
       )}>
+        {/* Attached Files (for user messages) */}
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachedFiles.map((file, index) => (
+              <FilePreview
+                key={index}
+                file={file}
+                index={index}
+                onRemove={() => {}} // No removal in chat bubble
+                showRemoveButton={false}
+                size="sm"
+              />
+            ))}
+          </div>
+        )}
+
         {/* Message Bubble */}
         <div className={cn(
           "relative px-4 py-3 rounded-2xl shadow-sm",
