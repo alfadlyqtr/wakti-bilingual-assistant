@@ -1,35 +1,5 @@
+
 import { supabase } from '@/integrations/supabase/client';
-
-export interface AIResponse {
-  response: string;
-  conversationId?: string;
-  intent?: string;
-  confidence?: string;
-  actionTaken?: string;
-  actionResult?: any;
-  imageUrl?: string;
-  browsingUsed?: boolean;
-  browsingData?: {
-    hasResults: boolean;
-    sources?: any[];
-    images?: any[];
-    query?: string;
-  };
-  quotaStatus?: {
-    count: number;
-    limit: number;
-    usagePercentage: number;
-    remaining: number;
-  };
-  requiresSearchConfirmation?: boolean;
-  error?: string;
-}
-
-export interface TranscriptionResponse {
-  text: string;
-  success: boolean;
-  error?: string;
-}
 
 export interface AIMessage {
   id: string;
@@ -41,15 +11,8 @@ export interface AIMessage {
   actionTaken?: boolean;
   inputType?: 'text' | 'voice';
   browsingUsed?: boolean;
-  browsingData?: {
-    query?: string;
-    sources?: any[];
-  };
-  quotaStatus?: {
-    count: number;
-    limit: number;
-    usagePercentage: number;
-  };
+  browsingData?: any;
+  quotaStatus?: any;
   requiresSearchConfirmation?: boolean;
   imageUrl?: string;
   isTextGenerated?: boolean;
@@ -58,502 +21,255 @@ export interface AIMessage {
 export interface AIConversation {
   id: string;
   title: string;
-  created_at: string;
   last_message_at: string;
+  created_at: string;
 }
 
-type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  intent?: string;
+  confidence_level?: 'high' | 'medium' | 'low';
+  action_taken?: any;
+  input_type?: 'text' | 'voice';
+  browsing_used?: boolean;
+  browsing_data?: any;
+  quota_status?: any;
+}
 
-// Session storage keys
-const CHAT_SESSION_KEY = 'wakti_ai_chat_session';
-const CURRENT_CONVERSATION_KEY = 'wakti_ai_current_conversation';
-const MAX_CHAT_MESSAGES = 20;
+class WaktiAIV2ServiceClass {
+  private static instance: WaktiAIV2ServiceClass;
+  private quotaCache: { [userId: string]: any } = {};
+  private quotaCacheTimestamp: { [userId: string]: number } = {};
+  private readonly QUOTA_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-export class WaktiAIV2Service {
-  // Session management for current chat
-  static saveChatSession(messages: AIMessage[], conversationId?: string): void {
-    try {
-      // Limit to 20 messages
-      const limitedMessages = messages.slice(-MAX_CHAT_MESSAGES);
-      
-      const sessionData = {
-        messages: limitedMessages,
-        conversationId,
-        timestamp: Date.now()
-      };
-      
-      sessionStorage.setItem(CHAT_SESSION_KEY, JSON.stringify(sessionData));
-      
-      if (conversationId) {
-        sessionStorage.setItem(CURRENT_CONVERSATION_KEY, conversationId);
-      }
-      
-      console.log('💾 Chat session saved:', limitedMessages.length, 'messages');
-    } catch (error) {
-      console.error('❌ Error saving chat session:', error);
+  static getInstance(): WaktiAIV2ServiceClass {
+    if (!WaktiAIV2ServiceClass.instance) {
+      WaktiAIV2ServiceClass.instance = new WaktiAIV2ServiceClass();
     }
+    return WaktiAIV2ServiceClass.instance;
   }
 
-  static loadChatSession(): { messages: AIMessage[]; conversationId?: string } | null {
-    try {
-      const sessionData = sessionStorage.getItem(CHAT_SESSION_KEY);
-      if (!sessionData) return null;
-
-      const parsed = JSON.parse(sessionData);
-      
-      // Convert timestamp strings back to Date objects
-      if (parsed.messages) {
-        parsed.messages = parsed.messages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }));
-      }
-      
-      console.log('📂 Chat session loaded:', parsed.messages?.length || 0, 'messages');
-      return parsed;
-    } catch (error) {
-      console.error('❌ Error loading chat session:', error);
-      return null;
-    }
-  }
-
-  static clearChatSession(): void {
-    try {
-      sessionStorage.removeItem(CHAT_SESSION_KEY);
-      sessionStorage.removeItem(CURRENT_CONVERSATION_KEY);
-      console.log('🗑️ Chat session cleared');
-    } catch (error) {
-      console.error('❌ Error clearing chat session:', error);
-    }
-  }
-
-  static getCurrentConversationId(): string | null {
-    try {
-      return sessionStorage.getItem(CURRENT_CONVERSATION_KEY);
-    } catch (error) {
-      console.error('❌ Error getting current conversation ID:', error);
-      return null;
-    }
-  }
-
-  static async testConnection(): Promise<{ success: boolean; error?: string }> {
-    try {
-      console.log('🔍 WaktiAIV2Service: Testing connection...');
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        throw new Error('No active session found');
-      }
-      
-      const testPayload = {
-        message: "Connection test",
-        userId: session.user.id,
-        language: 'en',
-        conversationId: null,
-        inputType: 'text',
-        activeTrigger: 'chat'
-      };
-      
-      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with test payload:', testPayload);
-      
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: testPayload
-      });
-      
-      if (error) {
-        console.error('🔍 WaktiAIV2Service: Connection test failed:', error);
-        return { success: false, error: error.message };
-      }
-      
-      console.log('🔍 WaktiAIV2Service: Connection test successful:', data);
-      return { success: true };
-      
-    } catch (error) {
-      console.error('🔍 WaktiAIV2Service: Connection test error:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  static async getOrFetchQuota(userId: string): Promise<any> {
-    try {
-      console.log('📊 Fetching quota for user:', userId);
-      
-      const { data, error } = await supabase
-        .from('ai_quotas')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
-        throw error;
-      }
-      
-      if (!data) {
-        // Create default quota if none exists
-        const defaultQuota = {
-          user_id: userId,
-          daily_limit: 100,
-          daily_count: 0,
-          last_reset: new Date().toISOString().split('T')[0]
-        };
-        
-        const { data: newQuota, error: insertError } = await supabase
-          .from('ai_quotas')
-          .insert(defaultQuota)
-          .select()
-          .single();
-        
-        if (insertError) {
-          throw insertError;
-        }
-        
-        return {
-          count: 0,
-          limit: 100,
-          usagePercentage: 0,
-          remaining: 100
-        };
-      }
-      
-      return {
-        count: data.daily_count || 0,
-        limit: data.daily_limit || 100,
-        usagePercentage: Math.round(((data.daily_count || 0) / (data.daily_limit || 100)) * 100),
-        remaining: (data.daily_limit || 100) - (data.daily_count || 0)
-      };
-    } catch (error) {
-      console.error('❌ Error fetching quota:', error);
-      return {
-        count: 0,
-        limit: 100,
-        usagePercentage: 0,
-        remaining: 100
-      };
-    }
-  }
-
-  static async sendMessage(
-    message: string, 
-    userId: string, 
+  // Enhanced sendMessage method with file support
+  async sendMessage(
+    message: string,
+    userId: string,
     language: string = 'en',
-    conversationId?: string,
+    conversationId: string | null = null,
     inputType: 'text' | 'voice' = 'text',
     conversationHistory: AIMessage[] = [],
     confirmSearch: boolean = false,
     activeTrigger: string = 'chat',
-    textGenParams?: any,
-    attachedFiles?: any[]
-  ): Promise<AIResponse> {
+    textGenParams: any = null,
+    attachedFiles: any[] = []
+  ) {
     try {
-      console.log('🔄 WaktiAIV2Service: === SEND MESSAGE START ===');
-      console.log('🔄 WaktiAIV2Service: Message:', message);
-      console.log('🔄 WaktiAIV2Service: Active Trigger (SERVICE):', activeTrigger);
-      console.log('🔄 WaktiAIV2Service: Conversation History Length:', conversationHistory.length);
-      console.log('🔄 WaktiAIV2Service: Attached Files:', attachedFiles?.length || 0);
+      console.log('🔄 WaktiAIV2Service: Sending message with enhanced file support');
+      console.log('🔄 Message:', message);
+      console.log('🔄 Active Trigger:', activeTrigger);
+      console.log('🔄 Attached Files:', attachedFiles?.length || 0);
 
-      // Increase context window - send last 15 messages instead of 10
-      const contextMessages = conversationHistory.slice(-15);
-
-      const payload = {
-        message,
-        userId,
-        language,
-        conversationId,
-        inputType,
-        conversationHistory: contextMessages,
-        confirmSearch,
-        activeTrigger,
-        textGenParams,
-        attachedFiles
-      };
-
-      console.log('🔄 WaktiAIV2Service: === PAYLOAD TO EDGE FUNCTION ===');
-      console.log('🔄 WaktiAIV2Service: Context messages count:', contextMessages.length);
-      console.log('🔄 WaktiAIV2Service: Full payload keys:', Object.keys(payload));
-
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: payload
+      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId,
+          language,
+          conversationId,
+          inputType,
+          conversationHistory: conversationHistory.slice(-10),
+          confirmSearch,
+          activeTrigger,
+          textGenParams,
+          attachedFiles // Pass attached files to the edge function
+        }
       });
 
-      console.log('🔄 WaktiAIV2Service: === EDGE FUNCTION RESPONSE ===');
-      console.log('🔄 WaktiAIV2Service: Error:', error);
-      console.log('🔄 WaktiAIV2Service: Data success:', data?.success);
-      console.log('🔄 WaktiAIV2Service: Response length:', data?.response?.length);
-
-      if (error) {
-        console.error('🔄 WaktiAIV2Service: ❌ Edge function error:', error);
-        throw error;
+      if (response.error) {
+        console.error('🔄 Edge function error:', response.error);
+        throw new Error(response.error.message || 'Failed to get AI response');
       }
 
-      if (!data.success) {
-        console.error('🔄 WaktiAIV2Service: ❌ AI processing failed:', data.error);
-        throw new Error(data.error || 'AI processing failed');
-      }
-
-      console.log('🔄 WaktiAIV2Service: ✅ Message sent successfully');
-
-      return {
-        response: data.response,
-        conversationId: data.conversationId,
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        actionResult: data.actionResult,
-        imageUrl: data.imageUrl,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation
-      };
-
+      console.log('🔄 WaktiAIV2Service: Received response from edge function');
+      return response.data;
     } catch (error: any) {
-      console.error('🔄 WaktiAIV2Service: ❌ Service error:', error);
-      return {
-        response: 'Sorry, I encountered an error processing your request. Please try again.',
-        error: error.message || 'Unknown error occurred'
-      };
-    }
-  }
-
-  static async sendMessageWithTrigger(
-    message: string,
-    conversationId?: string | null,
-    language: string = 'en',
-    inputType: 'text' | 'voice' = 'text',
-    activeTrigger: TriggerMode = 'chat'
-  ): Promise<AIResponse> {
-    try {
-      console.log('🔍 WaktiAIV2Service: Sending message with trigger:', activeTrigger);
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
-      }
-      
-      const payload = {
-        message,
-        userId: session.user.id,
-        language,
-        conversationId,
-        inputType,
-        activeTrigger
-      };
-      
-      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with trigger payload:', payload);
-      
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: payload
-      });
-      
-      if (error) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
-        throw new Error(error.message || 'AI service error');
-      }
-      
-      if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
-        throw new Error(data.error || 'AI processing failed');
-      }
-      
-      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain response:', data);
-      
-      return {
-        response: data.response,
-        conversationId: data.conversationId,
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        actionResult: data.actionResult,
-        imageUrl: data.imageUrl,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation
-      };
-      
-    } catch (error) {
-      console.error('🔍 WaktiAIV2Service: Service error:', error);
+      console.error('🔄 WaktiAIV2Service: Error sending message:', error);
       throw error;
     }
   }
 
-  static async sendMessageWithSearchConfirmation(
+  async sendMessageWithSearchConfirmation(
     message: string,
-    conversationId?: string | null,
-    language: string = 'en',
-    inputType: 'text' | 'voice' = 'text'
-  ): Promise<AIResponse> {
+    conversationId: string | null,
+    language: string = 'en'
+  ) {
     try {
-      console.log('🔍 WaktiAIV2Service: Sending message with search confirmation');
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
-      }
-      
-      const payload = {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      return await this.sendMessage(
         message,
-        userId: session.user.id,
+        user.id,
         language,
         conversationId,
-        inputType,
-        confirmSearch: true,
-        activeTrigger: 'search'
-      };
-      
-      console.log('🔍 WaktiAIV2Service: Calling wakti-ai-v2-brain with search confirmation:', payload);
-      
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: payload
-      });
-      
-      if (error) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain error:', error);
-        throw new Error(error.message || 'AI service error');
-      }
-      
-      if (!data.success) {
-        console.error('🔍 WaktiAIV2Service: wakti-ai-v2-brain returned failure:', data);
-        throw new Error(data.error || 'AI processing failed');
-      }
-      
-      console.log('🔍 WaktiAIV2Service: wakti-ai-v2-brain search confirmation response:', data);
-      
-      return {
-        response: data.response,
-        conversationId: data.conversationId,
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        actionResult: data.actionResult,
-        imageUrl: data.imageUrl,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        requiresSearchConfirmation: data.requiresSearchConfirmation
-      };
-      
-    } catch (error) {
-      console.error('🔍 WaktiAIV2Service: Service error:', error);
+        'text',
+        [],
+        true // confirmSearch = true
+      );
+    } catch (error: any) {
+      console.error('Error sending message with search confirmation:', error);
       throw error;
     }
   }
 
-  // Updated to limit to 5 conversations and ensure proper ordering
-  static async getConversations(): Promise<AIConversation[]> {
+  async getOrFetchQuota(userId: string) {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const now = Date.now();
+      const cacheKey = userId;
       
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
+      if (
+        this.quotaCache[cacheKey] && 
+        this.quotaCacheTimestamp[cacheKey] && 
+        (now - this.quotaCacheTimestamp[cacheKey]) < this.QUOTA_CACHE_DURATION
+      ) {
+        return this.quotaCache[cacheKey];
       }
+
+      const response = await supabase.functions.invoke('unified-ai-brain', {
+        body: {
+          message: 'quota_check',
+          userId,
+          language: 'en'
+        }
+      });
+
+      if (response.error) {
+        console.error('Error fetching quota:', response.error);
+        const fallbackQuota = { count: 0, limit: 60, canBrowse: true };
+        this.quotaCache[cacheKey] = fallbackQuota;
+        this.quotaCacheTimestamp[cacheKey] = now;
+        return fallbackQuota;
+      }
+
+      const quota = response.data?.quotaStatus || { count: 0, limit: 60, canBrowse: true };
+      this.quotaCache[cacheKey] = quota;
+      this.quotaCacheTimestamp[cacheKey] = now;
       
-      console.log('📋 Fetching recent conversations (max 5)...');
-      
+      return quota;
+    } catch (error: any) {
+      console.error('Error getting quota:', error);
+      const fallbackQuota = { count: 0, limit: 60, canBrowse: true };
+      return fallbackQuota;
+    }
+  }
+
+  async getConversations(): Promise<AIConversation[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('ai_conversations')
-        .select('*')
-        .eq('user_id', session.user.id)
+        .select('id, title, last_message_at, created_at')
+        .eq('user_id', user.id)
         .order('last_message_at', { ascending: false })
-        .limit(5); // Limit to 5 most recent conversations
-      
-      if (error) {
-        throw error;
-      }
-      
-      console.log(`📋 Retrieved ${data?.length || 0} conversations`);
+        .limit(50);
+
+      if (error) throw error;
+
       return data || [];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching conversations:', error);
       throw error;
     }
   }
 
-  static async getConversationMessages(conversationId: string): Promise<any[]> {
+  async getConversationMessages(conversationId: string): Promise<ConversationMessage[]> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
-      }
-      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('ai_chat_history')
         .select('*')
         .eq('conversation_id', conversationId)
-        .eq('user_id', session.user.id)
+        .eq('user_id', user.id)
         .order('created_at', { ascending: true });
-      
-      if (error) {
-        throw error;
-      }
-      
+
+      if (error) throw error;
+
       return data || [];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching conversation messages:', error);
       throw error;
     }
   }
 
-  static async deleteConversation(conversationId: string): Promise<void> {
+  async deleteConversation(conversationId: string): Promise<void> {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user?.id) {
-        throw new Error('User not authenticated');
-      }
-      
-      console.log('🗑️ Deleting conversation:', conversationId);
-      
-      // Delete chat history first (foreign key constraint)
-      await supabase
-        .from('ai_chat_history')
-        .delete()
-        .eq('conversation_id', conversationId)
-        .eq('user_id', session.user.id);
-      
-      // Delete conversation
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { error } = await supabase
         .from('ai_conversations')
         .delete()
         .eq('id', conversationId)
-        .eq('user_id', session.user.id);
-      
-      if (error) {
-        throw error;
-      }
-      
-      // Clear session if this was the current conversation
-      const currentConversationId = this.getCurrentConversationId();
-      if (currentConversationId === conversationId) {
-        this.clearChatSession();
-      }
-      
-      console.log('✅ Conversation deleted successfully');
-    } catch (error) {
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+    } catch (error: any) {
       console.error('Error deleting conversation:', error);
       throw error;
     }
   }
 
-  // Cleanup old conversations manually
-  static async cleanupExpiredConversations(): Promise<void> {
+  saveChatSession(messages: AIMessage[], conversationId: string | null = null) {
     try {
-      console.log('🧹 Starting manual conversation cleanup...');
+      const sessionData = {
+        messages: messages.slice(-20),
+        conversationId,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('wakti_ai_session', JSON.stringify(sessionData));
+    } catch (error) {
+      console.error('Error saving chat session:', error);
+    }
+  }
+
+  loadChatSession(): { messages: AIMessage[], conversationId: string | null } | null {
+    try {
+      const savedSession = localStorage.getItem('wakti_ai_session');
+      if (!savedSession) return null;
+
+      const sessionData = JSON.parse(savedSession);
       
-      const { error } = await supabase.functions.invoke('cleanup-ai-conversations');
-      
-      if (error) {
-        throw error;
+      if (sessionData.messages && Array.isArray(sessionData.messages)) {
+        const messages = sessionData.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+        
+        return {
+          messages,
+          conversationId: sessionData.conversationId || null
+        };
       }
       
-      console.log('✅ Manual cleanup completed');
+      return null;
     } catch (error) {
-      console.error('❌ Manual cleanup failed:', error);
-      throw error;
+      console.error('Error loading chat session:', error);
+      return null;
+    }
+  }
+
+  clearChatSession() {
+    try {
+      localStorage.removeItem('wakti_ai_session');
+    } catch (error) {
+      console.error('Error clearing chat session:', error);
     }
   }
 }
+
+export const WaktiAIV2Service = WaktiAIV2ServiceClass.getInstance();

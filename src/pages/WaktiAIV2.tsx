@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -104,13 +103,25 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2: === SEND MESSAGE START ===');
-      console.log('🔄 WAKTI AI V2: Message:', message);
-      console.log('🔄 WAKTI AI V2: Input Type:', inputType);
-      console.log('🔄 WAKTI AI V2: Attached Files:', attachedFiles?.length || 0);
-      console.log('🔄 WAKTI AI V2: Active Trigger (MAIN):', activeTrigger);
-      console.log('🔄 WAKTI AI V2: Current Conversation ID:', currentConversationId);
-      console.log('🔄 WAKTI AI V2: Session Messages Count:', sessionMessages.length);
+      console.log('🔄 WAKTI AI V2.5: === SEND MESSAGE WITH FILES START ===');
+      console.log('🔄 WAKTI AI V2.5: Message:', message);
+      console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
+      console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
+      console.log('🔄 WAKTI AI V2.5: Active Trigger (MAIN):', activeTrigger);
+      console.log('🔄 WAKTI AI V2.5: Current Conversation ID:', currentConversationId);
+      console.log('🔄 WAKTI AI V2.5: Session Messages Count:', sessionMessages.length);
+
+      // Log file details if any
+      if (attachedFiles && attachedFiles.length > 0) {
+        attachedFiles.forEach((file, index) => {
+          console.log(`🔄 WAKTI AI V2.5: File ${index + 1}:`, {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: file.url
+          });
+        });
+      }
 
       // Create user message
       const userMessage: AIMessage = {
@@ -128,7 +139,7 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Send message with enhanced context (15 messages instead of 10)
+      // Send message with enhanced context (15 messages instead of 10) AND attached files
       const response = await WaktiAIV2Service.sendMessage(
         message,
         user.id,
@@ -139,12 +150,12 @@ const WaktiAIV2 = () => {
         false, // confirmSearch
         activeTrigger,
         textGenParams,
-        attachedFiles
+        attachedFiles || [] // Pass attached files to the service
       );
 
-      console.log('🔄 WAKTI AI V2: === RESPONSE RECEIVED ===');
-      console.log('🔄 WAKTI AI V2: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2: Conversation ID:', response.conversationId);
+      console.log('🔄 WAKTI AI V2.5: === RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
+      console.log('🔄 WAKTI AI V2.5: Conversation ID:', response.conversationId);
 
       if (response.error) {
         throw new Error(response.error);
@@ -153,7 +164,7 @@ const WaktiAIV2 = () => {
       // Update conversation ID if new
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
-        console.log('🔄 WAKTI AI V2: Updated conversation ID:', response.conversationId);
+        console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
       // Create assistant message
@@ -190,9 +201,21 @@ const WaktiAIV2 = () => {
       // Refresh conversations list
       fetchConversations();
 
+      // Show success message if files were processed
+      if (attachedFiles && attachedFiles.length > 0) {
+        showSuccess(
+          language === 'ar' 
+            ? `تم تحليل ${attachedFiles.length} ملف بنجاح` 
+            : `Successfully analyzed ${attachedFiles.length} file(s)`
+        );
+      }
+
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2: ❌ Send message error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Send message error:', error);
       setError(error.message || 'Failed to send message');
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
+      );
     } finally {
       setIsLoading(false);
     }

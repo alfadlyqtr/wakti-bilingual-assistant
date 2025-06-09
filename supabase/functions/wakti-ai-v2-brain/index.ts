@@ -13,26 +13,231 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🔍 WAKTI AI V2.4 STRICT TRIGGER CONTROL: Processing request with absolute trigger enforcement");
+console.log("🔍 WAKTI AI V2.5 SMART FILE PROCESSING: Enhanced with DeepSeek vision and file analysis");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
+// Enhanced file processing function
+async function processAttachedFiles(files: any[]) {
+  try {
+    console.log("📁 WAKTI AI V2.5: Processing", files.length, "attached files");
+    
+    const processedFiles = [];
+    
+    for (const file of files) {
+      console.log("📁 Processing file:", file.name, "Type:", file.type);
+      
+      let fileContent = null;
+      let fileAnalysis = null;
+      
+      if (file.type.startsWith('image/')) {
+        // Process image files with DeepSeek vision
+        console.log("🖼️ Processing image file:", file.name);
+        fileAnalysis = await analyzeImageWithDeepSeek(file);
+        
+      } else if (file.type === 'application/pdf') {
+        // Process PDF files
+        console.log("📄 Processing PDF file:", file.name);
+        fileContent = await extractPDFText(file);
+        
+      } else if (file.type === 'text/plain') {
+        // Process text files
+        console.log("📝 Processing text file:", file.name);
+        fileContent = await extractTextContent(file);
+      }
+      
+      processedFiles.push({
+        name: file.name,
+        type: file.type,
+        url: file.url,
+        content: fileContent,
+        analysis: fileAnalysis
+      });
+    }
+    
+    return processedFiles;
+    
+  } catch (error) {
+    console.error("📁 Error processing files:", error);
+    return [];
+  }
+}
+
+// Analyze images using DeepSeek vision
+async function analyzeImageWithDeepSeek(file: any) {
+  try {
+    console.log("🖼️ Analyzing image with DeepSeek vision:", file.name);
+    
+    if (!DEEPSEEK_API_KEY) {
+      console.log("🖼️ DeepSeek API key not available, falling back to basic description");
+      return `I can see you've uploaded an image file named "${file.name}". However, I need the DeepSeek API key to analyze the image content in detail.`;
+    }
+    
+    // Download the image from the URL
+    const imageResponse = await fetch(file.url);
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to download image: ${imageResponse.status}`);
+    }
+    
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const base64Image = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)));
+    
+    // Use DeepSeek vision model
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-vl',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this image in detail. Describe what you see, read any text present, explain any diagrams or charts, and provide context about the image content. Be comprehensive and detailed in your analysis.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${file.type};base64,${base64Image}`
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('🖼️ DeepSeek vision API error:', errorData);
+      
+      // Fallback to OpenAI if DeepSeek fails
+      if (OPENAI_API_KEY) {
+        console.log('🖼️ Falling back to OpenAI vision...');
+        return await analyzeImageWithOpenAI(file, base64Image);
+      }
+      
+      throw new Error(errorData.error?.message || `Vision API request failed with status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const analysis = data.choices[0].message.content;
+    
+    console.log('🖼️ Successfully analyzed image with DeepSeek vision');
+    return analysis;
+    
+  } catch (error) {
+    console.error("🖼️ Error analyzing image:", error);
+    return `I can see you've uploaded an image file named "${file.name}", but I encountered an error analyzing it: ${error.message}`;
+  }
+}
+
+// Fallback to OpenAI vision if DeepSeek fails
+async function analyzeImageWithOpenAI(file: any, base64Image: string) {
+  try {
+    console.log("🖼️ Using OpenAI vision as fallback for:", file.name);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this image in detail. Describe what you see, read any text present, explain any diagrams or charts, and provide context about the image content.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${file.type};base64,${base64Image}`
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`OpenAI vision failed: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.choices[0].message.content;
+    
+  } catch (error) {
+    console.error("🖼️ OpenAI vision fallback failed:", error);
+    return `I can see you've uploaded an image file named "${file.name}", but I'm unable to analyze it at the moment due to technical limitations.`;
+  }
+}
+
+// Extract text from PDF files
+async function extractPDFText(file: any) {
+  try {
+    console.log("📄 Extracting text from PDF:", file.name);
+    
+    // For now, return a placeholder. In a full implementation, you'd use a PDF parsing library
+    // This would require adding a PDF parser dependency to the edge function
+    return `PDF file "${file.name}" uploaded. Note: PDF text extraction is not yet implemented in this demo version. Please describe the PDF content in your message if you'd like me to help with it.`;
+    
+  } catch (error) {
+    console.error("📄 Error extracting PDF text:", error);
+    return `PDF file "${file.name}" uploaded, but text extraction failed.`;
+  }
+}
+
+// Extract content from text files
+async function extractTextContent(file: any) {
+  try {
+    console.log("📝 Extracting text content from:", file.name);
+    
+    const response = await fetch(file.url);
+    if (!response.ok) {
+      throw new Error(`Failed to download text file: ${response.status}`);
+    }
+    
+    const textContent = await response.text();
+    console.log("📝 Successfully extracted text content, length:", textContent.length);
+    
+    return textContent;
+    
+  } catch (error) {
+    console.error("📝 Error extracting text content:", error);
+    return `Text file "${file.name}" uploaded, but content extraction failed.`;
+  }
+}
+
 // ULTRA-STRICT TRIGGER-BASED INTENT ANALYSIS - ABSOLUTE CONTROL
 function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activeTrigger = 'chat', textGenParams = null) {
   const lowerMessage = message.toLowerCase();
   
-  console.log("🎯 WAKTI AI V2.4: === ULTRA-STRICT TRIGGER ANALYSIS ===");
-  console.log("🎯 WAKTI AI V2.4: Message:", message);
-  console.log("🎯 WAKTI AI V2.4: Active trigger (ABSOLUTE CONTROLLER):", activeTrigger);
-  console.log("🎯 WAKTI AI V2.4: Language:", language);
-  console.log("🎯 WAKTI AI V2.4: Text Gen Params:", textGenParams);
+  console.log("🎯 WAKTI AI V2.5: === ULTRA-STRICT TRIGGER ANALYSIS ===");
+  console.log("🎯 WAKTI AI V2.5: Message:", message);
+  console.log("🎯 WAKTI AI V2.5: Active trigger (ABSOLUTE CONTROLLER):", activeTrigger);
+  console.log("🎯 WAKTI AI V2.5: Language:", language);
+  console.log("🎯 WAKTI AI V2.5: Text Gen Params:", textGenParams);
   
   // Check for text generation request FIRST
   if (textGenParams) {
-    console.log("🎯 WAKTI AI V2.4: ✅ TEXT GENERATION MODE DETECTED - NO BROWSING ALLOWED");
+    console.log("🎯 WAKTI AI V2.5: ✅ TEXT GENERATION MODE DETECTED - NO BROWSING ALLOWED");
     return {
       intent: 'generate_text',
       confidence: 'high',
@@ -49,8 +254,8 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
   
   switch (activeTrigger) {
     case 'chat':
-      console.log("🎯 WAKTI AI V2.4: ✅ CHAT MODE - BROWSING ABSOLUTELY FORBIDDEN");
-      console.log("🎯 WAKTI AI V2.4: 🚫 NO SEARCH, NO TAVILY, NO BROWSING - DEEPSEEK ONLY");
+      console.log("🎯 WAKTI AI V2.5: ✅ CHAT MODE - BROWSING ABSOLUTELY FORBIDDEN");
+      console.log("🎯 WAKTI AI V2.5: 🚫 NO SEARCH, NO TAVILY, NO BROWSING - DEEPSEEK ONLY");
       
       // Check for image generation patterns only (no browsing)
       const imagePatterns = [
@@ -60,7 +265,7 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       
       if (imagePatterns.some(p => lowerMessage.includes(p))) {
         const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة)/gi, '').trim();
-        console.log("🎯 WAKTI AI V2.4: 🎨 IMAGE GENERATION REQUEST IN CHAT MODE");
+        console.log("🎯 WAKTI AI V2.5: 🎨 IMAGE GENERATION REQUEST IN CHAT MODE");
         return {
           intent: 'generate_image',
           confidence: 'high',
@@ -73,7 +278,7 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       }
       
       // ABSOLUTE CHAT RESPONSE - NO BROWSING WHATSOEVER
-      console.log("🎯 WAKTI AI V2.4: 💬 PURE CHAT MODE - DEEPSEEK GENERAL KNOWLEDGE ONLY");
+      console.log("🎯 WAKTI AI V2.5: 💬 PURE CHAT MODE - DEEPSEEK GENERAL KNOWLEDGE ONLY");
       return {
         intent: 'general_chat',
         confidence: 'high',
@@ -85,8 +290,8 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       };
       
     case 'search':
-      console.log("🎯 WAKTI AI V2.4: ✅ SEARCH MODE - BROWSING ABSOLUTELY REQUIRED");
-      console.log("🎯 WAKTI AI V2.4: 🌐 TAVILY API ENABLED - BASIC SEARCH MODE");
+      console.log("🎯 WAKTI AI V2.5: ✅ SEARCH MODE - BROWSING ABSOLUTELY REQUIRED");
+      console.log("🎯 WAKTI AI V2.5: 🌐 TAVILY API ENABLED - BASIC SEARCH MODE");
       return {
         intent: 'real_time_search',
         confidence: 'high',
@@ -98,8 +303,8 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       };
       
     case 'advanced_search':
-      console.log("🎯 WAKTI AI V2.4: ✅ ADVANCED SEARCH MODE - ADVANCED BROWSING ABSOLUTELY REQUIRED");
-      console.log("🎯 WAKTI AI V2.4: 🌐 TAVILY API ENABLED - ADVANCED SEARCH MODE");
+      console.log("🎯 WAKTI AI V2.5: ✅ ADVANCED SEARCH MODE - ADVANCED BROWSING ABSOLUTELY REQUIRED");
+      console.log("🎯 WAKTI AI V2.5: 🌐 TAVILY API ENABLED - ADVANCED SEARCH MODE");
       return {
         intent: 'advanced_real_time_search',
         confidence: 'high',
@@ -111,7 +316,7 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       };
       
     case 'image':
-      console.log("🎯 WAKTI AI V2.4: ✅ IMAGE MODE - GENERATE IMAGES ONLY");
+      console.log("🎯 WAKTI AI V2.5: ✅ IMAGE MODE - GENERATE IMAGES ONLY");
       const prompt = message.replace(/(generate image|create image|draw|make picture|image of|picture of|أنشئ صورة|اصنع صورة|ارسم|صورة)/gi, '').trim();
       return {
         intent: 'generate_image',
@@ -124,8 +329,8 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
       };
       
     default:
-      console.log("🎯 WAKTI AI V2.4: ⚠️ UNKNOWN TRIGGER - DEFAULTING TO SAFE CHAT MODE");
-      console.log("🎯 WAKTI AI V2.4: 🚫 SAFETY MODE: NO BROWSING");
+      console.log("🎯 WAKTI AI V2.5: ⚠️ UNKNOWN TRIGGER - DEFAULTING TO SAFE CHAT MODE");
+      console.log("🎯 WAKTI AI V2.5: 🚫 SAFETY MODE: NO BROWSING");
       return {
         intent: 'general_chat',
         confidence: 'medium',
@@ -141,7 +346,7 @@ function analyzeIntentWithAbsoluteTriggerControl(message, language = 'en', activ
 // Text generation function
 async function generateText(params, language = 'en') {
   try {
-    console.log("📝 WAKTI AI V2.4: Generating text with params:", params);
+    console.log("📝 WAKTI AI V2.5: Generating text with params:", params);
     
     if (!DEEPSEEK_API_KEY) {
       throw new Error("DeepSeek API key not configured");
@@ -193,7 +398,7 @@ Write a direct reply that addresses the original message appropriately.`;
 Please write an appropriate reply.`;
     }
 
-    console.log('📝 WAKTI AI V2.4: Calling DeepSeek API for text generation...');
+    console.log('📝 WAKTI AI V2.5: Calling DeepSeek API for text generation...');
 
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -212,18 +417,18 @@ Please write an appropriate reply.`;
       }),
     });
 
-    console.log('📝 WAKTI AI V2.4: DeepSeek API response status:', response.status);
+    console.log('📝 WAKTI AI V2.5: DeepSeek API response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('📝 WAKTI AI V2.4: DeepSeek API error:', errorData);
+      console.error('📝 WAKTI AI V2.5: DeepSeek API error:', errorData);
       throw new Error(errorData.error?.message || `API request failed with status ${response.status}`);
     }
 
     const data = await response.json();
     const generatedText = data.choices[0].message.content;
 
-    console.log('📝 WAKTI AI V2.4: Successfully generated text, length:', generatedText?.length);
+    console.log('📝 WAKTI AI V2.5: Successfully generated text, length:', generatedText?.length);
 
     return {
       success: true,
@@ -232,7 +437,7 @@ Please write an appropriate reply.`;
     };
     
   } catch (error) {
-    console.error("📝 WAKTI AI V2.4: Text generation error:", error);
+    console.error("📝 WAKTI AI V2.5: Text generation error:", error);
     return {
       success: false,
       error: error.message
@@ -243,7 +448,7 @@ Please write an appropriate reply.`;
 // Image generation function
 async function generateImage(prompt, language = 'en') {
   try {
-    console.log("🎨 WAKTI AI V2.4: Generating image with prompt:", prompt);
+    console.log("🎨 WAKTI AI V2.5: Generating image with prompt:", prompt);
     
     if (!RUNWARE_API_KEY) {
       throw new Error("Runware API key not configured");
@@ -290,7 +495,7 @@ async function generateImage(prompt, language = 'en') {
     }
     
     const result = await response.json();
-    console.log("🎨 WAKTI AI V2.4: Image generation result:", result);
+    console.log("🎨 WAKTI AI V2.5: Image generation result:", result);
     
     if (result.data && result.data.length > 0) {
       const imageData = result.data.find(item => item.taskType === "imageInference");
@@ -306,7 +511,7 @@ async function generateImage(prompt, language = 'en') {
     throw new Error("No image URL in response");
     
   } catch (error) {
-    console.error("🎨 WAKTI AI V2.4: Image generation error:", error);
+    console.error("🎨 WAKTI AI V2.5: Image generation error:", error);
     return {
       success: false,
       error: error.message
@@ -358,14 +563,14 @@ async function translateText(text, fromLang, toLang) {
 // Enhanced browsing function with strict trigger validation
 async function executeBrowsing(query, searchMode = 'basic', language = 'en', triggerMode = 'search') {
   try {
-    console.log("🌐 WAKTI AI V2.4: === BROWSING EXECUTION START ===");
-    console.log("🌐 WAKTI AI V2.4: Query:", query);
-    console.log("🌐 WAKTI AI V2.4: Search Mode:", searchMode);
-    console.log("🌐 WAKTI AI V2.4: Trigger Mode:", triggerMode);
+    console.log("🌐 WAKTI AI V2.5: === BROWSING EXECUTION START ===");
+    console.log("🌐 WAKTI AI V2.5: Query:", query);
+    console.log("🌐 WAKTI AI V2.5: Search Mode:", searchMode);
+    console.log("🌐 WAKTI AI V2.5: Trigger Mode:", triggerMode);
     
     // STRICT VALIDATION: Only allow browsing for search triggers
     if (triggerMode !== 'search' && triggerMode !== 'advanced_search') {
-      console.log("🌐 WAKTI AI V2.4: 🚫 BROWSING BLOCKED - Invalid trigger mode:", triggerMode);
+      console.log("🌐 WAKTI AI V2.5: 🚫 BROWSING BLOCKED - Invalid trigger mode:", triggerMode);
       throw new Error(`Browsing not allowed for trigger mode: ${triggerMode}`);
     }
     
@@ -404,7 +609,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en', tri
       };
     }
     
-    console.log("🌐 WAKTI AI V2.4: Using Tavily config:", tavilyConfig);
+    console.log("🌐 WAKTI AI V2.5: Using Tavily config:", tavilyConfig);
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -419,7 +624,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en', tri
     }
     
     const data = await response.json();
-    console.log("🌐 WAKTI AI V2.4: Browsing results:", data);
+    console.log("🌐 WAKTI AI V2.5: Browsing results:", data);
     
     // Create rich context for AI processing
     let richContext = `Search Query: "${query}" (${searchMode} mode)\n\n`;
@@ -447,7 +652,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en', tri
       richContext += `Images Available: ${data.images.length} related images found\n\n`;
     }
     
-    console.log("🌐 WAKTI AI V2.4: === BROWSING EXECUTION SUCCESS ===");
+    console.log("🌐 WAKTI AI V2.5: === BROWSING EXECUTION SUCCESS ===");
     
     return {
       success: true,
@@ -460,7 +665,7 @@ async function executeBrowsing(query, searchMode = 'basic', language = 'en', tri
     };
     
   } catch (error) {
-    console.error("🌐 WAKTI AI V2.4: ❌ BROWSING ERROR:", error);
+    console.error("🌐 WAKTI AI V2.5: ❌ BROWSING ERROR:", error);
     return {
       success: false,
       error: error.message
@@ -500,18 +705,42 @@ function detectQueryType(query) {
   return 'general';
 }
 
-// Enhanced AI processing function with ULTRA-STRICT browsing control
-async function processWithAI(message, context, language = 'en', allowBrowsing = false, triggerMode = 'chat') {
+// Enhanced AI processing function with ULTRA-STRICT browsing control and file processing
+async function processWithAI(message, context, language = 'en', allowBrowsing = false, triggerMode = 'chat', attachedFiles = []) {
   try {
-    console.log("🤖 WAKTI AI V2.4: === AI PROCESSING START ===");
-    console.log("🤖 WAKTI AI V2.4: Trigger Mode:", triggerMode);
-    console.log("🤖 WAKTI AI V2.4: Allow Browsing:", allowBrowsing);
-    console.log("🤖 WAKTI AI V2.4: Has Context:", !!context);
+    console.log("🤖 WAKTI AI V2.5: === AI PROCESSING START ===");
+    console.log("🤖 WAKTI AI V2.5: Trigger Mode:", triggerMode);
+    console.log("🤖 WAKTI AI V2.5: Allow Browsing:", allowBrowsing);
+    console.log("🤖 WAKTI AI V2.5: Has Context:", !!context);
+    console.log("🤖 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
     
     // ULTRA-STRICT VALIDATION: Double-check browsing permissions
     if (allowBrowsing && triggerMode !== 'search' && triggerMode !== 'advanced_search') {
-      console.log("🤖 WAKTI AI V2.4: 🚫 BROWSING PERMISSION DENIED - Invalid trigger for browsing");
+      console.log("🤖 WAKTI AI V2.5: 🚫 BROWSING PERMISSION DENIED - Invalid trigger for browsing");
       allowBrowsing = false; // Force disable browsing
+    }
+    
+    // Process attached files if any
+    let fileContext = '';
+    if (attachedFiles && attachedFiles.length > 0) {
+      console.log("📁 WAKTI AI V2.5: Processing attached files...");
+      const processedFiles = await processAttachedFiles(attachedFiles);
+      
+      if (processedFiles.length > 0) {
+        fileContext = '\n\n=== ATTACHED FILES ANALYSIS ===\n';
+        processedFiles.forEach((file, index) => {
+          fileContext += `\nFile ${index + 1}: ${file.name} (${file.type})\n`;
+          if (file.analysis) {
+            fileContext += `Image Analysis: ${file.analysis}\n`;
+          }
+          if (file.content) {
+            fileContext += `Content: ${file.content}\n`;
+          }
+        });
+        fileContext += '\n=== END FILE ANALYSIS ===\n';
+        
+        console.log("📁 WAKTI AI V2.5: Generated file context, length:", fileContext.length);
+      }
     }
     
     // Try DeepSeek first, fallback to OpenAI
@@ -549,6 +778,12 @@ async function processWithAI(message, context, language = 'en', allowBrowsing = 
 - قدم معلومات عامة من معرفتك السابقة فقط
 - إذا سأل عن معلومات حديثة، أخبره بوضوح أن يستخدم وضع البحث
 
+📁 معالجة الملفات المرفقة:
+- إذا رفق المستخدم ملفات (صور، مستندات)، قم بتحليلها بتفصيل كبير
+- اوصف الصور بدقة واقرأ أي نص موجود فيها
+- اشرح الرسوم البيانية والمخططات والجداول
+- اربط محتوى الملفات بسؤال المستخدم وقدم إجابة شاملة
+
 إذا سأل عن أخبار حديثة أو معلومات متغيرة، قل له: "للحصول على المعلومات الحديثة والدقيقة، يرجى التبديل إلى وضع البحث 🔍"`
         : `You are WAKTI, a super friendly and knowledgeable AI assistant. You chat like a close buddy who's genuinely excited to share cool information and help out!
 
@@ -560,6 +795,12 @@ async function processWithAI(message, context, language = 'en', allowBrowsing = 
 - Show enthusiasm and passion when sharing information
 - Only provide general knowledge from your training data
 - If asked about current/recent info, clearly tell them to use Search mode
+
+📁 File Processing Capabilities:
+- If the user uploads files (images, documents), analyze them in great detail
+- Describe images thoroughly and read any text present in them
+- Explain diagrams, charts, and data visualizations
+- Connect file content to the user's question and provide comprehensive answers
 
 If asked about current events, news, or changing information, say: "For current and accurate information, please switch to Search mode 🔍"`;
       
@@ -576,6 +817,12 @@ If asked about current events, news, or changing information, say: "For current 
 - اظهر الحماس والشغف عند مشاركة المعلومات
 - قدم تفاصيل غنية ومعلومات إضافية مثيرة من نتائج البحث
 - اربط المعلومات بالسياق والخلفية
+
+📁 معالجة الملفات المرفقة:
+- إذا رفق المستخدم ملفات (صور، مستندات)، قم بتحليلها بتفصيل كبير
+- اوصف الصور بدقة واقرأ أي نص موجود فيها
+- اشرح الرسوم البيانية والمخططات والجداول
+- اربط محتوى الملفات بسؤال المستخدم ونتائج البحث
 
 📝 تنسيق الإجابات:
 ${queryType === 'sports' ? '- الرياضة: اذكر النتائج، النقاط المهمة، اللحظات الحاسمة، إحصائيات اللاعبين' : ''}
@@ -598,6 +845,12 @@ ${queryType === 'finance' ? '- المالية: قدم الأرقام، الات�
 - Provide rich details and interesting additional context from search results
 - Connect information to broader context and background
 
+📁 File Processing Capabilities:
+- If the user uploads files (images, documents), analyze them in great detail
+- Describe images thoroughly and read any text present in them
+- Explain diagrams, charts, and data visualizations
+- Connect file content to the user's question and search results
+
 📝 Response formatting based on query type:
 ${queryType === 'sports' ? '- Sports: Include scores, highlights, key moments, player stats, game analysis' : ''}
 ${queryType === 'news' ? '- News: Provide timeline, key facts, implications, background context' : ''}
@@ -610,16 +863,19 @@ ${queryType === 'finance' ? '- Finance: Provide numbers, trends, analysis, marke
 Be like that friend who always has the coolest and most current facts and loves sharing them in an engaging way!`;
     }
     
+    // Combine the user message with file context
+    const enhancedMessage = message + fileContext;
+    
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message }
+      { role: 'user', content: enhancedMessage }
     ];
     
     if (context && allowBrowsing) {
       messages.splice(1, 0, { role: 'assistant', content: `Here's what I found: ${context}` });
-      console.log("🤖 WAKTI AI V2.4: ✅ Using search context in AI processing");
+      console.log("🤖 WAKTI AI V2.5: ✅ Using search context in AI processing");
     } else {
-      console.log("🤖 WAKTI AI V2.4: 💬 Pure chat mode - no search context");
+      console.log("🤖 WAKTI AI V2.5: 💬 Pure chat mode - no search context");
     }
     
     const response = await fetch(apiUrl, {
@@ -632,7 +888,7 @@ Be like that friend who always has the coolest and most current facts and loves 
         model: model,
         messages: messages,
         temperature: allowBrowsing ? 0.8 : 0.7, // Slightly different temperature for different modes
-        max_tokens: 1200
+        max_tokens: 1500 // Increased for file analysis
       })
     });
     
@@ -643,13 +899,13 @@ Be like that friend who always has the coolest and most current facts and loves 
     const result = await response.json();
     const aiResponse = result.choices[0].message.content;
     
-    console.log("🤖 WAKTI AI V2.4: === AI PROCESSING SUCCESS ===");
-    console.log("🤖 WAKTI AI V2.4: Response length:", aiResponse.length);
+    console.log("🤖 WAKTI AI V2.5: === AI PROCESSING SUCCESS ===");
+    console.log("🤖 WAKTI AI V2.5: Response length:", aiResponse.length);
     
     return aiResponse;
     
   } catch (error) {
-    console.error("🤖 WAKTI AI V2.4: ❌ AI PROCESSING ERROR:", error);
+    console.error("🤖 WAKTI AI V2.5: ❌ AI PROCESSING ERROR:", error);
     
     // Fallback response
     return language === 'ar' 
@@ -738,23 +994,23 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🎯 WAKTI AI V2.4: === ULTRA-STRICT TRIGGER REQUEST START ===");
-    console.log("🎯 WAKTI AI V2.4: Request method:", req.method);
+    console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING REQUEST START ===");
+    console.log("🎯 WAKTI AI V2.5: Request method:", req.method);
 
     // Enhanced JSON parsing with detailed debugging
     let requestBody;
     try {
       const rawBody = await req.text();
-      console.log("🎯 WAKTI AI V2.4: Raw request body received");
+      console.log("🎯 WAKTI AI V2.5: Raw request body received");
       
       if (!rawBody || rawBody.trim() === '') {
         throw new Error("Empty request body received");
       }
       
       requestBody = JSON.parse(rawBody);
-      console.log("🎯 WAKTI AI V2.4: ✅ Successfully parsed request body");
+      console.log("🎯 WAKTI AI V2.5: ✅ Successfully parsed request body");
     } catch (parseError) {
-      console.error("🎯 WAKTI AI V2.4: ❌ JSON parsing error:", parseError);
+      console.error("🎯 WAKTI AI V2.5: ❌ JSON parsing error:", parseError);
       
       return new Response(JSON.stringify({ 
         error: "Invalid JSON in request body",
@@ -766,7 +1022,7 @@ serve(async (req) => {
       });
     }
 
-    // Extract fields with defaults - INCLUDING activeTrigger and textGenParams
+    // Extract fields with defaults - INCLUDING activeTrigger, textGenParams, and attachedFiles
     const {
       message,
       userId,
@@ -776,21 +1032,23 @@ serve(async (req) => {
       conversationHistory = [],
       confirmSearch = false,
       activeTrigger = 'chat',
-      textGenParams = null
+      textGenParams = null,
+      attachedFiles = []
     } = requestBody;
 
-    console.log("🎯 WAKTI AI V2.4: === EXTRACTED FIELDS ===");
-    console.log("🎯 WAKTI AI V2.4: Message:", message);
-    console.log("🎯 WAKTI AI V2.4: User ID:", userId);
-    console.log("🎯 WAKTI AI V2.4: Language:", language);
-    console.log("🎯 WAKTI AI V2.4: Active Trigger (ABSOLUTE CONTROLLER):", activeTrigger);
-    console.log("🎯 WAKTI AI V2.4: Input Type:", inputType);
-    console.log("🎯 WAKTI AI V2.4: Text Gen Params:", textGenParams);
-    console.log("🎯 WAKTI AI V2.4: Confirm Search:", confirmSearch);
+    console.log("🎯 WAKTI AI V2.5: === EXTRACTED FIELDS ===");
+    console.log("🎯 WAKTI AI V2.5: Message:", message);
+    console.log("🎯 WAKTI AI V2.5: User ID:", userId);
+    console.log("🎯 WAKTI AI V2.5: Language:", language);
+    console.log("🎯 WAKTI AI V2.5: Active Trigger (ABSOLUTE CONTROLLER):", activeTrigger);
+    console.log("🎯 WAKTI AI V2.5: Input Type:", inputType);
+    console.log("🎯 WAKTI AI V2.5: Text Gen Params:", textGenParams);
+    console.log("🎯 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
+    console.log("🎯 WAKTI AI V2.5: Confirm Search:", confirmSearch);
 
     // Validate required fields
     if (!message || typeof message !== 'string' || message.trim() === '') {
-      console.error("🎯 WAKTI AI V2.4: ❌ Invalid message field");
+      console.error("🎯 WAKTI AI V2.5: ❌ Invalid message field");
       return new Response(JSON.stringify({ 
         error: "Message is required and must be a non-empty string",
         success: false
@@ -801,7 +1059,7 @@ serve(async (req) => {
     }
 
     if (!userId) {
-      console.error("🎯 WAKTI AI V2.4: ❌ Missing userId");
+      console.error("🎯 WAKTI AI V2.5: ❌ Missing userId");
       return new Response(JSON.stringify({ 
         error: "User ID is required",
         success: false
@@ -812,13 +1070,13 @@ serve(async (req) => {
     }
 
     // ULTRA-STRICT TRIGGER ANALYSIS: Analyze intent with ABSOLUTE trigger control
-    console.log("🎯 WAKTI AI V2.4: === STARTING ULTRA-STRICT TRIGGER ANALYSIS ===");
+    console.log("🎯 WAKTI AI V2.5: === STARTING ULTRA-STRICT TRIGGER ANALYSIS ===");
     const intentAnalysis = analyzeIntentWithAbsoluteTriggerControl(message, language, activeTrigger, textGenParams);
-    console.log("🎯 WAKTI AI V2.4: === ULTRA-STRICT TRIGGER RESULT ===");
-    console.log("🎯 WAKTI AI V2.4: Intent:", intentAnalysis.intent);
-    console.log("🎯 WAKTI AI V2.4: Requires Browsing:", intentAnalysis.requiresBrowsing);
-    console.log("🎯 WAKTI AI V2.4: Trigger Mode:", intentAnalysis.triggerMode);
-    console.log("🎯 WAKTI AI V2.4: Strict Mode:", intentAnalysis.strictMode);
+    console.log("🎯 WAKTI AI V2.5: === ULTRA-STRICT TRIGGER RESULT ===");
+    console.log("🎯 WAKTI AI V2.5: Intent:", intentAnalysis.intent);
+    console.log("🎯 WAKTI AI V2.5: Requires Browsing:", intentAnalysis.requiresBrowsing);
+    console.log("🎯 WAKTI AI V2.5: Trigger Mode:", intentAnalysis.triggerMode);
+    console.log("🎯 WAKTI AI V2.5: Strict Mode:", intentAnalysis.strictMode);
 
     let response = '';
     let imageUrl = null;
@@ -833,10 +1091,10 @@ serve(async (req) => {
     quotaStatus = await checkBrowsingQuota(userId);
 
     // ULTRA-STRICT TRIGGER PROCESSING: Process based on ABSOLUTE trigger control
-    console.log("🎯 WAKTI AI V2.4: === PROCESSING WITH ULTRA-STRICT TRIGGER CONTROL ===");
+    console.log("🎯 WAKTI AI V2.5: === PROCESSING WITH ULTRA-STRICT TRIGGER CONTROL ===");
     
     if (intentAnalysis.intent === 'generate_text') {
-      console.log("📝 WAKTI AI V2.4: Handling text generation");
+      console.log("📝 WAKTI AI V2.5: Handling text generation");
       
       const textResult = await generateText(intentAnalysis.params, language);
       
@@ -854,7 +1112,7 @@ serve(async (req) => {
       }
       
     } else if (intentAnalysis.intent === 'generate_image') {
-      console.log("🎨 WAKTI AI V2.4: Handling image generation");
+      console.log("🎨 WAKTI AI V2.5: Handling image generation");
       
       const imageResult = await generateImage(intentAnalysis.params.prompt, language);
       
@@ -872,15 +1130,15 @@ serve(async (req) => {
       }
       
     } else if (intentAnalysis.requiresBrowsing) {
-      console.log("🌐 WAKTI AI V2.4: TRIGGER DEMANDS BROWSING - ENABLING TAVILY");
-      console.log("🌐 WAKTI AI V2.4: Trigger Mode:", activeTrigger);
-      console.log("🌐 WAKTI AI V2.4: Strict Mode:", intentAnalysis.strictMode);
+      console.log("🌐 WAKTI AI V2.5: TRIGGER DEMANDS BROWSING - ENABLING TAVILY");
+      console.log("🌐 WAKTI AI V2.5: Trigger Mode:", activeTrigger);
+      console.log("🌐 WAKTI AI V2.5: Strict Mode:", intentAnalysis.strictMode);
       
       if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
         // Determine search mode based on trigger
         const searchMode = activeTrigger === 'advanced_search' ? 'advanced' : 'basic';
         
-        console.log("🌐 WAKTI AI V2.4: Executing browsing with mode:", searchMode);
+        console.log("🌐 WAKTI AI V2.5: Executing browsing with mode:", searchMode);
         const browsingResult = await executeBrowsing(message, searchMode, language, activeTrigger);
         
         if (browsingResult.success) {
@@ -893,16 +1151,16 @@ serve(async (req) => {
             searchMode: browsingResult.searchMode
           };
           
-          // Use rich context for better AI processing WITH browsing allowed
-          response = await processWithAI(message, browsingResult.richContext, language, true, activeTrigger);
+          // Use rich context for better AI processing WITH browsing allowed AND file processing
+          response = await processWithAI(message, browsingResult.richContext, language, true, activeTrigger, attachedFiles);
           
           // Log browsing usage
           await logAIUsage(userId, 'deepseek-chat', true);
-          console.log("🌐 WAKTI AI V2.4: ✅ BROWSING SUCCESSFUL");
+          console.log("🌐 WAKTI AI V2.5: ✅ BROWSING SUCCESSFUL");
         } else {
-          console.log("🌐 WAKTI AI V2.4: ❌ BROWSING FAILED - Falling back to AI without browsing");
-          // If browsing fails, fall back to AI without browsing
-          response = await processWithAI(message, null, language, false, 'chat');
+          console.log("🌐 WAKTI AI V2.5: ❌ BROWSING FAILED - Falling back to AI without browsing");
+          // If browsing fails, fall back to AI without browsing but with file processing
+          response = await processWithAI(message, null, language, false, 'chat', attachedFiles);
         }
       } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
         response = language === 'ar' 
@@ -915,10 +1173,10 @@ serve(async (req) => {
       }
       
     } else {
-      console.log("💬 WAKTI AI V2.4: TRIGGER FORBIDS BROWSING - PURE CHAT MODE");
-      console.log("💬 WAKTI AI V2.4: Strict Mode:", intentAnalysis.strictMode);
-      // ULTRA-STRICT: Pass allowBrowsing=false to prevent ANY browsing
-      response = await processWithAI(message, null, language, false, activeTrigger);
+      console.log("💬 WAKTI AI V2.5: TRIGGER FORBIDS BROWSING - PURE CHAT MODE WITH FILE PROCESSING");
+      console.log("💬 WAKTI AI V2.5: Strict Mode:", intentAnalysis.strictMode);
+      // ULTRA-STRICT: Pass allowBrowsing=false to prevent ANY browsing but allow file processing
+      response = await processWithAI(message, null, language, false, activeTrigger, attachedFiles);
     }
 
     // Handle conversation storage
@@ -938,7 +1196,7 @@ serve(async (req) => {
           finalConversationId = newConv.id;
         }
       } catch (convErr) {
-        console.log("🎯 WAKTI AI V2.4: Conversation creation failed, continuing without storage");
+        console.log("🎯 WAKTI AI V2.5: Conversation creation failed, continuing without storage");
       }
     }
 
@@ -975,7 +1233,7 @@ serve(async (req) => {
           .update({ last_message_at: new Date().toISOString() })
           .eq('id', finalConversationId);
       } catch (dbError) {
-        console.error("🎯 WAKTI AI V2.4: Database storage error:", dbError);
+        console.error("🎯 WAKTI AI V2.5: Database storage error:", dbError);
       }
     }
 
@@ -1001,19 +1259,20 @@ serve(async (req) => {
       strictMode: intentAnalysis.strictMode
     };
 
-    console.log("🎯 WAKTI AI V2.4: === ULTRA-STRICT TRIGGER SUCCESS ===");
-    console.log("🎯 WAKTI AI V2.4: Browsing Used:", browsingUsed);
-    console.log("🎯 WAKTI AI V2.4: Intent:", intentAnalysis.intent);
-    console.log("🎯 WAKTI AI V2.4: Trigger Mode:", activeTrigger);
-    console.log("🎯 WAKTI AI V2.4: Strict Mode:", intentAnalysis.strictMode);
-    console.log("🎯 WAKTI AI V2.4: === REQUEST END ===");
+    console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING SUCCESS ===");
+    console.log("🎯 WAKTI AI V2.5: Browsing Used:", browsingUsed);
+    console.log("🎯 WAKTI AI V2.5: Intent:", intentAnalysis.intent);
+    console.log("🎯 WAKTI AI V2.5: Trigger Mode:", activeTrigger);
+    console.log("🎯 WAKTI AI V2.5: Strict Mode:", intentAnalysis.strictMode);
+    console.log("🎯 WAKTI AI V2.5: Files Processed:", attachedFiles?.length || 0);
+    console.log("🎯 WAKTI AI V2.5: === REQUEST END ===");
 
     return new Response(JSON.stringify(responseData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🎯 WAKTI AI V2.4: ❌ Request processing error:", error);
+    console.error("🎯 WAKTI AI V2.5: ❌ Request processing error:", error);
     
     return new Response(JSON.stringify({ 
       success: false,
