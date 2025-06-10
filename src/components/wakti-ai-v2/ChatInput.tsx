@@ -113,7 +113,7 @@ export function ChatInput({
     }
     return language === 'ar' 
       ? 'اضغط للتحدث' 
-      : 'Click to speak';
+      : 'Tap to speak';
   };
 
   return (
@@ -145,7 +145,7 @@ export function ChatInput({
         </div>
       )}
 
-      {/* Modern Chat Input Area */}
+      {/* Mobile-Optimized Chat Input Area */}
       <div className="p-4 bg-background border-t">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-end gap-3">
@@ -156,7 +156,7 @@ export function ChatInput({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-10 w-10 rounded-full hover:bg-muted"
+                    className="h-10 w-10 rounded-full hover:bg-muted flex-shrink-0"
                     onClick={handleFileUpload}
                     disabled={isUploading || isLoading}
                     aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
@@ -187,14 +187,14 @@ export function ChatInput({
             {/* Input Container */}
             <div className="flex-1 relative">
               <div className="flex items-end bg-muted/50 rounded-2xl border border-border/30 overflow-hidden">
-                {/* Mic Button - Always visible with tooltip */}
+                {/* Mic Button - Always visible */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-10 w-10 m-1 rounded-xl hover:bg-background/80 transition-all duration-300 ${
+                        className={`h-10 w-10 m-1 rounded-xl hover:bg-background/80 transition-all duration-300 flex-shrink-0 ${
                           isListening 
                             ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
                             : speechSupported 
@@ -228,19 +228,12 @@ export function ChatInput({
                       : language === 'ar' ? 'اكتب رسالتك أو استخدم الميكروفون...' : 'Type a message or use microphone...'
                   }
                   rows={1}
-                  className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 max-h-24 overflow-y-auto"
+                  className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 max-h-24 overflow-y-auto text-base"
                   style={{ minHeight: '40px' }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
-                    }
-                    // Keyboard shortcut: Ctrl/Cmd + M for microphone
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
-                      e.preventDefault();
-                      if (speechSupported && !isLoading) {
-                        handleVoiceInput();
-                      }
                     }
                   }}
                   disabled={isListening || isLoading}
@@ -255,7 +248,7 @@ export function ChatInput({
                         <Button
                           onClick={handleSend}
                           disabled={isLoading || isListening || isUploading}
-                          className="h-8 w-8 m-2 rounded-full p-0"
+                          className="h-8 w-8 m-2 rounded-full p-0 flex-shrink-0"
                           size="icon"
                           aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                         >
@@ -276,7 +269,7 @@ export function ChatInput({
             </div>
           </div>
 
-          {/* Enhanced Status Indicators */}
+          {/* Status Indicators */}
           {isListening && (
             <div className="mt-2 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs animate-pulse">
@@ -301,18 +294,6 @@ export function ChatInput({
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {language === 'ar' ? 'جاري رفع الملفات...' : 'Uploading files...'}
               </div>
-            </div>
-          )}
-
-          {/* Keyboard shortcut hint */}
-          {speechSupported && (
-            <div className="mt-1 text-center">
-              <span className="text-xs text-muted-foreground">
-                {language === 'ar' 
-                  ? 'اختصار لوحة المفاتيح: Ctrl+M للميكروفون' 
-                  : 'Keyboard shortcut: Ctrl+M for microphone'
-                }
-              </span>
             </div>
           )}
         </div>

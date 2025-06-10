@@ -191,10 +191,21 @@ export function ChatMessages({
   };
 
   return (
-    <div className="h-full overflow-hidden">
-      <ScrollArea ref={scrollAreaRef} className="h-full">
-        <div className="p-4">
+    <div className="h-full w-full overflow-hidden">
+      <ScrollArea ref={scrollAreaRef} className="h-full w-full">
+        <div className="p-4 pb-6">
           <div className="max-w-2xl mx-auto space-y-4">
+            {sessionMessages.length === 0 && (
+              <div className="text-center py-8">
+                <div className="text-muted-foreground text-sm">
+                  {language === 'ar' 
+                    ? 'ابدأ محادثة جديدة...' 
+                    : 'Start a new conversation...'
+                  }
+                </div>
+              </div>
+            )}
+            
             {sessionMessages.map((message, index) => (
               <ChatBubble
                 key={message.id || index}

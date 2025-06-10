@@ -10,7 +10,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Phase 4 - Advanced Integration & Automation");
+console.log("🚀 WAKTI AI V2 BRAIN: Phase 4 - Enhanced Mobile & Search Integration");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -159,7 +159,7 @@ serve(async (req) => {
 
         return new Response(JSON.stringify({
           response: language === 'ar' 
-            ? `✅ تم إنشاء التذكير "${pendingReminderData.title}" بنجاح! يمكنك مراجعته في صفحة المهام والتذكيرات.`
+            ? `✅ تم إنشاء التذكير "${pendingReminderData.title}" بنجاح! يمكنك مراجعتها في صفحة المهام والتذكيرات.`
             : `✅ Reminder "${pendingReminderData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
           conversationId: conversationId || generateConversationId(),
           intent: 'reminder_created_success',
@@ -208,9 +208,55 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
-    // Enhanced conversation context analysis
-    const conversationContext = analyzeConversationContext(conversationHistory, message);
-    console.log("🔍 Conversation context analysis:", conversationContext);
+    // Enhanced conversation context analysis with better continuity
+    const conversationContext = analyzeEnhancedConversationContext(conversationHistory, message);
+    console.log("🔍 Enhanced conversation context analysis:", conversationContext);
+
+    // Check for search-worthy queries (news, events, sports, recent info)
+    const searchPatterns = [
+      /\b(recent|latest|current|today|yesterday|this week|news|breaking|update)\b/i,
+      /\b(sport|football|basketball|soccer|game|match|score|result|win|lose)\b/i,
+      /\b(weather|stock|price|market|crypto|bitcoin)\b/i,
+      /\b(what happened|who won|what's new|latest on)\b/i,
+      /\b(current events|breaking news|live updates)\b/i
+    ];
+
+    const isSearchQuery = searchPatterns.some(pattern => pattern.test(message.toLowerCase()));
+
+    if (isSearchQuery && activeTrigger === 'chat') {
+      console.log("🔍 Detected search-worthy query, promoting search functions");
+      
+      const searchPromotionResponse = language === 'ar' 
+        ? `🔍 يبدو أنك تبحث عن معلومات حديثة! للحصول على أحدث المعلومات والأخبار، أنصحك بالتبديل إلى:
+
+**🔍 وضع البحث** - للبحث السريع عن المعلومات العامة
+**⚡ البحث المتقدم** - للحصول على معلومات مفصلة ومحدثة في الوقت الفعلي
+
+يمكنك الوصول إلى هذه الأوضاع من خلال الضغط على زر القائمة (☰) في الأعلى واختيار "أدوات سريعة".
+
+هل تريد مني مساعدتك في شيء آخر، أم تفضل التبديل إلى وضع البحث للحصول على المعلومات المحدثة؟`
+        : `🔍 It looks like you're looking for recent information! For the latest news and updates, I recommend switching to:
+
+**🔍 Search Mode** - For quick searches of general information  
+**⚡ Advanced Search** - For detailed, real-time updated information
+
+You can access these modes by tapping the menu button (☰) at the top and selecting "Quick Tools".
+
+Would you like me to help you with something else, or would you prefer to switch to search mode for updated information?`;
+
+      return new Response(JSON.stringify({
+        response: searchPromotionResponse,
+        conversationId: conversationId || generateConversationId(),
+        intent: 'search_promotion',
+        confidence: 'high',
+        actionTaken: false,
+        actionResult: null,
+        searchRecommendation: true,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     // Check for task creation patterns and prepare task preview
     const taskPatterns = [
@@ -283,20 +329,20 @@ serve(async (req) => {
     }
 
     // Process with AI for general chat with enhanced context awareness
-    console.log("🤖 WAKTI AI V2 BRAIN: Processing with AI");
-    const response = await processWithAdvancedAI(message, conversationContext, language, userContext, calendarContext);
+    console.log("🤖 WAKTI AI V2 BRAIN: Processing with enhanced mobile AI");
+    const response = await processWithEnhancedMobileAI(message, conversationContext, language, userContext, calendarContext);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'general_chat',
+      intent: conversationContext.type === 'continuing_conversation' ? 'conversation_follow_up' : 'general_chat',
       confidence: 'high',
       actionTaken: false,
       actionResult: null,
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response:", result);
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending mobile-optimized response:", result);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -317,23 +363,24 @@ serve(async (req) => {
   }
 });
 
-// Enhanced conversation context analysis function
-function analyzeConversationContext(conversationHistory: any[], currentMessage: string) {
-  console.log("🔍 Analyzing conversation context...");
+// Enhanced conversation context analysis for better continuity
+function analyzeEnhancedConversationContext(conversationHistory: any[], currentMessage: string) {
+  console.log("🔍 Analyzing enhanced conversation context for mobile...");
   
   if (!conversationHistory || conversationHistory.length === 0) {
     return { type: 'new_conversation', previousContext: null, expectingResponse: false };
   }
 
   // Get the last few messages for context
-  const recentMessages = conversationHistory.slice(-5);
+  const recentMessages = conversationHistory.slice(-8); // More context for better continuity
   const lastAssistantMessage = recentMessages.filter(msg => msg.role === 'assistant').pop();
+  const lastUserMessage = recentMessages.filter(msg => msg.role === 'user').slice(-2, -1)[0]; // Previous user message
   
   if (!lastAssistantMessage) {
     return { type: 'user_initiated', previousContext: null, expectingResponse: false };
   }
 
-  // Check if the last assistant message was asking a question or expecting a response
+  // Enhanced patterns for conversation continuity
   const questionPatterns = [
     /would you like/i,
     /do you want/i,
@@ -342,46 +389,51 @@ function analyzeConversationContext(conversationHistory: any[], currentMessage: 
     /any additional/i,
     /\?$/,
     /please provide/i,
-    /let me know/i
+    /let me know/i,
+    /tell me more/i,
+    /anything else/i
   ];
 
+  const followUpPatterns = [
+    /^yes/i, /^no/i, /^sure/i, /^okay/i, /^ok/i,
+    /^tell me/i, /^what about/i, /^how about/i,
+    /^also/i, /^and/i, /^but/i, /^however/i,
+    /^continue/i, /^go on/i, /^more/i,
+    /^that's/i, /^this/i, /^it/i
+  ];
+
+  // Context continuation indicators
+  const topicContinuationWords = ['also', 'and', 'but', 'however', 'though', 'besides', 'moreover', 'furthermore'];
+  const referenceWords = ['that', 'this', 'it', 'they', 'them', 'those', 'these'];
+  
   const wasAskingQuestion = questionPatterns.some(pattern => 
     pattern.test(lastAssistantMessage.content)
   );
 
-  // Check if current message seems to be answering previous question
-  const answerPatterns = [
-    /^yes/i,
-    /^no/i,
-    /^add/i,
-    /^include/i,
-    /my instagram/i,
-    /my email/i,
-    /my website/i,
-    /@\w+/i, // social media handles
-    /https?:\/\//i // URLs
-  ];
-
-  const seemsLikeAnswer = answerPatterns.some(pattern => 
+  const isFollowUp = followUpPatterns.some(pattern => 
     pattern.test(currentMessage.trim())
   );
 
-  // Specific context detection for social media/contact info
-  const socialMediaContext = lastAssistantMessage.content.toLowerCase().includes('social media') ||
-                            lastAssistantMessage.content.toLowerCase().includes('additional elements') ||
-                            lastAssistantMessage.content.toLowerCase().includes('contact');
+  const hasContinuationIndicators = topicContinuationWords.some(word =>
+    currentMessage.toLowerCase().includes(word)
+  ) || referenceWords.some(word =>
+    currentMessage.toLowerCase().split(' ').includes(word)
+  );
 
-  const providingSocialInfo = /(@\w+|instagram|twitter|facebook|linkedin|email|phone|website)/i.test(currentMessage);
+  // Check if current message references previous context
+  const messageWords = currentMessage.toLowerCase().split(' ');
+  const hasContextReference = messageWords.length <= 10 && (isFollowUp || hasContinuationIndicators);
 
   return {
-    type: wasAskingQuestion && (seemsLikeAnswer || providingSocialInfo) ? 'answering_question' : 'new_topic',
+    type: (wasAskingQuestion && isFollowUp) || hasContextReference ? 'continuing_conversation' : 'new_topic',
     previousContext: {
       lastQuestion: lastAssistantMessage.content,
-      wasSocialMediaRequest: socialMediaContext,
-      isProvidingSocialInfo: providingSocialInfo
+      lastUserMessage: lastUserMessage?.content || '',
+      hasReference: hasContextReference,
+      isFollowUp: isFollowUp
     },
     expectingResponse: wasAskingQuestion,
-    contextualContinuation: socialMediaContext && providingSocialInfo
+    contextualContinuation: hasContextReference || isFollowUp
   };
 }
 
@@ -595,8 +647,8 @@ function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Real AI processing with enhanced context awareness
-async function processWithAdvancedAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
+// Enhanced AI processing with mobile-first approach and better context handling
+async function processWithEnhancedMobileAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
   try {
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -612,16 +664,28 @@ async function processWithAdvancedAI(message: string, conversationContext: any, 
       throw new Error("No AI API key configured");
     }
 
-    // Enhanced system prompt with conversation context awareness
+    // Enhanced system prompt for mobile app with search promotion
     let systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في إدارة المهام والأحداث والتذكيرات. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
-      : `You are WAKTI, an advanced AI assistant specializing in task management, events, and reminders. You help users create tasks, events, and reminders efficiently. Be friendly, helpful, and concise in your responses.`;
+      ? `أنت WAKTI، مساعد ذكي متطور لتطبيق الهاتف المحمول. تتخصص في المساعدة في إدارة المهام والأحداث والتذكيرات.
+
+خصائصك:
+- تطبيق محمول فقط، لذا ركز على تجربة المستخدم المحمولة
+- عندما يسأل المستخدمون عن معلومات حديثة أو أخبار أو رياضة، وجههم لاستخدام وضع "البحث" أو "البحث المتقدم" في التطبيق
+- حافظ على استمرارية المحادثة واربط إجاباتك بالسياق السابق
+- كن ودوداً ومفيداً ومختصراً في إجاباتك`
+      : `You are WAKTI, an advanced AI assistant for a mobile-only app. You specialize in task management, events, and reminders.
+
+Your characteristics:
+- Mobile-only app, so focus on mobile user experience  
+- When users ask about recent information, news, or sports, direct them to use "Search" or "Advanced Search" modes in the app
+- Maintain conversation continuity and connect your responses to previous context
+- Be friendly, helpful, and concise in your responses`;
     
-    // Add context awareness to system prompt
-    if (conversationContext?.type === 'answering_question' && conversationContext?.contextualContinuation) {
+    // Add enhanced context awareness to system prompt
+    if (conversationContext?.type === 'continuing_conversation') {
       const contextPrompt = language === 'ar'
-        ? `\n\nسياق المحادثة: المستخدم يجيب على سؤالك السابق حول إضافة عناصر إضافية مثل وسائل التواصل الاجتماعي. استمر في المحادثة بناءً على هذا السياق.`
-        : `\n\nConversation Context: The user is responding to your previous question about adding additional elements like social media. Continue the conversation based on this context and build upon their response.`;
+        ? `\n\nسياق المحادثة: المستخدم يتابع المحادثة السابقة. الرسالة السابقة منك: "${conversationContext.previousContext.lastQuestion}". استمر في المحادثة بناءً على هذا السياق.`
+        : `\n\nConversation Context: User is continuing the previous conversation. Your last message: "${conversationContext.previousContext.lastQuestion}". Continue the conversation based on this context.`;
       
       systemPrompt += contextPrompt;
     }
@@ -631,11 +695,11 @@ async function processWithAdvancedAI(message: string, conversationContext: any, 
       { role: 'user', content: message }
     ];
     
-    // Add conversation context if relevant
-    if (conversationContext?.previousContext?.lastQuestion) {
+    // Add conversation context for better continuity
+    if (conversationContext?.previousContext?.lastUserMessage && conversationContext?.contextualContinuation) {
       const contextMessage = language === 'ar'
-        ? `السياق: سألت سابقاً: "${conversationContext.previousContext.lastQuestion}"`
-        : `Context: You previously asked: "${conversationContext.previousContext.lastQuestion}"`;
+        ? `السياق: رسالة المستخدم السابقة: "${conversationContext.previousContext.lastUserMessage}"`
+        : `Context: User's previous message: "${conversationContext.previousContext.lastUserMessage}"`;
       
       messages.splice(1, 0, { role: 'assistant', content: contextMessage });
     }
@@ -650,7 +714,7 @@ async function processWithAdvancedAI(message: string, conversationContext: any, 
         model: model,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 800 // Slightly reduced for mobile
       })
     });
     
@@ -662,7 +726,7 @@ async function processWithAdvancedAI(message: string, conversationContext: any, 
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error('AI processing error:', error);
+    console.error('Enhanced mobile AI processing error:', error);
     return language === 'ar'
       ? 'عذراً، حدث خطأ في المعالجة. يرجى المحاولة مرة أخرى.'
       : 'Sorry, there was an error processing your request. Please try again.';
