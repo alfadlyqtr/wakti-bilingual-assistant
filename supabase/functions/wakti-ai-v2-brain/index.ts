@@ -258,8 +258,6 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
     let needsConfirmation = false;
-    let pendingTaskData = null;
-    let pendingReminderData = null;
 
     // Get real quota status from database
     quotaStatus = await checkBrowsingQuota(userId);
