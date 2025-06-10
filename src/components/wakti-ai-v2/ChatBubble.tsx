@@ -118,7 +118,8 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
   const hasPendingReminder = message.actionTaken === 'parse_reminder' && message.actionResult?.pendingReminder;
   const hasSearchSuggestion = message.actionTaken === 'search_suggestion' && message.actionResult?.suggestion;
   const hasDuplicateWarning = message.actionTaken === 'duplicate_warning' && message.actionResult?.duplicateTask;
-  const needsClarification = message.actionTaken?.includes('clarify');
+  // Fix: Check for string type before using includes()
+  const needsClarification = typeof message.actionTaken === 'string' && message.actionTaken.includes('clarify');
 
   return (
     <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
