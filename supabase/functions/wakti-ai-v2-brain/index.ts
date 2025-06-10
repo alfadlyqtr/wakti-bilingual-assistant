@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -128,6 +129,261 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced intent detection function
+function detectActionableIntent(message: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase();
+  
+  // Task creation patterns
+  const taskPatterns = [
+    'create task', 'add task', 'new task', 'make task', 'task to',
+    'need to do', 'have to do', 'should do', 'must do',
+    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'يجب أن أفعل'
+  ];
+  
+  // Reminder patterns
+  const reminderPatterns = [
+    'remind me', 'set reminder', 'reminder to', 'don\'t forget',
+    'alert me', 'notify me', 'ping me',
+    'ذكرني', 'تذكير', 'لا تنس', 'نبهني'
+  ];
+  
+  // Calendar/Event patterns
+  const eventPatterns = [
+    'schedule', 'meeting', 'appointment', 'event', 'calendar',
+    'book', 'reserve', 'plan for',
+    'اجدول', 'اجتماع', 'موعد', 'حدث', 'تقويم'
+  ];
+  
+  if (taskPatterns.some(pattern => lowerMessage.includes(pattern))) {
+    return { type: 'task', confidence: 'high' };
+  }
+  
+  if (reminderPatterns.some(pattern => lowerMessage.includes(pattern))) {
+    return { type: 'reminder', confidence: 'high' };
+  }
+  
+  if (eventPatterns.some(pattern => lowerMessage.includes(pattern))) {
+    return { type: 'event', confidence: 'medium' };
+  }
+  
+  return { type: 'none', confidence: 'low' };
+}
+
+// Simple date/time extraction function
+function extractDateTimeDetails(message: string) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Simple date patterns
+  const datePatterns = {
+    'today': new Date(),
+    'tomorrow': new Date(Date.now() + 24 * 60 * 60 * 1000),
+    'next week': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    'اليوم': new Date(),
+    'غداً': new Date(Date.now() + 24 * 60 * 60 * 1000),
+    'غدا': new Date(Date.now() + 24 * 60 * 60 * 1000)
+  };
+  
+  let extractedDate = null;
+  for (const [pattern, date] of Object.entries(datePatterns)) {
+    if (lowerMessage.includes(pattern)) {
+      extractedDate = date.toISOString().split('T')[0];
+      break;
+    }
+  }
+  
+  // Simple time extraction (basic patterns)
+  const timeMatch = lowerMessage.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/i);
+  let extractedTime = null;
+  if (timeMatch) {
+    const hour = parseInt(timeMatch[1]);
+    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+    const period = timeMatch[3];
+    
+    let adjustedHour = hour;
+    if (period && (period.toLowerCase() === 'pm' || period === 'م') && hour !== 12) {
+      adjustedHour += 12;
+    } else if (period && (period.toLowerCase() === 'am' || period === 'ص') && hour === 12) {
+      adjustedHour = 0;
+    }
+    
+    extractedTime = `${adjustedHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  }
+  
+  // Priority extraction
+  const priorityPatterns = {
+    'urgent': 'urgent',
+    'high priority': 'high',
+    'important': 'high',
+    'low priority': 'low',
+    'عاجل': 'urgent',
+    'مهم': 'high',
+    'أولوية عالية': 'high'
+  };
+  
+  let priority = 'normal';
+  for (const [pattern, level] of Object.entries(priorityPatterns)) {
+    if (lowerMessage.includes(pattern)) {
+      priority = level;
+      break;
+    }
+  }
+  
+  return {
+    date: extractedDate,
+    time: extractedTime,
+    priority: priority
+  };
+}
+
+// Enhanced task creation function
+async function createTaskFromMessage(userId: string, message: string, language: string = 'en') {
+  try {
+    console.log("🔧 Creating task from message:", message);
+    
+    const details = extractDateTimeDetails(message);
+    
+    // Extract title by removing common task creation phrases
+    let title = message
+      .replace(/(create task|add task|new task|make task|task to|need to do|have to do|should do|must do)/gi, '')
+      .replace(/(أنشئ مهمة|أضف مهمة|مهمة جديدة|يجب أن أفعل)/gi, '')
+      .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
+      .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
+      .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
+      .trim();
+    
+    if (!title || title.length < 3) {
+      title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
+    }
+    
+    const taskData = {
+      title: title,
+      description: '',
+      due_date: details.date || new Date().toISOString().split('T')[0],
+      due_time: details.time || null,
+      priority: details.priority as 'normal' | 'high' | 'urgent',
+      task_type: 'one-time' as const,
+      is_shared: false
+    };
+    
+    // Create task using existing TRService logic (replicated to avoid imports)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const sanitizedData = {
+      ...taskData,
+      user_id: user.id,
+      completed: false,
+      due_time: taskData.due_time === '' ? null : taskData.due_time,
+      description: taskData.description === '' ? null : taskData.description
+    };
+    
+    const { data, error } = await supabase
+      .from('tr_tasks')
+      .insert([sanitizedData])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Task creation error:', error);
+      throw new Error(`Failed to create task: ${error.message}`);
+    }
+    
+    console.log("✅ Task created successfully:", data);
+    return {
+      success: true,
+      task: data,
+      message: language === 'ar' 
+        ? `تم إنشاء المهمة "${title}" بنجاح` 
+        : `Task "${title}" created successfully`
+    };
+    
+  } catch (error) {
+    console.error('Error creating task:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: language === 'ar' 
+        ? 'فشل في إنشاء المهمة' 
+        : 'Failed to create task'
+    };
+  }
+}
+
+// Enhanced reminder creation function
+async function createReminderFromMessage(userId: string, message: string, language: string = 'en') {
+  try {
+    console.log("🔔 Creating reminder from message:", message);
+    
+    const details = extractDateTimeDetails(message);
+    
+    // Extract title by removing common reminder phrases
+    let title = message
+      .replace(/(remind me|set reminder|reminder to|don't forget|alert me|notify me|ping me)/gi, '')
+      .replace(/(ذكرني|تذكير|لا تنس|نبهني)/gi, '')
+      .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
+      .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
+      .replace(/^(to|that|about|بأن|عن|أن)/gi, '')
+      .trim();
+    
+    if (!title || title.length < 3) {
+      title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
+    }
+    
+    const reminderData = {
+      title: title,
+      description: null,
+      due_date: details.date || new Date().toISOString().split('T')[0],
+      due_time: details.time || null
+    };
+    
+    // Create reminder using existing TRService logic (replicated to avoid imports)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error('User not authenticated');
+    }
+    
+    const sanitizedData = {
+      ...reminderData,
+      user_id: user.id,
+      due_time: reminderData.due_time === '' ? null : reminderData.due_time
+    };
+    
+    const { data, error } = await supabase
+      .from('tr_reminders')
+      .insert([sanitizedData])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Reminder creation error:', error);
+      throw new Error(`Failed to create reminder: ${error.message}`);
+    }
+    
+    console.log("✅ Reminder created successfully:", data);
+    return {
+      success: true,
+      reminder: data,
+      message: language === 'ar' 
+        ? `تم إنشاء التذكير "${title}" بنجاح` 
+        : `Reminder "${title}" created successfully`
+    };
+    
+  } catch (error) {
+    console.error('Error creating reminder:', error);
+    return {
+      success: false,
+      error: error.message,
+      message: language === 'ar' 
+        ? 'فشل في إنشاء التذكير' 
+        : 'Failed to create reminder'
+    };
+  }
+}
 
 // Fixed image analysis with proper DeepSeek vision model and authenticated file access
 async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Promise<string> {
@@ -475,10 +731,41 @@ async function processWithUltraStrictTriggerControl(
     fileContext = await processAttachedFiles(attachedFiles);
   }
 
+  // Check for actionable intents (task/reminder creation) - NEW FEATURE
+  let actionResult = null;
+  let actionTaken = null;
+  
+  try {
+    const intent = detectActionableIntent(message, language);
+    console.log("🎯 Detected intent:", intent);
+    
+    if (intent.type === 'task' && intent.confidence === 'high') {
+      console.log("🔧 Attempting to create task...");
+      actionResult = await createTaskFromMessage(userId, message, language);
+      actionTaken = 'create_task';
+    } else if (intent.type === 'reminder' && intent.confidence === 'high') {
+      console.log("🔔 Attempting to create reminder...");
+      actionResult = await createReminderFromMessage(userId, message, language);
+      actionTaken = 'create_reminder';
+    }
+  } catch (error) {
+    console.error("❌ Error processing actionable intent:", error);
+    // Continue with normal chat flow on any error
+    actionResult = null;
+    actionTaken = null;
+  }
+
   const quotaStatus = await checkBrowsingQuota(userId);
 
+  // Build enhanced context for AI response
+  let enhancedMessage = message;
+  if (actionResult && actionResult.success) {
+    const successMessage = actionResult.message;
+    enhancedMessage = `User message: "${message}"\n\nAction completed: ${successMessage}\n\nPlease acknowledge this action and provide a helpful response.`;
+  }
+
   const response = await processWithAI(
-    message,
+    enhancedMessage,
     null, // No search context in chat mode
     language,
     false, // Never allow browsing in chat mode
@@ -488,15 +775,29 @@ async function processWithUltraStrictTriggerControl(
     conversationHistory // Pass conversation history for context
   );
 
+  // Enhance response with action confirmation if an action was taken
+  let finalResponse = response;
+  if (actionResult && actionResult.success) {
+    const actionConfirmation = language === 'ar' 
+      ? `✅ ${actionResult.message}\n\n${response}`
+      : `✅ ${actionResult.message}\n\n${response}`;
+    finalResponse = actionConfirmation;
+  } else if (actionResult && !actionResult.success) {
+    const errorMessage = language === 'ar' 
+      ? `❌ ${actionResult.message}\n\n${response}`
+      : `❌ ${actionResult.message}\n\n${response}`;
+    finalResponse = errorMessage;
+  }
+
   console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING SUCCESS ===");
 
   return {
-    response,
+    response: finalResponse,
     conversationId: conversationId || generateConversationId(),
     intent: triggerResult.intent,
     confidence: triggerResult.confidence,
-    actionTaken: null,
-    actionResult: null,
+    actionTaken,
+    actionResult,
     imageUrl: null,
     browsingUsed: false,
     browsingData: null,
@@ -588,8 +889,8 @@ async function processWithAI(
     }
 
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.`;
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. يمكنك أيضاً إنشاء المهام والتذكيرات عندما يطلب المستخدم ذلك. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
+      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. You can also create tasks and reminders when users request them. Be friendly, helpful, and concise in your responses.`;
     
     // Build messages array starting with system prompt
     const messages = [
