@@ -31,18 +31,18 @@ export function ImageModal({ isOpen, onClose, imageUrl, prompt }: ImageModalProp
       window.URL.revokeObjectURL(url);
       
       showSuccess(
-        language === 'ar' ? 'تم تحميل الصورة بنجاح' : 'Image downloaded successfully'
+        language === 'ar' ? 'تم حفظ الصورة بنجاح' : 'Image saved successfully'
       );
     } catch (error) {
       showError(
-        language === 'ar' ? 'فشل في تحميل الصورة' : 'Failed to download image'
+        language === 'ar' ? 'فشل في حفظ الصورة' : 'Failed to save image'
       );
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0" hideCloseButton={true}>
         <DialogHeader className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-semibold">
@@ -56,7 +56,7 @@ export function ImageModal({ isOpen, onClose, imageUrl, prompt }: ImageModalProp
                 className="flex items-center gap-2"
               >
                 <Download className="h-4 w-4" />
-                {language === 'ar' ? 'تحميل' : 'Download'}
+                {language === 'ar' ? 'حفظ الصورة' : 'Save Image'}
               </Button>
               <Button
                 variant="ghost"
