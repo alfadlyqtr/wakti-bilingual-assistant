@@ -55,24 +55,12 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing task confirmation");
       
       try {
-        // Convert relative dates to actual dates BEFORE creating the task
-        let processedDueDate = null;
-        if (pendingTaskData.due_date) {
-          processedDueDate = convertRelativeDate(pendingTaskData.due_date);
-          console.log("🚀 WAKTI AI V2 BRAIN: Converted date:", pendingTaskData.due_date, "->", processedDueDate);
-          
-          // Validate the converted date
-          if (processedDueDate && !isValidDateString(processedDueDate)) {
-            console.error("🚀 WAKTI AI V2 BRAIN: Invalid converted date:", processedDueDate);
-            processedDueDate = null;
-          }
-        }
-
+        // No need to convert relative dates anymore since extractTaskData already does it
         const taskToCreate = {
           title: pendingTaskData.title,
           description: pendingTaskData.description || '',
           user_id: userId,
-          due_date: processedDueDate, // Use the converted date, not the original
+          due_date: pendingTaskData.due_date, // Already converted to actual date
           priority: pendingTaskData.priority || 'medium',
           status: 'pending',
           type: pendingTaskData.task_type || 'one-time',
@@ -146,16 +134,11 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing reminder confirmation");
       
       try {
-        let processedDueDate = null;
-        if (pendingReminderData.due_date) {
-          processedDueDate = convertRelativeDate(pendingReminderData.due_date);
-          console.log("🚀 WAKTI AI V2 BRAIN: Converted reminder date:", pendingReminderData.due_date, "->", processedDueDate);
-        }
-
+        // No need to convert relative dates anymore since extractReminderData should also do it
         const reminderToCreate = {
           title: pendingReminderData.title,
           user_id: userId,
-          due_date: processedDueDate, // Use converted date
+          due_date: pendingReminderData.due_date, // Already converted if needed
           completed: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -309,21 +292,17 @@ serve(async (req) => {
       
       if (taskData && taskData.title) {
         console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted, showing confirmation");
-        // Convert dates for display in confirmation
-        const displayData = {
-          ...taskData,
-          due_date: taskData.due_date ? convertRelativeDate(taskData.due_date) : null
-        };
+        // No need to convert dates here since extractTaskData already did it
         
         return new Response(JSON.stringify({
-          response: `I'll create this task for you:\n\n**${displayData.title}**\n${displayData.subtasks?.length > 0 ? `\nSubtasks:\n${displayData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${displayData.due_date ? `Due: ${formatDateForDisplay(displayData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
+          response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${formatDateForDisplay(taskData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
           conversationId: conversationId || generateConversationId(),
           intent: 'task_creation',
           confidence: 'high',
           actionTaken: false,
           actionResult: null,
           needsConfirmation: true,
-          pendingTaskData: displayData,
+          pendingTaskData: taskData, // taskData already has converted dates
           success: true
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -413,17 +392,24 @@ function extractTaskData(message: string) {
   let due_time = null;
   let priority = 'normal';
 
-  // Extract shopping list format: "shopping list lulu"
-  const shoppingMatch = message.match(/shopping\s+list\s+([^,\.\s]+)/i);
+  // Extract shopping list format: "shopping list lulu" or "shopping at lulu"
+  const shoppingMatch = message.match(/shopping\s+(?:list\s+|at\s+)?([^,\.\s]+)/i);
   if (shoppingMatch) {
     const location = shoppingMatch[1].trim();
     title = `Shopping at ${location.charAt(0).toUpperCase() + location.slice(1)}`;
   }
 
-  // Extract title from "create a task" format
-  const taskMatch = message.match(/create\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
-  if (taskMatch && !title) {
-    title = taskMatch[2].trim();
+  // Extract title from "create a task" format (only if no shopping title found)
+  if (!title) {
+    const taskMatch = message.match(/create\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
+    if (taskMatch) {
+      let extractedTitle = taskMatch[2].trim();
+      // Remove "for tomorrow" from title if it exists
+      extractedTitle = extractedTitle.replace(/\s*for\s+tomorrow\s*/i, '').trim();
+      if (extractedTitle && extractedTitle !== 'for' && extractedTitle !== 'tomorrow') {
+        title = extractedTitle;
+      }
+    }
   }
 
   // Extract subtasks from "sub tasks rice milk water"
@@ -437,11 +423,12 @@ function extractTaskData(message: string) {
       .slice(0, 10);
   }
 
-  // Extract due date and time
+  // Extract due date and time - IMMEDIATELY CONVERT TO ACTUAL DATE
   const dateTimePatterns = [
     /\bdue\s+(tomorrow)\s+(noon|morning|afternoon|evening)/i,
     /\bdue\s+(tomorrow)/i,
     /\b(tomorrow)\s+(noon)/i,
+    /\bfor\s+(tomorrow)/i,
     /\b(noon)\b/i
   ];
 
@@ -449,7 +436,9 @@ function extractTaskData(message: string) {
     const match = message.match(pattern);
     if (match) {
       if (match[1] && match[1].toLowerCase() === 'tomorrow') {
-        due_date = 'tomorrow';
+        // CONVERT IMMEDIATELY TO ACTUAL DATE
+        due_date = convertRelativeDate('tomorrow');
+        console.log(`🚀 WAKTI AI V2 BRAIN: Converted "tomorrow" to actual date: ${due_date}`);
       }
       if (match[2] && match[2].toLowerCase() === 'noon') {
         due_time = '12:00 PM';
@@ -469,11 +458,13 @@ function extractTaskData(message: string) {
     return null;
   }
 
+  console.log(`🚀 WAKTI AI V2 BRAIN: Extracted task data - Title: "${title}", Due Date: "${due_date}", Due Time: "${due_time}"`);
+
   return {
     title,
     description: '',
     subtasks,
-    due_date,
+    due_date, // This is now the actual date, not "tomorrow"
     due_time,
     priority: priority as 'normal' | 'high' | 'urgent',
     task_type: 'one-time' as const
@@ -551,7 +542,8 @@ function isValidDateString(dateString: string): boolean {
 function formatDateForDisplay(dateString: string): string {
   if (!dateString) return '';
   
-  // Check if it's still a relative term
+  // Since we now convert immediately, we shouldn't get relative terms here
+  // But keeping this as fallback
   if (dateString === 'tomorrow') {
     return 'Tomorrow';
   }
