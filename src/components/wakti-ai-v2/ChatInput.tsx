@@ -2,12 +2,13 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Mic, Send, Loader2 } from 'lucide-react';
+import { Upload, Mic, Send, Loader2, MicOff } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
 import { FilePreview } from './FilePreview';
 import { DragDropUpload } from './DragDropUpload';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ChatInputProps {
   message: string;
@@ -29,7 +30,10 @@ export function ChatInput({
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // Browser speech recognition hook
+  // Dynamic language setting for speech recognition
+  const speechLang = language === 'ar' ? 'ar-SA' : 'en-US';
+  
+  // Browser speech recognition hook with dynamic language
   const {
     isListening,
     transcript,
@@ -38,7 +42,11 @@ export function ChatInput({
     startListening,
     stopListening,
     clearTranscript
-  } = useBrowserSpeechRecognition();
+  } = useBrowserSpeechRecognition({
+    language: speechLang,
+    continuous: false,
+    interimResults: false
+  });
 
   // File upload hook
   const {
@@ -92,6 +100,22 @@ export function ChatInput({
     await uploadFiles(files);
   };
 
+  const getMicTooltip = () => {
+    if (!speechSupported) {
+      return language === 'ar' 
+        ? 'التعرف على الصوت غير مدعوم' 
+        : 'Speech recognition not supported';
+    }
+    if (isListening) {
+      return language === 'ar' 
+        ? 'إيقاف الاستماع' 
+        : 'Stop listening';
+    }
+    return language === 'ar' 
+      ? 'اضغط للتحدث' 
+      : 'Click to speak';
+  };
+
   return (
     <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
       {/* Uploaded Files Display */}
@@ -126,19 +150,29 @@ export function ChatInput({
         <div className="max-w-4xl mx-auto">
           <div className="flex items-end gap-3">
             {/* Upload Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-full hover:bg-muted"
-              onClick={handleFileUpload}
-              disabled={isUploading || isLoading}
-            >
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Upload className="h-5 w-5" />
-              )}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full hover:bg-muted"
+                    onClick={handleFileUpload}
+                    disabled={isUploading || isLoading}
+                    aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Upload className="h-5 w-5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {language === 'ar' ? 'رفع ملف' : 'Upload file'}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
             {/* Hidden file input */}
             <input
@@ -153,20 +187,36 @@ export function ChatInput({
             {/* Input Container */}
             <div className="flex-1 relative">
               <div className="flex items-end bg-muted/50 rounded-2xl border border-border/30 overflow-hidden">
-                {/* Mic Button (when input is empty) */}
-                {!message.trim() && !uploadedFiles.length && speechSupported && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={`h-10 w-10 m-1 rounded-xl hover:bg-background/80 ${
-                      isListening ? 'bg-red-500 text-white hover:bg-red-600' : ''
-                    }`}
-                    onClick={handleVoiceInput}
-                    disabled={!speechSupported || isLoading}
-                  >
-                    <Mic className="h-5 w-5" />
-                  </Button>
-                )}
+                {/* Mic Button - Always visible with tooltip */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-10 w-10 m-1 rounded-xl hover:bg-background/80 transition-all duration-300 ${
+                          isListening 
+                            ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
+                            : speechSupported 
+                              ? 'hover:bg-accent' 
+                              : 'opacity-50 cursor-not-allowed'
+                        }`}
+                        onClick={handleVoiceInput}
+                        disabled={!speechSupported || isLoading}
+                        aria-label={getMicTooltip()}
+                      >
+                        {isListening ? (
+                          <MicOff className="h-5 w-5" />
+                        ) : (
+                          <Mic className="h-5 w-5" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {getMicTooltip()}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
                 {/* Text Input */}
                 <Textarea
@@ -175,9 +225,7 @@ export function ChatInput({
                   placeholder={
                     isListening
                       ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
-                      : !speechSupported
-                      ? language === 'ar' ? 'التعرف على الصوت غير مدعوم' : 'Voice input not supported'
-                      : language === 'ar' ? 'اكتب رسالتك أو اسحب الملفات...' : 'Type a message or drag files...'
+                      : language === 'ar' ? 'اكتب رسالتك أو استخدم الميكروفون...' : 'Type a message or use microphone...'
                   }
                   rows={1}
                   className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 max-h-24 overflow-y-auto"
@@ -187,55 +235,84 @@ export function ChatInput({
                       e.preventDefault();
                       handleSend();
                     }
+                    // Keyboard shortcut: Ctrl/Cmd + M for microphone
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+                      e.preventDefault();
+                      if (speechSupported && !isLoading) {
+                        handleVoiceInput();
+                      }
+                    }
                   }}
                   disabled={isListening || isLoading}
+                  aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
                 />
 
-                {/* Send Button (when there's text or files) */}
+                {/* Send Button */}
                 {(message.trim() || uploadedFiles.length > 0) && (
-                  <Button
-                    onClick={handleSend}
-                    disabled={isLoading || isListening || isUploading}
-                    className="h-8 w-8 m-2 rounded-full p-0"
-                    size="icon"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="h-4 w-4" />
-                    )}
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleSend}
+                          disabled={isLoading || isListening || isUploading}
+                          className="h-8 w-8 m-2 rounded-full p-0"
+                          size="icon"
+                          aria-label={language === 'ar' ? 'إرسال' : 'Send'}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {language === 'ar' ? 'إرسال' : 'Send'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Listening indicator */}
+          {/* Enhanced Status Indicators */}
           {isListening && (
             <div className="mt-2 text-center">
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs">
-                <div className="h-2 w-2 bg-white rounded-full animate-pulse" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs animate-pulse">
+                <div className="h-2 w-2 bg-white rounded-full animate-ping" />
                 {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
               </div>
             </div>
           )}
 
-          {/* Speech error indicator */}
           {speechError && (
             <div className="mt-2 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-red-500 text-white rounded-full text-xs">
-                {language === 'ar' ? 'خطأ في التعرف على الصوت' : 'Speech recognition error'}
+                <MicOff className="h-3 w-3" />
+                {speechError}
               </div>
             </div>
           )}
 
-          {/* Upload progress indicator */}
           {isUploading && (
             <div className="mt-2 text-center">
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-500 text-white rounded-full text-xs">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {language === 'ar' ? 'جاري رفع الملفات...' : 'Uploading files...'}
               </div>
+            </div>
+          )}
+
+          {/* Keyboard shortcut hint */}
+          {speechSupported && (
+            <div className="mt-1 text-center">
+              <span className="text-xs text-muted-foreground">
+                {language === 'ar' 
+                  ? 'اختصار لوحة المفاتيح: Ctrl+M للميكروفون' 
+                  : 'Keyboard shortcut: Ctrl+M for microphone'
+                }
+              </span>
             </div>
           )}
         </div>
