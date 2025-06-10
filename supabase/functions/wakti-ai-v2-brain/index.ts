@@ -104,9 +104,11 @@ serve(async (req) => {
         }
 
         return new Response(JSON.stringify({
-          response: language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!',
+          response: language === 'ar' 
+            ? `✅ تم إنشاء المهمة "${pendingTaskData.title}" بنجاح! يمكنك مراجعتها في صفحة المهام والتذكيرات.`
+            : `✅ Task "${pendingTaskData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
           conversationId: conversationId || generateConversationId(),
-          intent: 'task_created',
+          intent: 'task_created_success',
           confidence: 'high',
           actionTaken: true,
           actionResult: { createdTask },
@@ -156,9 +158,11 @@ serve(async (req) => {
         console.log("Reminder created successfully:", createdReminder);
 
         return new Response(JSON.stringify({
-          response: language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!',
+          response: language === 'ar' 
+            ? `✅ تم إنشاء التذكير "${pendingReminderData.title}" بنجاح! يمكنك مراجعته في صفحة المهام والتذكيرات.`
+            : `✅ Reminder "${pendingReminderData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
           conversationId: conversationId || generateConversationId(),
-          intent: 'reminder_created',
+          intent: 'reminder_created_success',
           confidence: 'high',
           actionTaken: true,
           actionResult: { createdReminder },
@@ -225,8 +229,8 @@ serve(async (req) => {
         
         return new Response(JSON.stringify({
           response: language === 'ar' 
-            ? `سأقوم بإنشاء مهمة: "${taskData.title}". يرجى مراجعة التفاصيل والتأكيد.`
-            : `I'll create a task: "${taskData.title}". Please review the details and confirm.`,
+            ? `سأقوم بإنشاء مهمة: "${taskData.title}". يرجى مراجعة التفاصيل وتعديلها حسب الحاجة ثم الضغط على إنشاء.`
+            : `I'll create a task: "${taskData.title}". Please review and edit the details as needed, then click Create.`,
           conversationId: conversationId || generateConversationId(),
           intent: 'task_preview',
           confidence: 'high',
@@ -259,8 +263,8 @@ serve(async (req) => {
         
         return new Response(JSON.stringify({
           response: language === 'ar' 
-            ? `سأقوم بإنشاء تذكير: "${reminderData.title}". يرجى مراجعة التفاصيل والتأكيد.`
-            : `I'll create a reminder: "${reminderData.title}". Please review the details and confirm.`,
+            ? `سأقوم بإنشاء تذكير: "${reminderData.title}". يرجى مراجعة التفاصيل وتعديلها حسب الحاجة ثم الضغط على إنشاء.`
+            : `I'll create a reminder: "${reminderData.title}". Please review and edit the details as needed, then click Create.`,
           conversationId: conversationId || generateConversationId(),
           intent: 'reminder_preview',
           confidence: 'high',

@@ -1,84 +1,237 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Bot, Loader2, MessageSquare } from 'lucide-react';
-import { useTheme } from '@/providers/ThemeProvider';
 import { ChatBubble } from './ChatBubble';
-import { AIMessage } from '@/services/WaktiAIV2Service';
+import { TypingIndicator } from './TypingIndicator';
+import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
+import { useTheme } from '@/providers/ThemeProvider';
+import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { useToastHelper } from '@/hooks/use-toast-helper';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatMessagesProps {
-  sessionMessages: AIMessage[];
+  sessionMessages: any[];
   isLoading: boolean;
   activeTrigger: string;
-  scrollAreaRef: React.RefObject<any>;
-  userProfile?: any;
+  scrollAreaRef: any;
+  userProfile: any;
 }
 
-export function ChatMessages({
-  sessionMessages,
-  isLoading,
-  activeTrigger,
+export function ChatMessages({ 
+  sessionMessages, 
+  isLoading, 
+  activeTrigger, 
   scrollAreaRef,
-  userProfile
+  userProfile 
 }: ChatMessagesProps) {
   const { language } = useTheme();
+  const { showSuccess } = useToastHelper();
 
-  const getUserDisplayName = () => {
-    if (userProfile?.first_name) {
-      return userProfile.first_name;
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (scrollAreaRef.current) {
+      const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer) {
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     }
-    return language === 'ar' ? 'المستخدم' : 'User';
+  }, [sessionMessages, isLoading]);
+
+  const handleTaskConfirmation = async (editedTaskData: any) => {
+    try {
+      console.log('Confirming task creation with edited data:', editedTaskData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await WaktiAIV2Service.sendMessage(
+        '',
+        user.id,
+        language,
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        true,
+        false,
+        editedTaskData,
+        null
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // Show success toast
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
+      );
+
+      // Add follow-up success message to chat
+      const successMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant' as const,
+        content: language === 'ar' 
+          ? `✅ تم إنشاء المهمة "${editedTaskData.title}" بنجاح! يمكنك مراجعتها في صفحة المهام والتذكيرات.`
+          : `✅ Task "${editedTaskData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
+        timestamp: new Date(),
+        intent: 'task_created_success',
+        confidence: 'high' as const,
+        actionTaken: true
+      };
+
+      // Update session messages with success message
+      const updatedMessages = [...sessionMessages];
+      
+      // Remove the last message if it was a task preview
+      const lastMessage = updatedMessages[updatedMessages.length - 1];
+      if (lastMessage?.intent === 'task_preview') {
+        updatedMessages[updatedMessages.length - 1] = successMessage;
+      } else {
+        updatedMessages.push(successMessage);
+      }
+
+      // Save updated session
+      WaktiAIV2Service.saveChatSession(updatedMessages, null);
+      
+      // Force a page refresh to update the session
+      window.location.reload();
+
+    } catch (error: any) {
+      console.error('Task confirmation failed:', error);
+      showSuccess(
+        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
+      );
+    }
+  };
+
+  const handleReminderConfirmation = async (editedReminderData: any) => {
+    try {
+      console.log('Confirming reminder creation with edited data:', editedReminderData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await WaktiAIV2Service.sendMessage(
+        '',
+        user.id,
+        language,
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        false,
+        true,
+        null,
+        editedReminderData
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // Show success toast
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
+      );
+
+      // Add follow-up success message to chat
+      const successMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant' as const,
+        content: language === 'ar' 
+          ? `✅ تم إنشاء التذكير "${editedReminderData.title}" بنجاح! يمكنك مراجعته في صفحة المهام والتذكيرات.`
+          : `✅ Reminder "${editedReminderData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
+        timestamp: new Date(),
+        intent: 'reminder_created_success',
+        confidence: 'high' as const,
+        actionTaken: true
+      };
+
+      // Update session messages with success message
+      const updatedMessages = [...sessionMessages];
+      
+      // Remove the last message if it was a reminder preview
+      const lastMessage = updatedMessages[updatedMessages.length - 1];
+      if (lastMessage?.intent === 'reminder_preview') {
+        updatedMessages[updatedMessages.length - 1] = successMessage;
+      } else {
+        updatedMessages.push(successMessage);
+      }
+
+      // Save updated session
+      WaktiAIV2Service.saveChatSession(updatedMessages, null);
+      
+      // Force a page refresh to update the session
+      window.location.reload();
+
+    } catch (error: any) {
+      console.error('Reminder confirmation failed:', error);
+      showSuccess(
+        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
+      );
+    }
+  };
+
+  const handleCancelConfirmation = () => {
+    // Simply refresh to remove the confirmation card
+    window.location.reload();
   };
 
   return (
-    <ScrollArea 
-      className="h-full w-full px-4"
-      ref={scrollAreaRef}
-    >
-      <div className="max-w-4xl mx-auto py-4 space-y-6">
-        {sessionMessages.length === 0 && !isLoading && (
-          <div className="text-center py-12">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-primary" />
-            <h3 className="text-lg font-medium mb-2">
-              {language === 'ar' 
-                ? `مرحباً ${getUserDisplayName()} في WAKTI AI` 
-                : `Welcome ${getUserDisplayName()} to WAKTI AI`
-              }
-            </h3>
+    <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
+      <div className="max-w-2xl mx-auto space-y-4">
+        {sessionMessages.map((message, index) => (
+          <div key={message.id || index}>
+            <ChatBubble
+              message={message}
+              userProfile={userProfile}
+              activeTrigger={activeTrigger}
+            />
+            
+            {/* Show editable confirmation card for task/reminder previews */}
+            {message.intent === 'task_preview' && message.pendingTaskData && (
+              <div className="mt-3">
+                <EditableTaskConfirmationCard
+                  type="task"
+                  data={message.pendingTaskData}
+                  onConfirm={handleTaskConfirmation}
+                  onCancel={handleCancelConfirmation}
+                  isLoading={isLoading}
+                />
+              </div>
+            )}
+            
+            {message.intent === 'reminder_preview' && message.pendingReminderData && (
+              <div className="mt-3">
+                <EditableTaskConfirmationCard
+                  type="reminder"
+                  data={message.pendingReminderData}
+                  onConfirm={handleReminderConfirmation}
+                  onCancel={handleCancelConfirmation}
+                  isLoading={isLoading}
+                />
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Message Count Indicator */}
-        {sessionMessages.length > 15 && (
-          <div className="text-center py-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-muted rounded-full text-xs text-muted-foreground">
-              <MessageSquare className="h-3 w-3" />
-              <span>
-                {sessionMessages.length}/20 {language === 'ar' ? 'رسالة' : 'messages'}
-              </span>
-              {sessionMessages.length >= 20 && (
-                <span className="text-orange-500">
-                  {language === 'ar' ? '(ممتلئ)' : '(full)'}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        {sessionMessages.map((message) => (
-          <ChatBubble
-            key={message.id}
-            message={message}
-            activeTrigger={activeTrigger}
-          />
         ))}
 
         {isLoading && (
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            <span className="ml-2 text-sm text-muted-foreground">
-              {language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}
-            </span>
+          <div className="flex justify-start">
+            <TypingIndicator />
           </div>
         )}
       </div>

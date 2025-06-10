@@ -40,7 +40,7 @@ export interface AIConversation {
   message_count: number;
 }
 
-export class WaktiAIV2Service {
+export class WaktiAIV2ServiceClass {
   private static quotaCache: any = null;
   private static quotaCacheTime: number = 0;
   private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -107,227 +107,56 @@ export class WaktiAIV2Service {
     message: string,
     userId: string,
     language: string = 'en',
-    conversationId: string | null = null,
+    conversationId?: string | null,
     inputType: 'text' | 'voice' = 'text',
-    conversationHistory: AIMessage[] = [],
+    conversationHistory: any[] = [],
     confirmSearch: boolean = false,
     activeTrigger: string = 'chat',
     textGenParams: any = null,
     attachedFiles: any[] = [],
-    // Phase 4: Enhanced context
     calendarContext: any = null,
-    userContext: any = null
-  ): Promise<any> {
-    console.log('🚀 WaktiAIV2Service.sendMessage called - Phase 4 with enhanced debugging');
-    console.log('🔍 Request details:', {
-      message: message?.substring(0, 100) + '...',
-      userId,
-      language,
-      conversationId,
-      inputType,
-      confirmSearch,
-      activeTrigger,
-      hasTextGenParams: !!textGenParams,
-      attachedFilesCount: attachedFiles?.length || 0,
-      hasCalendarContext: !!calendarContext,
-      hasUserContext: !!userContext,
-      conversationHistoryLength: conversationHistory?.length || 0
-    });
-
+    userContext: any = null,
+    enableAdvancedIntegration: boolean = true,
+    enablePredictiveInsights: boolean = true,
+    enableWorkflowAutomation: boolean = true,
+    confirmTask: boolean = false,
+    confirmReminder: boolean = false,
+    pendingTaskData: any = null,
+    pendingReminderData: any = null
+  ) {
     try {
-      // Validate required parameters
-      if (!message || typeof message !== 'string' || message.trim() === '') {
-        const error = new Error('Message is required and must be a non-empty string');
-        console.error('❌ Validation error:', error.message);
-        throw error;
-      }
-
-      if (!userId || typeof userId !== 'string') {
-        const error = new Error('User ID is required and must be a string');
-        console.error('❌ Validation error:', error.message);
-        throw error;
-      }
-
-      // Check authentication status
-      console.log('🔐 Checking authentication...');
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError) {
-        console.error('❌ Authentication error details:', {
-          message: authError.message,
-          name: authError.name,
-          status: authError.status
-        });
-        throw new Error(`Authentication failed: ${authError.message}`);
-      }
-      
-      if (!user) {
-        const error = new Error('User not authenticated');
-        console.error('❌ Authentication error:', error.message);
-        throw error;
-      }
-      
-      if (user.id !== userId) {
-        const error = new Error('User ID mismatch');
-        console.error('❌ Authentication error:', error.message, { 
-          providedUserId: userId, 
-          authenticatedUserId: user.id 
-        });
-        throw error;
-      }
-
-      console.log('✅ Authentication verified for user:', user.id);
-
-      // Convert conversation history to the format expected by the edge function
-      const formattedHistory = conversationHistory.map(msg => ({
-        role: msg.role,
-        content: msg.content,
-        timestamp: msg.timestamp.toISOString()
-      }));
-
-      console.log('📝 Formatted conversation history:', {
-        length: formattedHistory.length,
-        roles: formattedHistory.map(h => h.role)
-      });
-
-      // Prepare request body
-      const requestBody = {
-        message,
-        userId,
-        language,
-        conversationId,
-        inputType,
-        conversationHistory: formattedHistory,
-        confirmSearch,
-        activeTrigger,
-        textGenParams,
-        attachedFiles: attachedFiles || [],
-        // Phase 4: Enhanced context
-        calendarContext,
-        userContext,
-        enableAdvancedIntegration: true,
-        enablePredictiveInsights: true,
-        enableWorkflowAutomation: true
-      };
-
-      console.log('📤 Sending request to edge function:', {
-        functionName: 'wakti-ai-v2-brain',
-        bodySize: JSON.stringify(requestBody).length,
-        requestBodyKeys: Object.keys(requestBody),
-        timestamp: new Date().toISOString()
-      });
-
-      // Add detailed request body logging (excluding sensitive data)
-      console.log('📤 Request body details:', {
-        messageLength: requestBody.message.length,
-        userId: requestBody.userId,
-        language: requestBody.language,
-        conversationId: requestBody.conversationId,
-        inputType: requestBody.inputType,
-        historyLength: requestBody.conversationHistory.length,
-        activeTrigger: requestBody.activeTrigger,
-        hasTextGenParams: !!requestBody.textGenParams,
-        attachedFilesCount: requestBody.attachedFiles.length,
-        hasCalendarContext: !!requestBody.calendarContext,
-        hasUserContext: !!requestBody.userContext
-      });
-
-      // Make the request to the edge function
-      const startTime = Date.now();
-      console.log('🌐 Making supabase.functions.invoke call...');
-      
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: requestBody
-      });
-
-      const duration = Date.now() - startTime;
-      console.log(`⏱️ Edge function response time: ${duration}ms`);
-
-      if (error) {
-        console.error('❌ Edge function error - Full details:', {
-          errorObject: error,
-          name: error.name,
-          message: error.message,
-          context: error.context,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-          duration,
-          timestamp: new Date().toISOString()
-        });
-        
-        // Enhanced error messaging without using .cause
-        let errorMessage = 'Failed to process message';
-        if (error.message) {
-          errorMessage = error.message;
-        } else if (error.details) {
-          errorMessage = `Edge function error: ${error.details}`;
-        } else if (error.context) {
-          errorMessage = `Request failed: ${error.context}`;
+      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId,
+          language,
+          conversationId,
+          inputType,
+          conversationHistory,
+          confirmSearch,
+          activeTrigger,
+          textGenParams,
+          attachedFiles,
+          calendarContext,
+          userContext,
+          enableAdvancedIntegration,
+          enablePredictiveInsights,
+          enableWorkflowAutomation,
+          confirmTask,
+          confirmReminder,
+          pendingTaskData,
+          pendingReminderData
         }
-        
-        // Create a new error with additional context
-        const enhancedError = new Error(`${errorMessage} (Duration: ${duration}ms)`);
-        throw enhancedError;
-      }
-
-      console.log('✅ Edge function response received:', {
-        hasData: !!data,
-        dataKeys: data ? Object.keys(data) : [],
-        success: data?.success,
-        hasResponse: !!data?.response,
-        hasError: !!data?.error,
-        duration,
-        timestamp: new Date().toISOString()
       });
 
-      // Add detailed response logging
-      if (data) {
-        console.log('📥 Response data details:', {
-          success: data.success,
-          responseLength: data.response ? data.response.length : 0,
-          hasGeneratedText: !!data.generatedText,
-          hasConversationId: !!data.conversationId,
-          hasActionTaken: !!data.actionTaken,
-          hasQuotaStatus: !!data.quotaStatus,
-          errorMessage: data.error,
-          dataProperties: Object.keys(data)
-        });
+      if (response.error) {
+        throw new Error(response.error.message || 'AI service error');
       }
 
-      // Validate response
-      if (!data) {
-        const error = new Error('No data received from edge function');
-        console.error('❌ Response validation error:', error.message);
-        throw error;
-      }
-
-      if (data.error) {
-        console.error('❌ Edge function returned error:', data.error);
-        throw new Error(data.error);
-      }
-
-      if (!data.success) {
-        console.warn('⚠️ Edge function returned success=false:', data);
-      }
-
-      console.log('✅ WaktiAIV2Service.sendMessage completed successfully');
-      return data;
-
+      return response.data;
     } catch (error: any) {
-      console.error('❌ WaktiAIV2Service.sendMessage comprehensive error:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-        userId,
-        activeTrigger,
-        messageLength: message?.length || 0,
-        timestamp: new Date().toISOString()
-      });
-      
-      // Re-throw with enhanced context but without using .cause
-      const enhancedError = new Error(`AI Service Error: ${error.message}`);
-      throw enhancedError;
+      console.error('WaktiAIV2Service sendMessage error:', error);
+      throw error;
     }
   }
 
@@ -722,3 +551,5 @@ export class WaktiAIV2Service {
     }
   }
 }
+
+export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
