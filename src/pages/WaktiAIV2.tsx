@@ -402,41 +402,46 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <ChatHeader
-          currentConversationId={currentConversationId}
-          activeTrigger={activeTrigger}
-          onShowConversations={() => setShowConversations(true)}
-          onNewConversation={handleNewConversation}
-          onShowQuickActions={() => setShowQuickActions(true)}
-        />
+      {/* Main Content with Fixed Layout */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+        {/* Fixed Header */}
+        <div className="flex-none">
+          <ChatHeader
+            currentConversationId={currentConversationId}
+            activeTrigger={activeTrigger}
+            onShowConversations={() => setShowConversations(true)}
+            onNewConversation={handleNewConversation}
+            onShowQuickActions={() => setShowQuickActions(true)}
+          />
 
-        <NotificationBars
-          searchConfirmationRequired={searchConfirmationRequired}
-          error={error}
-          onSearchConfirmation={handleSearchConfirmation}
-          onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
-        />
+          <NotificationBars
+            searchConfirmationRequired={searchConfirmationRequired}
+            error={error}
+            onSearchConfirmation={handleSearchConfirmation}
+            onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
+          />
+        </div>
         
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* Scrollable Messages Area */}
+        <div className="flex-1 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
           />
+        </div>
 
-          <div className="mt-auto">
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={isLoading}
-              sessionMessages={sessionMessages}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-            />
-          </div>
+        {/* Fixed Input Area */}
+        <div className="flex-none">
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={isLoading}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+          />
         </div>
       </div>
     </div>
