@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp } from 'lucide-react';
+import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp, Zap, Brain, Workflow, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
@@ -113,13 +112,44 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
     );
   };
 
-  // Phase 3: Enhanced detection for all action types with learning
+  // Phase 4: Advanced action detection
+  const handleAdvancedAction = async (actionType: string, actionData: any) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await WaktiAIV2Service.executeAdvancedAction(
+        user.id,
+        actionType,
+        actionData,
+        language
+      );
+
+      showSuccess(
+        response.message || (language === 'ar' ? 'تم تنفيذ الإجراء بنجاح' : 'Action executed successfully')
+      );
+    } catch (error: any) {
+      showError(
+        error.message || (language === 'ar' ? 'فشل في تنفيذ الإجراء' : 'Failed to execute action')
+      );
+    }
+  };
+
+  // Enhanced detection for all action types
   const hasPendingTask = (message.actionTaken === 'parse_task' || message.actionTaken === 'parse_task_with_learning') && message.actionResult?.pendingTask;
   const hasPendingReminder = (message.actionTaken === 'parse_reminder' || message.actionTaken === 'parse_reminder_with_learning') && message.actionResult?.pendingReminder;
   const hasSearchSuggestion = (message.actionTaken === 'search_suggestion' || message.actionTaken === 'enhanced_search_suggestion') && message.actionResult?.suggestion;
   const hasDuplicateWarning = (message.actionTaken === 'duplicate_warning' || message.actionTaken === 'smart_duplicate_warning') && message.actionResult?.duplicateTask;
   const hasProductivitySuggestion = message.actionTaken === 'productivity_suggestion' && message.actionResult?.suggestions;
-  // Fix: Check for string type before using includes()
+  
+  // Phase 4: Advanced features detection
+  const hasAdvancedScheduling = message.actionTaken === 'advanced_scheduling' && message.actionResult;
+  const hasProductivityOptimization = message.actionTaken === 'productivity_optimization' && message.actionResult;
+  const hasPredictiveInsights = message.predictiveInsights;
+  const hasWorkflowActions = message.workflowActions && message.workflowActions.length > 0;
+  const hasContextualActions = message.contextualActions && message.contextualActions.length > 0;
+  const hasAutomationSuggestions = message.automationSuggestions && message.automationSuggestions.length > 0;
+  
   const needsClarification = typeof message.actionTaken === 'string' && (
     message.actionTaken.includes('clarify') || 
     message.actionTaken.includes('clarify_task_with_learning') || 
@@ -148,7 +178,171 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             {message.content}
           </div>
           
-          {/* Phase 3: Enhanced search suggestion UI with learning */}
+          {/* Phase 4: Advanced Scheduling UI */}
+          {hasAdvancedScheduling && (
+            <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <div className="flex items-center gap-2 text-indigo-700 mb-2">
+                <Calendar className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'جدولة ذكية متقدمة' : 'Advanced Smart Scheduling'}
+                </span>
+                <span className="text-xs bg-indigo-200 px-2 py-1 rounded">
+                  {language === 'ar' ? 'الجيل الرابع' : 'Phase 4'}
+                </span>
+              </div>
+              <p className="text-sm text-indigo-600 mb-3">
+                {message.actionResult.suggestion}
+              </p>
+              <Button
+                size="sm"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                onClick={() => handleAdvancedAction('smart_schedule', message.actionResult)}
+              >
+                {language === 'ar' ? 'تطبيق الجدولة الذكية' : 'Apply Smart Scheduling'}
+              </Button>
+            </div>
+          )}
+
+          {/* Phase 4: Productivity Optimization UI */}
+          {hasProductivityOptimization && (
+            <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="flex items-center gap-2 text-emerald-700 mb-2">
+                <Target className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'تحسين الإنتاجية المتقدم' : 'Advanced Productivity Optimization'}
+                </span>
+                <span className="text-xs bg-emerald-200 px-2 py-1 rounded">
+                  {language === 'ar' ? 'الجيل الرابع' : 'Phase 4'}
+                </span>
+              </div>
+              <div className="text-sm text-emerald-600 mb-3">
+                {message.actionResult.suggestions && message.actionResult.suggestions.map((suggestion: string, index: number) => (
+                  <div key={index} className="flex items-start gap-2 mb-2">
+                    <Zap className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    <span>{suggestion}</span>
+                  </div>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={() => handleAdvancedAction('optimize_workflow', message.actionResult)}
+              >
+                {language === 'ar' ? 'تطبيق التحسينات' : 'Apply Optimizations'}
+              </Button>
+            </div>
+          )}
+
+          {/* Phase 4: Predictive Insights UI */}
+          {hasPredictiveInsights && (
+            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center gap-2 text-purple-700 mb-2">
+                <Brain className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'رؤى تنبؤية ذكية' : 'Predictive Intelligence Insights'}
+                </span>
+                <span className="text-xs bg-purple-200 px-2 py-1 rounded">
+                  {language === 'ar' ? 'الجيل الرابع' : 'Phase 4'}
+                </span>
+              </div>
+              <div className="text-sm text-purple-600 space-y-2">
+                {message.predictiveInsights.optimalTaskTime && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3 w-3" />
+                    <span>
+                      {language === 'ar' ? 'أفضل وقت للمهام:' : 'Optimal task time:'} 
+                      {message.predictiveInsights.optimalTaskTime.join(', ')}:00
+                    </span>
+                  </div>
+                )}
+                {message.predictiveInsights.conflictWarnings?.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span className="text-amber-600">
+                      {language === 'ar' ? 'تحذير من تضارب الجدولة' : 'Schedule conflict warning'}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Phase 4: Workflow Actions UI */}
+          {hasWorkflowActions && (
+            <div className="mt-3 p-3 bg-cyan-50 border border-cyan-200 rounded-lg">
+              <div className="flex items-center gap-2 text-cyan-700 mb-2">
+                <Workflow className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'أتمتة سير العمل' : 'Workflow Automation'}
+                </span>
+                <span className="text-xs bg-cyan-200 px-2 py-1 rounded">
+                  {language === 'ar' ? 'الجيل الرابع' : 'Phase 4'}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {message.workflowActions.map((action: any, index: number) => (
+                  <div key={index} className="text-sm text-cyan-600 flex items-center justify-between">
+                    <span>{action.suggestion}</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-cyan-300 text-cyan-700 hover:bg-cyan-100"
+                      onClick={() => handleAdvancedAction(action.action, action)}
+                    >
+                      {language === 'ar' ? 'تفعيل' : 'Enable'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Phase 4: Contextual Actions UI */}
+          {hasContextualActions && (
+            <div className="mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+              <div className="flex items-center gap-2 text-slate-700 mb-2">
+                <Lightbulb className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'إجراءات سياقية ذكية' : 'Smart Contextual Actions'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {message.contextualActions.map((action: any, index: number) => (
+                  <Button
+                    key={index}
+                    size="sm"
+                    variant="outline"
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
+                    onClick={() => handleAdvancedAction(action.type, action)}
+                  >
+                    {action.text}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Phase 4: Automation Suggestions UI */}
+          {hasAutomationSuggestions && (
+            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-700 mb-2">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'اقتراحات الأتمتة' : 'Automation Suggestions'}
+                </span>
+              </div>
+              <div className="text-sm text-orange-600 space-y-1">
+                {message.automationSuggestions.map((suggestion: any, index: number) => (
+                  <div key={index} className="flex items-start gap-2">
+                    <Zap className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    <span>{suggestion.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Phase 3: Enhanced detection for all action types with learning */}
           {hasSearchSuggestion && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
@@ -299,7 +493,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             </div>
           )}
 
-          {/* Phase 3: Display proactive actions if available */}
+          {/* Phase 3 & 4: Display proactive actions if available */}
           {message.proactiveActions && message.proactiveActions.length > 0 && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
               <div className="flex items-center gap-2 text-indigo-700 mb-2">
@@ -324,10 +518,16 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                 <span className="text-xs text-muted-foreground">
                   {formatTime(message.timestamp)}
                 </span>
-                {/* Phase 3: Show learning indicator */}
+                {/* Phase 3 & 4: Show intelligence indicators */}
                 {(typeof message.actionTaken === 'string' && message.actionTaken.includes('with_learning')) || message.userProfile && (
                   <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
                     {language === 'ar' ? 'ذكي' : 'Smart'}
+                  </span>
+                )}
+                {/* Phase 4: Advanced features indicator */}
+                {(hasAdvancedScheduling || hasProductivityOptimization || hasPredictiveInsights || hasWorkflowActions) && (
+                  <span className="text-xs bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 px-2 py-0.5 rounded">
+                    {language === 'ar' ? 'الجيل الرابع' : 'Phase 4'}
                   </span>
                 )}
               </div>

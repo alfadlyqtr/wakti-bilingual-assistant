@@ -22,6 +22,11 @@ const WaktiAIV2 = () => {
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  
+  // Phase 4: Enhanced context state
+  const [calendarContext, setCalendarContext] = useState<any>(null);
+  const [userContext, setUserContext] = useState<any>(null);
+  
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
@@ -45,6 +50,36 @@ const WaktiAIV2 = () => {
     };
 
     fetchQuota();
+  }, []);
+
+  // Phase 4: Fetch enhanced context
+  useEffect(() => {
+    const fetchEnhancedContext = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        console.log('🔄 WAKTI AI V2.5: Fetching Phase 4 enhanced context...');
+
+        // Fetch calendar and user context in parallel
+        const [calendarCtx, userCtx] = await Promise.all([
+          WaktiAIV2Service.getCalendarContext(user.id),
+          WaktiAIV2Service.getUserContext(user.id)
+        ]);
+
+        setCalendarContext(calendarCtx);
+        setUserContext(userCtx);
+        
+        console.log('🔄 WAKTI AI V2.5: Enhanced context loaded:', {
+          calendar: !!calendarCtx,
+          user: !!userCtx
+        });
+      } catch (error) {
+        console.error('Error fetching enhanced context:', error);
+      }
+    };
+
+    fetchEnhancedContext();
   }, []);
 
   // Fetch user profile
@@ -126,25 +161,12 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SEND MESSAGE WITH FILES START ===');
+      console.log('🔄 WAKTI AI V2.5: === PHASE 4 SEND MESSAGE START ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
-      console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
-      console.log('🔄 WAKTI AI V2.5: Active Trigger (MAIN):', activeTrigger);
-      console.log('🔄 WAKTI AI V2.5: Current Conversation ID:', currentConversationId);
-      console.log('🔄 WAKTI AI V2.5: Session Messages Count:', sessionMessages.length);
-
-      // Log file details if any
-      if (attachedFiles && attachedFiles.length > 0) {
-        attachedFiles.forEach((file, index) => {
-          console.log(`🔄 WAKTI AI V2.5: File ${index + 1}:`, {
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            url: file.url
-          });
-        });
-      }
+      console.log('🔄 WAKTI AI V2.5: Active Trigger (PHASE 4):', activeTrigger);
+      console.log('🔄 WAKTI AI V2.5: Calendar Context Available:', !!calendarContext);
+      console.log('🔄 WAKTI AI V2.5: User Context Available:', !!userContext);
 
       // Create user message
       const userMessage: AIMessage = {
@@ -162,7 +184,7 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Send message with enhanced context (15 messages instead of 10) AND attached files
+      // Send message with Phase 4 enhanced context
       const response = await WaktiAIV2Service.sendMessage(
         message,
         user.id,
@@ -173,12 +195,19 @@ const WaktiAIV2 = () => {
         false, // confirmSearch
         activeTrigger,
         textGenParams,
-        attachedFiles || [] // Pass attached files to the service
+        attachedFiles || [],
+        calendarContext, // Phase 4: Calendar context
+        userContext // Phase 4: User context
       );
 
-      console.log('🔄 WAKTI AI V2.5: === RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === PHASE 4 RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Conversation ID:', response.conversationId);
+      console.log('🔄 WAKTI AI V2.5: Phase 4 features:', {
+        deepIntegration: !!response.deepIntegration,
+        predictiveInsights: !!response.predictiveInsights,
+        workflowActions: response.workflowActions?.length || 0,
+        contextualActions: response.contextualActions?.length || 0
+      });
 
       if (response.error) {
         throw new Error(response.error);
@@ -190,7 +219,7 @@ const WaktiAIV2 = () => {
         console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
-      // Create assistant message
+      // Create assistant message with Phase 4 features
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -204,7 +233,14 @@ const WaktiAIV2 = () => {
         quotaStatus: response.quotaStatus,
         requiresSearchConfirmation: response.requiresSearchConfirmation,
         imageUrl: response.imageUrl,
-        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl
+        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
+        actionResult: response.actionResult,
+        // Phase 4: Advanced features
+        deepIntegration: response.deepIntegration,
+        automationSuggestions: response.automationSuggestions,
+        predictiveInsights: response.predictiveInsights,
+        workflowActions: response.workflowActions,
+        contextualActions: response.contextualActions
       };
 
       // Add assistant message to session (limit to 20 messages)
@@ -224,6 +260,15 @@ const WaktiAIV2 = () => {
       // Refresh conversations list
       fetchConversations();
 
+      // Show success message for Phase 4 features
+      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
+            : 'Phase 4 advanced features activated'
+        );
+      }
+
       // Show success message if files were processed
       if (attachedFiles && attachedFiles.length > 0) {
         showSuccess(
@@ -234,7 +279,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Send message error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Phase 4 send message error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')

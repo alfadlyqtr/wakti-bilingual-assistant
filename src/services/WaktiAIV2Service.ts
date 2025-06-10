@@ -18,6 +18,12 @@ export interface AIMessage {
   actionResult?: any;
   proactiveActions?: any[]; // Phase 3: Proactive suggestions
   userProfile?: any; // Phase 3: User learning data
+  // Phase 4: Advanced Integration
+  deepIntegration?: any; // Calendar, contacts, voice integration results
+  automationSuggestions?: any[]; // Smart scheduling, prioritization suggestions
+  predictiveInsights?: any; // Predictive intelligence results
+  workflowActions?: any[]; // Automated workflow suggestions
+  contextualActions?: any[]; // Context-aware quick actions
 }
 
 export interface AIConversation {
@@ -103,14 +109,17 @@ export class WaktiAIV2Service {
     confirmSearch: boolean = false,
     activeTrigger: string = 'chat',
     textGenParams: any = null,
-    attachedFiles: any[] = []
+    attachedFiles: any[] = [],
+    // Phase 4: Enhanced context
+    calendarContext: any = null,
+    userContext: any = null
   ): Promise<any> {
     try {
-      console.log('🚀 WaktiAIV2Service.sendMessage called');
+      console.log('🚀 WaktiAIV2Service.sendMessage called - Phase 4');
       console.log('🚀 Message:', message);
       console.log('🚀 Active Trigger:', activeTrigger);
-      console.log('🚀 Attached Files:', attachedFiles?.length || 0);
-      console.log('🚀 Conversation History:', conversationHistory?.length || 0);
+      console.log('🚀 Calendar Context:', calendarContext);
+      console.log('🚀 User Context:', userContext);
 
       // Convert conversation history to the format expected by the edge function
       const formattedHistory = conversationHistory.map(msg => ({
@@ -130,7 +139,13 @@ export class WaktiAIV2Service {
           confirmSearch,
           activeTrigger,
           textGenParams,
-          attachedFiles: attachedFiles || []
+          attachedFiles: attachedFiles || [],
+          // Phase 4: Enhanced context
+          calendarContext,
+          userContext,
+          enableAdvancedIntegration: true,
+          enablePredictiveInsights: true,
+          enableWorkflowAutomation: true
         }
       });
 
@@ -139,7 +154,7 @@ export class WaktiAIV2Service {
         throw new Error(error.message || 'Failed to process message');
       }
 
-      console.log('✅ WaktiAIV2Service.sendMessage success');
+      console.log('✅ WaktiAIV2Service.sendMessage success - Phase 4');
       return data;
     } catch (error) {
       console.error('❌ WaktiAIV2Service.sendMessage error:', error);
@@ -327,6 +342,188 @@ export class WaktiAIV2Service {
       return data;
     } catch (error) {
       console.error('Error in search confirmation:', error);
+      throw error;
+    }
+  }
+
+  // Phase 4: Advanced Integration Methods
+  static async getCalendarContext(userId: string): Promise<any> {
+    try {
+      // Get upcoming events and tasks for context
+      const now = new Date();
+      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      const [tasksResult, eventsResult, remindersResult] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, due_date, priority, status')
+          .eq('user_id', userId)
+          .gte('due_date', now.toISOString())
+          .lte('due_date', nextWeek.toISOString())
+          .limit(10),
+        
+        supabase
+          .from('maw3d_events')
+          .select('id, title, event_date, start_time, end_time')
+          .eq('created_by', userId)
+          .gte('event_date', now.toISOString().split('T')[0])
+          .limit(10),
+        
+        supabase
+          .from('tr_reminders')
+          .select('id, title, due_date, due_time')
+          .eq('user_id', userId)
+          .gte('due_date', now.toISOString().split('T')[0])
+          .limit(10)
+      ]);
+
+      return {
+        upcomingTasks: tasksResult.data || [],
+        upcomingEvents: eventsResult.data || [],
+        upcomingReminders: remindersResult.data || [],
+        currentDateTime: now.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      };
+    } catch (error) {
+      console.error('Error fetching calendar context:', error);
+      return null;
+    }
+  }
+
+  static async getUserContext(userId: string): Promise<any> {
+    try {
+      const [profileResult, preferencesResult, activityResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single(),
+        
+        supabase
+          .from('ai_user_knowledge')
+          .select('*')
+          .eq('user_id', userId)
+          .single(),
+        
+        // Get recent activity patterns
+        supabase
+          .from('tasks')
+          .select('created_at, status, priority')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ]);
+
+      return {
+        profile: profileResult.data,
+        preferences: preferencesResult.data,
+        recentActivity: activityResult.data || [],
+        productivityPatterns: await this.analyzeProductivityPatterns(userId)
+      };
+    } catch (error) {
+      console.error('Error fetching user context:', error);
+      return null;
+    }
+  }
+
+  private static async analyzeProductivityPatterns(userId: string): Promise<any> {
+    try {
+      // Analyze when user typically creates tasks, completes them, etc.
+      const { data } = await supabase
+        .from('tasks')
+        .select('created_at, status, due_date, priority')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (!data || data.length === 0) return null;
+
+      // Simple pattern analysis
+      const patterns = {
+        mostActiveHours: this.getMostActiveHours(data),
+        preferredPriority: this.getPreferredPriority(data),
+        completionRate: this.getCompletionRate(data),
+        averageTaskDuration: this.getAverageTaskDuration(data)
+      };
+
+      return patterns;
+    } catch (error) {
+      console.error('Error analyzing productivity patterns:', error);
+      return null;
+    }
+  }
+
+  private static getMostActiveHours(tasks: any[]): number[] {
+    const hourCounts: { [key: number]: number } = {};
+    
+    tasks.forEach(task => {
+      const hour = new Date(task.created_at).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+
+    return Object.entries(hourCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([hour]) => parseInt(hour));
+  }
+
+  private static getPreferredPriority(tasks: any[]): string {
+    const priorityCounts: { [key: string]: number } = {};
+    
+    tasks.forEach(task => {
+      const priority = task.priority || 'normal';
+      priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+    });
+
+    return Object.entries(priorityCounts)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'normal';
+  }
+
+  private static getCompletionRate(tasks: any[]): number {
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    return tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+  }
+
+  private static getAverageTaskDuration(tasks: any[]): number {
+    const completedTasks = tasks.filter(task => 
+      task.status === 'completed' && task.due_date
+    );
+
+    if (completedTasks.length === 0) return 0;
+
+    const durations = completedTasks.map(task => {
+      const created = new Date(task.created_at);
+      const due = new Date(task.due_date);
+      return Math.max(0, Math.floor((due.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)));
+    });
+
+    return Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length);
+  }
+
+  // Phase 4: Advanced automation methods
+  static async executeAdvancedAction(
+    userId: string,
+    actionType: string,
+    actionData: any,
+    language: string = 'en'
+  ): Promise<any> {
+    try {
+      const { data, error } = await supabase.functions.invoke('wakti-execute-action', {
+        body: {
+          action: {
+            type: actionType,
+            data: actionData
+          },
+          userId,
+          language,
+          advanced: true // Phase 4 flag
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error executing advanced action:', error);
       throw error;
     }
   }
