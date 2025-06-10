@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -56,12 +55,13 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing task confirmation");
       
       try {
+        // No need to convert relative dates anymore since extractTaskData already does it
         const taskToCreate = {
           title: pendingTaskData.title,
           description: pendingTaskData.description || '',
           user_id: userId,
-          due_date: pendingTaskData.due_date,
-          priority: pendingTaskData.priority || 'medium', // Use 'medium' not 'normal'
+          due_date: pendingTaskData.due_date, // Already converted to actual date
+          priority: pendingTaskData.priority || 'medium',
           status: 'pending',
           type: pendingTaskData.task_type || 'one-time',
           created_at: new Date().toISOString(),
@@ -134,10 +134,11 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing reminder confirmation");
       
       try {
+        // No need to convert relative dates anymore since extractReminderData should also do it
         const reminderToCreate = {
           title: pendingReminderData.title,
           user_id: userId,
-          due_date: pendingReminderData.due_date,
+          due_date: pendingReminderData.due_date, // Already converted if needed
           completed: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -205,6 +206,74 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
+    // Check for confirmation patterns first
+    const confirmationPatterns = [
+      /\b(go\s+ahead|yes|confirm|create\s+it|do\s+it|make\s+it)\b/i,
+      /\b(go\s+ahead\s+(and\s+)?create)\b/i,
+      /\b(create\s+the\s+task)\b/i,
+      /\b(proceed)\b/i
+    ];
+
+    const isConfirmation = confirmationPatterns.some(pattern => pattern.test(message.toLowerCase()));
+
+    if (isConfirmation && conversationHistory.length > 0) {
+      console.log("🚀 WAKTI AI V2 BRAIN: Detected confirmation, looking for previous task request");
+      
+      // Look for the most recent task/reminder request in conversation history
+      for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        const historyMessage = conversationHistory[i];
+        if (historyMessage.role === 'user') {
+          const taskData = extractTaskData(historyMessage.content);
+          const reminderData = extractReminderData(historyMessage.content);
+          
+          if (taskData && taskData.title) {
+            console.log("🚀 WAKTI AI V2 BRAIN: Found task in history, showing confirmation");
+            // Convert dates for display
+            const displayData = {
+              ...taskData,
+              due_date: taskData.due_date ? convertRelativeDate(taskData.due_date) : null
+            };
+            
+            return new Response(JSON.stringify({
+              response: `I'll create this task for you:\n\n**${displayData.title}**\n${displayData.subtasks?.length > 0 ? `\nSubtasks:\n${displayData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${displayData.due_date ? `Due: ${formatDateForDisplay(displayData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
+              conversationId: conversationId || generateConversationId(),
+              intent: 'task_confirmation',
+              confidence: 'high',
+              actionTaken: false,
+              actionResult: null,
+              needsConfirmation: true,
+              pendingTaskData: displayData,
+              success: true
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+          
+          if (reminderData && reminderData.title) {
+            console.log("🚀 WAKTI AI V2 BRAIN: Found reminder in history, showing confirmation");
+            const displayData = {
+              ...reminderData,
+              due_date: reminderData.due_date ? convertRelativeDate(reminderData.due_date) : null
+            };
+            
+            return new Response(JSON.stringify({
+              response: `I'll create this reminder for you:\n\n**${displayData.title}**\n${displayData.due_date ? `Date: ${formatDateForDisplay(displayData.due_date)}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`,
+              conversationId: conversationId || generateConversationId(),
+              intent: 'reminder_confirmation',
+              confidence: 'high',
+              actionTaken: false,
+              actionResult: null,
+              needsConfirmation: true,
+              pendingReminderData: displayData,
+              success: true
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
+      }
+    }
+
     // Check for task creation patterns
     const taskPatterns = [
       /\bcreate\s+(a\s+)?task/i,
@@ -222,86 +291,22 @@ serve(async (req) => {
       const taskData = extractTaskData(message);
       
       if (taskData && taskData.title) {
-        console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted successfully, creating task directly");
+        console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted, showing confirmation");
+        // No need to convert dates here since extractTaskData already did it
         
-        // Create task directly without confirmation
-        try {
-          const taskToCreate = {
-            title: taskData.title,
-            description: taskData.description || '',
-            user_id: userId,
-            due_date: taskData.due_date ? new Date(taskData.due_date).toISOString() : null,
-            priority: taskData.priority || 'medium', // Use 'medium' not 'normal'
-            status: 'pending',
-            type: taskData.task_type || 'one-time',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-
-          console.log("🚀 WAKTI AI V2 BRAIN: Creating task directly:", taskToCreate);
-
-          const { data: createdTask, error: taskError } = await supabase
-            .from('tasks')
-            .insert([taskToCreate])
-            .select()
-            .single();
-
-          if (taskError) {
-            console.error("Task creation error:", taskError);
-            throw new Error(`Failed to create task: ${taskError.message}`);
-          }
-
-          console.log("Task created successfully:", createdTask);
-
-          // Create subtasks if they exist
-          if (taskData.subtasks && taskData.subtasks.length > 0) {
-            const subtasksToCreate = taskData.subtasks.map((subtask: string, index: number) => ({
-              task_id: createdTask.id,
-              title: subtask,
-              is_completed: false,
-              order_index: index,
-              created_at: new Date().toISOString()
-            }));
-
-            const { error: subtaskError } = await supabase
-              .from('subtasks')
-              .insert(subtasksToCreate);
-
-            if (subtaskError) {
-              console.error("Subtask creation error:", subtaskError);
-            } else {
-              console.log("Subtasks created successfully");
-            }
-          }
-
-          const dueDateText = taskData.due_date ? ` due ${formatDateForDisplay(taskData.due_date)}` : '';
-          const timeText = taskData.due_time ? ` at ${taskData.due_time}` : '';
-          const subtaskText = taskData.subtasks && taskData.subtasks.length > 0 ? 
-            `\n\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : '';
-
-          return new Response(JSON.stringify({
-            response: `✅ Task created successfully!\n\n**${taskData.title}**${dueDateText}${timeText}${subtaskText}`,
-            conversationId: conversationId || generateConversationId(),
-            intent: 'task_created',
-            confidence: 'high',
-            actionTaken: true,
-            actionResult: { createdTask },
-            success: true
-          }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-
-        } catch (error) {
-          console.error("Task creation failed:", error);
-          return new Response(JSON.stringify({
-            response: language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task',
-            error: error.message,
-            success: false
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        return new Response(JSON.stringify({
+          response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${formatDateForDisplay(taskData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'task_creation',
+          confidence: 'high',
+          actionTaken: false,
+          actionResult: null,
+          needsConfirmation: true,
+          pendingTaskData: taskData, // taskData already has converted dates
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
     }
 
@@ -321,16 +326,20 @@ serve(async (req) => {
       
       if (reminderData && reminderData.title) {
         console.log("🚀 WAKTI AI V2 BRAIN: Reminder data extracted, showing confirmation");
+        const displayData = {
+          ...reminderData,
+          due_date: reminderData.due_date ? convertRelativeDate(reminderData.due_date) : null
+        };
         
         return new Response(JSON.stringify({
-          response: `I'll create this reminder for you:\n\n**${reminderData.title}**\n${reminderData.due_date ? `Date: ${formatDateForDisplay(reminderData.due_date)}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`,
+          response: `I'll create this reminder for you:\n\n**${displayData.title}**\n${displayData.due_date ? `Date: ${formatDateForDisplay(displayData.due_date)}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`,
           conversationId: conversationId || generateConversationId(),
           intent: 'reminder_creation',
           confidence: 'high',
           actionTaken: false,
           actionResult: null,
           needsConfirmation: true,
-          pendingReminderData: reminderData,
+          pendingReminderData: displayData,
           success: true
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -373,7 +382,7 @@ serve(async (req) => {
   }
 });
 
-// Extract task data from message - FIXED VERSION
+// Extract task data from message
 function extractTaskData(message: string) {
   const lowerMessage = message.toLowerCase();
   
@@ -381,7 +390,7 @@ function extractTaskData(message: string) {
   let subtasks = [];
   let due_date = null;
   let due_time = null;
-  let priority = 'medium'; // Use 'medium' instead of 'normal'
+  let priority = 'normal';
 
   // Extract shopping list format: "shopping list lulu" or "shopping at lulu"
   const shoppingMatch = message.match(/shopping\s+(?:list\s+|at\s+)?([^,\.\s]+)/i);
@@ -395,9 +404,9 @@ function extractTaskData(message: string) {
     const taskMatch = message.match(/create\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
     if (taskMatch) {
       let extractedTitle = taskMatch[2].trim();
-      // Remove "for tomorrow", "for today", etc. from title
-      extractedTitle = extractedTitle.replace(/\s*for\s+(tomorrow|today|yesterday|next\s+\w+|this\s+\w+)\s*/i, '').trim();
-      if (extractedTitle && extractedTitle !== 'for') {
+      // Remove "for tomorrow" from title if it exists
+      extractedTitle = extractedTitle.replace(/\s*for\s+tomorrow\s*/i, '').trim();
+      if (extractedTitle && extractedTitle !== 'for' && extractedTitle !== 'tomorrow') {
         title = extractedTitle;
       }
     }
@@ -428,9 +437,7 @@ function extractTaskData(message: string) {
     if (match) {
       if (match[1] && match[1].toLowerCase() === 'tomorrow') {
         // CONVERT IMMEDIATELY TO ACTUAL DATE
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        due_date = tomorrow.toISOString().split('T')[0];
+        due_date = convertRelativeDate('tomorrow');
         console.log(`🚀 WAKTI AI V2 BRAIN: Converted "tomorrow" to actual date: ${due_date}`);
       }
       if (match[2] && match[2].toLowerCase() === 'noon') {
@@ -459,7 +466,7 @@ function extractTaskData(message: string) {
     subtasks,
     due_date, // This is now the actual date, not "tomorrow"
     due_time,
-    priority: priority as 'low' | 'medium' | 'high' | 'urgent',
+    priority: priority as 'normal' | 'high' | 'urgent',
     task_type: 'one-time' as const
   };
 }
@@ -487,9 +494,65 @@ function extractReminderData(message: string) {
   };
 }
 
+// Convert relative dates to actual dates
+function convertRelativeDate(dateString: string): string {
+  if (!dateString) return '';
+  
+  const today = new Date();
+  
+  if (dateString.toLowerCase() === 'tomorrow') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  }
+  
+  if (dateString.toLowerCase() === 'today') {
+    return today.toISOString().split('T')[0];
+  }
+  
+  if (dateString.toLowerCase() === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+  
+  // If it's already a valid date format, return as is
+  const parsed = new Date(dateString);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  
+  return dateString;
+}
+
+// Validate date string format
+function isValidDateString(dateString: string): boolean {
+  if (!dateString) return false;
+  
+  // Check if it's in YYYY-MM-DD format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(dateString)) return false;
+  
+  // Check if it's a valid date
+  const date = new Date(dateString);
+  return !isNaN(date.getTime()) && dateString === date.toISOString().split('T')[0];
+}
+
 // Format date for display
 function formatDateForDisplay(dateString: string): string {
   if (!dateString) return '';
+  
+  // Since we now convert immediately, we shouldn't get relative terms here
+  // But keeping this as fallback
+  if (dateString === 'tomorrow') {
+    return 'Tomorrow';
+  }
+  if (dateString === 'today') {
+    return 'Today';
+  }
+  if (dateString === 'yesterday') {
+    return 'Yesterday';
+  }
   
   try {
     const date = new Date(dateString);
