@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -56,26 +55,31 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing task confirmation");
       
       try {
-        // Convert relative dates to actual dates and validate
-        let actualDueDate = null;
+        // Convert relative dates to actual dates BEFORE creating the task
+        let processedDueDate = null;
         if (pendingTaskData.due_date) {
-          actualDueDate = convertRelativeDate(pendingTaskData.due_date);
-          console.log("🚀 WAKTI AI V2 BRAIN: Converted date:", pendingTaskData.due_date, "->", actualDueDate);
+          processedDueDate = convertRelativeDate(pendingTaskData.due_date);
+          console.log("🚀 WAKTI AI V2 BRAIN: Converted date:", pendingTaskData.due_date, "->", processedDueDate);
+          
+          // Validate the converted date
+          if (processedDueDate && !isValidDateString(processedDueDate)) {
+            console.error("🚀 WAKTI AI V2 BRAIN: Invalid converted date:", processedDueDate);
+            processedDueDate = null;
+          }
         }
 
         const taskToCreate = {
           title: pendingTaskData.title,
           description: pendingTaskData.description || '',
           user_id: userId,
-          due_date: actualDueDate,
-          priority: pendingTaskData.priority || 'normal',
+          due_date: processedDueDate, // Use the converted date, not the original
+          priority: pendingTaskData.priority || 'medium',
           status: 'pending',
-          task_type: pendingTaskData.task_type || 'one-time',
+          type: pendingTaskData.task_type || 'one-time',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
 
-        // Remove due_time since it's not a column in the tasks table
         console.log("🚀 WAKTI AI V2 BRAIN: Creating task:", taskToCreate);
 
         const { data: createdTask, error: taskError } = await supabase
@@ -96,7 +100,7 @@ serve(async (req) => {
           const subtasksToCreate = pendingTaskData.subtasks.map((subtask: string, index: number) => ({
             task_id: createdTask.id,
             title: subtask,
-            completed: false,
+            is_completed: false,
             order_index: index,
             created_at: new Date().toISOString()
           }));
@@ -142,16 +146,16 @@ serve(async (req) => {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing reminder confirmation");
       
       try {
-        let actualDueDate = null;
+        let processedDueDate = null;
         if (pendingReminderData.due_date) {
-          actualDueDate = convertRelativeDate(pendingReminderData.due_date);
-          console.log("🚀 WAKTI AI V2 BRAIN: Converted reminder date:", pendingReminderData.due_date, "->", actualDueDate);
+          processedDueDate = convertRelativeDate(pendingReminderData.due_date);
+          console.log("🚀 WAKTI AI V2 BRAIN: Converted reminder date:", pendingReminderData.due_date, "->", processedDueDate);
         }
 
         const reminderToCreate = {
           title: pendingReminderData.title,
           user_id: userId,
-          due_date: actualDueDate,
+          due_date: processedDueDate, // Use converted date
           completed: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -501,6 +505,8 @@ function extractReminderData(message: string) {
 
 // Convert relative dates to actual dates
 function convertRelativeDate(dateString: string): string {
+  if (!dateString) return '';
+  
   const today = new Date();
   
   if (dateString.toLowerCase() === 'tomorrow') {
@@ -513,6 +519,12 @@ function convertRelativeDate(dateString: string): string {
     return today.toISOString().split('T')[0];
   }
   
+  if (dateString.toLowerCase() === 'yesterday') {
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+  
   // If it's already a valid date format, return as is
   const parsed = new Date(dateString);
   if (!isNaN(parsed.getTime())) {
@@ -520,6 +532,19 @@ function convertRelativeDate(dateString: string): string {
   }
   
   return dateString;
+}
+
+// Validate date string format
+function isValidDateString(dateString: string): boolean {
+  if (!dateString) return false;
+  
+  // Check if it's in YYYY-MM-DD format
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(dateString)) return false;
+  
+  // Check if it's a valid date
+  const date = new Date(dateString);
+  return !isNaN(date.getTime()) && dateString === date.toISOString().split('T')[0];
 }
 
 // Format date for display
@@ -533,6 +558,9 @@ function formatDateForDisplay(dateString: string): string {
   if (dateString === 'today') {
     return 'Today';
   }
+  if (dateString === 'yesterday') {
+    return 'Yesterday';
+  }
   
   try {
     const date = new Date(dateString);
@@ -540,19 +568,24 @@ function formatDateForDisplay(dateString: string): string {
       return dateString; // Return original if can't parse
     }
     
-    // Check if it's tomorrow by comparing dates
+    // Check if it's today, tomorrow, or yesterday by comparing dates
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(today.getDate() + 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
     
     const dateStr = date.toISOString().split('T')[0];
     const todayStr = today.toISOString().split('T')[0];
     const tomorrowStr = tomorrow.toISOString().split('T')[0];
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
     
     if (dateStr === todayStr) {
       return 'Today';
     } else if (dateStr === tomorrowStr) {
       return 'Tomorrow';
+    } else if (dateStr === yesterdayStr) {
+      return 'Yesterday';
     } else {
       return date.toLocaleDateString();
     }
