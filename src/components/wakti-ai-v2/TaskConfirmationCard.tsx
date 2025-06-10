@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Calendar, Clock, Flag, CheckCircle, X, Sparkles } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -10,7 +10,7 @@ interface TaskConfirmationCardProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
-  enhanced?: boolean; // Phase 3: Learning enhancement indicator
+  enhanced?: boolean;
 }
 
 export function TaskConfirmationCard({ 
@@ -18,8 +18,7 @@ export function TaskConfirmationCard({
   data, 
   onConfirm, 
   onCancel, 
-  isLoading = false,
-  enhanced = false 
+  isLoading = false 
 }: TaskConfirmationCardProps) {
   const { language } = useTheme();
 
@@ -31,47 +30,17 @@ export function TaskConfirmationCard({
       : date.toLocaleDateString('en-US');
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return 'text-red-600 bg-red-50';
-      case 'high': return 'text-orange-600 bg-orange-50';
-      case 'normal': return 'text-green-600 bg-green-50';
-      default: return 'text-gray-600 bg-gray-50';
-    }
-  };
-
-  const getPriorityText = (priority: string) => {
-    if (language === 'ar') {
-      switch (priority) {
-        case 'urgent': return 'عاجل';
-        case 'high': return 'عالي';
-        case 'normal': return 'عادي';
-        default: return priority;
-      }
-    }
-    return priority;
-  };
-
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <span className="font-medium text-sm text-gray-900">
-              {type === 'task' 
-                ? (language === 'ar' ? 'تأكيد المهمة' : 'Confirm Task')
-                : (language === 'ar' ? 'تأكيد التذكير' : 'Confirm Reminder')
-              }
-            </span>
-          </div>
-          {/* Phase 3: Enhanced learning indicator */}
-          {enhanced && (
-            <div className="flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded text-xs text-blue-600">
-              <Sparkles className="h-3 w-3" />
-              {language === 'ar' ? 'محسن بالذكاء الاصطناعي' : 'AI Enhanced'}
-            </div>
-          )}
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <span className="font-medium text-sm text-gray-900">
+            {type === 'task' 
+              ? (language === 'ar' ? 'تأكيد المهمة' : 'Confirm Task')
+              : (language === 'ar' ? 'تأكيد التذكير' : 'Confirm Reminder')
+            }
+          </span>
         </div>
         <Button
           variant="ghost"
@@ -110,82 +79,36 @@ export function TaskConfirmationCard({
           </div>
         )}
 
-        {/* Details Grid */}
-        <div className="grid grid-cols-1 gap-2">
+        {/* Basic Details */}
+        <div className="space-y-2">
           {/* Due Date */}
-          {(data.due_date || data.suggestedDate) && (
+          {data.due_date && (
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-gray-500" />
               <span className="text-gray-600">
                 {language === 'ar' ? 'التاريخ:' : 'Date:'}
               </span>
               <span className="text-gray-900">
-                {formatDate(data.due_date || data.suggestedDate)}
-                {data.suggestedDate && !data.due_date && (
-                  <span className="text-blue-600 text-xs ml-1">
-                    ({language === 'ar' ? 'مقترح' : 'suggested'})
-                  </span>
-                )}
+                {formatDate(data.due_date)}
               </span>
             </div>
           )}
 
-          {/* Due Time (for reminders) */}
-          {(data.due_time || data.suggestedTime) && (
+          {/* Due Time */}
+          {data.due_time && (
             <div className="flex items-center gap-2 text-sm">
               <Clock className="h-4 w-4 text-gray-500" />
               <span className="text-gray-600">
                 {language === 'ar' ? 'الوقت:' : 'Time:'}
               </span>
               <span className="text-gray-900">
-                {data.due_time || data.suggestedTime}
-                {data.suggestedTime && !data.due_time && (
-                  <span className="text-blue-600 text-xs ml-1">
-                    ({language === 'ar' ? 'مقترح' : 'suggested'})
-                  </span>
-                )}
-              </span>
-            </div>
-          )}
-
-          {/* Priority (for tasks) */}
-          {(data.priority || data.suggestedPriority) && type === 'task' && (
-            <div className="flex items-center gap-2 text-sm">
-              <Flag className="h-4 w-4 text-gray-500" />
-              <span className="text-gray-600">
-                {language === 'ar' ? 'الأولوية:' : 'Priority:'}
-              </span>
-              <span 
-                className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  getPriorityColor(data.priority || data.suggestedPriority)
-                }`}
-              >
-                {getPriorityText(data.priority || data.suggestedPriority)}
-                {data.suggestedPriority && !data.priority && (
-                  <span className="text-blue-600 ml-1">
-                    ({language === 'ar' ? 'مقترح' : 'suggested'})
-                  </span>
-                )}
+                {data.due_time}
               </span>
             </div>
           )}
         </div>
 
-        {/* Phase 3: Smart suggestions or enhancements display */}
-        {enhanced && data.smartSuggestions && (
-          <div className="bg-blue-50 border border-blue-200 rounded p-2">
-            <p className="text-xs text-blue-700 font-medium mb-1">
-              {language === 'ar' ? 'تحسينات ذكية:' : 'Smart Enhancements:'}
-            </p>
-            <ul className="text-xs text-blue-600 space-y-1">
-              {data.smartSuggestions.map((suggestion: string, index: number) => (
-                <li key={index}>• {suggestion}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Action Buttons */}
+        {/* Simple Action Buttons */}
         <div className="flex gap-2 pt-2">
           <Button
             onClick={onConfirm}
@@ -199,7 +122,7 @@ export function TaskConfirmationCard({
                 {language === 'ar' ? 'جاري الإنشاء...' : 'Creating...'}
               </div>
             ) : (
-              language === 'ar' ? 'تأكيد الإنشاء' : 'Confirm & Create'
+              language === 'ar' ? 'إنشاء' : 'Create'
             )}
           </Button>
           <Button
