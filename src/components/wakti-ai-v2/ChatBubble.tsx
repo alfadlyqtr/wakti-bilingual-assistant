@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp, Zap, Brain, Workflow, Target } from 'lucide-react';
+import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp, Zap, Brain, Workflow, Target, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
@@ -18,6 +18,8 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
   const { showSuccess, showError } = useToastHelper();
   const [copied, setCopied] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
 
   const formatTime = (timestamp: Date) => {
     return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
@@ -36,6 +38,16 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
     } catch (error) {
       showError(language === 'ar' ? 'فشل في النسخ' : 'Failed to copy');
     }
+  };
+
+  const handleImageLoad = () => {
+    setImageLoading(false);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageLoading(false);
+    setImageError(true);
   };
 
   const handleTaskConfirmation = async (pendingTask: any) => {
@@ -181,6 +193,43 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
           <div className="text-sm whitespace-pre-wrap break-words">
             {message.content}
           </div>
+
+          {/* Generated Image Display */}
+          {message.imageUrl && (
+            <div className="mt-3">
+              <div className="relative rounded-lg overflow-hidden border border-border">
+                {imageLoading && (
+                  <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <ImageIcon className="h-4 w-4 animate-pulse" />
+                      <span className="text-sm">
+                        {language === 'ar' ? 'جارٍ تحميل الصورة...' : 'Loading image...'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {imageError ? (
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-sm">
+                        {language === 'ar' ? 'فشل في تحميل الصورة' : 'Failed to load image'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <img
+                    src={message.imageUrl}
+                    alt="Generated image"
+                    className="w-full h-auto max-w-md"
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
+                    style={{ display: imageLoading ? 'none' : 'block' }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Task Confirmation Card */}
           {needsTaskConfirmation && (
