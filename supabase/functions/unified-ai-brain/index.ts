@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -11,6 +12,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
+const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
 console.log("🔍 UNIFIED AI BRAIN: Function loaded with real AI integration");
 
@@ -115,10 +117,26 @@ serve(async (req) => {
 
       case 'image':
         if (intent.allowed) {
-          response = language === 'ar' 
-            ? `🎨 وضع إنشاء الصور النشط\n\nسأنشئ صورة: "${message}"\n\n[إنشاء الصور معطل حالياً في النسخة التجريبية]`
-            : `🎨 Image Generation Mode Active\n\nGenerating image: "${message}"\n\n[Image generation disabled in demo version]`;
-          // imageUrl would be set here in real implementation
+          try {
+            console.log("🎨 Generating image with Runware API for prompt:", message);
+            const imageResult = await generateImageWithRunware(message, userId, language);
+            
+            if (imageResult.success) {
+              imageUrl = imageResult.imageUrl;
+              response = language === 'ar' 
+                ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
+                : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
+            } else {
+              response = language === 'ar' 
+                ? `❌ عذراً، حدث خطأ في إنشاء الصورة: ${imageResult.error}`
+                : `❌ Sorry, there was an error generating the image: ${imageResult.error}`;
+            }
+          } catch (error) {
+            console.error("Image generation error:", error);
+            response = language === 'ar' 
+              ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
+              : `❌ Sorry, there was an error generating the image. Please try again.`;
+          }
         } else {
           response = language === 'ar' 
             ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
@@ -176,6 +194,83 @@ serve(async (req) => {
     });
   }
 });
+
+// Generate image with Runware API
+async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
+  try {
+    console.log("🎨 Generating image with Runware for prompt:", prompt);
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: prompt,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
+          numberResults: 1,
+          outputFormat: "WEBP",
+          CFGScale: 1,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          steps: 4,
+        },
+      ]),
+    });
+
+    console.log("🎨 Runware response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("🎨 Runware response data:", result);
+      
+      // Find the image inference result
+      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+      
+      if (imageResult && imageResult.imageURL) {
+        // Save image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: imageResult.imageURL,
+              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
+            });
+        } catch (dbError) {
+          console.log("Could not save image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
+
+        return {
+          success: true,
+          imageUrl: imageResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in Runware response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("🎨 Runware API error:", response.status, errorText);
+      throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
+    }
+  } catch (error) {
+    console.error('🎨 Error generating image with Runware:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
 
 // Real AI processing function
 async function processWithAI(message: string, context: string | null, language: string = 'en') {
