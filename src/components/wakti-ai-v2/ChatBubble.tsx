@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,8 +59,6 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
         language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully'
       );
 
-      // The parent component will handle updating the conversation
-      // Force a page reload to refresh the T&R page data
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -94,7 +93,6 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
         language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully'
       );
 
-      // Force a page reload to refresh the T&R page data
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -110,7 +108,6 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
   };
 
   const handleCancelConfirmation = () => {
-    // Just dismiss the confirmation UI
     showSuccess(
       language === 'ar' ? 'تم إلغاء العملية' : 'Operation cancelled'
     );

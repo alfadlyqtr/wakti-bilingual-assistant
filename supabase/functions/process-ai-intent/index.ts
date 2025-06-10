@@ -30,120 +30,66 @@ serve(async (req) => {
       );
     }
 
-    // Define the system prompt based on the current mode
-    const getSystemPrompt = (currentMode: string) => {
-      const basePrompt = `You are WAKTI, an AI assistant specializing in ${currentMode} mode. `;
-      
-      switch (currentMode) {
-        case "general":
-          return basePrompt + `
-            Provide helpful, conversational responses to general queries.
-            If the user asks about creating tasks, events, reminders, or images, suggest switching to the appropriate mode.
-            Task/Events/Reminders = assistant mode, Images = creative mode, Writing = writer mode.
-            If suggesting a mode switch, specify which mode would be better and why.
-          `;
-        case "writer":
-          return basePrompt + `
-            Help with writing, editing, and language refinement.
-            You excel at drafting emails, creating content, and refining text.
-            If the user asks for something better suited to another mode, suggest switching.
-          `;
-        case "creative":
-          return basePrompt + `
-            Assist with creative content generation and ideas.
-            You're especially good at image generation, storytelling, and creative concepts.
-            For image generation requests, extract the image prompt clearly.
-            Never mention third-party image generators. When creating images, use descriptions like "I've extracted the image details from your request".
-          `;
-        case "assistant":
-          return basePrompt + `
-            Focus on task management, planning, and organization.
-            You excel at helping create tasks, events, and reminders.
-            Try to extract structured data from user requests for these items.
-            For tasks: extract title, description, priority, due date when possible.
-            For events: extract title, description, start time, end time, location when possible.
-            For reminders: extract title and due date when possible.
-          `;
-        default:
-          return "You are WAKTI, a helpful AI assistant.";
-      }
-    };
+    // Enhanced task detection patterns
+    const taskPatterns = [
+      // Shopping patterns
+      /\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i,
+      /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
+      /\bneed\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
+      /\bhave\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
+      /\bmust\s+(go|buy|get|shop|visit|pick\s+up)/i,
+      // General task patterns
+      /\b(create|add|make|new)\s+task/i,
+      /\btask\s+(to|for)/i,
+      /\bto\s+do\s+list/i,
+      /\btodo/i
+    ];
 
-    // Enhanced detection logic for mode switching with additional logging
-    const detectBetterMode = (userText: string, currentMode: string) => {
-      const lowerText = userText.toLowerCase();
-      let detectedMode = null;
+    // Check if this is a task creation request
+    const isTaskRequest = taskPatterns.some(pattern => pattern.test(text));
+    
+    if (isTaskRequest) {
+      console.log("Detected task creation request");
       
-      // Image generation - creative mode
-      if (
-        lowerText.startsWith("/image") ||
-        lowerText.includes("generate image") ||
-        lowerText.includes("create image") ||
-        lowerText.includes("draw") ||
-        lowerText.includes("create a picture") ||
-        lowerText.includes("make an image") ||
-        lowerText.includes("generate a picture") ||
-        lowerText.includes("show me a picture") ||
-        lowerText.includes("visualize") ||
-        lowerText.includes("picture of")
-      ) {
-        detectedMode = currentMode !== 'creative' ? 'creative' : null;
-        console.log("Detected image generation request, suggesting creative mode");
+      // Extract task details
+      const taskData = extractEnhancedTaskData(text);
+      
+      // Check if we need to ask for clarification
+      if (!taskData.dueDate || !taskData.priority) {
+        const clarificationQuestions = generateClarificationQuestions(taskData, text);
+        
+        return new Response(
+          JSON.stringify({
+            response: clarificationQuestions.message,
+            intent: "clarify_task",
+            intentData: {
+              partialTask: taskData,
+              missingFields: clarificationQuestions.missingFields,
+              originalText: text
+            }
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
       
-      // Task creation - assistant mode
-      else if (
-        lowerText.includes("create task") ||
-        lowerText.includes("add task") ||
-        lowerText.includes("make task") ||
-        lowerText.includes("create reminder") ||
-        lowerText.includes("add reminder") ||
-        lowerText.includes("remind me") ||
-        lowerText.includes("schedule") ||
-        lowerText.includes("create event") ||
-        lowerText.includes("add event") ||
-        lowerText.includes("calendar") ||
-        lowerText.includes("add to my calendar") ||
-        lowerText.includes("plan") ||
-        lowerText.includes("meeting") ||
-        lowerText.includes("appointment")
-      ) {
-        detectedMode = currentMode !== 'assistant' ? 'assistant' : null;
-        console.log("Detected task/calendar related request, suggesting assistant mode");
-      }
-      
-      // Writing assistance - writer mode
-      else if (
-        lowerText.includes("write") ||
-        lowerText.includes("draft") ||
-        lowerText.includes("compose") ||
-        lowerText.includes("email") ||
-        lowerText.includes("letter") ||
-        lowerText.includes("essay") ||
-        lowerText.includes("poem") ||
-        lowerText.includes("story") ||
-        lowerText.includes("message") ||
-        lowerText.includes("edit") ||
-        lowerText.includes("text") ||
-        lowerText.includes("summarize") ||
-        lowerText.includes("rewrite")
-      ) {
-        detectedMode = currentMode !== 'writer' ? 'writer' : null;
-        console.log("Detected writing related request, suggesting writer mode");
-      }
-      
-      // Enhanced logging for the detected mode
-      console.log(`Mode detection result - Current: ${currentMode}, Detected: ${detectedMode || 'none'}`);
-      
-      return detectedMode;
-    };
+      // If we have enough info, return parsed task for confirmation
+      return new Response(
+        JSON.stringify({
+          response: `I've prepared a task for you to review:\n\n**${taskData.title}**\n${taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
+          intent: "parse_task",
+          intentData: {
+            pendingTask: taskData
+          }
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Check for direct image generation request in creative mode
     const isImageRequest = text.toLowerCase().match(
       /(create|generate|make|draw|show me)( an?)? (image|picture|drawing|photo|visualization) (of|showing|with|depicting) (.*)/i
     );
     
-    // If we're in creative mode and it's an image request, handle it directly
     if (mode === 'creative' && isImageRequest) {
       const imagePrompt = isImageRequest[5] || text;
       console.log("Direct image generation request detected in creative mode:", imagePrompt);
@@ -159,14 +105,11 @@ serve(async (req) => {
       );
     }
 
-    // Check if a mode switch is recommended
+    // Enhanced mode detection
     const suggestedMode = detectBetterMode(text, mode);
     console.log(`Current mode: ${mode}, Suggested mode: ${suggestedMode || 'none'}`);
 
-    // If mode switch is suggested, return that instead of processing normally
-    // Updated to implement proper double-echo messaging pattern
     if (suggestedMode) {
-      // Get a readable name for the mode
       const getModeName = (mode: string): string => {
         switch(mode) {
           case "general": return "Chat";
@@ -177,18 +120,13 @@ serve(async (req) => {
         }
       };
       
-      // Create a properly formatted mode switch action with all required fields
       const modeSwitchAction = {
         text: `Switch to ${getModeName(suggestedMode)} mode`,
         action: `switch_to_${suggestedMode}`,
         targetMode: suggestedMode,
-        autoTrigger: true // Flag to indicate this should trigger automatically
+        autoTrigger: true
       };
       
-      console.log("Creating mode switch recommendation with action:", 
-        JSON.stringify(modeSwitchAction));
-      
-      // First echo - acknowledge the message and switch notification
       const switchMessage = `You asked to: "${text}"\nThis works better in ${getModeName(suggestedMode)} mode. Switching now...`;
       
       const response = {
@@ -196,10 +134,8 @@ serve(async (req) => {
         suggestedMode: suggestedMode,
         originalPrompt: text,
         modeSwitchAction: modeSwitchAction,
-        echoOriginalPrompt: true // Flag to echo the original message after switch
+        echoOriginalPrompt: true
       };
-      
-      console.log("Sending mode switch recommendation:", JSON.stringify(response));
       
       return new Response(
         JSON.stringify(response),
@@ -207,7 +143,7 @@ serve(async (req) => {
       );
     }
 
-    // First try DeepSeek API
+    // Process with AI if no special intent detected
     let result;
     try {
       if (!DEEPSEEK_API_KEY) {
@@ -240,7 +176,6 @@ serve(async (req) => {
     } catch (error) {
       console.log("DeepSeek API failed, falling back to OpenAI:", error.message);
       
-      // Fallback to OpenAI GPT-4o-mini
       if (!OPENAI_API_KEY) {
         throw new Error("OpenAI API key not configured for fallback");
       }
@@ -270,44 +205,13 @@ serve(async (req) => {
       console.log("OpenAI fallback successful");
     }
 
-    // Extract detected intent and response content
     const responseContent = result.choices[0].message?.content || "";
-    
-    // For second echo pattern - if we just switched modes, acknowledge this in the first response
-    if (text.startsWith("__ECHO__")) {
-      // This is a continuation after a mode switch
-      const originalPrompt = text.replace("__ECHO__", "").trim();
-      
-      // Second echo - acknowledge the mode switch and confirm the original message
-      const confirmationMessage = `We're now in ${getModeName(mode)} mode.\n\nStill want me to do this: "${originalPrompt}"?\n\nProcessing your request...`;
-      
-      const response = {
-        response: confirmationMessage,
-        originalPrompt: originalPrompt,
-      };
-      
-      if (mode === 'creative' && isImageGenerationRequest(originalPrompt)) {
-        response.intent = "generate_image";
-        response.intentData = { prompt: extractImagePrompt(originalPrompt) };
-      }
-      
-      return new Response(
-        JSON.stringify(response),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-    
-    // Analyze the content for special intents (task creation, reminders, events)
-    const intentAnalysis = analyzeForIntent(text, responseContent, mode);
-    
-    console.log("Intent analysis:", intentAnalysis);
     
     return new Response(
       JSON.stringify({
         response: responseContent,
-        intent: intentAnalysis.intent,
-        intentData: intentAnalysis.data,
-        originalPrompt: text // Always send original prompt for reference
+        intent: "general_chat",
+        originalPrompt: text
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -324,10 +228,104 @@ serve(async (req) => {
   }
 });
 
-// Check if text contains an image generation request
-function isImageGenerationRequest(text: string): boolean {
+// Enhanced task data extraction
+function extractEnhancedTaskData(text: string) {
   const lowerText = text.toLowerCase();
-  return (
+  
+  // Extract title
+  let title = "";
+  const shoppingMatch = text.match(/\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i);
+  if (shoppingMatch) {
+    const location = shoppingMatch[4].trim();
+    title = `Shopping at ${location}`;
+  } else {
+    // Generic task title extraction
+    title = text.replace(/\b(create|add|make|new)\s+task\s*/i, "").trim();
+    if (!title) title = "New task";
+  }
+  
+  // Extract subtasks from shopping lists
+  const subtasks: string[] = [];
+  
+  // Look for "buy/get/purchase" followed by items
+  const buyMatch = text.match(/\b(buy|get|purchase|pick\s+up)\s+(.+)/i);
+  if (buyMatch) {
+    const itemsText = buyMatch[2];
+    // Parse natural language lists: "milk and rice and bread" or "milk, rice, bread"
+    const items = itemsText
+      .split(/\s+and\s+|,\s*|\s*&\s*/)
+      .map(item => item.trim())
+      .filter(item => item && !item.match(/\b(at|to|in|from|for|on|when|where|why|how)\b/i))
+      .slice(0, 10); // Limit to 10 subtasks
+    
+    subtasks.push(...items);
+  }
+  
+  // Extract due date
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = text.match(dateRegex);
+  
+  // Extract priority
+  const priorityRegex = /\b(high|medium|low|urgent|critical)\b\s*priority/i;
+  const priorityMatch = text.match(priorityRegex);
+  
+  // Determine priority based on context
+  let priority = "normal";
+  if (priorityMatch) {
+    priority = priorityMatch[1].toLowerCase();
+  } else if (lowerText.includes("urgent") || lowerText.includes("asap") || lowerText.includes("immediately")) {
+    priority = "urgent";
+  } else if (lowerText.includes("important") || lowerText.includes("soon")) {
+    priority = "high";
+  }
+  
+  return {
+    title: title,
+    description: "",
+    subtasks: subtasks,
+    due_date: dateMatch ? dateMatch[0] : null,
+    due_time: null,
+    priority: priority as 'normal' | 'high' | 'urgent',
+    task_type: 'one-time' as const
+  };
+}
+
+// Generate clarification questions for missing task details
+function generateClarificationQuestions(taskData: any, originalText: string) {
+  const missingFields = [];
+  let questions = [];
+  
+  if (!taskData.due_date) {
+    missingFields.push('due_date');
+    if (taskData.title.toLowerCase().includes('shopping')) {
+      questions.push("When would you like to go shopping?");
+    } else {
+      questions.push("When would you like to complete this task?");
+    }
+  }
+  
+  if (!taskData.priority || taskData.priority === 'normal') {
+    missingFields.push('priority');
+    questions.push("What priority should this task have? (normal, high, urgent)");
+  }
+  
+  const questionText = questions.length > 0 
+    ? `I've prepared a task: **${taskData.title}**${taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nTo complete the setup, I need to know:\n• ${questions.join('\n• ')}\n\nPlease provide this information so I can create the task for you.`
+    : `Task ready: **${taskData.title}**${taskData.subtasks.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}`;
+  
+  return {
+    message: questionText,
+    missingFields: missingFields
+  };
+}
+
+// Enhanced mode detection
+function detectBetterMode(userText: string, currentMode: string) {
+  const lowerText = userText.toLowerCase();
+  let detectedMode = null;
+  
+  // Image generation - creative mode
+  if (
     lowerText.startsWith("/image") ||
     lowerText.includes("generate image") ||
     lowerText.includes("create image") ||
@@ -338,217 +336,85 @@ function isImageGenerationRequest(text: string): boolean {
     lowerText.includes("show me a picture") ||
     lowerText.includes("visualize") ||
     lowerText.includes("picture of")
-  );
+  ) {
+    detectedMode = currentMode !== 'creative' ? 'creative' : null;
+  }
+  
+  // Task creation - assistant mode
+  else if (
+    lowerText.includes("create task") ||
+    lowerText.includes("add task") ||
+    lowerText.includes("make task") ||
+    lowerText.includes("shopping") ||
+    lowerText.includes("buy") ||
+    lowerText.includes("purchase") ||
+    lowerText.includes("get") ||
+    lowerText.includes("pick up") ||
+    lowerText.includes("create reminder") ||
+    lowerText.includes("add reminder") ||
+    lowerText.includes("remind me") ||
+    lowerText.includes("schedule") ||
+    lowerText.includes("create event") ||
+    lowerText.includes("add event") ||
+    lowerText.includes("calendar") ||
+    lowerText.includes("plan") ||
+    lowerText.includes("meeting") ||
+    lowerText.includes("appointment")
+  ) {
+    detectedMode = currentMode !== 'assistant' ? 'assistant' : null;
+  }
+  
+  // Writing assistance - writer mode
+  else if (
+    lowerText.includes("write") ||
+    lowerText.includes("draft") ||
+    lowerText.includes("compose") ||
+    lowerText.includes("email") ||
+    lowerText.includes("letter") ||
+    lowerText.includes("essay") ||
+    lowerText.includes("poem") ||
+    lowerText.includes("story") ||
+    lowerText.includes("message") ||
+    lowerText.includes("edit") ||
+    lowerText.includes("text") ||
+    lowerText.includes("summarize") ||
+    lowerText.includes("rewrite")
+  ) {
+    detectedMode = currentMode !== 'writer' ? 'writer' : null;
+  }
+  
+  return detectedMode;
 }
 
-// Extract image prompt from text
-function extractImagePrompt(text: string): string {
-  const lowerText = text.toLowerCase();
+// System prompt based on mode
+function getSystemPrompt(currentMode: string) {
+  const basePrompt = `You are WAKTI, an AI assistant specializing in ${currentMode} mode. `;
   
-  if (lowerText.startsWith("/image")) {
-    return text.substring(6).trim();
+  switch (currentMode) {
+    case "general":
+      return basePrompt + `
+        Provide helpful, conversational responses to general queries.
+        If the user asks about creating tasks, events, reminders, or images, suggest switching to the appropriate mode.
+        Task/Events/Reminders = assistant mode, Images = creative mode, Writing = writer mode.
+      `;
+    case "writer":
+      return basePrompt + `
+        Help with writing, editing, and language refinement.
+        You excel at drafting emails, creating content, and refining text.
+      `;
+    case "creative":
+      return basePrompt + `
+        Assist with creative content generation and ideas.
+        You're especially good at image generation, storytelling, and creative concepts.
+        For image generation requests, extract the image prompt clearly.
+      `;
+    case "assistant":
+      return basePrompt + `
+        Focus on task management, planning, and organization.
+        You excel at helping create tasks, events, and reminders.
+        Try to extract structured data from user requests for these items.
+      `;
+    default:
+      return "You are WAKTI, a helpful AI assistant.";
   }
-  
-  // Handle various image generation phrases
-  const patterns = [
-    "generate image of ", 
-    "create image of ",
-    "draw ",
-    "create a picture of ",
-    "make an image of ",
-    "generate a picture of ",
-    "show me a picture of ",
-    "picture of ",
-    "visualize "
-  ];
-  
-  for (const pattern of patterns) {
-    if (lowerText.includes(pattern)) {
-      const startIndex = lowerText.indexOf(pattern) + pattern.length;
-      return text.substring(startIndex).trim();
-    }
-  }
-  
-  // If no pattern matches, use the whole text but remove trigger words
-  return text.replace(/generate image|create image|draw|picture/gi, '').trim();
-}
-
-// Function to analyze text for specific intents
-function analyzeForIntent(userText: string, aiResponse: string, mode: string) {
-  const lowerText = userText.toLowerCase();
-  
-  // In assistant mode, we're much more likely to detect structured intents
-  if (mode === 'assistant') {
-    // Check for task creation intent
-    if (lowerText.includes("task") || 
-        lowerText.includes("to do") || 
-        lowerText.includes("todo")) {
-      return extractTaskData(userText, aiResponse);
-    }
-    
-    // Check for reminder creation intent
-    if (lowerText.includes("remind") || 
-        lowerText.includes("reminder") || 
-        lowerText.includes("don't forget")) {
-      return extractReminderData(userText, aiResponse);
-    }
-    
-    // Check for event creation intent
-    if (lowerText.includes("event") || 
-        lowerText.includes("appointment") || 
-        lowerText.includes("schedule") ||
-        lowerText.includes("meeting") ||
-        lowerText.includes("calendar")) {
-      return extractEventData(userText, aiResponse);
-    }
-  }
-  
-  // Check for image generation intent in any mode
-  // Though this is better in creative mode
-  if (lowerText.startsWith("/image") || 
-      lowerText.includes("generate image") || 
-      lowerText.includes("create image") ||
-      lowerText.includes("draw") ||
-      lowerText.includes("picture of")) {
-    
-    return {
-      intent: "generate_image",
-      data: {
-        prompt: extractImagePrompt(userText)
-      }
-    };
-  }
-  
-  // If no specific intent is detected
-  return {
-    intent: "general_chat",
-    data: null
-  };
-}
-
-// Helper function for mode name display
-function getModeName(mode: string): string {
-  switch(mode) {
-    case "general": return "Chat";
-    case "writer": return "Writer";
-    case "creative": return "Creative";
-    case "assistant": return "Assistant";
-    default: return mode.charAt(0).toUpperCase() + mode.slice(1);
-  }
-}
-
-// Extract task data from text
-function extractTaskData(userText: string, aiResponse: string) {
-  // Use regex to try to extract date information
-  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
-  const dateMatch = userText.match(dateRegex);
-  
-  // Extract priority keywords
-  const priorityRegex = /\b(high|medium|low|urgent|critical)\b priority/i;
-  const priorityMatch = userText.match(priorityRegex);
-  
-  // Basic extraction logic - in real implementation this would be more sophisticated
-  let title = userText.replace(/create task|new task|add task|make task|task/gi, "").trim();
-  if (!title) title = "New task";
-  
-  // Try to clean up the title by removing date and priority information
-  if (dateMatch) {
-    dateMatch.forEach(date => {
-      title = title.replace(date, "").trim();
-    });
-  }
-  
-  if (priorityMatch) {
-    title = title.replace(priorityMatch[0], "").trim();
-  }
-  
-  // Remove any multiple spaces
-  title = title.replace(/\s+/g, " ").trim();
-  
-  return {
-    intent: "create_task",
-    data: {
-      title: title,
-      description: "",
-      priority: priorityMatch ? priorityMatch[1].toLowerCase() : "medium",
-      dueDate: dateMatch ? dateMatch[0] : null
-    }
-  };
-}
-
-// Extract reminder data from text
-function extractReminderData(userText: string, aiResponse: string) {
-  // Use regex to try to extract date information
-  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
-  const dateMatch = userText.match(dateRegex);
-  
-  let title = userText.replace(/remind me|set reminder|create reminder|new reminder|reminder/gi, "").trim();
-  if (!title) title = "New reminder";
-  
-  // Try to clean up the title by removing date information
-  if (dateMatch) {
-    dateMatch.forEach(date => {
-      title = title.replace(date, "").trim();
-    });
-  }
-  
-  // Remove any multiple spaces
-  title = title.replace(/\s+/g, " ").trim();
-  
-  return {
-    intent: "create_reminder",
-    data: {
-      title: title,
-      dueDate: dateMatch ? dateMatch[0] : null
-    }
-  };
-}
-
-// Extract event data from text
-function extractEventData(userText: string, aiResponse: string) {
-  // Use regex to try to extract date information
-  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
-  const dateMatch = userText.match(dateRegex);
-  
-  // Try to extract time information
-  const timeRegex = /(\d{1,2})(:)(\d{2})(\s?)(am|pm)?|(\d{1,2})(\s?)(am|pm)/gi;
-  const timeMatch = userText.match(timeRegex);
-  
-  // Try to extract location
-  const locationRegex = /at ([^,\.]+)/i;
-  const locationMatch = userText.match(locationRegex);
-  
-  let title = userText.replace(/create event|new event|schedule event|event|meeting|appointment|schedule/gi, "").trim();
-  if (!title) title = "New event";
-  
-  // Clean up title by removing date, time and location
-  if (dateMatch) {
-    dateMatch.forEach(date => {
-      title = title.replace(date, "").trim();
-    });
-  }
-  
-  if (timeMatch) {
-    timeMatch.forEach(time => {
-      title = title.replace(time, "").trim();
-    });
-  }
-  
-  if (locationMatch) {
-    title = title.replace(locationMatch[0], "").trim();
-  }
-  
-  // Remove any multiple spaces
-  title = title.replace(/\s+/g, " ").trim();
-  
-  return {
-    intent: "create_event",
-    data: {
-      title: title,
-      description: "",
-      startTime: dateMatch ? dateMatch[0] : null,
-      endTime: null,
-      location: locationMatch ? locationMatch[1] : null
-    }
-  };
 }
