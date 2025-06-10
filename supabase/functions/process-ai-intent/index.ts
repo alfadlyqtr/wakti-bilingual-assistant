@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -18,7 +17,7 @@ serve(async (req) => {
 
   try {
     console.log("Processing AI intent request");
-    const { text, mode, userId } = await req.json();
+    const { text, mode, userId, conversationHistory } = await req.json();
 
     if (!text) {
       return new Response(
@@ -30,17 +29,54 @@ serve(async (req) => {
       );
     }
 
-    // Enhanced task detection patterns
+    // Check for task confirmation first (go ahead, create, confirm)
+    const confirmationPatterns = [
+      /\b(go\s+ahead|yes|confirm|create\s+it|do\s+it|make\s+it)\b/i,
+      /\b(go\s+ahead\s+(and\s+)?create)\b/i,
+      /\b(create\s+the\s+task)\b/i
+    ];
+
+    const isConfirmation = confirmationPatterns.some(pattern => pattern.test(text));
+
+    if (isConfirmation && conversationHistory && conversationHistory.length > 0) {
+      console.log("Detected task confirmation, looking for previous task request");
+      
+      // Look for the most recent task creation request in conversation history
+      for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        const message = conversationHistory[i];
+        if (message.role === 'user') {
+          const taskData = extractTaskDataFromMessage(message.content);
+          if (taskData && (taskData.title || taskData.hasTaskKeywords)) {
+            console.log("Found previous task request, creating confirmation");
+            
+            return new Response(
+              JSON.stringify({
+                response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${taskData.due_date}` : ''}\n${taskData.due_time ? ` at ${taskData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this task.`,
+                intent: "parse_task",
+                intentData: {
+                  pendingTask: taskData
+                }
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      }
+    }
+
+    // Enhanced task detection patterns for your specific format
     const taskPatterns = [
-      // Shopping patterns
-      /\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i,
+      // Your specific formats
+      /\b(create|add|make|new)\s+(a\s+)?task\s+(.+)/i,
+      /\btask\s+due\s+(.+)/i,
+      /\b(shopping\s+list|shop\s+at|go\s+shopping)\s*(.+)?/i,
+      /\bsub\s+tasks?\s+(.+)/i,
+      /\bdue\s+(tomorrow|today|tonight|this\s+\w+|next\s+\w+|\d+)/i,
+      // General patterns
       /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
       /\bneed\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
       /\bhave\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
       /\bmust\s+(go|buy|get|shop|visit|pick\s+up)/i,
-      // General task patterns
-      /\b(create|add|make|new)\s+task/i,
-      /\btask\s+(to|for)/i,
       /\bto\s+do\s+list/i,
       /\btodo/i
     ];
@@ -51,11 +87,11 @@ serve(async (req) => {
     if (isTaskRequest) {
       console.log("Detected task creation request");
       
-      // Extract task details
-      const taskData = extractEnhancedTaskData(text);
+      // Extract task details from the current message
+      const taskData = extractTaskDataFromMessage(text);
       
       // Check if we need to ask for clarification
-      if (!taskData.dueDate || !taskData.priority) {
+      if (!taskData.due_date || !taskData.priority) {
         const clarificationQuestions = generateClarificationQuestions(taskData, text);
         
         return new Response(
@@ -228,49 +264,114 @@ serve(async (req) => {
   }
 });
 
-// Enhanced task data extraction
-function extractEnhancedTaskData(text: string) {
+// Enhanced task data extraction to handle your specific format
+function extractTaskDataFromMessage(text: string) {
   const lowerText = text.toLowerCase();
   
-  // Extract title
+  // Initialize task data
   let title = "";
-  const shoppingMatch = text.match(/\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i);
+  let subtasks: string[] = [];
+  let due_date = null;
+  let due_time = null;
+  let priority = "normal";
+  let hasTaskKeywords = false;
+
+  // Check for task keywords
+  if (lowerText.includes('task') || lowerText.includes('shopping') || lowerText.includes('buy') || lowerText.includes('get') || lowerText.includes('sub tasks')) {
+    hasTaskKeywords = true;
+  }
+
+  // Extract shopping list format: "shopping list lulu" or "shopping at lulu"
+  const shoppingMatch = text.match(/\b(shopping\s+list|shop\s+at|shopping\s+at)\s+([^,\.\s]+)/i);
   if (shoppingMatch) {
-    const location = shoppingMatch[4].trim();
-    title = `Shopping at ${location}`;
-  } else {
-    // Generic task title extraction
-    title = text.replace(/\b(create|add|make|new)\s+task\s*/i, "").trim();
-    if (!title) title = "New task";
+    const location = shoppingMatch[2].trim();
+    title = `Shopping at ${location.charAt(0).toUpperCase() + location.slice(1)}`;
   }
-  
-  // Extract subtasks from shopping lists
-  const subtasks: string[] = [];
-  
-  // Look for "buy/get/purchase" followed by items
-  const buyMatch = text.match(/\b(buy|get|purchase|pick\s+up)\s+(.+)/i);
-  if (buyMatch) {
-    const itemsText = buyMatch[2];
-    // Parse natural language lists: "milk and rice and bread" or "milk, rice, bread"
-    const items = itemsText
-      .split(/\s+and\s+|,\s*|\s*&\s*/)
+
+  // Extract title from "create a task" format
+  const taskMatch = text.match(/\b(create|add|make|new)\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
+  if (taskMatch && !title) {
+    title = taskMatch[3].trim();
+  }
+
+  // Extract title from "task due" format
+  const taskDueMatch = text.match(/\btask\s+due\s+.+?\s+(.+?)(\s+sub\s+tasks?|$)/i);
+  if (taskDueMatch && !title) {
+    // Extract everything after the date/time part
+    const fullText = text;
+    const afterDue = fullText.substring(fullText.toLowerCase().indexOf('due') + 3);
+    // Look for the part after date/time that might be the title
+    const titleMatch = afterDue.match(/\w+\s+\w+\s+(.+?)(\s+sub\s+tasks?|$)/i);
+    if (titleMatch) {
+      title = titleMatch[1].trim();
+    }
+  }
+
+  // If no title found but has shopping keywords, make a generic shopping title
+  if (!title && (lowerText.includes('shopping') || lowerText.includes('shop'))) {
+    title = "Shopping";
+  }
+
+  // If still no title but has task keywords, make a generic title
+  if (!title && hasTaskKeywords) {
+    title = "New task";
+  }
+
+  // Extract subtasks from "sub tasks rice milk water" format
+  const subtaskMatch = text.match(/\bsub\s+tasks?\s+(.+?)(\s+due|$)/i);
+  if (subtaskMatch) {
+    const itemsText = subtaskMatch[1];
+    // Split by spaces and common separators
+    subtasks = itemsText
+      .split(/\s+(?:and\s+)?|,\s*|\s*&\s*/)
       .map(item => item.trim())
-      .filter(item => item && !item.match(/\b(at|to|in|from|for|on|when|where|why|how)\b/i))
+      .filter(item => item && item.length > 0 && !item.match(/\b(due|at|to|in|from|for|on|when|where|why|how)\b/i))
       .slice(0, 10); // Limit to 10 subtasks
-    
-    subtasks.push(...items);
   }
-  
-  // Extract due date
-  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
-  const dateMatch = text.match(dateRegex);
-  
+
+  // Extract due date - enhanced patterns for your format
+  const datePatterns = [
+    /\bdue\s+(tomorrow|today|tonight)\b/i,
+    /\bdue\s+(tomorrow)\s+(morning|afternoon|evening|noon|night)/i,
+    /\bdue\s+(next|this)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)/i,
+    /\b(tomorrow|today|tonight)\b/i,
+    /\bdue\s+(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})/i
+  ];
+
+  for (const pattern of datePatterns) {
+    const dateMatch = text.match(pattern);
+    if (dateMatch) {
+      due_date = dateMatch[1] || dateMatch[0];
+      break;
+    }
+  }
+
+  // Extract due time - enhanced patterns
+  const timePatterns = [
+    /\b(noon|midnight)\b/i,
+    /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+    /\b(\d{1,2}):(\d{2})\b/i,
+    /\b(morning|afternoon|evening|night)\b/i
+  ];
+
+  for (const pattern of timePatterns) {
+    const timeMatch = text.match(pattern);
+    if (timeMatch) {
+      if (timeMatch[0].toLowerCase() === 'noon') {
+        due_time = '12:00 PM';
+      } else if (timeMatch[0].toLowerCase() === 'midnight') {
+        due_time = '12:00 AM';
+      } else {
+        due_time = timeMatch[0];
+      }
+      break;
+    }
+  }
+
   // Extract priority
   const priorityRegex = /\b(high|medium|low|urgent|critical)\b\s*priority/i;
   const priorityMatch = text.match(priorityRegex);
   
-  // Determine priority based on context
-  let priority = "normal";
   if (priorityMatch) {
     priority = priorityMatch[1].toLowerCase();
   } else if (lowerText.includes("urgent") || lowerText.includes("asap") || lowerText.includes("immediately")) {
@@ -280,13 +381,14 @@ function extractEnhancedTaskData(text: string) {
   }
   
   return {
-    title: title,
+    title: title || "New task",
     description: "",
     subtasks: subtasks,
-    due_date: dateMatch ? dateMatch[0] : null,
-    due_time: null,
+    due_date: due_date,
+    due_time: due_time,
     priority: priority as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as const
+    task_type: 'one-time' as const,
+    hasTaskKeywords
   };
 }
 
