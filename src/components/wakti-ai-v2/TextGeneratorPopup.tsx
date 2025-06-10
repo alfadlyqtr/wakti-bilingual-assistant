@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -8,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PenTool, MessageSquare, Loader2, Brain, CheckCircle } from 'lucide-react';
+import { PenTool, MessageSquare, Loader2, Brain, CheckCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -53,6 +52,7 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [messageAnalysis, setMessageAnalysis] = useState<MessageAnalysis | null>(null);
   const [formData, setFormData] = useState<FormData>({
     mode: 'compose',
@@ -105,8 +105,15 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     if (!message.trim() || !user?.id) return;
     
     setIsAnalyzing(true);
+    setLastError(null);
+    
     try {
-      console.log('📝 TextGenerator: Analyzing message with DeepSeek...');
+      console.log('📝 TextGenerator: Starting message analysis...');
+      console.log('📝 Analysis input:', {
+        messageLength: message.length,
+        userId: user.id,
+        language
+      });
       
       const analysisPrompt = `Analyze this message quickly and provide:
 1. Message type (email, text, request, complaint, etc.)
@@ -136,6 +143,9 @@ Respond in JSON format:
   ]
 }`;
 
+      console.log('📝 TextGenerator: Calling edge function for analysis...');
+      const startTime = Date.now();
+      
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: analysisPrompt,
@@ -146,7 +156,20 @@ Respond in JSON format:
         }
       });
 
-      if (error) throw error;
+      const duration = Date.now() - startTime;
+      console.log(`📝 TextGenerator: Analysis request completed in ${duration}ms`);
+
+      if (error) {
+        console.error('📝 TextGenerator: Edge function error:', error);
+        throw new Error(`Analysis failed: ${error.message || 'Unknown error'}`);
+      }
+
+      console.log('📝 TextGenerator: Analysis response:', {
+        hasData: !!data,
+        success: data?.success,
+        hasResponse: !!data?.response,
+        dataKeys: data ? Object.keys(data) : []
+      });
 
       if (data.success && data.response) {
         try {
@@ -166,10 +189,13 @@ Respond in JSON format:
               }
             }
             
-            console.log('📝 TextGenerator: Analysis complete:', analysis);
+            console.log('📝 TextGenerator: Analysis successful:', analysis);
+          } else {
+            console.warn('📝 TextGenerator: No JSON found in response, creating fallback');
+            throw new Error('No JSON found in response');
           }
         } catch (parseError) {
-          console.warn('📝 TextGenerator: Could not parse analysis JSON, using fallback');
+          console.warn('📝 TextGenerator: JSON parse failed, using fallback:', parseError);
           // Create a simple fallback analysis
           setMessageAnalysis({
             messageType: 'Message',
@@ -189,9 +215,19 @@ Respond in JSON format:
             ]
           });
         }
+      } else {
+        const errorMsg = data?.error || 'Analysis failed - no response received';
+        console.error('📝 TextGenerator: Analysis failed:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
-      console.error('📝 TextGenerator: Analysis error:', error);
+      console.error('📝 TextGenerator: Analysis comprehensive error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      setLastError(`Analysis failed: ${error.message}`);
       toast.error(language === 'ar' ? 'خطأ في تحليل الرسالة' : 'Error analyzing message');
     } finally {
       setIsAnalyzing(false);
@@ -292,11 +328,19 @@ USER PREFERENCES:`;
     }
 
     setIsGenerating(true);
+    setLastError(null);
 
     try {
       const enhancedPrompt = createEnhancedPrompt();
-      console.log('📝 TextGenerator: Generating with enhanced prompt:', enhancedPrompt);
+      console.log('📝 TextGenerator: Starting text generation...');
+      console.log('📝 Generation input:', {
+        promptLength: enhancedPrompt.length,
+        mode: formData.mode,
+        hasAnalysis: !!messageAnalysis,
+        userId: user.id
+      });
 
+      const startTime = Date.now();
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: enhancedPrompt,
@@ -312,10 +356,25 @@ USER PREFERENCES:`;
         }
       });
 
-      if (error) throw error;
+      const duration = Date.now() - startTime;
+      console.log(`📝 TextGenerator: Generation request completed in ${duration}ms`);
+
+      if (error) {
+        console.error('📝 TextGenerator: Generation error:', error);
+        throw new Error(`Generation failed: ${error.message || 'Unknown error'}`);
+      }
+
+      console.log('📝 TextGenerator: Generation response:', {
+        hasData: !!data,
+        success: data?.success,
+        hasGeneratedText: !!(data?.generatedText || data?.response),
+        dataKeys: data ? Object.keys(data) : []
+      });
 
       if (data.success && (data.generatedText || data.response)) {
         const generatedText = data.generatedText || data.response;
+        console.log('📝 TextGenerator: Generation successful, length:', generatedText.length);
+        
         onGenerated(generatedText, formData.mode, true);
         onOpenChange(false);
         
@@ -332,14 +391,24 @@ USER PREFERENCES:`;
           originalMessage: ''
         });
         setMessageAnalysis(null);
+        setLastError(null);
 
         toast.success(language === 'ar' ? 'تم إنشاء النص بناءً على التحليل الذكي' : 'Text generated with smart analysis');
       } else {
-        throw new Error(data.error || 'No generated text received');
+        const errorMsg = data?.error || 'No generated text received';
+        console.error('📝 TextGenerator: Generation failed:', errorMsg);
+        throw new Error(errorMsg);
       }
     } catch (error: any) {
-      console.error('📝 TextGenerator: Error generating text:', error);
-      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'));
+      console.error('📝 TextGenerator: Generation comprehensive error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      
+      const errorMessage = error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text');
+      setLastError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -354,6 +423,19 @@ USER PREFERENCES:`;
             {language === 'ar' ? 'مولد النصوص الذكي' : 'Smart Text Generator'}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Error Display */}
+        {lastError && (
+          <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+              <AlertTriangle className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {language === 'ar' ? 'خطأ' : 'Error'}
+              </span>
+            </div>
+            <p className="text-xs text-red-600 dark:text-red-400 mt-1">{lastError}</p>
+          </div>
+        )}
 
         <Tabs value={formData.mode} onValueChange={(value) => updateFormData('mode', value)} className="w-full">
           <TabsList className="grid w-full grid-cols-2">

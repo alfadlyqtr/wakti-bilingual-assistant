@@ -118,12 +118,61 @@ export class WaktiAIV2Service {
     calendarContext: any = null,
     userContext: any = null
   ): Promise<any> {
+    console.log('🚀 WaktiAIV2Service.sendMessage called - Phase 4 with enhanced debugging');
+    console.log('🔍 Request details:', {
+      message: message?.substring(0, 100) + '...',
+      userId,
+      language,
+      conversationId,
+      inputType,
+      confirmSearch,
+      activeTrigger,
+      hasTextGenParams: !!textGenParams,
+      attachedFilesCount: attachedFiles?.length || 0,
+      hasCalendarContext: !!calendarContext,
+      hasUserContext: !!userContext,
+      conversationHistoryLength: conversationHistory?.length || 0
+    });
+
     try {
-      console.log('🚀 WaktiAIV2Service.sendMessage called - Phase 4');
-      console.log('🚀 Message:', message);
-      console.log('🚀 Active Trigger:', activeTrigger);
-      console.log('🚀 Calendar Context:', calendarContext);
-      console.log('🚀 User Context:', userContext);
+      // Validate required parameters
+      if (!message || typeof message !== 'string' || message.trim() === '') {
+        const error = new Error('Message is required and must be a non-empty string');
+        console.error('❌ Validation error:', error.message);
+        throw error;
+      }
+
+      if (!userId || typeof userId !== 'string') {
+        const error = new Error('User ID is required and must be a string');
+        console.error('❌ Validation error:', error.message);
+        throw error;
+      }
+
+      // Check authentication status
+      console.log('🔐 Checking authentication...');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('❌ Authentication error:', authError);
+        throw new Error(`Authentication failed: ${authError.message}`);
+      }
+      
+      if (!user) {
+        const error = new Error('User not authenticated');
+        console.error('❌ Authentication error:', error.message);
+        throw error;
+      }
+      
+      if (user.id !== userId) {
+        const error = new Error('User ID mismatch');
+        console.error('❌ Authentication error:', error.message, { 
+          providedUserId: userId, 
+          authenticatedUserId: user.id 
+        });
+        throw error;
+      }
+
+      console.log('✅ Authentication verified for user:', user.id);
 
       // Convert conversation history to the format expected by the edge function
       const formattedHistory = conversationHistory.map(msg => ({
@@ -132,37 +181,113 @@ export class WaktiAIV2Service {
         timestamp: msg.timestamp.toISOString()
       }));
 
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId,
-          language,
-          conversationId,
-          inputType,
-          conversationHistory: formattedHistory,
-          confirmSearch,
-          activeTrigger,
-          textGenParams,
-          attachedFiles: attachedFiles || [],
-          // Phase 4: Enhanced context
-          calendarContext,
-          userContext,
-          enableAdvancedIntegration: true,
-          enablePredictiveInsights: true,
-          enableWorkflowAutomation: true
-        }
+      console.log('📝 Formatted conversation history:', {
+        length: formattedHistory.length,
+        roles: formattedHistory.map(h => h.role)
       });
 
+      // Prepare request body
+      const requestBody = {
+        message,
+        userId,
+        language,
+        conversationId,
+        inputType,
+        conversationHistory: formattedHistory,
+        confirmSearch,
+        activeTrigger,
+        textGenParams,
+        attachedFiles: attachedFiles || [],
+        // Phase 4: Enhanced context
+        calendarContext,
+        userContext,
+        enableAdvancedIntegration: true,
+        enablePredictiveInsights: true,
+        enableWorkflowAutomation: true
+      };
+
+      console.log('📤 Sending request to edge function:', {
+        functionName: 'wakti-ai-v2-brain',
+        bodySize: JSON.stringify(requestBody).length,
+        requestBodyKeys: Object.keys(requestBody)
+      });
+
+      // Make the request to the edge function
+      const startTime = Date.now();
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: requestBody
+      });
+
+      const duration = Date.now() - startTime;
+      console.log(`⏱️ Edge function response time: ${duration}ms`);
+
       if (error) {
-        console.error('❌ Edge function error:', error);
-        throw new Error(error.message || 'Failed to process message');
+        console.error('❌ Edge function error details:', {
+          name: error.name,
+          message: error.message,
+          context: error.context,
+          details: error.details,
+          hint: error.hint,
+          code: error.code,
+          duration
+        });
+        
+        // Enhanced error messaging
+        let errorMessage = 'Failed to process message';
+        if (error.message) {
+          errorMessage = error.message;
+        } else if (error.details) {
+          errorMessage = `Edge function error: ${error.details}`;
+        } else if (error.context) {
+          errorMessage = `Request failed: ${error.context}`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
-      console.log('✅ WaktiAIV2Service.sendMessage success - Phase 4');
+      console.log('✅ Edge function response received:', {
+        hasData: !!data,
+        dataKeys: data ? Object.keys(data) : [],
+        success: data?.success,
+        hasResponse: !!data?.response,
+        hasError: !!data?.error,
+        duration
+      });
+
+      // Validate response
+      if (!data) {
+        const error = new Error('No data received from edge function');
+        console.error('❌ Response validation error:', error.message);
+        throw error;
+      }
+
+      if (data.error) {
+        console.error('❌ Edge function returned error:', data.error);
+        throw new Error(data.error);
+      }
+
+      if (!data.success) {
+        console.warn('⚠️ Edge function returned success=false:', data);
+      }
+
+      console.log('✅ WaktiAIV2Service.sendMessage completed successfully');
       return data;
-    } catch (error) {
-      console.error('❌ WaktiAIV2Service.sendMessage error:', error);
-      throw error;
+
+    } catch (error: any) {
+      console.error('❌ WaktiAIV2Service.sendMessage comprehensive error:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+        userId,
+        activeTrigger,
+        messageLength: message?.length || 0
+      });
+      
+      // Re-throw with enhanced context
+      const enhancedError = new Error(`AI Service Error: ${error.message}`);
+      enhancedError.cause = error;
+      throw enhancedError;
     }
   }
 
@@ -172,9 +297,9 @@ export class WaktiAIV2Service {
     language: string = 'en',
     pendingTaskData: any
   ): Promise<any> {
+    console.log('🔧 confirmTaskCreation called:', { userId, language, pendingTaskData });
+    
     try {
-      console.log('🔧 Confirming task creation:', pendingTaskData);
-
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: '',
@@ -190,10 +315,10 @@ export class WaktiAIV2Service {
         throw new Error(error.message || 'Failed to create task');
       }
 
-      console.log('✅ Task creation confirmed');
+      console.log('✅ Task creation confirmed successfully');
       return data;
-    } catch (error) {
-      console.error('❌ Task confirmation error:', error);
+    } catch (error: any) {
+      console.error('❌ Task confirmation comprehensive error:', error);
       throw error;
     }
   }
@@ -204,9 +329,9 @@ export class WaktiAIV2Service {
     language: string = 'en',
     pendingReminderData: any
   ): Promise<any> {
+    console.log('🔔 confirmReminderCreation called:', { userId, language, pendingReminderData });
+    
     try {
-      console.log('🔔 Confirming reminder creation:', pendingReminderData);
-
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message: '',
@@ -222,10 +347,10 @@ export class WaktiAIV2Service {
         throw new Error(error.message || 'Failed to create reminder');
       }
 
-      console.log('✅ Reminder creation confirmed');
+      console.log('✅ Reminder creation confirmed successfully');
       return data;
-    } catch (error) {
-      console.error('❌ Reminder confirmation error:', error);
+    } catch (error: any) {
+      console.error('❌ Reminder confirmation comprehensive error:', error);
       throw error;
     }
   }
@@ -352,6 +477,8 @@ export class WaktiAIV2Service {
 
   // Phase 4: Advanced Integration Methods
   static async getCalendarContext(userId: string): Promise<any> {
+    console.log('📅 Getting calendar context for user:', userId);
+    
     try {
       // Get upcoming events and tasks for context
       const now = new Date();
@@ -381,20 +508,30 @@ export class WaktiAIV2Service {
           .limit(10)
       ]);
 
-      return {
+      const context = {
         upcomingTasks: tasksResult.data || [],
         upcomingEvents: eventsResult.data || [],
         upcomingReminders: remindersResult.data || [],
         currentDateTime: now.toISOString(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       };
+
+      console.log('📅 Calendar context retrieved:', {
+        tasksCount: context.upcomingTasks.length,
+        eventsCount: context.upcomingEvents.length,
+        remindersCount: context.upcomingReminders.length
+      });
+
+      return context;
     } catch (error) {
-      console.error('Error fetching calendar context:', error);
+      console.error('❌ Error fetching calendar context:', error);
       return null;
     }
   }
 
   static async getUserContext(userId: string): Promise<any> {
+    console.log('👤 Getting user context for user:', userId);
+    
     try {
       const [profileResult, preferencesResult, activityResult] = await Promise.all([
         supabase
@@ -418,14 +555,23 @@ export class WaktiAIV2Service {
           .limit(50)
       ]);
 
-      return {
+      const context = {
         profile: profileResult.data,
         preferences: preferencesResult.data,
         recentActivity: activityResult.data || [],
         productivityPatterns: await this.analyzeProductivityPatterns(userId)
       };
+
+      console.log('👤 User context retrieved:', {
+        hasProfile: !!context.profile,
+        hasPreferences: !!context.preferences,
+        activityCount: context.recentActivity.length,
+        hasPatterns: !!context.productivityPatterns
+      });
+
+      return context;
     } catch (error) {
-      console.error('Error fetching user context:', error);
+      console.error('❌ Error fetching user context:', error);
       return null;
     }
   }
@@ -511,6 +657,8 @@ export class WaktiAIV2Service {
     actionData: any,
     language: string = 'en'
   ): Promise<any> {
+    console.log('⚡ executeAdvancedAction called:', { userId, actionType, actionData });
+    
     try {
       const { data, error } = await supabase.functions.invoke('wakti-execute-action', {
         body: {
@@ -525,9 +673,11 @@ export class WaktiAIV2Service {
       });
 
       if (error) throw error;
+      
+      console.log('✅ Advanced action executed successfully');
       return data;
     } catch (error) {
-      console.error('Error executing advanced action:', error);
+      console.error('❌ Error executing advanced action:', error);
       throw error;
     }
   }
