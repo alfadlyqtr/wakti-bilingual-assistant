@@ -3,6 +3,7 @@ import React from 'react';
 import { Calendar, Clock, CheckCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
+import { formatDateForDisplay, isValidDate } from '@/lib/utils';
 
 interface TaskConfirmationCardProps {
   type: 'task' | 'reminder';
@@ -23,11 +24,8 @@ export function TaskConfirmationCard({
   const { language } = useTheme();
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return language === 'ar' 
-      ? date.toLocaleDateString('ar-SA')
-      : date.toLocaleDateString('en-US');
+    if (!dateString || !isValidDate(dateString)) return '';
+    return formatDateForDisplay(dateString);
   };
 
   return (
