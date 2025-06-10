@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -42,7 +41,11 @@ serve(async (req) => {
       confirmSearch = false,
       activeTrigger = 'chat',
       textGenParams = null,
-      attachedFiles = []
+      attachedFiles = [],
+      confirmTask = false,
+      confirmReminder = false,
+      pendingTaskData = null,
+      pendingReminderData = null
     } = requestBody;
 
     console.log("🎯 WAKTI AI V2.5: === EXTRACTED FIELDS ===");
@@ -55,6 +58,53 @@ serve(async (req) => {
     console.log("🎯 WAKTI AI V2.5: Text Gen Params:", textGenParams);
     console.log("🎯 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
     console.log("🎯 WAKTI AI V2.5: Confirm Search:", confirmSearch);
+    console.log("🎯 WAKTI AI V2.5: Confirm Task:", confirmTask);
+    console.log("🎯 WAKTI AI V2.5: Confirm Reminder:", confirmReminder);
+
+    // Handle task/reminder confirmations
+    if (confirmTask && pendingTaskData) {
+      console.log("🔧 Creating confirmed task:", pendingTaskData);
+      const taskResult = await createTaskFromData(userId, pendingTaskData, language);
+      
+      const response = taskResult.success 
+        ? (language === 'ar' ? `✅ تم إنشاء المهمة "${pendingTaskData.title}" بنجاح!` : `✅ Task "${pendingTaskData.title}" created successfully!`)
+        : (taskResult.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task'));
+
+      return new Response(JSON.stringify({
+        response,
+        conversationId: conversationId || generateConversationId(),
+        intent: 'task_created',
+        confidence: 'high',
+        actionTaken: 'create_task',
+        actionResult: taskResult,
+        browsingUsed: false,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (confirmReminder && pendingReminderData) {
+      console.log("🔔 Creating confirmed reminder:", pendingReminderData);
+      const reminderResult = await createReminderFromData(userId, pendingReminderData, language);
+      
+      const response = reminderResult.success 
+        ? (language === 'ar' ? `✅ تم إنشاء التذكير "${pendingReminderData.title}" بنجاح!` : `✅ Reminder "${pendingReminderData.title}" created successfully!`)
+        : (reminderResult.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder'));
+
+      return new Response(JSON.stringify({
+        response,
+        conversationId: conversationId || generateConversationId(),
+        intent: 'reminder_created',
+        confidence: 'high',
+        actionTaken: 'create_reminder',
+        actionResult: reminderResult,
+        browsingUsed: false,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     console.log("🎯 WAKTI AI V2.5: === STARTING ULTRA-STRICT TRIGGER ANALYSIS ===");
 
@@ -101,6 +151,10 @@ serve(async (req) => {
       requiresSearchConfirmation: response.requiresSearchConfirmation,
       needsConfirmation: false,
       needsClarification: false,
+      pendingTask: response.pendingTask,
+      pendingReminder: response.pendingReminder,
+      requiresTaskConfirmation: response.requiresTaskConfirmation,
+      requiresReminderConfirmation: response.requiresReminderConfirmation,
       success: true
     };
 
@@ -130,25 +184,26 @@ serve(async (req) => {
   }
 });
 
-// Enhanced intent detection function
+// Enhanced intent detection function with better parsing
 function detectActionableIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
   // Task creation patterns
   const taskPatterns = [
     'create task', 'add task', 'new task', 'make task', 'task to',
-    'need to do', 'have to do', 'should do', 'must do',
-    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'يجب أن أفعل'
+    'need to do', 'have to do', 'should do', 'must do', 'i need to',
+    'add to my tasks', 'create a task', 'make a task',
+    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'يجب أن أفعل', 'أحتاج أن'
   ];
   
   // Reminder patterns
   const reminderPatterns = [
     'remind me', 'set reminder', 'reminder to', 'don\'t forget',
-    'alert me', 'notify me', 'ping me',
-    'ذكرني', 'تذكير', 'لا تنس', 'نبهني'
+    'alert me', 'notify me', 'ping me', 'remember to',
+    'ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'تذكر'
   ];
   
-  // Calendar/Event patterns
+  // Calendar/Event patterns (for future use)
   const eventPatterns = [
     'schedule', 'meeting', 'appointment', 'event', 'calendar',
     'book', 'reserve', 'plan for',
@@ -170,15 +225,22 @@ function detectActionableIntent(message: string, language: string = 'en') {
   return { type: 'none', confidence: 'low' };
 }
 
-// Simple date/time extraction function
+// Enhanced date/time extraction function
 function extractDateTimeDetails(message: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Simple date patterns
+  // Enhanced date patterns
   const datePatterns = {
     'today': new Date(),
     'tomorrow': new Date(Date.now() + 24 * 60 * 60 * 1000),
     'next week': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    'next monday': getNextWeekday(1),
+    'next tuesday': getNextWeekday(2),
+    'next wednesday': getNextWeekday(3),
+    'next thursday': getNextWeekday(4),
+    'next friday': getNextWeekday(5),
+    'next saturday': getNextWeekday(6),
+    'next sunday': getNextWeekday(0),
     'اليوم': new Date(),
     'غداً': new Date(Date.now() + 24 * 60 * 60 * 1000),
     'غدا': new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -192,7 +254,7 @@ function extractDateTimeDetails(message: string) {
     }
   }
   
-  // Simple time extraction (basic patterns)
+  // Enhanced time extraction
   const timeMatch = lowerMessage.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/i);
   let extractedTime = null;
   if (timeMatch) {
@@ -210,12 +272,13 @@ function extractDateTimeDetails(message: string) {
     extractedTime = `${adjustedHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
   }
   
-  // Priority extraction
+  // Enhanced priority extraction
   const priorityPatterns = {
     'urgent': 'urgent',
     'high priority': 'high',
     'important': 'high',
     'low priority': 'low',
+    'asap': 'urgent',
     'عاجل': 'urgent',
     'مهم': 'high',
     'أولوية عالية': 'high'
@@ -228,45 +291,138 @@ function extractDateTimeDetails(message: string) {
       break;
     }
   }
+
+  // Extract subtasks
+  const subtasks = extractSubtasks(message);
   
   return {
     date: extractedDate,
     time: extractedTime,
-    priority: priority
+    priority: priority,
+    subtasks: subtasks
   };
 }
 
-// Enhanced task creation function
-async function createTaskFromMessage(userId: string, message: string, language: string = 'en') {
+// Helper function to get next weekday
+function getNextWeekday(targetDay: number) {
+  const today = new Date();
+  const currentDay = today.getDay();
+  const daysUntilTarget = (targetDay - currentDay + 7) % 7;
+  const nextWeekday = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
+  return nextWeekday;
+}
+
+// Extract subtasks from message
+function extractSubtasks(message: string): string[] {
+  const subtasks: string[] = [];
+  
+  // Look for colon-separated lists: "buy groceries: milk, bread, eggs"
+  const colonMatch = message.match(/:\s*(.+)$/);
+  if (colonMatch) {
+    const items = colonMatch[1].split(',').map(item => item.trim()).filter(item => item.length > 0);
+    subtasks.push(...items);
+  }
+  
+  // Look for bullet points or numbered lists
+  const bulletMatches = message.match(/[-•*]\s*([^-•*\n]+)/g);
+  if (bulletMatches) {
+    bulletMatches.forEach(match => {
+      const item = match.replace(/^[-•*]\s*/, '').trim();
+      if (item && !subtasks.includes(item)) {
+        subtasks.push(item);
+      }
+    });
+  }
+  
+  return subtasks;
+}
+
+// New function to parse structured task data
+function parseTaskFromMessage(message: string, language: string = 'en') {
+  const details = extractDateTimeDetails(message);
+  
+  // Extract title by removing common task creation phrases
+  let title = message
+    .replace(/(create task|add task|new task|make task|task to|need to do|have to do|should do|must do|i need to)/gi, '')
+    .replace(/(أنشئ مهمة|أضف مهمة|مهمة جديدة|يجب أن أفعل|أحتاج أن)/gi, '')
+    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
+    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
+    .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
+    .replace(/:\s*.*$/, '') // Remove subtask list
+    .trim();
+  
+  if (!title || title.length < 3) {
+    title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
+  }
+
+  // Extract description (text after title but before subtasks)
+  const description = extractDescription(message, title);
+  
+  return {
+    title: title,
+    description: description || undefined,
+    due_date: details.date || undefined,
+    due_time: details.time || undefined,
+    priority: details.priority as 'normal' | 'high' | 'urgent',
+    task_type: 'one-time' as const,
+    subtasks: details.subtasks
+  };
+}
+
+// New function to parse structured reminder data
+function parseReminderFromMessage(message: string, language: string = 'en') {
+  const details = extractDateTimeDetails(message);
+  
+  // Extract title by removing common reminder phrases
+  let title = message
+    .replace(/(remind me|set reminder|reminder to|don't forget|alert me|notify me|ping me|remember to)/gi, '')
+    .replace(/(ذكرني|تذكير|لا تنس|نبهني|تذكر)/gi, '')
+    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
+    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
+    .replace(/^(to|that|about|بأن|عن|أن)/gi, '')
+    .trim();
+  
+  if (!title || title.length < 3) {
+    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
+  }
+
+  const description = extractDescription(message, title);
+  
+  return {
+    title: title,
+    description: description || undefined,
+    due_date: details.date || undefined,
+    due_time: details.time || undefined
+  };
+}
+
+// Extract description from message
+function extractDescription(message: string, title: string): string | null {
+  // Remove title from message and see if there's additional descriptive text
+  const remainingText = message.replace(title, '').trim();
+  
+  // Look for descriptive phrases
+  const descriptionMatches = remainingText.match(/(?:about|for|regarding|description|desc):\s*([^:]+)/i);
+  if (descriptionMatches) {
+    return descriptionMatches[1].trim();
+  }
+  
+  // If there's additional text that's not time/date/priority related, use as description
+  const cleanText = remainingText
+    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
+    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
+    .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
+    .replace(/:\s*.*$/, '') // Remove subtask list
+    .trim();
+  
+  return cleanText.length > 10 ? cleanText : null;
+}
+
+// New function to create task from structured data
+async function createTaskFromData(userId: string, taskData: any, language: string = 'en') {
   try {
-    console.log("🔧 Creating task from message:", message);
+    console.log("🔧 Creating task from structured data:", taskData);
     
-    const details = extractDateTimeDetails(message);
-    
-    // Extract title by removing common task creation phrases
-    let title = message
-      .replace(/(create task|add task|new task|make task|task to|need to do|have to do|should do|must do)/gi, '')
-      .replace(/(أنشئ مهمة|أضف مهمة|مهمة جديدة|يجب أن أفعل)/gi, '')
-      .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-      .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-      .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
-      .trim();
-    
-    if (!title || title.length < 3) {
-      title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
-    }
-    
-    const taskData = {
-      title: title,
-      description: '',
-      due_date: details.date || new Date().toISOString().split('T')[0],
-      due_time: details.time || null,
-      priority: details.priority as 'normal' | 'high' | 'urgent',
-      task_type: 'one-time' as const,
-      is_shared: false
-    };
-    
-    // Create task using existing TRService logic (replicated to avoid imports)
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -297,12 +453,12 @@ async function createTaskFromMessage(userId: string, message: string, language: 
       success: true,
       task: data,
       message: language === 'ar' 
-        ? `تم إنشاء المهمة "${title}" بنجاح` 
-        : `Task "${title}" created successfully`
+        ? `تم إنشاء المهمة "${taskData.title}" بنجاح` 
+        : `Task "${taskData.title}" created successfully`
     };
     
   } catch (error) {
-    console.error('Error creating task:', error);
+    console.error('Error creating task from data:', error);
     return {
       success: false,
       error: error.message,
@@ -313,34 +469,11 @@ async function createTaskFromMessage(userId: string, message: string, language: 
   }
 }
 
-// Enhanced reminder creation function
-async function createReminderFromMessage(userId: string, message: string, language: string = 'en') {
+// New function to create reminder from structured data
+async function createReminderFromData(userId: string, reminderData: any, language: string = 'en') {
   try {
-    console.log("🔔 Creating reminder from message:", message);
+    console.log("🔔 Creating reminder from structured data:", reminderData);
     
-    const details = extractDateTimeDetails(message);
-    
-    // Extract title by removing common reminder phrases
-    let title = message
-      .replace(/(remind me|set reminder|reminder to|don't forget|alert me|notify me|ping me)/gi, '')
-      .replace(/(ذكرني|تذكير|لا تنس|نبهني)/gi, '')
-      .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-      .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-      .replace(/^(to|that|about|بأن|عن|أن)/gi, '')
-      .trim();
-    
-    if (!title || title.length < 3) {
-      title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
-    }
-    
-    const reminderData = {
-      title: title,
-      description: null,
-      due_date: details.date || new Date().toISOString().split('T')[0],
-      due_time: details.time || null
-    };
-    
-    // Create reminder using existing TRService logic (replicated to avoid imports)
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
@@ -369,12 +502,12 @@ async function createReminderFromMessage(userId: string, message: string, langua
       success: true,
       reminder: data,
       message: language === 'ar' 
-        ? `تم إنشاء التذكير "${title}" بنجاح` 
-        : `Reminder "${title}" created successfully`
+        ? `تم إنشاء التذكير "${reminderData.title}" بنجاح` 
+        : `Reminder "${reminderData.title}" created successfully`
     };
     
   } catch (error) {
-    console.error('Error creating reminder:', error);
+    console.error('Error creating reminder from data:', error);
     return {
       success: false,
       error: error.message,
@@ -731,22 +864,46 @@ async function processWithUltraStrictTriggerControl(
     fileContext = await processAttachedFiles(attachedFiles);
   }
 
-  // Check for actionable intents (task/reminder creation) - NEW FEATURE
+  // Check for actionable intents - ENHANCED WITH CONFIRMATION
   let actionResult = null;
   let actionTaken = null;
+  let pendingTask = null;
+  let pendingReminder = null;
+  let requiresTaskConfirmation = false;
+  let requiresReminderConfirmation = false;
   
   try {
     const intent = detectActionableIntent(message, language);
     console.log("🎯 Detected intent:", intent);
     
     if (intent.type === 'task' && intent.confidence === 'high') {
-      console.log("🔧 Attempting to create task...");
-      actionResult = await createTaskFromMessage(userId, message, language);
-      actionTaken = 'create_task';
+      console.log("🔧 Parsing task data for confirmation...");
+      pendingTask = parseTaskFromMessage(message, language);
+      requiresTaskConfirmation = true;
+      actionTaken = 'parse_task';
+      
+      // Generate a response asking for confirmation
+      actionResult = {
+        success: true,
+        pendingTask: pendingTask,
+        message: language === 'ar' 
+          ? `تم تحليل طلب إنشاء المهمة. يرجى مراجعة التفاصيل والتأكيد.`
+          : `I've parsed your task request. Please review the details and confirm.`
+      };
     } else if (intent.type === 'reminder' && intent.confidence === 'high') {
-      console.log("🔔 Attempting to create reminder...");
-      actionResult = await createReminderFromMessage(userId, message, language);
-      actionTaken = 'create_reminder';
+      console.log("🔔 Parsing reminder data for confirmation...");
+      pendingReminder = parseReminderFromMessage(message, language);
+      requiresReminderConfirmation = true;
+      actionTaken = 'parse_reminder';
+      
+      // Generate a response asking for confirmation
+      actionResult = {
+        success: true,
+        pendingReminder: pendingReminder,
+        message: language === 'ar' 
+          ? `تم تحليل طلب إنشاء التذكير. يرجى مراجعة التفاصيل والتأكيد.`
+          : `I've parsed your reminder request. Please review the details and confirm.`
+      };
     }
   } catch (error) {
     console.error("❌ Error processing actionable intent:", error);
@@ -759,9 +916,8 @@ async function processWithUltraStrictTriggerControl(
 
   // Build enhanced context for AI response
   let enhancedMessage = message;
-  if (actionResult && actionResult.success) {
-    const successMessage = actionResult.message;
-    enhancedMessage = `User message: "${message}"\n\nAction completed: ${successMessage}\n\nPlease acknowledge this action and provide a helpful response.`;
+  if (actionResult && actionResult.success && (requiresTaskConfirmation || requiresReminderConfirmation)) {
+    enhancedMessage = `User message: "${message}"\n\nI've detected a ${requiresTaskConfirmation ? 'task' : 'reminder'} creation request and parsed the details. The user will see a confirmation interface to review and approve the ${requiresTaskConfirmation ? 'task' : 'reminder'} creation.\n\nPlease provide a helpful response acknowledging the request and mentioning that they can review and confirm the details.`;
   }
 
   const response = await processWithAI(
@@ -775,29 +931,19 @@ async function processWithUltraStrictTriggerControl(
     conversationHistory // Pass conversation history for context
   );
 
-  // Enhance response with action confirmation if an action was taken
-  let finalResponse = response;
-  if (actionResult && actionResult.success) {
-    const actionConfirmation = language === 'ar' 
-      ? `✅ ${actionResult.message}\n\n${response}`
-      : `✅ ${actionResult.message}\n\n${response}`;
-    finalResponse = actionConfirmation;
-  } else if (actionResult && !actionResult.success) {
-    const errorMessage = language === 'ar' 
-      ? `❌ ${actionResult.message}\n\n${response}`
-      : `❌ ${actionResult.message}\n\n${response}`;
-    finalResponse = errorMessage;
-  }
-
   console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING SUCCESS ===");
 
   return {
-    response: finalResponse,
+    response: response,
     conversationId: conversationId || generateConversationId(),
     intent: triggerResult.intent,
     confidence: triggerResult.confidence,
     actionTaken,
     actionResult,
+    pendingTask,
+    pendingReminder,
+    requiresTaskConfirmation,
+    requiresReminderConfirmation,
     imageUrl: null,
     browsingUsed: false,
     browsingData: null,
