@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock } from 'lucide-react';
+import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
@@ -113,13 +113,14 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
     );
   };
 
-  // Phase 2: Enhanced detection for all action types
-  const hasPendingTask = message.actionTaken === 'parse_task' && message.actionResult?.pendingTask;
-  const hasPendingReminder = message.actionTaken === 'parse_reminder' && message.actionResult?.pendingReminder;
-  const hasSearchSuggestion = message.actionTaken === 'search_suggestion' && message.actionResult?.suggestion;
-  const hasDuplicateWarning = message.actionTaken === 'duplicate_warning' && message.actionResult?.duplicateTask;
+  // Phase 3: Enhanced detection for all action types with learning
+  const hasPendingTask = (message.actionTaken === 'parse_task' || message.actionTaken === 'parse_task_with_learning') && message.actionResult?.pendingTask;
+  const hasPendingReminder = (message.actionTaken === 'parse_reminder' || message.actionTaken === 'parse_reminder_with_learning') && message.actionResult?.pendingReminder;
+  const hasSearchSuggestion = (message.actionTaken === 'search_suggestion' || message.actionTaken === 'enhanced_search_suggestion') && message.actionResult?.suggestion;
+  const hasDuplicateWarning = (message.actionTaken === 'duplicate_warning' || message.actionTaken === 'smart_duplicate_warning') && message.actionResult?.duplicateTask;
+  const hasProductivitySuggestion = message.actionTaken === 'productivity_suggestion' && message.actionResult?.suggestions;
   // Fix: Check for string type before using includes()
-  const needsClarification = typeof message.actionTaken === 'string' && message.actionTaken.includes('clarify');
+  const needsClarification = typeof message.actionTaken === 'string' && (message.actionTaken.includes('clarify') || message.actionTaken.includes('clarify_task_with_learning') || message.actionTaken.includes('clarify_reminder_with_learning'));
 
   return (
     <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -143,13 +144,13 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             {message.content}
           </div>
           
-          {/* Phase 2: Enhanced search suggestion UI */}
+          {/* Phase 3: Enhanced search suggestion UI with learning */}
           {hasSearchSuggestion && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
                 <Search className="h-4 w-4" />
                 <span className="font-medium text-sm">
-                  {language === 'ar' ? 'اقتراح وضع البحث' : 'Search Mode Suggestion'}
+                  {language === 'ar' ? 'اقتراح بحث ذكي' : 'Smart Search Suggestion'}
                 </span>
               </div>
               <p className="text-sm text-blue-600 mb-3">
@@ -168,14 +169,19 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             </div>
           )}
 
-          {/* Phase 2: Duplicate task warning UI */}
+          {/* Phase 3: Smart duplicate task warning UI with similarity scoring */}
           {hasDuplicateWarning && (
             <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <div className="flex items-center gap-2 text-amber-700 mb-2">
                 <AlertTriangle className="h-4 w-4" />
                 <span className="font-medium text-sm">
-                  {language === 'ar' ? 'تحذير: مهمة مشابهة موجودة' : 'Warning: Similar Task Exists'}
+                  {language === 'ar' ? 'تحذير ذكي: مهمة مشابهة موجودة' : 'Smart Warning: Similar Task Exists'}
                 </span>
+                {message.actionResult.similarity && (
+                  <span className="text-xs bg-amber-200 px-2 py-1 rounded">
+                    {Math.round(message.actionResult.similarity * 100)}% {language === 'ar' ? 'تشابه' : 'similarity'}
+                  </span>
+                )}
               </div>
               <div className="text-sm text-amber-600 mb-3">
                 <p className="font-medium">{language === 'ar' ? 'المهمة الموجودة:' : 'Existing task:'}</p>
@@ -205,7 +211,33 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             </div>
           )}
 
-          {/* Phase 2: Clarification needed UI */}
+          {/* Phase 3: New productivity suggestion UI */}
+          {hasProductivitySuggestion && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2 text-green-700 mb-2">
+                <TrendingUp className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'اقتراح إنتاجية ذكي' : 'Smart Productivity Suggestion'}
+                </span>
+              </div>
+              <div className="text-sm text-green-600 mb-3">
+                {message.actionResult.suggestions && message.actionResult.suggestions.map((suggestion: any, index: number) => (
+                  <div key={index} className="flex items-start gap-2 mb-2">
+                    <Lightbulb className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    <span>{suggestion.text}</span>
+                  </div>
+                ))}
+              </div>
+              <Button
+                size="sm"
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {language === 'ar' ? 'تطبيق الاقتراحات' : 'Apply Suggestions'}
+              </Button>
+            </div>
+          )}
+
+          {/* Phase 3: Enhanced clarification needed UI with learning context */}
           {needsClarification && (
             <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
               <div className="flex items-center gap-2 text-purple-700 mb-2">
@@ -213,6 +245,11 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                 <span className="font-medium text-sm">
                   {language === 'ar' ? 'معلومات إضافية مطلوبة' : 'Additional Information Needed'}
                 </span>
+                {message.actionResult?.learningContext && (
+                  <span className="text-xs bg-purple-200 px-2 py-1 rounded">
+                    {language === 'ar' ? 'ذكي' : 'Smart'}
+                  </span>
+                )}
               </div>
               {message.actionResult?.missingFields && (
                 <div className="text-sm text-purple-600 mb-3">
@@ -231,7 +268,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             </div>
           )}
           
-          {/* Enhanced confirmation cards for parsed tasks/reminders */}
+          {/* Enhanced confirmation cards for parsed tasks/reminders with learning */}
           {hasPendingTask && (
             <div className="mt-3">
               <TaskConfirmationCard
@@ -240,6 +277,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                 onConfirm={() => handleTaskConfirmation(message.actionResult.pendingTask)}
                 onCancel={handleCancelConfirmation}
                 isLoading={isConfirming}
+                enhanced={message.actionResult.learningEnhancements}
               />
             </div>
           )}
@@ -252,15 +290,43 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                 onConfirm={() => handleReminderConfirmation(message.actionResult.pendingReminder)}
                 onCancel={handleCancelConfirmation}
                 isLoading={isConfirming}
+                enhanced={message.actionResult.learningEnhancements}
               />
+            </div>
+          )}
+
+          {/* Phase 3: Display proactive actions if available */}
+          {message.proactiveActions && message.proactiveActions.length > 0 && (
+            <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
+              <div className="flex items-center gap-2 text-indigo-700 mb-2">
+                <Lightbulb className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'اقتراحات ذكية' : 'Smart Suggestions'}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {message.proactiveActions.map((action: any, index: number) => (
+                  <div key={index} className="text-sm text-indigo-600">
+                    {action.text}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {message.role === 'assistant' && (
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-muted-foreground/20">
-              <span className="text-xs text-muted-foreground">
-                {formatTime(message.timestamp)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {formatTime(message.timestamp)}
+                </span>
+                {/* Phase 3: Show learning indicator */}
+                {(message.actionTaken?.includes('with_learning') || message.userProfile) && (
+                  <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
+                    {language === 'ar' ? 'ذكي' : 'Smart'}
+                  </span>
+                )}
+              </div>
               
               <Button
                 variant="ghost"

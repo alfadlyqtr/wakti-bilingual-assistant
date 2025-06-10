@@ -1,35 +1,16 @@
 
 import React from 'react';
+import { Calendar, Clock, Flag, CheckCircle, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Calendar, Clock, Flag, List, CheckSquare, X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { format } from 'date-fns';
-
-interface PendingTask {
-  title: string;
-  description?: string;
-  due_date?: string;
-  due_time?: string;
-  priority: 'normal' | 'high' | 'urgent';
-  task_type: 'one-time' | 'repeated';
-  subtasks?: string[];
-}
-
-interface PendingReminder {
-  title: string;
-  description?: string;
-  due_date?: string;
-  due_time?: string;
-}
 
 interface TaskConfirmationCardProps {
   type: 'task' | 'reminder';
-  data: PendingTask | PendingReminder;
+  data: any;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  enhanced?: boolean; // Phase 3: Learning enhancement indicator
 }
 
 export function TaskConfirmationCard({ 
@@ -37,132 +18,170 @@ export function TaskConfirmationCard({
   data, 
   onConfirm, 
   onCancel, 
-  isLoading = false 
+  isLoading = false,
+  enhanced = false 
 }: TaskConfirmationCardProps) {
   const { language } = useTheme();
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return null;
-    try {
-      return format(new Date(dateStr), 'PPP');
-    } catch {
-      return dateStr;
-    }
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return language === 'ar' 
+      ? date.toLocaleDateString('ar-SA')
+      : date.toLocaleDateString('en-US');
   };
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'urgent': return 'destructive';
-      case 'high': return 'secondary';
-      default: return 'outline';
+      case 'urgent': return 'text-red-600 bg-red-50';
+      case 'high': return 'text-orange-600 bg-orange-50';
+      case 'normal': return 'text-green-600 bg-green-50';
+      default: return 'text-gray-600 bg-gray-50';
     }
   };
 
   const getPriorityText = (priority: string) => {
-    const priorityMap = {
-      normal: language === 'ar' ? 'عادي' : 'Normal',
-      high: language === 'ar' ? 'عالي' : 'High',
-      urgent: language === 'ar' ? 'عاجل' : 'Urgent'
-    };
-    return priorityMap[priority as keyof typeof priorityMap] || priority;
-  };
-
-  const getTaskTypeText = (taskType: string) => {
-    const typeMap = {
-      'one-time': language === 'ar' ? 'لمرة واحدة' : 'One-time',
-      'repeated': language === 'ar' ? 'متكرر' : 'Repeated'
-    };
-    return typeMap[taskType as keyof typeof typeMap] || taskType;
+    if (language === 'ar') {
+      switch (priority) {
+        case 'urgent': return 'عاجل';
+        case 'high': return 'عالي';
+        case 'normal': return 'عادي';
+        default: return priority;
+      }
+    }
+    return priority;
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto border-primary/20">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-sm">
-          {type === 'task' ? (
-            <>
-              <CheckSquare className="h-4 w-4" />
-              {language === 'ar' ? 'تأكيد إنشاء المهمة' : 'Confirm Task Creation'}
-            </>
-          ) : (
-            <>
-              <Clock className="h-4 w-4" />
-              {language === 'ar' ? 'تأكيد إنشاء التذكير' : 'Confirm Reminder Creation'}
-            </>
+    <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <span className="font-medium text-sm text-gray-900">
+              {type === 'task' 
+                ? (language === 'ar' ? 'تأكيد المهمة' : 'Confirm Task')
+                : (language === 'ar' ? 'تأكيد التذكير' : 'Confirm Reminder')
+              }
+            </span>
+          </div>
+          {/* Phase 3: Enhanced learning indicator */}
+          {enhanced && (
+            <div className="flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded text-xs text-blue-600">
+              <Sparkles className="h-3 w-3" />
+              {language === 'ar' ? 'محسن بالذكاء الاصطناعي' : 'AI Enhanced'}
+            </div>
           )}
-        </CardTitle>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onCancel}
+          className="h-6 w-6 p-0 text-gray-400 hover:text-gray-600"
+          disabled={isLoading}
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+
+      <div className="space-y-3">
         {/* Title */}
         <div>
-          <h3 className="font-medium text-sm text-muted-foreground mb-1">
-            {language === 'ar' ? 'العنوان' : 'Title'}
-          </h3>
-          <p className="text-sm font-medium">{data.title}</p>
+          <h3 className="font-medium text-gray-900 mb-1">{data.title}</h3>
+          {data.description && (
+            <p className="text-sm text-gray-600">{data.description}</p>
+          )}
         </div>
 
-        {/* Description */}
-        {data.description && (
+        {/* Subtasks */}
+        {data.subtasks && data.subtasks.length > 0 && (
           <div>
-            <h3 className="font-medium text-sm text-muted-foreground mb-1">
-              {language === 'ar' ? 'الوصف' : 'Description'}
-            </h3>
-            <p className="text-sm text-muted-foreground">{data.description}</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">
+              {language === 'ar' ? 'المهام الفرعية:' : 'Subtasks:'}
+            </p>
+            <ul className="space-y-1">
+              {data.subtasks.map((subtask: string, index: number) => (
+                <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                  {subtask}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        {/* Date and Time */}
-        {data.due_date && (
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm">{formatDate(data.due_date)}</span>
-            {data.due_time && (
-              <>
-                <Clock className="h-4 w-4 text-muted-foreground ml-2" />
-                <span className="text-sm">{data.due_time}</span>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Task-specific fields */}
-        {type === 'task' && 'priority' in data && (
-          <div className="space-y-2">
-            {/* Priority */}
-            <div className="flex items-center gap-2">
-              <Flag className="h-4 w-4 text-muted-foreground" />
-              <Badge variant={getPriorityColor(data.priority)}>
-                {getPriorityText(data.priority)}
-              </Badge>
-            </div>
-
-            {/* Task Type */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">
-                {language === 'ar' ? 'النوع:' : 'Type:'}
+        {/* Details Grid */}
+        <div className="grid grid-cols-1 gap-2">
+          {/* Due Date */}
+          {(data.due_date || data.suggestedDate) && (
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-gray-500" />
+              <span className="text-gray-600">
+                {language === 'ar' ? 'التاريخ:' : 'Date:'}
               </span>
-              <span className="text-sm">{getTaskTypeText(data.task_type)}</span>
-            </div>
-
-            {/* Subtasks */}
-            {data.subtasks && data.subtasks.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <List className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">
-                    {language === 'ar' ? 'المهام الفرعية' : 'Subtasks'}
+              <span className="text-gray-900">
+                {formatDate(data.due_date || data.suggestedDate)}
+                {data.suggestedDate && !data.due_date && (
+                  <span className="text-blue-600 text-xs ml-1">
+                    ({language === 'ar' ? 'مقترح' : 'suggested'})
                   </span>
-                </div>
-                <ul className="list-disc list-inside space-y-1 ml-6">
-                  {data.subtasks.map((subtask, index) => (
-                    <li key={index} className="text-sm text-muted-foreground">
-                      {subtask}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Due Time (for reminders) */}
+          {(data.due_time || data.suggestedTime) && (
+            <div className="flex items-center gap-2 text-sm">
+              <Clock className="h-4 w-4 text-gray-500" />
+              <span className="text-gray-600">
+                {language === 'ar' ? 'الوقت:' : 'Time:'}
+              </span>
+              <span className="text-gray-900">
+                {data.due_time || data.suggestedTime}
+                {data.suggestedTime && !data.due_time && (
+                  <span className="text-blue-600 text-xs ml-1">
+                    ({language === 'ar' ? 'مقترح' : 'suggested'})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Priority (for tasks) */}
+          {(data.priority || data.suggestedPriority) && type === 'task' && (
+            <div className="flex items-center gap-2 text-sm">
+              <Flag className="h-4 w-4 text-gray-500" />
+              <span className="text-gray-600">
+                {language === 'ar' ? 'الأولوية:' : 'Priority:'}
+              </span>
+              <span 
+                className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  getPriorityColor(data.priority || data.suggestedPriority)
+                }`}
+              >
+                {getPriorityText(data.priority || data.suggestedPriority)}
+                {data.suggestedPriority && !data.priority && (
+                  <span className="text-blue-600 ml-1">
+                    ({language === 'ar' ? 'مقترح' : 'suggested'})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Phase 3: Smart suggestions or enhancements display */}
+        {enhanced && data.smartSuggestions && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-2">
+            <p className="text-xs text-blue-700 font-medium mb-1">
+              {language === 'ar' ? 'تحسينات ذكية:' : 'Smart Enhancements:'}
+            </p>
+            <ul className="text-xs text-blue-600 space-y-1">
+              {data.smartSuggestions.map((suggestion: string, index: number) => (
+                <li key={index}>• {suggestion}</li>
+              ))}
+            </ul>
           </div>
         )}
 
@@ -175,26 +194,24 @@ export function TaskConfirmationCard({
             size="sm"
           >
             {isLoading ? (
-              <>
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent mr-2" />
-                {language === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...'}
-              </>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                {language === 'ar' ? 'جاري الإنشاء...' : 'Creating...'}
+              </div>
             ) : (
-              language === 'ar' ? 'إنشاء' : 'Create'
+              language === 'ar' ? 'تأكيد الإنشاء' : 'Confirm & Create'
             )}
           </Button>
-          
           <Button
-            onClick={onCancel}
             variant="outline"
+            onClick={onCancel}
             disabled={isLoading}
             size="sm"
           >
-            <X className="h-3 w-3 mr-1" />
             {language === 'ar' ? 'إلغاء' : 'Cancel'}
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
