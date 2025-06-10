@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,34 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
     setImageError(true);
   };
 
+  const addSuccessMessageToChat = (successContent: string) => {
+    // Get current session from localStorage
+    const savedSession = WaktiAIV2Service.loadChatSession();
+    const currentMessages = savedSession?.messages || [];
+    
+    // Create success message
+    const successMessage: AIMessage = {
+      id: `success-${Date.now()}`,
+      role: 'assistant',
+      content: successContent,
+      timestamp: new Date(),
+      intent: 'task_created_success',
+      confidence: 'high',
+      actionTaken: true
+    };
+
+    // Add success message to session
+    const updatedMessages = [...currentMessages, successMessage];
+    
+    // Save updated session
+    WaktiAIV2Service.saveChatSession(updatedMessages, savedSession?.conversationId || null);
+    
+    // Reload to show the new message
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
+
   const handleTaskConfirmation = async (pendingTask: any) => {
     setIsConfirming(true);
     try {
@@ -73,9 +102,12 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully'
       );
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Add success message to chat with thumbs up
+      const successContent = language === 'ar' 
+        ? '👍 تم إنشاء المهمة بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
+        : '👍 Task created successfully! Please visit T & R page';
+      
+      addSuccessMessageToChat(successContent);
 
     } catch (error: any) {
       console.error('Error confirming task:', error);
@@ -107,9 +139,12 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully'
       );
 
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Add success message to chat with thumbs up
+      const successContent = language === 'ar' 
+        ? '👍 تم إنشاء التذكير بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
+        : '👍 Reminder created successfully! Please visit T & R page';
+      
+      addSuccessMessageToChat(successContent);
 
     } catch (error: any) {
       console.error('Error confirming reminder:', error);
