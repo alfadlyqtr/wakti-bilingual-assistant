@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp, Zap, Brain, Workflow, Target, Image as ImageIcon } from 'lucide-react';
+import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock, Lightbulb, TrendingUp, Zap, Brain, Workflow, Target, Image as ImageIcon, Expand } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
+import { ImageModal } from './ImageModal';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +21,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
   const [imageError, setImageError] = useState(false);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
 
   const formatTime = (timestamp: Date) => {
     return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
@@ -197,7 +199,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
           {/* Generated Image Display */}
           {message.imageUrl && (
             <div className="mt-3">
-              <div className="relative rounded-lg overflow-hidden border border-border">
+              <div className="relative rounded-lg overflow-hidden border border-border group cursor-pointer">
                 {imageLoading && (
                   <div className="absolute inset-0 bg-muted flex items-center justify-center">
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -218,14 +220,21 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                     </div>
                   </div>
                 ) : (
-                  <img
-                    src={message.imageUrl}
-                    alt="Generated image"
-                    className="w-full h-auto max-w-md"
-                    onLoad={handleImageLoad}
-                    onError={handleImageError}
-                    style={{ display: imageLoading ? 'none' : 'block' }}
-                  />
+                  <div className="relative" onClick={() => setImageModalOpen(true)}>
+                    <img
+                      src={message.imageUrl}
+                      alt="Generated image"
+                      className="w-full h-auto max-w-md transition-transform group-hover:scale-105"
+                      onLoad={handleImageLoad}
+                      onError={handleImageError}
+                      style={{ display: imageLoading ? 'none' : 'block' }}
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 rounded-full p-2">
+                        <Expand className="h-4 w-4 text-gray-700" />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -642,6 +651,16 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             <User className="h-4 w-4 text-primary-foreground" />
           </div>
         </div>
+      )}
+
+      {/* Image Modal */}
+      {message.imageUrl && (
+        <ImageModal
+          isOpen={imageModalOpen}
+          onClose={() => setImageModalOpen(false)}
+          imageUrl={message.imageUrl}
+          prompt={message.content}
+        />
       )}
     </div>
   );
