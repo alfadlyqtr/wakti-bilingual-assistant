@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PenTool, MessageSquare, Loader2 } from 'lucide-react';
+import { PenTool, MessageSquare, Loader2, Brain, CheckCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -28,13 +29,31 @@ interface FormData {
   from: string;
   topic: string;
   originalMessage: string;
-  replyType: string;
+}
+
+interface MessageAnalysis {
+  messageType: string;
+  intent: string;
+  mainPoints: string[];
+  questionsAsked: string[];
+  urgency: string;
+  tone: string;
+  suggestedQuestions: AnalysisQuestion[];
+}
+
+interface AnalysisQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  selectedOption?: string;
 }
 
 export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGeneratorPopupProps) {
   const { language } = useTheme();
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [messageAnalysis, setMessageAnalysis] = useState<MessageAnalysis | null>(null);
   const [formData, setFormData] = useState<FormData>({
     mode: 'compose',
     contentType: '',
@@ -44,8 +63,7 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     to: '',
     from: '',
     topic: '',
-    originalMessage: '',
-    replyType: ''
+    originalMessage: ''
   });
 
   const contentTypes = [
@@ -76,83 +94,189 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     { value: 'Plain', label: language === 'ar' ? 'عادي' : 'Plain' },
     { value: 'Bullet Points', label: language === 'ar' ? 'نقاط' : 'Bullet Points' },
     { value: 'Numbered List', label: language === 'ar' ? 'قائمة مرقمة' : 'Numbered List' },
-    { value: 'Paragraphs', label: language === 'ar' ? 'فقرات' : 'Paragraphs' },
-    { value: 'Table', label: language === 'ar' ? 'جدول' : 'Table' },
-    { value: 'Summary', label: language === 'ar' ? 'ملخص' : 'Summary' },
-    { value: 'Q&A Format', label: language === 'ar' ? 'تنسيق سؤال وجواب' : 'Q&A Format' }
-  ];
-
-  const replyTypes = [
-    { value: 'Text Message', label: language === 'ar' ? 'رسالة نصية' : 'Text Message' },
-    { value: 'Email', label: language === 'ar' ? 'بريد إلكتروني' : 'Email' }
+    { value: 'Paragraphs', label: language === 'ar' ? 'فقرات' : 'Paragraphs' }
   ];
 
   const updateFormData = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const isFormValid = () => {
-    if (formData.mode === 'compose') {
-      return formData.contentType && formData.tone && formData.length && formData.format;
-    } else {
-      return formData.originalMessage.trim() && formData.replyType && formData.tone && formData.length && formData.format;
+  const analyzeMessage = async (message: string) => {
+    if (!message.trim() || !user?.id) return;
+    
+    setIsAnalyzing(true);
+    try {
+      console.log('📝 TextGenerator: Analyzing message with DeepSeek...');
+      
+      const analysisPrompt = `Analyze this message quickly and provide:
+1. Message type (email, text, request, complaint, etc.)
+2. Main intent/purpose
+3. Key points mentioned
+4. Any questions asked in the message
+5. Urgency level (low/medium/high)
+6. Original tone
+7. Generate 2-3 contextual questions to help craft the best reply
+
+Message to analyze: "${message}"
+
+Respond in JSON format:
+{
+  "messageType": "string",
+  "intent": "string", 
+  "mainPoints": ["point1", "point2"],
+  "questionsAsked": ["question1"],
+  "urgency": "low/medium/high",
+  "tone": "formal/casual/friendly/etc",
+  "suggestedQuestions": [
+    {
+      "id": "q1",
+      "question": "What's the main goal of your reply?",
+      "options": ["Accept", "Decline", "Request more info", "Provide update"]
+    }
+  ]
+}`;
+
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message: analysisPrompt,
+          userId: user.id,
+          language: language,
+          activeTrigger: 'chat',
+          isQuickAnalysis: true
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success && data.response) {
+        try {
+          // Try to parse JSON from the response
+          const jsonMatch = data.response.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const analysis = JSON.parse(jsonMatch[0]);
+            setMessageAnalysis(analysis);
+            
+            // Auto-suggest tone based on analysis
+            if (analysis.tone && !formData.tone) {
+              const suggestedTone = tones.find(t => 
+                t.value.toLowerCase() === analysis.tone.toLowerCase()
+              );
+              if (suggestedTone) {
+                updateFormData('tone', suggestedTone.value);
+              }
+            }
+            
+            console.log('📝 TextGenerator: Analysis complete:', analysis);
+          }
+        } catch (parseError) {
+          console.warn('📝 TextGenerator: Could not parse analysis JSON, using fallback');
+          // Create a simple fallback analysis
+          setMessageAnalysis({
+            messageType: 'Message',
+            intent: 'Reply needed',
+            mainPoints: [message.substring(0, 50) + '...'],
+            questionsAsked: [],
+            urgency: 'medium',
+            tone: 'neutral',
+            suggestedQuestions: [
+              {
+                id: 'q1',
+                question: language === 'ar' ? 'ما هو هدف ردك؟' : 'What is your reply goal?',
+                options: language === 'ar' 
+                  ? ['موافقة', 'رفض', 'طلب معلومات', 'تقديم تحديث']
+                  : ['Accept', 'Decline', 'Ask for info', 'Provide update']
+              }
+            ]
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('📝 TextGenerator: Analysis error:', error);
+      toast.error(language === 'ar' ? 'خطأ في تحليل الرسالة' : 'Error analyzing message');
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
-  // Create a more structured prompt that enforces format, tone, and length
-  const createStructuredPrompt = (): string => {
-    const lengthInstructions = {
-      'Short': 'Write approximately 50-100 words (1-2 short paragraphs)',
-      'Medium': 'Write approximately 150-300 words (2-4 paragraphs)', 
-      'Long': 'Write approximately 400-600 words (4-8 paragraphs)'
-    };
+  const handleMessagePaste = async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    updateFormData('originalMessage', value);
+    
+    // Auto-analyze when message is pasted or typed (with debounce)
+    if (value.trim().length > 20) {
+      setTimeout(() => {
+        if (value === formData.originalMessage) {
+          analyzeMessage(value);
+        }
+      }, 1000);
+    } else {
+      setMessageAnalysis(null);
+    }
+  };
 
-    const formatInstructions = {
-      'Plain': 'Write in plain text format with natural paragraphs',
-      'Bullet Points': 'Format as bullet points using • symbol for each point',
-      'Numbered List': 'Format as a numbered list using 1., 2., 3., etc. for each item',
-      'Paragraphs': 'Organize into clear, distinct paragraphs',
-      'Table': 'Present information in a table format with clear rows and columns',
-      'Summary': 'Write as a concise summary with key points highlighted',
-      'Q&A Format': 'Structure as questions and answers'
-    };
+  const updateQuestionAnswer = (questionId: string, selectedOption: string) => {
+    if (!messageAnalysis) return;
+    
+    setMessageAnalysis(prev => ({
+      ...prev!,
+      suggestedQuestions: prev!.suggestedQuestions.map(q => 
+        q.id === questionId ? { ...q, selectedOption } : q
+      )
+    }));
+  };
 
-    const toneInstructions = {
-      'Formal': 'Use formal, professional language with proper grammar and sophisticated vocabulary',
-      'Casual': 'Use relaxed, conversational language as if talking to a friend',
-      'Professional': 'Use business-appropriate language that is clear and competent',
-      'Friendly': 'Use warm, approachable language that is welcoming and kind',
-      'Supportive': 'Use encouraging, empathetic language that shows understanding',
-      'Enthusiastic': 'Use energetic, positive language that shows excitement and passion'
-    };
+  const isFormValid = () => {
+    if (formData.mode === 'compose') {
+      return formData.contentType && formData.tone && formData.length;
+    } else {
+      return formData.originalMessage.trim() && formData.tone && formData.length;
+    }
+  };
 
+  const createEnhancedPrompt = (): string => {
     if (formData.mode === 'compose') {
       return `Generate a ${formData.contentType} about: ${formData.topic || 'the specified topic'}
 
-CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
-
-1. FORMAT: ${formatInstructions[formData.format as keyof typeof formatInstructions]}
-2. TONE: ${toneInstructions[formData.tone as keyof typeof toneInstructions]}  
-3. LENGTH: ${lengthInstructions[formData.length as keyof typeof lengthInstructions]}
-
+TONE: ${formData.tone}
+LENGTH: ${formData.length}
+${formData.format ? `FORMAT: ${formData.format}` : ''}
 ${formData.to ? `To: ${formData.to}` : ''}
-${formData.from ? `From: ${formData.from}` : ''}
-
-IMPORTANT: You MUST follow the format, tone, and length requirements exactly as specified above. Do not deviate from these instructions.`;
+${formData.from ? `From: ${formData.from}` : ''}`;
     } else {
-      return `Reply to this message: "${formData.originalMessage}"
+      // Enhanced reply prompt with analysis context
+      let prompt = `Reply to this message: "${formData.originalMessage}"
 
-CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
+REPLY REQUIREMENTS:
+- TONE: ${formData.tone}
+- LENGTH: ${formData.length}
+${formData.format ? `- FORMAT: ${formData.format}` : ''}
+${formData.to ? `- To: ${formData.to}` : ''}
+${formData.from ? `- From: ${formData.from}` : ''}`;
 
-1. FORMAT: ${formatInstructions[formData.format as keyof typeof formatInstructions]}
-2. TONE: ${toneInstructions[formData.tone as keyof typeof toneInstructions]}
-3. LENGTH: ${lengthInstructions[formData.length as keyof typeof lengthInstructions]}
-4. REPLY TYPE: ${formData.replyType}
+      // Add analysis context if available
+      if (messageAnalysis) {
+        prompt += `
 
-${formData.to ? `To: ${formData.to}` : ''}
-${formData.from ? `From: ${formData.from}` : ''}
+CONTEXT FROM ANALYSIS:
+- Original message type: ${messageAnalysis.messageType}
+- Intent: ${messageAnalysis.intent}
+- Key points to address: ${messageAnalysis.mainPoints.join(', ')}
+${messageAnalysis.questionsAsked.length > 0 ? `- Questions to answer: ${messageAnalysis.questionsAsked.join(', ')}` : ''}
+- Urgency level: ${messageAnalysis.urgency}`;
 
-IMPORTANT: You MUST follow the format, tone, and length requirements exactly as specified above. Do not deviate from these instructions.`;
+        // Add user's answers to contextual questions
+        const answeredQuestions = messageAnalysis.suggestedQuestions.filter(q => q.selectedOption);
+        if (answeredQuestions.length > 0) {
+          prompt += `
+
+USER PREFERENCES:`;
+          answeredQuestions.forEach(q => {
+            prompt += `\n- ${q.question}: ${q.selectedOption}`;
+          });
+        }
+      }
+
+      return prompt;
     }
   };
 
@@ -170,58 +294,29 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
     setIsGenerating(true);
 
     try {
-      console.log('📝 TextGeneratorPopup: Generating text with enhanced parameters');
-      
-      // Create a structured message that emphasizes format, tone, and length
-      const structuredPrompt = createStructuredPrompt();
-      
-      console.log('📝 TextGeneratorPopup: Structured prompt:', structuredPrompt);
-
-      // Prepare enhanced text generation parameters with strict formatting
-      const enhancedTextGenParams = {
-        mode: formData.mode,
-        ...(formData.mode === 'compose' ? {
-          contentType: formData.contentType,
-          topic: formData.topic
-        } : {
-          originalMessage: formData.originalMessage,
-          replyType: formData.replyType
-        }),
-        tone: formData.tone,
-        length: formData.length,
-        format: formData.format,
-        to: formData.to,
-        from: formData.from,
-        strictFormatting: true, // Flag to indicate strict format enforcement needed
-        formatInstruction: `MUST use ${formData.format} format`,
-        toneInstruction: `MUST use ${formData.tone} tone`,
-        lengthInstruction: `MUST be ${formData.length} length`
-      };
-
-      // Call the brain with the structured prompt and enhanced parameters
-      const payload = {
-        message: structuredPrompt,
-        userId: user.id,
-        language: language,
-        activeTrigger: 'chat',
-        textGenParams: enhancedTextGenParams
-      };
-
-      console.log('📝 TextGeneratorPopup: Enhanced payload:', payload);
+      const enhancedPrompt = createEnhancedPrompt();
+      console.log('📝 TextGenerator: Generating with enhanced prompt:', enhancedPrompt);
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: payload
+        body: {
+          message: enhancedPrompt,
+          userId: user.id,
+          language: language,
+          activeTrigger: 'chat',
+          textGenParams: {
+            mode: formData.mode,
+            originalMessage: formData.originalMessage,
+            analysis: messageAnalysis,
+            userAnswers: messageAnalysis?.suggestedQuestions.filter(q => q.selectedOption) || []
+          }
+        }
       });
 
-      if (error) {
-        console.error('📝 TextGeneratorPopup: Brain function error:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('📝 TextGeneratorPopup: Brain response:', data);
-
-      if (data.success && data.generatedText) {
-        onGenerated(data.generatedText, formData.mode, true);
+      if (data.success && (data.generatedText || data.response)) {
+        const generatedText = data.generatedText || data.response;
+        onGenerated(generatedText, formData.mode, true);
         onOpenChange(false);
         
         // Reset form
@@ -234,35 +329,16 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
           to: '',
           from: '',
           topic: '',
-          originalMessage: '',
-          replyType: ''
+          originalMessage: ''
         });
+        setMessageAnalysis(null);
 
-        toast.success(language === 'ar' ? 'تم إنشاء النص بالتنسيق والنبرة المطلوبة' : 'Text generated with requested format and tone');
-      } else if (data.success && data.response) {
-        // Fallback: use the regular response if generatedText is not available
-        onGenerated(data.response, formData.mode, true);
-        onOpenChange(false);
-        
-        setFormData({
-          mode: 'compose',
-          contentType: '',
-          tone: '',
-          length: '',
-          format: '',
-          to: '',
-          from: '',
-          topic: '',
-          originalMessage: '',
-          replyType: ''
-        });
-
-        toast.success(language === 'ar' ? 'تم إنشاء النص' : 'Text generated');
+        toast.success(language === 'ar' ? 'تم إنشاء النص بناءً على التحليل الذكي' : 'Text generated with smart analysis');
       } else {
         throw new Error(data.error || 'No generated text received');
       }
     } catch (error: any) {
-      console.error('📝 TextGeneratorPopup: Error generating text:', error);
+      console.error('📝 TextGenerator: Error generating text:', error);
       toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء النص' : 'Failed to generate text'));
     } finally {
       setIsGenerating(false);
@@ -275,7 +351,7 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <PenTool className="h-5 w-5" />
-            {language === 'ar' ? 'مولد النصوص' : 'Text Generator'}
+            {language === 'ar' ? 'مولد النصوص الذكي' : 'Smart Text Generator'}
           </DialogTitle>
         </DialogHeader>
 
@@ -287,7 +363,7 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
             </TabsTrigger>
             <TabsTrigger value="reply" className="flex items-center gap-1">
               <MessageSquare className="h-3 w-3" />
-              {language === 'ar' ? 'رد' : 'Reply'}
+              {language === 'ar' ? 'رد ذكي' : 'Smart Reply'}
             </TabsTrigger>
           </TabsList>
 
@@ -310,7 +386,7 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
               </div>
 
               <div className="space-y-2">
-                <Label>{language === 'ar' ? 'التنسيق' : 'Format'} *</Label>
+                <Label>{language === 'ar' ? 'التنسيق' : 'Format'}</Label>
                 <Select value={formData.format} onValueChange={(value) => updateFormData('format', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder={language === 'ar' ? 'اختر التنسيق' : 'Select format'} />
@@ -393,30 +469,71 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
 
           <TabsContent value="reply" className="space-y-4">
             <div className="space-y-2">
-              <Label>{language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'} *</Label>
+              <Label className="flex items-center gap-2">
+                {language === 'ar' ? 'الرسالة الأصلية' : 'Original Message'} *
+                {isAnalyzing && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+                {messageAnalysis && <Brain className="h-3 w-3 text-green-500" />}
+              </Label>
               <Textarea
                 value={formData.originalMessage}
-                onChange={(e) => updateFormData('originalMessage', e.target.value)}
+                onChange={handleMessagePaste}
                 placeholder={language === 'ar' ? 'الصق الرسالة التي تريد الرد عليها...' : 'Paste the message you want to reply to...'}
                 className="min-h-20"
               />
+              {isAnalyzing && (
+                <p className="text-xs text-blue-600 flex items-center gap-1">
+                  <Brain className="h-3 w-3" />
+                  {language === 'ar' ? 'جاري تحليل الرسالة...' : 'Analyzing message...'}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'نوع الرد' : 'Reply Type'} *</Label>
-              <Select value={formData.replyType} onValueChange={(value) => updateFormData('replyType', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر نوع الرد' : 'Select reply type'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {replyTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Smart Analysis Results */}
+            {messageAnalysis && (
+              <div className="space-y-3 p-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">
+                    {language === 'ar' ? 'تم التحليل بنجاح' : 'Analysis Complete'}
+                  </span>
+                </div>
+                
+                <div className="text-xs space-y-1">
+                  <p><span className="font-medium">{language === 'ar' ? 'النوع:' : 'Type:'}</span> {messageAnalysis.messageType}</p>
+                  <p><span className="font-medium">{language === 'ar' ? 'الهدف:' : 'Intent:'}</span> {messageAnalysis.intent}</p>
+                  <p><span className="font-medium">{language === 'ar' ? 'الأولوية:' : 'Priority:'}</span> {messageAnalysis.urgency}</p>
+                </div>
+
+                {/* Dynamic Questions */}
+                {messageAnalysis.suggestedQuestions.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                      {language === 'ar' ? 'أسئلة للمساعدة في الرد:' : 'Questions to help with reply:'}
+                    </p>
+                    {messageAnalysis.suggestedQuestions.map((question) => (
+                      <div key={question.id} className="space-y-1">
+                        <Label className="text-xs">{question.question}</Label>
+                        <Select 
+                          value={question.selectedOption || ''} 
+                          onValueChange={(value) => updateQuestionAnswer(question.id, value)}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder={language === 'ar' ? 'اختر إجابة' : 'Select answer'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {question.options.map((option) => (
+                              <SelectItem key={option} value={option} className="text-xs">
+                                {option}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -452,22 +569,6 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>{language === 'ar' ? 'التنسيق' : 'Format'} *</Label>
-              <Select value={formData.format} onValueChange={(value) => updateFormData('format', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder={language === 'ar' ? 'اختر التنسيق' : 'Select format'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {formats.map((format) => (
-                    <SelectItem key={format.value} value={format.value}>
-                      {format.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>{language === 'ar' ? 'إلى' : 'To'}</Label>
@@ -496,7 +597,7 @@ IMPORTANT: You MUST follow the format, tone, and length requirements exactly as 
           </Button>
           <Button 
             onClick={handleGenerate} 
-            disabled={!isFormValid() || isGenerating}
+            disabled={!isFormValid() || isGenerating || isAnalyzing}
             className="flex-1"
           >
             {isGenerating ? (
