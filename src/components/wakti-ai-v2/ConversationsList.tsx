@@ -3,7 +3,7 @@ import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Clock } from 'lucide-react';
+import { Trash2, MessageSquare, Clock, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Conversation {
@@ -20,6 +20,7 @@ interface ConversationsListProps {
   onDeleteConversation: (id: string) => void;
   onRefresh: () => void;
   onClose?: () => void;
+  onNewConversation?: () => void;
 }
 
 export function ConversationsList({
@@ -28,7 +29,8 @@ export function ConversationsList({
   onSelectConversation,
   onDeleteConversation,
   onRefresh,
-  onClose
+  onClose,
+  onNewConversation
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
 
@@ -51,6 +53,11 @@ export function ConversationsList({
 
   const handleRefresh = () => {
     onRefresh();
+    onClose?.();
+  };
+
+  const handleNewConversation = () => {
+    onNewConversation?.();
     onClose?.();
   };
 
@@ -82,6 +89,17 @@ export function ConversationsList({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {onNewConversation && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNewConversation}
+              className="h-9 px-3 rounded-full text-sm"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              {language === 'ar' ? 'جديد' : 'New'}
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Menu, Plus } from 'lucide-react';
+import { MessageSquare, Menu } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
 interface ChatHeaderProps {
@@ -47,16 +47,6 @@ export function ChatHeader({
         >
           <MessageSquare className="h-5 w-5" />
         </Button>
-        {currentConversationId && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onNewConversation}
-            className="h-9 w-9"
-          >
-            <Plus className="h-5 w-5" />
-          </Button>
-        )}
       </div>
 
       {/* Active Mode Indicator */}
