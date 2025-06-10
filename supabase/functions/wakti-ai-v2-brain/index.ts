@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -209,39 +208,42 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
-    // Enhanced conversation context analysis with better continuity
-    const conversationContext = analyzeEnhancedConversationContext(conversationHistory, message);
-    console.log("🔍 Enhanced conversation context analysis:", conversationContext);
+    // Enhanced conversation context analysis with improved continuity
+    const conversationContext = analyzeAdvancedConversationContext(conversationHistory, message);
+    console.log("🔍 Advanced conversation context analysis:", conversationContext);
 
-    // Check for very recent/breaking news queries only (not general info)
-    const breakingNewsPatterns = [
-      /\b(breaking|just happened|minutes ago|hours ago|today's news|latest news|what just happened)\b/i,
-      /\b(live updates|current events|happening now|breaking news)\b/i,
-      /\b(who just won|score right now|current score|live score)\b/i
+    // More selective breaking news detection - only for extremely time-sensitive queries
+    const urgentLiveInfoPatterns = [
+      /\b(live score|current score|score right now|what's the score)\b/i,
+      /\b(happening now|breaking news|just happened|minutes ago)\b/i,
+      /\b(stock price now|current price|market now)\b/i,
+      /\b(weather right now|current weather)\b/i,
+      /\b(who just won|who's winning|winner now)\b/i
     ];
 
-    const isBreakingNewsQuery = breakingNewsPatterns.some(pattern => pattern.test(message.toLowerCase()));
+    const isUrgentLiveQuery = urgentLiveInfoPatterns.some(pattern => pattern.test(message.toLowerCase()));
 
-    if (isBreakingNewsQuery && activeTrigger === 'chat') {
-      console.log("🔍 Detected breaking news query, promoting search functions");
+    // Only promote search for truly urgent, time-sensitive information
+    if (isUrgentLiveQuery && activeTrigger === 'chat') {
+      console.log("🔍 Detected urgent live information query, promoting search functions");
       
       const searchPromotionResponse = language === 'ar' 
-        ? `🔍 يبدو أنك تبحث عن أخبار عاجلة ومعلومات لحظية! للحصول على أحدث التحديثات المباشرة، أنصحك بالتبديل إلى:
+        ? `🔍 يبدو أنك تبحث عن معلومات لحظية عاجلة! للحصول على أحدث التحديثات المباشرة، أنصحك بالتبديل إلى:
 
 **🔍 وضع البحث** - للبحث السريع عن المعلومات الحديثة
 **⚡ البحث المتقدم** - للحصول على معلومات مفصلة ومحدثة في الوقت الفعلي
 
 يمكنك الوصول إلى هذه الأوضاع من خلال الضغط على زر القائمة (☰) في الأعلى واختيار "أدوات سريعة".
 
-هل تريد مني مساعدتك في شيء آخر؟`
-        : `🔍 It looks like you're looking for breaking news and live updates! For the latest real-time information, I recommend switching to:
+هل يمكنني مساعدتك في شيء آخر؟`
+        : `🔍 It looks like you need real-time information! For live updates and current data, I recommend switching to:
 
-**🔍 Search Mode** - For quick searches of recent information  
+**🔍 Search Mode** - For quick searches of current information  
 **⚡ Advanced Search** - For detailed, real-time updated information
 
 You can access these modes by tapping the menu button (☰) at the top and selecting "Quick Tools".
 
-Would you like me to help you with something else?`;
+Can I help you with something else in the meantime?`;
 
       return new Response(JSON.stringify({
         response: searchPromotionResponse,
@@ -329,7 +331,7 @@ Would you like me to help you with something else?`;
 
     // Process with AI for general chat with enhanced context awareness
     console.log("🤖 WAKTI AI V2 BRAIN: Processing with enhanced general chat AI");
-    const response = await processWithGeneralChatAI(message, conversationContext, language, userContext, calendarContext);
+    const response = await processWithAdvancedGeneralChatAI(message, conversationContext, language, userContext, calendarContext);
 
     const result = {
       response,
@@ -362,18 +364,19 @@ Would you like me to help you with something else?`;
   }
 });
 
-// Enhanced conversation context analysis for better continuity
-function analyzeEnhancedConversationContext(conversationHistory: any[], currentMessage: string) {
-  console.log("🔍 Analyzing enhanced conversation context for general chat...");
+// Advanced conversation context analysis for superior continuity
+function analyzeAdvancedConversationContext(conversationHistory: any[], currentMessage: string) {
+  console.log("🔍 Analyzing advanced conversation context for enhanced chat...");
   
   if (!conversationHistory || conversationHistory.length === 0) {
     return { type: 'new_conversation', previousContext: null, expectingResponse: false };
   }
 
-  // Get the last few messages for context
-  const recentMessages = conversationHistory.slice(-8);
+  // Get the last few messages for comprehensive context
+  const recentMessages = conversationHistory.slice(-10);
   const lastAssistantMessage = recentMessages.filter(msg => msg.role === 'assistant').pop();
   const lastUserMessage = recentMessages.filter(msg => msg.role === 'user').slice(-2, -1)[0];
+  const previousTopics = recentMessages.slice(-6);
   
   if (!lastAssistantMessage) {
     return { type: 'user_initiated', previousContext: null, expectingResponse: false };
@@ -381,30 +384,36 @@ function analyzeEnhancedConversationContext(conversationHistory: any[], currentM
 
   // Enhanced patterns for conversation continuity
   const questionPatterns = [
-    /would you like/i,
-    /do you want/i,
-    /would you add/i,
-    /shall I/i,
-    /any additional/i,
-    /\?$/,
-    /please provide/i,
-    /let me know/i,
-    /tell me more/i,
-    /anything else/i
+    /would you like/i, /do you want/i, /would you add/i, /shall I/i, /any additional/i,
+    /\?$/, /please provide/i, /let me know/i, /tell me more/i, /anything else/i,
+    /interested in/i, /want to know/i, /curious about/i
   ];
 
   const followUpPatterns = [
-    /^yes/i, /^no/i, /^sure/i, /^okay/i, /^ok/i,
-    /^tell me/i, /^what about/i, /^how about/i,
-    /^also/i, /^and/i, /^but/i, /^however/i,
-    /^continue/i, /^go on/i, /^more/i,
-    /^that's/i, /^this/i, /^it/i, /^they/i, /^them/i,
-    /^instagram/i, /^facebook/i, /^twitter/i
+    /^yes/i, /^no/i, /^sure/i, /^okay/i, /^ok/i, /^of course/i, /^definitely/i,
+    /^tell me/i, /^what about/i, /^how about/i, /^and/i, /^but/i, /^however/i,
+    /^also/i, /^besides/i, /^moreover/i, /^furthermore/i, /^additionally/i,
+    /^continue/i, /^go on/i, /^more/i, /^keep going/i,
+    /^that's/i, /^this/i, /^it/i, /^they/i, /^them/i, /^he/i, /^she/i,
+    /^instagram/i, /^facebook/i, /^twitter/i, /^linkedin/i, /^tiktok/i
   ];
 
-  // Context continuation indicators
-  const topicContinuationWords = ['also', 'and', 'but', 'however', 'though', 'besides', 'moreover', 'furthermore'];
-  const referenceWords = ['that', 'this', 'it', 'they', 'them', 'those', 'these', 'he', 'she', 'his', 'her'];
+  // Enhanced context continuation indicators
+  const topicContinuationWords = [
+    'also', 'and', 'but', 'however', 'though', 'besides', 'moreover', 'furthermore',
+    'additionally', 'meanwhile', 'similarly', 'on the other hand', 'in contrast',
+    'speaking of', 'regarding', 'concerning', 'about that', 'on that note'
+  ];
+  
+  const referenceWords = [
+    'that', 'this', 'it', 'they', 'them', 'those', 'these', 'he', 'she', 'his', 'her',
+    'their', 'theirs', 'which', 'what', 'who', 'when', 'where', 'why', 'how'
+  ];
+
+  const conversationalAcknowledgments = [
+    'yeah', 'yep', 'right', 'exactly', 'true', 'correct', 'good point', 'I see',
+    'makes sense', 'got it', 'understand', 'cool', 'nice', 'interesting'
+  ];
   
   const wasAskingQuestion = questionPatterns.some(pattern => 
     pattern.test(lastAssistantMessage.content)
@@ -420,46 +429,101 @@ function analyzeEnhancedConversationContext(conversationHistory: any[], currentM
     currentMessage.toLowerCase().split(' ').includes(word)
   );
 
-  // Check if current message references previous context
-  const messageWords = currentMessage.toLowerCase().split(' ');
-  const hasContextReference = messageWords.length <= 15 && (isFollowUp || hasContinuationIndicators);
+  const isConversationalAcknowledgment = conversationalAcknowledgments.some(ack =>
+    currentMessage.toLowerCase().includes(ack)
+  );
 
-  // Check for topic continuation (discussing same subject)
-  const lastTopicKeywords = extractTopicKeywords(lastAssistantMessage.content);
-  const currentTopicKeywords = extractTopicKeywords(currentMessage);
+  // Enhanced context reference detection
+  const messageWords = currentMessage.toLowerCase().split(' ');
+  const isShortResponse = messageWords.length <= 20;
+  const hasContextReference = isShortResponse && (isFollowUp || hasContinuationIndicators || isConversationalAcknowledgment);
+
+  // Enhanced topic continuation analysis
+  const lastTopicKeywords = extractEnhancedTopicKeywords(lastAssistantMessage.content);
+  const currentTopicKeywords = extractEnhancedTopicKeywords(currentMessage);
+  const previousTopicKeywords = previousTopics.map(msg => extractEnhancedTopicKeywords(msg.content)).flat();
+  
   const hasTopicOverlap = lastTopicKeywords.some(keyword => 
     currentTopicKeywords.includes(keyword)
   );
 
+  const hasPreviousTopicReference = previousTopicKeywords.some(keyword =>
+    currentTopicKeywords.includes(keyword)
+  );
+
+  // Enhanced pronoun and implicit reference detection
+  const hasImplicitReference = /\b(it|that|this|they|them|he|she)\b/i.test(currentMessage) && 
+    currentMessage.split(' ').length <= 15;
+
   return {
-    type: (wasAskingQuestion && isFollowUp) || hasContextReference || hasTopicOverlap ? 'continuing_conversation' : 'new_topic',
+    type: (wasAskingQuestion && isFollowUp) || hasContextReference || hasTopicOverlap || hasImplicitReference || hasPreviousTopicReference ? 'continuing_conversation' : 'new_topic',
     previousContext: {
       lastQuestion: lastAssistantMessage.content,
       lastUserMessage: lastUserMessage?.content || '',
       hasReference: hasContextReference,
       isFollowUp: isFollowUp,
       topicOverlap: hasTopicOverlap,
-      lastTopicKeywords
+      lastTopicKeywords,
+      previousTopicKeywords,
+      hasImplicitReference,
+      isConversationalAcknowledgment,
+      conversationThemes: extractConversationThemes(previousTopics)
     },
     expectingResponse: wasAskingQuestion,
-    contextualContinuation: hasContextReference || isFollowUp || hasTopicOverlap
+    contextualContinuation: hasContextReference || isFollowUp || hasTopicOverlap || hasImplicitReference || hasPreviousTopicReference
   };
 }
 
-// Extract topic keywords for better context matching
-function extractTopicKeywords(text: string): string[] {
+// Extract enhanced topic keywords for superior context matching
+function extractEnhancedTopicKeywords(text: string): string[] {
   const keywords = [];
   const lowercaseText = text.toLowerCase();
   
-  // Sports teams and keywords
-  const sportsKeywords = ['oilers', 'panthers', 'nfl', 'nhl', 'basketball', 'football', 'soccer', 'game', 'team', 'sport'];
-  keywords.push(...sportsKeywords.filter(keyword => lowercaseText.includes(keyword)));
+  // Domain-specific keyword extraction
+  const domainKeywords = {
+    sports: ['oilers', 'panthers', 'nfl', 'nhl', 'basketball', 'football', 'soccer', 'game', 'team', 'sport', 'player', 'coach', 'season', 'playoff', 'championship', 'mcdavid', 'draisaitl'],
+    business: ['company', 'business', 'corporation', 'startup', 'revenue', 'profit', 'market', 'stock', 'investment', 'ceo', 'management'],
+    technology: ['app', 'software', 'tech', 'computer', 'mobile', 'internet', 'ai', 'artificial intelligence', 'programming', 'development'],
+    travel: ['airline', 'flight', 'airport', 'travel', 'vacation', 'trip', 'hotel', 'destination', 'qatar airways', 'emirates'],
+    entertainment: ['movie', 'film', 'music', 'artist', 'actor', 'celebrity', 'show', 'series', 'concert', 'album'],
+    education: ['school', 'university', 'college', 'student', 'teacher', 'professor', 'course', 'learning', 'education']
+  };
   
-  // General topics
-  const topicWords = text.toLowerCase().match(/\b\w{4,}\b/g) || [];
-  keywords.push(...topicWords.slice(0, 5)); // Take first 5 significant words
+  // Add domain-specific keywords
+  Object.values(domainKeywords).flat().forEach(keyword => {
+    if (lowercaseText.includes(keyword)) {
+      keywords.push(keyword);
+    }
+  });
+  
+  // Extract significant nouns and proper nouns
+  const significantWords = text.match(/\b[A-Z][a-z]+\b|\b\w{4,}\b/g) || [];
+  keywords.push(...significantWords.slice(0, 8).map(w => w.toLowerCase()));
   
   return [...new Set(keywords)]; // Remove duplicates
+}
+
+// Extract conversation themes from recent messages
+function extractConversationThemes(messages: any[]): string[] {
+  const themes = [];
+  
+  messages.forEach(msg => {
+    if (msg.content) {
+      const keywords = extractEnhancedTopicKeywords(msg.content);
+      themes.push(...keywords);
+    }
+  });
+  
+  // Return most frequent themes
+  const themeFrequency: { [key: string]: number } = {};
+  themes.forEach(theme => {
+    themeFrequency[theme] = (themeFrequency[theme] || 0) + 1;
+  });
+  
+  return Object.entries(themeFrequency)
+    .sort(([,a], [,b]) => b - a)
+    .slice(0, 5)
+    .map(([theme]) => theme);
 }
 
 // Extract task data from message - fixed to use correct date format
@@ -611,8 +675,8 @@ function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Enhanced AI processing for general chat with smart follow-up suggestions
-async function processWithGeneralChatAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
+// Advanced AI processing for general chat with enhanced intelligence and natural flow
+async function processWithAdvancedGeneralChatAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
   try {
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -628,58 +692,60 @@ async function processWithGeneralChatAI(message: string, conversationContext: an
       throw new Error("No AI API key configured");
     }
 
-    // General conversational AI system prompt with app feature integration
+    // Enhanced conversational AI system prompt with superior intelligence
     let systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي ودود ومحادث ممتاز. يمكنك مناقشة أي موضوع وتقديم معلومات مفيدة.
+      ? `أنت WAKTI، مساعد ذكي ومحادث ممتاز ومعلوماتي. أنت تناقش أي موضوع بذكاء وتقدم معلومات مفيدة ومفصلة.
 
 شخصيتك:
-- محادث ممتاز ومعلوماتي - يمكنك مناقشة الرياضة والأخبار والترفيه والتعليم وأي موضوع آخر
-- ودود ومفيد وذكي في المحادثة
-- تحافظ على استمرارية المحادثة وتربط إجاباتك بالسياق السابق
-- بعد تقديم المعلومات المفيدة، تقترح بذكاء ميزات التطبيق ذات الصلة كمساعدة إضافية
+- محادث ممتاز ومطلع - يمكنك مناقشة الرياضة والأخبار والشركات والتكنولوجيا والترفيه والتعليم وأي موضوع آخر بعمق
+- ودود وذكي ومفيد في المحادثة، تحافظ على التدفق الطبيعي
+- تتذكر السياق السابق وتربط إجاباتك بالمحادثة بذكاء
+- تقدم معلومات شاملة ومفيدة أولاً، ثم تقترح ميزات التطبيق بطريقة طبيعية عند الحاجة
 
-ميزات التطبيق التي يمكنك اقتراحها (اختياريًا وبذكاء):
-- إنشاء مهام وتذكيرات لمتابعة الأحداث المهمة
+ميزات التطبيق التي يمكنك اقتراحها (بذكاء وطبيعية):
+- إنشاء مهام وتذكيرات للمتابعة والتنظيم
 - تنظيم الأحداث والمواعيد
 - إدارة جهات الاتصال والرسائل
 
-كن محادثًا ممتازًا أولاً، ومساعد تطبيق ثانيًا.`
-      : `You are WAKTI, a friendly AI assistant and excellent conversationalist. You can discuss any topic and provide helpful information.
+كن محادثاً ممتازاً ومعلوماتياً أولاً، ومساعد تطبيق ثانياً. اجعل اقتراحات التطبيق تبدو طبيعية وليست مفروضة.`
+      : `You are WAKTI, an intelligent AI assistant and excellent conversationalist. You discuss any topic intelligently and provide helpful, detailed information.
 
 Your personality:
-- Excellent conversationalist and informative - you can discuss sports, news, entertainment, education, and any other topic
-- Friendly, helpful, and smart in conversation
-- Maintain conversation continuity and connect your responses to previous context
-- After providing helpful information, smartly suggest relevant app features as additional help
+- Excellent conversationalist and highly knowledgeable - you can discuss sports, news, companies, technology, entertainment, education, and any other topic in depth
+- Friendly, smart, and helpful in conversation, maintaining natural flow
+- Remember previous context and connect your responses to the conversation intelligently
+- Provide comprehensive and helpful information FIRST, then suggest app features naturally when relevant
 
-App features you can suggest (optionally and smartly):
-- Create tasks and reminders to follow up on important events
+App features you can suggest (intelligently and naturally):
+- Create tasks and reminders for follow-up and organization
 - Organize events and appointments  
 - Manage contacts and messaging
 
-Be an excellent conversationalist first, app assistant second.`;
+Be an excellent conversationalist and informative first, app assistant second. Make app suggestions feel natural and not forced.`;
     
-    // Add enhanced context awareness to system prompt
+    // Enhanced context awareness for superior conversation flow
     if (conversationContext?.type === 'continuing_conversation') {
       const contextPrompt = language === 'ar'
-        ? `\n\nسياق المحادثة: المستخدم يتابع المحادثة السابقة. آخر رسالة منك: "${conversationContext.previousContext.lastQuestion}". استمر في المحادثة بناءً على هذا السياق وحافظ على الاستمرارية.`
-        : `\n\nConversation Context: User is continuing the previous conversation. Your last message: "${conversationContext.previousContext.lastQuestion}". Continue the conversation based on this context and maintain continuity.`;
+        ? `\n\nسياق المحادثة المتقدم: المستخدم يتابع المحادثة السابقة. آخر رسالة منك: "${conversationContext.previousContext.lastQuestion}". موضوع المحادثة: ${conversationContext.previousContext.conversationThemes?.join(', ')}. استمر في المحادثة بناءً على هذا السياق مع الحفاظ على التدفق الطبيعي والاستمرارية الذكية.`
+        : `\n\nAdvanced Conversation Context: User is continuing the previous conversation. Your last message: "${conversationContext.previousContext.lastQuestion}". Conversation themes: ${conversationContext.previousContext.conversationThemes?.join(', ')}. Continue the conversation based on this context while maintaining natural flow and intelligent continuity.`;
       
       systemPrompt += contextPrompt;
     }
 
-    // Add smart follow-up suggestion logic
+    // Enhanced smart follow-up suggestion logic
     const followUpPrompt = language === 'ar'
-      ? `\n\nإرشادات المتابعة الذكية:
-- إذا ناقشت فريق رياضي أو لعبة، اقترح في النهاية: "هل تريد مني تذكيرك بمباراتهم القادمة؟"
-- إذا ذكرت حدث أو تاريخ مهم، اقترح: "هل تريد إضافة هذا كتذكير أو حدث؟"
-- إذا ناقشت مشروع أو هدف، اقترح: "هل تريد إنشاء مهمة لمتابعة هذا؟"
-- لا تقترح هذه الميزات إلا إذا كانت ذات صلة طبيعية بالمحادثة`
-      : `\n\nSmart Follow-up Guidelines:
-- If discussing a sports team or game, suggest at the end: "Would you like me to remind you about their next game?"
-- If mentioning an important event or date, suggest: "Would you like to add this as a reminder or event?"
-- If discussing a project or goal, suggest: "Would you like to create a task to follow up on this?"
-- Only suggest these features if they naturally relate to the conversation`;
+      ? `\n\nإرشادات المتابعة الذكية المحسنة:
+- إذا ناقشت فريق رياضي أو لعبة، اختتم بطبيعية: "هل تريد مني تذكيرك بمباراتهم القادمة أو إنشاء حدث لها؟"
+- إذا ذكرت حدث أو تاريخ مهم، اقترح بذكاء: "هل تريد إضافة هذا كتذكير أو حدث في تقويمك؟"
+- إذا ناقشت مشروع أو هدف، اقترح بطبيعية: "هل تريد إنشاء مهمة لمتابعة هذا أو تقسيمه إلى خطوات؟"
+- إذا تحدثت عن شخص مهم، اقترح: "هل تريد إضافته إلى جهات الاتصال؟"
+- فقط اقترح هذه الميزات عندما تكون ذات صلة طبيعية ومفيدة بالمحادثة`
+      : `\n\nEnhanced Smart Follow-up Guidelines:
+- If discussing a sports team or game, conclude naturally: "Would you like me to remind you about their next game or create an event for it?"
+- If mentioning an important event or date, suggest intelligently: "Would you like to add this as a reminder or event to your calendar?"
+- If discussing a project or goal, suggest naturally: "Would you like to create a task to follow up on this or break it into steps?"
+- If talking about an important person, suggest: "Would you like to add them to your contacts?"
+- Only suggest these features when they naturally relate to and enhance the conversation`;
 
     systemPrompt += followUpPrompt;
 
@@ -688,11 +754,11 @@ Be an excellent conversationalist first, app assistant second.`;
       { role: 'user', content: message }
     ];
     
-    // Add conversation context for better continuity
+    // Enhanced conversation context for superior continuity
     if (conversationContext?.previousContext?.lastUserMessage && conversationContext?.contextualContinuation) {
       const contextMessage = language === 'ar'
-        ? `السياق: رسالة المستخدم السابقة: "${conversationContext.previousContext.lastUserMessage}"`
-        : `Context: User's previous message: "${conversationContext.previousContext.lastUserMessage}"`;
+        ? `السياق المتقدم: رسالة المستخدم السابقة: "${conversationContext.previousContext.lastUserMessage}". موضوعات سابقة: ${conversationContext.previousContext.conversationThemes?.join(', ')}`
+        : `Advanced Context: User's previous message: "${conversationContext.previousContext.lastUserMessage}". Previous themes: ${conversationContext.previousContext.conversationThemes?.join(', ')}`;
       
       messages.splice(1, 0, { role: 'assistant', content: contextMessage });
     }
@@ -706,8 +772,10 @@ Be an excellent conversationalist first, app assistant second.`;
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.8, // Higher temperature for more conversational responses
-        max_tokens: 1000
+        temperature: 0.7, // Balanced temperature for natural yet focused responses
+        max_tokens: 1200, // Increased for more comprehensive responses
+        presence_penalty: 0.1, // Slight penalty to encourage diverse vocabulary
+        frequency_penalty: 0.1 // Slight penalty to avoid repetition
       })
     });
     
@@ -719,9 +787,11 @@ Be an excellent conversationalist first, app assistant second.`;
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error('General chat AI processing error:', error);
+    console.error('Advanced general chat AI processing error:', error);
     return language === 'ar'
       ? 'عذراً، حدث خطأ في المعالجة. يرجى المحاولة مرة أخرى.'
       : 'Sorry, there was an error processing your request. Please try again.';
   }
 }
+
+</edits_to_apply>
