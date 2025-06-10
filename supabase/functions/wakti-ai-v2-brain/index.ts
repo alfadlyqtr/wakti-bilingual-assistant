@@ -204,7 +204,7 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
-    // Check for task creation patterns and create directly
+    // Check for task creation patterns and prepare task preview
     const taskPatterns = [
       /\bcreate\s+(a\s+)?task/i,
       /\btask\s+due/i,
@@ -221,80 +221,22 @@ serve(async (req) => {
       const taskData = extractTaskData(message);
       
       if (taskData && taskData.title) {
-        console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted, creating task directly");
+        console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted, returning preview");
         
-        try {
-          const taskToCreate = {
-            title: taskData.title,
-            description: taskData.description || '',
-            user_id: userId,
-            due_date: taskData.due_date,
-            due_time: taskData.due_time || null,
-            priority: taskData.priority || 'normal',
-            task_type: taskData.task_type || 'one-time',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-
-          console.log("🚀 WAKTI AI V2 BRAIN: Creating task directly:", taskToCreate);
-
-          const { data: createdTask, error: taskError } = await supabase
-            .from('tr_tasks')
-            .insert([taskToCreate])
-            .select()
-            .single();
-
-          if (taskError) {
-            console.error("Task creation error:", taskError);
-            throw new Error(`Failed to create task: ${taskError.message}`);
-          }
-
-          console.log("Task created successfully:", createdTask);
-
-          // Create subtasks if they exist
-          if (taskData.subtasks && taskData.subtasks.length > 0) {
-            const subtasksToCreate = taskData.subtasks.map((subtask: string, index: number) => ({
-              task_id: createdTask.id,
-              title: subtask,
-              completed: false,
-              order_index: index,
-              created_at: new Date().toISOString()
-            }));
-
-            const { error: subtaskError } = await supabase
-              .from('tr_subtasks')
-              .insert(subtasksToCreate);
-
-            if (subtaskError) {
-              console.error("Subtask creation error:", subtaskError);
-            } else {
-              console.log("Subtasks created successfully");
-            }
-          }
-
-          return new Response(JSON.stringify({
-            response: language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!',
-            conversationId: conversationId || generateConversationId(),
-            intent: 'task_created',
-            confidence: 'high',
-            actionTaken: true,
-            actionResult: { createdTask },
-            success: true
-          }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-
-        } catch (error) {
-          console.error("Task creation failed:", error);
-          return new Response(JSON.stringify({
-            response: language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task',
-            error: error.message,
-            success: false
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `سأقوم بإنشاء مهمة: "${taskData.title}". يرجى مراجعة التفاصيل والتأكيد.`
+            : `I'll create a task: "${taskData.title}". Please review the details and confirm.`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'task_preview',
+          confidence: 'high',
+          actionTaken: false,
+          needsConfirmation: true,
+          pendingTaskData: taskData,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
     }
 
@@ -313,54 +255,22 @@ serve(async (req) => {
       const reminderData = extractReminderData(message);
       
       if (reminderData && reminderData.title) {
-        console.log("🚀 WAKTI AI V2 BRAIN: Reminder data extracted, creating reminder directly");
+        console.log("🚀 WAKTI AI V2 BRAIN: Reminder data extracted, returning preview");
         
-        try {
-          const reminderToCreate = {
-            title: reminderData.title,
-            user_id: userId,
-            due_date: reminderData.due_date,
-            due_time: reminderData.due_time || null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-
-          const { data: createdReminder, error: reminderError } = await supabase
-            .from('tr_reminders')
-            .insert([reminderToCreate])
-            .select()
-            .single();
-
-          if (reminderError) {
-            console.error("Reminder creation error:", reminderError);
-            throw new Error(`Failed to create reminder: ${reminderError.message}`);
-          }
-
-          console.log("Reminder created successfully:", createdReminder);
-
-          return new Response(JSON.stringify({
-            response: language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!',
-            conversationId: conversationId || generateConversationId(),
-            intent: 'reminder_created',
-            confidence: 'high',
-            actionTaken: true,
-            actionResult: { createdReminder },
-            success: true
-          }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-
-        } catch (error) {
-          console.error("Reminder creation failed:", error);
-          return new Response(JSON.stringify({
-            response: language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder',
-            error: error.message,
-            success: false
-          }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `سأقوم بإنشاء تذكير: "${reminderData.title}". يرجى مراجعة التفاصيل والتأكيد.`
+            : `I'll create a reminder: "${reminderData.title}". Please review the details and confirm.`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'reminder_preview',
+          confidence: 'high',
+          actionTaken: false,
+          needsConfirmation: true,
+          pendingReminderData: reminderData,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
     }
 
