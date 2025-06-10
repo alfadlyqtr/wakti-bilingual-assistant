@@ -399,6 +399,7 @@ const WaktiAIV2 = () => {
         activeTrigger={activeTrigger}
         onTriggerChange={handleTriggerChange}
         onTextGenerated={handleTextGenerated}
+        onNewConversation={handleNewConversation}
       />
 
       {/* Main Content */}
