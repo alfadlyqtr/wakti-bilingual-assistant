@@ -120,7 +120,11 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
   const hasDuplicateWarning = (message.actionTaken === 'duplicate_warning' || message.actionTaken === 'smart_duplicate_warning') && message.actionResult?.duplicateTask;
   const hasProductivitySuggestion = message.actionTaken === 'productivity_suggestion' && message.actionResult?.suggestions;
   // Fix: Check for string type before using includes()
-  const needsClarification = typeof message.actionTaken === 'string' && (message.actionTaken.includes('clarify') || message.actionTaken.includes('clarify_task_with_learning') || message.actionTaken.includes('clarify_reminder_with_learning'));
+  const needsClarification = typeof message.actionTaken === 'string' && (
+    message.actionTaken.includes('clarify') || 
+    message.actionTaken.includes('clarify_task_with_learning') || 
+    message.actionTaken.includes('clarify_reminder_with_learning')
+  );
 
   return (
     <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -321,7 +325,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
                   {formatTime(message.timestamp)}
                 </span>
                 {/* Phase 3: Show learning indicator */}
-                {(message.actionTaken?.includes('with_learning') || message.userProfile) && (
+                {(typeof message.actionTaken === 'string' && message.actionTaken.includes('with_learning')) || message.userProfile && (
                   <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">
                     {language === 'ar' ? 'ذكي' : 'Smart'}
                   </span>

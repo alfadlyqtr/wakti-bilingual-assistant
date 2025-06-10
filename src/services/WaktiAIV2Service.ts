@@ -16,6 +16,8 @@ export interface AIMessage {
   imageUrl?: string;
   isTextGenerated?: boolean;
   actionResult?: any;
+  proactiveActions?: any[]; // Phase 3: Proactive suggestions
+  userProfile?: any; // Phase 3: User learning data
 }
 
 export interface AIConversation {
