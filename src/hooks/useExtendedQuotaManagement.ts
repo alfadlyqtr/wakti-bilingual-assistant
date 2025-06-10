@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -292,8 +291,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, language]);
 
-  // Purchase extra voice credits
-  const purchaseExtraVoiceCredits = useCallback(async (characters: number = 10000) => {
+  // Purchase extra voice credits (5,000 characters for 10 QAR)
+  const purchaseExtraVoiceCredits = useCallback(async (characters: number = 5000) => {
     if (!user) return false;
 
     try {
@@ -332,6 +331,46 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       toast({
         title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
         description: language === 'ar' ? 'فشل في شراء الاعتمادات الصوتية الإضافية' : 'Failed to purchase extra voice credits',
+        variant: 'destructive'
+      });
+      return false;
+    }
+  }, [user, language]);
+
+  // Purchase extra translations (100 for 10 QAR)
+  const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
+    if (!user) return false;
+
+    try {
+      console.log('💰 Purchasing extra translations:', count);
+      
+      const { data, error } = await supabase.rpc('purchase_extra_translations', {
+        p_user_id: user.id,
+        p_count: count
+      });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          toast({
+            title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
+            description: language === 'ar' 
+              ? `تم إضافة ${count} ترجمة إضافية (صالحة لشهر واحد)` 
+              : `Added ${count} extra translations (valid for 1 month)`,
+          });
+          
+          console.log('💰 Extra translations purchased successfully:', result.new_extra_count);
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error purchasing extra translations:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
+        description: language === 'ar' ? 'فشل في شراء الترجمات الإضافية' : 'Failed to purchase extra translations',
         variant: 'destructive'
       });
       return false;
@@ -404,6 +443,9 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     isLoadingVoiceQuota,
     loadUserVoiceQuota,
     purchaseExtraVoiceCredits,
-    ...voiceComputedValues
+    ...voiceComputedValues,
+
+    // Translation quota
+    purchaseExtraTranslations
   };
 };
