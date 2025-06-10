@@ -3,6 +3,8 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Menu } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import { cn } from '@/lib/utils';
 
 interface ChatHeaderProps {
   currentConversationId: string | null;
@@ -20,6 +22,11 @@ export function ChatHeader({
   onShowQuickActions
 }: ChatHeaderProps) {
   const { language } = useTheme();
+  const { 
+    userSearchQuota, 
+    MAX_MONTHLY_ADVANCED_SEARCHES, 
+    MAX_MONTHLY_REGULAR_SEARCHES 
+  } = useExtendedQuotaManagement(language);
 
   const getTriggerDisplayName = () => {
     switch (activeTrigger) {
@@ -36,6 +43,44 @@ export function ChatHeader({
     }
   };
 
+  const getQuotaDisplay = () => {
+    if (activeTrigger === 'search') {
+      const used = userSearchQuota.regular_search_count;
+      const total = MAX_MONTHLY_REGULAR_SEARCHES;
+      const remaining = total - used;
+      const percentage = (remaining / total) * 100;
+      
+      let colorClass = 'text-green-600';
+      if (percentage <= 20) colorClass = 'text-red-600';
+      else if (percentage <= 50) colorClass = 'text-yellow-600';
+      
+      return (
+        <span className={cn('text-xs ml-1', colorClass)}>
+          ({used}/{total})
+        </span>
+      );
+    }
+    
+    if (activeTrigger === 'advanced_search') {
+      const used = userSearchQuota.daily_count;
+      const total = MAX_MONTHLY_ADVANCED_SEARCHES;
+      const remaining = total - used;
+      const percentage = (remaining / total) * 100;
+      
+      let colorClass = 'text-green-600';
+      if (percentage <= 20) colorClass = 'text-red-600';
+      else if (percentage <= 50) colorClass = 'text-yellow-600';
+      
+      return (
+        <span className={cn('text-xs ml-1', colorClass)}>
+          ({used}/{total})
+        </span>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur-sm">
       <div className="flex items-center gap-3">
@@ -49,9 +94,10 @@ export function ChatHeader({
         </Button>
       </div>
 
-      {/* Active Mode Indicator */}
-      <div className="px-3 py-1 bg-muted rounded-full text-sm font-medium text-muted-foreground">
-        {getTriggerDisplayName()}
+      {/* Active Mode Indicator with Quota */}
+      <div className="flex items-center px-3 py-1 bg-muted rounded-full text-sm font-medium text-muted-foreground">
+        <span>{getTriggerDisplayName()}</span>
+        {getQuotaDisplay()}
       </div>
 
       <Button

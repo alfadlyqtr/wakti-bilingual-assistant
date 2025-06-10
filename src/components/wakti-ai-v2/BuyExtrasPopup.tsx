@@ -1,15 +1,12 @@
 
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { toast } from '@/hooks/use-toast';
-import { ShoppingCart, Languages, Search, Mic, Loader2, CheckCircle, Zap } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import { Coins, Search, Zap, Loader2, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface BuyExtrasPopupProps {
   open: boolean;
@@ -18,169 +15,132 @@ interface BuyExtrasPopupProps {
 
 export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
   const { language } = useTheme();
-  const { userQuota, purchaseExtraTranslations } = useQuotaManagement(language);
   const { 
-    userSearchQuota, 
-    userVoiceQuota, 
-    purchaseExtraSearches, 
-    purchaseExtraVoiceCredits 
+    userSearchQuota,
+    purchaseExtraSearches,
+    MAX_MONTHLY_ADVANCED_SEARCHES,
+    MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
-  const [isPurchasing, setIsPurchasing] = useState<string | null>(null);
 
-  const handleTranslatorPurchase = async () => {
-    setIsPurchasing('translator');
+  const [isSearchPurchasing, setIsSearchPurchasing] = useState(false);
+
+  const handlePurchaseSearches = async () => {
+    setIsSearchPurchasing(true);
     try {
-      const success = await purchaseExtraTranslations(100);
+      const success = await purchaseExtraSearches(50); // 50 extra searches for 10 QAR
       if (success) {
+        toast.success(language === 'ar' ? 'تم شراء 50 بحث إضافي بنجاح!' : 'Successfully purchased 50 extra searches!');
         onOpenChange(false);
       }
+    } catch (error) {
+      console.error('Error purchasing searches:', error);
+      toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
     } finally {
-      setIsPurchasing(null);
+      setIsSearchPurchasing(false);
     }
   };
 
-  const handleSearchPurchase = async () => {
-    setIsPurchasing('search');
-    try {
-      const success = await purchaseExtraSearches(50);
-      if (success) {
-        onOpenChange(false);
-      }
-    } finally {
-      setIsPurchasing(null);
-    }
+  const getSearchQuotaStatus = () => {
+    const regularUsed = userSearchQuota.regular_search_count;
+    const advancedUsed = userSearchQuota.daily_count;
+    const extraSearches = userSearchQuota.extra_searches;
+
+    return {
+      regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
+      advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
+      extraSearches
+    };
   };
 
-  const handleVoicePurchase = async () => {
-    setIsPurchasing('voice');
-    try {
-      const success = await purchaseExtraVoiceCredits(5000);
-      if (success) {
-        onOpenChange(false);
-      }
-    } finally {
-      setIsPurchasing(null);
-    }
-  };
-
-  const purchaseOptions = [
-    {
-      id: 'translator',
-      icon: Languages,
-      title: language === 'ar' ? 'ترجمات إضافية' : 'Extra Translations',
-      quota: language === 'ar' ? '100 ترجمة' : '100 translations',
-      price: '10 QAR',
-      validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
-      available: true,
-      current: userQuota.extra_translations,
-      remaining: language === 'ar' ? `${userQuota.extra_translations} متبقي` : `${userQuota.extra_translations} remaining`,
-      onPurchase: handleTranslatorPurchase,
-      color: 'from-rose-500 to-pink-500'
-    },
-    {
-      id: 'search',
-      icon: Zap,
-      title: language === 'ar' ? 'بحث متقدم' : 'Advanced Search Boost',
-      quota: language === 'ar' ? '50 بحث متقدم' : '50 advanced searches',
-      price: '10 QAR',
-      validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
-      available: true,
-      current: userSearchQuota.extra_searches,
-      remaining: language === 'ar' ? `${userSearchQuota.extra_searches} متبقي` : `${userSearchQuota.extra_searches} remaining`,
-      onPurchase: handleSearchPurchase,
-      color: 'from-green-500 to-emerald-500'
-    },
-    {
-      id: 'voice',
-      icon: Mic,
-      title: language === 'ar' ? 'أصوات إضافية' : 'Extra Voice Credits',
-      quota: language === 'ar' ? '5,000 حرف' : '5,000 characters',
-      price: '10 QAR',
-      validity: language === 'ar' ? 'صالحة لشهر واحد' : 'Valid for 1 month',
-      available: true,
-      current: userVoiceQuota.extra_characters,
-      remaining: language === 'ar' ? `${userVoiceQuota.extra_characters} متبقي` : `${userVoiceQuota.extra_characters} remaining`,
-      onPurchase: handleVoicePurchase,
-      color: 'from-purple-500 to-violet-500'
-    }
-  ];
+  const quotaStatus = getSearchQuotaStatus();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-xl">
-            <ShoppingCart className="h-5 w-5" />
+          <DialogTitle className="flex items-center gap-2">
+            <Coins className="h-5 w-5 text-yellow-500" />
             {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-4 mt-4">
-          {purchaseOptions.map((option) => (
-            <Card key={option.id} className={cn(
-              "transition-all duration-200 hover:shadow-md border-border"
-            )}>
+        <div className="space-y-4">
+          {/* Current Quota Status */}
+          <Card className="bg-muted/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-500" />
+                {language === 'ar' ? 'حصتك الحالية' : 'Your Current Quota'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'البحث العادي:' : 'Regular Search:'}</span>
+                <span className="font-medium">
+                  {quotaStatus.regularRemaining}/{MAX_MONTHLY_REGULAR_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'البحث المتقدم:' : 'Advanced Search:'}</span>
+                <span className="font-medium">
+                  {quotaStatus.advancedRemaining}/{MAX_MONTHLY_ADVANCED_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'البحثات الإضافية:' : 'Extra Searches:'}</span>
+                <span className="font-medium text-blue-600">
+                  {quotaStatus.extraSearches} {language === 'ar' ? 'متوفر' : 'available'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Purchase Options */}
+          <div className="space-y-3">
+            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "p-2 rounded-lg bg-gradient-to-r",
-                      option.color
-                    )}>
-                      <option.icon className="h-5 w-5 text-white" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">{option.title}</CardTitle>
-                      {option.current > 0 && (
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                          {option.remaining}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Search className="h-4 w-4 text-blue-500" />
+                  {language === 'ar' ? 'بحثات إضافية' : 'Extra Searches'}
+                </CardTitle>
               </CardHeader>
-              
-              <CardContent className="pt-0">
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'احصل على 50 بحث إضافي (عادي ومتقدم) صالح لمدة شهر واحد'
+                    : 'Get 50 extra searches (regular and advanced) valid for 1 month'
+                  }
+                </div>
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="font-medium text-sm">{option.quota}</div>
-                    <div className="text-xs text-muted-foreground">{option.validity}</div>
+                  <div className="text-lg font-bold text-blue-600">
+                    10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <div className="font-bold text-lg">{option.price}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {language === 'ar' ? 'شهرياً' : 'monthly'}
-                      </div>
-                    </div>
-                    
-                    <Button
-                      onClick={option.onPurchase}
-                      disabled={isPurchasing === option.id}
-                      size="sm"
-                      className="min-w-[80px]"
-                    >
-                      {isPurchasing === option.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        language === 'ar' ? 'شراء' : 'Buy'
-                      )}
-                    </Button>
-                  </div>
+                  <Button 
+                    onClick={handlePurchaseSearches}
+                    disabled={isSearchPurchasing}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isSearchPurchasing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
+                      </>
+                    )}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
-          ))}
-        </div>
+          </div>
 
-        <div className="mt-4 p-3 bg-muted/50 rounded-lg">
           <div className="text-xs text-muted-foreground text-center">
             {language === 'ar' 
-              ? 'جميع المشتريات صالحة لمدة شهر واحد من تاريخ الشراء' 
-              : 'All purchases are valid for one month from purchase date'
+              ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء'
+              : 'All extras are valid for 30 days from purchase date'
             }
           </div>
         </div>

@@ -53,7 +53,7 @@ class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.instance;
   }
 
-  // Enhanced sendMessage method with file support
+  // Enhanced sendMessage method with file support and search quota handling
   async sendMessage(
     message: string,
     userId: string,
@@ -67,10 +67,36 @@ class WaktiAIV2ServiceClass {
     attachedFiles: any[] = []
   ) {
     try {
-      console.log('🔄 WaktiAIV2Service: Sending message with enhanced file support');
+      console.log('🔄 WaktiAIV2Service: Sending message with enhanced search quota support');
       console.log('🔄 Message:', message);
       console.log('🔄 Active Trigger:', activeTrigger);
       console.log('🔄 Attached Files:', attachedFiles?.length || 0);
+
+      // Handle search quota checking based on trigger type
+      if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
+        const quotaFunction = activeTrigger === 'search' 
+          ? 'increment_regular_search_usage' 
+          : 'increment_search_usage';
+        
+        console.log(`🔄 Checking ${activeTrigger} quota before processing...`);
+        
+        const { data: quotaData, error: quotaError } = await supabase.rpc(quotaFunction, {
+          p_user_id: userId
+        });
+
+        if (quotaError) {
+          console.error('❌ Quota check error:', quotaError);
+          throw new Error('Failed to check search quota');
+        }
+
+        if (!quotaData || quotaData.length === 0 || !quotaData[0].success) {
+          const limitType = activeTrigger === 'search' ? 'monthly search' : 'monthly advanced search';
+          const limitCount = activeTrigger === 'search' ? '15' : '5';
+          throw new Error(`You have reached your ${limitType} limit (${limitCount} searches). Please purchase extra searches to continue.`);
+        }
+
+        console.log(`✅ ${activeTrigger} quota available, proceeding with request`);
+      }
 
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -274,3 +300,5 @@ class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = WaktiAIV2ServiceClass.getInstance();
+
+// ... keep existing code (all other methods remain the same)
