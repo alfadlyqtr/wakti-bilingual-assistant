@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -425,10 +426,10 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
       />
 
-      {/* Main Chat Container - Fixed Height */}
-      <div className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden">
-        {/* Fixed Header - No Scroll */}
-        <div className="flex-shrink-0 sticky top-0 z-10 bg-background">
+      {/* Main Chat Container - Fixed Layout */}
+      <div className="flex-1 flex flex-col h-screen relative">
+        {/* Fixed Header - Always visible at top */}
+        <div className="fixed top-0 left-0 right-0 z-20 bg-background border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -445,8 +446,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* Scrollable Messages Area - Takes remaining space */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        {/* Scrollable Messages Area - Positioned between fixed header and input */}
+        <div className="flex-1 pt-20 pb-32 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -456,8 +457,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Fixed Input Area - No Scroll */}
-        <div className="flex-shrink-0 sticky bottom-0 z-10 bg-background border-t">
+        {/* Fixed Input Area - Always visible at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-background border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}

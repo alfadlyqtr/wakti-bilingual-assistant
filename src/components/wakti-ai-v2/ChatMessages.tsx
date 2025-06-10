@@ -32,7 +32,7 @@ export function ChatMessages({
 
   return (
     <ScrollArea 
-      className="h-full px-4"
+      className="h-full w-full px-4"
       ref={scrollAreaRef}
     >
       <div className="max-w-4xl mx-auto py-4 space-y-6">
