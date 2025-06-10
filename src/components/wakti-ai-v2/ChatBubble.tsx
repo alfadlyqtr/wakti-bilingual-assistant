@@ -156,6 +156,10 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
     message.actionTaken.includes('clarify_reminder_with_learning')
   );
 
+  // Enhanced detection for confirmation needs
+  const needsTaskConfirmation = message.needsConfirmation && message.pendingTaskData;
+  const needsReminderConfirmation = message.needsConfirmation && message.pendingReminderData;
+  
   return (
     <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && (
@@ -178,6 +182,34 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             {message.content}
           </div>
           
+          {/* Task Confirmation Card */}
+          {needsTaskConfirmation && (
+            <div className="mt-3">
+              <TaskConfirmationCard
+                type="task"
+                data={message.pendingTaskData}
+                onConfirm={() => handleTaskConfirmation(message.pendingTaskData)}
+                onCancel={handleCancelConfirmation}
+                isLoading={isConfirming}
+                enhanced={true} // Phase 4 enhancement
+              />
+            </div>
+          )}
+
+          {/* Reminder Confirmation Card */}
+          {needsReminderConfirmation && (
+            <div className="mt-3">
+              <TaskConfirmationCard
+                type="reminder"
+                data={message.pendingReminderData}
+                onConfirm={() => handleReminderConfirmation(message.pendingReminderData)}
+                onCancel={handleCancelConfirmation}
+                isLoading={isConfirming}
+                enhanced={true} // Phase 4 enhancement
+              />
+            </div>
+          )}
+
           {/* Phase 4: Advanced Scheduling UI */}
           {hasAdvancedScheduling && (
             <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg">
@@ -556,9 +588,9 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
       </div>
       
       {message.role === 'user' && (
-        <div className="flex-shrink-0 order-3">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <User className="h-4 w-4 text-primary" />
+        <div className="flex-shrink-0 order-1">
+          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+            <User className="h-4 w-4 text-primary-foreground" />
           </div>
         </div>
       )}

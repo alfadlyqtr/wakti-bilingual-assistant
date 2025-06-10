@@ -48,8 +48,122 @@ serve(async (req) => {
       userContext = null,
       enableAdvancedIntegration = false,
       enablePredictiveInsights = false,
-      enableWorkflowAutomation = false
+      enableWorkflowAutomation = false,
+      // Task/Reminder confirmation
+      confirmTask = false,
+      pendingTaskData = null,
+      confirmReminder = false,
+      pendingReminderData = null
     } = requestBody;
+
+    // Handle task confirmation
+    if (confirmTask && pendingTaskData) {
+      console.log("🔧 Processing task confirmation:", pendingTaskData);
+      
+      try {
+        const taskData = {
+          title: pendingTaskData.title,
+          description: pendingTaskData.description || '',
+          priority: pendingTaskData.priority || 'normal',
+          due_date: pendingTaskData.due_date || pendingTaskData.suggestedDate,
+          due_time: pendingTaskData.due_time,
+          task_type: pendingTaskData.task_type || 'one-time',
+          user_id: userId
+        };
+
+        const { data: task, error: taskError } = await supabase
+          .from('tr_tasks')
+          .insert(taskData)
+          .select()
+          .single();
+
+        if (taskError) throw taskError;
+
+        // Add subtasks if they exist
+        if (pendingTaskData.subtasks && pendingTaskData.subtasks.length > 0) {
+          const subtaskData = pendingTaskData.subtasks.map((subtask: string, index: number) => ({
+            task_id: task.id,
+            title: subtask,
+            order_index: index
+          }));
+
+          const { error: subtaskError } = await supabase
+            .from('tr_subtasks')
+            .insert(subtaskData);
+
+          if (subtaskError) console.error('Subtask creation error:', subtaskError);
+        }
+
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `✅ تم إنشاء المهمة "${task.title}" بنجاح!`
+            : `✅ Task "${task.title}" created successfully!`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'task_created',
+          confidence: 'high',
+          actionTaken: 'create_task',
+          actionResult: { task, created: true },
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (error) {
+        console.error("Task creation error:", error);
+        return new Response(JSON.stringify({
+          error: `Failed to create task: ${error.message}`,
+          success: false
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // Handle reminder confirmation
+    if (confirmReminder && pendingReminderData) {
+      console.log("🔔 Processing reminder confirmation:", pendingReminderData);
+      
+      try {
+        const reminderData = {
+          title: pendingReminderData.title,
+          description: pendingReminderData.description || '',
+          due_date: pendingReminderData.due_date || pendingReminderData.suggestedDate,
+          due_time: pendingReminderData.due_time || pendingReminderData.suggestedTime,
+          user_id: userId
+        };
+
+        const { data: reminder, error: reminderError } = await supabase
+          .from('tr_reminders')
+          .insert(reminderData)
+          .select()
+          .single();
+
+        if (reminderError) throw reminderError;
+
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `✅ تم إنشاء التذكير "${reminder.title}" بنجاح!`
+            : `✅ Reminder "${reminder.title}" created successfully!`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'reminder_created',
+          confidence: 'high',
+          actionTaken: 'create_reminder',
+          actionResult: { reminder, created: true },
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } catch (error) {
+        console.error("Reminder creation error:", error);
+        return new Response(JSON.stringify({
+          error: `Failed to create reminder: ${error.message}`,
+          success: false
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
 
     // Validate required fields
     if (!message || typeof message !== 'string' || message.trim() === '') {
@@ -107,6 +221,30 @@ serve(async (req) => {
       }
     }
 
+    // Detect task/reminder creation intent
+    const intentAnalysis = await analyzeTaskCreationIntent(message, conversationHistory, language, enhancedContext);
+    console.log("🚀 WAKTI AI V2 BRAIN: Intent analysis:", intentAnalysis);
+
+    // If user is confirming to proceed with task/reminder creation
+    if (intentAnalysis.isConfirmation && intentAnalysis.pendingData) {
+      console.log("🚀 WAKTI AI V2 BRAIN: User confirming creation, showing confirmation card");
+      
+      return new Response(JSON.stringify({
+        response: intentAnalysis.confirmationMessage,
+        conversationId: conversationId || generateConversationId(),
+        intent: intentAnalysis.intent,
+        confidence: 'high',
+        actionTaken: intentAnalysis.actionType,
+        actionResult: intentAnalysis.pendingData,
+        needsConfirmation: true,
+        pendingTaskData: intentAnalysis.intent === 'create_task' ? intentAnalysis.pendingData : null,
+        pendingReminderData: intentAnalysis.intent === 'create_reminder' ? intentAnalysis.pendingData : null,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // Enforce trigger isolation with Phase 4 enhancements
     const intent = await analyzeTriggerIntentAdvanced(message, activeTrigger, language, enhancedContext);
     console.log("🚀 WAKTI AI V2 BRAIN: Advanced trigger analysis result:", intent);
@@ -119,6 +257,9 @@ serve(async (req) => {
     let quotaStatus = null;
     let actionTaken = null;
     let actionResult = null;
+    let needsConfirmation = false;
+    let pendingTaskData = null;
+    let pendingReminderData = null;
 
     // Get real quota status from database
     quotaStatus = await checkBrowsingQuota(userId);
@@ -176,24 +317,38 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        // Chat mode - use Phase 4 advanced AI
-        const aiResult = await processWithAdvancedAI(message, null, language, enhancedContext);
-        response = aiResult.response || aiResult;
-        actionTaken = aiResult.actionTaken;
-        actionResult = aiResult.actionResult;
+        // Check for task/reminder creation intent in chat mode
+        if (intentAnalysis.needsConfirmation) {
+          response = intentAnalysis.confirmationMessage;
+          needsConfirmation = true;
+          actionTaken = intentAnalysis.actionType;
+          actionResult = intentAnalysis.pendingData;
+          
+          if (intentAnalysis.intent === 'create_task') {
+            pendingTaskData = intentAnalysis.pendingData;
+          } else if (intentAnalysis.intent === 'create_reminder') {
+            pendingReminderData = intentAnalysis.pendingData;
+          }
+        } else {
+          // Chat mode - use Phase 4 advanced AI
+          const aiResult = await processWithAdvancedAI(message, null, language, enhancedContext);
+          response = aiResult.response || aiResult;
+          actionTaken = aiResult.actionTaken;
+          actionResult = aiResult.actionResult;
 
-        // Phase 4: Advanced automation and intelligence
-        if (enablePredictiveInsights) {
-          predictiveInsights = await generatePredictiveInsights(message, userContext, calendarContext);
+          // Phase 4: Advanced automation and intelligence
+          if (enablePredictiveInsights) {
+            predictiveInsights = await generatePredictiveInsights(message, userContext, calendarContext);
+          }
+
+          if (enableWorkflowAutomation) {
+            workflowActions = await generateWorkflowAutomation(message, userContext, calendarContext);
+            automationSuggestions = await generateAutomationSuggestions(message, userContext);
+          }
+
+          // Generate contextual quick actions
+          contextualActions = generateContextualActions(message, { context: enhancedContext }, userContext);
         }
-
-        if (enableWorkflowAutomation) {
-          workflowActions = await generateWorkflowAutomation(message, userContext, calendarContext);
-          automationSuggestions = await generateAutomationSuggestions(message, userContext);
-        }
-
-        // Generate contextual quick actions
-        contextualActions = generateContextualActions(message, { context: enhancedContext }, userContext);
         break;
     }
 
@@ -209,7 +364,9 @@ serve(async (req) => {
       browsingData,
       quotaStatus,
       requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch,
-      needsConfirmation: false,
+      needsConfirmation,
+      pendingTaskData,
+      pendingReminderData,
       needsClarification: false,
       // Phase 4: Advanced features
       deepIntegration,
@@ -240,6 +397,271 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced task/reminder creation intent analysis
+async function analyzeTaskCreationIntent(message: string, conversationHistory: any[], language: string = 'en', enhancedContext: string = '') {
+  const lowerMessage = message.toLowerCase().trim();
+  
+  // Check if user is confirming a previous task/reminder suggestion
+  const confirmationWords = [
+    'proceed', 'yes', 'create', 'go ahead', 'do it', 'make it', 'confirm', 'ok', 'okay', 'sure',
+    'نعم', 'أكد', 'أنشئ', 'اصنع', 'تقدم', 'حسنا', 'موافق'
+  ];
+  
+  const isConfirmation = confirmationWords.some(word => lowerMessage.includes(word));
+  
+  // Look for previous AI suggestions in conversation history
+  let lastAIMessage = null;
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    if (conversationHistory[i].role === 'assistant') {
+      lastAIMessage = conversationHistory[i];
+      break;
+    }
+  }
+  
+  // If user is confirming and AI previously suggested a task/reminder
+  if (isConfirmation && lastAIMessage) {
+    const lastContent = lastAIMessage.content.toLowerCase();
+    
+    // Check if the last AI message was suggesting task creation
+    if (lastContent.includes('shopping') || lastContent.includes('task') || lastContent.includes('create')) {
+      const taskData = extractTaskDataFromHistory(conversationHistory, message);
+      if (taskData) {
+        return {
+          isConfirmation: true,
+          needsConfirmation: true,
+          intent: 'create_task',
+          actionType: 'parse_task',
+          pendingData: taskData,
+          confirmationMessage: language === 'ar' 
+            ? `سأقوم بإنشاء هذه المهمة:\n\n**${taskData.title}**\n\nهل تريد المتابعة؟`
+            : `I'll create this task:\n\n**${taskData.title}**\n\nShall I proceed?`
+        };
+      }
+    }
+    
+    // Check for reminder creation
+    if (lastContent.includes('remind') || lastContent.includes('reminder')) {
+      const reminderData = extractReminderDataFromHistory(conversationHistory, message);
+      if (reminderData) {
+        return {
+          isConfirmation: true,
+          needsConfirmation: true,
+          intent: 'create_reminder',
+          actionType: 'parse_reminder',
+          pendingData: reminderData,
+          confirmationMessage: language === 'ar' 
+            ? `سأقوم بإنشاء هذا التذكير:\n\n**${reminderData.title}**\n\nهل تريد المتابعة؟`
+            : `I'll create this reminder:\n\n**${reminderData.title}**\n\nShall I proceed?`
+        };
+      }
+    }
+  }
+  
+  // Direct task creation patterns
+  const taskPatterns = [
+    /\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i,
+    /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
+    /\bneed\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
+    /\bhave\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
+    /\bmust\s+(go|buy|get|shop|visit|pick\s+up)/i,
+    /\b(create|add|make|new)\s+task/i,
+    /\btask\s+(to|for)/i,
+    /\bto\s+do\s+list/i,
+    /\btodo/i
+  ];
+
+  const isTaskRequest = taskPatterns.some(pattern => pattern.test(message));
+  
+  if (isTaskRequest) {
+    const taskData = extractTaskData(message, language);
+    return {
+      isConfirmation: false,
+      needsConfirmation: true,
+      intent: 'create_task',
+      actionType: 'parse_task',
+      pendingData: taskData,
+      confirmationMessage: generateTaskConfirmationMessage(taskData, language)
+    };
+  }
+
+  // Reminder patterns
+  const reminderPatterns = [
+    /\bremind\s+me\s+(to|about)/i,
+    /\b(create|add|set)\s+(a\s+)?reminder/i,
+    /\bdon'?t\s+forget\s+to/i,
+    /\ذكرني/i,
+    /\أنشئ\s+تذكير/i
+  ];
+
+  const isReminderRequest = reminderPatterns.some(pattern => pattern.test(message));
+  
+  if (isReminderRequest) {
+    const reminderData = extractReminderData(message, language);
+    return {
+      isConfirmation: false,
+      needsConfirmation: true,
+      intent: 'create_reminder',
+      actionType: 'parse_reminder',
+      pendingData: reminderData,
+      confirmationMessage: generateReminderConfirmationMessage(reminderData, language)
+    };
+  }
+  
+  return {
+    isConfirmation: false,
+    needsConfirmation: false,
+    intent: 'general_chat',
+    actionType: null,
+    pendingData: null,
+    confirmationMessage: null
+  };
+}
+
+// Extract task data from conversation history and current message
+function extractTaskDataFromHistory(conversationHistory: any[], currentMessage: string) {
+  // Look for shopping patterns in recent conversation
+  for (let i = conversationHistory.length - 1; i >= Math.max(0, conversationHistory.length - 5); i--) {
+    const msg = conversationHistory[i];
+    if (msg.role === 'user' && msg.content) {
+      const content = msg.content.toLowerCase();
+      
+      // Shopping pattern
+      const shoppingMatch = content.match(/\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i);
+      if (shoppingMatch) {
+        const location = shoppingMatch[4].trim();
+        
+        // Look for items
+        const buyMatch = content.match(/\b(buy|get|purchase|pick\s+up)\s+(.+)/i);
+        const subtasks = [];
+        
+        if (buyMatch) {
+          const itemsText = buyMatch[2];
+          const items = itemsText
+            .split(/\s+and\s+|,\s*|\s*&\s*/)
+            .map(item => item.trim())
+            .filter(item => item && !item.match(/\b(at|to|in|from|for|on|when|where|why|how)\b/i))
+            .slice(0, 10);
+          
+          subtasks.push(...items);
+        }
+        
+        return {
+          title: `Shopping at ${location}`,
+          description: `Shopping list for ${location}`,
+          subtasks: subtasks,
+          priority: 'normal',
+          task_type: 'one-time',
+          due_date: null,
+          suggestedDate: new Date().toISOString().split('T')[0] // Today
+        };
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Extract reminder data from conversation history
+function extractReminderDataFromHistory(conversationHistory: any[], currentMessage: string) {
+  for (let i = conversationHistory.length - 1; i >= Math.max(0, conversationHistory.length - 5); i--) {
+    const msg = conversationHistory[i];
+    if (msg.role === 'user' && msg.content) {
+      const content = msg.content;
+      
+      const reminderMatch = content.match(/\bremind\s+me\s+(to|about)\s+(.+)/i);
+      if (reminderMatch) {
+        return {
+          title: `Reminder: ${reminderMatch[2]}`,
+          description: '',
+          due_date: new Date().toISOString().split('T')[0], // Today
+          suggestedTime: '09:00'
+        };
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Extract task data from message
+function extractTaskData(message: string, language: string = 'en') {
+  const lowerText = message.toLowerCase();
+  
+  // Extract title
+  let title = "";
+  const shoppingMatch = message.match(/\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i);
+  if (shoppingMatch) {
+    const location = shoppingMatch[4].trim();
+    title = `Shopping at ${location}`;
+  } else {
+    title = message.replace(/\b(create|add|make|new)\s+task\s*/i, "").trim();
+    if (!title) title = "New task";
+  }
+  
+  // Extract subtasks from shopping lists
+  const subtasks: string[] = [];
+  const buyMatch = message.match(/\b(buy|get|purchase|pick\s+up)\s+(.+)/i);
+  if (buyMatch) {
+    const itemsText = buyMatch[2];
+    const items = itemsText
+      .split(/\s+and\s+|,\s*|\s*&\s*/)
+      .map(item => item.trim())
+      .filter(item => item && !item.match(/\b(at|to|in|from|for|on|when|where|why|how)\b/i))
+      .slice(0, 10);
+    
+    subtasks.push(...items);
+  }
+  
+  // Extract priority
+  let priority = "normal";
+  if (lowerText.includes("urgent") || lowerText.includes("asap") || lowerText.includes("immediately")) {
+    priority = "urgent";
+  } else if (lowerText.includes("important") || lowerText.includes("soon")) {
+    priority = "high";
+  }
+  
+  return {
+    title,
+    description: '',
+    subtasks,
+    priority,
+    task_type: 'one-time',
+    due_date: null,
+    suggestedDate: new Date().toISOString().split('T')[0] // Today
+  };
+}
+
+// Extract reminder data from message
+function extractReminderData(message: string, language: string = 'en') {
+  const reminderMatch = message.match(/\bremind\s+me\s+(to|about)\s+(.+)/i);
+  const title = reminderMatch ? `Reminder: ${reminderMatch[2]}` : message;
+  
+  return {
+    title,
+    description: '',
+    due_date: new Date().toISOString().split('T')[0], // Today
+    suggestedTime: '09:00'
+  };
+}
+
+// Generate task confirmation message
+function generateTaskConfirmationMessage(taskData: any, language: string = 'en') {
+  const subtaskList = taskData.subtasks && taskData.subtasks.length > 0 
+    ? `\n\n${language === 'ar' ? 'المهام الفرعية:' : 'Subtasks:'}\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}`
+    : '';
+    
+  return language === 'ar' 
+    ? `سأقوم بإنشاء هذه المهمة:\n\n**${taskData.title}**${subtaskList}\n\nهل تريد المتابعة؟`
+    : `I'll create this task:\n\n**${taskData.title}**${subtaskList}\n\nShall I proceed?`;
+}
+
+// Generate reminder confirmation message
+function generateReminderConfirmationMessage(reminderData: any, language: string = 'en') {
+  return language === 'ar' 
+    ? `سأقوم بإنشاء هذا التذكير:\n\n**${reminderData.title}**\n\nهل تريد المتابعة؟`
+    : `I'll create this reminder:\n\n**${reminderData.title}**\n\nShall I proceed?`;
+}
 
 // Phase 4: Advanced AI processing function
 async function processWithAdvancedAI(message: string, context: string | null, language: string = 'en', enhancedContext: string = '') {
@@ -541,95 +963,6 @@ async function analyzeForAdvancedActions(message: string, aiResponse: string, la
   };
 }
 
-// Trigger isolation logic
-function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase();
-  
-  console.log("🔍 UNIFIED AI BRAIN: Analyzing trigger intent for:", activeTrigger);
-  
-  switch (activeTrigger) {
-    case 'search':
-      const searchPatterns = [
-        'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
-        'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
-        'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
-        'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
-      ];
-      
-      const isSearchIntent = searchPatterns.some(pattern => lowerMessage.includes(pattern));
-      
-      return {
-        intent: isSearchIntent ? 'real_time_search' : 'invalid_for_search',
-        confidence: isSearchIntent ? 'high' : 'low',
-        allowed: isSearchIntent
-      };
-
-    case 'image':
-      const imagePatterns = [
-        'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
-        'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
-      ];
-      
-      const isImageIntent = imagePatterns.some(pattern => lowerMessage.includes(pattern));
-      
-      return {
-        intent: isImageIntent ? 'generate_image' : 'invalid_for_image',
-        confidence: isImageIntent ? 'high' : 'low',
-        allowed: isImageIntent
-      };
-
-    case 'advanced_search':
-      return {
-        intent: 'advanced_search_unavailable',
-        confidence: 'high',
-        allowed: false
-      };
-
-    case 'chat':
-    default:
-      // Chat mode allows everything
-      return {
-        intent: 'general_chat',
-        confidence: 'high',
-        allowed: true
-      };
-  }
-}
-
-// Check browsing quota
-async function checkBrowsingQuota(userId: string) {
-  try {
-    const { data, error } = await supabase.rpc('check_browsing_quota', {
-      p_user_id: userId
-    });
-    
-    if (error) {
-      console.error("Quota check error:", error);
-      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-    }
-    
-    const count = data || 0;
-    const limit = 60;
-    const usagePercentage = Math.round((count / limit) * 100);
-    
-    return {
-      count,
-      limit,
-      usagePercentage,
-      remaining: Math.max(0, limit - count),
-      canBrowse: count < limit,
-      requiresConfirmation: usagePercentage >= 80
-    };
-  } catch (error) {
-    console.error("Quota check error:", error);
-    return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-  }
-}
-
-function generateConversationId() {
-  return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
 // Enhanced trigger isolation logic for Phase 4
 async function analyzeTriggerIntentAdvanced(message: string, activeTrigger: string, language: string = 'en', enhancedContext: string = '') {
   const lowerMessage = message.toLowerCase();
@@ -687,4 +1020,38 @@ async function analyzeTriggerIntentAdvanced(message: string, activeTrigger: stri
         enhancedFeatures: ['deep_integration', 'workflow_automation', 'predictive_insights']
       };
   }
+}
+
+// Check browsing quota
+async function checkBrowsingQuota(userId: string) {
+  try {
+    const { data, error } = await supabase.rpc('check_browsing_quota', {
+      p_user_id: userId
+    });
+    
+    if (error) {
+      console.error("Quota check error:", error);
+      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
+    }
+    
+    const count = data || 0;
+    const limit = 60;
+    const usagePercentage = Math.round((count / limit) * 100);
+    
+    return {
+      count,
+      limit,
+      usagePercentage,
+      remaining: Math.max(0, limit - count),
+      canBrowse: count < limit,
+      requiresConfirmation: usagePercentage >= 80
+    };
+  } catch (error) {
+    console.error("Quota check error:", error);
+    return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
+  }
+}
+
+function generateConversationId() {
+  return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }

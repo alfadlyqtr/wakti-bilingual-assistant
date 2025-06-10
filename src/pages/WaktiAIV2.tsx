@@ -202,12 +202,9 @@ const WaktiAIV2 = () => {
 
       console.log('🔄 WAKTI AI V2.5: === PHASE 4 RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Phase 4 features:', {
-        deepIntegration: !!response.deepIntegration,
-        predictiveInsights: !!response.predictiveInsights,
-        workflowActions: response.workflowActions?.length || 0,
-        contextualActions: response.contextualActions?.length || 0
-      });
+      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
+      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', response.pendingTaskData);
+      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', response.pendingReminderData);
 
       if (response.error) {
         throw new Error(response.error);
@@ -227,7 +224,7 @@ const WaktiAIV2 = () => {
         timestamp: new Date(),
         intent: response.intent,
         confidence: response.confidence as 'high' | 'medium' | 'low',
-        actionTaken: !!response.actionTaken,
+        actionTaken: response.actionTaken,
         browsingUsed: response.browsingUsed,
         browsingData: response.browsingData,
         quotaStatus: response.quotaStatus,
@@ -240,7 +237,11 @@ const WaktiAIV2 = () => {
         automationSuggestions: response.automationSuggestions,
         predictiveInsights: response.predictiveInsights,
         workflowActions: response.workflowActions,
-        contextualActions: response.contextualActions
+        contextualActions: response.contextualActions,
+        // Task/Reminder confirmation data
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
       };
 
       // Add assistant message to session (limit to 20 messages)
@@ -275,6 +276,16 @@ const WaktiAIV2 = () => {
           language === 'ar' 
             ? `تم تحليل ${attachedFiles.length} ملف بنجاح` 
             : `Successfully analyzed ${attachedFiles.length} file(s)`
+        );
+      }
+
+      // Show success message for confirmation cards
+      if (response.needsConfirmation) {
+        console.log('🔄 WAKTI AI V2.5: Confirmation card should be shown');
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تحضير البيانات للتأكيد' 
+            : 'Data prepared for confirmation'
         );
       }
 
