@@ -24,6 +24,10 @@ export interface AIMessage {
   predictiveInsights?: any; // Predictive intelligence results
   workflowActions?: any[]; // Automated workflow suggestions
   contextualActions?: any[]; // Context-aware quick actions
+  // Task/Reminder confirmation properties
+  needsConfirmation?: boolean;
+  pendingTaskData?: any;
+  pendingReminderData?: any;
 }
 
 export interface AIConversation {
