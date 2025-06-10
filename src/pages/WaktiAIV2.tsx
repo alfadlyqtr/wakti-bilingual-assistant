@@ -426,10 +426,10 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
       />
 
-      {/* Main Chat Container - Fixed Layout */}
-      <div className="flex-1 flex flex-col h-screen relative">
-        {/* Fixed Header - Always visible at top */}
-        <div className="fixed top-0 left-0 right-0 z-20 bg-background border-b">
+      {/* Main Chat Container - Relative positioning for absolute children */}
+      <div className="flex-1 flex flex-col h-screen relative overflow-hidden">
+        {/* Header - Fixed within container */}
+        <div className="absolute top-0 left-0 right-0 z-20 bg-background border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -446,7 +446,7 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* Scrollable Messages Area - Positioned between fixed header and input */}
+        {/* Scrollable Messages Area - Between header and input */}
         <div className="flex-1 pt-20 pb-32 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -457,8 +457,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Fixed Input Area - Always visible at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 z-20 bg-background border-t">
+        {/* Input - Fixed within container */}
+        <div className="absolute bottom-0 left-0 right-0 z-20 bg-background border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}
