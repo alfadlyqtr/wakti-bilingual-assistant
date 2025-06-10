@@ -208,6 +208,10 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
+    // Enhanced conversation context analysis
+    const conversationContext = analyzeConversationContext(conversationHistory, message);
+    console.log("🔍 Conversation context analysis:", conversationContext);
+
     // Check for task creation patterns and prepare task preview
     const taskPatterns = [
       /\bcreate\s+(a\s+)?task/i,
@@ -278,9 +282,9 @@ serve(async (req) => {
       }
     }
 
-    // Process with AI for general chat
+    // Process with AI for general chat with enhanced context awareness
     console.log("🤖 WAKTI AI V2 BRAIN: Processing with AI");
-    const response = await processWithAdvancedAI(message, null, language, userContext, calendarContext);
+    const response = await processWithAdvancedAI(message, conversationContext, language, userContext, calendarContext);
 
     const result = {
       response,
@@ -312,6 +316,74 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced conversation context analysis function
+function analyzeConversationContext(conversationHistory: any[], currentMessage: string) {
+  console.log("🔍 Analyzing conversation context...");
+  
+  if (!conversationHistory || conversationHistory.length === 0) {
+    return { type: 'new_conversation', previousContext: null, expectingResponse: false };
+  }
+
+  // Get the last few messages for context
+  const recentMessages = conversationHistory.slice(-5);
+  const lastAssistantMessage = recentMessages.filter(msg => msg.role === 'assistant').pop();
+  
+  if (!lastAssistantMessage) {
+    return { type: 'user_initiated', previousContext: null, expectingResponse: false };
+  }
+
+  // Check if the last assistant message was asking a question or expecting a response
+  const questionPatterns = [
+    /would you like/i,
+    /do you want/i,
+    /would you add/i,
+    /shall I/i,
+    /any additional/i,
+    /\?$/,
+    /please provide/i,
+    /let me know/i
+  ];
+
+  const wasAskingQuestion = questionPatterns.some(pattern => 
+    pattern.test(lastAssistantMessage.content)
+  );
+
+  // Check if current message seems to be answering previous question
+  const answerPatterns = [
+    /^yes/i,
+    /^no/i,
+    /^add/i,
+    /^include/i,
+    /my instagram/i,
+    /my email/i,
+    /my website/i,
+    /@\w+/i, // social media handles
+    /https?:\/\//i // URLs
+  ];
+
+  const seemsLikeAnswer = answerPatterns.some(pattern => 
+    pattern.test(currentMessage.trim())
+  );
+
+  // Specific context detection for social media/contact info
+  const socialMediaContext = lastAssistantMessage.content.toLowerCase().includes('social media') ||
+                            lastAssistantMessage.content.toLowerCase().includes('additional elements') ||
+                            lastAssistantMessage.content.toLowerCase().includes('contact');
+
+  const providingSocialInfo = /(@\w+|instagram|twitter|facebook|linkedin|email|phone|website)/i.test(currentMessage);
+
+  return {
+    type: wasAskingQuestion && (seemsLikeAnswer || providingSocialInfo) ? 'answering_question' : 'new_topic',
+    previousContext: {
+      lastQuestion: lastAssistantMessage.content,
+      wasSocialMediaRequest: socialMediaContext,
+      isProvidingSocialInfo: providingSocialInfo
+    },
+    expectingResponse: wasAskingQuestion,
+    contextualContinuation: socialMediaContext && providingSocialInfo
+  };
+}
 
 // Extract task data from message - fixed to use correct date format
 function extractTaskData(message: string) {
@@ -518,8 +590,13 @@ function formatDateForDisplay(dateString: string): string {
   }
 }
 
-// Real AI processing
-async function processWithAdvancedAI(message: string, context: string | null, language: string = 'en', userContext: any = null, calendarContext: any = null) {
+// Generate unique conversation ID
+function generateConversationId(): string {
+  return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Real AI processing with enhanced context awareness
+async function processWithAdvancedAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
   try {
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -535,17 +612,32 @@ async function processWithAdvancedAI(message: string, context: string | null, la
       throw new Error("No AI API key configured");
     }
 
-    const systemPrompt = language === 'ar' 
+    // Enhanced system prompt with conversation context awareness
+    let systemPrompt = language === 'ar' 
       ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في إدارة المهام والأحداث والتذكيرات. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
       : `You are WAKTI, an advanced AI assistant specializing in task management, events, and reminders. You help users create tasks, events, and reminders efficiently. Be friendly, helpful, and concise in your responses.`;
     
+    // Add context awareness to system prompt
+    if (conversationContext?.type === 'answering_question' && conversationContext?.contextualContinuation) {
+      const contextPrompt = language === 'ar'
+        ? `\n\nسياق المحادثة: المستخدم يجيب على سؤالك السابق حول إضافة عناصر إضافية مثل وسائل التواصل الاجتماعي. استمر في المحادثة بناءً على هذا السياق.`
+        : `\n\nConversation Context: The user is responding to your previous question about adding additional elements like social media. Continue the conversation based on this context and build upon their response.`;
+      
+      systemPrompt += contextPrompt;
+    }
+
     const messages = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: message }
     ];
     
-    if (context) {
-      messages.splice(1, 0, { role: 'assistant', content: `Context: ${context}` });
+    // Add conversation context if relevant
+    if (conversationContext?.previousContext?.lastQuestion) {
+      const contextMessage = language === 'ar'
+        ? `السياق: سألت سابقاً: "${conversationContext.previousContext.lastQuestion}"`
+        : `Context: You previously asked: "${conversationContext.previousContext.lastQuestion}"`;
+      
+      messages.splice(1, 0, { role: 'assistant', content: contextMessage });
     }
     
     const response = await fetch(apiUrl, {
@@ -563,36 +655,16 @@ async function processWithAdvancedAI(message: string, context: string | null, la
     });
     
     if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
+      throw new Error(`API request failed: ${response.status}`);
     }
     
     const result = await response.json();
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🤖 WAKTI AI V2 BRAIN: AI processing error:", error);
-    
-    return language === 'ar' 
-      ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
-      : `I'll help you create tasks, events, or reminders. To get started, could you please provide:
-
-1. What would you like me to create? (Task/Event/Reminder)
-2. Key details like:
-   - Title/description
-   - Date/time (or should I suggest optimal timing?)
-   - Priority level if applicable
-   - Any other relevant details
-
-For example, you could say:
-"Create a task to prepare quarterly report, due Friday afternoon, high priority"
-
-Or:
-"Schedule a dentist appointment, suggest times next week when I'm typically free"
-
-How would you like to proceed? I can also suggest smart scheduling based on your typical productivity patterns if you'd like.`;
+    console.error('AI processing error:', error);
+    return language === 'ar'
+      ? 'عذراً، حدث خطأ في المعالجة. يرجى المحاولة مرة أخرى.'
+      : 'Sorry, there was an error processing your request. Please try again.';
   }
-}
-
-function generateConversationId() {
-  return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
