@@ -50,6 +50,7 @@ serve(async (req) => {
     console.log("🎯 WAKTI AI V2.5: Language:", language);
     console.log("🎯 WAKTI AI V2.5: Active Trigger (ABSOLUTE CONTROLLER):", activeTrigger);
     console.log("🎯 WAKTI AI V2.5: Input Type:", inputType);
+    console.log("🎯 WAKTI AI V2.5: Conversation History Messages:", conversationHistory?.length || 0);
     console.log("🎯 WAKTI AI V2.5: Text Gen Params:", textGenParams);
     console.log("🎯 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
     console.log("🎯 WAKTI AI V2.5: Confirm Search:", confirmSearch);
@@ -466,6 +467,7 @@ async function processWithUltraStrictTriggerControl(
   
   console.log("💬 WAKTI AI V2.5: TRIGGER FORBIDS BROWSING - PURE CHAT MODE WITH FILE PROCESSING");
   console.log("💬 WAKTI AI V2.5: Strict Mode:", triggerResult.strictMode);
+  console.log("💬 WAKTI AI V2.5: Conversation History Length:", conversationHistory?.length || 0);
 
   let fileContext = '';
   if (attachedFiles && attachedFiles.length > 0) {
@@ -482,7 +484,8 @@ async function processWithUltraStrictTriggerControl(
     false, // Never allow browsing in chat mode
     activeTrigger,
     fileContext,
-    attachedFiles || []
+    attachedFiles || [],
+    conversationHistory // Pass conversation history for context
   );
 
   console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING SUCCESS ===");
@@ -559,7 +562,8 @@ async function processWithAI(
   allowBrowsing: boolean = false,
   activeTrigger: string = 'chat',
   fileContext: string = '',
-  attachedFiles: any[] = []
+  attachedFiles: any[] = [],
+  conversationHistory: any[] = []
 ) {
   try {
     console.log("🤖 WAKTI AI V2.5: === AI PROCESSING START ===");
@@ -567,6 +571,7 @@ async function processWithAI(
     console.log("🤖 WAKTI AI V2.5: Allow Browsing:", allowBrowsing);
     console.log("🤖 WAKTI AI V2.5: Has Context:", !!context);
     console.log("🤖 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
+    console.log("🤖 WAKTI AI V2.5: Conversation History:", conversationHistory?.length || 0);
 
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -586,24 +591,50 @@ async function processWithAI(
       ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
       : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.`;
     
+    // Build messages array starting with system prompt
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation history if available (limit to last 8 exchanges to manage token usage)
+    if (conversationHistory && conversationHistory.length > 0) {
+      console.log("🤖 WAKTI AI V2.5: 🔄 Including conversation history for context");
+      
+      // Take last 8 messages (4 exchanges) to maintain reasonable context
+      const recentHistory = conversationHistory.slice(-8);
+      
+      for (const historyMessage of recentHistory) {
+        if (historyMessage.role === 'user' || historyMessage.role === 'assistant') {
+          messages.push({
+            role: historyMessage.role,
+            content: historyMessage.content
+          });
+        }
+      }
+    }
+
+    // Add search context if provided
+    if (context) {
+      messages.push({ role: 'assistant', content: `Context: ${context}` });
+    }
+    
+    // Build current user message
     let userContent = message;
     
     // Add file context if available
     if (fileContext) {
       userContent = `${message}\n\n---\n\n${fileContext}`;
       console.log("🤖 WAKTI AI V2.5: 📁 Including file context in conversation");
+    } else if (conversationHistory && conversationHistory.length > 0) {
+      console.log("🤖 WAKTI AI V2.5: 🔄 Using conversation context (no files)");
     } else {
       console.log("🤖 WAKTI AI V2.5: 💬 Pure chat mode - no search context");
     }
     
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userContent }
-    ];
+    // Add current user message
+    messages.push({ role: 'user', content: userContent });
     
-    if (context) {
-      messages.splice(1, 0, { role: 'assistant', content: `Context: ${context}` });
-    }
+    console.log("🤖 WAKTI AI V2.5: 📤 Sending", messages.length, "messages to AI");
     
     const response = await fetch(apiUrl, {
       method: 'POST',
