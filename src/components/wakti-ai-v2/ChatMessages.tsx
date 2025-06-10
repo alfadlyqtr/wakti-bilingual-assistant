@@ -3,7 +3,6 @@ import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
 import { TypingIndicator } from './TypingIndicator';
-import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from '@/hooks/use-toast-helper';
@@ -80,8 +79,8 @@ export function ChatMessages({
         id: `success-${Date.now()}`,
         role: 'assistant' as const,
         content: language === 'ar' 
-          ? `✅ تم إنشاء المهمة "${taskData.title}" بنجاح! يمكنك مراجعتها في صفحة المهام والتذكيرات.`
-          : `✅ Task "${taskData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
+          ? `✅ تم إنشاء المهمة بنجاح! يرجى زيارة صفحة المهام والتذكيرات`
+          : `✅ Task created successfully! Please visit T & R page`,
         timestamp: new Date(),
         intent: 'task_created_success',
         confidence: 'high' as const,
@@ -153,8 +152,8 @@ export function ChatMessages({
         id: `success-${Date.now()}`,
         role: 'assistant' as const,
         content: language === 'ar' 
-          ? `✅ تم إنشاء التذكير "${reminderData.title}" بنجاح! يمكنك مراجعته في صفحة المهام والتذكيرات.`
-          : `✅ Reminder "${reminderData.title}" created successfully! You can check it out in your Tasks & Reminders page.`,
+          ? `✅ تم إنشاء التذكير بنجاح! يرجى زيارة صفحة المهام والتذكيرات`
+          : `✅ Reminder created successfully! Please visit T & R page`,
         timestamp: new Date(),
         intent: 'reminder_created_success',
         confidence: 'high' as const,
@@ -197,38 +196,12 @@ export function ChatMessages({
         <div className="p-4">
           <div className="max-w-2xl mx-auto space-y-4">
             {sessionMessages.map((message, index) => (
-              <div key={message.id || index}>
-                <ChatBubble
-                  message={message}
-                  userProfile={userProfile}
-                  activeTrigger={activeTrigger}
-                />
-                
-                {/* Show simple confirmation card for task/reminder previews */}
-                {message.intent === 'task_preview' && message.pendingTaskData && (
-                  <div className="mt-3">
-                    <TaskConfirmationCard
-                      type="task"
-                      data={message.pendingTaskData}
-                      onConfirm={() => handleTaskConfirmation(message.pendingTaskData)}
-                      onCancel={handleCancelConfirmation}
-                      isLoading={isLoading}
-                    />
-                  </div>
-                )}
-                
-                {message.intent === 'reminder_preview' && message.pendingReminderData && (
-                  <div className="mt-3">
-                    <TaskConfirmationCard
-                      type="reminder"
-                      data={message.pendingReminderData}
-                      onConfirm={() => handleReminderConfirmation(message.pendingReminderData)}
-                      onCancel={handleCancelConfirmation}
-                      isLoading={isLoading}
-                    />
-                  </div>
-                )}
-              </div>
+              <ChatBubble
+                key={message.id || index}
+                message={message}
+                userProfile={userProfile}
+                activeTrigger={activeTrigger}
+              />
             ))}
 
             {isLoading && (
