@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -429,7 +428,7 @@ const WaktiAIV2 = () => {
       {/* Main Chat Container - Relative positioning for absolute children */}
       <div className="flex-1 flex flex-col h-screen relative overflow-hidden">
         {/* Header - Fixed within container */}
-        <div className="absolute top-0 left-0 right-0 z-20 bg-background border-b">
+        <div className="absolute top-0 left-0 right-0 z-30 bg-background border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -457,8 +456,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Input - Fixed within container */}
-        <div className="absolute bottom-0 left-0 right-0 z-20 bg-background border-t">
+        {/* Input - Fixed within container at bottom */}
+        <div className="absolute bottom-0 left-0 right-0 z-30 bg-background border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}
