@@ -7,11 +7,12 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
+// Add API keys for real AI integration
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🔍 WAKTI AI V2.5 SMART FILE PROCESSING: Enhanced with DeepSeek vision and file analysis");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with Phase 2 Smart Intelligence");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -19,15 +20,17 @@ const supabase = createClient(
 );
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log("🎯 WAKTI AI V2.5: === SMART FILE PROCESSING REQUEST START ===");
+    console.log("🔍 UNIFIED AI BRAIN: Processing with Phase 2 Smart Intelligence");
 
+    // Get request body
     const requestBody = await req.json();
-    console.log("🎯 WAKTI AI V2.5: ✅ Successfully parsed request body");
+    console.log("🔍 UNIFIED AI BRAIN: Request body received:", requestBody);
 
     const {
       message,
@@ -35,115 +38,148 @@ serve(async (req) => {
       language = 'en',
       conversationId = null,
       inputType = 'text',
-      conversationHistory = [],
       confirmSearch = false,
-      activeTrigger = 'chat',
-      textGenParams = null,
-      attachedFiles = [],
-      confirmTask = false,
-      confirmReminder = false,
-      pendingTaskData = null,
-      pendingReminderData = null
+      activeTrigger = 'chat'
     } = requestBody;
 
-    console.log("🎯 WAKTI AI V2.5: === EXTRACTED FIELDS ===");
-    console.log("🎯 WAKTI AI V2.5: Message:", message);
-    console.log("🎯 WAKTI AI V2.5: Active Trigger:", activeTrigger);
-    console.log("🎯 WAKTI AI V2.5: Confirm Task:", confirmTask);
-    console.log("🎯 WAKTI AI V2.5: Confirm Reminder:", confirmReminder);
-
-    // Handle task/reminder confirmations
-    if (confirmTask && pendingTaskData) {
-      console.log("🔧 Creating confirmed task:", pendingTaskData);
-      const taskResult = await createTaskFromData(userId, pendingTaskData, language);
-      
-      const response = taskResult.success 
-        ? (language === 'ar' ? `✅ تم إنشاء المهمة "${pendingTaskData.title}" بنجاح!` : `✅ Task "${pendingTaskData.title}" created successfully!`)
-        : (taskResult.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task'));
-
-      return new Response(JSON.stringify({
-        response,
-        conversationId: conversationId || generateConversationId(),
-        intent: 'task_created',
-        confidence: 'high',
-        actionTaken: 'create_task',
-        actionResult: taskResult,
-        browsingUsed: false,
-        success: true
+    // Validate required fields
+    if (!message || typeof message !== 'string' || message.trim() === '') {
+      console.error("🔍 UNIFIED AI BRAIN: Invalid message field");
+      return new Response(JSON.stringify({ 
+        error: "Message is required and must be a non-empty string",
+        success: false
       }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    if (confirmReminder && pendingReminderData) {
-      console.log("🔔 Creating confirmed reminder:", pendingReminderData);
-      const reminderResult = await createReminderFromData(userId, pendingReminderData, language);
-      
-      const response = reminderResult.success 
-        ? (language === 'ar' ? `✅ تم إنشاء التذكير "${pendingReminderData.title}" بنجاح!` : `✅ Reminder "${pendingReminderData.title}" created successfully!`)
-        : (reminderResult.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder'));
-
-      return new Response(JSON.stringify({
-        response,
-        conversationId: conversationId || generateConversationId(),
-        intent: 'reminder_created',
-        confidence: 'high',
-        actionTaken: 'create_reminder',
-        actionResult: reminderResult,
-        browsingUsed: false,
-        success: true
+    if (!userId) {
+      console.error("🔍 UNIFIED AI BRAIN: Missing userId");
+      return new Response(JSON.stringify({ 
+        error: "User ID is required",
+        success: false
       }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    console.log("🎯 WAKTI AI V2.5: === STARTING ENHANCED INTELLIGENCE ANALYSIS ===");
+    console.log("🔍 UNIFIED AI BRAIN: Processing message for user:", userId);
+    console.log("🔍 UNIFIED AI BRAIN: Active trigger mode:", activeTrigger);
 
-    const triggerResult = analyzeUltraStrictTrigger(message, activeTrigger, language);
-    console.log("🎯 WAKTI AI V2.5: Trigger analysis result:", triggerResult);
+    // Phase 2: Get conversation context and user data
+    const contextData = await getConversationContext(userId, conversationId);
+    const userData = await getUserData(userId);
 
-    const response = await processWithEnhancedIntelligence(
-      message,
-      userId,
-      language,
-      conversationId,
-      inputType,
-      conversationHistory,
-      confirmSearch,
-      activeTrigger,
-      textGenParams,
-      attachedFiles || []
-    );
+    // Enhanced intent analysis with context
+    const intent = await analyzeIntentWithContext(message, activeTrigger, language, contextData, userData);
+    console.log("🔍 UNIFIED AI BRAIN: Enhanced intent analysis result:", intent);
 
-    console.log("🎯 WAKTI AI V2.5: === PROCESSING COMPLETE ===");
+    // Generate response with smart intelligence
+    let response = '';
+    let imageUrl = null;
+    let browsingUsed = false;
+    let browsingData = null;
+    let quotaStatus = null;
+    let actionTaken = null;
+    let actionResult = null;
+    let needsConfirmation = false;
+    let needsClarification = false;
+
+    // Get real quota status from database
+    quotaStatus = await checkBrowsingQuota(userId);
+
+    switch (activeTrigger) {
+      case 'search':
+        if (intent.allowed) {
+          if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
+            // Real search functionality
+            const searchResult = await executeSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
+              response = await processWithSmartAI(message, searchResult.context, language, contextData, userData);
+            } else {
+              response = await processWithSmartAI(message, null, language, contextData, userData);
+            }
+          } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
+            response = language === 'ar' 
+              ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث عن معلومات حديثة؟`
+              : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with searching for current information?`;
+          } else {
+            response = language === 'ar' 
+              ? `لقد وصلت إلى حد البحث الشهري (${quotaStatus.limit}). يمكنني الإجابة على أسئلة عامة.`
+              : `You've reached your monthly search limit (${quotaStatus.limit}). I can answer general questions.`;
+          }
+        } else {
+          response = language === 'ar' 
+            ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للبحث والمعلومات الحديثة فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Search Mode\n\nThis mode is for search and current information only.\n\nFor general chat, switch to Chat mode.`;
+        }
+        break;
+
+      case 'image':
+        if (intent.allowed) {
+          response = language === 'ar' 
+            ? `🎨 وضع إنشاء الصور النشط\n\nسأنشئ صورة: "${message}"\n\n[إنشاء الصور معطل حالياً في النسخة التجريبية]`
+            : `🎨 Image Generation Mode Active\n\nGenerating image: "${message}"\n\n[Image generation disabled in demo version]`;
+          // imageUrl would be set here in real implementation
+        } else {
+          response = language === 'ar' 
+            ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
+        }
+        break;
+
+      case 'advanced_search':
+        response = language === 'ar' 
+          ? `🔮 وضع البحث المتقدم\n\nهذه الميزة قيد التطوير.\n\nيرجى استخدام وضع البحث العادي أو المحادثة.`
+          : `🔮 Advanced Search Mode\n\nThis feature is coming soon.\n\nPlease use regular Search or Chat mode.`;
+        break;
+
+      case 'chat':
+      default:
+        // Phase 2: Smart chat processing with context and intelligence
+        const smartResult = await processSmartChatWithContext(message, userId, language, contextData, userData);
+        response = smartResult.response;
+        actionTaken = smartResult.actionTaken;
+        actionResult = smartResult.actionResult;
+        needsConfirmation = smartResult.needsConfirmation;
+        needsClarification = smartResult.needsClarification;
+        break;
+    }
+
+    // Phase 2: Store conversation context for future use
+    if (conversationId) {
+      await storeConversationContext(userId, conversationId, message, response, intent);
+    }
 
     const result = {
-      response: response.response,
-      conversationId: response.conversationId || conversationId || generateConversationId(),
-      intent: triggerResult.intent,
-      confidence: triggerResult.confidence,
-      actionTaken: response.actionTaken,
-      actionResult: response.actionResult,
-      imageUrl: response.imageUrl,
-      browsingUsed: response.browsingUsed,
-      browsingData: response.browsingData,
-      quotaStatus: response.quotaStatus,
-      requiresSearchConfirmation: response.requiresSearchConfirmation,
-      needsConfirmation: false,
-      needsClarification: false,
-      pendingTask: response.pendingTask,
-      pendingReminder: response.pendingReminder,
-      requiresTaskConfirmation: response.requiresTaskConfirmation,
-      requiresReminderConfirmation: response.requiresReminderConfirmation,
+      response,
+      conversationId: conversationId || generateConversationId(),
+      intent: intent.intent,
+      confidence: intent.confidence,
+      actionTaken,
+      actionResult,
+      imageUrl,
+      browsingUsed,
+      browsingData,
+      quotaStatus,
+      requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch,
+      needsConfirmation,
+      needsClarification,
       success: true
     };
+
+    console.log("🔍 UNIFIED AI BRAIN: Sending Phase 2 smart response:", result);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🎯 WAKTI AI V2.5: Error processing request:", error);
+    console.error("🔍 UNIFIED AI BRAIN: Error processing request:", error);
     
     const errorResponse = {
       error: error.message || 'Unknown error occurred',
@@ -157,1130 +193,134 @@ serve(async (req) => {
   }
 });
 
-// Enhanced intelligence detection for tasks and reminders
-function detectSmartActionableIntent(message: string, language: string = 'en', conversationHistory: any[] = []) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Enhanced task creation patterns - much more comprehensive
-  const taskPatterns = [
-    // Direct task commands
-    'create task', 'add task', 'new task', 'make task', 'task to', 'add to my tasks',
-    'need to do', 'have to do', 'should do', 'must do', 'i need to',
-    'todo', 'to do', 'remind me to do',
-    
-    // Shopping patterns - key missing piece!
-    'go shopping', 'shopping at', 'shop at', 'shopping for', 'shopping list',
-    'buy', 'purchase', 'get from store', 'pick up from', 'need to buy',
-    'groceries', 'grocery shopping', 'supermarket', 'mall', 'store',
-    
-    // Work/appointment patterns
-    'schedule', 'appointment', 'meeting', 'call', 'visit',
-    'work on', 'project', 'assignment', 'homework',
-    
-    // Personal tasks
-    'clean', 'organize', 'pay', 'fix', 'repair', 'book', 'reserve',
-    
-    // Arabic patterns
-    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'يجب أن أفعل', 'أحتاج أن',
-    'تسوق', 'شراء', 'اشتري', 'احصل على', 'من المتجر'
-  ];
-  
-  // Enhanced reminder patterns
-  const reminderPatterns = [
-    'remind me', 'set reminder', 'reminder to', 'reminder for', 'alert me',
-    'notify me', 'ping me', 'remember to', 'don\'t forget', 'make sure to',
-    'ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'تذكر أن'
-  ];
-  
-  // Search suggestion patterns - when user asks for current info
-  const searchSuggestionPatterns = [
-    'who won', 'what happened', 'latest news', 'current score', 'weather',
-    'stock price', 'what time', 'when is', 'how much', 'where is',
-    'game last night', 'match result', 'election results', 'breaking news'
-  ];
-  
-  // Check for search suggestions first
-  if (searchSuggestionPatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return { 
-      type: 'search_suggestion', 
-      confidence: 'high',
-      suggestion: language === 'ar' 
-        ? 'يبدو أنك تبحث عن معلومات حديثة. جرب وضع البحث للحصول على أحدث النتائج!'
-        : 'It looks like you\'re asking for current information. Try Search mode to get the latest results!'
-    };
-  }
-  
-  // Check for task patterns
-  const hasTaskPattern = taskPatterns.some(pattern => lowerMessage.includes(pattern));
-  if (hasTaskPattern) {
-    return { type: 'task', confidence: 'high' };
-  }
-  
-  // Check for reminder patterns
-  const hasReminderPattern = reminderPatterns.some(pattern => lowerMessage.includes(pattern));
-  if (hasReminderPattern) {
-    return { type: 'reminder', confidence: 'high' };
-  }
-  
-  // Context-aware detection from conversation history
-  if (conversationHistory && conversationHistory.length > 0) {
-    const recentContext = conversationHistory.slice(-2).map(h => h.content?.toLowerCase() || '').join(' ');
-    if (recentContext.includes('task') || recentContext.includes('todo')) {
-      // If recent conversation was about tasks, be more lenient
-      if (lowerMessage.includes('yes') || lowerMessage.includes('create') || lowerMessage.includes('add')) {
-        return { type: 'task', confidence: 'medium' };
-      }
-    }
-  }
-  
-  return { type: 'none', confidence: 'low' };
-}
-
-// Enhanced date/time extraction with better natural language processing
-function extractEnhancedDateTimeDetails(message: string) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Enhanced date patterns with more natural language
-  const datePatterns = {
-    'today': new Date(),
-    'tomorrow': new Date(Date.now() + 24 * 60 * 60 * 1000),
-    'next week': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    'this weekend': getNextWeekend(),
-    'next weekend': getNextWeekend(true),
-    'monday': getNextWeekday(1),
-    'tuesday': getNextWeekday(2),
-    'wednesday': getNextWeekday(3),
-    'thursday': getNextWeekday(4),
-    'friday': getNextWeekday(5),
-    'saturday': getNextWeekday(6),
-    'sunday': getNextWeekday(0),
-    'next monday': getNextWeekday(1, true),
-    'next tuesday': getNextWeekday(2, true),
-    'next wednesday': getNextWeekday(3, true),
-    'next thursday': getNextWeekday(4, true),
-    'next friday': getNextWeekday(5, true),
-    'next saturday': getNextWeekday(6, true),
-    'next sunday': getNextWeekday(0, true),
-    'اليوم': new Date(),
-    'غداً': new Date(Date.now() + 24 * 60 * 60 * 1000),
-    'غدا': new Date(Date.now() + 24 * 60 * 60 * 1000)
-  };
-  
-  let extractedDate = null;
-  for (const [pattern, date] of Object.entries(datePatterns)) {
-    if (lowerMessage.includes(pattern)) {
-      extractedDate = date.toISOString().split('T')[0];
-      break;
-    }
-  }
-  
-  // Enhanced time extraction with more formats
-  const timeMatch = lowerMessage.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?|(\d{1,2})\s*(o'?clock|am|pm|ص|م)/i);
-  let extractedTime = null;
-  if (timeMatch) {
-    const hour = parseInt(timeMatch[1] || timeMatch[4]);
-    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-    const period = timeMatch[3] || timeMatch[5];
-    
-    let adjustedHour = hour;
-    if (period && (period.toLowerCase().includes('pm') || period === 'م') && hour !== 12) {
-      adjustedHour += 12;
-    } else if (period && (period.toLowerCase().includes('am') || period === 'ص') && hour === 12) {
-      adjustedHour = 0;
-    }
-    
-    extractedTime = `${adjustedHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  }
-  
-  // Enhanced priority extraction with context
-  const priorityPatterns = {
-    'urgent': 'urgent',
-    'asap': 'urgent',
-    'immediately': 'urgent',
-    'emergency': 'urgent',
-    'high priority': 'high',
-    'important': 'high',
-    'critical': 'high',
-    'low priority': 'low',
-    'when I have time': 'low',
-    'eventually': 'low',
-    'عاجل': 'urgent',
-    'مهم': 'high',
-    'أولوية عالية': 'high'
-  };
-  
-  let priority = 'normal';
-  for (const [pattern, level] of Object.entries(priorityPatterns)) {
-    if (lowerMessage.includes(pattern)) {
-      priority = level;
-      break;
-    }
-  }
-
-  // Enhanced subtask extraction for shopping and other contexts
-  const subtasks = extractEnhancedSubtasks(message);
-  
-  return {
-    date: extractedDate,
-    time: extractedTime,
-    priority: priority,
-    subtasks: subtasks
-  };
-}
-
-// Helper functions for date calculations
-function getNextWeekday(targetDay: number, nextWeek: boolean = false) {
-  const today = new Date();
-  const currentDay = today.getDay();
-  let daysUntilTarget = (targetDay - currentDay + 7) % 7;
-  
-  if (daysUntilTarget === 0 && !nextWeek) {
-    daysUntilTarget = 7; // If it's the same day, get next week's occurrence
-  } else if (nextWeek) {
-    daysUntilTarget += 7; // Force next week
-  }
-  
-  const nextWeekday = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
-  return nextWeekday;
-}
-
-function getNextWeekend(nextWeek: boolean = false) {
-  const saturday = getNextWeekday(6, nextWeek);
-  return saturday;
-}
-
-// Enhanced subtask extraction with better parsing
-function extractEnhancedSubtasks(message: string): string[] {
-  const subtasks: string[] = [];
-  
-  // Enhanced shopping list detection
-  const shoppingPatterns = [
-    /(?:buy|get|purchase|pick up|need)\s+(.+?)(?:\s+(?:from|at|in)\s+\w+|$)/gi,
-    /shopping\s+(?:list|for):\s*(.+)/gi,
-    /groceries:\s*(.+)/gi
-  ];
-  
-  for (const pattern of shoppingPatterns) {
-    const matches = message.match(pattern);
-    if (matches) {
-      matches.forEach(match => {
-        const items = match
-          .replace(/^(buy|get|purchase|pick up|need|shopping for|shopping list|groceries):\s*/gi, '')
-          .replace(/\s+(?:from|at|in)\s+\w+.*$/gi, '') // Remove location
-          .split(/[,&]|\s+and\s+/)
-          .map(item => item.trim())
-          .filter(item => item.length > 0 && item.length < 50);
-        
-        subtasks.push(...items);
-      });
-    }
-  }
-  
-  // Generic list detection
-  const listMatches = message.match(/:\s*(.+)$/);
-  if (listMatches && subtasks.length === 0) {
-    const items = listMatches[1]
-      .split(/[,&]|\s+and\s+/)
-      .map(item => item.trim())
-      .filter(item => item.length > 0 && item.length < 50);
-    subtasks.push(...items);
-  }
-  
-  // Bullet point detection
-  const bulletMatches = message.match(/[-•*]\s*([^-•*\n]+)/g);
-  if (bulletMatches) {
-    bulletMatches.forEach(match => {
-      const item = match.replace(/^[-•*]\s*/, '').trim();
-      if (item && !subtasks.includes(item)) {
-        subtasks.push(item);
-      }
-    });
-  }
-  
-  return subtasks.slice(0, 10); // Limit to 10 subtasks
-}
-
-// Enhanced task parsing with better context understanding
-function parseEnhancedTaskFromMessage(message: string, language: string = 'en') {
-  const details = extractEnhancedDateTimeDetails(message);
-  
-  // Enhanced title extraction with context awareness
-  let title = extractTaskTitle(message, language);
-  
-  // Enhanced description extraction
-  const description = extractTaskDescription(message, title);
-  
-  return {
-    title: title,
-    description: description || undefined,
-    due_date: details.date || undefined,
-    due_time: details.time || undefined,
-    priority: details.priority as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as const,
-    subtasks: details.subtasks
-  };
-}
-
-function extractTaskTitle(message: string, language: string): string {
-  const lowerMessage = message.toLowerCase();
-  
-  // Shopping context
-  if (lowerMessage.includes('shopping') || lowerMessage.includes('buy') || lowerMessage.includes('groceries')) {
-    const locationMatch = message.match(/(?:shopping|shop|buy|groceries)\s+(?:at|from|in)\s+([^,\.!?]+)/i);
-    if (locationMatch) {
-      return `Shopping at ${locationMatch[1].trim()}`;
-    }
-    return language === 'ar' ? 'تسوق' : 'Shopping';
-  }
-  
-  // Remove task creation phrases and extract core task
-  let title = message
-    .replace(/(create task|add task|new task|make task|task to|need to do|have to do|should do|must do|i need to|remind me to)/gi, '')
-    .replace(/(أنشئ مهمة|أضف مهمة|مهمة جديدة|يجب أن أفعل|أحتاج أن|ذكرني أن)/gi, '')
-    .replace(/(today|tomorrow|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|اليوم|غداً|غدا)/gi, '')
-    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-    .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
-    .replace(/:\s*.*$/, '') // Remove subtask list
-    .trim();
-  
-  // Clean up common words at the start
-  title = title.replace(/^(to|that|about|for|بأن|عن|أن|ل|إلى)\s+/gi, '');
-  
-  if (!title || title.length < 3) {
-    title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
-  }
-  
-  // Capitalize first letter
-  return title.charAt(0).toUpperCase() + title.slice(1);
-}
-
-function extractTaskDescription(message: string, title: string): string | null {
-  // Look for additional context that's not part of the title
-  const remainingText = message.replace(title, '').trim();
-  
-  // Look for description patterns
-  const descriptionMatch = remainingText.match(/(?:description|desc|details|notes?):\s*([^:]+)/i);
-  if (descriptionMatch) {
-    return descriptionMatch[1].trim();
-  }
-  
-  // Extract context that provides more details
-  const cleanText = remainingText
-    .replace(/(create task|add task|new task|today|tomorrow|urgent|important)/gi, '')
-    .replace(/:\s*.*$/, '') // Remove lists
-    .trim();
-  
-  return cleanText.length > 10 && cleanText.length < 200 ? cleanText : null;
-}
-
-// Enhanced reminder parsing
-function parseEnhancedReminderFromMessage(message: string, language: string = 'en') {
-  const details = extractEnhancedDateTimeDetails(message);
-  
-  // Extract reminder title
-  let title = message
-    .replace(/(remind me|set reminder|reminder to|reminder for|don't forget|alert me|notify me|ping me|remember to)/gi, '')
-    .replace(/(ذكرني|تذكير|لا تنس|نبهني|تذكر)/gi, '')
-    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-    .replace(/^(to|that|about|بأن|عن|أن)/gi, '')
-    .trim();
-  
-  if (!title || title.length < 3) {
-    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
-  }
-  
-  const description = extractTaskDescription(message, title);
-  
-  return {
-    title: title.charAt(0).toUpperCase() + title.slice(1),
-    description: description || undefined,
-    due_date: details.date || undefined,
-    due_time: details.time || undefined
-  };
-}
-
-// Enhanced intent detection function with better parsing
-function detectActionableIntent(message: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase();
-  
-  // Task creation patterns
-  const taskPatterns = [
-    'create task', 'add task', 'new task', 'make task', 'task to',
-    'need to do', 'have to do', 'should do', 'must do', 'i need to',
-    'أنشئ مهمة', 'أضف مهمة', 'مهمة جديدة', 'يجب أن أفعل', 'أحتاج أن'
-  ];
-  
-  // Reminder patterns
-  const reminderPatterns = [
-    'remind me', 'set reminder', 'reminder to', 'don\'t forget',
-    'alert me', 'notify me', 'ping me', 'remember to',
-    'ذكرني', 'تذكير', 'لا تنس', 'نبهني', 'تذكر'
-  ];
-  
-  // Calendar/Event patterns (for future use)
-  const eventPatterns = [
-    'schedule', 'meeting', 'appointment', 'event', 'calendar',
-    'book', 'reserve', 'plan for',
-    'اجدول', 'اجتماع', 'موعد', 'حدث', 'تقويم'
-  ];
-  
-  if (taskPatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return { type: 'task', confidence: 'high' };
-  }
-  
-  if (reminderPatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return { type: 'reminder', confidence: 'high' };
-  }
-  
-  if (eventPatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return { type: 'event', confidence: 'medium' };
-  }
-  
-  return { type: 'none', confidence: 'low' };
-}
-
-// Enhanced date/time extraction function
-function extractDateTimeDetails(message: string) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Enhanced date patterns
-  const datePatterns = {
-    'today': new Date(),
-    'tomorrow': new Date(Date.now() + 24 * 60 * 60 * 1000),
-    'next week': new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    'next monday': getNextWeekday(1),
-    'next tuesday': getNextWeekday(2),
-    'next wednesday': getNextWeekday(3),
-    'next thursday': getNextWeekday(4),
-    'next friday': getNextWeekday(5),
-    'next saturday': getNextWeekday(6),
-    'next sunday': getNextWeekday(0),
-    'اليوم': new Date(),
-    'غداً': new Date(Date.now() + 24 * 60 * 60 * 1000),
-    'غدا': new Date(Date.now() + 24 * 60 * 60 * 1000)
-  };
-  
-  let extractedDate = null;
-  for (const [pattern, date] of Object.entries(datePatterns)) {
-    if (lowerMessage.includes(pattern)) {
-      extractedDate = date.toISOString().split('T')[0];
-      break;
-    }
-  }
-  
-  // Enhanced time extraction
-  const timeMatch = lowerMessage.match(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/i);
-  let extractedTime = null;
-  if (timeMatch) {
-    const hour = parseInt(timeMatch[1]);
-    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-    const period = timeMatch[3];
-    
-    let adjustedHour = hour;
-    if (period && (period.toLowerCase() === 'pm' || period === 'م') && hour !== 12) {
-      adjustedHour += 12;
-    } else if (period && (period.toLowerCase() === 'am' || period === 'ص') && hour === 12) {
-      adjustedHour = 0;
-    }
-    
-    extractedTime = `${adjustedHour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  }
-  
-  // Enhanced priority extraction
-  const priorityPatterns = {
-    'urgent': 'urgent',
-    'high priority': 'high',
-    'important': 'high',
-    'low priority': 'low',
-    'asap': 'urgent',
-    'عاجل': 'urgent',
-    'مهم': 'high',
-    'أولوية عالية': 'high'
-  };
-  
-  let priority = 'normal';
-  for (const [pattern, level] of Object.entries(priorityPatterns)) {
-    if (lowerMessage.includes(pattern)) {
-      priority = level;
-      break;
-    }
-  }
-
-  // Extract subtasks
-  const subtasks = extractSubtasks(message);
-  
-  return {
-    date: extractedDate,
-    time: extractedTime,
-    priority: priority,
-    subtasks: subtasks
-  };
-}
-
-// Helper function to get next weekday
-function getNextWeekday(targetDay: number) {
-  const today = new Date();
-  const currentDay = today.getDay();
-  const daysUntilTarget = (targetDay - currentDay + 7) % 7;
-  const nextWeekday = new Date(today.getTime() + daysUntilTarget * 24 * 60 * 60 * 1000);
-  return nextWeekday;
-}
-
-// Extract subtasks from message
-function extractSubtasks(message: string): string[] {
-  const subtasks: string[] = [];
-  
-  // Look for colon-separated lists: "buy groceries: milk, bread, eggs"
-  const colonMatch = message.match(/:\s*(.+)$/);
-  if (colonMatch) {
-    const items = colonMatch[1].split(',').map(item => item.trim()).filter(item => item.length > 0);
-    subtasks.push(...items);
-  }
-  
-  // Look for bullet points or numbered lists
-  const bulletMatches = message.match(/[-•*]\s*([^-•*\n]+)/g);
-  if (bulletMatches) {
-    bulletMatches.forEach(match => {
-      const item = match.replace(/^[-•*]\s*/, '').trim();
-      if (item && !subtasks.includes(item)) {
-        subtasks.push(item);
-      }
-    });
-  }
-  
-  return subtasks;
-}
-
-// New function to parse structured task data
-function parseTaskFromMessage(message: string, language: string = 'en') {
-  const details = extractDateTimeDetails(message);
-  
-  // Extract title by removing common task creation phrases
-  let title = message
-    .replace(/(create task|add task|new task|make task|task to|need to do|have to do|should do|must do|i need to)/gi, '')
-    .replace(/(أنشئ مهمة|أضف مهمة|مهمة جديدة|يجب أن أفعل|أحتاج أن)/gi, '')
-    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-    .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
-    .replace(/:\s*.*$/, '') // Remove subtask list
-    .trim();
-  
-  if (!title || title.length < 3) {
-    title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
-  }
-
-  // Extract description (text after title but before subtasks)
-  const description = extractDescription(message, title);
-  
-  return {
-    title: title,
-    description: description || undefined,
-    due_date: details.date || undefined,
-    due_time: details.time || undefined,
-    priority: details.priority as 'normal' | 'high' | 'urgent',
-    task_type: 'one-time' as const,
-    subtasks: details.subtasks
-  };
-}
-
-// New function to parse structured reminder data
-function parseReminderFromMessage(message: string, language: string = 'en') {
-  const details = extractDateTimeDetails(message);
-  
-  // Extract title by removing common reminder phrases
-  let title = message
-    .replace(/(remind me|set reminder|reminder to|don't forget|alert me|notify me|ping me|remember to)/gi, '')
-    .replace(/(ذكرني|تذكير|لا تنس|نبهني|تذكر)/gi, '')
-    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-    .replace(/^(to|that|about|بأن|عن|أن)/gi, '')
-    .trim();
-  
-  if (!title || title.length < 3) {
-    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
-  }
-
-  const description = extractDescription(message, title);
-  
-  return {
-    title: title,
-    description: description || undefined,
-    due_date: details.date || undefined,
-    due_time: details.time || undefined
-  };
-}
-
-// Extract description from message
-function extractDescription(message: string, title: string): string | null {
-  // Remove title from message and see if there's additional descriptive text
-  const remainingText = message.replace(title, '').trim();
-  
-  // Look for descriptive phrases
-  const descriptionMatches = remainingText.match(/(?:about|for|regarding|description|desc):\s*([^:]+)/i);
-  if (descriptionMatches) {
-    return descriptionMatches[1].trim();
-  }
-  
-  // If there's additional text that's not time/date/priority related, use as description
-  const cleanText = remainingText
-    .replace(/(today|tomorrow|next week|اليوم|غداً|غدا)/gi, '')
-    .replace(/(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/gi, '')
-    .replace(/(urgent|high priority|important|low priority|عاجل|مهم|أولوية عالية)/gi, '')
-    .replace(/:\s*.*$/, '') // Remove subtask list
-    .trim();
-  
-  return cleanText.length > 10 ? cleanText : null;
-}
-
-// New function to create task from structured data
-async function createTaskFromData(userId: string, taskData: any, language: string = 'en') {
+// Phase 2: Get conversation context for smart responses
+async function getConversationContext(userId: string, conversationId: string | null) {
   try {
-    console.log("🔧 Creating task from structured data:", taskData);
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      throw new Error('User not authenticated');
+    if (!conversationId) return { recentMessages: [], patterns: {} };
+
+    const { data: messages, error } = await supabase
+      .from('ai_chat_history')
+      .select('content, role, created_at, intent, action_taken')
+      .eq('user_id', userId)
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) {
+      console.error("Error getting conversation context:", error);
+      return { recentMessages: [], patterns: {} };
     }
-    
-    const sanitizedData = {
-      ...taskData,
-      user_id: user.id,
-      completed: false,
-      due_time: taskData.due_time === '' ? null : taskData.due_time,
-      description: taskData.description === '' ? null : taskData.description
+
+    // Analyze patterns in recent conversation
+    const patterns = analyzeConversationPatterns(messages || []);
+
+    return {
+      recentMessages: messages || [],
+      patterns
     };
-    
-    const { data, error } = await supabase
+  } catch (error) {
+    console.error("Error in getConversationContext:", error);
+    return { recentMessages: [], patterns: {} };
+  }
+}
+
+// Phase 2: Get user data for smart suggestions
+async function getUserData(userId: string) {
+  try {
+    // Get user's existing tasks
+    const { data: tasks, error: tasksError } = await supabase
       .from('tr_tasks')
-      .insert([sanitizedData])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Task creation error:', error);
-      throw new Error(`Failed to create task: ${error.message}`);
-    }
-    
-    console.log("✅ Task created successfully:", data);
-    return {
-      success: true,
-      task: data,
-      message: language === 'ar' 
-        ? `تم إنشاء المهمة "${taskData.title}" بنجاح` 
-        : `Task "${taskData.title}" created successfully`
-    };
-    
-  } catch (error) {
-    console.error('Error creating task from data:', error);
-    return {
-      success: false,
-      error: error.message,
-      message: language === 'ar' 
-        ? 'فشل في إنشاء المهمة' 
-        : 'Failed to create task'
-    };
-  }
-}
+      .select('id, title, description, due_date, priority, task_type, completed')
+      .eq('user_id', userId)
+      .eq('completed', false)
+      .order('created_at', { ascending: false })
+      .limit(20);
 
-// New function to create reminder from structured data
-async function createReminderFromData(userId: string, reminderData: any, language: string = 'en') {
-  try {
-    console.log("🔔 Creating reminder from structured data:", reminderData);
-    
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      throw new Error('User not authenticated');
-    }
-    
-    const sanitizedData = {
-      ...reminderData,
-      user_id: user.id,
-      due_time: reminderData.due_time === '' ? null : reminderData.due_time
-    };
-    
-    const { data, error } = await supabase
+    // Get user's reminders
+    const { data: reminders, error: remindersError } = await supabase
       .from('tr_reminders')
-      .insert([sanitizedData])
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Reminder creation error:', error);
-      throw new Error(`Failed to create reminder: ${error.message}`);
-    }
-    
-    console.log("✅ Reminder created successfully:", data);
+      .select('id, title, description, due_date, due_time')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Get user's events (upcoming)
+    const { data: events, error: eventsError } = await supabase
+      .from('events')
+      .select('id, title, description, start_time, end_time, location')
+      .eq('organizer_id', userId)
+      .gte('start_time', new Date().toISOString())
+      .order('start_time', { ascending: true })
+      .limit(10);
+
+    if (tasksError) console.error("Error getting tasks:", tasksError);
+    if (remindersError) console.error("Error getting reminders:", remindersError);
+    if (eventsError) console.error("Error getting events:", eventsError);
+
     return {
-      success: true,
-      reminder: data,
-      message: language === 'ar' 
-        ? `تم إنشاء التذكير "${reminderData.title}" بنجاح` 
-        : `Reminder "${reminderData.title}" created successfully`
+      tasks: tasks || [],
+      reminders: reminders || [],
+      events: events || [],
+      hasData: (tasks?.length || 0) + (reminders?.length || 0) + (events?.length || 0) > 0
     };
-    
   } catch (error) {
-    console.error('Error creating reminder from data:', error);
-    return {
-      success: false,
-      error: error.message,
-      message: language === 'ar' 
-        ? 'فشل في إنشاء التذكير' 
-        : 'Failed to create reminder'
-    };
+    console.error("Error in getUserData:", error);
+    return { tasks: [], reminders: [], events: [], hasData: false };
   }
 }
 
-// Fixed image analysis with proper DeepSeek vision model and authenticated file access
-async function analyzeImageWithDeepSeek(fileName: string, imageUrl: string): Promise<string> {
-  try {
-    console.log("🖼️ Analyzing image with DeepSeek vision:", fileName);
-    
-    if (!DEEPSEEK_API_KEY) {
-      console.log("🖼️ DeepSeek API key not available, falling back to OpenAI");
-      return await analyzeImageWithOpenAI(fileName, imageUrl);
-    }
-
-    // Download image using authenticated Supabase client
-    const imageData = await downloadImageFromSupabase(imageUrl);
-    if (!imageData) {
-      throw new Error('Failed to download image from Supabase storage');
-    }
-
-    // Convert to base64 efficiently
-    const base64Image = await optimizedArrayBufferToBase64(imageData);
-    
-    // Use correct DeepSeek vision API - they use deepseek-vl model for vision
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-vl', // Fixed: Use vision model instead of chat model
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Please analyze this image in detail. Describe what you see, including objects, people, text, colors, composition, and any other relevant details.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1000,
-        temperature: 0.7
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log("🖼️ DeepSeek vision failed:", errorText, "falling back to OpenAI");
-      return await analyzeImageWithOpenAI(fileName, imageUrl);
-    }
-
-    const result = await response.json();
-    const analysis = result.choices?.[0]?.message?.content;
-    
-    if (!analysis) {
-      throw new Error('No analysis received from DeepSeek vision');
-    }
-
-    console.log("🖼️ DeepSeek vision analysis completed successfully");
-    return `📸 **Image Analysis for ${fileName}:**\n\n${analysis}`;
-
-  } catch (error) {
-    console.error("🖼️ Error analyzing image with DeepSeek:", error);
-    return await analyzeImageWithOpenAI(fileName, imageUrl);
-  }
-}
-
-// Fixed OpenAI vision with proper authenticated file access
-async function analyzeImageWithOpenAI(fileName: string, imageUrl: string): Promise<string> {
-  try {
-    console.log("🖼️ Analyzing image with OpenAI vision:", fileName);
-    
-    if (!OPENAI_API_KEY) {
-      return `📸 **Image uploaded: ${fileName}**\n\nImage analysis is currently unavailable. The image has been received but cannot be analyzed at this time.`;
-    }
-
-    // Download image using authenticated Supabase client
-    const imageData = await downloadImageFromSupabase(imageUrl);
-    if (!imageData) {
-      throw new Error('Failed to download image from Supabase storage');
-    }
-
-    // Convert to base64 efficiently
-    const base64Image = await optimizedArrayBufferToBase64(imageData);
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Please analyze this image in detail. Describe what you see, including objects, people, text, colors, composition, and any other relevant details.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 1000
-      }),
-      signal: AbortSignal.timeout(30000)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("🖼️ OpenAI API failed:", errorText);
-      throw new Error(`OpenAI API failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    const analysis = result.choices?.[0]?.message?.content;
-    
-    if (!analysis) {
-      throw new Error('No analysis received from OpenAI');
-    }
-
-    console.log("🖼️ OpenAI vision analysis completed successfully");
-    return `📸 **Image Analysis for ${fileName}:**\n\n${analysis}`;
-
-  } catch (error) {
-    console.error("🖼️ Error analyzing image with OpenAI:", error);
-    return `📸 **Image uploaded: ${fileName}**\n\nUnable to analyze the image content at this time due to: ${error.message}. The image has been received.`;
-  }
-}
-
-// New function to download images from Supabase storage with authentication
-async function downloadImageFromSupabase(imageUrl: string): Promise<ArrayBuffer | null> {
-  try {
-    console.log("📥 Downloading image from Supabase storage:", imageUrl);
-    
-    // Extract bucket and path from the URL
-    const urlParts = imageUrl.split('/');
-    const bucketIndex = urlParts.findIndex(part => part === 'message-media');
-    
-    if (bucketIndex === -1) {
-      // If it's not a Supabase storage URL, try direct download
-      console.log("📥 Not a Supabase storage URL, trying direct download");
-      const response = await fetch(imageUrl, {
-        signal: AbortSignal.timeout(10000)
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to download image: ${response.status}`);
-      }
-      
-      return await response.arrayBuffer();
-    }
-    
-    const bucket = urlParts[bucketIndex];
-    const filePath = urlParts.slice(bucketIndex + 1).join('/');
-    
-    console.log("📥 Downloading from bucket:", bucket, "path:", filePath);
-    
-    // Use Supabase storage client to download with authentication
-    const { data, error } = await supabase.storage
-      .from(bucket)
-      .download(filePath);
-    
-    if (error) {
-      console.error("📥 Supabase storage download error:", error);
-      throw new Error(`Supabase storage error: ${error.message}`);
-    }
-    
-    if (!data) {
-      throw new Error('No data received from Supabase storage');
-    }
-    
-    console.log("📥 Successfully downloaded image, size:", data.size);
-    return await data.arrayBuffer();
-    
-  } catch (error) {
-    console.error("📥 Error downloading image from Supabase:", error);
-    return null;
-  }
-}
-
-// Optimized base64 conversion that prevents stack overflow
-async function optimizedArrayBufferToBase64(buffer: ArrayBuffer): Promise<string> {
-  try {
-    console.log("🔄 Converting image to base64, size:", buffer.byteLength);
-    
-    // For very large images, resize them first to prevent memory issues
-    if (buffer.byteLength > 5 * 1024 * 1024) { // 5MB
-      console.log("🔄 Large image detected, will resize before conversion");
-      buffer = await resizeImage(buffer);
-    }
-    
-    // Use efficient conversion method
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunkSize = 8192;
-    
-    // Process in chunks to prevent stack overflow
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    
-    const base64 = btoa(binary);
-    console.log("🔄 Base64 conversion completed, length:", base64.length);
-    return base64;
-    
-  } catch (error) {
-    console.error("🔄 Error in base64 conversion:", error);
-    throw new Error(`Base64 conversion failed: ${error.message}`);
-  }
-}
-
-// Simple image resizing function to prevent memory issues
-async function resizeImage(buffer: ArrayBuffer, maxSize: number = 2048): Promise<ArrayBuffer> {
-  try {
-    console.log("🖼️ Resizing large image to prevent memory issues");
-    
-    // Create a blob from the buffer
-    const blob = new Blob([buffer]);
-    
-    // Create an image element
-    const img = new Image();
-    const canvas = new OffscreenCanvas(maxSize, maxSize);
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      throw new Error('Cannot get canvas context');
-    }
-    
-    // Load the image
-    const imageBitmap = await createImageBitmap(blob);
-    
-    // Calculate new dimensions while maintaining aspect ratio
-    let { width, height } = imageBitmap;
-    
-    if (width > maxSize || height > maxSize) {
-      const ratio = Math.min(maxSize / width, maxSize / height);
-      width = Math.floor(width * ratio);
-      height = Math.floor(height * ratio);
-    }
-    
-    // Resize canvas and draw
-    canvas.width = width;
-    canvas.height = height;
-    ctx.drawImage(imageBitmap, 0, 0, width, height);
-    
-    // Convert back to buffer
-    const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
-    const resizedBuffer = await resizedBlob.arrayBuffer();
-    
-    console.log("🖼️ Image resized from", buffer.byteLength, "to", resizedBuffer.byteLength, "bytes");
-    return resizedBuffer;
-    
-  } catch (error) {
-    console.error("🖼️ Error resizing image:", error);
-    // If resizing fails, return original buffer
-    return buffer;
-  }
-}
-
-// Process attached files without recursion
-async function processAttachedFiles(attachedFiles: any[]): Promise<string> {
-  if (!attachedFiles || attachedFiles.length === 0) {
-    return '';
-  }
-
-  console.log("📁 WAKTI AI V2.5: Processing attached files...");
-  console.log("📁 WAKTI AI V2.5: Processing", attachedFiles.length, "attached files");
-
-  const fileAnalysis: string[] = [];
-
-  for (const file of attachedFiles) {
-    console.log("📁 Processing file:", file.name, "Type:", file.type);
-    
-    try {
-      if (file.type.startsWith('image/')) {
-        console.log("🖼️ Processing image file:", file.name);
-        const analysis = await analyzeImageWithDeepSeek(file.name, file.url);
-        fileAnalysis.push(analysis);
-      } else if (file.type === 'application/pdf') {
-        console.log("📄 Processing PDF file:", file.name);
-        fileAnalysis.push(`📄 **PDF Document: ${file.name}**\n\nPDF analysis is not yet implemented. The document has been received.`);
-      } else if (file.type === 'text/plain') {
-        console.log("📝 Processing text file:", file.name);
-        try {
-          const textResponse = await fetch(file.url);
-          const textContent = await textResponse.text();
-          fileAnalysis.push(`📝 **Text File: ${file.name}**\n\nContent:\n${textContent.substring(0, 2000)}${textContent.length > 2000 ? '...' : ''}`);
-        } catch (error) {
-          console.error("Error reading text file:", error);
-          fileAnalysis.push(`📝 **Text File: ${file.name}**\n\nUnable to read file content.`);
-        }
-      } else {
-        console.log("📎 Processing unknown file type:", file.name);
-        fileAnalysis.push(`📎 **File: ${file.name}**\n\nFile type ${file.type} analysis not supported.`);
-      }
-    } catch (error) {
-      console.error("Error processing file:", file.name, error);
-      fileAnalysis.push(`❌ **Error processing ${file.name}**\n\nUnable to analyze this file: ${error.message}`);
-    }
-  }
-
-  const result = fileAnalysis.join('\n\n');
-  console.log("📁 Generated file context, length:", result.length);
-  
-  return result;
-}
-
-async function processWithEnhancedIntelligence(
-  message: string,
-  userId: string,
-  language: string = 'en',
-  conversationId: string | null = null,
-  inputType: 'text' | 'voice' = 'text',
-  conversationHistory: any[] = [],
-  confirmSearch: boolean = false,
-  activeTrigger: string = 'chat',
-  textGenParams: any = null,
-  attachedFiles: any[] = []
-) {
-  const triggerResult = analyzeUltraStrictTrigger(message, activeTrigger, language);
-  
-  console.log("💬 WAKTI AI V2.5: Enhanced Intelligence Processing");
-  console.log("💬 WAKTI AI V2.5: Strict Mode:", triggerResult.strictMode);
-  console.log("💬 WAKTI AI V2.5: Conversation History Length:", conversationHistory?.length || 0);
-
-  let fileContext = '';
-  if (attachedFiles && attachedFiles.length > 0) {
-    console.log("📁 WAKTI AI V2.5: Processing attached files...");
-    fileContext = await processAttachedFiles(attachedFiles);
-  }
-
-  // Enhanced actionable intent detection with search suggestions
-  let actionResult = null;
-  let actionTaken = null;
-  let pendingTask = null;
-  let pendingReminder = null;
-  let requiresTaskConfirmation = false;
-  let requiresReminderConfirmation = false;
-  
-  try {
-    const intent = detectSmartActionableIntent(message, language, conversationHistory);
-    console.log("🎯 Enhanced intent detected:", intent);
-    
-    if (intent.type === 'search_suggestion') {
-      console.log("🔍 Suggesting search mode for current information");
-      actionTaken = 'search_suggestion';
-      actionResult = {
-        success: true,
-        suggestion: intent.suggestion
-      };
-    } else if (intent.type === 'task' && intent.confidence === 'high') {
-      console.log("🔧 Parsing task data for confirmation...");
-      pendingTask = parseEnhancedTaskFromMessage(message, language);
-      requiresTaskConfirmation = true;
-      actionTaken = 'parse_task';
-      
-      actionResult = {
-        success: true,
-        pendingTask: pendingTask,
-        message: language === 'ar' 
-          ? `تم تحليل طلب إنشاء المهمة. يرجى مراجعة التفاصيل والتأكيد.`
-          : `I've parsed your task request. Please review the details and confirm.`
-      };
-    } else if (intent.type === 'reminder' && intent.confidence === 'high') {
-      console.log("🔔 Parsing reminder data for confirmation...");
-      pendingReminder = parseEnhancedReminderFromMessage(message, language);
-      requiresReminderConfirmation = true;
-      actionTaken = 'parse_reminder';
-      
-      actionResult = {
-        success: true,
-        pendingReminder: pendingReminder,
-        message: language === 'ar' 
-          ? `تم تحليل طلب إنشاء التذكير. يرجى مراجعة التفاصيل والتأكيد.`
-          : `I've parsed your reminder request. Please review the details and confirm.`
-      };
-    }
-  } catch (error) {
-    console.error("❌ Error processing actionable intent:", error);
-    actionResult = null;
-    actionTaken = null;
-  }
-
-  const quotaStatus = await checkBrowsingQuota(userId);
-
-  // Build enhanced context for AI response
-  let enhancedMessage = message;
-  
-  if (actionResult && actionResult.success) {
-    if (actionResult.suggestion) {
-      // Search suggestion case
-      enhancedMessage = `User message: "${message}"\n\nI've detected that the user is asking for current information that would be better answered in Search mode. I should suggest they switch to Search mode and also provide a helpful general response about their query.`;
-    } else if (requiresTaskConfirmation || requiresReminderConfirmation) {
-      // Task/reminder confirmation case
-      enhancedMessage = `User message: "${message}"\n\nI've detected a ${requiresTaskConfirmation ? 'task' : 'reminder'} creation request and parsed the details. The user will see a confirmation interface to review and approve the ${requiresTaskConfirmation ? 'task' : 'reminder'} creation.\n\nPlease provide a helpful response acknowledging the request and mentioning that they can review and confirm the details in the confirmation card below.`;
-    }
-  }
-
-  const response = await processWithAI(
-    enhancedMessage,
-    null, // No search context in chat mode
-    language,
-    false, // Never allow browsing in chat mode
-    activeTrigger,
-    fileContext,
-    attachedFiles || [],
-    conversationHistory // Pass conversation history for context
-  );
-
-  console.log("🎯 WAKTI AI V2.5: === ENHANCED INTELLIGENCE SUCCESS ===");
-
-  return {
-    response: response,
-    conversationId: conversationId || generateConversationId(),
-    intent: triggerResult.intent,
-    confidence: triggerResult.confidence,
-    actionTaken,
-    actionResult,
-    pendingTask,
-    pendingReminder,
-    requiresTaskConfirmation,
-    requiresReminderConfirmation,
-    imageUrl: null,
-    browsingUsed: false,
-    browsingData: null,
-    quotaStatus,
-    requiresSearchConfirmation: false
+// Phase 2: Analyze conversation patterns for smart suggestions
+function analyzeConversationPatterns(messages: any[]) {
+  const patterns = {
+    frequentTopics: [] as string[],
+    taskCreationAttempts: 0,
+    searchQueries: 0,
+    timeReferences: [] as string[],
+    lastIntent: null as string | null
   };
+
+  messages.forEach(msg => {
+    if (msg.intent) {
+      patterns.lastIntent = msg.intent;
+      
+      if (msg.intent.includes('task') || msg.action_taken === 'parse_task') {
+        patterns.taskCreationAttempts++;
+      }
+      
+      if (msg.intent.includes('search')) {
+        patterns.searchQueries++;
+      }
+    }
+
+    // Extract time references
+    const timeWords = msg.content?.match(/\b(today|tomorrow|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|morning|afternoon|evening)\b/gi);
+    if (timeWords) {
+      patterns.timeReferences.push(...timeWords);
+    }
+  });
+
+  return patterns;
 }
 
-function analyzeUltraStrictTrigger(message: string, activeTrigger: string, language: string = 'en') {
+// Phase 2: Enhanced intent analysis with context
+async function analyzeIntentWithContext(message: string, activeTrigger: string, language: string, contextData: any, userData: any) {
   const lowerMessage = message.toLowerCase();
-
+  
+  console.log("🔍 UNIFIED AI BRAIN: Analyzing intent with Phase 2 context intelligence");
+  
+  // Check for duplicate task prevention
+  if (activeTrigger === 'chat') {
+    const potentialDuplicate = checkForDuplicateTask(message, userData.tasks);
+    if (potentialDuplicate) {
+      return {
+        intent: 'duplicate_task_warning',
+        confidence: 'high',
+        allowed: true,
+        duplicateTask: potentialDuplicate
+      };
+    }
+  }
+  
   switch (activeTrigger) {
     case 'search':
       const searchPatterns = [
@@ -1295,9 +335,7 @@ function analyzeUltraStrictTrigger(message: string, activeTrigger: string, langu
       return {
         intent: isSearchIntent ? 'real_time_search' : 'invalid_for_search',
         confidence: isSearchIntent ? 'high' : 'low',
-        allowed: isSearchIntent,
-        requiresBrowsing: isSearchIntent,
-        strictMode: isSearchIntent ? 'SEARCH_WITH_BROWSING' : 'SEARCH_FORBIDDEN'
+        allowed: isSearchIntent
       };
 
     case 'image':
@@ -1311,41 +349,559 @@ function analyzeUltraStrictTrigger(message: string, activeTrigger: string, langu
       return {
         intent: isImageIntent ? 'generate_image' : 'invalid_for_image',
         confidence: isImageIntent ? 'high' : 'low',
-        allowed: isImageIntent,
-        requiresBrowsing: false,
-        strictMode: isImageIntent ? 'IMAGE_GENERATION' : 'IMAGE_FORBIDDEN'
+        allowed: isImageIntent
+      };
+
+    case 'advanced_search':
+      return {
+        intent: 'advanced_search_unavailable',
+        confidence: 'high',
+        allowed: false
       };
 
     case 'chat':
     default:
-      return {
-        intent: 'general_chat',
-        confidence: 'high',
-        allowed: true,
-        requiresBrowsing: false,
-        strictMode: 'CHAT_NO_BROWSING_EVER'
-      };
+      // Enhanced chat intent analysis with context
+      return analyzeSmartChatIntent(message, language, contextData, userData);
   }
 }
 
-async function processWithAI(
-  message: string, 
-  context: string | null, 
-  language: string = 'en',
-  allowBrowsing: boolean = false,
-  activeTrigger: string = 'chat',
-  fileContext: string = '',
-  attachedFiles: any[] = [],
-  conversationHistory: any[] = []
-) {
-  try {
-    console.log("🤖 WAKTI AI V2.5: === AI PROCESSING START ===");
-    console.log("🤖 WAKTI AI V2.5: Trigger Mode:", activeTrigger);
-    console.log("🤖 WAKTI AI V2.5: Allow Browsing:", allowBrowsing);
-    console.log("🤖 WAKTI AI V2.5: Has Context:", !!context);
-    console.log("🤖 WAKTI AI V2.5: Attached Files:", attachedFiles?.length || 0);
-    console.log("🤖 WAKTI AI V2.5: Conversation History:", conversationHistory?.length || 0);
+// Phase 2: Smart chat intent analysis
+function analyzeSmartChatIntent(message: string, language: string, contextData: any, userData: any) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Task creation patterns (enhanced)
+  const taskPatterns = [
+    /\b(create|add|make|new)\s+task/i,
+    /\b(need|have|must|should)\s+to\s+(do|buy|get|go|visit|call|email|finish|complete)/i,
+    /\b(shopping|shop)\s+(at|to|in|for)/i,
+    /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
+    /\btodo/i,
+    /\bremind\s+me\s+to/i,
+    /\bschedule/i
+  ];
 
+  // Search suggestion patterns
+  const searchSuggestionPatterns = [
+    /\b(what\s+is|who\s+is|when\s+is|where\s+is|how\s+is)\b/i,
+    /\b(current|latest|recent|today\'s|this\s+week\'s)\s+(news|weather|score|price|information)/i,
+    /\b(tell\s+me\s+about|information\s+about|details\s+about)\b/i
+  ];
+
+  // Enhanced task detection
+  const isTaskRequest = taskPatterns.some(pattern => pattern.test(message));
+  
+  if (isTaskRequest) {
+    return {
+      intent: 'task_creation',
+      confidence: 'high',
+      allowed: true
+    };
+  }
+
+  // Enhanced search suggestion detection
+  const shouldSuggestSearch = searchSuggestionPatterns.some(pattern => pattern.test(message));
+  
+  if (shouldSuggestSearch) {
+    return {
+      intent: 'search_suggestion',
+      confidence: 'high',
+      allowed: true
+    };
+  }
+
+  // Default chat intent
+  return {
+    intent: 'general_chat',
+    confidence: 'high',
+    allowed: true
+  };
+}
+
+// Phase 2: Check for duplicate tasks
+function checkForDuplicateTask(message: string, existingTasks: any[]) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Extract potential task title from message
+  const taskKeywords = extractTaskKeywords(lowerMessage);
+  
+  // Check against existing tasks
+  for (const task of existingTasks) {
+    const taskTitle = task.title.toLowerCase();
+    const taskDescription = (task.description || '').toLowerCase();
+    
+    // Check for significant overlap
+    const overlap = taskKeywords.some(keyword => 
+      taskTitle.includes(keyword) || taskDescription.includes(keyword)
+    );
+    
+    if (overlap && taskKeywords.length > 0) {
+      return task;
+    }
+  }
+  
+  return null;
+}
+
+// Extract task keywords from message
+function extractTaskKeywords(message: string) {
+  // Remove common task creation phrases
+  let cleaned = message
+    .replace(/\b(create|add|make|new|task|todo|need|have|must|should|to|do)\b/g, '')
+    .trim();
+  
+  // Split into meaningful words (exclude very short words)
+  return cleaned
+    .split(/\s+/)
+    .filter(word => word.length > 2)
+    .slice(0, 3); // Take first 3 meaningful words
+}
+
+// Phase 2: Process smart chat with context and intelligence
+async function processSmartChatWithContext(message: string, userId: string, language: string, contextData: any, userData: any) {
+  try {
+    // Enhanced task detection and processing
+    if (detectTaskIntent(message)) {
+      return await processTaskCreationWithContext(message, userId, language, userData);
+    }
+
+    // Enhanced reminder detection
+    if (detectReminderIntent(message)) {
+      return await processReminderCreationWithContext(message, userId, language, userData);
+    }
+
+    // Smart search suggestions
+    if (detectSearchSuggestion(message)) {
+      return {
+        response: generateSearchSuggestion(message, language),
+        actionTaken: 'search_suggestion',
+        actionResult: { suggestion: generateSearchSuggestion(message, language) },
+        needsConfirmation: false,
+        needsClarification: false
+      };
+    }
+
+    // Check for duplicate task warning
+    const duplicateTask = checkForDuplicateTask(message, userData.tasks);
+    if (duplicateTask) {
+      return {
+        response: language === 'ar' 
+          ? `يبدو أن لديك مهمة مشابهة: "${duplicateTask.title}". هل تريد إنشاء مهمة جديدة أم تحديث المهمة الموجودة؟`
+          : `You seem to have a similar task: "${duplicateTask.title}". Do you want to create a new task or update the existing one?`,
+        actionTaken: 'duplicate_warning',
+        actionResult: { duplicateTask },
+        needsConfirmation: true,
+        needsClarification: false
+      };
+    }
+
+    // Default smart AI processing
+    const response = await processWithSmartAI(message, null, language, contextData, userData);
+    return {
+      response,
+      actionTaken: null,
+      actionResult: null,
+      needsConfirmation: false,
+      needsClarification: false
+    };
+
+  } catch (error) {
+    console.error("Error in processSmartChatWithContext:", error);
+    
+    const fallbackResponse = language === 'ar' 
+      ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
+      : `Sorry, there was an error processing your request. Please try again.`;
+    
+    return {
+      response: fallbackResponse,
+      actionTaken: null,
+      actionResult: null,
+      needsConfirmation: false,
+      needsClarification: false
+    };
+  }
+}
+
+// Phase 2: Enhanced task creation with context
+async function processTaskCreationWithContext(message: string, userId: string, language: string, userData: any) {
+  try {
+    const taskData = extractEnhancedTaskData(message);
+    
+    // Smart scheduling based on existing events
+    if (!taskData.due_date && userData.events.length > 0) {
+      taskData.suggestedDate = suggestOptimalDate(userData.events);
+    }
+
+    // Smart priority suggestion
+    if (!taskData.priority || taskData.priority === 'normal') {
+      taskData.suggestedPriority = suggestPriority(message, taskData.due_date);
+    }
+
+    // Check if we need clarification
+    const missingFields = [];
+    if (!taskData.due_date && !taskData.suggestedDate) missingFields.push('due_date');
+    if (!taskData.priority && !taskData.suggestedPriority) missingFields.push('priority');
+
+    if (missingFields.length > 0) {
+      const clarificationResponse = generateSmartClarificationQuestions(taskData, missingFields, language);
+      return {
+        response: clarificationResponse,
+        actionTaken: 'clarify_task',
+        actionResult: { partialTask: taskData, missingFields },
+        needsConfirmation: false,
+        needsClarification: true
+      };
+    }
+
+    // Task ready for confirmation
+    const confirmationResponse = generateTaskConfirmation(taskData, language);
+    return {
+      response: confirmationResponse,
+      actionTaken: 'parse_task',
+      actionResult: { pendingTask: taskData },
+      needsConfirmation: true,
+      needsClarification: false
+    };
+
+  } catch (error) {
+    console.error("Error in processTaskCreationWithContext:", error);
+    
+    const errorResponse = language === 'ar' 
+      ? `أعتذر، لم أتمكن من معالجة طلب المهمة. يرجى المحاولة مرة أخرى بتفاصيل أكثر وضوحاً.`
+      : `Sorry, I couldn't process the task request. Please try again with clearer details.`;
+    
+    return {
+      response: errorResponse,
+      actionTaken: null,
+      actionResult: null,
+      needsConfirmation: false,
+      needsClarification: false
+    };
+  }
+}
+
+// Phase 2: Enhanced reminder creation with context
+async function processReminderCreationWithContext(message: string, userId: string, language: string, userData: any) {
+  try {
+    const reminderData = extractReminderData(message);
+    
+    // Smart time suggestions based on user patterns
+    if (!reminderData.due_time) {
+      reminderData.suggestedTime = suggestOptimalTime(userData.reminders);
+    }
+
+    // Check if we need clarification
+    const missingFields = [];
+    if (!reminderData.due_date) missingFields.push('due_date');
+    if (!reminderData.due_time && !reminderData.suggestedTime) missingFields.push('due_time');
+
+    if (missingFields.length > 0) {
+      const clarificationResponse = generateReminderClarificationQuestions(reminderData, missingFields, language);
+      return {
+        response: clarificationResponse,
+        actionTaken: 'clarify_reminder',
+        actionResult: { partialReminder: reminderData, missingFields },
+        needsConfirmation: false,
+        needsClarification: true
+      };
+    }
+
+    // Reminder ready for confirmation
+    const confirmationResponse = generateReminderConfirmation(reminderData, language);
+    return {
+      response: confirmationResponse,
+      actionTaken: 'parse_reminder',
+      actionResult: { pendingReminder: reminderData },
+      needsConfirmation: true,
+      needsClarification: false
+    };
+
+  } catch (error) {
+    console.error("Error in processReminderCreationWithContext:", error);
+    
+    const errorResponse = language === 'ar' 
+      ? `أعتذر، لم أتمكن من معالجة طلب التذكير. يرجى المحاولة مرة أخرى بتفاصيل أكثر وضوحاً.`
+      : `Sorry, I couldn't process the reminder request. Please try again with clearer details.`;
+    
+    return {
+      response: errorResponse,
+      actionTaken: null,
+      actionResult: null,
+      needsConfirmation: false,
+      needsClarification: false
+    };
+  }
+}
+
+// Phase 2: Enhanced task detection
+function detectTaskIntent(message: string) {
+  const taskPatterns = [
+    /\b(create|add|make|new)\s+task/i,
+    /\b(need|have|must|should)\s+to\s+(do|buy|get|go|visit|call|email|finish|complete)/i,
+    /\b(shopping|shop)\s+(at|to|in|for)/i,
+    /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
+    /\btodo/i,
+    /\bplan\s+to/i,
+    /\bschedule.*task/i
+  ];
+  
+  return taskPatterns.some(pattern => pattern.test(message));
+}
+
+// Phase 2: Enhanced reminder detection
+function detectReminderIntent(message: string) {
+  const reminderPatterns = [
+    /\bremind\s+me\s+to/i,
+    /\bremind\s+me\s+(about|of)/i,
+    /\b(create|add|set)\s+(a\s+)?reminder/i,
+    /\bdon\'t\s+forget\s+to/i,
+    /\bmake\s+sure\s+(i|to)/i
+  ];
+  
+  return reminderPatterns.some(pattern => pattern.test(message));
+}
+
+// Phase 2: Enhanced search suggestion detection
+function detectSearchSuggestion(message: string) {
+  const searchPatterns = [
+    /\b(what\s+is|who\s+is|when\s+is|where\s+is|how\s+is)\b/i,
+    /\b(current|latest|recent|today\'s|this\s+week\'s)\s+(news|weather|score|price|information)/i,
+    /\b(tell\s+me\s+about|information\s+about|details\s+about)\b/i,
+    /\bwhat.*happening/i,
+    /\bhow.*doing/i
+  ];
+  
+  return searchPatterns.some(pattern => pattern.test(message));
+}
+
+// Phase 2: Suggest optimal date based on user's calendar
+function suggestOptimalDate(events: any[]) {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  
+  // Check if tomorrow is free
+  const tomorrowEvents = events.filter(event => {
+    const eventDate = new Date(event.start_time);
+    return eventDate.toDateString() === tomorrow.toDateString();
+  });
+  
+  if (tomorrowEvents.length === 0) {
+    return tomorrow.toISOString().split('T')[0]; // Tomorrow if free
+  }
+  
+  // Find next free day within a week
+  for (let i = 2; i <= 7; i++) {
+    const checkDate = new Date(today);
+    checkDate.setDate(today.getDate() + i);
+    
+    const dayEvents = events.filter(event => {
+      const eventDate = new Date(event.start_time);
+      return eventDate.toDateString() === checkDate.toDateString();
+    });
+    
+    if (dayEvents.length === 0) {
+      return checkDate.toISOString().split('T')[0];
+    }
+  }
+  
+  // Default to tomorrow if all days are busy
+  return tomorrow.toISOString().split('T')[0];
+}
+
+// Phase 2: Suggest priority based on context
+function suggestPriority(message: string, dueDate: string | null) {
+  const urgentWords = ['urgent', 'asap', 'immediately', 'now', 'critical', 'important'];
+  const lowerMessage = message.toLowerCase();
+  
+  if (urgentWords.some(word => lowerMessage.includes(word))) {
+    return 'urgent';
+  }
+  
+  if (dueDate) {
+    const due = new Date(dueDate);
+    const today = new Date();
+    const daysDiff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff <= 1) return 'urgent';
+    if (daysDiff <= 3) return 'high';
+  }
+  
+  return 'normal';
+}
+
+// Phase 2: Suggest optimal time based on user patterns
+function suggestOptimalTime(reminders: any[]) {
+  // Analyze user's reminder patterns
+  const timePattern = analyzeTimePatterns(reminders);
+  
+  if (timePattern.morningReminders > timePattern.eveningReminders) {
+    return '09:00';
+  } else {
+    return '18:00';
+  }
+}
+
+// Analyze user's time patterns
+function analyzeTimePatterns(reminders: any[]) {
+  let morningReminders = 0;
+  let eveningReminders = 0;
+  
+  reminders.forEach(reminder => {
+    if (reminder.due_time) {
+      const hour = parseInt(reminder.due_time.split(':')[0]);
+      if (hour < 12) morningReminders++;
+      else eveningReminders++;
+    }
+  });
+  
+  return { morningReminders, eveningReminders };
+}
+
+// Phase 2: Generate smart clarification questions
+function generateSmartClarificationQuestions(taskData: any, missingFields: string[], language: string) {
+  const questions = [];
+  
+  if (missingFields.includes('due_date')) {
+    if (taskData.suggestedDate) {
+      questions.push(language === 'ar' 
+        ? `متى تريد إكمال هذه المهمة؟ أقترح ${formatDate(taskData.suggestedDate, language)}`
+        : `When would you like to complete this task? I suggest ${formatDate(taskData.suggestedDate, language)}`
+      );
+    } else {
+      questions.push(language === 'ar' 
+        ? 'متى تريد إكمال هذه المهمة؟'
+        : 'When would you like to complete this task?'
+      );
+    }
+  }
+  
+  if (missingFields.includes('priority')) {
+    if (taskData.suggestedPriority) {
+      questions.push(language === 'ar' 
+        ? `ما هي أولوية هذه المهمة؟ أقترح: ${translatePriority(taskData.suggestedPriority, language)}`
+        : `What priority should this task have? I suggest: ${taskData.suggestedPriority}`
+      );
+    } else {
+      questions.push(language === 'ar' 
+        ? 'ما هي أولوية هذه المهمة؟ (عادي، عالي، عاجل)'
+        : 'What priority should this task have? (normal, high, urgent)'
+      );
+    }
+  }
+  
+  return language === 'ar'
+    ? `لقد أعددت مهمة: **${taskData.title}**${taskData.subtasks?.length > 0 ? `\n\nالمهام الفرعية:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nلإكمال الإعداد، أحتاج إلى معرفة:\n• ${questions.join('\n• ')}`
+    : `I've prepared a task: **${taskData.title}**${taskData.subtasks?.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nTo complete the setup, I need to know:\n• ${questions.join('\n• ')}`;
+}
+
+// Phase 2: Generate reminder clarification questions
+function generateReminderClarificationQuestions(reminderData: any, missingFields: string[], language: string) {
+  const questions = [];
+  
+  if (missingFields.includes('due_date')) {
+    questions.push(language === 'ar' 
+      ? 'في أي يوم تريد التذكير؟'
+      : 'What date do you want to be reminded?'
+    );
+  }
+  
+  if (missingFields.includes('due_time')) {
+    if (reminderData.suggestedTime) {
+      questions.push(language === 'ar' 
+        ? `في أي وقت تريد التذكير؟ أقترح الساعة ${reminderData.suggestedTime}`
+        : `What time do you want to be reminded? I suggest ${reminderData.suggestedTime}`
+      );
+    } else {
+      questions.push(language === 'ar' 
+        ? 'في أي وقت تريد التذكير؟'
+        : 'What time do you want to be reminded?'
+      );
+    }
+  }
+  
+  return language === 'ar'
+    ? `لقد أعددت تذكيراً: **${reminderData.title}**\n\nلإكمال الإعداد، أحتاج إلى معرفة:\n• ${questions.join('\n• ')}`
+    : `I've prepared a reminder: **${reminderData.title}**\n\nTo complete the setup, I need to know:\n• ${questions.join('\n• ')}`;
+}
+
+// Phase 2: Generate search suggestion
+function generateSearchSuggestion(message: string, language: string) {
+  return language === 'ar'
+    ? `يبدو أنك تبحث عن معلومات حديثة. للحصول على أحدث المعلومات، أنصحك بالتبديل إلى وضع البحث.`
+    : `It looks like you're looking for current information. For the latest information, I recommend switching to Search mode.`;
+}
+
+// Phase 2: Generate task confirmation
+function generateTaskConfirmation(taskData: any, language: string) {
+  return language === 'ar'
+    ? `لقد أعددت مهمة لك للمراجعة:\n\n**${taskData.title}**\n${taskData.due_date ? `\n📅 تاريخ الاستحقاق: ${formatDate(taskData.due_date, language)}` : ''}${taskData.priority ? `\n🔥 الأولوية: ${translatePriority(taskData.priority, language)}` : ''}${taskData.subtasks?.length > 0 ? `\n\nالمهام الفرعية:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nيرجى تأكيد ما إذا كنت تريد مني إنشاء هذه المهمة.`
+    : `I've prepared a task for you to review:\n\n**${taskData.title}**\n${taskData.due_date ? `\n📅 Due date: ${formatDate(taskData.due_date, language)}` : ''}${taskData.priority ? `\n🔥 Priority: ${taskData.priority}` : ''}${taskData.subtasks?.length > 0 ? `\n\nSubtasks:\n${taskData.subtasks.map((s: string) => `• ${s}`).join('\n')}` : ''}\n\nPlease confirm if you'd like me to create this task.`;
+}
+
+// Phase 2: Generate reminder confirmation
+function generateReminderConfirmation(reminderData: any, language: string) {
+  return language === 'ar'
+    ? `لقد أعددت تذكيراً لك للمراجعة:\n\n**${reminderData.title}**\n${reminderData.due_date ? `\n📅 تاريخ التذكير: ${formatDate(reminderData.due_date, language)}` : ''}${reminderData.due_time ? `\n⏰ وقت التذكير: ${reminderData.due_time}` : ''}\n\nيرجى تأكيد ما إذا كنت تريد مني إنشاء هذا التذكير.`
+    : `I've prepared a reminder for you to review:\n\n**${reminderData.title}**\n${reminderData.due_date ? `\n📅 Reminder date: ${formatDate(reminderData.due_date, language)}` : ''}${reminderData.due_time ? `\n⏰ Reminder time: ${reminderData.due_time}` : ''}\n\nPlease confirm if you'd like me to create this reminder.`;
+}
+
+// Helper functions for formatting and translation
+function formatDate(dateString: string, language: string) {
+  const date = new Date(dateString);
+  return language === 'ar' 
+    ? date.toLocaleDateString('ar-SA')
+    : date.toLocaleDateString('en-US');
+}
+
+function translatePriority(priority: string, language: string) {
+  if (language === 'ar') {
+    switch (priority) {
+      case 'urgent': return 'عاجل';
+      case 'high': return 'عالي';
+      case 'normal': return 'عادي';
+      default: return priority;
+    }
+  }
+  return priority;
+}
+
+// Phase 2: Store conversation context
+async function storeConversationContext(userId: string, conversationId: string, userMessage: string, aiResponse: string, intent: any) {
+  try {
+    // Store in conversation history for context
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        user_id: userId,
+        conversation_id: conversationId,
+        role: 'user',
+        content: userMessage,
+        intent: intent.intent,
+        confidence_level: intent.confidence
+      });
+
+    await supabase
+      .from('ai_chat_history')
+      .insert({
+        user_id: userId,
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: aiResponse,
+        intent: intent.intent,
+        confidence_level: intent.confidence
+      });
+
+  } catch (error) {
+    console.error("Error storing conversation context:", error);
+  }
+}
+
+async function processWithSmartAI(message: string, context: string | null, language: string = 'en', contextData?: any, userData?: any) {
+  try {
+    console.log("🤖 UNIFIED AI BRAIN: Processing with smart AI");
+    
+    // Try DeepSeek first, fallback to OpenAI
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
     let model = 'deepseek-chat';
@@ -1360,54 +916,33 @@ async function processWithAI(
       throw new Error("No AI API key configured");
     }
 
+    // Enhanced system prompt with Phase 2 intelligence
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. يمكنك أيضاً إنشاء المهام والتذكيرات عندما يطلب المستخدم ذلك. كن ودوداً ومفيداً ومختصراً في إجاباتك. عندما تحتاج للمعلومات الحديثة، اقترح للمستخدم تجربة وضع البحث.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. You can also create tasks and reminders when users request them. Be friendly, helpful, and concise in your responses. When users ask for current information, suggest they try Search mode for the latest results.`;
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. 
+
+المعلومات السياقية:
+- لدى المستخدم ${userData?.tasks?.length || 0} مهمة نشطة
+- لدى المستخدم ${userData?.reminders?.length || 0} تذكير
+- لدى المستخدم ${userData?.events?.length || 0} حدث قادم
+
+كن ودوداً ومفيداً وذكياً في إجاباتك. استخدم المعلومات السياقية لتقديم اقتراحات أفضل.`
+      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information.
+
+Context Information:
+- User has ${userData?.tasks?.length || 0} active tasks
+- User has ${userData?.reminders?.length || 0} reminders  
+- User has ${userData?.events?.length || 0} upcoming events
+
+Be friendly, helpful, and intelligent in your responses. Use the context information to provide better suggestions.`;
     
-    // Build messages array starting with system prompt
     const messages = [
-      { role: 'system', content: systemPrompt }
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message }
     ];
-
-    // Add conversation history if available (limit to last 8 exchanges to manage token usage)
-    if (conversationHistory && conversationHistory.length > 0) {
-      console.log("🤖 WAKTI AI V2.5: 🔄 Including conversation history for context");
-      
-      // Take last 8 messages (4 exchanges) to maintain reasonable context
-      const recentHistory = conversationHistory.slice(-8);
-      
-      for (const historyMessage of recentHistory) {
-        if (historyMessage.role === 'user' || historyMessage.role === 'assistant') {
-          messages.push({
-            role: historyMessage.role,
-            content: historyMessage.content
-          });
-        }
-      }
-    }
-
-    // Add search context if provided
+    
     if (context) {
-      messages.push({ role: 'assistant', content: `Context: ${context}` });
+      messages.splice(1, 0, { role: 'assistant', content: `Context: ${context}` });
     }
-    
-    // Build current user message
-    let userContent = message;
-    
-    // Add file context if available
-    if (fileContext) {
-      userContent = `${message}\n\n---\n\n${fileContext}`;
-      console.log("🤖 WAKTI AI V2.5: 📁 Including file context in conversation");
-    } else if (conversationHistory && conversationHistory.length > 0) {
-      console.log("🤖 WAKTI AI V2.5: 🔄 Using conversation context (no files)");
-    } else {
-      console.log("🤖 WAKTI AI V2.5: 💬 Pure chat mode - no search context");
-    }
-    
-    // Add current user message
-    messages.push({ role: 'user', content: userContent });
-    
-    console.log("🤖 WAKTI AI V2.5: 📤 Sending", messages.length, "messages to AI");
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -1419,7 +954,7 @@ async function processWithAI(
         model: model,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1500
+        max_tokens: 1000
       })
     });
     
@@ -1428,22 +963,19 @@ async function processWithAI(
     }
     
     const result = await response.json();
-    const aiResponse = result.choices[0].message.content;
-    
-    console.log("🤖 WAKTI AI V2.5: === AI PROCESSING SUCCESS ===");
-    console.log("🤖 WAKTI AI V2.5: Response length:", aiResponse?.length || 0);
-    
-    return aiResponse;
+    return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🤖 WAKTI AI V2.5: AI processing error:", error);
+    console.error("🤖 UNIFIED AI BRAIN: AI processing error:", error);
     
+    // Fallback response
     return language === 'ar' 
       ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
       : `Sorry, there was an error processing your request. Please try again.`;
   }
 }
 
+// Real search function
 async function executeSearch(query: string, language: string = 'en') {
   try {
     if (!TAVILY_API_KEY) {
@@ -1477,6 +1009,7 @@ async function executeSearch(query: string, language: string = 'en') {
   }
 }
 
+// Check browsing quota
 async function checkBrowsingQuota(userId: string) {
   try {
     const { data, error } = await supabase.rpc('check_browsing_quota', {
@@ -1508,4 +1041,96 @@ async function checkBrowsingQuota(userId: string) {
 
 function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Enhanced task data extraction function
+function extractEnhancedTaskData(text: string) {
+  const lowerText = text.toLowerCase();
+  
+  // Extract title
+  let title = "";
+  const shoppingMatch = text.match(/\b(go\s+)?(shopping|shop)\s+(at|to|in)\s+([^,\.]+)/i);
+  if (shoppingMatch) {
+    const location = shoppingMatch[4].trim();
+    title = `Shopping at ${location}`;
+  } else {
+    // Generic task title extraction
+    title = text.replace(/\b(create|add|make|new)\s+task\s*/i, "").trim();
+    if (!title) title = "New task";
+  }
+  
+  // Extract subtasks from shopping lists
+  const subtasks: string[] = [];
+  
+  // Look for "buy/get/purchase" followed by items
+  const buyMatch = text.match(/\b(buy|get|purchase|pick\s+up)\s+(.+)/i);
+  if (buyMatch) {
+    const itemsText = buyMatch[2];
+    // Parse natural language lists: "milk and rice and bread" or "milk, rice, bread"
+    const items = itemsText
+      .split(/\s+and\s+|,\s*|\s*&\s*/)
+      .map(item => item.trim())
+      .filter(item => item && !item.match(/\b(at|to|in|from|for|on|when|where|why|how)\b/i))
+      .slice(0, 10); // Limit to 10 subtasks
+    
+    subtasks.push(...items);
+  }
+  
+  // Extract due date
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = text.match(dateRegex);
+  
+  // Extract priority
+  const priorityRegex = /\b(high|medium|low|urgent|critical)\b\s*priority/i;
+  const priorityMatch = text.match(priorityRegex);
+  
+  // Determine priority based on context
+  let priority = "normal";
+  if (priorityMatch) {
+    priority = priorityMatch[1].toLowerCase();
+  } else if (lowerText.includes("urgent") || lowerText.includes("asap") || lowerText.includes("immediately")) {
+    priority = "urgent";
+  } else if (lowerText.includes("important") || lowerText.includes("soon")) {
+    priority = "high";
+  }
+  
+  return {
+    title: title,
+    description: "",
+    subtasks: subtasks,
+    due_date: dateMatch ? dateMatch[0] : null,
+    due_time: null,
+    priority: priority as 'normal' | 'high' | 'urgent',
+    task_type: 'one-time' as const
+  };
+}
+
+// Extract reminder data function
+function extractReminderData(text: string) {
+  const lowerText = text.toLowerCase();
+  
+  // Extract title from "remind me to..." pattern
+  let title = "";
+  const remindMatch = text.match(/remind\s+me\s+to\s+(.+)/i);
+  if (remindMatch) {
+    title = remindMatch[1].trim();
+  } else {
+    title = text.replace(/\b(create|add|set)\s+(a\s+)?reminder\s*/i, "").trim();
+    if (!title) title = "New reminder";
+  }
+  
+  // Extract due date
+  const dateRegex = /(\d{1,2})[\/\-](\d{1,2})[\/\-]?(\d{0,4})|(\d{1,2})(st|nd|rd|th)? (of )?(january|february|march|april|may|june|july|august|september|october|november|december)|tomorrow|today|next (monday|tuesday|wednesday|thursday|friday|saturday|sunday)|this (monday|tuesday|wednesday|thursday|friday|saturday|sunday)/gi;
+  const dateMatch = text.match(dateRegex);
+  
+  // Extract time
+  const timeRegex = /(\d{1,2}):(\d{2})\s*(am|pm)?/i;
+  const timeMatch = text.match(timeRegex);
+  
+  return {
+    title: title,
+    description: "",
+    due_date: dateMatch ? dateMatch[0] : null,
+    due_time: timeMatch ? timeMatch[0] : null
+  };
 }

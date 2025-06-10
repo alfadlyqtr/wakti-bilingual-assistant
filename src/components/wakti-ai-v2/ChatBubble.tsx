@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, Search } from 'lucide-react';
+import { Bot, User, Copy, CheckCheck, Search, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
@@ -113,10 +113,12 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
     );
   };
 
-  // Enhanced detection for pending tasks/reminders - Fixed action type matching
+  // Phase 2: Enhanced detection for all action types
   const hasPendingTask = message.actionTaken === 'parse_task' && message.actionResult?.pendingTask;
   const hasPendingReminder = message.actionTaken === 'parse_reminder' && message.actionResult?.pendingReminder;
   const hasSearchSuggestion = message.actionTaken === 'search_suggestion' && message.actionResult?.suggestion;
+  const hasDuplicateWarning = message.actionTaken === 'duplicate_warning' && message.actionResult?.duplicateTask;
+  const needsClarification = message.actionTaken?.includes('clarify');
 
   return (
     <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -140,7 +142,7 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
             {message.content}
           </div>
           
-          {/* Enhanced search suggestion UI */}
+          {/* Phase 2: Enhanced search suggestion UI */}
           {hasSearchSuggestion && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
@@ -162,6 +164,69 @@ export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
               >
                 {language === 'ar' ? 'التبديل إلى وضع البحث' : 'Switch to Search Mode'}
               </Button>
+            </div>
+          )}
+
+          {/* Phase 2: Duplicate task warning UI */}
+          {hasDuplicateWarning && (
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'تحذير: مهمة مشابهة موجودة' : 'Warning: Similar Task Exists'}
+                </span>
+              </div>
+              <div className="text-sm text-amber-600 mb-3">
+                <p className="font-medium">{language === 'ar' ? 'المهمة الموجودة:' : 'Existing task:'}</p>
+                <p>• {message.actionResult.duplicateTask.title}</p>
+                {message.actionResult.duplicateTask.due_date && (
+                  <p className="text-xs text-amber-500 mt-1">
+                    <Calendar className="h-3 w-3 inline mr-1" />
+                    {new Date(message.actionResult.duplicateTask.due_date).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                >
+                  {language === 'ar' ? 'إنشاء مهمة جديدة' : 'Create New Task'}
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {language === 'ar' ? 'تحديث الموجودة' : 'Update Existing'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Phase 2: Clarification needed UI */}
+          {needsClarification && (
+            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <div className="flex items-center gap-2 text-purple-700 mb-2">
+                <Clock className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'معلومات إضافية مطلوبة' : 'Additional Information Needed'}
+                </span>
+              </div>
+              {message.actionResult?.missingFields && (
+                <div className="text-sm text-purple-600 mb-3">
+                  <p className="mb-2">{language === 'ar' ? 'المعلومات المطلوبة:' : 'Required information:'}</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {message.actionResult.missingFields.map((field: string, index: number) => (
+                      <li key={index}>
+                        {field === 'due_date' ? (language === 'ar' ? 'تاريخ الاستحقاق' : 'Due date') : 
+                         field === 'priority' ? (language === 'ar' ? 'الأولوية' : 'Priority') :
+                         field === 'due_time' ? (language === 'ar' ? 'وقت التذكير' : 'Reminder time') : field}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           
