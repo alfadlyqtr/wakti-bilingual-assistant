@@ -153,7 +153,11 @@ export class WaktiAIV2Service {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError) {
-        console.error('❌ Authentication error:', authError);
+        console.error('❌ Authentication error details:', {
+          message: authError.message,
+          name: authError.name,
+          status: authError.status
+        });
         throw new Error(`Authentication failed: ${authError.message}`);
       }
       
@@ -209,11 +213,29 @@ export class WaktiAIV2Service {
       console.log('📤 Sending request to edge function:', {
         functionName: 'wakti-ai-v2-brain',
         bodySize: JSON.stringify(requestBody).length,
-        requestBodyKeys: Object.keys(requestBody)
+        requestBodyKeys: Object.keys(requestBody),
+        timestamp: new Date().toISOString()
+      });
+
+      // Add detailed request body logging (excluding sensitive data)
+      console.log('📤 Request body details:', {
+        messageLength: requestBody.message.length,
+        userId: requestBody.userId,
+        language: requestBody.language,
+        conversationId: requestBody.conversationId,
+        inputType: requestBody.inputType,
+        historyLength: requestBody.conversationHistory.length,
+        activeTrigger: requestBody.activeTrigger,
+        hasTextGenParams: !!requestBody.textGenParams,
+        attachedFilesCount: requestBody.attachedFiles.length,
+        hasCalendarContext: !!requestBody.calendarContext,
+        hasUserContext: !!requestBody.userContext
       });
 
       // Make the request to the edge function
       const startTime = Date.now();
+      console.log('🌐 Making supabase.functions.invoke call...');
+      
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: requestBody
       });
@@ -222,17 +244,19 @@ export class WaktiAIV2Service {
       console.log(`⏱️ Edge function response time: ${duration}ms`);
 
       if (error) {
-        console.error('❌ Edge function error details:', {
+        console.error('❌ Edge function error - Full details:', {
+          errorObject: error,
           name: error.name,
           message: error.message,
           context: error.context,
           details: error.details,
           hint: error.hint,
           code: error.code,
-          duration
+          duration,
+          timestamp: new Date().toISOString()
         });
         
-        // Enhanced error messaging
+        // Enhanced error messaging without using .cause
         let errorMessage = 'Failed to process message';
         if (error.message) {
           errorMessage = error.message;
@@ -242,7 +266,9 @@ export class WaktiAIV2Service {
           errorMessage = `Request failed: ${error.context}`;
         }
         
-        throw new Error(errorMessage);
+        // Create a new error with additional context
+        const enhancedError = new Error(`${errorMessage} (Duration: ${duration}ms)`);
+        throw enhancedError;
       }
 
       console.log('✅ Edge function response received:', {
@@ -251,8 +277,23 @@ export class WaktiAIV2Service {
         success: data?.success,
         hasResponse: !!data?.response,
         hasError: !!data?.error,
-        duration
+        duration,
+        timestamp: new Date().toISOString()
       });
+
+      // Add detailed response logging
+      if (data) {
+        console.log('📥 Response data details:', {
+          success: data.success,
+          responseLength: data.response ? data.response.length : 0,
+          hasGeneratedText: !!data.generatedText,
+          hasConversationId: !!data.conversationId,
+          hasActionTaken: !!data.actionTaken,
+          hasQuotaStatus: !!data.quotaStatus,
+          errorMessage: data.error,
+          dataProperties: Object.keys(data)
+        });
+      }
 
       // Validate response
       if (!data) {
@@ -278,15 +319,14 @@ export class WaktiAIV2Service {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        cause: error.cause,
         userId,
         activeTrigger,
-        messageLength: message?.length || 0
+        messageLength: message?.length || 0,
+        timestamp: new Date().toISOString()
       });
       
-      // Re-throw with enhanced context
+      // Re-throw with enhanced context but without using .cause
       const enhancedError = new Error(`AI Service Error: ${error.message}`);
-      enhancedError.cause = error;
       throw enhancedError;
     }
   }
