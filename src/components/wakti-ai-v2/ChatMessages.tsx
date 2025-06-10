@@ -11,40 +11,40 @@ interface ChatMessagesProps {
   isLoading: boolean;
   activeTrigger: string;
   scrollAreaRef: React.RefObject<any>;
+  userProfile?: any;
 }
 
 export function ChatMessages({
   sessionMessages,
   isLoading,
   activeTrigger,
-  scrollAreaRef
+  scrollAreaRef,
+  userProfile
 }: ChatMessagesProps) {
   const { language } = useTheme();
 
+  const getUserDisplayName = () => {
+    if (userProfile?.first_name) {
+      return userProfile.first_name;
+    }
+    return language === 'ar' ? 'المستخدم' : 'User';
+  };
+
   return (
     <ScrollArea 
-      className="flex-1 px-4"
+      className="h-full px-4"
       ref={scrollAreaRef}
     >
       <div className="max-w-4xl mx-auto py-4 space-y-6">
         {sessionMessages.length === 0 && !isLoading && (
           <div className="text-center py-12">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <Bot className="h-12 w-12 mx-auto mb-4 text-primary" />
             <h3 className="text-lg font-medium mb-2">
-              {language === 'ar' ? 'مرحباً بك في WAKTI AI' : 'Welcome to WAKTI AI'}
+              {language === 'ar' 
+                ? `مرحباً ${getUserDisplayName()} في WAKTI AI` 
+                : `Welcome ${getUserDisplayName()} to WAKTI AI`
+              }
             </h3>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              {language === 'ar' 
-                ? 'ابدأ محادثة جديدة. يمكنني مساعدتك في المهام، البحث، إنشاء الصور والمزيد.'
-                : 'Start a new conversation. I can help with tasks, search, image generation, and more.'
-              }
-            </p>
-            <div className="mt-4 text-xs text-muted-foreground">
-              {language === 'ar' 
-                ? 'المحادثة الحالية تحتفظ بآخر 20 رسالة'
-                : 'Current chat keeps last 20 messages'
-              }
-            </div>
           </div>
         )}
 

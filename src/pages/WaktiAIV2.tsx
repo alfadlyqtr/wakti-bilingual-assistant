@@ -21,6 +21,7 @@ const WaktiAIV2 = () => {
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<any>(null);
   const scrollAreaRef = useRef<any>(null);
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
@@ -44,6 +45,28 @@ const WaktiAIV2 = () => {
     };
 
     fetchQuota();
+  }, []);
+
+  // Fetch user profile
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+
+    fetchUserProfile();
   }, []);
 
   // Load chat session on component mount
@@ -384,7 +407,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background overflow-hidden">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -402,10 +425,10 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
       />
 
-      {/* Main Content with Fixed Layout */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Fixed Header */}
-        <div className="flex-none">
+      {/* Main Chat Container - Fixed Height */}
+      <div className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden">
+        {/* Fixed Header - No Scroll */}
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-background">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -422,18 +445,19 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* Scrollable Messages Area */}
-        <div className="flex-1 overflow-hidden">
+        {/* Scrollable Messages Area - Takes remaining space */}
+        <div className="flex-1 min-h-0 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
+            userProfile={userProfile}
           />
         </div>
 
-        {/* Fixed Input Area */}
-        <div className="flex-none">
+        {/* Fixed Input Area - No Scroll */}
+        <div className="flex-shrink-0 sticky bottom-0 z-10 bg-background border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}
