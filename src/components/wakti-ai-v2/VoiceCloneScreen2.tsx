@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -6,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Mic, Square, Play, Pause, Upload, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface VoiceClone {
   id: string;
@@ -21,7 +20,6 @@ interface VoiceCloneScreen2Props {
 
 export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -91,11 +89,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       }, 1000);
       
     } catch (error) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'فشل في الوصول للميكروفون' : 'Failed to access microphone',
-        variant: 'destructive',
-      });
+      toast.error(language === 'ar' ? 'فشل في الوصول للميكروفون' : 'Failed to access microphone');
     }
   };
 
@@ -139,21 +133,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     if (file) {
       // Validate file type
       if (!file.type.includes('audio/')) {
-        toast({
-          title: language === 'ar' ? 'خطأ' : 'Error',
-          description: language === 'ar' ? 'يرجى اختيار ملف صوتي' : 'Please select an audio file',
-          variant: 'destructive',
-        });
+        toast.error(language === 'ar' ? 'يرجى اختيار ملف صوتي' : 'Please select an audio file');
         return;
       }
       
       // Validate file size (5MB max)
       if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: language === 'ar' ? 'خطأ' : 'Error',
-          description: language === 'ar' ? 'حجم الملف يجب أن يكون أقل من 5 ميجابايت' : 'File size must be less than 5MB',
-          variant: 'destructive',
-        });
+        toast.error(language === 'ar' ? 'حجم الملف يجب أن يكون أقل من 5 ميجابايت' : 'File size must be less than 5MB');
         return;
       }
       
@@ -175,31 +161,19 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
   const createVoiceClone = async () => {
     if (!voiceName.trim()) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى إدخال اسم للصوت' : 'Please enter a voice name',
-        variant: 'destructive',
-      });
+      toast.error(language === 'ar' ? 'يرجى إدخال اسم للصوت' : 'Please enter a voice name');
       return;
     }
 
     const audioFile = audioBlob || uploadedFile;
     if (!audioFile) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'يرجى تسجيل أو رفع ملف صوتي' : 'Please record or upload an audio file',
-        variant: 'destructive',
-      });
+      toast.error(language === 'ar' ? 'يرجى تسجيل أو رفع ملف صوتي' : 'Please record or upload an audio file');
       return;
     }
 
     // Validate minimum duration for recorded audio
     if (audioBlob && recordingTime < 30) {
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: language === 'ar' ? 'التسجيل يجب أن يكون 30 ثانية على الأقل' : 'Recording must be at least 30 seconds',
-        variant: 'destructive',
-      });
+      toast.error(language === 'ar' ? 'التسجيل يجب أن يكون 30 ثانية على الأقل' : 'Recording must be at least 30 seconds');
       return;
     }
 
@@ -216,10 +190,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
       if (error) throw error;
 
-      toast({
-        title: language === 'ar' ? 'نجح!' : 'Success!',
-        description: language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully',
-      });
+      toast.success(language === 'ar' ? 'تم إنشاء نسخة الصوت بنجاح' : 'Voice clone created successfully');
 
       // Reload voices and reset form
       await loadExistingVoices();
@@ -228,11 +199,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     } catch (error: any) {
       console.error('Error creating voice clone:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone'),
-        variant: 'destructive',
-      });
+      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء نسخة الصوت' : 'Failed to create voice clone'));
     } finally {
       setIsCloning(false);
     }
