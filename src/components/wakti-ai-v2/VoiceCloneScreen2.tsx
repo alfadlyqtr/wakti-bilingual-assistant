@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Mic, Square, Play, Pause, Upload, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import { Mic, Square, Play, Pause, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -23,7 +23,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [voiceName, setVoiceName] = useState('');
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCloning, setIsCloning] = useState(false);
@@ -33,7 +32,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadExistingVoices();
@@ -70,7 +68,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/wav' });
         setAudioBlob(blob);
-        setUploadedFile(null);
         stream.getTracks().forEach(track => track.stop());
       };
       
@@ -104,8 +101,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const playAudio = () => {
-    const audioUrl = audioBlob ? URL.createObjectURL(audioBlob) : (uploadedFile ? URL.createObjectURL(uploadedFile) : '');
-    if (audioUrl) {
+    if (audioBlob) {
+      const audioUrl = URL.createObjectURL(audioBlob);
       if (audioRef.current) {
         audioRef.current.pause();
       }
@@ -128,30 +125,8 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     }
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.includes('audio/')) {
-        toast.error(language === 'ar' ? 'يرجى اختيار ملف صوتي' : 'Please select an audio file');
-        return;
-      }
-      
-      // Validate file size (5MB max)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(language === 'ar' ? 'حجم الملف يجب أن يكون أقل من 5 ميجابايت' : 'File size must be less than 5MB');
-        return;
-      }
-      
-      setUploadedFile(file);
-      setAudioBlob(null);
-      setRecordingTime(0);
-    }
-  };
-
   const deleteRecording = () => {
     setAudioBlob(null);
-    setUploadedFile(null);
     setRecordingTime(0);
     setIsPlaying(false);
     if (audioRef.current) {
@@ -165,14 +140,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
       return;
     }
 
-    const audioFile = audioBlob || uploadedFile;
-    if (!audioFile) {
-      toast.error(language === 'ar' ? 'يرجى تسجيل أو رفع ملف صوتي' : 'Please record or upload an audio file');
+    if (!audioBlob) {
+      toast.error(language === 'ar' ? 'يرجى تسجيل ملف صوتي' : 'Please record an audio file');
       return;
     }
 
     // Validate minimum duration for recorded audio
-    if (audioBlob && recordingTime < 30) {
+    if (recordingTime < 30) {
       toast.error(language === 'ar' ? 'التسجيل يجب أن يكون 30 ثانية على الأقل' : 'Recording must be at least 30 seconds');
       return;
     }
@@ -181,7 +155,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
 
     try {
       const formData = new FormData();
-      formData.append('audio', audioFile);
+      formData.append('audio', audioBlob);
       formData.append('voiceName', voiceName.trim());
 
       const { data, error } = await supabase.functions.invoke('voice-clone', {
@@ -212,7 +186,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const canRecord = existingVoices.length < 3;
-  const hasValidAudio = (audioBlob && recordingTime >= 30) || uploadedFile;
+  const hasValidAudio = audioBlob && recordingTime >= 30;
 
   if (loading) {
     return (
@@ -226,7 +200,7 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-semibold mb-2">
-          {language === 'ar' ? 'سجل صوتك أو ارفع ملف' : 'Record Your Voice or Upload File'}
+          {language === 'ar' ? 'سجل صوتك' : 'Record Your Voice'}
         </h2>
         <p className="text-sm text-muted-foreground">
           {language === 'ar' ? 'يمكنك إنشاء حتى 3 أصوات' : 'You can create up to 3 voices'}
@@ -278,7 +252,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   variant={isRecording ? "destructive" : "default"}
                   size="lg"
                   className="flex-shrink-0"
-                  disabled={!!uploadedFile}
                 >
                   {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                   {isRecording 
@@ -314,48 +287,6 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
                   <Button onClick={deleteRecording} variant="outline" size="sm">
                     <Trash2 className="h-3 w-3" />
                     {language === 'ar' ? 'حذف' : 'Delete'}
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Upload Section */}
-            <div className="p-4 border rounded-lg space-y-4">
-              <h3 className="font-medium">
-                {language === 'ar' ? 'أو ارفع ملف صوتي' : 'Or Upload Audio File'}
-              </h3>
-              
-              <div className="space-y-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="audio/*"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  disabled={!!audioBlob}
-                />
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  variant="outline"
-                  disabled={!!audioBlob}
-                  className="w-full"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  {language === 'ar' ? 'اختر ملف صوتي' : 'Choose Audio File'}
-                </Button>
-                <p className="text-xs text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'MP3 أو WAV، حد أقصى 5 ميجابايت، 30 ثانية على الأقل' 
-                    : 'MP3 or WAV, max 5MB, at least 30 seconds'
-                  }
-                </p>
-              </div>
-
-              {uploadedFile && (
-                <div className="flex items-center gap-2 p-2 bg-muted rounded">
-                  <span className="text-sm">{uploadedFile.name}</span>
-                  <Button onClick={deleteRecording} variant="outline" size="sm">
-                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               )}
