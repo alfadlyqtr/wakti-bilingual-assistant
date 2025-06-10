@@ -45,6 +45,89 @@ export class WaktiAIV2ServiceClass {
   private static quotaCacheTime: number = 0;
   private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  // Instance methods that delegate to static methods
+  saveChatSession(messages: AIMessage[], conversationId: string | null) {
+    return WaktiAIV2ServiceClass.saveChatSession(messages, conversationId);
+  }
+
+  loadChatSession() {
+    return WaktiAIV2ServiceClass.loadChatSession();
+  }
+
+  clearChatSession() {
+    return WaktiAIV2ServiceClass.clearChatSession();
+  }
+
+  sendMessage(
+    message: string,
+    userId: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' = 'text',
+    conversationHistory: any[] = [],
+    confirmSearch: boolean = false,
+    activeTrigger: string = 'chat',
+    textGenParams: any = null,
+    attachedFiles: any[] = [],
+    calendarContext: any = null,
+    userContext: any = null,
+    enableAdvancedIntegration: boolean = true,
+    enablePredictiveInsights: boolean = true,
+    enableWorkflowAutomation: boolean = true,
+    confirmTask: boolean = false,
+    confirmReminder: boolean = false,
+    pendingTaskData: any = null,
+    pendingReminderData: any = null
+  ) {
+    return WaktiAIV2ServiceClass.sendMessage(
+      message, userId, language, conversationId, inputType, conversationHistory,
+      confirmSearch, activeTrigger, textGenParams, attachedFiles, calendarContext,
+      userContext, enableAdvancedIntegration, enablePredictiveInsights,
+      enableWorkflowAutomation, confirmTask, confirmReminder, pendingTaskData, pendingReminderData
+    );
+  }
+
+  confirmTaskCreation(userId: string, language: string = 'en', pendingTaskData: any) {
+    return WaktiAIV2ServiceClass.confirmTaskCreation(userId, language, pendingTaskData);
+  }
+
+  confirmReminderCreation(userId: string, language: string = 'en', pendingReminderData: any) {
+    return WaktiAIV2ServiceClass.confirmReminderCreation(userId, language, pendingReminderData);
+  }
+
+  getOrFetchQuota(userId: string) {
+    return WaktiAIV2ServiceClass.getOrFetchQuota(userId);
+  }
+
+  getConversations() {
+    return WaktiAIV2ServiceClass.getConversations();
+  }
+
+  getConversationMessages(conversationId: string) {
+    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
+  }
+
+  deleteConversation(conversationId: string) {
+    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
+  }
+
+  sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
+    return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
+  }
+
+  getCalendarContext(userId: string) {
+    return WaktiAIV2ServiceClass.getCalendarContext(userId);
+  }
+
+  getUserContext(userId: string) {
+    return WaktiAIV2ServiceClass.getUserContext(userId);
+  }
+
+  executeAdvancedAction(userId: string, actionType: string, actionData: any, language: string = 'en') {
+    return WaktiAIV2ServiceClass.executeAdvancedAction(userId, actionType, actionData, language);
+  }
+
+  // Static methods (keep all existing static methods)
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
       const sessionData = {

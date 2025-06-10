@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,9 +12,10 @@ import { supabase } from '@/integrations/supabase/client';
 interface ChatBubbleProps {
   message: AIMessage;
   activeTrigger: string;
+  userProfile?: any;
 }
 
-export function ChatBubble({ message, activeTrigger }: ChatBubbleProps) {
+export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubbleProps) {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
   const [copied, setCopied] = useState(false);
