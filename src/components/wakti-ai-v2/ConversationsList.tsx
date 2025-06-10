@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash } from 'lucide-react';
+import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   AlertDialog,
@@ -32,6 +32,8 @@ interface ConversationsListProps {
   onRefresh: () => void;
   onClose?: () => void;
   onNewConversation?: () => void;
+  onClearChat: () => void;
+  sessionMessages: any[];
 }
 
 export function ConversationsList({
@@ -41,7 +43,9 @@ export function ConversationsList({
   onDeleteConversation,
   onRefresh,
   onClose,
-  onNewConversation
+  onNewConversation,
+  onClearChat,
+  sessionMessages
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
   const [isClearing, setIsClearing] = useState(false);
@@ -71,6 +75,11 @@ export function ConversationsList({
 
   const handleNewConversation = () => {
     onNewConversation?.();
+    onClose?.();
+  };
+
+  const handleClearChat = () => {
+    onClearChat();
     onClose?.();
   };
 
@@ -151,6 +160,18 @@ export function ConversationsList({
           >
             <RefreshCw className="h-3 w-3" />
           </Button>
+
+          {/* Clear Current Chat Button */}
+          {sessionMessages.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearChat}
+              className="h-8 px-3 text-xs text-orange-600 hover:text-orange-700"
+            >
+              <Eraser className="h-3 w-3" />
+            </Button>
+          )}
 
           {limitedConversations.length > 0 && (
             <AlertDialog>
