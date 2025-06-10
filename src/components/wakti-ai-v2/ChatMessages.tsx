@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -192,48 +191,50 @@ export function ChatMessages({
   };
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
-      <div className="max-w-2xl mx-auto space-y-4">
-        {sessionMessages.map((message, index) => (
-          <div key={message.id || index}>
-            <ChatBubble
-              message={message}
-              userProfile={userProfile}
-              activeTrigger={activeTrigger}
-            />
-            
-            {/* Show editable confirmation card for task/reminder previews */}
-            {message.intent === 'task_preview' && message.pendingTaskData && (
-              <div className="mt-3">
-                <EditableTaskConfirmationCard
-                  type="task"
-                  data={message.pendingTaskData}
-                  onConfirm={handleTaskConfirmation}
-                  onCancel={handleCancelConfirmation}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-            
-            {message.intent === 'reminder_preview' && message.pendingReminderData && (
-              <div className="mt-3">
-                <EditableTaskConfirmationCard
-                  type="reminder"
-                  data={message.pendingReminderData}
-                  onConfirm={handleReminderConfirmation}
-                  onCancel={handleCancelConfirmation}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-          </div>
-        ))}
+    <ScrollArea ref={scrollAreaRef} className="h-full">
+      <div className="p-4">
+        <div className="max-w-2xl mx-auto space-y-4">
+          {sessionMessages.map((message, index) => (
+            <div key={message.id || index}>
+              <ChatBubble
+                message={message}
+                userProfile={userProfile}
+                activeTrigger={activeTrigger}
+              />
+              
+              {/* Show editable confirmation card for task/reminder previews */}
+              {message.intent === 'task_preview' && message.pendingTaskData && (
+                <div className="mt-3">
+                  <EditableTaskConfirmationCard
+                    type="task"
+                    data={message.pendingTaskData}
+                    onConfirm={handleTaskConfirmation}
+                    onCancel={handleCancelConfirmation}
+                    isLoading={isLoading}
+                  />
+                </div>
+              )}
+              
+              {message.intent === 'reminder_preview' && message.pendingReminderData && (
+                <div className="mt-3">
+                  <EditableTaskConfirmationCard
+                    type="reminder"
+                    data={message.pendingReminderData}
+                    onConfirm={handleReminderConfirmation}
+                    onCancel={handleCancelConfirmation}
+                    isLoading={isLoading}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
 
-        {isLoading && (
-          <div className="flex justify-start">
-            <TypingIndicator />
-          </div>
-        )}
+          {isLoading && (
+            <div className="flex justify-start">
+              <TypingIndicator />
+            </div>
+          )}
+        </div>
       </div>
     </ScrollArea>
   );
