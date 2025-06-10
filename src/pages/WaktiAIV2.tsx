@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -425,10 +426,10 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
       />
 
-      {/* Main Chat Container - Use flexbox layout instead of absolute positioning */}
+      {/* Main Chat Container - Fixed header and input, scrollable messages */}
       <div className="flex-1 flex flex-col h-screen">
-        {/* Header - Fixed at top */}
-        <div className="flex-shrink-0 z-30 bg-background border-b">
+        {/* Header - Always visible at top */}
+        <div className="flex-shrink-0 z-50 bg-background border-b sticky top-0">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -445,8 +446,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* Scrollable Messages Area - Takes remaining space */}
-        <div className="flex-1 overflow-hidden">
+        {/* Scrollable Messages Area - Only this scrolls */}
+        <div className="flex-1 min-h-0">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -456,8 +457,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Input - Fixed at bottom */}
-        <div className="flex-shrink-0 z-30 bg-background border-t">
+        {/* Input - Always visible at bottom */}
+        <div className="flex-shrink-0 z-50 bg-background border-t sticky bottom-0">
           <ChatInput
             message={message}
             setMessage={setMessage}
