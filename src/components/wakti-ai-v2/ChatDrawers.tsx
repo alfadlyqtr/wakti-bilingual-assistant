@@ -27,6 +27,8 @@ interface ChatDrawersProps {
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
   onNewConversation: () => void;
+  onClearChat: () => void;
+  sessionMessages: any[];
 }
 
 export function ChatDrawers({
@@ -43,7 +45,9 @@ export function ChatDrawers({
   activeTrigger,
   onTriggerChange,
   onTextGenerated,
-  onNewConversation
+  onNewConversation,
+  onClearChat,
+  sessionMessages
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
@@ -68,6 +72,8 @@ export function ChatDrawers({
             onRefresh={fetchConversations}
             onClose={() => setShowConversations(false)}
             onNewConversation={onNewConversation}
+            onClearChat={onClearChat}
+            sessionMessages={sessionMessages}
           />
         </SheetContent>
       </Sheet>

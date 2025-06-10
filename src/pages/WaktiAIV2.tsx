@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -424,6 +423,8 @@ const WaktiAIV2 = () => {
         onTriggerChange={handleTriggerChange}
         onTextGenerated={handleTextGenerated}
         onNewConversation={handleNewConversation}
+        onClearChat={handleClearChat}
+        sessionMessages={sessionMessages}
       />
 
       {/* Main Chat Container - Fixed header and input, scrollable messages */}

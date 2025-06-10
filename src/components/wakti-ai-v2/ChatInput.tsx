@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Mic, Send, Loader2, Trash2 } from 'lucide-react';
+import { Upload, Mic, Send, Loader2 } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
@@ -94,23 +94,6 @@ export function ChatInput({
 
   return (
     <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-      {/* Clear Chat Button */}
-      {sessionMessages.length > 0 && (
-        <div className="px-6 py-2 border-b border-border/30">
-          <div className="max-w-4xl mx-auto">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClearChat}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              <Trash2 className="h-3 w-3 mr-1" />
-              {language === 'ar' ? 'مسح المحادثة' : 'Clear Chat'}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
         <div className="px-4 py-3 bg-muted/30 border-b">
