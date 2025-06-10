@@ -44,8 +44,146 @@ serve(async (req) => {
       userContext = null,
       enableAdvancedIntegration = true,
       enablePredictiveInsights = true,
-      enableWorkflowAutomation = true
+      enableWorkflowAutomation = true,
+      confirmTask = false,
+      confirmReminder = false,
+      pendingTaskData = null,
+      pendingReminderData = null
     } = requestBody;
+
+    // Handle task confirmation (when confirmTask is true)
+    if (confirmTask && pendingTaskData) {
+      console.log("🚀 WAKTI AI V2 BRAIN: Processing task confirmation");
+      
+      try {
+        // Convert relative dates to actual dates
+        let actualDueDate = null;
+        if (pendingTaskData.due_date) {
+          actualDueDate = convertRelativeDate(pendingTaskData.due_date);
+        }
+
+        const taskToCreate = {
+          ...pendingTaskData,
+          user_id: userId,
+          due_date: actualDueDate,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: createdTask, error: taskError } = await supabase
+          .from('tasks')
+          .insert([taskToCreate])
+          .select()
+          .single();
+
+        if (taskError) {
+          console.error("Task creation error:", taskError);
+          throw new Error(`Failed to create task: ${taskError.message}`);
+        }
+
+        console.log("Task created successfully:", createdTask);
+
+        // Create subtasks if they exist
+        if (pendingTaskData.subtasks && pendingTaskData.subtasks.length > 0) {
+          const subtasksToCreate = pendingTaskData.subtasks.map((subtask: string, index: number) => ({
+            task_id: createdTask.id,
+            title: subtask,
+            completed: false,
+            order_index: index,
+            created_at: new Date().toISOString()
+          }));
+
+          const { error: subtaskError } = await supabase
+            .from('subtasks')
+            .insert(subtasksToCreate);
+
+          if (subtaskError) {
+            console.error("Subtask creation error:", subtaskError);
+          }
+        }
+
+        return new Response(JSON.stringify({
+          response: language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!',
+          conversationId: conversationId || generateConversationId(),
+          intent: 'task_created',
+          confidence: 'high',
+          actionTaken: true,
+          actionResult: { createdTask },
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+
+      } catch (error) {
+        console.error("Task creation failed:", error);
+        return new Response(JSON.stringify({
+          response: language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task',
+          error: error.message,
+          success: false
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // Handle reminder confirmation (when confirmReminder is true)
+    if (confirmReminder && pendingReminderData) {
+      console.log("🚀 WAKTI AI V2 BRAIN: Processing reminder confirmation");
+      
+      try {
+        let actualDueDate = null;
+        if (pendingReminderData.due_date) {
+          actualDueDate = convertRelativeDate(pendingReminderData.due_date);
+        }
+
+        const reminderToCreate = {
+          ...pendingReminderData,
+          user_id: userId,
+          due_date: actualDueDate,
+          completed: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        const { data: createdReminder, error: reminderError } = await supabase
+          .from('reminders')
+          .insert([reminderToCreate])
+          .select()
+          .single();
+
+        if (reminderError) {
+          console.error("Reminder creation error:", reminderError);
+          throw new Error(`Failed to create reminder: ${reminderError.message}`);
+        }
+
+        console.log("Reminder created successfully:", createdReminder);
+
+        return new Response(JSON.stringify({
+          response: language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!',
+          conversationId: conversationId || generateConversationId(),
+          intent: 'reminder_created',
+          confidence: 'high',
+          actionTaken: true,
+          actionResult: { createdReminder },
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+
+      } catch (error) {
+        console.error("Reminder creation failed:", error);
+        return new Response(JSON.stringify({
+          response: language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder',
+          error: error.message,
+          success: false
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
 
     if (!message || typeof message !== 'string' || message.trim() === '') {
       console.error("🚀 WAKTI AI V2 BRAIN: Invalid message field");
@@ -71,115 +209,151 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
 
-    // Phase 4 features enabled
-    console.log("🚀 WAKTI AI V2 BRAIN: Phase 4 features enabled:", {
-      advancedIntegration: enableAdvancedIntegration,
-      predictiveInsights: enablePredictiveInsights,
-      workflowAutomation: enableWorkflowAutomation
-    });
+    // Check for confirmation patterns first
+    const confirmationPatterns = [
+      /\b(go\s+ahead|yes|confirm|create\s+it|do\s+it|make\s+it)\b/i,
+      /\b(go\s+ahead\s+(and\s+)?create)\b/i,
+      /\b(create\s+the\s+task)\b/i,
+      /\b(proceed)\b/i
+    ];
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Active trigger mode:", activeTrigger);
+    const isConfirmation = confirmationPatterns.some(pattern => pattern.test(message.toLowerCase()));
 
-    // Enhanced intent analysis for Phase 4
-    const intentAnalysis = analyzeAdvancedIntent(message, conversationHistory, language);
-    console.log("🚀 WAKTI AI V2 BRAIN: Intent analysis:", intentAnalysis);
-
-    // Advanced trigger isolation for Phase 4
-    const triggerAnalysis = analyzeAdvancedTriggerIntent(activeTrigger, message, language);
-    console.log("🚀 WAKTI AI V2 BRAIN: Advanced trigger analysis result:", triggerAnalysis);
-
-    let response = '';
-    let imageUrl = null;
-    let browsingUsed = false;
-    let browsingData = null;
-    let quotaStatus = await checkBrowsingQuota(userId);
-    let actionTaken = false;
-    let actionResult = null;
-    let needsConfirmation = false;
-    let pendingTaskData = null;
-    let pendingReminderData = null;
-    let needsClarification = false;
-
-    // Phase 4: Enhanced features
-    let deepIntegration = null;
-    let automationSuggestions = [];
-    let predictiveInsights = null;
-    let workflowActions = [];
-    let contextualActions = [];
-
-    // Handle task creation and confirmation flow
-    if (intentAnalysis.isConfirmation && intentAnalysis.pendingData) {
-      console.log("🚀 WAKTI AI V2 BRAIN: Processing task confirmation");
-      needsConfirmation = true;
+    if (isConfirmation && conversationHistory.length > 0) {
+      console.log("🚀 WAKTI AI V2 BRAIN: Detected confirmation, looking for previous task request");
       
-      if (intentAnalysis.actionType === 'task') {
-        pendingTaskData = intentAnalysis.pendingData;
-        response = intentAnalysis.confirmationMessage || 
-          `I'll create this task for you:\n\n**${pendingTaskData.title}**\n${pendingTaskData.subtasks?.length > 0 ? `\nSubtasks:\n${pendingTaskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${pendingTaskData.due_date ? `Due: ${pendingTaskData.due_date}` : ''}${pendingTaskData.due_time ? ` at ${pendingTaskData.due_time}` : ''}`;
-      } else if (intentAnalysis.actionType === 'reminder') {
-        pendingReminderData = intentAnalysis.pendingData;
-        response = intentAnalysis.confirmationMessage || 
-          `I'll create this reminder for you:\n\n**${pendingReminderData.title}**\n${pendingReminderData.due_date ? `Date: ${pendingReminderData.due_date}` : ''}${pendingReminderData.due_time ? ` at ${pendingReminderData.due_time}` : ''}`;
+      // Look for the most recent task/reminder request in conversation history
+      for (let i = conversationHistory.length - 1; i >= 0; i--) {
+        const historyMessage = conversationHistory[i];
+        if (historyMessage.role === 'user') {
+          const taskData = extractTaskData(historyMessage.content);
+          const reminderData = extractReminderData(historyMessage.content);
+          
+          if (taskData && taskData.title) {
+            console.log("🚀 WAKTI AI V2 BRAIN: Found task in history, showing confirmation");
+            return new Response(JSON.stringify({
+              response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${formatDateForDisplay(taskData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
+              conversationId: conversationId || generateConversationId(),
+              intent: 'task_confirmation',
+              confidence: 'high',
+              actionTaken: false,
+              actionResult: null,
+              needsConfirmation: true,
+              pendingTaskData: taskData,
+              success: true
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+          
+          if (reminderData && reminderData.title) {
+            console.log("🚀 WAKTI AI V2 BRAIN: Found reminder in history, showing confirmation");
+            return new Response(JSON.stringify({
+              response: `I'll create this reminder for you:\n\n**${reminderData.title}**\n${reminderData.due_date ? `Date: ${formatDateForDisplay(reminderData.due_date)}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`,
+              conversationId: conversationId || generateConversationId(),
+              intent: 'reminder_confirmation',
+              confidence: 'high',
+              actionTaken: false,
+              actionResult: null,
+              needsConfirmation: true,
+              pendingReminderData: reminderData,
+              success: true
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+        }
       }
-    } else if (intentAnalysis.intent === 'task_creation') {
+    }
+
+    // Check for task creation patterns
+    const taskPatterns = [
+      /\bcreate\s+(a\s+)?task/i,
+      /\btask\s+due/i,
+      /\bshopping\s+list/i,
+      /\bsub\s+tasks/i,
+      /\bnew\s+task/i,
+      /\badd\s+task/i
+    ];
+
+    const isTaskCreation = taskPatterns.some(pattern => pattern.test(message.toLowerCase()));
+
+    if (isTaskCreation) {
       console.log("🚀 WAKTI AI V2 BRAIN: Processing task creation request");
       const taskData = extractTaskData(message);
       
       if (taskData && taskData.title) {
-        needsConfirmation = true;
-        pendingTaskData = taskData;
-        response = `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${taskData.due_date}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`;
-      } else {
-        response = await processWithAdvancedAI(message, null, language, userContext, calendarContext);
-      }
-    } else {
-      // Process with Phase 4 advanced AI
-      console.log("🤖 WAKTI AI V2 BRAIN: Processing with Phase 4 advanced AI");
-      response = await processWithAdvancedAI(message, null, language, userContext, calendarContext);
-      
-      // Generate Phase 4 enhanced features
-      if (enableWorkflowAutomation) {
-        workflowActions = generateWorkflowActions(message, userContext);
-      }
-      
-      if (enableAdvancedIntegration) {
-        contextualActions = generateContextualActions(message, calendarContext);
+        console.log("🚀 WAKTI AI V2 BRAIN: Task data extracted, showing confirmation");
+        return new Response(JSON.stringify({
+          response: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${formatDateForDisplay(taskData.due_date)}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'task_creation',
+          confidence: 'high',
+          actionTaken: false,
+          actionResult: null,
+          needsConfirmation: true,
+          pendingTaskData: taskData,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
     }
+
+    // Check for reminder creation patterns
+    const reminderPatterns = [
+      /\bcreate\s+(a\s+)?reminder/i,
+      /\bremind\s+me/i,
+      /\breminder\s+for/i,
+      /\bset\s+reminder/i
+    ];
+
+    const isReminderCreation = reminderPatterns.some(pattern => pattern.test(message.toLowerCase()));
+
+    if (isReminderCreation) {
+      console.log("🚀 WAKTI AI V2 BRAIN: Processing reminder creation request");
+      const reminderData = extractReminderData(message);
+      
+      if (reminderData && reminderData.title) {
+        console.log("🚀 WAKTI AI V2 BRAIN: Reminder data extracted, showing confirmation");
+        return new Response(JSON.stringify({
+          response: `I'll create this reminder for you:\n\n**${reminderData.title}**\n${reminderData.due_date ? `Date: ${formatDateForDisplay(reminderData.due_date)}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'reminder_creation',
+          confidence: 'high',
+          actionTaken: false,
+          actionResult: null,
+          needsConfirmation: true,
+          pendingReminderData: reminderData,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // Process with AI for general chat
+    console.log("🤖 WAKTI AI V2 BRAIN: Processing with AI");
+    const response = await processWithAdvancedAI(message, null, language, userContext, calendarContext);
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: intentAnalysis.intent,
+      intent: 'general_chat',
       confidence: 'high',
-      actionTaken,
-      actionResult,
-      imageUrl,
-      browsingUsed,
-      browsingData,
-      quotaStatus,
-      requiresSearchConfirmation: false,
-      needsConfirmation,
-      pendingTaskData,
-      pendingReminderData,
-      needsClarification,
-      // Phase 4: Advanced features
-      deepIntegration,
-      automationSuggestions,
-      predictiveInsights,
-      workflowActions,
-      contextualActions,
+      actionTaken: false,
+      actionResult: null,
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending Phase 4 advanced response:", result);
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response:", result);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🚀 WAKTI AI V2 BRAIN: ❌ Phase 4 error:", error);
+    console.error("🚀 WAKTI AI V2 BRAIN: ❌ Error:", error);
     
     const errorResponse = {
       error: error.message || 'Unknown error occurred',
@@ -193,113 +367,10 @@ serve(async (req) => {
   }
 });
 
-// Enhanced intent analysis for conversation flow
-function analyzeAdvancedIntent(message: string, conversationHistory: any[] = [], language: string = 'en') {
-  const lowerMessage = message.toLowerCase().trim();
-  
-  // Check for confirmation patterns
-  const confirmationPatterns = [
-    /\b(go\s+ahead|yes|confirm|create\s+it|do\s+it|make\s+it)\b/i,
-    /\b(go\s+ahead\s+(and\s+)?create)\b/i,
-    /\b(create\s+the\s+task)\b/i,
-    /\b(proceed)\b/i
-  ];
-
-  const isConfirmation = confirmationPatterns.some(pattern => pattern.test(lowerMessage));
-
-  if (isConfirmation && conversationHistory.length > 0) {
-    // Look for the most recent task/reminder request in conversation history
-    for (let i = conversationHistory.length - 1; i >= 0; i--) {
-      const historyMessage = conversationHistory[i];
-      if (historyMessage.role === 'user') {
-        const taskData = extractTaskData(historyMessage.content);
-        const reminderData = extractReminderData(historyMessage.content);
-        
-        if (taskData && taskData.title) {
-          return {
-            isConfirmation: true,
-            needsConfirmation: true,
-            intent: 'task_confirmation',
-            actionType: 'task',
-            pendingData: taskData,
-            confirmationMessage: `I'll create this task for you:\n\n**${taskData.title}**\n${taskData.subtasks?.length > 0 ? `\nSubtasks:\n${taskData.subtasks.map(s => `• ${s}`).join('\n')}` : ''}\n${taskData.due_date ? `Due: ${taskData.due_date}` : ''}${taskData.due_time ? ` at ${taskData.due_time}` : ''}`
-          };
-        }
-        
-        if (reminderData && reminderData.title) {
-          return {
-            isConfirmation: true,
-            needsConfirmation: true,
-            intent: 'reminder_confirmation',
-            actionType: 'reminder',
-            pendingData: reminderData,
-            confirmationMessage: `I'll create this reminder for you:\n\n**${reminderData.title}**\n${reminderData.due_date ? `Date: ${reminderData.due_date}` : ''}${reminderData.due_time ? ` at ${reminderData.due_time}` : ''}`
-          };
-        }
-      }
-    }
-  }
-
-  // Check for task creation patterns
-  const taskPatterns = [
-    /\bcreate\s+(a\s+)?task\s+.*shopping.*list/i,
-    /\btask\s+due\s+.*shopping/i,
-    /\bshopping\s+list.*sub\s+tasks/i,
-    /\bcreate.*task.*due.*noon/i,
-    /\btask.*lulu.*sub\s+tasks/i
-  ];
-
-  const isTaskCreation = taskPatterns.some(pattern => pattern.test(lowerMessage));
-
-  if (isTaskCreation) {
-    return {
-      isConfirmation: false,
-      needsConfirmation: false,
-      intent: 'task_creation',
-      actionType: 'task',
-      pendingData: null,
-      confirmationMessage: null
-    };
-  }
-
-  return {
-    isConfirmation: false,
-    needsConfirmation: false,
-    intent: 'general_chat',
-    actionType: null,
-    pendingData: null,
-    confirmationMessage: null
-  };
-}
-
-// Advanced trigger isolation for Phase 4
-function analyzeAdvancedTriggerIntent(activeTrigger: string, message: string, language: string = 'en') {
-  console.log("🔍 WAKTI AI V2 BRAIN: Analyzing Phase 4 advanced trigger intent for:", activeTrigger);
-  
-  const enhancedFeatures = ['deep_integration', 'workflow_automation', 'predictive_insights'];
-  
-  switch (activeTrigger) {
-    case 'chat':
-    default:
-      return {
-        intent: 'advanced_general_chat',
-        confidence: 'high',
-        allowed: true,
-        enhancedFeatures
-      };
-  }
-}
-
 // Extract task data from message
 function extractTaskData(message: string) {
   const lowerMessage = message.toLowerCase();
   
-  // Check if this looks like a task creation request
-  const taskIndicators = ['create task', 'task due', 'shopping list', 'sub tasks'];
-  if (!taskIndicators.some(indicator => lowerMessage.includes(indicator))) {
-    return null;
-  }
-
   let title = '';
   let subtasks = [];
   let due_date = null;
@@ -311,6 +382,12 @@ function extractTaskData(message: string) {
   if (shoppingMatch) {
     const location = shoppingMatch[1].trim();
     title = `Shopping at ${location.charAt(0).toUpperCase() + location.slice(1)}`;
+  }
+
+  // Extract title from "create a task" format
+  const taskMatch = message.match(/create\s+(a\s+)?task\s+(.+?)(\s+due|\s+sub\s+tasks?|$)/i);
+  if (taskMatch && !title) {
+    title = taskMatch[2].trim();
   }
 
   // Extract subtasks from "sub tasks rice milk water"
@@ -349,7 +426,7 @@ function extractTaskData(message: string) {
 
   // Default title if not found
   if (!title && (lowerMessage.includes('task') || lowerMessage.includes('shopping'))) {
-    title = 'Shopping Task';
+    title = 'New Task';
   }
 
   if (!title) {
@@ -376,15 +453,56 @@ function extractReminderData(message: string) {
     return null;
   }
 
-  // Basic reminder extraction logic
+  // Extract reminder title
+  let title = 'New Reminder';
+  const reminderMatch = message.match(/remind\s+me\s+(.+?)(\s+at|\s+on|\s+in|$)/i);
+  if (reminderMatch) {
+    title = reminderMatch[1].trim();
+  }
+
   return {
-    title: 'New Reminder',
+    title,
     due_date: null,
     due_time: null
   };
 }
 
-// Real AI processing with Phase 4 features
+// Convert relative dates to actual dates
+function convertRelativeDate(dateString: string): string {
+  const today = new Date();
+  
+  if (dateString.toLowerCase() === 'tomorrow') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  }
+  
+  if (dateString.toLowerCase() === 'today') {
+    return today.toISOString().split('T')[0];
+  }
+  
+  // If it's already a date, return as is
+  return dateString;
+}
+
+// Format date for display
+function formatDateForDisplay(dateString: string): string {
+  if (dateString === 'tomorrow') {
+    return 'Tomorrow';
+  }
+  if (dateString === 'today') {
+    return 'Today';
+  }
+  
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  } catch {
+    return dateString;
+  }
+}
+
+// Real AI processing
 async function processWithAdvancedAI(message: string, context: string | null, language: string = 'en', userContext: any = null, calendarContext: any = null) {
   try {
     let apiKey = DEEPSEEK_API_KEY;
@@ -456,66 +574,6 @@ Or:
 "Schedule a dentist appointment, suggest times next week when I'm typically free"
 
 How would you like to proceed? I can also suggest smart scheduling based on your typical productivity patterns if you'd like.`;
-  }
-}
-
-// Generate workflow actions for Phase 4
-function generateWorkflowActions(message: string, userContext: any) {
-  const actions = [];
-  
-  if (message.toLowerCase().includes('task') || message.toLowerCase().includes('shopping')) {
-    actions.push({
-      type: 'task_grouping',
-      suggestion: 'Group similar tasks for batch processing',
-      action: 'create_task_batch'
-    });
-  }
-  
-  return actions;
-}
-
-// Generate contextual actions for Phase 4
-function generateContextualActions(message: string, calendarContext: any) {
-  const actions = [];
-  
-  if (message.toLowerCase().includes('create') || message.toLowerCase().includes('task')) {
-    actions.push({
-      type: 'create_smart_task',
-      text: 'Create optimized task',
-      icon: 'plus'
-    });
-  }
-  
-  return actions;
-}
-
-// Check browsing quota
-async function checkBrowsingQuota(userId: string) {
-  try {
-    const { data, error } = await supabase.rpc('check_browsing_quota', {
-      p_user_id: userId
-    });
-    
-    if (error) {
-      console.error("Quota check error:", error);
-      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-    }
-    
-    const count = data || 0;
-    const limit = 60;
-    const usagePercentage = Math.round((count / limit) * 100);
-    
-    return {
-      count,
-      limit,
-      usagePercentage,
-      remaining: Math.max(0, limit - count),
-      canBrowse: count < limit,
-      requiresConfirmation: usagePercentage >= 80
-    };
-  } catch (error) {
-    console.error("Quota check error:", error);
-    return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
   }
 }
 
