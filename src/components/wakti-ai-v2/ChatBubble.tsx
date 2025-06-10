@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatBubbleProps {
   message: AIMessage;
