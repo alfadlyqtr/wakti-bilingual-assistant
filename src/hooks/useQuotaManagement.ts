@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,6 +19,29 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const MAX_DAILY_TRANSLATIONS = 10; // Changed from 150 to 10 for translations per month
   const SOFT_WARNING_THRESHOLD = 8; // Warn at 8 out of 10
 
+  // Enhanced error handling helper
+  const handleDatabaseError = (error: any, operation: string) => {
+    console.error(`❌ ${operation} failed:`, error);
+    
+    let userMessage = language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred';
+    
+    if (error?.message) {
+      if (error.message.includes('function') && error.message.includes('does not exist')) {
+        userMessage = language === 'ar' ? 'خطأ في النظام، يرجى المحاولة لاحقاً' : 'System error, please try again later';
+      } else if (error.message.includes('permission')) {
+        userMessage = language === 'ar' ? 'ليس لديك صلاحية للقيام بهذه العملية' : 'You do not have permission for this operation';
+      }
+    }
+    
+    toast({
+      title: language === 'ar' ? 'خطأ' : 'Error',
+      description: userMessage,
+      variant: 'destructive'
+    });
+    
+    return false;
+  };
+
   // Memoize the loadUserQuota function to prevent infinite re-renders
   const loadUserQuota = useCallback(async () => {
     if (!user) return;
@@ -28,39 +50,36 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       setIsLoadingQuota(true);
       setQuotaError(null);
       
-      console.log('🔄 Loading user quota for user:', user.id);
+      console.log('🔄 Loading user translation quota for user:', user.id);
       
       const { data, error } = await supabase.rpc('get_or_create_user_quota', {
         p_user_id: user.id
       });
 
       if (error) {
-        console.error('❌ Error loading user quota:', error);
-        throw error;
+        console.error('❌ Error loading user translation quota:', error);
+        handleDatabaseError(error, 'Loading translation quota');
+        setQuotaError('Failed to load quota data');
+        return;
       }
 
       if (data && data.length > 0) {
         const quota = data[0];
-        console.log('✅ User quota loaded successfully:', quota);
+        console.log('✅ User translation quota loaded successfully:', quota);
         setUserQuota({
           daily_count: quota.daily_count,
           extra_translations: quota.extra_translations,
           purchase_date: quota.purchase_date
         });
       } else {
-        console.warn('⚠️ No quota data returned, using defaults');
+        console.warn('⚠️ No translation quota data returned, using defaults');
         setUserQuota({ daily_count: 0, extra_translations: 0 });
       }
     } catch (error) {
-      console.error('❌ Error loading user quota:', error);
+      console.error('❌ Unexpected error loading user translation quota:', error);
       setQuotaError('Failed to load quota data');
+      handleDatabaseError(error, 'Loading translation quota');
       setUserQuota({ daily_count: 0, extra_translations: 0 });
-      
-      toast({
-        title: language === 'ar' ? 'تحذير' : 'Warning',
-        description: language === 'ar' ? 'تعذر تحميل بيانات الحصة، ولكن يمكنك المتابعة' : 'Could not load quota data, but you can continue',
-        variant: 'default'
-      });
     } finally {
       setIsLoadingQuota(false);
     }
@@ -135,28 +154,43 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS]);
 
+  // Enhanced purchase function for translations
   const purchaseExtraTranslations = useCallback(async (count: number = 150) => {
-    if (!user) return false;
+    if (!user) {
+      console.error('❌ No authenticated user found');
+      return false;
+    }
 
     try {
-      console.log('💰 Purchasing extra translations:', count);
+      console.log('💰 Attempting to purchase extra translations:', { userId: user.id, count });
       
       const { data, error } = await supabase.rpc('purchase_extra_translations', {
         p_user_id: user.id,
         p_count: count
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Database error during translation purchase:', error);
+        handleDatabaseError(error, 'Purchasing translations');
+        return false;
+      }
+
+      console.log('💰 Translation purchase response:', data);
 
       if (data && data.length > 0) {
         const result = data[0];
         if (result.success) {
+          console.log('✅ Translations purchased successfully:', result.new_extra_count);
+          
           // Update local state immediately
           setUserQuota(prev => ({
             ...prev,
             extra_translations: result.new_extra_count,
             purchase_date: new Date().toISOString()
           }));
+          
+          // Reload quota to ensure consistency
+          await loadUserQuota();
           
           toast({
             title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
@@ -165,21 +199,23 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
               : `Added ${count} extra translations (valid for 1 month)`,
           });
           
-          console.log('💰 Extra translations purchased successfully:', result.new_extra_count);
           return true;
+        } else {
+          console.error('❌ Purchase failed - database returned success: false');
+          handleDatabaseError(new Error('Purchase operation failed'), 'Purchasing translations');
+          return false;
         }
+      } else {
+        console.error('❌ No data returned from purchase function');
+        handleDatabaseError(new Error('No data returned from purchase'), 'Purchasing translations');
+        return false;
       }
-      return false;
     } catch (error) {
-      console.error('❌ Error purchasing extra translations:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
-        description: language === 'ar' ? 'فشل في شراء الترجمات الإضافية' : 'Failed to purchase extra translations',
-        variant: 'destructive'
-      });
+      console.error('❌ Unexpected error purchasing extra translations:', error);
+      handleDatabaseError(error, 'Purchasing translations');
       return false;
     }
-  }, [user, language]);
+  }, [user, language, loadUserQuota]);
 
   // Only load quota when user changes, not on every render
   useEffect(() => {

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -5,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { Coins, Search, Zap, Loader2, CheckCircle, Mic, Languages } from 'lucide-react';
+import { Coins, Search, Zap, Loader2, CheckCircle, Mic, Languages, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BuyExtrasPopupProps {
@@ -42,15 +43,47 @@ export function BuyExtrasPopup({
 
   const handlePurchaseRegularSearches = async () => {
     setIsRegularSearchPurchasing(true);
+    console.log('🛒 Starting regular search purchase...');
+    
     try {
       const success = await purchaseExtraRegularSearches(50);
+      console.log('🛒 Regular search purchase result:', success);
+      
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 50 بحث عادي إضافي بنجاح!' : 'Successfully purchased 50 extra regular searches!');
-        onOpenChange(false);
+        toast.success(
+          language === 'ar' 
+            ? 'تم شراء 50 بحث عادي إضافي بنجاح!' 
+            : 'Successfully purchased 50 extra regular searches!',
+          {
+            description: language === 'ar' 
+              ? 'صالح لمدة 30 يوماً من تاريخ الشراء' 
+              : 'Valid for 30 days from purchase date'
+          }
+        );
+        
+        // Close popup after successful purchase
+        setTimeout(() => onOpenChange(false), 1500);
+      } else {
+        console.error('❌ Regular search purchase failed');
+        toast.error(
+          language === 'ar' ? 'فشل في الشراء' : 'Purchase failed',
+          {
+            description: language === 'ar' 
+              ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' 
+              : 'Please try again or contact support'
+          }
+        );
       }
     } catch (error) {
-      console.error('Error purchasing regular searches:', error);
-      toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
+      console.error('❌ Unexpected error during regular search purchase:', error);
+      toast.error(
+        language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error',
+        {
+          description: language === 'ar' 
+            ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' 
+            : 'An unexpected error occurred, please try again later'
+        }
+      );
     } finally {
       setIsRegularSearchPurchasing(false);
     }
@@ -58,15 +91,47 @@ export function BuyExtrasPopup({
 
   const handlePurchaseAdvancedSearches = async () => {
     setIsAdvancedSearchPurchasing(true);
+    console.log('🛒 Starting advanced search purchase...');
+    
     try {
       const success = await purchaseExtraAdvancedSearches(50);
+      console.log('🛒 Advanced search purchase result:', success);
+      
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 50 بحث متقدم إضافي بنجاح!' : 'Successfully purchased 50 extra advanced searches!');
-        onOpenChange(false);
+        toast.success(
+          language === 'ar' 
+            ? 'تم شراء 50 بحث متقدم إضافي بنجاح!' 
+            : 'Successfully purchased 50 extra advanced searches!',
+          {
+            description: language === 'ar' 
+              ? 'صالح لمدة 30 يوماً من تاريخ الشراء' 
+              : 'Valid for 30 days from purchase date'
+          }
+        );
+        
+        // Close popup after successful purchase
+        setTimeout(() => onOpenChange(false), 1500);
+      } else {
+        console.error('❌ Advanced search purchase failed');
+        toast.error(
+          language === 'ar' ? 'فشل في الشراء' : 'Purchase failed',
+          {
+            description: language === 'ar' 
+              ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' 
+              : 'Please try again or contact support'
+          }
+        );
       }
     } catch (error) {
-      console.error('Error purchasing advanced searches:', error);
-      toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
+      console.error('❌ Unexpected error during advanced search purchase:', error);
+      toast.error(
+        language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error',
+        {
+          description: language === 'ar' 
+            ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' 
+            : 'An unexpected error occurred, please try again later'
+        }
+      );
     } finally {
       setIsAdvancedSearchPurchasing(false);
     }
@@ -74,15 +139,47 @@ export function BuyExtrasPopup({
 
   const handlePurchaseVoiceCredits = async () => {
     setIsVoicePurchasing(true);
+    console.log('🛒 Starting voice credits purchase...');
+    
     try {
       const success = await purchaseExtraVoiceCredits(5000);
+      console.log('🛒 Voice credits purchase result:', success);
+      
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 5,000 حرف صوتي إضافي بنجاح!' : 'Successfully purchased 5,000 extra voice characters!');
-        onOpenChange(false);
+        toast.success(
+          language === 'ar' 
+            ? 'تم شراء 5,000 حرف صوتي إضافي بنجاح!' 
+            : 'Successfully purchased 5,000 extra voice characters!',
+          {
+            description: language === 'ar' 
+              ? 'صالح لمدة 30 يوماً من تاريخ الشراء' 
+              : 'Valid for 30 days from purchase date'
+          }
+        );
+        
+        // Close popup after successful purchase
+        setTimeout(() => onOpenChange(false), 1500);
+      } else {
+        console.error('❌ Voice credits purchase failed');
+        toast.error(
+          language === 'ar' ? 'فشل في الشراء' : 'Purchase failed',
+          {
+            description: language === 'ar' 
+              ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' 
+              : 'Please try again or contact support'
+          }
+        );
       }
     } catch (error) {
-      console.error('Error purchasing voice credits:', error);
-      toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
+      console.error('❌ Unexpected error during voice credits purchase:', error);
+      toast.error(
+        language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error',
+        {
+          description: language === 'ar' 
+            ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' 
+            : 'An unexpected error occurred, please try again later'
+        }
+      );
     } finally {
       setIsVoicePurchasing(false);
     }
@@ -90,15 +187,47 @@ export function BuyExtrasPopup({
 
   const handlePurchaseTranslations = async () => {
     setIsTranslationPurchasing(true);
+    console.log('🛒 Starting translations purchase...');
+    
     try {
       const success = await purchaseExtraTranslations(150);
+      console.log('🛒 Translations purchase result:', success);
+      
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 150 ترجمة إضافية بنجاح!' : 'Successfully purchased 150 extra translations!');
-        onOpenChange(false);
+        toast.success(
+          language === 'ar' 
+            ? 'تم شراء 150 ترجمة إضافية بنجاح!' 
+            : 'Successfully purchased 150 extra translations!',
+          {
+            description: language === 'ar' 
+              ? 'صالح لمدة 30 يوماً من تاريخ الشراء' 
+              : 'Valid for 30 days from purchase date'
+          }
+        );
+        
+        // Close popup after successful purchase
+        setTimeout(() => onOpenChange(false), 1500);
+      } else {
+        console.error('❌ Translations purchase failed');
+        toast.error(
+          language === 'ar' ? 'فشل في الشراء' : 'Purchase failed',
+          {
+            description: language === 'ar' 
+              ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' 
+              : 'Please try again or contact support'
+          }
+        );
       }
     } catch (error) {
-      console.error('Error purchasing translations:', error);
-      toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
+      console.error('❌ Unexpected error during translations purchase:', error);
+      toast.error(
+        language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error',
+        {
+          description: language === 'ar' 
+            ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' 
+            : 'An unexpected error occurred, please try again later'
+        }
+      );
     } finally {
       setIsTranslationPurchasing(false);
     }
@@ -143,6 +272,9 @@ export function BuyExtrasPopup({
   const voiceStatus = getVoiceQuotaStatus();
   const translationStatus = getTranslationQuotaStatus();
 
+  // Helper to determine if any purchase is in progress
+  const anyPurchaseInProgress = isRegularSearchPurchasing || isAdvancedSearchPurchasing || isVoicePurchasing || isTranslationPurchasing;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -154,6 +286,24 @@ export function BuyExtrasPopup({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Debug Info Card - Only show in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs flex items-center gap-2">
+                  <AlertCircle className="h-3 w-3 text-blue-500" />
+                  Debug Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                <div>Search Quota: R:{userSearchQuota.regular_search_count}, A:{userSearchQuota.daily_count}</div>
+                <div>Extra Searches: R:{userSearchQuota.extra_regular_searches}, A:{userSearchQuota.extra_advanced_searches}</div>
+                <div>Voice: {userVoiceQuota.characters_used}/{userVoiceQuota.characters_limit} (+{userVoiceQuota.extra_characters})</div>
+                <div>Translations: {translationQuota.daily_count}/{MAX_DAILY_TRANSLATIONS} (+{translationQuota.extra_translations})</div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Current Quota Status */}
           <Card className="bg-muted/30">
             <CardHeader className="pb-3">
@@ -232,7 +382,12 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-blue-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseRegularSearches} disabled={isRegularSearchPurchasing} className="bg-blue-600 hover:bg-blue-700" size="sm">
+                  <Button 
+                    onClick={handlePurchaseRegularSearches} 
+                    disabled={isRegularSearchPurchasing || anyPurchaseInProgress} 
+                    className="bg-blue-600 hover:bg-blue-700" 
+                    size="sm"
+                  >
                     {isRegularSearchPurchasing ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
