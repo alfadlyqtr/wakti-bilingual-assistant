@@ -1,13 +1,12 @@
-
 import React, { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, manuallyDeleteOldRecordings } from "@/integrations/supabase/client";
 import { TasjeelRecord } from "./types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
-import { FileText, Download, Trash, AlertCircle, RefreshCw } from "lucide-react";
+import { FileText, Download, Trash, AlertCircle, RefreshCw, Zap } from "lucide-react";
 import { generatePDF } from "@/utils/pdfUtils";
 import CompactRecordingCard from "./CompactRecordingCard";
 import { Button } from "@/components/ui/button";
@@ -51,7 +50,8 @@ const translations = {
     titleUpdated: "Title updated",
     errorUpdatingTitle: "Error updating title",
     autoDeleteNotice: "⚠️ All recordings are automatically deleted after 10 days. Download important recordings to keep them permanently.",
-    refresh: "Refresh"
+    refresh: "Refresh",
+    autoDeleted: "Auto-deleted"
   },
   ar: {
     noRecordings: "لم يتم العثور على تسجيلات محفوظة",
@@ -89,7 +89,8 @@ const translations = {
     titleUpdated: "تم تحديث العنوان",
     errorUpdatingTitle: "خطأ في تحديث العنوان",
     autoDeleteNotice: "⚠️ يتم حذف جميع التسجيلات تلقائياً بعد 10 أيام. قم بتنزيل التسجيلات المهمة للاحتفاظ بها بشكل دائم.",
-    refresh: "تحديث"
+    refresh: "تحديث",
+    autoDeleted: "تم الحذف تلقائياً"
   }
 };
 
@@ -100,6 +101,7 @@ const SavedRecordings: React.FC = () => {
 
   const [recordings, setRecordings] = useState<TasjeelRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isCleaningUp, setIsCleaningUp] = useState<boolean>(false);
 
   // Load saved recordings
   useEffect(() => {
@@ -175,6 +177,35 @@ const SavedRecordings: React.FC = () => {
     }
   };
 
+  // Manual cleanup function
+  const handleManualCleanup = async () => {
+    if (!confirm(language === 'ar' 
+      ? 'هل تريد حذف جميع التسجيلات الأقدم من 10 أيام؟' 
+      : 'Delete all recordings older than 10 days?'
+    )) {
+      return;
+    }
+
+    setIsCleaningUp(true);
+    try {
+      console.log('Starting manual cleanup...');
+      const result = await manuallyDeleteOldRecordings();
+      
+      if (result.success) {
+        toast(`${result.message} (${result.deletedCount || 0} records)`);
+        // Reload the recordings to reflect changes
+        await loadSavedRecordings();
+      } else {
+        toast(result.message);
+      }
+    } catch (error) {
+      console.error('Manual cleanup error:', error);
+      toast(language === 'ar' ? 'خطأ في التنظيف' : 'Cleanup failed');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   // Format date function
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString(language === "ar" ? "ar-SA" : undefined, {
@@ -186,22 +217,27 @@ const SavedRecordings: React.FC = () => {
     });
   };
 
-  // Delete recording function
+  // Delete recording function - improved with better error handling
   const deleteRecording = async (id: string) => {
     try {
+      console.log(`Attempting to delete recording: ${id}`);
+      
       const { error } = await supabase
         .from("tasjeel_records")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", user?.id);
 
       if (error) {
+        console.error("Delete error:", error);
         throw error;
       }
       
-      // The real-time subscription will handle UI updates
+      console.log(`Successfully deleted recording: ${id}`);
+      // The real-time subscription will handle UI updates and show success message
     } catch (error) {
       console.error("Error deleting recording:", error);
-      toast(t.errorDeletingRecording);
+      throw error; // Re-throw to let CompactRecordingCard handle the error message
     }
   };
 
@@ -263,8 +299,22 @@ const SavedRecordings: React.FC = () => {
         </AlertDescription>
       </Alert>
 
-      {/* Refresh button */}
-      <div className="flex justify-end">
+      {/* Action buttons */}
+      <div className="flex justify-between items-center">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleManualCleanup}
+          disabled={isCleaningUp}
+          className="text-xs"
+        >
+          <Zap className={`h-4 w-4 mr-2 ${isCleaningUp ? 'animate-pulse' : ''}`} />
+          {isCleaningUp 
+            ? (language === 'ar' ? 'جاري التنظيف...' : 'Cleaning...') 
+            : (language === 'ar' ? 'تنظيف القديم' : 'Clean Old')
+          }
+        </Button>
+        
         <Button 
           variant="outline" 
           size="sm" 
@@ -288,7 +338,10 @@ const SavedRecordings: React.FC = () => {
             onDelete={deleteRecording}
             onExportToPDF={exportToPDF}
             onDownloadAudio={downloadAudio}
-            translations={t}
+            translations={{
+              ...t,
+              autoDeleted: t.autoDeleted
+            }}
           />
         ))
       )}

@@ -17,7 +17,8 @@ import {
   Edit,
   Save,
   X,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import AudioControls from "./AudioControls";
@@ -43,6 +44,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
   const [title, setTitle] = useState(recording.title || "");
   const [isPlayingOriginal, setIsPlayingOriginal] = useState(false);
   const [isPlayingSummary, setIsPlayingSummary] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Format date function
   const formatDate = (dateString: string): string => {
@@ -72,6 +74,28 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
     } catch (error) {
       console.error("Error updating title:", error);
       toast("Error updating title");
+    }
+  };
+
+  // Handle delete with confirmation and proper feedback
+  const handleDelete = async () => {
+    const confirmMessage = language === 'ar' 
+      ? 'هل أنت متأكد أنك تريد حذف هذا التسجيل؟'
+      : 'Are you sure you want to delete this recording?';
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await onDelete(recording.id);
+      // Success message will be shown by the parent component via real-time subscription
+    } catch (error) {
+      console.error("Error deleting recording:", error);
+      toast(t.errorDeletingRecording || "Error deleting recording");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -186,7 +210,8 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                         pause: t.pauseAudio,
                         rewind: t.rewindAudio,
                         stop: t.stopAudio,
-                        error: t.errorPlayingAudio
+                        error: t.errorPlayingAudio,
+                        autoDeleted: t.autoDeleted || "Recording was automatically deleted after 10 days"
                       }}
                     />
                   </div>
@@ -203,7 +228,8 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                         pause: t.pauseAudio,
                         rewind: t.rewindAudio,
                         stop: t.stopAudio,
-                        error: t.errorPlayingAudio
+                        error: t.errorPlayingAudio,
+                        autoDeleted: t.autoDeleted || "Recording was automatically deleted after 10 days"
                       }}
                     />
                   </div>
@@ -278,14 +304,20 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                 </>
               )}
               
-              {/* Delete button for all types */}
+              {/* Delete button for all types with improved feedback */}
               <Button 
                 variant="destructive" 
                 size="sm"
                 className="text-xs py-1 h-7"
-                onClick={() => onDelete(recording.id)}
+                onClick={handleDelete}
+                disabled={isDeleting}
               >
-                <Trash className="mr-1 h-3 w-3" /> {t.deleteRecording}
+                {isDeleting ? (
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash className="mr-1 h-3 w-3" />
+                )}
+                {isDeleting ? (language === 'ar' ? 'جاري الحذف...' : 'Deleting...') : t.deleteRecording}
               </Button>
             </div>
           </>

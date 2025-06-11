@@ -432,7 +432,20 @@ const PreviousRecordings: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteTasjeelRecord(id);
+      console.log(`Attempting to delete recording: ${id}`);
+      
+      const { error } = await supabase
+        .from("tasjeel_records")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user?.id);
+
+      if (error) {
+        console.error("Delete error:", error);
+        throw error;
+      }
+      
+      console.log(`Successfully deleted recording: ${id}`);
       // The real-time subscription will handle UI updates
       setDialogOpen(false);
       toast(t.deleteSuccess);
