@@ -1,4 +1,5 @@
 
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -1036,5 +1037,6 @@ export const en = {
   saveAllSettings: "Save All Settings",
   reminders: "Reminders",
   activityMonitor: "Activity Monitor",
-  time: "Time"
+  time: "Time",
+  contract: "Contract"
 };

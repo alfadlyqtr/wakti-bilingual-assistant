@@ -392,7 +392,6 @@ export const ar = {
   history: "التاريخ",
   current: "الحالي",
   upcoming: "القادم",
-  previous: "السابق",
   following: "التالي",
   preceding: "السابق",
   before: "قبل",
@@ -1040,5 +1039,6 @@ export const ar = {
   saveAllSettings: "حفظ جميع الإعدادات",
   reminders: "التذكيرات",
   activityMonitor: "مراقب النشاط",
-  time: "الوقت"
+  time: "الوقت",
+  previous: "السابق"
 };
