@@ -466,7 +466,6 @@ export const en = {
   level: "Level",
   basement: "Basement",
   ground: "Ground",
-  first: "First",
   second: "Second",
   third: "Third",
   top: "Top",
@@ -702,17 +701,7 @@ export const en = {
   // Additional fields
   username: "Username",
   messages: "Messages",
-  month: "Month",
-  week: "Week",
-  date: "Date",
-  time: "Time",
-  title: "Title",
-  block: "Block",
-  unblock: "Unblock",
-  
-  // Form and input related
   text: "Text",
-  image: "Image",
   file: "File",
   document: "Document",
   pdf: "PDF",
@@ -898,7 +887,6 @@ export const en = {
   velocity: "Velocity",
   acceleration: "Acceleration",
   distance: "Distance",
-  location: "Location",
   position: "Position",
   direction: "Direction",
   orientation: "Orientation",
@@ -1070,8 +1058,6 @@ export const en = {
   occasional: "Occasional",
   constant: "Constant",
   variable: "Variable",
-  stable: "Stable",
-  unstable: "Unstable",
   flexible: "Flexible",
   rigid: "Rigid",
   soft: "Soft",
@@ -1146,12 +1132,10 @@ export const en = {
   visitor: "Visitor",
   owner: "Owner",
   creator: "Creator",
-  editor: "Editor",
   viewer: "Viewer",
   moderator: "Moderator",
   supervisor: "Supervisor",
   manager: "Manager",
-  director: "Director",
   executive: "Executive",
   assistant: "Assistant",
   intern: "Intern",
@@ -1171,7 +1155,6 @@ export const en = {
   anonymous: "Anonymous",
   guest: "Guest",
   admin: "Admin",
-  user: "User",
   
   // Additional missing keys from ContactSearch and other components
   requestSent: "Request sent",
@@ -1255,7 +1238,6 @@ export const en = {
   pastEvents: "Past Events",
   allEvents: "All Events",
   unsubscribe: "Unsubscribe",
-  invite: "Invite",
   eventTimePassed: "Event time has passed",
   eventTimeRemaining: "Time remaining",
   eventTimeSlot: "Event time slot",
@@ -1356,7 +1338,6 @@ export const en = {
   saveToCloud: "Save to cloud",
   syncWithCloud: "Sync with cloud",
   cloudSync: "Cloud sync",
-  offline: "Offline",
   offlineMode: "Offline mode",
   onlineMode: "Online mode",
   connectionLost: "Connection lost",
@@ -1395,5 +1376,7 @@ export const en = {
   relaunchApp: "Relaunch app",
   reloadPage: "Reload page",
   reloadApp: "Reload app",
-  refreshApp: "Refresh app"
+  refreshApp: "Refresh app",
+  block: "Block",
+  time: "Time"
 };
