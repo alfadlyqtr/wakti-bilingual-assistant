@@ -9,8 +9,9 @@ const corsHeaders = {
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management with Tavily Search");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -30,7 +31,8 @@ serve(async (req) => {
       message: requestBody.message,
       userId: requestBody.userId,
       attachedFiles: requestBody.attachedFiles?.length || 0,
-      conversationHistoryLength: requestBody.conversationHistory?.length || 0
+      conversationHistoryLength: requestBody.conversationHistory?.length || 0,
+      activeTrigger: requestBody.activeTrigger
     });
 
     const {
@@ -42,7 +44,7 @@ serve(async (req) => {
       confirmSearch = false,
       activeTrigger = 'chat',
       attachedFiles = [],
-      conversationHistory = [] // Enhanced conversation context
+      conversationHistory = []
     } = requestBody;
 
     if (!message || typeof message !== 'string' || message.trim() === '') {
@@ -91,33 +93,93 @@ serve(async (req) => {
     // Get browsing quota
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Generate response based on trigger and files with enhanced context
-    if (fileAnalysisResults.length > 0) {
-      // If files were analyzed, include analysis in the response using enhanced context
-      response = await generateResponseWithFileAnalysisAndContext(
-        message, 
-        fileAnalysisResults, 
-        conversationHistory, 
-        language
-      );
-      actionTaken = 'file_analysis';
-      actionResult = { fileAnalysis: fileAnalysisResults };
-      contextUtilized = true;
-    } else {
-      // Regular chat response using enhanced conversation context
-      response = await processWithEnhancedContext(
-        message, 
-        conversationHistory, 
-        language, 
-        activeTrigger
-      );
+    // Handle advanced search trigger
+    if (activeTrigger === 'advanced_search') {
+      console.log("🔍 Advanced search triggered");
+      
+      // Check if user has browsing quota
+      if (!quotaStatus.canBrowse) {
+        console.log("❌ No browsing quota remaining");
+        response = language === 'ar' 
+          ? `لقد استنفدت حصتك اليومية من البحث المتقدم (${quotaStatus.limit} عملية بحث). يمكنك شراء المزيد من عمليات البحث أو المحاولة غداً.`
+          : `You've reached your daily advanced search limit (${quotaStatus.limit} searches). You can purchase more searches or try again tomorrow.`;
+        
+        return new Response(JSON.stringify({
+          response,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'quota_exceeded',
+          confidence: 'high',
+          browsingUsed: false,
+          quotaStatus,
+          requiresSearchConfirmation: false,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      // Perform Tavily search
+      const searchResults = await performTavilySearch(message, language);
+      
+      if (searchResults.success) {
+        browsingUsed = true;
+        browsingData = searchResults.data;
+        actionTaken = 'web_search';
+        actionResult = { searchResults: searchResults.data };
+
+        // Increment browsing usage
+        await incrementBrowsingUsage(userId);
+        
+        // Update quota status
+        quotaStatus = await checkBrowsingQuota(userId);
+
+        // Generate AI response with search results and conversation context
+        response = await generateResponseWithSearchAndContext(
+          message,
+          searchResults.data,
+          conversationHistory,
+          language
+        );
+        
+        console.log("✅ Advanced search completed successfully");
+      } else {
+        console.error("❌ Tavily search failed:", searchResults.error);
+        response = language === 'ar' 
+          ? `حدث خطأ أثناء البحث: ${searchResults.error}. سأحاول الإجابة بناءً على معرفتي الحالية.`
+          : `Search error: ${searchResults.error}. I'll try to answer based on my current knowledge.`;
+        
+        // Fallback to regular AI response
+        response = await processWithEnhancedContext(message, conversationHistory, language, activeTrigger);
+      }
+      
       contextUtilized = conversationHistory.length > 0;
+    } else {
+      // Regular processing for other triggers
+      if (fileAnalysisResults.length > 0) {
+        response = await generateResponseWithFileAnalysisAndContext(
+          message, 
+          fileAnalysisResults, 
+          conversationHistory, 
+          language
+        );
+        actionTaken = 'file_analysis';
+        actionResult = { fileAnalysis: fileAnalysisResults };
+        contextUtilized = true;
+      } else {
+        response = await processWithEnhancedContext(
+          message, 
+          conversationHistory, 
+          language, 
+          activeTrigger
+        );
+        contextUtilized = conversationHistory.length > 0;
+      }
     }
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: 'general_chat',
+      intent: activeTrigger === 'advanced_search' ? 'web_search' : 'general_chat',
       confidence: 'high',
       actionTaken,
       actionResult,
@@ -128,7 +190,7 @@ serve(async (req) => {
       needsConfirmation: false,
       attachedFiles: attachedFiles,
       fileAnalysisResults,
-      contextUtilized, // New field to indicate if context was used
+      contextUtilized,
       success: true
     };
 
@@ -152,6 +214,183 @@ serve(async (req) => {
     });
   }
 });
+
+// New function to perform Tavily search
+async function performTavilySearch(query: string, language: string = 'en') {
+  try {
+    if (!TAVILY_API_KEY) {
+      throw new Error("Tavily API key not configured");
+    }
+
+    console.log("🔍 Performing Tavily search for:", query.slice(0, 50));
+
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${TAVILY_API_KEY}`
+      },
+      body: JSON.stringify({
+        query: query,
+        search_depth: "advanced",
+        include_answer: true,
+        include_raw_content: false,
+        max_results: 5,
+        include_domains: [],
+        exclude_domains: []
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error(`Tavily API failed: ${response.status}`, errorData);
+      throw new Error(`Tavily API failed: ${response.status} - ${errorData}`);
+    }
+
+    const searchData = await response.json();
+    console.log("✅ Tavily search successful, found", searchData.results?.length || 0, "results");
+
+    return {
+      success: true,
+      data: {
+        answer: searchData.answer,
+        results: searchData.results || [],
+        query: searchData.query,
+        response_time: searchData.response_time
+      }
+    };
+
+  } catch (error) {
+    console.error('Error performing Tavily search:', error);
+    return {
+      success: false,
+      error: error.message,
+      data: null
+    };
+  }
+}
+
+// New function to generate response with search results and context
+async function generateResponseWithSearchAndContext(
+  message: string,
+  searchData: any,
+  conversationHistory: any[],
+  language: string = 'en'
+) {
+  try {
+    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
+    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    console.log(`🔍 Generating response with search results and context using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+
+    const systemPrompt = language === 'ar' 
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. لقد حصلت على نتائج بحث حديثة من الويب لسؤال المستخدم. استخدم هذه المعلومات مع سياق المحادثة السابق لتقديم إجابة شاملة ودقيقة.
+
+تذكر دائماً:
+- استخدم المعلومات الحديثة من نتائج البحث
+- اربط إجابتك بسياق المحادثة السابق
+- اذكر المصادر عند الإمكان
+- كن دقيقاً ومفيداً ومختصراً`
+      : `You are WAKTI, an advanced AI assistant. You have received fresh web search results for the user's query. Use this information along with the previous conversation context to provide a comprehensive and accurate response.
+
+Always remember to:
+- Use the latest information from search results
+- Connect your response to previous conversation context
+- Cite sources when possible
+- Be accurate, helpful, and concise`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add recent conversation history for context
+    if (conversationHistory && conversationHistory.length > 0) {
+      const recentHistory = conversationHistory.slice(-20);
+      for (const historyMessage of recentHistory) {
+        messages.push({
+          role: historyMessage.role,
+          content: historyMessage.content
+        });
+      }
+    }
+
+    // Prepare search results summary
+    const searchSummary = `Search Results for: "${searchData.query}"
+
+Answer: ${searchData.answer || 'No direct answer provided'}
+
+Top Results:
+${searchData.results.map((result: any, index: number) => 
+  `${index + 1}. ${result.title}
+   URL: ${result.url}
+   Content: ${result.content.slice(0, 300)}...`
+).join('\n\n')}`;
+
+    // Add current message with search results
+    messages.push({ 
+      role: 'user', 
+      content: `${message}\n\nWeb Search Results:\n${searchSummary}` 
+    });
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI API failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Search response generated successfully using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    
+    return result.choices[0].message.content;
+
+  } catch (error) {
+    console.error("Error generating response with search and context:", error);
+    
+    // Fallback response
+    return language === 'ar' 
+      ? `تم العثور على نتائج البحث ولكن حدث خطأ في معالجتها. إليك ما وجدته: ${searchData.answer || 'لم يتم العثور على إجابة مباشرة'}`
+      : `Found search results but encountered an error processing them. Here's what I found: ${searchData.answer || 'No direct answer found'}`;
+  }
+}
+
+// Function to increment browsing usage
+async function incrementBrowsingUsage(userId: string) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    
+    const { error } = await supabase.rpc('log_ai_usage', {
+      p_user_id: userId,
+      p_model_used: 'tavily-search',
+      p_has_browsing: true,
+      p_tokens_used: null
+    });
+
+    if (error) {
+      console.error("Error logging browsing usage:", error);
+    } else {
+      console.log("✅ Browsing usage logged successfully");
+    }
+  } catch (error) {
+    console.error("Error in incrementBrowsingUsage:", error);
+  }
+}
 
 // Enhanced function to process message with full conversation context
 async function processWithEnhancedContext(
