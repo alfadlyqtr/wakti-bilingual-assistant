@@ -483,9 +483,10 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* RESTRUCTURED MAIN CONTAINER - Header, Messages, Input as siblings */}
+      {/* OUTER CONTAINER - Header, Messages, Input structure */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* FIXED HEADER SECTION - Always visible at top */}
+        
+        {/* HEADER + NOTIFICATION BARS - Fixed at top of outer container */}
         <div className="flex-shrink-0 bg-background border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
@@ -502,7 +503,7 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* SCROLLABLE MESSAGES SECTION - Takes remaining space between header and input */}
+        {/* MESSAGES CONTAINER - Takes remaining space, purely scrollable */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -513,7 +514,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* FIXED INPUT SECTION - Always visible at bottom */}
+        {/* INPUT - Fixed at bottom of outer container */}
         <div className="flex-shrink-0 bg-background border-t">
           <ChatInput
             message={message}
@@ -524,6 +525,7 @@ const WaktiAIV2 = () => {
             onClearChat={handleClearChat}
           />
         </div>
+        
       </div>
     </div>
   );
