@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -96,36 +95,13 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.confirmReminderCreation(userId, language, pendingReminderData);
   }
 
-  getOrFetchQuota(userId: string) {
-    return WaktiAIV2ServiceClass.getOrFetchQuota(userId);
+  getOrFetchQuota(userId: string, forceRefresh: boolean = false) {
+    return WaktiAIV2ServiceClass.getOrFetchQuota(userId, forceRefresh);
   }
 
-  getConversations() {
-    return WaktiAIV2ServiceClass.getConversations();
-  }
-
-  getConversationMessages(conversationId: string) {
-    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
-  }
-
-  deleteConversation(conversationId: string) {
-    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
-  }
-
-  sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
-    return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
-  }
-
-  getCalendarContext(userId: string) {
-    return WaktiAIV2ServiceClass.getCalendarContext(userId);
-  }
-
-  getUserContext(userId: string) {
-    return WaktiAIV2ServiceClass.getUserContext(userId);
-  }
-
-  executeAdvancedAction(userId: string, actionType: string, actionData: any, language: string = 'en') {
-    return WaktiAIV2ServiceClass.executeAdvancedAction(userId, actionType, actionData, language);
+  // New method to invalidate quota cache
+  invalidateQuotaCache() {
+    return WaktiAIV2ServiceClass.invalidateQuotaCache();
   }
 
   // Instance methods that delegate to static methods
@@ -444,15 +420,26 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
-  static async getOrFetchQuota(userId: string): Promise<any> {
+  // NEW: Method to invalidate quota cache
+  static invalidateQuotaCache(): void {
+    console.log('🗑️ Invalidating quota cache');
+    this.quotaCache = null;
+    this.quotaCacheTime = 0;
+  }
+
+  // UPDATED: Enhanced getOrFetchQuota with forceRefresh parameter
+  static async getOrFetchQuota(userId: string, forceRefresh: boolean = false): Promise<any> {
     const now = Date.now();
     
-    // Check cache first
-    if (this.quotaCache && (now - this.quotaCacheTime) < this.CACHE_DURATION) {
+    // Check cache first, but skip if forceRefresh is true
+    if (!forceRefresh && this.quotaCache && (now - this.quotaCacheTime) < this.CACHE_DURATION) {
+      console.log('📊 Using cached quota data');
       return this.quotaCache;
     }
 
     try {
+      console.log(`📊 ${forceRefresh ? 'Force refreshing' : 'Fetching fresh'} quota data for user:`, userId);
+      
       const { data, error } = await supabase.rpc('check_browsing_quota', {
         p_user_id: userId
       });
@@ -479,6 +466,7 @@ export class WaktiAIV2ServiceClass {
       this.quotaCache = quota;
       this.quotaCacheTime = now;
       
+      console.log('📊 Fresh quota data loaded:', quota);
       return quota;
     } catch (error) {
       console.error("Quota check error:", error);
@@ -773,3 +761,5 @@ export class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
+
+}

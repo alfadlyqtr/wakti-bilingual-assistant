@@ -1,10 +1,10 @@
 
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { MessageSquare, Menu } from 'lucide-react';
+import { MessageSquare, Plus, Zap, History } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
-import { cn } from '@/lib/utils';
+import { QuotaDisplay } from './QuotaDisplay';
+import { SearchModeIndicator } from './SearchModeIndicator';
 
 interface ChatHeaderProps {
   currentConversationId: string | null;
@@ -12,102 +12,64 @@ interface ChatHeaderProps {
   onShowConversations: () => void;
   onNewConversation: () => void;
   onShowQuickActions: () => void;
+  quotaStatus?: any; // Add quotaStatus prop
 }
 
-export function ChatHeader({
-  currentConversationId,
-  activeTrigger,
-  onShowConversations,
-  onNewConversation,
-  onShowQuickActions
+export function ChatHeader({ 
+  currentConversationId, 
+  activeTrigger, 
+  onShowConversations, 
+  onNewConversation, 
+  onShowQuickActions,
+  quotaStatus // Add quotaStatus parameter
 }: ChatHeaderProps) {
   const { language } = useTheme();
-  const { 
-    userSearchQuota, 
-    MAX_MONTHLY_ADVANCED_SEARCHES, 
-    MAX_MONTHLY_REGULAR_SEARCHES 
-  } = useExtendedQuotaManagement(language);
-
-  const getTriggerDisplayName = () => {
-    switch (activeTrigger) {
-      case 'chat':
-        return language === 'ar' ? 'محادثة' : 'Chat';
-      case 'search':
-        return language === 'ar' ? 'بحث' : 'Search';
-      case 'image':
-        return language === 'ar' ? 'صورة' : 'Image';
-      case 'advanced_search':
-        return language === 'ar' ? 'بحث متقدم' : 'Advanced';
-      default:
-        return language === 'ar' ? 'محادثة' : 'Chat';
-    }
-  };
-
-  const getQuotaDisplay = () => {
-    if (activeTrigger === 'search') {
-      const used = userSearchQuota.regular_search_count;
-      const total = MAX_MONTHLY_REGULAR_SEARCHES;
-      const remaining = total - used;
-      const percentage = (remaining / total) * 100;
-      
-      let colorClass = 'text-green-600';
-      if (percentage <= 20) colorClass = 'text-red-600';
-      else if (percentage <= 50) colorClass = 'text-yellow-600';
-      
-      return (
-        <span className={cn('text-xs ml-1', colorClass)}>
-          ({used}/{total})
-        </span>
-      );
-    }
-    
-    if (activeTrigger === 'advanced_search') {
-      const used = userSearchQuota.daily_count;
-      const total = MAX_MONTHLY_ADVANCED_SEARCHES;
-      const remaining = total - used;
-      const percentage = (remaining / total) * 100;
-      
-      let colorClass = 'text-green-600';
-      if (percentage <= 20) colorClass = 'text-red-600';
-      else if (percentage <= 50) colorClass = 'text-yellow-600';
-      
-      return (
-        <span className={cn('text-xs ml-1', colorClass)}>
-          ({used}/{total})
-        </span>
-      );
-    }
-    
-    return null;
-  };
 
   return (
-    <div className="w-full flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm rounded-b-2xl">
+    <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onShowConversations}
-          className="h-9 w-9 rounded-full bg-muted/50 hover:bg-muted transition-all duration-200"
+          className="flex items-center gap-2"
         >
-          <MessageSquare className="h-5 w-5" />
+          <History size={16} />
+          <span className="hidden sm:inline">
+            {language === 'ar' ? 'المحادثات' : 'History'}
+          </span>
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onNewConversation}
+          className="flex items-center gap-2"
+        >
+          <Plus size={16} />
+          <span className="hidden sm:inline">
+            {language === 'ar' ? 'جديد' : 'New'}
+          </span>
+        </Button>
+
+        <SearchModeIndicator activeTrigger={activeTrigger} />
+      </div>
+
+      <div className="flex items-center gap-3">
+        {quotaStatus && <QuotaDisplay quotaStatus={quotaStatus} />}
+        
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onShowQuickActions}
+          className="flex items-center gap-2"
+        >
+          <Zap size={16} />
+          <span className="hidden sm:inline">
+            {language === 'ar' ? 'الأدوات' : 'Tools'}
+          </span>
         </Button>
       </div>
-
-      {/* Active Mode Indicator with Quota - Enhanced Glass Effect */}
-      <div className="flex items-center px-4 py-2 bg-muted/20 backdrop-blur-md rounded-full text-sm font-medium text-muted-foreground border border-border/20 shadow-sm">
-        <span>{getTriggerDisplayName()}</span>
-        {getQuotaDisplay()}
-      </div>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onShowQuickActions}
-        className="h-9 w-9 rounded-full bg-muted/50 hover:bg-muted transition-all duration-200"
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
     </div>
   );
 }

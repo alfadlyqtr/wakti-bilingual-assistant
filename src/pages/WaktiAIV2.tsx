@@ -51,6 +51,23 @@ const WaktiAIV2 = () => {
     fetchQuota();
   }, []);
 
+  // UPDATED: Enhanced fetchQuota function with force refresh option
+  const fetchQuota = async (forceRefresh: boolean = false) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      console.log(`📊 Fetching quota ${forceRefresh ? 'with force refresh' : 'normally'}`);
+      const quota = await WaktiAIV2Service.getOrFetchQuota(user.id, forceRefresh);
+      setQuotaStatus(quota);
+      
+      console.log('📊 Updated quota state:', quota);
+    } catch (error: any) {
+      console.error('Error fetching quota:', error);
+      setError(error.message || 'Failed to fetch quota');
+    }
+  };
+
   useEffect(() => {
     const fetchEnhancedContext = async () => {
       try {
@@ -332,6 +349,7 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
       console.log('🔄 WAKTI AI V2.5: File Analysis Results:', response.fileAnalysisResults?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Action Taken:', response.actionTaken);
+      console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
 
       if (response.error) {
         throw new Error(response.error);
@@ -396,8 +414,21 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
+      // UPDATED: Enhanced quota handling with immediate refresh for search operations
       if (response.quotaStatus) {
+        console.log('📊 Received quota status from AI response:', response.quotaStatus);
         setQuotaStatus(response.quotaStatus);
+        
+        // If browsing was used (search/advanced_search), invalidate cache and force refresh
+        if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+          console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
+          WaktiAIV2Service.invalidateQuotaCache();
+          
+          // Force refresh quota after a brief delay to ensure backend is updated
+          setTimeout(() => {
+            fetchQuota(true);
+          }, 1000);
+        }
       }
 
       if (response.requiresSearchConfirmation) {
@@ -429,6 +460,15 @@ const WaktiAIV2 = () => {
           language === 'ar' 
             ? 'تم تحضير البيانات للتأكيد' 
             : 'Data prepared for confirmation'
+        );
+      }
+
+      // Show success message for search operations
+      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+        showSuccess(
+          language === 'ar' 
+            ? `تم تنفيذ البحث ${activeTrigger === 'advanced_search' ? 'المتقدم' : 'العادي'} بنجاح` 
+            : `${activeTrigger === 'advanced_search' ? 'Advanced' : 'Basic'} search completed successfully`
         );
       }
 
@@ -697,3 +737,5 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
+
+</edits_to_apply>
