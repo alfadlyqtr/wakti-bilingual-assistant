@@ -127,6 +127,19 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.executeAdvancedAction(userId, actionType, actionData, language);
   }
 
+  // Add the missing instance methods that delegate to static methods
+  ensureConversationExists(userId: string, sessionMessages: AIMessage[], language: string = 'en') {
+    return WaktiAIV2ServiceClass.ensureConversationExists(userId, sessionMessages, language);
+  }
+
+  updateConversationTimestamp(conversationId: string) {
+    return WaktiAIV2ServiceClass.updateConversationTimestamp(conversationId);
+  }
+
+  saveCurrentConversationIfNeeded(userId: string, sessionMessages: AIMessage[], currentConversationId: string | null, language: string = 'en') {
+    return WaktiAIV2ServiceClass.saveCurrentConversationIfNeeded(userId, sessionMessages, currentConversationId, language);
+  }
+
   // Enhanced static method for better conversation saving
   static async ensureConversationExists(
     userId: string, 
