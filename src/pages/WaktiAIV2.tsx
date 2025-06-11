@@ -486,7 +486,7 @@ const WaktiAIV2 = () => {
       {/* MAIN CONTAINER - Full screen layout */}
       <div className="flex-1 flex flex-col h-full">
         
-        {/* CHAT HEADER - Fixed at top */}
+        {/* CHAT HEADER - Fixed at top of main container */}
         <ChatHeader
           currentConversationId={currentConversationId}
           activeTrigger={activeTrigger}
@@ -495,16 +495,18 @@ const WaktiAIV2 = () => {
           onShowQuickActions={() => setShowQuickActions(true)}
         />
         
-        {/* NOTIFICATION BARS - Below header */}
-        <NotificationBars
-          searchConfirmationRequired={searchConfirmationRequired}
-          error={error}
-          onSearchConfirmation={handleSearchConfirmation}
-          onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
-        />
+        {/* NOTIFICATION BARS - Below fixed header */}
+        <div className="pt-16">
+          <NotificationBars
+            searchConfirmationRequired={searchConfirmationRequired}
+            error={error}
+            onSearchConfirmation={handleSearchConfirmation}
+            onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
+          />
+        </div>
         
-        {/* MESSAGES CONTAINER - Flexible middle section with top padding for fixed header */}
-        <div className="flex-1 overflow-hidden pt-[60px]">
+        {/* MESSAGES CONTAINER - Flexible middle section */}
+        <div className="flex-1 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
