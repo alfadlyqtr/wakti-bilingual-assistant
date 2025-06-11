@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +21,9 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
@@ -47,6 +48,20 @@ export default function Account() {
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
+  
+  // Feedback states
+  const [isFeedbackDialogOpen, setIsFeedbackDialogOpen] = useState(false);
+  const [feedbackType, setFeedbackType] = useState("");
+  const [feedbackTitle, setFeedbackTitle] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  
+  // Abuse report states
+  const [isAbuseDialogOpen, setIsAbuseDialogOpen] = useState(false);
+  const [abuseType, setAbuseType] = useState("");
+  const [abuseDetails, setAbuseDetails] = useState("");
+  const [reportedUser, setReportedUser] = useState("");
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   
   // Fetch user profile data
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
@@ -192,6 +207,74 @@ export default function Account() {
     }
   };
   
+  // Feedback handlers
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!feedbackType || !feedbackTitle || !feedbackMessage) {
+      toast.error(t("error", language), {
+        description: "Please fill in all required fields"
+      });
+      return;
+    }
+    
+    setIsSubmittingFeedback(true);
+    
+    try {
+      // In a real app, this would send to your backend
+      console.log("Submitting feedback:", {
+        type: feedbackType,
+        title: feedbackTitle,
+        message: feedbackMessage,
+        userId: user?.id
+      });
+      
+      toast.success(t("feedbackSubmitted", language));
+      setIsFeedbackDialogOpen(false);
+      setFeedbackType("");
+      setFeedbackTitle("");
+      setFeedbackMessage("");
+    } catch (error) {
+      toast.error(t("errorSubmittingFeedback", language));
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+  
+  // Abuse report handlers
+  const handleSubmitAbuse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!abuseType || !abuseDetails) {
+      toast.error(t("error", language), {
+        description: "Please fill in all required fields"
+      });
+      return;
+    }
+    
+    setIsSubmittingReport(true);
+    
+    try {
+      // In a real app, this would send to your backend
+      console.log("Submitting abuse report:", {
+        type: abuseType,
+        details: abuseDetails,
+        reportedUser: reportedUser,
+        reporterId: user?.id
+      });
+      
+      toast.success(t("abuseReported", language));
+      setIsAbuseDialogOpen(false);
+      setAbuseType("");
+      setAbuseDetails("");
+      setReportedUser("");
+    } catch (error) {
+      toast.error(t("errorSubmittingReport", language));
+    } finally {
+      setIsSubmittingReport(false);
+    }
+  };
+  
   return (
     <PageContainer showHeader={false}>
       <div className="container mx-auto px-4 py-6">
@@ -309,6 +392,50 @@ export default function Account() {
             </CardContent>
           </Card>
           
+          {/* Submit Feedback Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                {t("submitFeedback", language)}
+              </CardTitle>
+              <CardDescription>
+                {t("feedbackDescription", language)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsFeedbackDialogOpen(true)}
+                className="w-full sm:w-auto"
+              >
+                {t("submitFeedback", language)}
+              </Button>
+            </CardContent>
+          </Card>
+          
+          {/* Report Abuse Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Flag className="h-5 w-5" />
+                {t("reportAbuse", language)}
+              </CardTitle>
+              <CardDescription>
+                {t("abuseDescription", language)}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="outline" 
+                onClick={() => setIsAbuseDialogOpen(true)}
+                className="w-full sm:w-auto"
+              >
+                {t("reportAbuse", language)}
+              </Button>
+            </CardContent>
+          </Card>
+          
           <Card>
             <CardHeader>
               <CardTitle>{t("accountOptions", language)}</CardTitle>
@@ -346,6 +473,152 @@ export default function Account() {
           </Card>
         </div>
       </div>
+      
+      {/* Submit Feedback Dialog */}
+      <Dialog open={isFeedbackDialogOpen} onOpenChange={setIsFeedbackDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              {t("feedbackForm", language)}
+            </DialogTitle>
+            <DialogDescription>
+              {t("feedbackDescription", language)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmitFeedback} className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="feedback-type">{t("feedbackType", language)}</Label>
+              <Select value={feedbackType} onValueChange={setFeedbackType}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("selectFeedbackType", language)} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bug">{t("bugReport", language)}</SelectItem>
+                  <SelectItem value="feature">{t("featureRequest", language)}</SelectItem>
+                  <SelectItem value="general">{t("generalFeedback", language)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="feedback-title">{t("feedbackTitle", language)}</Label>
+              <Input
+                id="feedback-title"
+                value={feedbackTitle}
+                onChange={(e) => setFeedbackTitle(e.target.value)}
+                placeholder={t("enterFeedbackTitle", language)}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="feedback-message">{t("feedbackMessage", language)}</Label>
+              <Textarea
+                id="feedback-message"
+                value={feedbackMessage}
+                onChange={(e) => setFeedbackMessage(e.target.value)}
+                placeholder={t("enterFeedbackMessage", language)}
+                rows={4}
+              />
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsFeedbackDialogOpen(false)}
+                disabled={isSubmittingFeedback}
+              >
+                {t("cancel", language)}
+              </Button>
+              <Button 
+                type="submit"
+                disabled={isSubmittingFeedback || !feedbackType || !feedbackTitle || !feedbackMessage}
+              >
+                {isSubmittingFeedback 
+                  ? t("loading", language) 
+                  : t("submitFeedbackButton", language)
+                }
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Report Abuse Dialog */}
+      <Dialog open={isAbuseDialogOpen} onOpenChange={setIsAbuseDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5" />
+              {t("abuseReportForm", language)}
+            </DialogTitle>
+            <DialogDescription>
+              {t("abuseDescription", language)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmitAbuse} className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="abuse-type">{t("abuseType", language)}</Label>
+              <Select value={abuseType} onValueChange={setAbuseType}>
+                <SelectTrigger>
+                  <SelectValue placeholder={t("selectAbuseType", language)} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="harassment">{t("harassment", language)}</SelectItem>
+                  <SelectItem value="spam">{t("spam", language)}</SelectItem>
+                  <SelectItem value="inappropriate">{t("inappropriateContent", language)}</SelectItem>
+                  <SelectItem value="fake">{t("fakeProfile", language)}</SelectItem>
+                  <SelectItem value="other">{t("other", language)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="reported-user">{t("reportedUser", language)} ({t("optional", language)})</Label>
+              <Input
+                id="reported-user"
+                value={reportedUser}
+                onChange={(e) => setReportedUser(e.target.value)}
+                placeholder={t("enterReportedUser", language)}
+              />
+            </div>
+            
+            <div className="grid gap-2">
+              <Label htmlFor="abuse-details">{t("abuseDetails", language)}</Label>
+              <Textarea
+                id="abuse-details"
+                value={abuseDetails}
+                onChange={(e) => setAbuseDetails(e.target.value)}
+                placeholder={t("enterAbuseDetails", language)}
+                rows={4}
+              />
+            </div>
+            
+            <DialogFooter>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsAbuseDialogOpen(false)}
+                disabled={isSubmittingReport}
+              >
+                {t("cancel", language)}
+              </Button>
+              <Button 
+                type="submit"
+                disabled={isSubmittingReport || !abuseType || !abuseDetails}
+              >
+                {isSubmittingReport 
+                  ? t("loading", language) 
+                  : t("submitReport", language)
+                }
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
       
       {/* Delete Account Confirmation Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
