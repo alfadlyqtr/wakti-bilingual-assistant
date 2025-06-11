@@ -10,7 +10,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Phase 5 - Enhanced File Analysis with OpenAI Vision + DeepSeek Chat");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - OpenAI Vision for ALL files, DeepSeek for chat only");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,7 +23,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing Phase 5 request with file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with OpenAI Vision for all files");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
@@ -77,11 +77,11 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Process attached files with hybrid approach: OpenAI for images, DeepSeek for text
+    // Process attached files using OpenAI Vision for ALL file types
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing attached files with hybrid analysis...");
-      fileAnalysisResults = await processFilesWithHybridAnalysis(attachedFiles, language);
-      console.log("📎 File analysis completed:", fileAnalysisResults.length);
+      console.log("📎 Processing ALL files with OpenAI Vision...");
+      fileAnalysisResults = await processFilesWithOpenAIVision(attachedFiles, language);
+      console.log("📎 OpenAI Vision file analysis completed:", fileAnalysisResults.length);
     }
 
     // Get browsing quota
@@ -89,13 +89,13 @@ serve(async (req) => {
 
     // Generate response based on trigger and files
     if (fileAnalysisResults.length > 0) {
-      // If files were analyzed, include analysis in the response using DeepSeek
+      // If files were analyzed, include analysis in the response using DeepSeek for synthesis
       response = await generateResponseWithFileAnalysis(message, fileAnalysisResults, language);
       actionTaken = 'file_analysis';
       actionResult = { fileAnalysis: fileAnalysisResults };
     } else {
       // Regular chat response using DeepSeek
-      response = await processWithAI(message, null, language, activeTrigger);
+      response = await processWithDeepSeekChat(message, null, language, activeTrigger);
     }
 
     const result = {
@@ -115,7 +115,7 @@ serve(async (req) => {
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending enhanced response with hybrid file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with OpenAI Vision file analysis");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -136,36 +136,16 @@ serve(async (req) => {
   }
 });
 
-// Process files with hybrid approach: OpenAI for images, DeepSeek for text
-async function processFilesWithHybridAnalysis(files: any[], language: string = 'en') {
+// Process ALL files with OpenAI Vision (images, PDFs, docs)
+async function processFilesWithOpenAIVision(files: any[], language: string = 'en') {
   const results = [];
 
   for (const file of files) {
     try {
-      console.log(`📎 Analyzing file: ${file.name} (${file.type})`);
+      console.log(`📎 Analyzing file with OpenAI Vision: ${file.name} (${file.type})`);
       
-      let analysisResult = null;
-
-      if (file.type.startsWith('image/')) {
-        // Image analysis with OpenAI Vision
-        console.log(`🖼️ Using OpenAI Vision for image: ${file.name}`);
-        analysisResult = await analyzeImageWithOpenAI(file, language);
-      } else if (file.type === 'application/pdf') {
-        // PDF analysis with DeepSeek
-        console.log(`📄 Using DeepSeek for PDF: ${file.name}`);
-        analysisResult = await analyzePDFWithDeepSeek(file, language);
-      } else if (file.type === 'text/plain') {
-        // Text file analysis with DeepSeek
-        console.log(`📝 Using DeepSeek for text file: ${file.name}`);
-        analysisResult = await analyzeTextFileWithDeepSeek(file, language);
-      } else {
-        // Unsupported file type
-        analysisResult = {
-          success: false,
-          error: language === 'ar' ? 'نوع الملف غير مدعوم' : 'Unsupported file type',
-          analysis: language === 'ar' ? 'لا يمكن تحليل هذا النوع من الملفات' : 'Cannot analyze this file type'
-        };
-      }
+      // Use OpenAI Vision for ALL file types
+      const analysisResult = await analyzeFileWithOpenAIVision(file, language);
 
       results.push({
         fileName: file.name,
@@ -194,18 +174,44 @@ async function processFilesWithHybridAnalysis(files: any[], language: string = '
   return results;
 }
 
-// Analyze image with OpenAI Vision (GPT-4o)
-async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
+// Analyze ANY file type with OpenAI Vision (GPT-4o)
+async function analyzeFileWithOpenAIVision(file: any, language: string = 'en') {
   try {
     if (!OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not configured for image analysis");
+      throw new Error("OpenAI API key not configured for file analysis");
     }
 
-    console.log(`🖼️ Analyzing image with OpenAI Vision: ${file.name}`);
+    console.log(`🔍 Analyzing file with OpenAI Vision: ${file.name} (${file.type})`);
 
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
-      : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
+    let systemPrompt = '';
+    let userPrompt = '';
+
+    // Customize prompts based on file type
+    if (file.type.startsWith('image/')) {
+      systemPrompt = language === 'ar' 
+        ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
+        : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
+      
+      userPrompt = language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail';
+    } else if (file.type === 'application/pdf') {
+      systemPrompt = language === 'ar' 
+        ? 'أنت مساعد ذكي متخصص في تحليل المستندات والملفات. حلل محتوى هذا الملف واستخرج المعلومات المهمة والنصوص والبيانات. كن شاملاً ودقيقاً في تحليلك.'
+        : 'You are an AI assistant specialized in document and file analysis. Analyze the content of this file and extract important information, text, and data. Be comprehensive and accurate in your analysis.';
+      
+      userPrompt = language === 'ar' ? 'حلل محتوى هذا المستند PDF بالتفصيل' : 'Analyze the content of this PDF document in detail';
+    } else if (file.type === 'text/plain' || file.type.includes('document')) {
+      systemPrompt = language === 'ar' 
+        ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
+        : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
+      
+      userPrompt = language === 'ar' ? 'حلل محتوى هذا المستند النصي' : 'Analyze the content of this text document';
+    } else {
+      systemPrompt = language === 'ar' 
+        ? 'أنت مساعد ذكي متخصص في تحليل الملفات. حاول تحليل هذا الملف واستخراج أي معلومات مفيدة منه.'
+        : 'You are an AI assistant specialized in file analysis. Try to analyze this file and extract any useful information from it.';
+      
+      userPrompt = language === 'ar' ? 'حلل هذا الملف' : 'Analyze this file';
+    }
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -220,13 +226,13 @@ async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
           { 
             role: 'user', 
             content: [
-              { type: 'text', text: language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail' },
+              { type: 'text', text: userPrompt },
               { type: 'image_url', image_url: { url: file.url } }
             ]
           }
         ],
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 1500
       })
     });
 
@@ -242,97 +248,20 @@ async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
     return {
       success: true,
       analysis: result.choices[0].message.content,
-      model: 'gpt-4o'
+      model: 'gpt-4o-vision'
     };
 
   } catch (error) {
-    console.error('Error analyzing image with OpenAI:', error);
+    console.error('Error analyzing file with OpenAI Vision:', error);
     return {
       success: false,
       error: error.message,
-      analysis: language === 'ar' ? 'فشل في تحليل الصورة' : 'Failed to analyze image'
+      analysis: language === 'ar' ? 'فشل في تحليل الملف' : 'Failed to analyze file'
     };
   }
 }
 
-// Analyze PDF with DeepSeek (simplified - would need PDF parsing)
-async function analyzePDFWithDeepSeek(file: any, language: string = 'en') {
-  try {
-    // For now, return a placeholder since PDF parsing requires additional libraries
-    return {
-      success: true,
-      analysis: language === 'ar' 
-        ? 'ملف PDF تم اكتشافه. تحليل المحتوى النصي قيد التطوير.' 
-        : 'PDF file detected. Text content analysis is under development.',
-      model: 'deepseek-chat'
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error.message,
-      analysis: language === 'ar' ? 'فشل في تحليل ملف PDF' : 'Failed to analyze PDF'
-    };
-  }
-}
-
-// Analyze text file with DeepSeek
-async function analyzeTextFileWithDeepSeek(file: any, language: string = 'en') {
-  try {
-    if (!DEEPSEEK_API_KEY) {
-      throw new Error("DeepSeek API key not configured for text analysis");
-    }
-
-    console.log(`📝 Analyzing text file with DeepSeek: ${file.name}`);
-
-    // Fetch the text content
-    const textResponse = await fetch(file.url);
-    const textContent = await textResponse.text();
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل النصوص. حلل المحتوى واستخرج النقاط المهمة والملخص.'
-      : 'You are an AI assistant specialized in text analysis. Analyze the content and extract key points and summary.';
-
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: `${language === 'ar' ? 'حلل هذا النص' : 'Analyze this text'}:\n\n${textContent}` }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`DeepSeek API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log(`✅ DeepSeek text analysis successful for: ${file.name}`);
-    
-    return {
-      success: true,
-      analysis: result.choices[0].message.content,
-      model: 'deepseek-chat'
-    };
-
-  } catch (error) {
-    console.error('Error analyzing text with DeepSeek:', error);
-    return {
-      success: false,
-      error: error.message,
-      analysis: language === 'ar' ? 'فشل في تحليل النص' : 'Failed to analyze text'
-    };
-  }
-}
-
-// Generate response that includes file analysis using DeepSeek
+// Generate response that includes file analysis using DeepSeek for synthesis
 async function generateResponseWithFileAnalysis(message: string, fileAnalysis: any[], language: string = 'en') {
   try {
     const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
@@ -343,20 +272,20 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
       throw new Error("No AI API key configured");
     }
 
-    console.log(`💬 Generating response with file analysis using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    console.log(`💬 Generating response with file analysis using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'} for synthesis`);
 
     const systemPrompt = language === 'ar' 
-      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات للإجابة على سؤاله بشكل شامل ومفيد.'
-      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the file analysis to provide a comprehensive and helpful response to their question.';
+      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات المرفق (الذي تم بواسطة OpenAI Vision) للإجابة على سؤاله بشكل شامل ومفيد.'
+      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the attached file analysis (performed by OpenAI Vision) to provide a comprehensive and helpful response to their question.';
 
     // Prepare file analysis summary for the AI
     const fileAnalysisSummary = fileAnalysis.map(file => 
-      `File: ${file.fileName} (${file.fileType})\nAnalysis: ${file.analysis.analysis}`
+      `File: ${file.fileName} (${file.fileType})\nOpenAI Vision Analysis: ${file.analysis.analysis}`
     ).join('\n\n');
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `${message}\n\nFile Analysis Results:\n${fileAnalysisSummary}` }
+      { role: 'user', content: `${message}\n\nFile Analysis Results from OpenAI Vision:\n${fileAnalysisSummary}` }
     ];
 
     const response = await fetch(apiUrl, {
@@ -378,7 +307,7 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     }
 
     const result = await response.json();
-    console.log(`✅ Response generation successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    console.log(`✅ Response synthesis successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
     
     return result.choices[0].message.content;
 
@@ -387,15 +316,15 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     
     // Fallback response
     return language === 'ar' 
-      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
-      : `Successfully analyzed ${fileAnalysis.length} attached file(s). Please rephrase your question for more detailed information.`;
+      ? `تم تحليل الملفات المرفقة بنجاح باستخدام OpenAI Vision. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
+      : `Successfully analyzed ${fileAnalysis.length} attached file(s) using OpenAI Vision. Please rephrase your question for more detailed information.`;
   }
 }
 
-// Regular AI processing function using DeepSeek for general chat
-async function processWithAI(message: string, context: string | null, language: string = 'en', activeTrigger: string = 'chat') {
+// DeepSeek for general chat only (no file analysis)
+async function processWithDeepSeekChat(message: string, context: string | null, language: string = 'en', activeTrigger: string = 'chat') {
   try {
-    console.log("🤖 WAKTI AI V2 BRAIN: Processing with DeepSeek for general chat");
+    console.log("🤖 WAKTI AI V2 BRAIN: Processing general chat with DeepSeek (no files)");
     
     const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
     const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
@@ -437,12 +366,12 @@ async function processWithAI(message: string, context: string | null, language: 
     }
     
     const result = await response.json();
-    console.log(`✅ General chat response generated using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    console.log(`✅ DeepSeek general chat response generated`);
     
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🤖 WAKTI AI V2 BRAIN: AI processing error:", error);
+    console.error("🤖 WAKTI AI V2 BRAIN: DeepSeek chat processing error:", error);
     
     // Fallback response
     return language === 'ar' 
