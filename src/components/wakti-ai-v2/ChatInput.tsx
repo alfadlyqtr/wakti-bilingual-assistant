@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -117,13 +116,13 @@ export function ChatInput({
   };
 
   return (
-    <div className="w-full h-full bg-background">
+    <div className="w-full h-full bg-background flex flex-col">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
         {/* Uploaded Files Display */}
         {uploadedFiles.length > 0 && (
-          <div className="px-4 py-2 bg-muted/30 border-b max-h-[60px] overflow-y-auto">
+          <div className="px-4 py-2 bg-muted/30 border-b flex-shrink-0">
             <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-medium">
                   {language === 'ar' ? 'الملفات المرفقة:' : 'Attached Files:'}
                 </span>
@@ -131,7 +130,7 @@ export function ChatInput({
                   ({uploadedFiles.length})
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 max-h-[80px] overflow-y-auto">
                 {uploadedFiles.map((file, index) => (
                   <FilePreview
                     key={index}
@@ -147,7 +146,7 @@ export function ChatInput({
         )}
 
         {/* Mobile-Optimized Chat Input Area */}
-        <div className="p-3 bg-background h-[80px] flex items-center">
+        <div className="p-3 bg-background flex-1 min-h-[80px] flex items-center">
           <div className="max-w-4xl mx-auto w-full">
             <div className="flex items-center gap-3">
               {/* Upload Button */}
@@ -187,7 +186,7 @@ export function ChatInput({
 
               {/* Input Container */}
               <div className="flex-1 relative">
-                <div className="flex items-center bg-muted/50 rounded-2xl border border-border/30 h-[50px]">
+                <div className="flex items-start bg-muted/50 rounded-2xl border border-border/30 min-h-[50px]">
                   {/* Mic Button */}
                   <TooltipProvider>
                     <Tooltip>
@@ -195,7 +194,7 @@ export function ChatInput({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-8 w-8 m-1 rounded-xl hover:bg-background/80 transition-all duration-300 flex-shrink-0 ${
+                          className={`h-8 w-8 m-1 mt-2 rounded-xl hover:bg-background/80 transition-all duration-300 flex-shrink-0 ${
                             isListening 
                               ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
                               : speechSupported 
@@ -228,8 +227,7 @@ export function ChatInput({
                         ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
                         : language === 'ar' ? 'اكتب رسالتك...' : 'Type a message...'
                     }
-                    rows={1}
-                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 h-[44px] min-h-[44px] max-h-[44px] overflow-hidden text-sm"
+                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 min-h-[44px] max-h-[120px] text-sm"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -248,7 +246,7 @@ export function ChatInput({
                           <Button
                             onClick={handleSend}
                             disabled={isLoading || isListening || isUploading}
-                            className="h-8 w-8 m-1 rounded-full p-0 flex-shrink-0"
+                            className="h-8 w-8 m-1 mt-2 rounded-full p-0 flex-shrink-0"
                             size="icon"
                             aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                           >
@@ -271,7 +269,7 @@ export function ChatInput({
 
             {/* Status Indicators - Compact */}
             {(isListening || speechError || isUploading) && (
-              <div className="mt-1 text-center">
+              <div className="mt-2 text-center">
                 {isListening && (
                   <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-500 text-white rounded-full text-xs animate-pulse">
                     <div className="h-1 w-1 bg-white rounded-full animate-ping" />

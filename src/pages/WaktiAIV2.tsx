@@ -580,7 +580,7 @@ const WaktiAIV2 = () => {
         </div>
         
         {/* MESSAGES CONTAINER - Scrollable middle section */}
-        <div className="flex-1 overflow-hidden pb-[140px]">
+        <div className="flex-1 overflow-hidden pb-[160px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -590,8 +590,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* INPUT - Fixed at bottom with guaranteed height */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t h-[140px] z-50">
+        {/* INPUT - Fixed at bottom with dynamic height */}
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t min-h-[140px] max-h-[300px] z-50">
           <ChatInput
             message={message}
             setMessage={setMessage}
