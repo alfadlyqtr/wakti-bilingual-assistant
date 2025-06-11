@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -6,16 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Play, Download, Loader2, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 
 interface VoiceClone {
   id: string;
   voice_name: string;
   voice_id: string;
-}
-
-interface VoiceUsage {
-  characters_used: number;
-  characters_limit: number;
 }
 
 interface VoiceCloneScreen3Props {
@@ -27,10 +24,18 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [voices, setVoices] = useState<VoiceClone[]>([]);
-  const [usage, setUsage] = useState<VoiceUsage>({ characters_used: 0, characters_limit: 5000 });
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Use the extended quota management hook to get voice quota data
+  const { 
+    userVoiceQuota, 
+    isLoadingVoiceQuota, 
+    loadUserVoiceQuota,
+    totalAvailableCharacters,
+    canUseVoice 
+  } = useExtendedQuotaManagement(language);
 
   useEffect(() => {
     loadData();
@@ -51,17 +56,8 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         setSelectedVoiceId(voicesData[0].voice_id);
       }
 
-      // Load usage
-      const { data: usageData, error: usageError } = await supabase
-        .from('user_voice_usage')
-        .select('*')
-        .single();
-
-      if (usageData) {
-        setUsage(usageData);
-      } else if (usageError && !usageError.message.includes('No rows')) {
-        throw usageError;
-      }
+      // Load voice quota using the hook
+      await loadUserVoiceQuota();
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -70,8 +66,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  const remainingCharacters = usage.characters_limit - usage.characters_used;
-  const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= remainingCharacters;
+  const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
 
   const generateSpeech = async () => {
     if (!canGenerate) return;
@@ -158,11 +153,8 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       console.log('🎵 Created object URL:', url);
       setAudioUrl(url);
 
-      // Update usage
-      setUsage(prev => ({
-        ...prev,
-        characters_used: prev.characters_used + text.trim().length
-      }));
+      // Reload voice quota after successful generation
+      await loadUserVoiceQuota();
 
       toast.success(language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully');
 
@@ -197,7 +189,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
     }
   };
 
-  if (loading) {
+  if (loading || isLoadingVoiceQuota) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin" />
@@ -236,28 +228,37 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         </p>
       </div>
 
-      {/* Character Usage */}
+      {/* Character Usage - Now showing total available including extras */}
       <div className="p-3 bg-muted rounded-lg">
         <div className="flex justify-between items-center">
           <span className="text-sm font-medium">
             {language === 'ar' ? 'الأحرف المتبقية' : 'Characters Remaining'}
           </span>
           <span className="text-sm">
-            {remainingCharacters.toLocaleString()} / {usage.characters_limit.toLocaleString()}
+            {totalAvailableCharacters.toLocaleString()} / {(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}
           </span>
         </div>
         <div className="w-full bg-background rounded-full h-2 mt-2">
           <div 
             className="bg-blue-500 h-2 rounded-full" 
-            style={{ width: `${((usage.characters_limit - remainingCharacters) / usage.characters_limit) * 100}%` }}
+            style={{ 
+              width: `${Math.max(0, Math.min(100, ((userVoiceQuota.characters_used) / (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters)) * 100))}%` 
+            }}
           />
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          {language === 'ar' 
-            ? `لديك ${remainingCharacters.toLocaleString()} حرف متبقي من أصل ${usage.characters_limit.toLocaleString()}.`
-            : `You have ${remainingCharacters.toLocaleString()} characters left out of ${usage.characters_limit.toLocaleString()}.`
-          }
-        </p>
+        <div className="flex justify-between items-center mt-2">
+          <p className="text-xs text-muted-foreground">
+            {language === 'ar' 
+              ? `لديك ${totalAvailableCharacters.toLocaleString()} حرف متبقي من أصل ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+              : `You have ${totalAvailableCharacters.toLocaleString()} characters left out of ${(userVoiceQuota.characters_limit + userVoiceQuota.extra_characters).toLocaleString()}.`
+            }
+          </p>
+          {userVoiceQuota.extra_characters > 0 && (
+            <span className="text-xs text-green-600 font-medium">
+              +{userVoiceQuota.extra_characters.toLocaleString()} {language === 'ar' ? 'إضافي' : 'extra'}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Voice Selector */}
@@ -289,11 +290,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           onChange={(e) => setText(e.target.value)}
           placeholder={language === 'ar' ? 'اكتب ما تريد سماعه بصوتك...' : 'Type what you want to hear in your voice...'}
           className="min-h-32 resize-none"
-          maxLength={remainingCharacters}
+          maxLength={totalAvailableCharacters}
         />
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>{text.length} / {remainingCharacters}</span>
-          {text.length > remainingCharacters && (
+          <span>{text.length} / {totalAvailableCharacters}</span>
+          {text.length > totalAvailableCharacters && (
             <span className="text-red-500">
               {language === 'ar' ? 'تجاوز الحد المسموح' : 'Exceeds limit'}
             </span>

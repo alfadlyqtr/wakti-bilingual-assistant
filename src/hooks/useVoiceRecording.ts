@@ -2,6 +2,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from './use-toast-helper';
+import { useExtendedQuotaManagement } from './useExtendedQuotaManagement';
 
 export interface VoiceRecordingState {
   isRecording: boolean;
@@ -23,6 +24,9 @@ export function useVoiceRecording() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const { showError } = useToastHelper();
+  
+  // Get voice quota information
+  const { totalAvailableCharacters, canUseVoice, loadUserVoiceQuota } = useExtendedQuotaManagement();
 
   const startRecording = useCallback(async () => {
     try {
@@ -89,6 +93,9 @@ export function useVoiceRecording() {
         error: null
       }));
 
+      // Reload voice quota after transcription
+      await loadUserVoiceQuota();
+
       return data.text;
     } catch (error) {
       console.error('Error transcribing audio:', error);
@@ -99,7 +106,7 @@ export function useVoiceRecording() {
       }));
       return null;
     }
-  }, []);
+  }, [loadUserVoiceQuota]);
 
   const clearRecording = useCallback(() => {
     if (state.audioUrl) {
@@ -118,6 +125,8 @@ export function useVoiceRecording() {
     ...state,
     startRecording,
     stopRecording,
-    clearRecording
+    clearRecording,
+    totalAvailableCharacters,
+    canUseVoice
   };
 }
