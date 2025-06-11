@@ -1,5 +1,4 @@
 
-
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -331,6 +330,7 @@ export const en = {
   competition: "Competition",
   conflict: "Conflict",
   disagreement: "Disagreement",
+  contract: "Contract",
   deal: "Deal",
   transaction: "Transaction",
   exchange: "Exchange",
@@ -496,8 +496,6 @@ export const en = {
   seventy: "Seventy",
   eighty: "Eighty",
   ninety: "Ninety",
-
-  // Date of Birth specific translations
   dateOfBirth: "Date of Birth",
   dobHelpText: "Your date of birth helps us personalize your experience",
   updateDateOfBirth: "Update Date of Birth",
@@ -506,16 +504,12 @@ export const en = {
   errorUpdatingDob: "Error updating date of birth",
   pickDate: "Pick a date",
   useCalendarPicker: "Use calendar picker",
-
-  // Account specific
   profileManagement: "Profile Management",
   usernameHelpText: "This is your public display name",
   updateEmail: "Update Email",
   currentPassword: "Current Password",
   newPassword: "New Password",
   updating: "Updating",
-
-  // Additional missing keys from build errors
   privateEvent: "Private Event",
   eventCreated: "Event Created",
   rsvpDeadlinePassed: "RSVP Deadline Passed",
@@ -632,8 +626,6 @@ export const en = {
   errorUpdatingPassword: "Error updating password",
   passwordUpdated: "Password updated successfully",
   errorSigningOut: "Error signing out",
-
-  // Missing keys from the build errors
   maw3dEvents: "Maw3d Events",
   manageEvent: "Manage Event",
   createEvent: "Create Event",
@@ -692,8 +684,6 @@ export const en = {
   errorLoadingRequests: "Error loading requests",
   noContactRequests: "No contact requests",
   waitingForRequests: "Waiting for requests",
-
-  // Additional missing keys from ContactSearch and other components
   requestSent: "Request sent",
   errorSendingRequest: "Error sending request",
   enterAtLeastThreeCharacters: "Enter at least 3 characters to search",
@@ -915,8 +905,6 @@ export const en = {
   reloadPage: "Reload page",
   reloadApp: "Reload app",
   refreshApp: "Refresh app",
-
-  // More missing keys from the errors
   user: "User",
   title: "Title",
   date: "Date",
@@ -960,8 +948,6 @@ export const en = {
   noSnoozeRequests: "No snooze requests",
   failedToUpdateReminder: "Failed to update reminder",
   failedToCreateReminder: "Failed to create reminder",
-
-  // TR specific keys
   editReminder: "Edit Reminder",
   createReminder: "Create Reminder",
   enterReminderTitle: "Enter reminder title",
@@ -1000,8 +986,6 @@ export const en = {
   markComplete: "Mark Complete",
   snooze: "Snooze",
   shareLink: "Share Link",
-
-  // Additional missing keys from current errors
   username: "Username",
   updatePassword: "Update Password",
   blocked: "Blocked",
@@ -1037,6 +1021,5 @@ export const en = {
   saveAllSettings: "Save All Settings",
   reminders: "Reminders",
   activityMonitor: "Activity Monitor",
-  time: "Time",
-  contract: "Contract"
+  time: "Time"
 };

@@ -1,6 +1,5 @@
 
 export const ar = {
-  // Basic translations
   welcome: "مرحباً",
   login: "تسجيل الدخول",
   signup: "إنشاء حساب",
@@ -497,8 +496,6 @@ export const ar = {
   seventy: "سبعون",
   eighty: "ثمانون",
   ninety: "تسعون",
-
-  // Date of Birth specific translations
   dateOfBirth: "تاريخ الميلاد",
   dobHelpText: "تاريخ ميلادك يساعدنا في تخصيص تجربتك",
   updateDateOfBirth: "تحديث تاريخ الميلاد",
@@ -507,16 +504,12 @@ export const ar = {
   errorUpdatingDob: "خطأ في تحديث تاريخ الميلاد",
   pickDate: "اختر التاريخ",
   useCalendarPicker: "استخدم منتقي التقويم",
-
-  // Account specific
   profileManagement: "إدارة الملف الشخصي",
   usernameHelpText: "هذا هو اسم العرض العام",
   updateEmail: "تحديث البريد الإلكتروني",
   currentPassword: "كلمة المرور الحالية",
   newPassword: "كلمة المرور الجديدة",
   updating: "جاري التحديث",
-
-  // Additional missing keys from build errors
   privateEvent: "حدث خاص",
   eventCreated: "تم إنشاء الحدث",
   rsvpDeadlinePassed: "انتهى موعد الرد",
@@ -633,8 +626,6 @@ export const ar = {
   errorUpdatingPassword: "خطأ في تحديث كلمة المرور",
   passwordUpdated: "تم تحديث كلمة المرور بنجاح",
   errorSigningOut: "خطأ في تسجيل الخروج",
-
-  // Missing keys from the build errors
   maw3dEvents: "أحداث موعد",
   manageEvent: "إدارة الحدث",
   createEvent: "إنشاء حدث",
@@ -693,8 +684,6 @@ export const ar = {
   errorLoadingRequests: "خطأ في تحميل الطلبات",
   noContactRequests: "لا توجد طلبات اتصال",
   waitingForRequests: "في انتظار الطلبات",
-
-  // Additional missing keys from ContactSearch and other components
   requestSent: "تم إرسال الطلب",
   errorSendingRequest: "خطأ في إرسال الطلب",
   enterAtLeastThreeCharacters: "أدخل 3 أحرف على الأقل للبحث",
@@ -877,7 +866,6 @@ export const ar = {
   saveToCloud: "حفظ على السحابة",
   syncWithCloud: "مزامنة مع السحابة",
   cloudSync: "مزامنة السحابة",
-  offline: "غير متصل",
   offlineMode: "وضع عدم الاتصال",
   onlineMode: "وضع الاتصال",
   connectionLost: "فقد الاتصال",
@@ -917,8 +905,6 @@ export const ar = {
   reloadPage: "إعادة تحميل الصفحة",
   reloadApp: "إعادة تحميل التطبيق",
   refreshApp: "تحديث التطبيق",
-
-  // More missing keys from the errors
   user: "المستخدم",
   title: "العنوان",
   date: "التاريخ",
@@ -962,8 +948,6 @@ export const ar = {
   noSnoozeRequests: "لا توجد طلبات تأجيل",
   failedToUpdateReminder: "فشل في تحديث التذكير",
   failedToCreateReminder: "فشل في إنشاء التذكير",
-
-  // TR specific keys
   editReminder: "تعديل التذكير",
   createReminder: "إنشاء تذكير",
   enterReminderTitle: "أدخل عنوان التذكير",
@@ -1002,8 +986,6 @@ export const ar = {
   markComplete: "وضع علامة كمكتمل",
   snooze: "تأجيل",
   shareLink: "رابط المشاركة",
-
-  // Additional missing keys from current errors
   username: "اسم المستخدم",
   updatePassword: "تحديث كلمة المرور",
   blocked: "محظور",
@@ -1039,6 +1021,5 @@ export const ar = {
   saveAllSettings: "حفظ جميع الإعدادات",
   reminders: "التذكيرات",
   activityMonitor: "مراقب النشاط",
-  time: "الوقت",
-  previous: "السابق"
+  time: "الوقت"
 };
