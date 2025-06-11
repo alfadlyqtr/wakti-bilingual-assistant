@@ -799,5 +799,3 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
-
-</edits_to_apply>
