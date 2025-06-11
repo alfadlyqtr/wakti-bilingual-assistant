@@ -82,20 +82,20 @@ export function ChatHeader({
   };
 
   return (
-    <div className="w-full flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur-sm">
+    <div className="w-full flex items-center justify-between p-4 bg-background/95 backdrop-blur-sm rounded-b-2xl">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           size="icon"
           onClick={onShowConversations}
-          className="h-9 w-9"
+          className="h-9 w-9 rounded-full bg-muted/50 hover:bg-muted transition-all duration-200"
         >
           <MessageSquare className="h-5 w-5" />
         </Button>
       </div>
 
-      {/* Active Mode Indicator with Quota */}
-      <div className="flex items-center px-3 py-1 bg-muted rounded-full text-sm font-medium text-muted-foreground">
+      {/* Active Mode Indicator with Quota - Enhanced Glass Effect */}
+      <div className="flex items-center px-4 py-2 bg-muted/20 backdrop-blur-md rounded-full text-sm font-medium text-muted-foreground border border-border/20 shadow-sm">
         <span>{getTriggerDisplayName()}</span>
         {getQuotaDisplay()}
       </div>
@@ -104,7 +104,7 @@ export function ChatHeader({
         variant="ghost"
         size="icon"
         onClick={onShowQuickActions}
-        className="h-9 w-9"
+        className="h-9 w-9 rounded-full bg-muted/50 hover:bg-muted transition-all duration-200"
       >
         <Menu className="h-5 w-5" />
       </Button>

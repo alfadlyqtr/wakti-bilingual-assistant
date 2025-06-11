@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -525,9 +526,9 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen">
-        {/* Fixed Header - positioned below the main app header */}
+        {/* Fixed Header - positioned below the main app header with glass effect */}
         <div 
-          className="fixed top-16 right-0 bg-background border-b z-40"
+          className="fixed top-16 right-0 bg-background/80 backdrop-blur-md border-b rounded-b-2xl z-40"
           style={{ 
             left: showConversations || showQuickActions ? '320px' : '0',
             transition: 'left 0.3s ease-in-out'
@@ -548,11 +549,11 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area with top padding to account for both headers */}
+        {/* Scrollable Messages Area with reduced top padding for better spacing */}
         <div 
           className="flex-1 overflow-hidden"
           style={{ 
-            paddingTop: '184px', // Account for AppHeader (64px) + Wakti header + notification bars (120px)
+            paddingTop: '140px', // Reduced from 184px - Account for AppHeader (64px) + Wakti header (76px)
             paddingBottom: '100px' // Account for input area
           }}
         >
