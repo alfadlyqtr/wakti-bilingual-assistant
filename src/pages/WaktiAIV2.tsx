@@ -153,56 +153,14 @@ const WaktiAIV2 = () => {
 
       console.log('🆕 Auto-creating conversation for new chat...');
 
-      const firstUserMessage = messages.find(msg => msg.role === 'user');
-      const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'New Conversation';
-
-      // Create conversation
-      const { data: conversation, error } = await supabase
-        .from('ai_conversations')
-        .insert({
-          user_id: user.id,
-          title: title,
-          last_message_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
-
-      if (error) {
-        console.error('❌ Error creating conversation:', error);
-        return null;
+      const conversationId = await WaktiAIV2Service.ensureConversationExists(user.id, messages, language);
+      
+      if (conversationId) {
+        console.log('✅ Auto-created conversation:', conversationId);
+        return conversationId;
       }
 
-      console.log('✅ Auto-created conversation:', conversation.id);
-
-      // Save all current session messages to the new conversation
-      const messageInserts = messages.map((msg, index) => ({
-        conversation_id: conversation.id,
-        user_id: user.id,
-        role: msg.role,
-        content: msg.content,
-        created_at: new Date(Date.now() + index).toISOString(),
-        language: language,
-        input_type: msg.inputType || 'text',
-        intent: msg.intent,
-        confidence_level: msg.confidence,
-        action_taken: msg.actionTaken ? String(msg.actionTaken) : null,
-        browsing_used: msg.browsingUsed || false,
-        browsing_data: msg.browsingData || null,
-        quota_status: msg.quotaStatus || null,
-        action_result: msg.actionResult || null
-      }));
-
-      const { error: messagesError } = await supabase
-        .from('ai_chat_history')
-        .insert(messageInserts);
-
-      if (messagesError) {
-        console.error('❌ Error saving messages:', messagesError);
-        return null;
-      }
-
-      console.log('✅ Saved', messageInserts.length, 'messages to new conversation');
-      return conversation.id;
+      return null;
     } catch (error) {
       console.error('❌ Error in createConversationIfNeeded:', error);
       return null;
@@ -242,13 +200,7 @@ const WaktiAIV2 = () => {
       }
 
       // Update conversation's last_message_at
-      await supabase
-        .from('ai_conversations')
-        .update({ 
-          last_message_at: message.timestamp.toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', conversationId);
+      await WaktiAIV2Service.updateConversationTimestamp(conversationId);
 
       console.log('✅ Message saved successfully');
     } catch (error) {
@@ -469,13 +421,15 @@ const WaktiAIV2 = () => {
   };
 
   const saveCurrentConversationIfNeeded = async () => {
-    // This is now mainly for cleanup when switching conversations
-    // The auto-creation happens in handleSendMessage
+    // Save current conversation before starting new one
     if (sessionMessages.length > 0 && !currentConversationId) {
-      console.log('🔄 WAKTI AI V2: Fallback save for unsaved conversation');
-      const newConversationId = await createConversationIfNeeded(sessionMessages);
-      if (newConversationId) {
-        setCurrentConversationId(newConversationId);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        await WaktiAIV2Service.saveCurrentConversationIfNeeded(user.id, sessionMessages, currentConversationId, language);
+      } catch (error) {
+        console.error('❌ Error saving current conversation:', error);
       }
     }
   };
@@ -669,5 +623,3 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
-
-}
