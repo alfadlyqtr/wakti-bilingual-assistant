@@ -463,7 +463,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-[99vh] bg-background overflow-hidden">
+    <div className="flex h-[98.5vh] bg-background overflow-hidden">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
