@@ -2,6 +2,7 @@
 import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
+import html2canvas from 'html2canvas';
 
 interface PDFGenerationOptions {
   title: string;
@@ -20,7 +21,7 @@ interface PDFGenerationOptions {
 }
 
 export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     try {
       const { title, content, metadata, language } = options;
       const isRtl = language === 'ar';
@@ -39,12 +40,8 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 20;
-      const lineHeight = 7;
       let yPosition = margin;
 
-      // Set font to support Unicode (includes Arabic)
-      doc.setFont('helvetica');
-      
       // Header
       doc.setFillColor(6, 5, 65); // #060541
       doc.rect(0, 0, pageWidth, 40, 'F');
@@ -58,17 +55,8 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       // Title
       doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      const titleLines = doc.splitTextToSize(title, pageWidth - 2 * margin);
-      titleLines.forEach((line: string) => {
-        if (yPosition > pageHeight - margin) {
-          doc.addPage();
-          yPosition = margin;
-        }
-        doc.text(line, isRtl ? pageWidth - margin : margin, yPosition, { align: isRtl ? 'right' : 'left' });
-        yPosition += lineHeight + 2;
-      });
-      
-      yPosition += 10;
+      doc.text(title, isRtl ? pageWidth - margin : margin, yPosition, { align: isRtl ? 'right' : 'left' });
+      yPosition += 15;
       
       // Metadata section
       doc.setFontSize(12);
@@ -95,23 +83,19 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         metadataItems.push(`${isRtl ? 'الموقع:' : 'Location:'} ${metadata.location}`);
       }
       
-      // Add background for metadata
+      // Add metadata with background
       doc.setFillColor(248, 249, 250);
-      const metadataHeight = metadataItems.length * lineHeight + 10;
+      const metadataHeight = metadataItems.length * 7 + 10;
       doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, metadataHeight, 'F');
       
       metadataItems.forEach(item => {
-        if (yPosition > pageHeight - margin) {
-          doc.addPage();
-          yPosition = margin;
-        }
         doc.text(item, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
-        yPosition += lineHeight;
+        yPosition += 7;
       });
       
       yPosition += 15;
       
-      // Content section
+      // Content section using html2canvas for Arabic text
       if (content.text && content.text.trim()) {
         // Content header
         doc.setFont('helvetica', 'bold');
@@ -120,35 +104,84 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         doc.text(isRtl ? 'المحتوى' : 'Content', isRtl ? pageWidth - margin - 5 : margin + 5, yPosition + 5);
         yPosition += 20;
         
-        // Content text
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(11);
+        // Create hidden element with Arabic content
+        const hiddenDiv = document.createElement('div');
+        hiddenDiv.style.position = 'absolute';
+        hiddenDiv.style.left = '-9999px';
+        hiddenDiv.style.top = '-9999px';
+        hiddenDiv.style.width = `${(pageWidth - 2 * margin) * 3.78}px`; // Convert mm to px (approximate)
+        hiddenDiv.style.padding = '20px';
+        hiddenDiv.style.backgroundColor = 'white';
+        hiddenDiv.style.color = 'black';
+        hiddenDiv.style.fontSize = '16px';
+        hiddenDiv.style.lineHeight = '1.5';
+        hiddenDiv.style.fontFamily = isRtl ? 'Arial, "Segoe UI", Tahoma, sans-serif' : 'Arial, sans-serif';
+        hiddenDiv.style.direction = isRtl ? 'rtl' : 'ltr';
+        hiddenDiv.style.textAlign = isRtl ? 'right' : 'left';
+        hiddenDiv.style.whiteSpace = 'pre-wrap';
+        hiddenDiv.style.wordWrap = 'break-word';
+        hiddenDiv.textContent = content.text;
         
-        // Split text into lines that fit the page width
-        const textWidth = pageWidth - 2 * margin - 10;
-        const contentLines = doc.splitTextToSize(content.text, textWidth);
+        document.body.appendChild(hiddenDiv);
         
-        console.log('Content lines to render:', contentLines.length);
-        
-        contentLines.forEach((line: string, index: number) => {
-          if (yPosition > pageHeight - margin - 10) {
+        try {
+          // Convert to canvas
+          const canvas = await html2canvas(hiddenDiv, {
+            backgroundColor: 'white',
+            scale: 2, // Higher quality
+            useCORS: true,
+            allowTaint: true
+          });
+          
+          // Remove hidden element
+          document.body.removeChild(hiddenDiv);
+          
+          // Convert canvas to image data
+          const imgData = canvas.toDataURL('image/png');
+          
+          // Calculate dimensions for PDF
+          const imgWidth = pageWidth - 2 * margin;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          
+          // Check if image fits on current page
+          if (yPosition + imgHeight > pageHeight - margin) {
             doc.addPage();
             yPosition = margin;
           }
           
-          // For Arabic text, align to the right
-          const xPosition = isRtl ? pageWidth - margin - 5 : margin + 5;
-          doc.text(line, xPosition, yPosition, { align: isRtl ? 'right' : 'left' });
-          yPosition += lineHeight;
-        });
+          // Add image to PDF
+          doc.addImage(imgData, 'PNG', margin, yPosition, imgWidth, imgHeight);
+          
+        } catch (canvasError) {
+          console.error('Canvas rendering failed, using fallback:', canvasError);
+          
+          // Remove hidden element if still exists
+          if (document.body.contains(hiddenDiv)) {
+            document.body.removeChild(hiddenDiv);
+          }
+          
+          // Fallback to simple text
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(11);
+          
+          const lines = content.text.split('\n');
+          lines.forEach(line => {
+            if (yPosition > pageHeight - margin - 10) {
+              doc.addPage();
+              yPosition = margin;
+            }
+            doc.text(line, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
+            yPosition += 7;
+          });
+        }
       }
       
       // Footer
-      yPosition = pageHeight - 20;
+      const footerY = pageHeight - 20;
       doc.setFontSize(9);
       doc.setTextColor(102, 102, 102);
       const footerText = isRtl ? 'WAKTI © 2025 - وقتي' : 'WAKTI © 2025';
-      doc.text(footerText, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(footerText, pageWidth / 2, footerY, { align: 'center' });
       
       console.log('PDF generation completed');
       
