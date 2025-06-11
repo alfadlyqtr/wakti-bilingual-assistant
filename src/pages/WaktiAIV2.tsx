@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
-import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
+import { PageContainer } from '@/components/PageContainer';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
@@ -463,73 +463,64 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <ChatDrawers
-        showConversations={showConversations}
-        setShowConversations={setShowConversations}
-        showQuickActions={showQuickActions}
-        setShowQuickActions={setShowQuickActions}
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        fetchConversations={fetchConversations}
-        onSendMessage={handleSendMessage}
-        activeTrigger={activeTrigger}
-        onTriggerChange={handleTriggerChange}
-        onTextGenerated={handleTextGenerated}
-        onNewConversation={handleNewConversation}
-        onClearChat={handleClearChat}
-        sessionMessages={sessionMessages}
-      />
-
-      {/* MAIN CONTAINER - Fixed header, scrollable messages, fixed input */}
-      <div className="flex-1 flex flex-col h-full">
-        
-        {/* HEADER - Fixed at top with guaranteed visibility */}
-        <ChatHeader
+    <PageContainer showHeader={true}>
+      <div className="flex h-full bg-background overflow-hidden relative">
+        <ChatDrawers
+          showConversations={showConversations}
+          setShowConversations={setShowConversations}
+          showQuickActions={showQuickActions}
+          setShowQuickActions={setShowQuickActions}
+          conversations={conversations}
           currentConversationId={currentConversationId}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
+          fetchConversations={fetchConversations}
+          onSendMessage={handleSendMessage}
           activeTrigger={activeTrigger}
-          onShowConversations={() => setShowConversations(true)}
+          onTriggerChange={handleTriggerChange}
+          onTextGenerated={handleTextGenerated}
           onNewConversation={handleNewConversation}
-          onShowQuickActions={() => setShowQuickActions(true)}
+          onClearChat={handleClearChat}
+          sessionMessages={sessionMessages}
         />
 
-        {/* NOTIFICATION BARS - Below fixed header */}
-        <div className="fixed top-[60px] left-0 right-0 z-40 bg-background border-b">
+        {/* MAIN CONTAINER - Natural layout within PageContainer */}
+        <div className="flex-1 flex flex-col h-full">
+          
+          {/* NOTIFICATION BARS - At top */}
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
             error={error}
             onSearchConfirmation={handleSearchConfirmation}
             onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
           />
-        </div>
-        
-        {/* MESSAGES CONTAINER - Scrollable middle section with proper top and bottom spacing */}
-        <div className="flex-1 overflow-hidden pt-[60px] pb-[120px]">
-          <ChatMessages
-            sessionMessages={sessionMessages}
-            isLoading={isLoading}
-            activeTrigger={activeTrigger}
-            scrollAreaRef={scrollAreaRef}
-            userProfile={userProfile}
-          />
-        </div>
+          
+          {/* MESSAGES CONTAINER - Flexible middle section */}
+          <div className="flex-1 overflow-hidden">
+            <ChatMessages
+              sessionMessages={sessionMessages}
+              isLoading={isLoading}
+              activeTrigger={activeTrigger}
+              scrollAreaRef={scrollAreaRef}
+              userProfile={userProfile}
+            />
+          </div>
 
-        {/* INPUT - Fixed at bottom with guaranteed height and visibility */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t h-[120px] z-50">
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={isLoading}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-          />
+          {/* INPUT - Natural bottom position */}
+          <div className="bg-background border-t">
+            <ChatInput
+              message={message}
+              setMessage={setMessage}
+              isLoading={isLoading}
+              sessionMessages={sessionMessages}
+              onSendMessage={handleSendMessage}
+              onClearChat={handleClearChat}
+            />
+          </div>
+          
         </div>
-        
       </div>
-    </div>
+    </PageContainer>
   );
 };
 
