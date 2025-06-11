@@ -20,12 +20,14 @@ import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/con
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { TranslationKey } from "@/utils/translationTypes";
 import { cn } from "@/lib/utils";
+import { getUserPreferences } from "@/utils/widgetPreferences";
 
 export default function Settings() {
   const { theme, language, toggleTheme, toggleLanguage } = useTheme();
   const location = useLocation();
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
+  const [widgetVisibility, setWidgetVisibility] = useState(getUserPreferences());
   const categories = Object.keys(quotes);
   const queryClient = useQueryClient();
 
@@ -80,6 +82,19 @@ export default function Settings() {
     
     toast.success(t("quotePreferencesUpdated", language));
   };
+
+  // Widget visibility handlers
+  const handleWidgetToggle = (widgetId: string, checked: boolean) => {
+    const newVisibility = { ...widgetVisibility, [widgetId]: checked };
+    setWidgetVisibility(newVisibility);
+    localStorage.setItem('widgetVisibility', JSON.stringify(newVisibility));
+    
+    toast.success(
+      language === 'ar' 
+        ? `تم ${checked ? 'تفعيل' : 'إلغاء'} عرض الودجت`
+        : `Widget ${checked ? 'enabled' : 'disabled'}`
+    );
+  };
   
   // Update the handleSaveAllSettings function to use the confirm function
   const handleSaveAllSettings = async () => {
@@ -89,16 +104,8 @@ export default function Settings() {
     });
 
     if (confirmed) {
-      // Already saving on change, but we can add additional save logic here
       // Save widget visibility settings
-      const widgetSettings = {
-        tasksWidget: true,
-        calendarWidget: true,
-        remindersWidget: true,
-        quoteWidget: true
-      };
-      
-      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+      localStorage.setItem('widgetVisibility', JSON.stringify(widgetVisibility));
       localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
       
       toast.success(t("allSettingsSaved", language), {
@@ -304,20 +311,44 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex justify-between items-center">
-            <span>{t("tasksWidget", language)}</span>
-            <Switch defaultChecked id="tasks-widget" />
+            <span>
+              {language === 'ar' ? 'ودجت التقويم' : 'Calendar Widget'}
+            </span>
+            <Switch 
+              checked={widgetVisibility.calendar !== false}
+              onCheckedChange={(checked) => handleWidgetToggle('calendar', checked)}
+              id="calendar-widget" 
+            />
           </div>
           <div className="flex justify-between items-center">
-            <span>{t("calendarWidget", language)}</span>
-            <Switch defaultChecked id="calendar-widget" />
+            <span>
+              {language === 'ar' ? 'ودجت المهام والتذكيرات' : 'Tasks & Reminders Widget'}
+            </span>
+            <Switch 
+              checked={widgetVisibility.tr !== false}
+              onCheckedChange={(checked) => handleWidgetToggle('tr', checked)}
+              id="tr-widget" 
+            />
           </div>
           <div className="flex justify-between items-center">
-            <span>{t("remindersWidget", language)}</span>
-            <Switch defaultChecked id="reminders-widget" />
+            <span>
+              {language === 'ar' ? 'ودجت مواعيد الأحداث' : 'Maw3d Events Widget'}
+            </span>
+            <Switch 
+              checked={widgetVisibility.maw3d !== false}
+              onCheckedChange={(checked) => handleWidgetToggle('maw3d', checked)}
+              id="maw3d-widget" 
+            />
           </div>
           <div className="flex justify-between items-center">
-            <span>{t("dailyQuoteWidget", language)}</span>
-            <Switch defaultChecked id="quote-widget" />
+            <span>
+              {language === 'ar' ? 'ودجت الاقتباس اليومي' : 'Daily Quote Widget'}
+            </span>
+            <Switch 
+              checked={widgetVisibility.dailyQuote !== false}
+              onCheckedChange={(checked) => handleWidgetToggle('dailyQuote', checked)}
+              id="quote-widget" 
+            />
           </div>
         </CardContent>
       </Card>
