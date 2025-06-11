@@ -117,22 +117,22 @@ export function ChatInput({
   };
 
   return (
-    <div className="w-full bg-background/95 backdrop-blur-sm">
+    <div className="w-full">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
         
-        {/* Uploaded Files Display - Clean and minimal */}
+        {/* Uploaded Files Display - Liquid Glass Style */}
         {uploadedFiles.length > 0 && (
-          <div className="px-3 py-2 bg-muted/10 border-b border-border/20">
+          <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
             <div className="max-w-4xl mx-auto">
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <span className="text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-medium text-foreground/70">
                   {language === 'ar' ? 'ملفات:' : 'Files:'}
                 </span>
-                <span className="text-xs text-muted-foreground/60 bg-muted/30 px-1.5 py-0.5 rounded">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
                   {uploadedFiles.length}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+              <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
                 {uploadedFiles.map((file, index) => (
                   <FilePreview
                     key={index}
@@ -147,145 +147,151 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - Clean and minimal design */}
-        <div className="px-3 py-2.5">
+        {/* Main Input Area - Liquid Glass Container */}
+        <div className="px-4 pb-4">
           <div className="max-w-4xl mx-auto">
             
-            {/* Single line input container */}
-            <div className="flex items-center gap-2 bg-muted/20 rounded-lg border border-border/30 p-1.5">
+            {/* Liquid Glass Input Container */}
+            <div className="relative group">
+              {/* Glow Effect */}
+              <div className="absolute -inset-0.5 rounded-3xl bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-500 blur-sm"></div>
               
-              {/* Upload Button - Minimal */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-md hover:bg-accent/50 flex-shrink-0"
-                      onClick={handleFileUpload}
-                      disabled={isUploading || isLoading}
-                      aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
-                    >
-                      {isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Upload className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {language === 'ar' ? 'رفع ملف' : 'Upload file'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              {/* Hidden file input */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept="image/*,.pdf,.txt"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-
-              {/* Mic Button - Minimal */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`h-8 w-8 rounded-md flex-shrink-0 ${
-                        isListening 
-                          ? 'bg-red-500/10 text-red-600 hover:bg-red-500/20' 
-                          : speechSupported 
-                            ? 'hover:bg-accent/50' 
-                            : 'opacity-40 cursor-not-allowed'
-                      }`}
-                      onClick={handleVoiceInput}
-                      disabled={!speechSupported || isLoading}
-                      aria-label={getMicTooltip()}
-                    >
-                      {isListening ? (
-                        <MicOff className="h-4 w-4" />
-                      ) : (
-                        <Mic className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {getMicTooltip()}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              {/* Text Input - Clean design */}
-              <Textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={
-                  isListening
-                    ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
-                    : language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
-                }
-                className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-1.5 px-2 min-h-[32px] max-h-20 text-sm placeholder:text-muted-foreground/60"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSend();
-                  }
-                }}
-                disabled={isListening || isLoading}
-                aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
-              />
-
-              {/* Send Button - Only when there's content */}
-              {(message.trim() || uploadedFiles.length > 0) && (
+              {/* Main Container */}
+              <div className="relative flex items-center gap-3 bg-white/10 dark:bg-black/10 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-white/10 p-2 shadow-2xl">
+                
+                {/* Upload Button - Liquid Glass Style */}
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={handleSend}
-                        disabled={isLoading || isListening || isUploading}
-                        className="h-8 w-8 rounded-md p-0 flex-shrink-0 bg-primary hover:bg-primary/90"
+                        variant="ghost"
                         size="icon"
-                        aria-label={language === 'ar' ? 'إرسال' : 'Send'}
+                        className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
+                        onClick={handleFileUpload}
+                        disabled={isUploading || isLoading}
+                        aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
                       >
-                        {isLoading ? (
+                        {isUploading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Send className="h-4 w-4" />
+                          <Upload className="h-4 w-4" />
                         )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs">
-                      {language === 'ar' ? 'إرسال' : 'Send'}
+                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                      {language === 'ar' ? 'رفع ملف' : 'Upload file'}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-              )}
+
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,.pdf,.txt"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {/* Mic Button - Liquid Glass Style */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-9 w-9 rounded-2xl backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0 border-0 ${
+                          isListening 
+                            ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30' 
+                            : speechSupported 
+                              ? 'bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10' 
+                              : 'bg-white/5 opacity-40 cursor-not-allowed'
+                        }`}
+                        onClick={handleVoiceInput}
+                        disabled={!speechSupported || isLoading}
+                        aria-label={getMicTooltip()}
+                      >
+                        {isListening ? (
+                          <MicOff className="h-4 w-4" />
+                        ) : (
+                          <Mic className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                      {getMicTooltip()}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                {/* Text Input - Glass Style */}
+                <Textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={
+                    isListening
+                      ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
+                      : language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
+                  }
+                  className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-2 px-3 min-h-[36px] max-h-20 text-sm placeholder:text-foreground/40 rounded-2xl"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  disabled={isListening || isLoading}
+                  aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
+                />
+
+                {/* Send Button - Floating Glass Orb */}
+                {(message.trim() || uploadedFiles.length > 0) && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleSend}
+                          disabled={isLoading || isListening || isUploading}
+                          className="h-9 w-9 rounded-2xl p-0 flex-shrink-0 bg-primary/80 hover:bg-primary border-0 backdrop-blur-sm transition-all duration-300 hover:scale-110 hover:shadow-xl shadow-lg"
+                          size="icon"
+                          aria-label={language === 'ar' ? 'إرسال' : 'Send'}
+                        >
+                          {isLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                        {language === 'ar' ? 'إرسال' : 'Send'}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
             </div>
 
-            {/* Status Indicators - Minimal */}
+            {/* Status Indicators - Glass Style */}
             {(isListening || speechError || isUploading) && (
-              <div className="mt-2 flex justify-center">
+              <div className="mt-3 flex justify-center">
                 {isListening && (
-                  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-500/10 text-red-600 rounded text-xs">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 backdrop-blur-xl text-red-500 rounded-2xl border border-red-500/20 text-xs font-medium">
                     <div className="h-1.5 w-1.5 bg-red-500 rounded-full animate-ping" />
                     {language === 'ar' ? 'استماع...' : 'Listening...'}
                   </div>
                 )}
 
                 {speechError && (
-                  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-500/10 text-red-600 rounded text-xs">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 backdrop-blur-xl text-red-500 rounded-2xl border border-red-500/20 text-xs font-medium">
                     <MicOff className="h-3 w-3" />
                     {speechError}
                   </div>
                 )}
 
                 {isUploading && (
-                  <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 text-blue-600 rounded text-xs">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
                     <Loader2 className="h-3 w-3 animate-spin" />
                     {language === 'ar' ? 'رفع...' : 'Uploading...'}
                   </div>
