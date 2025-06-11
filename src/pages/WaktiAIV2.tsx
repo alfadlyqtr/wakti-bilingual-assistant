@@ -559,11 +559,10 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* MAIN CONTAINER - Better layout structure */}
-      <div className="flex-1 flex flex-col h-full max-h-screen">
-        
-        {/* HEADER + NOTIFICATION BARS - Fixed at top */}
-        <div className="flex-shrink-0 bg-background border-b border-border/40">
+      {/* Main Chat Container */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Header */}
+        <div className="flex-shrink-0">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -578,9 +577,9 @@ const WaktiAIV2 = () => {
             onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
           />
         </div>
-        
-        {/* MESSAGES CONTAINER - Flexible middle section */}
-        <div className="flex-1 overflow-hidden">
+
+        {/* Messages Area */}
+        <div className="flex-1 min-h-0">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -590,8 +589,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* INPUT - Modern integrated design */}
-        <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm border-t border-border/40">
+        {/* Input Area */}
+        <div className="flex-shrink-0">
           <ChatInput
             message={message}
             setMessage={setMessage}
@@ -601,7 +600,6 @@ const WaktiAIV2 = () => {
             onClearChat={handleClearChat}
           />
         </div>
-        
       </div>
     </div>
   );
