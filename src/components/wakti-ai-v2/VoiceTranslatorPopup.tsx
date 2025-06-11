@@ -134,7 +134,7 @@ const SUPPORTED_LANGUAGES = [
 const MAX_RECORDING_TIME = 15;
 const COOLDOWN_TIME = 5000;
 const EXTRA_TRANSLATIONS_PRICE = 10;
-const EXTRA_TRANSLATIONS_COUNT = 100;
+const EXTRA_TRANSLATIONS_COUNT = 150;
 const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
@@ -661,6 +661,9 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     return success;
   }, [purchaseExtraTranslations]);
 
+  // Only show daily reset info if needed
+  const showDailyResetInfo = !quotaError && (isAtSoftLimit || isAtHardLimit);
+
   if (isLoadingQuota) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -743,8 +746,8 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <p className="text-sm text-red-600 dark:text-red-400">
                 {language === 'ar' 
-                  ? 'لقد وصلت للحد الأقصى من الترجمات اليومية.' 
-                  : "You've reached your daily translation limit."
+                  ? 'لقد وصلت للحد الأقصى من الترجمات الشهرية.' 
+                  : "You've reached your monthly translation limit."
                 }
               </p>
               <Button size="sm" onClick={handlePurchaseExtra} className="ml-auto">
@@ -759,18 +762,18 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
               <AlertTriangle className="h-4 w-4 text-orange-600" />
               <p className="text-sm text-orange-600 dark:text-orange-400">
                 {language === 'ar' 
-                  ? 'اقتربت من الحد الأقصى للترجمات اليومية.' 
-                  : 'You\'re nearing your daily limit.'
+                  ? 'اقتربت من الحد الأقصى للترجمات الشهرية.' 
+                  : 'You\'re nearing your monthly limit.'
                 }
               </p>
             </div>
           )}
 
-          {/* Daily reset info */}
-          {!quotaError && (
+          {/* Monthly reset info - only show if needed */}
+          {showDailyResetInfo && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
-              {language === 'ar' ? 'الحصة المجانية تتجدد يومياً في منتصف الليل' : 'Free quota resets daily at midnight'}
+              {language === 'ar' ? 'الحصة المجانية تتجدد شهرياً' : 'Free quota resets monthly'}
             </div>
           )}
 
@@ -967,3 +970,5 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     </Dialog>
   );
 }
+
+</edits_to_apply>

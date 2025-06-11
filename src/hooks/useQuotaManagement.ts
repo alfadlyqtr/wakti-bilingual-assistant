@@ -17,8 +17,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
   // Monthly limit for translations (treating daily as monthly for display consistency)
-  const MAX_DAILY_TRANSLATIONS = 150; // Changed from 5 to 150 to match monthly terminology
-  const SOFT_WARNING_THRESHOLD = 130; // Warn at 130 out of 150
+  const MAX_DAILY_TRANSLATIONS = 10; // Changed from 150 to 10 for translations per month
+  const SOFT_WARNING_THRESHOLD = 8; // Warn at 8 out of 10
 
   // Memoize the loadUserQuota function to prevent infinite re-renders
   const loadUserQuota = useCallback(async () => {
