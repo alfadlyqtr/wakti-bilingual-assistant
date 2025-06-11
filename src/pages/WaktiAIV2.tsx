@@ -687,6 +687,7 @@ const WaktiAIV2 = () => {
             onShowConversations={() => setShowConversations(true)}
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
+            quotaStatus={quotaStatus}
           />
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
@@ -737,5 +738,3 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
-
-</edits_to_apply>
