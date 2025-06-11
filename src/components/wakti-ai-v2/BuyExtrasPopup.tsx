@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -23,7 +22,8 @@ export function BuyExtrasPopup({
   const {
     userSearchQuota,
     userVoiceQuota,
-    purchaseExtraSearches,
+    purchaseExtraRegularSearches,
+    purchaseExtraAdvancedSearches,
     purchaseExtraVoiceCredits,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES
@@ -43,7 +43,7 @@ export function BuyExtrasPopup({
   const handlePurchaseRegularSearches = async () => {
     setIsRegularSearchPurchasing(true);
     try {
-      const success = await purchaseExtraSearches(50);
+      const success = await purchaseExtraRegularSearches(50);
       if (success) {
         toast.success(language === 'ar' ? 'تم شراء 50 بحث عادي إضافي بنجاح!' : 'Successfully purchased 50 extra regular searches!');
         onOpenChange(false);
@@ -59,7 +59,7 @@ export function BuyExtrasPopup({
   const handlePurchaseAdvancedSearches = async () => {
     setIsAdvancedSearchPurchasing(true);
     try {
-      const success = await purchaseExtraSearches(50);
+      const success = await purchaseExtraAdvancedSearches(50);
       if (success) {
         toast.success(language === 'ar' ? 'تم شراء 50 بحث متقدم إضافي بنجاح!' : 'Successfully purchased 50 extra advanced searches!');
         onOpenChange(false);
@@ -107,12 +107,14 @@ export function BuyExtrasPopup({
   const getSearchQuotaStatus = () => {
     const regularUsed = userSearchQuota.regular_search_count;
     const advancedUsed = userSearchQuota.daily_count;
-    const extraSearches = userSearchQuota.extra_searches;
+    const extraRegularSearches = userSearchQuota.extra_regular_searches;
+    const extraAdvancedSearches = userSearchQuota.extra_advanced_searches;
     
     return {
       regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
       advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
-      extraSearches
+      extraRegularSearches,
+      extraAdvancedSearches
     };
   };
 
@@ -185,10 +187,16 @@ export function BuyExtrasPopup({
                   {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
               </div>
-              {quotaStatus.extraSearches > 0 && (
+              {quotaStatus.extraRegularSearches > 0 && (
                 <div className="flex justify-between text-green-600">
-                  <span>{language === 'ar' ? 'بحثات إضافية:' : 'Extra Searches:'}</span>
-                  <span className="font-medium">+{quotaStatus.extraSearches}</span>
+                  <span>{language === 'ar' ? 'بحثات عادية إضافية:' : 'Extra Regular Searches:'}</span>
+                  <span className="font-medium">+{quotaStatus.extraRegularSearches}</span>
+                </div>
+              )}
+              {quotaStatus.extraAdvancedSearches > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>{language === 'ar' ? 'بحثات متقدمة إضافية:' : 'Extra Advanced Searches:'}</span>
+                  <span className="font-medium">+{quotaStatus.extraAdvancedSearches}</span>
                 </div>
               )}
               {voiceStatus.extraCharacters > 0 && (

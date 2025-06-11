@@ -16,7 +16,8 @@ interface QuotaDisplayProps {
     advancedRemaining: number;
     regularLimit: number;
     advancedLimit: number;
-    extraSearches: number;
+    extraRegularSearches: number;
+    extraAdvancedSearches: number;
   } | null;
   activeTrigger?: string;
 }
@@ -34,6 +35,7 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
     const isAdvanced = activeTrigger === 'advanced_search';
     const remaining = isAdvanced ? searchQuotaStatus.advancedRemaining : searchQuotaStatus.regularRemaining;
     const limit = isAdvanced ? searchQuotaStatus.advancedLimit : searchQuotaStatus.regularLimit;
+    const extraSearches = isAdvanced ? searchQuotaStatus.extraAdvancedSearches : searchQuotaStatus.extraRegularSearches;
     const usagePercentage = Math.round(((limit - remaining) / limit) * 100);
     
     const getQuotaColor = (percentage: number) => {
@@ -56,9 +58,9 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
             {language === 'ar' ? 'متبقي' : 'left'}: {remaining}
           </span>
         </div>
-        {searchQuotaStatus.extraSearches > 0 && (
+        {extraSearches > 0 && (
           <Badge variant="outline" className="text-xs">
-            +{searchQuotaStatus.extraSearches}
+            +{extraSearches}
           </Badge>
         )}
       </div>

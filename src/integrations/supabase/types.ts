@@ -1161,6 +1161,8 @@ export type Database = {
           created_at: string
           daily_count: number
           daily_date: string
+          extra_advanced_searches: number | null
+          extra_regular_searches: number | null
           extra_searches: number
           id: string
           purchase_date: string | null
@@ -1171,6 +1173,8 @@ export type Database = {
           created_at?: string
           daily_count?: number
           daily_date?: string
+          extra_advanced_searches?: number | null
+          extra_regular_searches?: number | null
           extra_searches?: number
           id?: string
           purchase_date?: string | null
@@ -1181,6 +1185,8 @@ export type Database = {
           created_at?: string
           daily_count?: number
           daily_date?: string
+          extra_advanced_searches?: number | null
+          extra_regular_searches?: number | null
           extra_searches?: number
           id?: string
           purchase_date?: string | null
@@ -1366,6 +1372,9 @@ export type Database = {
           daily_count: number
           extra_searches: number
           purchase_date: string
+          regular_search_count: number
+          extra_regular_searches: number
+          extra_advanced_searches: number
         }[]
       }
       get_or_create_user_voice_quota: {
@@ -1397,12 +1406,20 @@ export type Database = {
         Args: { "": unknown }
         Returns: unknown
       }
+      increment_regular_search_usage: {
+        Args: { p_user_id: string }
+        Returns: {
+          success: boolean
+          regular_search_count: number
+          extra_regular_searches: number
+        }[]
+      }
       increment_search_usage: {
         Args: { p_user_id: string }
         Returns: {
           success: boolean
           daily_count: number
-          extra_searches: number
+          extra_advanced_searches: number
         }[]
       }
       increment_translation_usage: {
@@ -1430,7 +1447,14 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: undefined
       }
-      purchase_extra_searches: {
+      purchase_extra_advanced_searches: {
+        Args: { p_user_id: string; p_count: number }
+        Returns: {
+          success: boolean
+          new_extra_count: number
+        }[]
+      }
+      purchase_extra_regular_searches: {
         Args: { p_user_id: string; p_count: number }
         Returns: {
           success: boolean

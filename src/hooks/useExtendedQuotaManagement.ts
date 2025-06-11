@@ -6,7 +6,9 @@ import { toast } from '@/hooks/use-toast';
 export interface UserSearchQuota {
   daily_count: number; // This is actually advanced search monthly count
   regular_search_count: number; // Regular search monthly count
-  extra_searches: number;
+  extra_searches: number; // Keep for backward compatibility
+  extra_regular_searches: number; // Separate regular extras
+  extra_advanced_searches: number; // Separate advanced extras
   purchase_date?: string;
 }
 
@@ -22,7 +24,9 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [userSearchQuota, setUserSearchQuota] = useState<UserSearchQuota>({ 
     daily_count: 0, 
     regular_search_count: 0, 
-    extra_searches: 0 
+    extra_searches: 0,
+    extra_regular_searches: 0,
+    extra_advanced_searches: 0
   });
   const [userVoiceQuota, setUserVoiceQuota] = useState<UserVoiceQuota>({ 
     characters_used: 0, 
@@ -62,12 +66,20 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           daily_count: quota.daily_count,
           regular_search_count: quota.regular_search_count || 0,
           extra_searches: quota.extra_searches,
+          extra_regular_searches: quota.extra_regular_searches || 0,
+          extra_advanced_searches: quota.extra_advanced_searches || 0,
           purchase_date: quota.purchase_date
         });
       }
     } catch (error) {
       console.error('❌ Error loading user search quota:', error);
-      setUserSearchQuota({ daily_count: 0, regular_search_count: 0, extra_searches: 0 });
+      setUserSearchQuota({ 
+        daily_count: 0, 
+        regular_search_count: 0, 
+        extra_searches: 0,
+        extra_regular_searches: 0,
+        extra_advanced_searches: 0
+      });
       
       toast({
         title: language === 'ar' ? 'تحذير' : 'Warning',
@@ -152,7 +164,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           setUserSearchQuota(prev => ({
             ...prev,
             daily_count: result.daily_count,
-            extra_searches: result.extra_searches
+            extra_advanced_searches: result.extra_advanced_searches
           }));
           
           return true;
@@ -212,7 +224,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           setUserSearchQuota(prev => ({
             ...prev,
             regular_search_count: result.regular_search_count,
-            extra_searches: result.extra_searches
+            extra_regular_searches: result.extra_regular_searches
           }));
           
           return true;
@@ -245,14 +257,14 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, language]);
 
-  // Purchase extra searches (50 for 10 QAR)
-  const purchaseExtraSearches = useCallback(async (count: number = 50) => {
+  // Purchase extra regular searches (50 for 10 QAR)
+  const purchaseExtraRegularSearches = useCallback(async (count: number = 50) => {
     if (!user) return false;
 
     try {
-      console.log('💰 Purchasing extra searches:', count);
+      console.log('💰 Purchasing extra regular searches:', count);
       
-      const { data, error } = await supabase.rpc('purchase_extra_searches', {
+      const { data, error } = await supabase.rpc('purchase_extra_regular_searches', {
         p_user_id: user.id,
         p_count: count
       });
@@ -264,27 +276,73 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         if (result.success) {
           setUserSearchQuota(prev => ({
             ...prev,
-            extra_searches: result.new_extra_count,
+            extra_regular_searches: result.new_extra_count,
             purchase_date: new Date().toISOString()
           }));
           
           toast({
             title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
             description: language === 'ar' 
-              ? `تم إضافة ${count} بحث إضافي (صالح لشهر واحد)` 
-              : `Added ${count} extra searches (valid for 1 month)`,
+              ? `تم إضافة ${count} بحث عادي إضافي (صالح لشهر واحد)` 
+              : `Added ${count} extra regular searches (valid for 1 month)`,
           });
           
-          console.log('💰 Extra searches purchased successfully:', result.new_extra_count);
+          console.log('💰 Extra regular searches purchased successfully:', result.new_extra_count);
           return true;
         }
       }
       return false;
     } catch (error) {
-      console.error('❌ Error purchasing extra searches:', error);
+      console.error('❌ Error purchasing extra regular searches:', error);
       toast({
         title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
-        description: language === 'ar' ? 'فشل في شراء البحثات الإضافية' : 'Failed to purchase extra searches',
+        description: language === 'ar' ? 'فشل في شراء البحثات العادية الإضافية' : 'Failed to purchase extra regular searches',
+        variant: 'destructive'
+      });
+      return false;
+    }
+  }, [user, language]);
+
+  // Purchase extra advanced searches (50 for 10 QAR)
+  const purchaseExtraAdvancedSearches = useCallback(async (count: number = 50) => {
+    if (!user) return false;
+
+    try {
+      console.log('💰 Purchasing extra advanced searches:', count);
+      
+      const { data, error } = await supabase.rpc('purchase_extra_advanced_searches', {
+        p_user_id: user.id,
+        p_count: count
+      });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          setUserSearchQuota(prev => ({
+            ...prev,
+            extra_advanced_searches: result.new_extra_count,
+            purchase_date: new Date().toISOString()
+          }));
+          
+          toast({
+            title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
+            description: language === 'ar' 
+              ? `تم إضافة ${count} بحث متقدم إضافي (صالح لشهر واحد)` 
+              : `Added ${count} extra advanced searches (valid for 1 month)`,
+          });
+          
+          console.log('💰 Extra advanced searches purchased successfully:', result.new_extra_count);
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error purchasing extra advanced searches:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ في الشراء' : 'Purchase Error',
+        description: language === 'ar' ? 'فشل في شراء البحثات المتقدمة الإضافية' : 'Failed to purchase extra advanced searches',
         variant: 'destructive'
       });
       return false;
@@ -396,10 +454,10 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     const remainingFreeRegularSearches = Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - userSearchQuota.regular_search_count);
     const isAtAdvancedSearchSoftLimit = userSearchQuota.daily_count >= ADVANCED_SEARCH_SOFT_WARNING_THRESHOLD;
     const isAtRegularSearchSoftLimit = userSearchQuota.regular_search_count >= REGULAR_SEARCH_SOFT_WARNING_THRESHOLD;
-    const isAtAdvancedSearchHardLimit = userSearchQuota.daily_count >= MAX_MONTHLY_ADVANCED_SEARCHES && userSearchQuota.extra_searches === 0;
-    const isAtRegularSearchHardLimit = userSearchQuota.regular_search_count >= MAX_MONTHLY_REGULAR_SEARCHES && userSearchQuota.extra_searches === 0;
-    const canAdvancedSearch = remainingFreeAdvancedSearches > 0 || userSearchQuota.extra_searches > 0;
-    const canRegularSearch = remainingFreeRegularSearches > 0 || userSearchQuota.extra_searches > 0;
+    const isAtAdvancedSearchHardLimit = userSearchQuota.daily_count >= MAX_MONTHLY_ADVANCED_SEARCHES && userSearchQuota.extra_advanced_searches === 0;
+    const isAtRegularSearchHardLimit = userSearchQuota.regular_search_count >= MAX_MONTHLY_REGULAR_SEARCHES && userSearchQuota.extra_regular_searches === 0;
+    const canAdvancedSearch = remainingFreeAdvancedSearches > 0 || userSearchQuota.extra_advanced_searches > 0;
+    const canRegularSearch = remainingFreeRegularSearches > 0 || userSearchQuota.extra_regular_searches > 0;
 
     return {
       remainingFreeAdvancedSearches,
@@ -433,7 +491,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     loadUserSearchQuota,
     incrementAdvancedSearchUsage,
     incrementRegularSearchUsage,
-    purchaseExtraSearches,
+    purchaseExtraRegularSearches,
+    purchaseExtraAdvancedSearches,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES,
     ...searchComputedValues,
