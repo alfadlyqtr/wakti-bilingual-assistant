@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -116,21 +117,22 @@ export function ChatInput({
   };
 
   return (
-    <div className="w-full h-full bg-background flex flex-col">
+    <div className="w-full bg-background">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-        {/* Uploaded Files Display */}
+        
+        {/* Uploaded Files Display - Compact and clean */}
         {uploadedFiles.length > 0 && (
-          <div className="px-4 py-2 bg-muted/30 border-b flex-shrink-0">
+          <div className="px-6 py-3 bg-muted/20 border-b border-border/30">
             <div className="max-w-4xl mx-auto">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-xs font-medium">
+                <span className="text-xs font-medium text-muted-foreground">
                   {language === 'ar' ? 'الملفات المرفقة:' : 'Attached Files:'}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  ({uploadedFiles.length})
+                <span className="text-xs text-muted-foreground/70 bg-muted/50 px-2 py-0.5 rounded-full">
+                  {uploadedFiles.length}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-2 max-h-[80px] overflow-y-auto">
+              <div className="flex flex-wrap gap-2 max-h-[100px] overflow-y-auto">
                 {uploadedFiles.map((file, index) => (
                   <FilePreview
                     key={index}
@@ -145,30 +147,31 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Mobile-Optimized Chat Input Area */}
-        <div className="p-3 bg-background flex-1 min-h-[80px] flex items-center">
-          <div className="max-w-4xl mx-auto w-full">
-            <div className="flex items-center gap-3">
-              {/* Upload Button */}
+        {/* Main Input Area - Redesigned for better aesthetics */}
+        <div className="px-6 py-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end gap-3">
+              
+              {/* Upload Button - Cleaner design */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="icon"
-                      className="h-9 w-9 rounded-full hover:bg-muted flex-shrink-0"
+                      className="h-11 w-11 rounded-full border-border/40 hover:border-primary/30 hover:bg-accent/50 transition-all duration-200 flex-shrink-0"
                       onClick={handleFileUpload}
                       disabled={isUploading || isLoading}
                       aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
                     >
                       {isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                       ) : (
-                        <Upload className="h-4 w-4" />
+                        <Upload className="h-4 w-4 text-muted-foreground" />
                       )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent side="top">
                     {language === 'ar' ? 'رفع ملف' : 'Upload file'}
                   </TooltipContent>
                 </Tooltip>
@@ -184,22 +187,23 @@ export function ChatInput({
                 className="hidden"
               />
 
-              {/* Input Container */}
+              {/* Input Container - Modern design */}
               <div className="flex-1 relative">
-                <div className="flex items-start bg-muted/50 rounded-2xl border border-border/30 min-h-[50px]">
-                  {/* Mic Button */}
+                <div className="flex items-end bg-background rounded-2xl border border-border/40 shadow-sm hover:border-border/60 focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200">
+                  
+                  {/* Mic Button - Integrated design */}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-8 w-8 m-1 mt-2 rounded-xl hover:bg-background/80 transition-all duration-300 flex-shrink-0 ${
+                          className={`h-9 w-9 m-2 mb-2.5 rounded-xl transition-all duration-300 flex-shrink-0 ${
                             isListening 
-                              ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' 
+                              ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse shadow-lg' 
                               : speechSupported 
-                                ? 'hover:bg-accent' 
-                                : 'opacity-50 cursor-not-allowed'
+                                ? 'hover:bg-accent/70 text-muted-foreground hover:text-foreground' 
+                                : 'opacity-40 cursor-not-allowed text-muted-foreground/50'
                           }`}
                           onClick={handleVoiceInput}
                           disabled={!speechSupported || isLoading}
@@ -212,22 +216,22 @@ export function ChatInput({
                           )}
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>
+                      <TooltipContent side="top">
                         {getMicTooltip()}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
 
-                  {/* Text Input */}
+                  {/* Text Input - Enhanced styling */}
                   <Textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={
                       isListening
                         ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
-                        : language === 'ar' ? 'اكتب رسالتك...' : 'Type a message...'
+                        : language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'
                     }
-                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 min-h-[44px] max-h-[120px] text-sm"
+                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 min-h-[48px] max-h-[120px] text-base placeholder:text-muted-foreground/60"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -238,7 +242,7 @@ export function ChatInput({
                     aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
                   />
 
-                  {/* Send Button */}
+                  {/* Send Button - Modern design */}
                   {(message.trim() || uploadedFiles.length > 0) && (
                     <TooltipProvider>
                       <Tooltip>
@@ -246,7 +250,7 @@ export function ChatInput({
                           <Button
                             onClick={handleSend}
                             disabled={isLoading || isListening || isUploading}
-                            className="h-8 w-8 m-1 mt-2 rounded-full p-0 flex-shrink-0"
+                            className="h-9 w-9 m-2 mb-2.5 rounded-xl p-0 flex-shrink-0 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
                             size="icon"
                             aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                           >
@@ -257,7 +261,7 @@ export function ChatInput({
                             )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>
+                        <TooltipContent side="top">
                           {language === 'ar' ? 'إرسال' : 'Send'}
                         </TooltipContent>
                       </Tooltip>
@@ -267,26 +271,26 @@ export function ChatInput({
               </div>
             </div>
 
-            {/* Status Indicators - Compact */}
+            {/* Status Indicators - Refined design */}
             {(isListening || speechError || isUploading) && (
-              <div className="mt-2 text-center">
+              <div className="mt-3 flex justify-center">
                 {isListening && (
-                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-500 text-white rounded-full text-xs animate-pulse">
-                    <div className="h-1 w-1 bg-white rounded-full animate-ping" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-600 rounded-full text-sm font-medium">
+                    <div className="h-2 w-2 bg-red-500 rounded-full animate-ping" />
                     {language === 'ar' ? 'جاري الاستماع...' : 'Listening...'}
                   </div>
                 )}
 
                 {speechError && (
-                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-500 text-white rounded-full text-xs">
-                    <MicOff className="h-2 w-2" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-600 rounded-full text-sm font-medium">
+                    <MicOff className="h-3 w-3" />
                     {speechError}
                   </div>
                 )}
 
                 {isUploading && (
-                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500 text-white rounded-full text-xs">
-                    <Loader2 className="h-2 w-2 animate-spin" />
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-600 rounded-full text-sm font-medium">
+                    <Loader2 className="h-3 w-3 animate-spin" />
                     {language === 'ar' ? 'جاري رفع الملفات...' : 'Uploading files...'}
                   </div>
                 )}

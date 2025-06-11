@@ -559,11 +559,11 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* MAIN CONTAINER - Fixed header, scrollable messages, fixed input */}
-      <div className="flex-1 flex flex-col h-full">
+      {/* MAIN CONTAINER - Better layout structure */}
+      <div className="flex-1 flex flex-col h-full max-h-screen">
         
         {/* HEADER + NOTIFICATION BARS - Fixed at top */}
-        <div className="flex-shrink-0 bg-background border-b">
+        <div className="flex-shrink-0 bg-background border-b border-border/40">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -579,8 +579,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* MESSAGES CONTAINER - Scrollable middle section */}
-        <div className="flex-1 overflow-hidden pb-[160px]">
+        {/* MESSAGES CONTAINER - Flexible middle section */}
+        <div className="flex-1 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -590,8 +590,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* INPUT - Fixed at bottom with dynamic height */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t min-h-[140px] max-h-[300px] z-50">
+        {/* INPUT - Modern integrated design */}
+        <div className="flex-shrink-0 bg-background/95 backdrop-blur-sm border-t border-border/40">
           <ChatInput
             message={message}
             setMessage={setMessage}
@@ -608,3 +608,5 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
+
+}
