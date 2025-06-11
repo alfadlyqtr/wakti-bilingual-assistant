@@ -194,7 +194,7 @@ async function processFilesWithHybridAnalysis(files: any[], language: string = '
   return results;
 }
 
-// Analyze image with OpenAI Vision (GPT-4V)
+// Analyze image with OpenAI Vision (GPT-4o)
 async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
   try {
     if (!OPENAI_API_KEY) {
@@ -214,7 +214,7 @@ async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
         'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'gpt-4-vision-preview',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           { 
@@ -242,7 +242,7 @@ async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
     return {
       success: true,
       analysis: result.choices[0].message.content,
-      model: 'gpt-4-vision-preview'
+      model: 'gpt-4o'
     };
 
   } catch (error) {
