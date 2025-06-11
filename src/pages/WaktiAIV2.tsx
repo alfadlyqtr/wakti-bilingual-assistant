@@ -463,7 +463,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-[100dvh] bg-background overflow-hidden">
+    <div className="flex h-[99vh] bg-background overflow-hidden">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -484,7 +484,7 @@ const WaktiAIV2 = () => {
       />
 
       {/* MAIN CHAT CONTAINER - Fixed Height Structure */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-[98.5%] overflow-hidden">
         {/* FIXED HEADER SECTION - Always visible, never scrolls */}
         <div className="flex-shrink-0 sticky top-0 z-10 bg-background border-b">
           <ChatHeader
