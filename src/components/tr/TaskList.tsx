@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,12 +33,18 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   };
 
   const isOverdue = (task: TRTask) => {
-    if (task.completed) return false;
-    const now = new Date();
-    const dueDateTime = task.due_time 
-      ? parseISO(`${task.due_date}T${task.due_time}`)
-      : parseISO(`${task.due_date}T23:59:59`);
-    return isAfter(now, dueDateTime);
+    if (task.completed || !task.due_date) return false;
+    
+    try {
+      const now = new Date();
+      const dueDateTime = task.due_time 
+        ? parseISO(`${task.due_date}T${task.due_time}`)
+        : parseISO(`${task.due_date}T23:59:59`);
+      return isAfter(now, dueDateTime);
+    } catch (error) {
+      console.error('Error parsing task due date:', error, task);
+      return false;
+    }
   };
 
   const handleToggleComplete = async (task: TRTask) => {
@@ -182,13 +187,15 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                 </div>
 
                 {/* Task Details */}
-                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span>
-                    Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
-                    {task.due_time && ` at ${task.due_time}`}
-                  </span>
-                </div>
+                {task.due_date && (
+                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                      {task.due_time && ` at ${task.due_time}`}
+                    </span>
+                  </div>
+                )}
 
                 {/* Status Badge */}
                 <div className="mt-2">
