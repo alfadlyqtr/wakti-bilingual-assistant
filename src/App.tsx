@@ -10,6 +10,7 @@ import Maw3d from "@/pages/Maw3d";
 import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
+import Account from "@/pages/Account";
 import Home from "@/pages/Home";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
@@ -103,6 +104,17 @@ function App() {
                     <ProtectedRoute>
                       <PageContainer>
                         <Settings />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/account"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Account />
                       </PageContainer>
                       <MobileNav />
                     </ProtectedRoute>
