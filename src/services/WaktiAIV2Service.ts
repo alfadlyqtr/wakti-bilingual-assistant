@@ -761,5 +761,3 @@ export class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
-
-}
