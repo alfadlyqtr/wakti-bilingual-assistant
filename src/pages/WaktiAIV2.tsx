@@ -486,15 +486,17 @@ const WaktiAIV2 = () => {
       {/* MAIN CONTAINER - Fixed header, scrollable messages, fixed input */}
       <div className="flex-1 flex flex-col h-full">
         
-        {/* HEADER + NOTIFICATION BARS - Fixed at top */}
-        <div className="flex-shrink-0 bg-background border-b">
-          <ChatHeader
-            currentConversationId={currentConversationId}
-            activeTrigger={activeTrigger}
-            onShowConversations={() => setShowConversations(true)}
-            onNewConversation={handleNewConversation}
-            onShowQuickActions={() => setShowQuickActions(true)}
-          />
+        {/* HEADER - Fixed at top with guaranteed visibility */}
+        <ChatHeader
+          currentConversationId={currentConversationId}
+          activeTrigger={activeTrigger}
+          onShowConversations={() => setShowConversations(true)}
+          onNewConversation={handleNewConversation}
+          onShowQuickActions={() => setShowQuickActions(true)}
+        />
+
+        {/* NOTIFICATION BARS - Below fixed header */}
+        <div className="fixed top-[60px] left-0 right-0 z-40 bg-background border-b">
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
             error={error}
@@ -503,8 +505,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* MESSAGES CONTAINER - Scrollable middle section */}
-        <div className="flex-1 overflow-hidden pb-[140px]">
+        {/* MESSAGES CONTAINER - Scrollable middle section with proper top and bottom spacing */}
+        <div className="flex-1 overflow-hidden pt-[60px] pb-[120px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -514,8 +516,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* INPUT - Fixed at bottom with guaranteed height */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t h-[140px] z-50">
+        {/* INPUT - Fixed at bottom with guaranteed height and visibility */}
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t h-[120px] z-50">
           <ChatInput
             message={message}
             setMessage={setMessage}
@@ -532,3 +534,5 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
+
+}

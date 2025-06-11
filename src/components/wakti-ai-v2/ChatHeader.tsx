@@ -82,7 +82,7 @@ export function ChatHeader({
   };
 
   return (
-    <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur-sm">
+    <div className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b h-[60px] flex items-center justify-between px-4">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"
