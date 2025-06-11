@@ -528,8 +528,9 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-shrink-0">
+      <div className="flex-1 flex flex-col h-screen">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 bg-background border-b z-10">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -545,7 +546,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="flex-1 min-h-0">
+        {/* Scrollable Messages Area */}
+        <div className="flex-1 overflow-hidden pb-[140px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -555,7 +557,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <div className="flex-shrink-0">
+        {/* Fixed Input at Bottom */}
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t z-20">
           <ChatInput
             message={message}
             setMessage={setMessage}

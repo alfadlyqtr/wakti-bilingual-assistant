@@ -147,27 +147,27 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - Redesigned for better aesthetics */}
-        <div className="px-6 py-4">
+        {/* Main Input Area - Enhanced for mobile */}
+        <div className="px-4 py-4 safe-area-inset-bottom">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end gap-3">
               
-              {/* Upload Button - Cleaner design */}
+              {/* Upload Button - Mobile optimized */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="outline"
                       size="icon"
-                      className="h-11 w-11 rounded-full border-border/40 hover:border-primary/30 hover:bg-accent/50 transition-all duration-200 flex-shrink-0"
+                      className="h-12 w-12 rounded-full border-border/40 hover:border-primary/30 hover:bg-accent/50 transition-all duration-200 flex-shrink-0"
                       onClick={handleFileUpload}
                       disabled={isUploading || isLoading}
                       aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
                     >
                       {isUploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       ) : (
-                        <Upload className="h-4 w-4 text-muted-foreground" />
+                        <Upload className="h-5 w-5 text-muted-foreground" />
                       )}
                     </Button>
                   </TooltipTrigger>
@@ -187,18 +187,18 @@ export function ChatInput({
                 className="hidden"
               />
 
-              {/* Input Container - Modern design */}
+              {/* Input Container - Mobile optimized */}
               <div className="flex-1 relative">
                 <div className="flex items-end bg-background rounded-2xl border border-border/40 shadow-sm hover:border-border/60 focus-within:border-primary/50 focus-within:shadow-md transition-all duration-200">
                   
-                  {/* Mic Button - Integrated design */}
+                  {/* Mic Button - Mobile optimized */}
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className={`h-9 w-9 m-2 mb-2.5 rounded-xl transition-all duration-300 flex-shrink-0 ${
+                          className={`h-10 w-10 m-2 mb-3 rounded-xl transition-all duration-300 flex-shrink-0 ${
                             isListening 
                               ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse shadow-lg' 
                               : speechSupported 
@@ -210,9 +210,9 @@ export function ChatInput({
                           aria-label={getMicTooltip()}
                         >
                           {isListening ? (
-                            <MicOff className="h-4 w-4" />
+                            <MicOff className="h-5 w-5" />
                           ) : (
-                            <Mic className="h-4 w-4" />
+                            <Mic className="h-5 w-5" />
                           )}
                         </Button>
                       </TooltipTrigger>
@@ -222,7 +222,7 @@ export function ChatInput({
                     </Tooltip>
                   </TooltipProvider>
 
-                  {/* Text Input - Enhanced styling */}
+                  {/* Text Input - Mobile optimized */}
                   <Textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
@@ -231,7 +231,7 @@ export function ChatInput({
                         ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
                         : language === 'ar' ? 'اكتب رسالتك هنا...' : 'Type your message here...'
                     }
-                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-3 px-3 min-h-[48px] max-h-[120px] text-base placeholder:text-muted-foreground/60"
+                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-4 px-3 min-h-[52px] max-h-[120px] text-base placeholder:text-muted-foreground/60"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -242,7 +242,7 @@ export function ChatInput({
                     aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
                   />
 
-                  {/* Send Button - Modern design */}
+                  {/* Send Button - Mobile optimized */}
                   {(message.trim() || uploadedFiles.length > 0) && (
                     <TooltipProvider>
                       <Tooltip>
@@ -250,14 +250,14 @@ export function ChatInput({
                           <Button
                             onClick={handleSend}
                             disabled={isLoading || isListening || isUploading}
-                            className="h-9 w-9 m-2 mb-2.5 rounded-xl p-0 flex-shrink-0 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
+                            className="h-10 w-10 m-2 mb-3 rounded-xl p-0 flex-shrink-0 bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all duration-200"
                             size="icon"
                             aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                           >
                             {isLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <Loader2 className="h-5 w-5 animate-spin" />
                             ) : (
-                              <Send className="h-4 w-4" />
+                              <Send className="h-5 w-5" />
                             )}
                           </Button>
                         </TooltipTrigger>
@@ -271,7 +271,7 @@ export function ChatInput({
               </div>
             </div>
 
-            {/* Status Indicators - Refined design */}
+            {/* Status Indicators - Mobile optimized */}
             {(isListening || speechError || isUploading) && (
               <div className="mt-3 flex justify-center">
                 {isListening && (
