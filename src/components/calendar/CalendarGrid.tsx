@@ -89,7 +89,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
       [EntryType.EVENT]: 0,
       [EntryType.APPOINTMENT]: 0,
       [EntryType.MANUAL_NOTE]: 0,
-      [EntryType.MAW3D_EVENT]: 0
+      [EntryType.MAW3D_EVENT]: 0,
+      [EntryType.TASK]: 0,
+      [EntryType.REMINDER]: 0
     };
     
     entries.forEach(entry => {
@@ -152,6 +154,18 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     <div className="flex items-center">
                       <Circle className="h-2 w-2 fill-yellow-500 text-yellow-500" />
                       {entryCounts[EntryType.MANUAL_NOTE] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.MANUAL_NOTE]}</span>}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.TASK] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-2 w-2 fill-green-500 text-green-500" />
+                      {entryCounts[EntryType.TASK] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.TASK]}</span>}
+                    </div>
+                  )}
+                  {entryCounts[EntryType.REMINDER] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-2 w-2 fill-red-500 text-red-500" />
+                      {entryCounts[EntryType.REMINDER] > 1 && <span className="text-xs ml-1">{entryCounts[EntryType.REMINDER]}</span>}
                     </div>
                   )}
                 </div>
@@ -247,6 +261,22 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                       <Circle className="h-3 w-3 fill-yellow-500 text-yellow-500" />
                       {entryCounts[EntryType.MANUAL_NOTE] > 1 && 
                         <span className="text-xs ml-0.5">{entryCounts[EntryType.MANUAL_NOTE]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.TASK] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-green-500 text-green-500" />
+                      {entryCounts[EntryType.TASK] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.TASK]}</span>
+                      }
+                    </div>
+                  )}
+                  {entryCounts[EntryType.REMINDER] > 0 && (
+                    <div className="flex items-center">
+                      <Circle className="h-3 w-3 fill-red-500 text-red-500" />
+                      {entryCounts[EntryType.REMINDER] > 1 && 
+                        <span className="text-xs ml-0.5">{entryCounts[EntryType.REMINDER]}</span>
                       }
                     </div>
                   )}

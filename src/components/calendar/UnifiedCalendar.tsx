@@ -14,6 +14,7 @@ import { CalendarViewSwitcher } from "./CalendarViewSwitcher";
 import { getCalendarEntries, CalendarEntry, CalendarView, EntryType } from "@/utils/calendarUtils";
 import { Maw3dService } from "@/services/maw3dService";
 import { Maw3dEvent } from "@/types/maw3d";
+import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { 
   Drawer, 
   DrawerContent, 
@@ -49,6 +50,8 @@ export const UnifiedCalendar: React.FC = () => {
   const [calendarEntries, setCalendarEntries] = useState<CalendarEntry[]>([]);
   const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
   const [maw3dEvents, setMaw3dEvents] = useState<Maw3dEvent[]>([]);
+  const [tasks, setTasks] = useState<TRTask[]>([]);
+  const [reminders, setReminders] = useState<TRReminder[]>([]);
   const [view, setView] = useState<CalendarView>('month');
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
@@ -118,31 +121,60 @@ export const UnifiedCalendar: React.FC = () => {
     fetchMaw3dEvents();
   }, []);
 
+  // Fetch tasks and reminders
+  useEffect(() => {
+    const fetchTasksAndReminders = async () => {
+      try {
+        console.log('Fetching tasks and reminders for calendar...');
+        const [tasksData, remindersData] = await Promise.all([
+          TRService.getTasks(),
+          TRService.getReminders()
+        ]);
+        console.log('Fetched tasks:', tasksData.length);
+        console.log('Fetched reminders:', remindersData.length);
+        setTasks(tasksData);
+        setReminders(remindersData);
+      } catch (error) {
+        console.error('Error fetching tasks and reminders:', error);
+        setTasks([]);
+        setReminders([]);
+      }
+    };
+
+    fetchTasksAndReminders();
+  }, []);
+
   // Save manual entries to local storage whenever they change
   useEffect(() => {
     console.log('Saving manual entries to localStorage:', manualEntries);
     localStorage.setItem('calendarManualEntries', JSON.stringify(manualEntries));
   }, [manualEntries]);
 
-  // Calculate all calendar entries from manual entries and maw3d events
+  // Calculate all calendar entries from manual entries, maw3d events, tasks, and reminders
   useEffect(() => {
     const fetchEntries = async () => {
       console.log('Calculating calendar entries with:', {
         maw3dEvents: maw3dEvents.length,
-        manualEntries: manualEntries.length
+        manualEntries: manualEntries.length,
+        tasks: tasks.length,
+        reminders: reminders.length
       });
       
       try {
-        const entries = await getCalendarEntries(manualEntries, [], maw3dEvents);
+        const entries = await getCalendarEntries(manualEntries, [], maw3dEvents, tasks, reminders);
         console.log('Total calendar entries after combination:', entries.length);
         
         // Log entries by type for debugging
         const manualEntriesFiltered = entries.filter(e => e.type === EntryType.MANUAL_NOTE);
         const maw3dEntriesFiltered = entries.filter(e => e.type === EntryType.MAW3D_EVENT);
+        const taskEntriesFiltered = entries.filter(e => e.type === EntryType.TASK);
+        const reminderEntriesFiltered = entries.filter(e => e.type === EntryType.REMINDER);
         
         console.log('Entries breakdown:', {
           manual: manualEntriesFiltered.length,
-          maw3d: maw3dEntriesFiltered.length
+          maw3d: maw3dEntriesFiltered.length,
+          tasks: taskEntriesFiltered.length,
+          reminders: reminderEntriesFiltered.length
         });
         
         setCalendarEntries(entries);
@@ -153,7 +185,7 @@ export const UnifiedCalendar: React.FC = () => {
     };
 
     fetchEntries();
-  }, [manualEntries, maw3dEvents]);
+  }, [manualEntries, maw3dEvents, tasks, reminders]);
 
   // Handle navigation between dates
   const navigatePrevious = () => {
@@ -394,7 +426,7 @@ export const UnifiedCalendar: React.FC = () => {
           </div>
         </div>
 
-        {/* Legend */}
+        {/* Updated Legend with Tasks and Reminders */}
         <div className="flex items-center justify-center">
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1">
@@ -403,7 +435,15 @@ export const UnifiedCalendar: React.FC = () => {
             </div>
             <div className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-              <span>Manual Entry</span>
+              <span>Manual</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-green-500"></div>
+              <span>Tasks</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-red-500"></div>
+              <span>Reminders</span>
             </div>
           </div>
         </div>
@@ -481,3 +521,5 @@ export const UnifiedCalendar: React.FC = () => {
     </div>
   );
 };
+
+export default UnifiedCalendar;
