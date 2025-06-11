@@ -85,7 +85,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <CheckSquare className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                  <span className="text-sm font-medium text-green-500 dark:text-green-400">
                     Tasks ({pendingTasks.length})
                   </span>
                 </div>
@@ -95,9 +95,9 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                       key={task.id} 
                       className="flex items-center justify-between p-2 rounded-lg bg-green-500/10 backdrop-blur-sm border border-green-500/20"
                     >
-                      <span className="text-sm truncate flex-1">{task.title}</span>
+                      <span className="text-sm truncate flex-1 text-foreground font-medium">{task.title}</span>
                       {task.due_date && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           <Calendar className="h-3 w-3" />
                           {new Date(task.due_date).toLocaleDateString()}
                         </div>
@@ -113,7 +113,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <Bell className="h-4 w-4 text-red-500" />
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                  <span className="text-sm font-medium text-red-500 dark:text-red-400">
                     Today's Reminders ({todayReminders.length})
                   </span>
                 </div>
@@ -123,9 +123,9 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
                       key={reminder.id} 
                       className="flex items-center justify-between p-2 rounded-lg bg-red-500/10 backdrop-blur-sm border border-red-500/20"
                     >
-                      <span className="text-sm truncate flex-1">{reminder.title}</span>
+                      <span className="text-sm truncate flex-1 text-foreground font-medium">{reminder.title}</span>
                       {reminder.due_time && (
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-red-600 dark:text-red-400 font-medium">
                           {reminder.due_time}
                         </span>
                       )}
@@ -138,7 +138,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
             <Button 
               variant="outline" 
               size="sm" 
-              className="w-full bg-white/10 backdrop-blur-sm border-white/20 hover:bg-primary/20 hover:border-primary/40 transition-all duration-300" 
+              className="w-full bg-white/10 backdrop-blur-sm border-white/20 hover:bg-primary/20 hover:border-primary/40 transition-all duration-300 text-foreground font-medium" 
               onClick={() => navigate('/tr')}
             >
               View All T&R
@@ -150,11 +150,11 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
               <CheckSquare className="h-6 w-6 text-green-500" />
               <Bell className="h-6 w-6 text-red-500" />
             </div>
-            <p className="text-sm text-muted-foreground mb-3">No pending tasks or reminders</p>
+            <p className="text-sm text-foreground/70 mb-3 font-medium">No pending tasks or reminders</p>
             <Button 
               variant="outline" 
               size="sm" 
-              className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-primary/20 hover:border-primary/40 transition-all duration-300" 
+              className="bg-white/10 backdrop-blur-sm border-white/20 hover:bg-primary/20 hover:border-primary/40 transition-all duration-300 text-foreground font-medium" 
               onClick={() => navigate('/tr')}
             >
               <Plus className="h-4 w-4 mr-2" />
