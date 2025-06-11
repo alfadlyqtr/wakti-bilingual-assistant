@@ -3,13 +3,10 @@ import 'jspdf-autotable';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
 
-// Extend the jsPDF type to include autotable
+// Extend the jsPDF type to include autotable - only add what's missing
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
-    addFileToVFS: (filename: string, data: string) => void;
-    addFont: (filename: string, fontName: string, fontStyle: string) => void;
-    setR2L: (isRTL: boolean) => void;
   }
 }
 
@@ -39,7 +36,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const isRtl = language === 'ar';
       const locale = language === 'ar' ? arSA : enUS;
       
-      // Create new PDF document with RTL support if needed
+      // Create new PDF document
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -49,16 +46,13 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       // Add Arabic font support if language is Arabic
       if (isRtl) {
         try {
-          // Add the Amiri font to jsPDF's virtual file system
-          doc.addFileToVFS('Amiri-Regular.ttf', AMIRI_FONT_BASE64.split(',')[1]);
+          // Use the existing jsPDF methods with correct signatures
+          const fontData = AMIRI_FONT_BASE64.split(',')[1];
+          doc.addFileToVFS('Amiri-Regular.ttf', fontData);
           doc.addFont('Amiri-Regular.ttf', 'Amiri', 'normal');
-          
-          // Set the font to Amiri for Arabic text
           doc.setFont('Amiri');
-          doc.setR2L(true);
         } catch (fontError) {
           console.warn('Arabic font loading failed, falling back to default:', fontError);
-          // Fallback to default font
           doc.setFont('helvetica');
         }
       } else {
@@ -66,10 +60,10 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       }
 
       // Add branding
-      const primaryColor = '#060541'; // Dark blue from the WAKTI theme colors
-      const secondaryColor = '#e9ceb0'; // Light color from the WAKTI theme colors
+      const primaryColor = '#060541';
+      const secondaryColor = '#e9ceb0';
       
-      // Header with app name and logo (simulated as colored rectangles for now)
+      // Header with app name
       doc.setFillColor(primaryColor);
       doc.rect(0, 0, 210, 20, 'F');
       
@@ -153,7 +147,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       // Get the final y position after the metadata table
       const finalY = (doc as any).lastAutoTable.finalY + 10;
       
-      // Main content section - Process and format the text
+      // Main content section
       if (content.text) {
         // Add a header for the content section
         doc.setFillColor(240, 240, 240);
@@ -166,10 +160,10 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         const contentLabel = isRtl ? 'المحتوى' : 'Content';
         doc.text(contentLabel, isRtl ? 190 : 20, finalY, { align: isRtl ? 'right' : 'left' });
         
-        // Process the text to identify structure
+        // Process the text
         const processedText = preprocessTextForPDF(content.text, isRtl);
         
-        // Create a content table that will automatically handle pagination
+        // Create a content table
         doc.autoTable({
           startY: finalY + 5,
           head: [],
@@ -266,7 +260,6 @@ function reverseArabicText(text: string): string {
   }
   
   // Simple reversal for Arabic text display in PDF
-  // This is a basic approach - for production, consider using a proper BIDI library
   const words = text.split(' ');
   const reversedWords = words.reverse();
   
