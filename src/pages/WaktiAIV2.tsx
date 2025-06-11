@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -559,9 +558,9 @@ const WaktiAIV2 = () => {
         </div>
       </div>
 
-      {/* Fixed Input at Bottom - positioned to respect drawer width with safe area */}
+      {/* Fixed Input at Bottom - moved up from bottom-0 to bottom-4 */}
       <div 
-        className="fixed bottom-0 right-0 bg-background border-t z-20 pb-safe" 
+        className="fixed bottom-4 right-0 bg-background border-t z-20 pb-safe" 
         style={{ 
           left: showConversations || showQuickActions ? '320px' : '0',
           paddingBottom: 'max(env(safe-area-inset-bottom), 20px)'
