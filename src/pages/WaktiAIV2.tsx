@@ -463,7 +463,7 @@ const WaktiAIV2 = () => {
   };
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-[100dvh] bg-background overflow-hidden">
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -483,10 +483,10 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* FIXED LAYOUT: Main Chat Container */}
-      <div className="flex-1 flex flex-col h-screen">
-        {/* FIXED HEADER SECTION - Always visible at top */}
-        <div className="flex-shrink-0 border-b">
+      {/* MAIN CHAT CONTAINER - Fixed Height Structure */}
+      <div className="flex-1 flex flex-col h-[100dvh] overflow-hidden">
+        {/* FIXED HEADER SECTION - Always visible, never scrolls */}
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-background border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -503,7 +503,7 @@ const WaktiAIV2 = () => {
         </div>
         
         {/* SCROLLABLE MESSAGES SECTION - Takes remaining space, only this scrolls */}
-        <div className="flex-1 h-0">
+        <div className="flex-1 min-h-0 overflow-hidden">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -513,8 +513,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* FIXED INPUT SECTION - Always visible at bottom */}
-        <div className="flex-shrink-0 border-t">
+        {/* FIXED INPUT SECTION - Always visible, never scrolls */}
+        <div className="flex-shrink-0 sticky bottom-0 z-10 bg-background border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}

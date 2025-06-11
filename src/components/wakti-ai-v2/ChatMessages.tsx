@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -190,11 +189,11 @@ export function ChatMessages({
     window.location.reload();
   };
 
-  // Modified component to fill height and properly scroll
+  // Fixed height component that fills available space
   return (
-    <div className="h-full w-full overflow-hidden">
+    <div className="h-full w-full">
       <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-        <div className="p-4 pb-6">
+        <div className="p-4 pb-6 min-h-full">
           <div className="max-w-2xl mx-auto space-y-4">
             {sessionMessages.length === 0 && (
               <div className="text-center py-8">
