@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
@@ -30,9 +31,31 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
+  // Add extended quota management
+  const {
+    userSearchQuota,
+    MAX_MONTHLY_ADVANCED_SEARCHES,
+    MAX_MONTHLY_REGULAR_SEARCHES
+  } = useExtendedQuotaManagement(language);
+
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
+
+  // Get search quota status for the header
+  const getSearchQuotaStatus = () => {
+    const regularUsed = userSearchQuota.regular_search_count;
+    const advancedUsed = userSearchQuota.daily_count;
+    const extraSearches = userSearchQuota.extra_searches;
+    
+    return {
+      regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
+      advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
+      regularLimit: MAX_MONTHLY_REGULAR_SEARCHES,
+      advancedLimit: MAX_MONTHLY_ADVANCED_SEARCHES,
+      extraSearches
+    };
+  };
 
   useEffect(() => {
     const fetchQuota = async () => {
@@ -688,6 +711,7 @@ const WaktiAIV2 = () => {
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
             quotaStatus={quotaStatus}
+            searchQuotaStatus={getSearchQuotaStatus()}
           />
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
