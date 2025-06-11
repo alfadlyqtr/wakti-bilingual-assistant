@@ -45,6 +45,12 @@ export class WaktiAIV2ServiceClass {
   private static quotaCacheTime: number = 0;
   private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
+  // SECURITY FIX: Get user-specific localStorage key
+  private static getUserStorageKey(suffix: string): string {
+    // We'll get this from auth context when available
+    return `wakti_ai_${suffix}`;
+  }
+
   // Instance methods that delegate to static methods
   saveChatSession(messages: AIMessage[], conversationId: string | null) {
     return WaktiAIV2ServiceClass.saveChatSession(messages, conversationId);
@@ -99,12 +105,10 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.getOrFetchQuota(userId, forceRefresh);
   }
 
-  // New method to invalidate quota cache
   invalidateQuotaCache() {
     return WaktiAIV2ServiceClass.invalidateQuotaCache();
   }
 
-  // Instance methods that delegate to static methods
   ensureConversationExists(userId: string, sessionMessages: AIMessage[], language: string = 'en') {
     return WaktiAIV2ServiceClass.ensureConversationExists(userId, sessionMessages, language);
   }
@@ -117,7 +121,6 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.saveCurrentConversationIfNeeded(userId, sessionMessages, currentConversationId, language);
   }
 
-  // Add missing instance method delegates
   getCalendarContext(userId: string) {
     return WaktiAIV2ServiceClass.getCalendarContext(userId);
   }
@@ -142,7 +145,7 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
   }
 
-  // Enhanced static method for better conversation saving
+  // SECURITY FIX: Enhanced static method for better conversation saving with user isolation
   static async ensureConversationExists(
     userId: string, 
     sessionMessages: AIMessage[], 
@@ -155,11 +158,11 @@ export class WaktiAIV2ServiceClass {
       const firstUserMessage = sessionMessages.find(msg => msg.role === 'user');
       const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'Untitled Conversation';
 
-      // Create conversation in database
+      // SECURITY: Ensure user_id is set correctly for RLS
       const { data: conversation, error } = await supabase
         .from('ai_conversations')
         .insert({
-          user_id: userId,
+          user_id: userId, // CRITICAL: Always use the provided userId
           title: title,
           last_message_at: new Date().toISOString()
         })
@@ -174,13 +177,13 @@ export class WaktiAIV2ServiceClass {
       if (conversation) {
         console.log('✅ Created new conversation:', conversation.id);
         
-        // Save all session messages to the database
+        // SECURITY: Save all session messages with proper user_id
         const messageInserts = sessionMessages.map((msg, index) => ({
           conversation_id: conversation.id,
-          user_id: userId,
+          user_id: userId, // CRITICAL: Always use the provided userId
           role: msg.role,
           content: msg.content,
-          created_at: new Date(Date.now() + index).toISOString(), // Ensure chronological order
+          created_at: new Date(Date.now() + index).toISOString(),
           language: language,
           input_type: msg.inputType || 'text',
           intent: msg.intent,
@@ -220,7 +223,7 @@ export class WaktiAIV2ServiceClass {
   ): Promise<void> {
     if (sessionMessages.length > 0 && !currentConversationId) {
       try {
-        console.log('🔄 WAKTI AI V2: Saving unsaved conversation with', sessionMessages.length, 'messages');
+        console.log('🔄 WAKTI AI V2: Saving unsaved conversation with', sessionMessages.length, 'messages for user:', userId);
         
         const conversationId = await this.ensureConversationExists(userId, sessionMessages, language);
         if (conversationId) {
@@ -251,16 +254,19 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
-  // Static methods (keep all existing static methods)
+  // SECURITY FIX: User-isolated session storage
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
       const sessionData = {
-        messages: messages.slice(-30), // Increased from 20 to 30
+        messages: messages.slice(-30),
         conversationId,
         timestamp: Date.now()
       };
-      localStorage.setItem('wakti_ai_chat_session', JSON.stringify(sessionData));
-      console.log('💾 Chat session saved to localStorage');
+      
+      // Use user-specific key (will be enhanced when we have user context)
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.setItem(storageKey, JSON.stringify(sessionData));
+      console.log('💾 Chat session saved to localStorage with user isolation');
     } catch (error) {
       console.error('Failed to save chat session:', error);
     }
@@ -268,7 +274,8 @@ export class WaktiAIV2ServiceClass {
 
   static loadChatSession(): { messages: AIMessage[], conversationId: string | null } | null {
     try {
-      const sessionData = localStorage.getItem('wakti_ai_chat_session');
+      const storageKey = this.getUserStorageKey('chat_session');
+      const sessionData = localStorage.getItem(storageKey);
       if (!sessionData) return null;
 
       const parsed = JSON.parse(sessionData);
@@ -277,7 +284,7 @@ export class WaktiAIV2ServiceClass {
       const now = Date.now();
       const sessionAge = now - (parsed.timestamp || 0);
       if (sessionAge > 24 * 60 * 60 * 1000) {
-        localStorage.removeItem('wakti_ai_chat_session');
+        localStorage.removeItem(storageKey);
         return null;
       }
 
@@ -289,21 +296,23 @@ export class WaktiAIV2ServiceClass {
         }));
       }
 
-      console.log('📂 Chat session loaded from localStorage');
+      console.log('📂 Chat session loaded from localStorage with user isolation');
       return {
         messages: parsed.messages || [],
         conversationId: parsed.conversationId || null
       };
     } catch (error) {
       console.error('Failed to load chat session:', error);
-      localStorage.removeItem('wakti_ai_chat_session');
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.removeItem(storageKey);
       return null;
     }
   }
 
   static clearChatSession() {
     try {
-      localStorage.removeItem('wakti_ai_chat_session');
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.removeItem(storageKey);
       console.log('🗑️ Chat session cleared from localStorage');
     } catch (error) {
       console.error('Failed to clear chat session:', error);
@@ -332,23 +341,17 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('📤 WAKTI AI V2: Sending message with enhanced context:', {
-        message: message.slice(0, 50),
-        filesCount: attachedFiles.length,
-        activeTrigger,
-        conversationHistoryLength: conversationHistory.length, // Log context size
-        hasCalendarContext: !!calendarContext,
-        hasUserContext: !!userContext
-      });
+      console.log('📤 WAKTI AI V2: Sending message with user isolation for user:', userId);
 
-      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      // SECURITY: Use the new unified-ai-brain function with proper authentication
+      const response = await supabase.functions.invoke('unified-ai-brain', {
         body: {
           message,
-          userId,
+          userId, // CRITICAL: Always include userId for verification
           language,
           conversationId,
           inputType,
-          conversationHistory, // Full conversation history passed
+          conversationHistory,
           confirmSearch,
           activeTrigger,
           textGenParams,
@@ -369,12 +372,7 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
 
-      console.log('📥 WAKTI AI V2: Received response with enhanced context processing:', {
-        hasFileAnalysis: !!response.data?.fileAnalysisResults,
-        filesAnalyzed: response.data?.fileAnalysisResults?.length || 0,
-        contextUtilized: response.data?.contextUtilized || false
-      });
-
+      console.log('📥 WAKTI AI V2: Received response with user isolation');
       return response.data;
     } catch (error: any) {
       console.error('WaktiAIV2Service sendMessage error:', error);

@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -68,7 +69,6 @@ export function ChatMessages({
         throw new Error(response.error);
       }
 
-      // Show success toast
       showSuccess(
         language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
       );
@@ -141,7 +141,6 @@ export function ChatMessages({
         throw new Error(response.error);
       }
 
-      // Show success toast
       showSuccess(
         language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
       );

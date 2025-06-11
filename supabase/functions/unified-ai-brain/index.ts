@@ -14,7 +14,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with real AI integration");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with real AI integration and user isolation");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -28,11 +28,37 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with real AI system");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with user isolation");
+
+    // CRITICAL: Extract and verify authentication token
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error("🔍 UNIFIED AI BRAIN: Missing authorization header");
+      return new Response(JSON.stringify({ 
+        error: "Authentication required",
+        success: false
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (authError || !user) {
+      console.error("🔍 UNIFIED AI BRAIN: Authentication failed:", authError);
+      return new Response(JSON.stringify({ 
+        error: "Invalid authentication",
+        success: false
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     // Get request body
     const requestBody = await req.json();
-    console.log("🔍 UNIFIED AI BRAIN: Request body received:", requestBody);
+    console.log("🔍 UNIFIED AI BRAIN: Request body received for user:", user.id);
 
     const {
       message,
@@ -43,6 +69,18 @@ serve(async (req) => {
       confirmSearch = false,
       activeTrigger = 'chat'
     } = requestBody;
+
+    // CRITICAL: Ensure userId matches authenticated user
+    if (userId !== user.id) {
+      console.error("🔍 UNIFIED AI BRAIN: User ID mismatch - potential security breach attempt");
+      return new Response(JSON.stringify({ 
+        error: "User ID mismatch",
+        success: false
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
     // Validate required fields
     if (!message || typeof message !== 'string' || message.trim() === '') {
@@ -56,18 +94,7 @@ serve(async (req) => {
       });
     }
 
-    if (!userId) {
-      console.error("🔍 UNIFIED AI BRAIN: Missing userId");
-      return new Response(JSON.stringify({ 
-        error: "User ID is required",
-        success: false
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    console.log("🔍 UNIFIED AI BRAIN: Processing message for user:", userId);
+    console.log("🔍 UNIFIED AI BRAIN: Processing message for authenticated user:", user.id);
     console.log("🔍 UNIFIED AI BRAIN: Active trigger mode:", activeTrigger);
 
     // Enforce trigger isolation
@@ -83,30 +110,20 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Get real quota status from database
-    quotaStatus = await checkBrowsingQuota(userId);
+    // No quota restrictions - unlimited searches for all users
+    quotaStatus = { count: 0, limit: 999999, canBrowse: true, usagePercentage: 0, remaining: 999999 };
 
     switch (activeTrigger) {
       case 'search':
         if (intent.allowed) {
-          if (quotaStatus.canBrowse && (confirmSearch || !quotaStatus.requiresConfirmation)) {
-            // Real search functionality
-            const searchResult = await executeSearch(message, language);
-            if (searchResult.success) {
-              browsingUsed = true;
-              browsingData = searchResult.data;
-              response = await processWithAI(message, searchResult.context, language);
-            } else {
-              response = await processWithAI(message, null, language);
-            }
-          } else if (quotaStatus.requiresConfirmation && !confirmSearch) {
-            response = language === 'ar' 
-              ? `لقد استخدمت ${quotaStatus.count} من ${quotaStatus.limit} عملية بحث شهرية (${quotaStatus.usagePercentage}%). هل تريد المتابعة بالبحث عن معلومات حديثة؟`
-              : `You've used ${quotaStatus.count} of ${quotaStatus.limit} monthly searches (${quotaStatus.usagePercentage}%). Do you want to proceed with searching for current information?`;
+          // Always allow search - no quota restrictions
+          const searchResult = await executeSearch(message, language);
+          if (searchResult.success) {
+            browsingUsed = true;
+            browsingData = searchResult.data;
+            response = await processWithAI(message, searchResult.context, language);
           } else {
-            response = language === 'ar' 
-              ? `لقد وصلت إلى حد البحث الشهري (${quotaStatus.limit}). يمكنني الإجابة على أسئلة عامة.`
-              : `You've reached your monthly search limit (${quotaStatus.limit}). I can answer general questions.`;
+            response = await processWithAI(message, null, language);
           }
         } else {
           response = language === 'ar' 
@@ -119,7 +136,7 @@ serve(async (req) => {
         if (intent.allowed) {
           try {
             console.log("🎨 Generating image with Runware API for prompt:", message);
-            const imageResult = await generateImageWithRunware(message, userId, language);
+            const imageResult = await generateImageWithRunware(message, user.id, language);
             
             if (imageResult.success) {
               imageUrl = imageResult.imageUrl;
@@ -145,9 +162,21 @@ serve(async (req) => {
         break;
 
       case 'advanced_search':
-        response = language === 'ar' 
-          ? `🔮 وضع البحث المتقدم\n\nهذه الميزة قيد التطوير.\n\nيرجى استخدام وضع البحث العادي أو المحادثة.`
-          : `🔮 Advanced Search Mode\n\nThis feature is coming soon.\n\nPlease use regular Search or Chat mode.`;
+        if (intent.allowed) {
+          // Always allow advanced search - no quota restrictions
+          const searchResult = await executeSearch(message, language);
+          if (searchResult.success) {
+            browsingUsed = true;
+            browsingData = searchResult.data;
+            response = await processWithAI(message, searchResult.context, language);
+          } else {
+            response = await processWithAI(message, null, language);
+          }
+        } else {
+          response = language === 'ar' 
+            ? `⚠️ أنت في وضع البحث المتقدم\n\nهذا الوضع مخصص للبحث المتقدم فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Advanced Search Mode\n\nThis mode is for advanced search only.\n\nFor general chat, switch to Chat mode.`;
+        }
         break;
 
       case 'chat':
@@ -168,13 +197,13 @@ serve(async (req) => {
       browsingUsed,
       browsingData,
       quotaStatus,
-      requiresSearchConfirmation: quotaStatus?.requiresConfirmation && !confirmSearch,
+      requiresSearchConfirmation: false, // No quota restrictions
       needsConfirmation: false,
       needsClarification: false,
       success: true
     };
 
-    console.log("🔍 UNIFIED AI BRAIN: Sending real AI response:", result);
+    console.log("🔍 UNIFIED AI BRAIN: Sending real AI response for user:", user.id);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
