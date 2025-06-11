@@ -546,7 +546,7 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area */}
+        {/* Scrollable Messages Area with bottom padding for fixed input */}
         <div className="flex-1 overflow-hidden pb-[140px]">
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -556,18 +556,18 @@ const WaktiAIV2 = () => {
             userProfile={userProfile}
           />
         </div>
+      </div>
 
-        {/* Fixed Input at Bottom */}
-        <div className="fixed bottom-0 left-0 right-0 bg-background border-t z-20">
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={isLoading}
-            sessionMessages={sessionMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-          />
-        </div>
+      {/* Fixed Input at Bottom - positioned to respect drawer width */}
+      <div className="fixed bottom-0 right-0 bg-background border-t z-20" style={{ left: showConversations || showQuickActions ? '320px' : '0' }}>
+        <ChatInput
+          message={message}
+          setMessage={setMessage}
+          isLoading={isLoading}
+          sessionMessages={sessionMessages}
+          onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+        />
       </div>
     </div>
   );
