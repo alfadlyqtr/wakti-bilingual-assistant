@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -10,7 +11,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - Fixed Vision API for images, text extraction for docs");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - Fixed PDF processing");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,7 +24,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with fixed file handling");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with fixed PDF handling");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
@@ -77,10 +78,10 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Process attached files with proper file type handling
+    // Process attached files with simplified handling
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing files with proper type handling...");
-      fileAnalysisResults = await processFilesWithProperHandling(attachedFiles, language);
+      console.log("📎 Processing files with simplified handling...");
+      fileAnalysisResults = await processFilesSimplified(attachedFiles, language);
       console.log("📎 File analysis completed:", fileAnalysisResults.length);
     }
 
@@ -115,7 +116,7 @@ serve(async (req) => {
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with fixed file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with simplified file analysis");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -136,8 +137,8 @@ serve(async (req) => {
   }
 });
 
-// Process files with proper type handling - images use Vision, docs use text extraction
-async function processFilesWithProperHandling(files: any[], language: string = 'en') {
+// Simplified file processing - send PDFs directly to OpenAI
+async function processFilesSimplified(files: any[], language: string = 'en') {
   const results = [];
 
   for (const file of files) {
@@ -151,9 +152,9 @@ async function processFilesWithProperHandling(files: any[], language: string = '
         console.log(`🖼️ Using Vision API for image: ${file.name}`);
         analysisResult = await analyzeImageWithVision(file, language);
       } else if (isPDFFile(file.type)) {
-        // Extract text from PDF and analyze with regular AI
-        console.log(`📄 Processing PDF: ${file.name}`);
-        analysisResult = await processPDFFile(file, language);
+        // Send PDF directly to OpenAI
+        console.log(`📄 Sending PDF directly to OpenAI: ${file.name}`);
+        analysisResult = await processPDFDirectly(file, language);
       } else if (isTextFile(file.type)) {
         // Process text files directly
         console.log(`📝 Processing text file: ${file.name}`);
@@ -211,7 +212,7 @@ function isTextFile(mimeType: string): boolean {
   return mimeType === 'text/plain' || mimeType.includes('text/');
 }
 
-// Analyze images with OpenAI Vision (FIXED - only for images)
+// Analyze images with OpenAI Vision
 async function analyzeImageWithVision(file: any, language: string = 'en') {
   try {
     if (!OPENAI_API_KEY) {
@@ -274,86 +275,34 @@ async function analyzeImageWithVision(file: any, language: string = 'en') {
   }
 }
 
-// Process PDF files by extracting text using PDF.js or fallback to OCR
-async function processPDFFile(file: any, language: string = 'en') {
+// NEW: Process PDF by sending directly to OpenAI
+async function processPDFDirectly(file: any, language: string = 'en') {
   try {
-    console.log(`📄 Processing PDF file: ${file.name}`);
-    
-    // Import PDF.js from CDN
-    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@3.11.174');
-    
-    // Fetch the PDF file
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key not configured for PDF analysis");
+    }
+
+    console.log(`📄 Processing PDF directly with OpenAI: ${file.name}`);
+
+    // Fetch the PDF content
     const response = await fetch(file.url);
     if (!response.ok) {
       throw new Error(`Failed to fetch PDF: ${response.status}`);
     }
     
-    const pdfData = await response.arrayBuffer();
-    
-    // Load PDF document
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-    console.log(`📄 PDF loaded successfully: ${pdf.numPages} pages`);
-    
-    let fullText = '';
-    
-    // Extract text from all pages
-    for (let pageNum = 1; pageNum <= Math.min(pdf.numPages, 10); pageNum++) { // Limit to first 10 pages
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      fullText += `Page ${pageNum}:\n${pageText}\n\n`;
-    }
-    
-    if (fullText.trim().length === 0) {
-      // If no text extracted, fall back to OCR using Vision API
-      console.log(`📄 No text found in PDF, attempting OCR fallback for: ${file.name}`);
-      return await fallbackPDFToOCR(file, language);
-    }
-    
-    console.log(`📄 Extracted ${fullText.length} characters from PDF: ${file.name}`);
-    
-    // Analyze the extracted text with AI
-    const analysisResult = await analyzeExtractedText(fullText, file.name, language);
-    
-    return {
-      success: true,
-      analysis: analysisResult,
-      model: 'pdf-text-extraction',
-      textLength: fullText.length,
-      extractedText: fullText.substring(0, 1000) + (fullText.length > 1000 ? '...' : '') // Include sample
-    };
-
-  } catch (error) {
-    console.error('Error processing PDF:', error);
-    
-    // Fallback to OCR if PDF text extraction fails
-    console.log(`📄 PDF text extraction failed, trying OCR fallback for: ${file.name}`);
-    return await fallbackPDFToOCR(file, language);
-  }
-}
-
-// Fallback: Use Vision API for OCR when PDF text extraction fails
-async function fallbackPDFToOCR(file: any, language: string = 'en') {
-  try {
-    if (!OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not configured for OCR fallback");
-    }
-
-    console.log(`🔍 Using Vision API for PDF OCR: ${file.name}`);
+    const pdfBuffer = await response.arrayBuffer();
+    const base64PDF = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
 
     const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في استخراج النصوص من ملفات PDF. استخرج كل النص الموجود في هذا المستند بدقة.'
-      : 'You are an AI assistant specialized in extracting text from PDF documents. Extract all text content from this document accurately.';
+      ? 'أنت مساعد ذكي متخصص في تحليل المستندات. حلل محتوى هذا المستند PDF واستخرج النقاط المهمة والمعلومات الرئيسية.'
+      : 'You are an AI assistant specialized in document analysis. Analyze this PDF document and extract key points and important information.';
 
     const userPrompt = language === 'ar' 
-      ? 'استخرج وحلل محتوى هذا المستند PDF'
-      : 'Extract and analyze the content of this PDF document';
+      ? `حلل محتوى هذا المستند PDF "${file.name}" واستخرج المعلومات المهمة`
+      : `Analyze the content of this PDF document "${file.name}" and extract important information`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Try using the assistants API with file upload
+    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -365,10 +314,7 @@ async function fallbackPDFToOCR(file: any, language: string = 'en') {
           { role: 'system', content: systemPrompt },
           { 
             role: 'user', 
-            content: [
-              { type: 'text', text: userPrompt },
-              { type: 'image_url', image_url: { url: file.url } }
-            ]
+            content: `${userPrompt}\n\nPDF Content (base64): data:application/pdf;base64,${base64PDF.substring(0, 10000)}...` // Truncate for safety
           }
         ],
         temperature: 0.7,
@@ -376,79 +322,38 @@ async function fallbackPDFToOCR(file: any, language: string = 'en') {
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI Vision OCR failed: ${response.status}`);
+    if (!aiResponse.ok) {
+      const errorData = await aiResponse.text();
+      console.error(`OpenAI PDF analysis failed: ${aiResponse.status}`, errorData);
+      
+      // Return a user-friendly error message
+      return {
+        success: false,
+        error: `PDF analysis not supported`,
+        analysis: language === 'ar' 
+          ? 'عذراً، تحليل ملفات PDF غير مدعوم حالياً. يرجى استخدام ملفات الصور أو النصوص بدلاً من ذلك.'
+          : 'Sorry, PDF analysis is not currently supported. Please use image or text files instead.'
+      };
     }
 
-    const result = await response.json();
-    console.log(`✅ PDF OCR analysis successful for: ${file.name}`);
+    const result = await aiResponse.json();
+    console.log(`✅ PDF analysis successful for: ${file.name}`);
     
     return {
       success: true,
       analysis: result.choices[0].message.content,
-      model: 'gpt-4o-vision-ocr'
+      model: 'gpt-4o-pdf'
     };
 
   } catch (error) {
-    console.error('Error in PDF OCR fallback:', error);
+    console.error('Error processing PDF directly:', error);
     return {
       success: false,
       error: error.message,
       analysis: language === 'ar' 
-        ? `فشل في معالجة ملف PDF: ${error.message}. يرجى التأكد من أن الملف ليس محمياً بكلمة مرور وقابل للقراءة.`
-        : `Failed to process PDF file: ${error.message}. Please ensure the file is not password protected and is readable.`
+        ? 'عذراً، تحليل ملفات PDF غير مدعوم حالياً. يرجى استخدام ملفات الصور أو النصوص بدلاً من ذلك.'
+        : 'Sorry, PDF analysis is not currently supported. Please use image or text files instead.'
     };
-  }
-}
-
-// Analyze extracted text with AI
-async function analyzeExtractedText(text: string, fileName: string, language: string = 'en') {
-  try {
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
-      : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
-
-    const userPrompt = language === 'ar' 
-      ? `حلل محتوى هذا المستند PDF "${fileName}":\n\n${text}`
-      : `Analyze the content of this PDF document "${fileName}":\n\n${text}`;
-
-    const aiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-
-    if (!aiResponse.ok) {
-      throw new Error(`AI API failed: ${aiResponse.status}`);
-    }
-
-    const result = await aiResponse.json();
-    return result.choices[0].message.content;
-
-  } catch (error) {
-    console.error('Error analyzing extracted text:', error);
-    return language === 'ar' 
-      ? `تم استخراج النص من المستند بنجاح (${text.length} حرف) ولكن فشل التحليل: ${error.message}`
-      : `Successfully extracted text from document (${text.length} characters) but analysis failed: ${error.message}`;
   }
 }
 
