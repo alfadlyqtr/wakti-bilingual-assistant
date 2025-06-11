@@ -223,7 +223,7 @@ export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean;
   try {
     console.log('Manually triggering auto-delete of old recordings...');
     
-    const { data, error } = await callEdgeFunctionWithRetry<{
+    const data = await callEdgeFunctionWithRetry<{
       message: string;
       deleted_count: number;
       deleted_recordings?: Array<{ id: string; title: string; created_at: string }>;
@@ -232,11 +232,6 @@ export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean;
       maxRetries: 1,
       retryDelay: 1000
     });
-
-    if (error) {
-      console.error('Error calling auto-delete function:', error);
-      throw error;
-    }
 
     console.log('Auto-delete function result:', data);
     
