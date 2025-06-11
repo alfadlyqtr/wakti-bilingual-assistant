@@ -50,7 +50,7 @@ export function ChatMessages({
         '',
         user.id,
         language,
-        null,
+        null, 
         'text',
         [],
         false,
@@ -190,6 +190,7 @@ export function ChatMessages({
     window.location.reload();
   };
 
+  // Modified component to fill height and properly scroll
   return (
     <div className="h-full w-full overflow-hidden">
       <ScrollArea ref={scrollAreaRef} className="h-full w-full">

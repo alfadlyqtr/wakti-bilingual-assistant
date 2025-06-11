@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -120,7 +119,7 @@ export function ChatInput({
     <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
       {/* Uploaded Files Display */}
       {uploadedFiles.length > 0 && (
-        <div className="px-4 py-3 bg-muted/30 border-b">
+        <div className="px-4 py-3 bg-muted/30">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-medium">
@@ -146,7 +145,7 @@ export function ChatInput({
       )}
 
       {/* Mobile-Optimized Chat Input Area */}
-      <div className="p-4 bg-background border-t">
+      <div className="p-4 bg-background">
         <div className="max-w-4xl mx-auto">
           <div className="flex items-end gap-3">
             {/* Upload Button */}

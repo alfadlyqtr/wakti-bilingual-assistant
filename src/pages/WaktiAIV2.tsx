@@ -483,10 +483,10 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* Main Chat Container - PROPERLY FIXED HEIGHT STRUCTURE */}
-      <div className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden">
-        {/* Fixed Header - Always at top */}
-        <div className="flex-shrink-0">
+      {/* FIXED LAYOUT: Main Chat Container */}
+      <div className="flex-1 flex flex-col h-screen">
+        {/* FIXED HEADER SECTION - Always visible at top */}
+        <div className="flex-shrink-0 border-b">
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -494,7 +494,6 @@ const WaktiAIV2 = () => {
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
           />
-
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
             error={error}
@@ -503,8 +502,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* Scrollable Messages Area - Takes all remaining space */}
-        <div className="flex-1 min-h-0 overflow-hidden">
+        {/* SCROLLABLE MESSAGES SECTION - Takes remaining space, only this scrolls */}
+        <div className="flex-1 h-0">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -514,8 +513,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Fixed Input - Always at bottom */}
-        <div className="flex-shrink-0">
+        {/* FIXED INPUT SECTION - Always visible at bottom */}
+        <div className="flex-shrink-0 border-t">
           <ChatInput
             message={message}
             setMessage={setMessage}
