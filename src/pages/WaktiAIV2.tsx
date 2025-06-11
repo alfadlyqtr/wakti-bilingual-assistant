@@ -525,9 +525,9 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen">
-        {/* Fixed Header - positioned absolutely to stay in place */}
+        {/* Fixed Header - positioned below the main app header */}
         <div 
-          className="fixed top-0 right-0 bg-background border-b z-50"
+          className="fixed top-16 right-0 bg-background border-b z-40"
           style={{ 
             left: showConversations || showQuickActions ? '320px' : '0',
             transition: 'left 0.3s ease-in-out'
@@ -548,11 +548,11 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area with top padding to account for fixed header */}
+        {/* Scrollable Messages Area with top padding to account for both headers */}
         <div 
           className="flex-1 overflow-hidden"
           style={{ 
-            paddingTop: '120px', // Account for header + notification bars height
+            paddingTop: '184px', // Account for AppHeader (64px) + Wakti header + notification bars (120px)
             paddingBottom: '100px' // Account for input area
           }}
         >
