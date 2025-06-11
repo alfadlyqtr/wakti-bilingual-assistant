@@ -483,20 +483,18 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* MAIN CONTAINER - Full screen layout */}
+      {/* MAIN CONTAINER - Fixed header, scrollable messages, fixed input */}
       <div className="flex-1 flex flex-col h-full">
         
-        {/* CHAT HEADER - Fixed at top of main container */}
-        <ChatHeader
-          currentConversationId={currentConversationId}
-          activeTrigger={activeTrigger}
-          onShowConversations={() => setShowConversations(true)}
-          onNewConversation={handleNewConversation}
-          onShowQuickActions={() => setShowQuickActions(true)}
-        />
-        
-        {/* NOTIFICATION BARS - Below fixed header */}
-        <div className="pt-16">
+        {/* HEADER + NOTIFICATION BARS - Fixed at top */}
+        <div className="flex-shrink-0 bg-background border-b">
+          <ChatHeader
+            currentConversationId={currentConversationId}
+            activeTrigger={activeTrigger}
+            onShowConversations={() => setShowConversations(true)}
+            onNewConversation={handleNewConversation}
+            onShowQuickActions={() => setShowQuickActions(true)}
+          />
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
             error={error}
@@ -505,8 +503,8 @@ const WaktiAIV2 = () => {
           />
         </div>
         
-        {/* MESSAGES CONTAINER - Flexible middle section */}
-        <div className="flex-1 overflow-hidden">
+        {/* MESSAGES CONTAINER - Scrollable middle section */}
+        <div className="flex-1 overflow-hidden pb-[140px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -516,8 +514,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* INPUT - Fixed at bottom */}
-        <div className="bg-background border-t">
+        {/* INPUT - Fixed at bottom with guaranteed height */}
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t h-[140px] z-50">
           <ChatInput
             message={message}
             setMessage={setMessage}
