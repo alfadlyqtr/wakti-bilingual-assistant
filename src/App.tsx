@@ -16,6 +16,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import Contacts from "@/pages/Contacts";
 import { PageContainer } from "@/components/PageContainer";
 import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -115,6 +116,17 @@ function App() {
                     <ProtectedRoute>
                       <PageContainer>
                         <Account />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/contacts"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Contacts />
                       </PageContainer>
                       <MobileNav />
                     </ProtectedRoute>
