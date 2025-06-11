@@ -1,8 +1,17 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface ChatSession {
   messages: AIMessage[];
   conversationId: string | null;
+}
+
+export interface AIConversation {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
 }
 
 export interface AIMessage {
@@ -50,6 +59,80 @@ export class WaktiAIV2Service {
 
   static clearChatSession() {
     localStorage.removeItem('chatSession');
+  }
+
+  static async getUserProfile() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+      return profile;
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
+  }
+
+  static async getCalendarContext() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      // Get upcoming events and tasks for calendar context
+      const { data: events, error: eventsError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', user.id)
+        .gte('date', new Date().toISOString())
+        .order('date', { ascending: true })
+        .limit(10);
+
+      const { data: tasks, error: tasksError } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'in_progress'])
+        .order('due_date', { ascending: true })
+        .limit(10);
+
+      return {
+        events: events || [],
+        tasks: tasks || []
+      };
+    } catch (error) {
+      console.error('Error fetching calendar context:', error);
+      return null;
+    }
+  }
+
+  static async getUserContext() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      // Get user preferences and settings for context
+      const { data: preferences, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      return {
+        userId: user.id,
+        email: user.email,
+        preferences: preferences || {}
+      };
+    } catch (error) {
+      console.error('Error fetching user context:', error);
+      return null;
+    }
   }
 
   static async confirmTaskCreation(userId: string, language: string, pendingTask: any) {

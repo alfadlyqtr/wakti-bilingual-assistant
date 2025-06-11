@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { AIMessage, WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { ModeToggle } from '@/components/ModeToggle';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
@@ -107,9 +107,9 @@ export default function WaktiAIV2() {
         attachedFiles,
         calendarContext,
         userContext,
-        true,
-        true,
-        true,
+        enableAdvancedIntegration,
+        enablePredictiveInsights,
+        enableWorkflowAutomation,
         activeTrigger
       );
 
@@ -173,7 +173,6 @@ export default function WaktiAIV2() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <ModeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="h-8 w-8 p-0">
