@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from './use-toast-helper';
@@ -74,9 +73,14 @@ export function useFileUpload() {
 
   // Validate file type and size
   const validateFile = useCallback((file: File): string | null => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf', 'text/plain'];
+    // Explicitly check and reject PDFs
+    if (file.type === 'application/pdf') {
+      return 'PDF files are not supported. Please use images or text files only.';
+    }
+    
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'text/plain'];
     if (!allowedTypes.includes(file.type)) {
-      return `File type ${file.type} not supported. Allowed: images, PDF, text files`;
+      return `File type ${file.type} not supported. Allowed: images, text files`;
     }
 
     const maxSize = 10 * 1024 * 1024; // 10MB
@@ -95,6 +99,15 @@ export function useFileUpload() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
+
+      // First check for any PDF files in the selection
+      const pdfFiles = Array.from(files).filter(file => file.type === 'application/pdf');
+      if (pdfFiles.length > 0) {
+        const errorMessage = 'PDF files are not supported. Please use images or text files only.';
+        showError(errorMessage);
+        setState(prev => ({ ...prev, isUploading: false, error: errorMessage }));
+        return null;
+      }
 
       const uploadPromises = Array.from(files).map(async (file) => {
         // Validate file

@@ -184,12 +184,12 @@ export function ChatInput({
                   </Tooltip>
                 </TooltipProvider>
 
-                {/* Hidden file input */}
+                {/* Hidden file input - Updated to exclude PDF */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*,.pdf,.txt"
+                  accept="image/*,.txt"
                   onChange={handleFileChange}
                   className="hidden"
                 />

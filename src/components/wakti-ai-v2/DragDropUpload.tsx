@@ -30,7 +30,6 @@ export function DragDropUpload({ onFilesSelected, disabled, children }: DragDrop
     disabled,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.gif', '.webp'],
-      'application/pdf': ['.pdf'],
       'text/plain': ['.txt']
     },
     maxSize: 10 * 1024 * 1024, // 10MB
@@ -56,8 +55,8 @@ export function DragDropUpload({ onFilesSelected, disabled, children }: DragDrop
               </h3>
               <p className="text-sm text-muted-foreground">
                 {language === 'ar' 
-                  ? 'يدعم: الصور، PDF، ملفات النص'
-                  : 'Supports: Images, PDF, Text files'
+                  ? 'يدعم: الصور، ملفات النص'
+                  : 'Supports: Images, Text files'
                 }
               </p>
             </div>
@@ -96,8 +95,8 @@ export function DragDropUpload({ onFilesSelected, disabled, children }: DragDrop
           </p>
           <p className="text-xs text-muted-foreground mt-1">
             {language === 'ar' 
-              ? 'يدعم: الصور، PDF، ملفات النص (حد أقصى 10 ميجابايت)'
-              : 'Supports: Images, PDF, Text files (max 10MB)'
+              ? 'يدعم: الصور، ملفات النص (حد أقصى 10 ميجابايت)'
+              : 'Supports: Images, Text files (max 10MB)'
             }
           </p>
         </div>

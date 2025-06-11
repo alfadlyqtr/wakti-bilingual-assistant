@@ -11,7 +11,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - Fixed PDF processing");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - PDF uploads removed");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -24,7 +24,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with fixed PDF handling");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with PDF support removed");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
@@ -80,7 +80,7 @@ serve(async (req) => {
 
     // Process attached files with simplified handling
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing files with simplified handling...");
+      console.log("📎 Processing files...");
       fileAnalysisResults = await processFilesSimplified(attachedFiles, language);
       console.log("📎 File analysis completed:", fileAnalysisResults.length);
     }
@@ -116,7 +116,7 @@ serve(async (req) => {
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with simplified file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -137,7 +137,7 @@ serve(async (req) => {
   }
 });
 
-// Simplified file processing - send PDFs directly to OpenAI
+// Simplified file processing - removed PDF specific handling
 async function processFilesSimplified(files: any[], language: string = 'en') {
   const results = [];
 
@@ -151,10 +151,6 @@ async function processFilesSimplified(files: any[], language: string = 'en') {
         // Use OpenAI Vision for images
         console.log(`🖼️ Using Vision API for image: ${file.name}`);
         analysisResult = await analyzeImageWithVision(file, language);
-      } else if (isPDFFile(file.type)) {
-        // Send PDF directly to OpenAI
-        console.log(`📄 Sending PDF directly to OpenAI: ${file.name}`);
-        analysisResult = await processPDFDirectly(file, language);
       } else if (isTextFile(file.type)) {
         // Process text files directly
         console.log(`📝 Processing text file: ${file.name}`);
@@ -200,11 +196,6 @@ async function processFilesSimplified(files: any[], language: string = 'en') {
 function isImageFile(mimeType: string): boolean {
   return mimeType.startsWith('image/') && 
          ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(mimeType.toLowerCase());
-}
-
-// Check if file is a PDF
-function isPDFFile(mimeType: string): boolean {
-  return mimeType === 'application/pdf';
 }
 
 // Check if file is a text file
@@ -271,88 +262,6 @@ async function analyzeImageWithVision(file: any, language: string = 'en') {
       success: false,
       error: error.message,
       analysis: language === 'ar' ? 'فشل في تحليل الصورة' : 'Failed to analyze image'
-    };
-  }
-}
-
-// NEW: Process PDF by sending directly to OpenAI
-async function processPDFDirectly(file: any, language: string = 'en') {
-  try {
-    if (!OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not configured for PDF analysis");
-    }
-
-    console.log(`📄 Processing PDF directly with OpenAI: ${file.name}`);
-
-    // Fetch the PDF content
-    const response = await fetch(file.url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch PDF: ${response.status}`);
-    }
-    
-    const pdfBuffer = await response.arrayBuffer();
-    const base64PDF = btoa(String.fromCharCode(...new Uint8Array(pdfBuffer)));
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل المستندات. حلل محتوى هذا المستند PDF واستخرج النقاط المهمة والمعلومات الرئيسية.'
-      : 'You are an AI assistant specialized in document analysis. Analyze this PDF document and extract key points and important information.';
-
-    const userPrompt = language === 'ar' 
-      ? `حلل محتوى هذا المستند PDF "${file.name}" واستخرج المعلومات المهمة`
-      : `Analyze the content of this PDF document "${file.name}" and extract important information`;
-
-    // Try using the assistants API with file upload
-    const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { 
-            role: 'user', 
-            content: `${userPrompt}\n\nPDF Content (base64): data:application/pdf;base64,${base64PDF.substring(0, 10000)}...` // Truncate for safety
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-
-    if (!aiResponse.ok) {
-      const errorData = await aiResponse.text();
-      console.error(`OpenAI PDF analysis failed: ${aiResponse.status}`, errorData);
-      
-      // Return a user-friendly error message
-      return {
-        success: false,
-        error: `PDF analysis not supported`,
-        analysis: language === 'ar' 
-          ? 'عذراً، تحليل ملفات PDF غير مدعوم حالياً. يرجى استخدام ملفات الصور أو النصوص بدلاً من ذلك.'
-          : 'Sorry, PDF analysis is not currently supported. Please use image or text files instead.'
-      };
-    }
-
-    const result = await aiResponse.json();
-    console.log(`✅ PDF analysis successful for: ${file.name}`);
-    
-    return {
-      success: true,
-      analysis: result.choices[0].message.content,
-      model: 'gpt-4o-pdf'
-    };
-
-  } catch (error) {
-    console.error('Error processing PDF directly:', error);
-    return {
-      success: false,
-      error: error.message,
-      analysis: language === 'ar' 
-        ? 'عذراً، تحليل ملفات PDF غير مدعوم حالياً. يرجى استخدام ملفات الصور أو النصوص بدلاً من ذلك.'
-        : 'Sorry, PDF analysis is not currently supported. Please use image or text files instead.'
     };
   }
 }
@@ -483,8 +392,8 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     
     // Fallback response
     return language === 'ar' 
-      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
-      : `Successfully analyzed ${fileAnalysis.length} attached file(s). Please rephrase your question for more detailed information.`;
+      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysisResults.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
+      : `Successfully analyzed ${fileAnalysisResults.length} attached file(s). Please rephrase your question for more detailed information.`;
   }
 }
 
