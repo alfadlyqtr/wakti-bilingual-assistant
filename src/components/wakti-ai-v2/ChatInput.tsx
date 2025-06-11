@@ -147,8 +147,8 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - Enhanced for mobile */}
-        <div className="px-4 py-4 safe-area-inset-bottom">
+        {/* Main Input Area - Enhanced for mobile with extra bottom padding */}
+        <div className="px-4 py-4 pb-8">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-end gap-3">
               

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -547,7 +548,7 @@ const WaktiAIV2 = () => {
         </div>
 
         {/* Scrollable Messages Area with bottom padding for fixed input */}
-        <div className="flex-1 overflow-hidden pb-[140px]">
+        <div className="flex-1 overflow-hidden pb-[180px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -558,8 +559,14 @@ const WaktiAIV2 = () => {
         </div>
       </div>
 
-      {/* Fixed Input at Bottom - positioned to respect drawer width */}
-      <div className="fixed bottom-0 right-0 bg-background border-t z-20" style={{ left: showConversations || showQuickActions ? '320px' : '0' }}>
+      {/* Fixed Input at Bottom - positioned to respect drawer width with safe area */}
+      <div 
+        className="fixed bottom-0 right-0 bg-background border-t z-20 pb-safe" 
+        style={{ 
+          left: showConversations || showQuickActions ? '320px' : '0',
+          paddingBottom: 'max(env(safe-area-inset-bottom), 20px)'
+        }}
+      >
         <ChatInput
           message={message}
           setMessage={setMessage}
