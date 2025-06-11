@@ -40,6 +40,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   // Search quota limits
   const REGULAR_SEARCH_LIMIT = 15; // 15 regular searches per month
   const ADVANCED_SEARCH_LIMIT = 5; // 5 advanced searches per month
+  const MAX_MONTHLY_REGULAR_SEARCHES = 15;
+  const MAX_MONTHLY_ADVANCED_SEARCHES = 5;
 
   const loadUserSearchQuota = useCallback(async () => {
     if (!user) return;
@@ -109,6 +111,94 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user]);
 
+  // Purchase functions
+  const purchaseExtraRegularSearches = useCallback(async (count: number): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      console.log('🛒 Purchasing extra regular searches:', count);
+      
+      const { data, error } = await supabase.rpc('purchase_extra_regular_searches', {
+        p_user_id: user.id,
+        p_count: count
+      });
+
+      if (error) {
+        console.error('❌ Error purchasing regular searches:', error);
+        return false;
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        console.log('✅ Regular searches purchased successfully');
+        await loadUserSearchQuota(); // Reload quota
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Error purchasing regular searches:', error);
+      return false;
+    }
+  }, [user, loadUserSearchQuota]);
+
+  const purchaseExtraAdvancedSearches = useCallback(async (count: number): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      console.log('🛒 Purchasing extra advanced searches:', count);
+      
+      const { data, error } = await supabase.rpc('purchase_extra_advanced_searches', {
+        p_user_id: user.id,
+        p_count: count
+      });
+
+      if (error) {
+        console.error('❌ Error purchasing advanced searches:', error);
+        return false;
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        console.log('✅ Advanced searches purchased successfully');
+        await loadUserSearchQuota(); // Reload quota
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Error purchasing advanced searches:', error);
+      return false;
+    }
+  }, [user, loadUserSearchQuota]);
+
+  const purchaseExtraVoiceCredits = useCallback(async (characters: number): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      console.log('🛒 Purchasing extra voice credits:', characters);
+      
+      const { data, error } = await supabase.rpc('purchase_extra_voice_credits', {
+        p_user_id: user.id,
+        p_characters: characters
+      });
+
+      if (error) {
+        console.error('❌ Error purchasing voice credits:', error);
+        return false;
+      }
+
+      if (data && data.length > 0 && data[0].success) {
+        console.log('✅ Voice credits purchased successfully');
+        await loadUserVoiceQuota(); // Reload quota
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('❌ Error purchasing voice credits:', error);
+      return false;
+    }
+  }, [user, loadUserVoiceQuota]);
+
   // Load quotas when user changes
   useEffect(() => {
     if (user) {
@@ -152,6 +242,11 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     totalAvailableCharacters,
     canUseVoice,
     REGULAR_SEARCH_LIMIT,
-    ADVANCED_SEARCH_LIMIT
+    ADVANCED_SEARCH_LIMIT,
+    MAX_MONTHLY_REGULAR_SEARCHES,
+    MAX_MONTHLY_ADVANCED_SEARCHES,
+    purchaseExtraRegularSearches,
+    purchaseExtraAdvancedSearches,
+    purchaseExtraVoiceCredits
   };
 };
