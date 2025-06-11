@@ -19,6 +19,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
   
   useEffect(() => {
     const widgetVisibility = getUserPreferences();
+    console.log('Widget visibility preferences loaded:', widgetVisibility);
     
     // Import components dynamically to avoid circular dependencies
     import("@/components/dashboard/widgets").then(({ CalendarWidget, TRWidget, Maw3dWidget }) => {
@@ -45,16 +46,25 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
           quote: {
             id: "quote",
             title: "dailyQuote" as TranslationKey,
-            visible: widgetVisibility.dailyQuote,
+            visible: widgetVisibility.dailyQuote !== false, // Fixed: now consistent with other widgets
             component: React.createElement(QuoteWidget)
           },
         };
 
+        console.log('Widget objects created:', Object.entries(defaultWidgets).map(([key, widget]) => ({
+          id: key,
+          visible: widget.visible
+        })));
+
         // Get saved order and arrange widgets accordingly
         const savedOrder = getWidgetOrder();
+        console.log('Saved widget order:', savedOrder);
+        
         const orderedWidgets = savedOrder.map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets]).filter(Boolean);
         
-        console.log('Dashboard widgets configured:', orderedWidgets.map(w => w.id));
+        console.log('Final ordered widgets:', orderedWidgets.map(w => ({ id: w.id, visible: w.visible })));
+        console.log('Visible widgets count:', orderedWidgets.filter(w => w.visible).length);
+        
         setWidgets(orderedWidgets);
       });
     });

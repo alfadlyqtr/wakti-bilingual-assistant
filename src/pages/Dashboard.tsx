@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
 import { TrialBanner } from "@/components/dashboard/TrialBanner";
@@ -18,6 +18,15 @@ export default function Dashboard() {
   
   // Manage widgets - pass legacyEvents to avoid conflicts with Maw3d system
   const { widgets, handleDragEnd } = useWidgetManager(language, isLoading, [], legacyEvents, []);
+
+  // Debug logging for widget visibility
+  useEffect(() => {
+    console.log('Dashboard: Total widgets received from hook:', widgets.length);
+    console.log('Dashboard: Widgets details:', widgets.map(w => ({ id: w.id, visible: w.visible })));
+    const visibleWidgets = widgets.filter(widget => widget.visible);
+    console.log('Dashboard: Visible widgets count:', visibleWidgets.length);
+    console.log('Dashboard: Visible widget IDs:', visibleWidgets.map(w => w.id));
+  }, [widgets]);
 
   // Toggle drag mode button handler
   const toggleDragMode = () => {
@@ -47,6 +56,15 @@ export default function Dashboard() {
           isDragging={isDragging} 
           onDragEnd={handleDragEnd} 
         />
+        
+        {/* Debug info - remove this after testing */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 p-2 bg-muted rounded text-xs">
+            <div>Total widgets: {widgets.length}</div>
+            <div>Visible widgets: {widgets.filter(w => w.visible).length}</div>
+            <div>Widget IDs: {widgets.map(w => `${w.id}(${w.visible ? 'visible' : 'hidden'})`).join(', ')}</div>
+          </div>
+        )}
       </div>
     </div>
   );
