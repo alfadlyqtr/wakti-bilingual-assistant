@@ -1,6 +1,5 @@
 
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
 
@@ -28,6 +27,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const locale = language === 'ar' ? arSA : enUS;
       
       console.log('Generating PDF for language:', language);
+      console.log('Content text:', content.text);
       
       // Create new PDF document
       const doc = new jsPDF({
@@ -36,112 +36,126 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         format: 'a4',
       });
 
-      // Create HTML content that will be converted to PDF
-      const createHtmlContent = () => {
-        const createdDate = new Date(metadata.createdAt);
-        const expiresDate = new Date(metadata.expiresAt);
-        const createdFormatted = format(createdDate, 'PPP', { locale });
-        const expiresFormatted = format(expiresDate, 'PPP', { locale });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const lineHeight = 7;
+      let yPosition = margin;
 
-        return `
-          <div style="font-family: 'Noto Sans Arabic', 'Arial Unicode MS', Arial, sans-serif; direction: ${isRtl ? 'rtl' : 'ltr'}; text-align: ${isRtl ? 'right' : 'left'}; padding: 20px; line-height: 1.6;">
-            
-            <!-- Header -->
-            <div style="background: #060541; color: white; padding: 15px; margin: -20px -20px 20px -20px; text-align: center;">
-              <h1 style="margin: 0; font-size: 18px; font-weight: bold;">WAKTI - ${isRtl ? 'وقتي' : ''}</h1>
-            </div>
-            
-            <!-- Title -->
-            <h2 style="color: #060541; font-size: 16px; font-weight: bold; margin-bottom: 20px;">
-              ${title}
-            </h2>
-            
-            <!-- Metadata -->
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 12px;">
-              <table style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold; width: 25%;">${isRtl ? 'النوع:' : 'Type:'}</td>
-                  <td style="padding: 5px 0;">${metadata.type}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold;">${isRtl ? 'تاريخ الإنشاء:' : 'Created:'}</td>
-                  <td style="padding: 5px 0;">${createdFormatted}</td>
-                </tr>
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold;">${isRtl ? 'تاريخ الانتهاء:' : 'Expires:'}</td>
-                  <td style="padding: 5px 0;">${expiresFormatted}</td>
-                </tr>
-                ${metadata.host ? `
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold;">${isRtl ? 'المضيف:' : 'Host:'}</td>
-                  <td style="padding: 5px 0;">${metadata.host}</td>
-                </tr>` : ''}
-                ${metadata.attendees ? `
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold;">${isRtl ? 'الحضور:' : 'Attendees:'}</td>
-                  <td style="padding: 5px 0;">${metadata.attendees}</td>
-                </tr>` : ''}
-                ${metadata.location ? `
-                <tr>
-                  <td style="padding: 5px 0; font-weight: bold;">${isRtl ? 'الموقع:' : 'Location:'}</td>
-                  <td style="padding: 5px 0;">${metadata.location}</td>
-                </tr>` : ''}
-              </table>
-            </div>
-            
-            <!-- Content -->
-            ${content.text ? `
-            <div style="margin-bottom: 20px;">
-              <h3 style="background: #f0f0f0; padding: 10px; margin: 0 0 15px 0; font-size: 14px; font-weight: bold;">
-                ${isRtl ? 'المحتوى' : 'Content'}
-              </h3>
-              <div style="padding: 15px; border: 1px solid #ddd; border-radius: 5px; white-space: pre-wrap; font-size: 12px;">
-                ${content.text}
-              </div>
-            </div>` : ''}
-            
-            <!-- Footer -->
-            <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 10px;">
-              ${isRtl ? 'WAKTI © 2025 - وقتي' : 'WAKTI © 2025'}
-            </div>
-          </div>
-        `;
-      };
-
-      // Create a temporary element to hold the HTML
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = createHtmlContent();
-      tempDiv.style.position = 'fixed';
-      tempDiv.style.top = '-9999px';
-      tempDiv.style.left = '-9999px';
-      tempDiv.style.width = '210mm';
-      document.body.appendChild(tempDiv);
-
-      console.log('Converting HTML to PDF...');
-
-      // Use jsPDF html method to convert HTML to PDF
-      doc.html(tempDiv, {
-        callback: function (pdf) {
-          console.log('PDF conversion completed');
-          
-          // Clean up the temporary element
-          document.body.removeChild(tempDiv);
-          
-          // Generate and resolve the blob
-          const pdfBlob = pdf.output('blob');
-          console.log('PDF generated successfully, blob size:', pdfBlob.size);
-          resolve(pdfBlob);
-        },
-        x: 0,
-        y: 0,
-        width: 210,
-        windowWidth: 794, // A4 width in pixels at 96 DPI
-        html2canvas: {
-          scale: 0.8,
-          useCORS: true,
-          letterRendering: true
+      // Set font to support Unicode (includes Arabic)
+      doc.setFont('helvetica');
+      
+      // Header
+      doc.setFillColor(6, 5, 65); // #060541
+      doc.rect(0, 0, pageWidth, 40, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text('WAKTI', pageWidth / 2, 25, { align: 'center' });
+      
+      yPosition = 50;
+      doc.setTextColor(0, 0, 0);
+      
+      // Title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      const titleLines = doc.splitTextToSize(title, pageWidth - 2 * margin);
+      titleLines.forEach((line: string) => {
+        if (yPosition > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
         }
+        doc.text(line, isRtl ? pageWidth - margin : margin, yPosition, { align: isRtl ? 'right' : 'left' });
+        yPosition += lineHeight + 2;
       });
+      
+      yPosition += 10;
+      
+      // Metadata section
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      
+      const createdDate = new Date(metadata.createdAt);
+      const expiresDate = new Date(metadata.expiresAt);
+      const createdFormatted = format(createdDate, 'PPP', { locale });
+      const expiresFormatted = format(expiresDate, 'PPP', { locale });
+      
+      const metadataItems = [
+        `${isRtl ? 'النوع:' : 'Type:'} ${metadata.type}`,
+        `${isRtl ? 'تاريخ الإنشاء:' : 'Created:'} ${createdFormatted}`,
+        `${isRtl ? 'تاريخ الانتهاء:' : 'Expires:'} ${expiresFormatted}`
+      ];
+      
+      if (metadata.host) {
+        metadataItems.push(`${isRtl ? 'المضيف:' : 'Host:'} ${metadata.host}`);
+      }
+      if (metadata.attendees) {
+        metadataItems.push(`${isRtl ? 'الحضور:' : 'Attendees:'} ${metadata.attendees}`);
+      }
+      if (metadata.location) {
+        metadataItems.push(`${isRtl ? 'الموقع:' : 'Location:'} ${metadata.location}`);
+      }
+      
+      // Add background for metadata
+      doc.setFillColor(248, 249, 250);
+      const metadataHeight = metadataItems.length * lineHeight + 10;
+      doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, metadataHeight, 'F');
+      
+      metadataItems.forEach(item => {
+        if (yPosition > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(item, isRtl ? pageWidth - margin - 5 : margin + 5, yPosition, { align: isRtl ? 'right' : 'left' });
+        yPosition += lineHeight;
+      });
+      
+      yPosition += 15;
+      
+      // Content section
+      if (content.text && content.text.trim()) {
+        // Content header
+        doc.setFont('helvetica', 'bold');
+        doc.setFillColor(240, 240, 240);
+        doc.rect(margin, yPosition - 5, pageWidth - 2 * margin, 15, 'F');
+        doc.text(isRtl ? 'المحتوى' : 'Content', isRtl ? pageWidth - margin - 5 : margin + 5, yPosition + 5);
+        yPosition += 20;
+        
+        // Content text
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        
+        // Split text into lines that fit the page width
+        const textWidth = pageWidth - 2 * margin - 10;
+        const contentLines = doc.splitTextToSize(content.text, textWidth);
+        
+        console.log('Content lines to render:', contentLines.length);
+        
+        contentLines.forEach((line: string, index: number) => {
+          if (yPosition > pageHeight - margin - 10) {
+            doc.addPage();
+            yPosition = margin;
+          }
+          
+          // For Arabic text, align to the right
+          const xPosition = isRtl ? pageWidth - margin - 5 : margin + 5;
+          doc.text(line, xPosition, yPosition, { align: isRtl ? 'right' : 'left' });
+          yPosition += lineHeight;
+        });
+      }
+      
+      // Footer
+      yPosition = pageHeight - 20;
+      doc.setFontSize(9);
+      doc.setTextColor(102, 102, 102);
+      const footerText = isRtl ? 'WAKTI © 2025 - وقتي' : 'WAKTI © 2025';
+      doc.text(footerText, pageWidth / 2, yPosition, { align: 'center' });
+      
+      console.log('PDF generation completed');
+      
+      // Generate and resolve the blob
+      const pdfBlob = doc.output('blob');
+      console.log('PDF generated successfully, blob size:', pdfBlob.size);
+      resolve(pdfBlob);
 
     } catch (error) {
       console.error('Error generating PDF:', error);
