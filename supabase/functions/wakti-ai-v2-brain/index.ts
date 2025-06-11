@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -329,9 +328,9 @@ I'm also happy to help you with other things if you'd like!`;
       }
     }
 
-    // Process with enhanced AI for superior general chat experience
-    console.log("🤖 WAKTI AI V2 BRAIN: Processing with enhanced conversational AI");
-    const response = await processWithSuperiorGeneralChatAI(message, conversationContext, language, userContext, calendarContext);
+    // Process with enhanced AI for superior general chat experience and file analysis
+    console.log("🤖 WAKTI AI V2 BRAIN: Processing with enhanced conversational AI and file analysis");
+    const response = await processWithSuperiorGeneralChatAI(message, conversationContext, language, userContext, calendarContext, attachedFiles);
 
     const result = {
       response,
@@ -766,8 +765,8 @@ function generateConversationId(): string {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Superior AI processing for general chat with enhanced conversational intelligence
-async function processWithSuperiorGeneralChatAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null) {
+// Superior AI processing for general chat with enhanced conversational intelligence and file analysis
+async function processWithSuperiorGeneralChatAI(message: string, conversationContext: any, language: string = 'en', userContext: any = null, calendarContext: any = null, attachedFiles: any[] = []) {
   try {
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -792,6 +791,7 @@ async function processWithSuperiorGeneralChatAI(message: string, conversationCon
 - صديق ودود وذكي ومفيد، تحافظ على التدفق الطبيعي للمحادثة
 - تتذكر السياق السابق بذكاء وتربط إجاباتك بالمحادثة بطريقة طبيعية ومتدفقة
 - تقدم معلومات شاملة ومفيدة أولاً، ثم تقترح ميزات التطبيق بطريقة طبيعية جداً عند الحاجة الفعلية
+- تحلل الصور والمستندات وملفات PDF بدقة وتقدم رؤى مفيدة
 
 الموضوعات التي تتقنها:
 - الرياضة: الفرق والألعاب واللاعبين والأحداث الرياضية
@@ -799,6 +799,7 @@ async function processWithSuperiorGeneralChatAI(message: string, conversationCon
 - التكنولوجيا: التطبيقات والبرمجة والذكاء الاصطناعي
 - الترفيه: الأفلام والموسيقى والمشاهير
 - السفر والثقافة: البلدان والمدن والثقافات
+- تحليل الملفات: الصور والمستندات وملفات PDF
 
 ميزات التطبيق (اقترحها بذكاء وطبيعية فقط عند الحاجة الحقيقية):
 - إنشاء مهام وتذكيرات للمتابعة والتنظيم
@@ -813,6 +814,7 @@ Your Enhanced Personality:
 - Friendly, smart, and helpful friend who maintains natural conversation flow
 - Remember previous context intelligently and connect your responses to the conversation naturally and seamlessly
 - Provide comprehensive and helpful information FIRST, then suggest app features very naturally when there's genuine relevance
+- Analyze images, documents, and PDFs accurately and provide useful insights
 
 Topics You Excel At:
 - Sports: Teams, games, players, and sporting events
@@ -820,6 +822,7 @@ Topics You Excel At:
 - Technology: Apps, programming, artificial intelligence
 - Entertainment: Movies, music, celebrities
 - Travel & Culture: Countries, cities, cultures
+- File Analysis: Images, documents, and PDFs
 
 App Features (suggest intelligently and naturally only when genuinely relevant):
 - Create tasks and reminders for follow-up and organization
@@ -827,6 +830,15 @@ App Features (suggest intelligently and naturally only when genuinely relevant):
 - Manage contacts and messaging
 
 Be an excellent conversationalist and informative first, app assistant second. Make app suggestions feel very natural and never forced.`;
+
+    // Add file analysis context if files are attached
+    if (attachedFiles && attachedFiles.length > 0) {
+      const fileAnalysisPrompt = language === 'ar'
+        ? `\n\nتحليل الملفات المرفقة: يرجى تحليل الملفات المرفقة وتقديم رؤى مفيدة حولها. الملفات المرفقة: ${attachedFiles.map(f => f.name).join(', ')}`
+        : `\n\nFile Analysis: Please analyze the attached files and provide useful insights about them. Attached files: ${attachedFiles.map(f => f.name).join(', ')}`;
+      
+      systemPrompt += fileAnalysisPrompt;
+    }
     
     // Enhanced context awareness for superior conversation flow
     if (conversationContext?.type === 'continuing_conversation') {
@@ -844,20 +856,55 @@ Be an excellent conversationalist and informative first, app assistant second. M
 - إذا ذكرت حدث أو تاريخ مهم، اقترح بذكاء: "هل تريد إضافة هذا كحدث في تقويمك؟"
 - إذا ناقشت مشروع أو هدف، اقترح بطبيعية: "يمكنني مساعدتك في تنظيم هذا كمهمة إذا أردت"
 - إذا تحدثت عن شخص مهم أو جهة اتصال: "هل تريد إضافته إلى جهات الاتصال؟"
+- إذا حللت صورة أو مستند مهم: "هل تريد إنشاء مهمة للمتابعة بناءً على هذا المحتوى؟"
 - فقط اقترح هذه الميزات عندما تكون ذات صلة طبيعية حقيقية ومفيدة جداً للمحادثة`
       : `\n\nEnhanced Smart and Natural Follow-up Guidelines:
 - If discussing a sports team or game, conclude naturally: "By the way, would you like me to remind you about their next game?"
 - If mentioning an important event or date, suggest intelligently: "Would you like to add this as an event to your calendar?"
 - If discussing a project or goal, suggest naturally: "I can help you organize this as a task if you'd like"
 - If talking about an important person or contact: "Would you like to add them to your contacts?"
+- If analyzing an important image or document: "Would you like to create a task to follow up on this content?"
 - Only suggest these features when they have genuine natural relevance and are very helpful to the conversation`;
 
     systemPrompt += followUpPrompt;
 
+    // Prepare messages for the API
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message }
     ];
+
+    // Add file content to messages if available
+    if (attachedFiles && attachedFiles.length > 0) {
+      for (const file of attachedFiles) {
+        if (file.type.startsWith('image/')) {
+          // For images, include them in the message for vision analysis
+          messages.push({
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `Please analyze this image: ${file.name}`
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: file.url
+                }
+              }
+            ]
+          });
+        } else {
+          // For other files, mention them in text
+          const fileInfo = language === 'ar' 
+            ? `ملف مرفق: ${file.name} (${file.type})`
+            : `Attached file: ${file.name} (${file.type})`;
+          messages.push({ role: 'user', content: fileInfo });
+        }
+      }
+    }
+
+    // Add the main user message
+    messages.push({ role: 'user', content: message });
     
     // Enhanced conversation context for superior continuity
     if (conversationContext?.previousContext?.lastUserMessage && conversationContext?.contextualContinuation) {
@@ -865,7 +912,7 @@ Be an excellent conversationalist and informative first, app assistant second. M
         ? `السياق المتقدم والذكي: رسالة المستخدم السابقة: "${conversationContext.previousContext.lastUserMessage}". موضوعات سابقة: ${conversationContext.previousContext.conversationThemes?.join(', ')}`
         : `Advanced Intelligent Context: User's previous message: "${conversationContext.previousContext.lastUserMessage}". Previous themes: ${conversationContext.previousContext.conversationThemes?.join(', ')}`;
       
-      messages.splice(1, 0, { role: 'assistant', content: contextMessage });
+      messages.splice(-1, 0, { role: 'assistant', content: contextMessage });
     }
     
     const response = await fetch(apiUrl, {
@@ -877,10 +924,10 @@ Be an excellent conversationalist and informative first, app assistant second. M
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.8, // Slightly increased for more natural, varied responses
-        max_tokens: 1400, // Increased for more comprehensive responses
-        presence_penalty: 0.2, // Enhanced to encourage diverse vocabulary
-        frequency_penalty: 0.15 // Enhanced to avoid repetition
+        temperature: 0.8,
+        max_tokens: 1400,
+        presence_penalty: 0.2,
+        frequency_penalty: 0.15
       })
     });
     
