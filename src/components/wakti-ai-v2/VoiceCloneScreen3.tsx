@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Play, Download, Loader2, Volume2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface VoiceClone {
   id: string;
@@ -24,7 +24,6 @@ interface VoiceCloneScreen3Props {
 
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [voices, setVoices] = useState<VoiceClone[]>([]);
@@ -165,18 +164,11 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
         characters_used: prev.characters_used + text.trim().length
       }));
 
-      toast({
-        title: language === 'ar' ? 'نجح!' : 'Success!',
-        description: language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully',
-      });
+      toast.success(language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully');
 
     } catch (error: any) {
       console.error('🎵 Error generating speech:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
-        description: error.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'),
-        variant: 'destructive',
-      });
+      toast.error(error.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
     }
@@ -188,11 +180,7 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
       const audio = new Audio(audioUrl);
       audio.play().catch(error => {
         console.error('🎵 Error playing audio:', error);
-        toast({
-          title: language === 'ar' ? 'خطأ' : 'Error',
-          description: language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio',
-          variant: 'destructive',
-        });
+        toast.error(language === 'ar' ? 'فشل في تشغيل الصوت' : 'Failed to play audio');
       });
     }
   };
