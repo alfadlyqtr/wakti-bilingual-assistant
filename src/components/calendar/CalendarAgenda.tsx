@@ -1,7 +1,7 @@
-
 import React, { useState } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { CalendarEntry, EntryType } from "@/utils/calendarUtils";
@@ -36,6 +36,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   onEditEntry
 }) => {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [selectedEntry, setSelectedEntry] = useState<CalendarEntry | null>(null);
   
   console.log('CalendarAgenda - Selected date:', date);
@@ -276,8 +277,7 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  // Navigate to T&R page
-                  window.location.href = '/tasks-reminders';
+                  navigate('/tr');
                 }}
                 className="w-full"
               >
@@ -363,3 +363,5 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
     </motion.div>
   );
 };
+
+export default CalendarAgenda;
