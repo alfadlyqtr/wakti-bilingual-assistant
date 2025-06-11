@@ -274,31 +274,181 @@ async function analyzeImageWithVision(file: any, language: string = 'en') {
   }
 }
 
-// Process PDF files by extracting text and analyzing with regular AI
+// Process PDF files by extracting text using PDF.js or fallback to OCR
 async function processPDFFile(file: any, language: string = 'en') {
   try {
     console.log(`📄 Processing PDF file: ${file.name}`);
     
-    // For now, we'll indicate that PDF text extraction is not available
-    // In a full implementation, you'd use a PDF parsing library here
-    const fallbackAnalysis = language === 'ar' 
-      ? `هذا ملف PDF بعنوان "${file.name}". لا يمكن استخراج النص من ملفات PDF حالياً، ولكن يمكنك تحويل المحتوى إلى صورة أو نص عادي للتحليل.`
-      : `This is a PDF file named "${file.name}". PDF text extraction is not currently available, but you can convert the content to an image or plain text for analysis.`;
-
+    // Import PDF.js from CDN
+    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@3.11.174');
+    
+    // Fetch the PDF file
+    const response = await fetch(file.url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch PDF: ${response.status}`);
+    }
+    
+    const pdfData = await response.arrayBuffer();
+    
+    // Load PDF document
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    console.log(`📄 PDF loaded successfully: ${pdf.numPages} pages`);
+    
+    let fullText = '';
+    
+    // Extract text from all pages
+    for (let pageNum = 1; pageNum <= Math.min(pdf.numPages, 10); pageNum++) { // Limit to first 10 pages
+      const page = await pdf.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += `Page ${pageNum}:\n${pageText}\n\n`;
+    }
+    
+    if (fullText.trim().length === 0) {
+      // If no text extracted, fall back to OCR using Vision API
+      console.log(`📄 No text found in PDF, attempting OCR fallback for: ${file.name}`);
+      return await fallbackPDFToOCR(file, language);
+    }
+    
+    console.log(`📄 Extracted ${fullText.length} characters from PDF: ${file.name}`);
+    
+    // Analyze the extracted text with AI
+    const analysisResult = await analyzeExtractedText(fullText, file.name, language);
+    
     return {
-      success: false,
-      analysis: fallbackAnalysis,
-      model: 'fallback',
-      note: 'PDF text extraction not implemented'
+      success: true,
+      analysis: analysisResult,
+      model: 'pdf-text-extraction',
+      textLength: fullText.length,
+      extractedText: fullText.substring(0, 1000) + (fullText.length > 1000 ? '...' : '') // Include sample
     };
 
   } catch (error) {
     console.error('Error processing PDF:', error);
+    
+    // Fallback to OCR if PDF text extraction fails
+    console.log(`📄 PDF text extraction failed, trying OCR fallback for: ${file.name}`);
+    return await fallbackPDFToOCR(file, language);
+  }
+}
+
+// Fallback: Use Vision API for OCR when PDF text extraction fails
+async function fallbackPDFToOCR(file: any, language: string = 'en') {
+  try {
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key not configured for OCR fallback");
+    }
+
+    console.log(`🔍 Using Vision API for PDF OCR: ${file.name}`);
+
+    const systemPrompt = language === 'ar' 
+      ? 'أنت مساعد ذكي متخصص في استخراج النصوص من ملفات PDF. استخرج كل النص الموجود في هذا المستند بدقة.'
+      : 'You are an AI assistant specialized in extracting text from PDF documents. Extract all text content from this document accurately.';
+
+    const userPrompt = language === 'ar' 
+      ? 'استخرج وحلل محتوى هذا المستند PDF'
+      : 'Extract and analyze the content of this PDF document';
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { 
+            role: 'user', 
+            content: [
+              { type: 'text', text: userPrompt },
+              { type: 'image_url', image_url: { url: file.url } }
+            ]
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI Vision OCR failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ PDF OCR analysis successful for: ${file.name}`);
+    
+    return {
+      success: true,
+      analysis: result.choices[0].message.content,
+      model: 'gpt-4o-vision-ocr'
+    };
+
+  } catch (error) {
+    console.error('Error in PDF OCR fallback:', error);
     return {
       success: false,
       error: error.message,
-      analysis: language === 'ar' ? 'فشل في معالجة ملف PDF' : 'Failed to process PDF file'
+      analysis: language === 'ar' 
+        ? `فشل في معالجة ملف PDF: ${error.message}. يرجى التأكد من أن الملف ليس محمياً بكلمة مرور وقابل للقراءة.`
+        : `Failed to process PDF file: ${error.message}. Please ensure the file is not password protected and is readable.`
     };
+  }
+}
+
+// Analyze extracted text with AI
+async function analyzeExtractedText(text: string, fileName: string, language: string = 'en') {
+  try {
+    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
+    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
+      : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
+
+    const userPrompt = language === 'ar' 
+      ? `حلل محتوى هذا المستند PDF "${fileName}":\n\n${text}`
+      : `Analyze the content of this PDF document "${fileName}":\n\n${text}`;
+
+    const aiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`AI API failed: ${aiResponse.status}`);
+    }
+
+    const result = await aiResponse.json();
+    return result.choices[0].message.content;
+
+  } catch (error) {
+    console.error('Error analyzing extracted text:', error);
+    return language === 'ar' 
+      ? `تم استخراج النص من المستند بنجاح (${text.length} حرف) ولكن فشل التحليل: ${error.message}`
+      : `Successfully extracted text from document (${text.length} characters) but analysis failed: ${error.message}`;
   }
 }
 
