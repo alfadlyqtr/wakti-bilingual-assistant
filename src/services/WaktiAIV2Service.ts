@@ -127,6 +127,75 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.executeAdvancedAction(userId, actionType, actionData, language);
   }
 
+  // Enhanced static method for better conversation saving
+  static async ensureConversationExists(
+    userId: string, 
+    sessionMessages: AIMessage[], 
+    language: string = 'en'
+  ): Promise<string | null> {
+    if (sessionMessages.length === 0) return null;
+
+    try {
+      // Create a conversation title from the first user message
+      const firstUserMessage = sessionMessages.find(msg => msg.role === 'user');
+      const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'Untitled Conversation';
+
+      // Create conversation in database
+      const { data: conversation, error } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId,
+          title: title,
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        console.error('❌ Error creating conversation in ensureConversationExists:', error);
+        return null;
+      }
+
+      if (conversation) {
+        console.log('✅ Created new conversation:', conversation.id);
+        
+        // Save all session messages to the database
+        const messageInserts = sessionMessages.map((msg, index) => ({
+          conversation_id: conversation.id,
+          user_id: userId,
+          role: msg.role,
+          content: msg.content,
+          created_at: new Date(Date.now() + index).toISOString(), // Ensure chronological order
+          language: language,
+          input_type: msg.inputType || 'text',
+          intent: msg.intent,
+          confidence_level: msg.confidence,
+          action_taken: msg.actionTaken ? String(msg.actionTaken) : null,
+          browsing_used: msg.browsingUsed || false,
+          browsing_data: msg.browsingData || null,
+          quota_status: msg.quotaStatus || null,
+          action_result: msg.actionResult || null
+        }));
+
+        const { error: messagesError } = await supabase
+          .from('ai_chat_history')
+          .insert(messageInserts);
+
+        if (messagesError) {
+          console.error('❌ Error saving messages in ensureConversationExists:', messagesError);
+        } else {
+          console.log('✅ Saved', messageInserts.length, 'messages to conversation');
+        }
+
+        return conversation.id;
+      }
+    } catch (error) {
+      console.error('❌ Error in ensureConversationExists:', error);
+    }
+
+    return null;
+  }
+
   // Static methods (keep all existing static methods)
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
@@ -636,3 +705,5 @@ export class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
+
+}
