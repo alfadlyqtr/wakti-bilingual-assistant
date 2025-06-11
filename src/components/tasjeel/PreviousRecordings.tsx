@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
 import { generatePDF } from "@/utils/pdfUtils";
 import {
@@ -24,7 +25,8 @@ import {
   FileText,
   Volume2,
   Rewind,
-  StopCircle
+  StopCircle,
+  AlertCircle
 } from "lucide-react";
 import { TasjeelRecord } from "./types";
 
@@ -50,6 +52,8 @@ const translations = {
     deleteError: "Error deleting recording",
     pdfExported: "PDF exported successfully",
     seconds: "sec",
+    autoDeleteNotice: "⚠️ All recordings are automatically deleted after 10 days. Download important recordings to keep them permanently.",
+    refresh: "Refresh"
   },
   ar: {
     previousRecordings: "التسجيلات السابقة",
@@ -71,6 +75,8 @@ const translations = {
     deleteError: "خطأ في حذف التسجيل",
     pdfExported: "تم تصدير PDF بنجاح",
     seconds: "ثانية",
+    autoDeleteNotice: "⚠️ يتم حذف جميع التسجيلات تلقائياً بعد 10 أيام. قم بتنزيل التسجيلات المهمة للاحتفاظ بها بشكل دائم.",
+    refresh: "تحديث"
   }
 };
 
@@ -109,7 +115,10 @@ const RecordingDialog: React.FC<{
       if (audioPlaying) {
         audioRef.current.pause();
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch((error) => {
+          console.error("Error playing audio:", error);
+          toast("Audio file may no longer exist");
+        });
       }
       setAudioPlaying(!audioPlaying);
     }
@@ -120,7 +129,10 @@ const RecordingDialog: React.FC<{
       // Rewind 10 seconds
       audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
       if (!audioPlaying) {
-        audioRef.current.play();
+        audioRef.current.play().catch((error) => {
+          console.error("Error playing audio:", error);
+          toast("Audio file may no longer exist");
+        });
         setAudioPlaying(true);
       }
     }
@@ -217,6 +229,7 @@ const RecordingDialog: React.FC<{
                 onPlay={() => setAudioPlaying(true)}
                 onPause={() => setAudioPlaying(false)}
                 onEnded={() => setAudioPlaying(false)}
+                onError={() => toast("Audio file may no longer exist")}
                 className="hidden"
               />
               
@@ -321,6 +334,58 @@ const PreviousRecordings: React.FC = () => {
     }
   }, [user]);
 
+  // Real-time subscription for database changes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('tasjeel-previous-recordings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'tasjeel_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Recording deleted from database:', payload);
+          // Remove the deleted recording from the UI
+          setRecords(prev => prev.filter(rec => rec.id !== payload.old.id));
+          // Close dialog if the deleted record was open
+          if (selectedRecord?.id === payload.old.id) {
+            setDialogOpen(false);
+            setSelectedRecord(null);
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasjeel_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Recording updated:', payload);
+          // Update the recording in the UI
+          setRecords(prev => prev.map(rec => 
+            rec.id === payload.new.id ? { ...rec, ...payload.new } : rec
+          ));
+          // Update selected record if it's the one being viewed
+          if (selectedRecord?.id === payload.new.id) {
+            setSelectedRecord({ ...selectedRecord, ...payload.new });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, selectedRecord]);
+
   const loadRecordings = async () => {
     setLoading(true);
     try {
@@ -346,7 +411,10 @@ const PreviousRecordings: React.FC = () => {
     if (playingId === record.id) {
       // Same audio, toggle play/pause
       if (audioRef.current.paused) {
-        audioRef.current.play();
+        audioRef.current.play().catch((error) => {
+          console.error("Error playing audio:", error);
+          toast("Audio file may no longer exist");
+        });
       } else {
         audioRef.current.pause();
         setPlayingId(null);
@@ -354,7 +422,10 @@ const PreviousRecordings: React.FC = () => {
     } else {
       // Different audio, switch to it
       audioRef.current.src = audioSource;
-      audioRef.current.play();
+      audioRef.current.play().catch((error) => {
+        console.error("Error playing audio:", error);
+        toast("Audio file may no longer exist");
+      });
       setPlayingId(record.id);
     }
   };
@@ -362,7 +433,7 @@ const PreviousRecordings: React.FC = () => {
   const handleDelete = async (id: string) => {
     try {
       await deleteTasjeelRecord(id);
-      setRecords(prevRecords => prevRecords.filter(record => record.id !== id));
+      // The real-time subscription will handle UI updates
       setDialogOpen(false);
       toast(t.deleteSuccess);
     } catch (error) {
@@ -385,104 +456,124 @@ const PreviousRecordings: React.FC = () => {
     );
   }
 
-  if (records.length === 0) {
-    return (
-      <div className="text-center py-8 text-muted-foreground">
-        {t.noRecordings}
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-4">
+      {/* Auto-deletion warning notice */}
+      <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+        <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+        <AlertDescription className="text-orange-800 dark:text-orange-200">
+          {t.autoDeleteNotice}
+        </AlertDescription>
+      </Alert>
+
+      {/* Refresh button */}
+      <div className="flex justify-end">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={loadRecordings}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          {t.refresh}
+        </Button>
+      </div>
+
       {/* Hidden audio element for playback */}
       <audio 
         ref={audioRef}
         onEnded={() => setPlayingId(null)}
+        onError={() => toast("Audio file may no longer exist")}
         className="hidden"
       />
       
-      <div className="grid grid-cols-1 gap-4">
-        {records.map((record) => (
-          <Card
-            key={record.id}
-            className="overflow-hidden hover:shadow-md transition-shadow"
-            onClick={() => handleOpenDetails(record)}
-          >
-            <CardContent className="p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-medium">
-                    {record.title || format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
-                  </h3>
-                  <div className="text-sm text-muted-foreground mt-1 flex flex-wrap gap-x-4">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
-                    </span>
+      {records.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          {t.noRecordings}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {records.map((record) => (
+            <Card
+              key={record.id}
+              className="overflow-hidden hover:shadow-md transition-shadow"
+              onClick={() => handleOpenDetails(record)}
+            >
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium">
+                      {record.title || format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
+                    </h3>
+                    <div className="text-sm text-muted-foreground mt-1 flex flex-wrap gap-x-4">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {format(new Date(record.created_at), "yyyy-MM-dd HH:mm")}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Quick actions - stop propagation to avoid opening the dialog */}
+                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    {record.summary_audio_path && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePlayPause(record);
+                        }}
+                      >
+                        {playingId === record.id ? (
+                          <PauseCircle className="h-5 w-5" />
+                        ) : (
+                          <PlayCircle className="h-5 w-5" />
+                        )}
+                      </Button>
+                    )}
+                    
+                    {record.summary_audio_path && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const link = document.createElement("a");
+                          link.href = record.summary_audio_path;
+                          link.download = `summary-${record.id.slice(0, 8)}.mp3`;
+                          link.click();
+                        }}
+                      >
+                        <Download className="h-5 w-5" />
+                      </Button>
+                    )}
+                    
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(t.confirmDelete)) {
+                          handleDelete(record.id);
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-5 w-5 text-destructive" />
+                    </Button>
                   </div>
                 </div>
                 
-                {/* Quick actions - stop propagation to avoid opening the dialog */}
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  {record.summary_audio_path && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePlayPause(record);
-                      }}
-                    >
-                      {playingId === record.id ? (
-                        <PauseCircle className="h-5 w-5" />
-                      ) : (
-                        <PlayCircle className="h-5 w-5" />
-                      )}
-                    </Button>
-                  )}
-                  
-                  {record.summary_audio_path && (
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const link = document.createElement("a");
-                        link.href = record.summary_audio_path;
-                        link.download = `summary-${record.id.slice(0, 8)}.mp3`;
-                        link.click();
-                      }}
-                    >
-                      <Download className="h-5 w-5" />
-                    </Button>
-                  )}
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (confirm(t.confirmDelete)) {
-                        handleDelete(record.id);
-                      }
-                    }}
-                  >
-                    <Trash2 className="h-5 w-5 text-destructive" />
-                  </Button>
-                </div>
-              </div>
-              
-              {/* Preview of summary */}
-              {record.summary && (
-                <div className="mt-2 text-sm line-clamp-2 text-muted-foreground">
-                  {record.summary}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                {/* Preview of summary */}
+                {record.summary && (
+                  <div className="mt-2 text-sm line-clamp-2 text-muted-foreground">
+                    {record.summary}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
       
       {/* Recording details dialog */}
       <RecordingDialog

@@ -7,9 +7,11 @@ import { TasjeelRecord } from "./types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
-import { FileText, Download, Trash } from "lucide-react";
+import { FileText, Download, Trash, AlertCircle, RefreshCw } from "lucide-react";
 import { generatePDF } from "@/utils/pdfUtils";
 import CompactRecordingCard from "./CompactRecordingCard";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Translations
 const translations = {
@@ -47,7 +49,9 @@ const translations = {
     uploadError: "Upload failed",
     editTitle: "Edit title",
     titleUpdated: "Title updated",
-    errorUpdatingTitle: "Error updating title"
+    errorUpdatingTitle: "Error updating title",
+    autoDeleteNotice: "⚠️ All recordings are automatically deleted after 10 days. Download important recordings to keep them permanently.",
+    refresh: "Refresh"
   },
   ar: {
     noRecordings: "لم يتم العثور على تسجيلات محفوظة",
@@ -83,7 +87,9 @@ const translations = {
     uploadError: "فشل التحميل",
     editTitle: "تعديل العنوان",
     titleUpdated: "تم تحديث العنوان",
-    errorUpdatingTitle: "خطأ في تحديث العنوان"
+    errorUpdatingTitle: "خطأ في تحديث العنوان",
+    autoDeleteNotice: "⚠️ يتم حذف جميع التسجيلات تلقائياً بعد 10 أيام. قم بتنزيل التسجيلات المهمة للاحتفاظ بها بشكل دائم.",
+    refresh: "تحديث"
   }
 };
 
@@ -101,6 +107,50 @@ const SavedRecordings: React.FC = () => {
       loadSavedRecordings();
     }
   }, [user]);
+
+  // Real-time subscription for database changes
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('tasjeel-recordings-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'tasjeel_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Recording deleted from database:', payload);
+          // Remove the deleted recording from the UI
+          setRecordings(prev => prev.filter(rec => rec.id !== payload.old.id));
+          toast(t.recordingDeleted);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tasjeel_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Recording updated:', payload);
+          // Update the recording in the UI
+          setRecordings(prev => prev.map(rec => 
+            rec.id === payload.new.id ? { ...rec, ...payload.new } : rec
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, t.recordingDeleted]);
 
   const loadSavedRecordings = async () => {
     setLoading(true);
@@ -148,9 +198,7 @@ const SavedRecordings: React.FC = () => {
         throw error;
       }
       
-      // Refresh the recordings list
-      setRecordings(recordings.filter(rec => rec.id !== id));
-      toast(t.recordingDeleted);
+      // The real-time subscription will handle UI updates
     } catch (error) {
       console.error("Error deleting recording:", error);
       toast(t.errorDeletingRecording);
@@ -207,6 +255,27 @@ const SavedRecordings: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Auto-deletion warning notice */}
+      <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+        <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+        <AlertDescription className="text-orange-800 dark:text-orange-200">
+          {t.autoDeleteNotice}
+        </AlertDescription>
+      </Alert>
+
+      {/* Refresh button */}
+      <div className="flex justify-end">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={loadSavedRecordings}
+          disabled={loading}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          {t.refresh}
+        </Button>
+      </div>
+
       {recordings.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-64">
           <p className="text-muted-foreground mb-4">{t.noRecordings}</p>
