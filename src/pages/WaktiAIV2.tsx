@@ -23,7 +23,6 @@ const WaktiAIV2 = () => {
   const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   
-  // Phase 4: Enhanced context state
   const [calendarContext, setCalendarContext] = useState<any>(null);
   const [userContext, setUserContext] = useState<any>(null);
   
@@ -31,7 +30,6 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
-  // Enhanced state for session management
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
@@ -52,7 +50,6 @@ const WaktiAIV2 = () => {
     fetchQuota();
   }, []);
 
-  // Phase 4: Fetch enhanced context
   useEffect(() => {
     const fetchEnhancedContext = async () => {
       try {
@@ -61,7 +58,6 @@ const WaktiAIV2 = () => {
 
         console.log('🔄 WAKTI AI V2.5: Fetching Phase 4 enhanced context...');
 
-        // Fetch calendar and user context in parallel
         const [calendarCtx, userCtx] = await Promise.all([
           WaktiAIV2Service.getCalendarContext(user.id),
           WaktiAIV2Service.getUserContext(user.id)
@@ -82,7 +78,6 @@ const WaktiAIV2 = () => {
     fetchEnhancedContext();
   }, []);
 
-  // Fetch user profile
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
@@ -104,7 +99,6 @@ const WaktiAIV2 = () => {
     fetchUserProfile();
   }, []);
 
-  // Load chat session on component mount
   useEffect(() => {
     if (!hasLoadedSession) {
       const savedSession = WaktiAIV2Service.loadChatSession();
@@ -119,7 +113,6 @@ const WaktiAIV2 = () => {
     }
   }, [hasLoadedSession]);
 
-  // Save session whenever messages change
   useEffect(() => {
     if (hasLoadedSession && sessionMessages.length > 0) {
       WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
@@ -161,62 +154,59 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === PHASE 4 SEND MESSAGE START ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED FILE ANALYSIS START ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
-      console.log('🔄 WAKTI AI V2.5: Active Trigger (PHASE 4):', activeTrigger);
-      console.log('🔄 WAKTI AI V2.5: Calendar Context Available:', !!calendarContext);
-      console.log('🔄 WAKTI AI V2.5: User Context Available:', !!userContext);
+      console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
+      console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // Create user message
+      // Create user message with attached files
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content: message || '[File attachment]',
         timestamp: new Date(),
-        inputType
+        inputType,
+        attachedFiles: attachedFiles || [] // Include files in user message
       };
 
-      // Add user message to session (limit to 20 messages)
       const updatedMessages = [...sessionMessages, userMessage].slice(-20);
       setSessionMessages(updatedMessages);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Send message with Phase 4 enhanced context
+      // Send message with attached files for analysis
       const response = await WaktiAIV2Service.sendMessage(
         message,
         user.id,
         language,
         currentConversationId,
         inputType,
-        updatedMessages.slice(-15), // Send last 15 messages for better context
-        false, // confirmSearch
+        updatedMessages.slice(-15),
+        false,
         activeTrigger,
         textGenParams,
-        attachedFiles || [],
-        calendarContext, // Phase 4: Calendar context
-        userContext // Phase 4: User context
+        attachedFiles || [], // Pass files for analysis
+        calendarContext,
+        userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === PHASE 4 RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
-      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', response.pendingTaskData);
-      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', response.pendingReminderData);
+      console.log('🔄 WAKTI AI V2.5: File Analysis Results:', response.fileAnalysisResults?.length || 0);
+      console.log('🔄 WAKTI AI V2.5: Action Taken:', response.actionTaken);
 
       if (response.error) {
         throw new Error(response.error);
       }
 
-      // Update conversation ID if new
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
         console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
-      // Create assistant message with Phase 4 features
+      // Create assistant message with file analysis results
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -232,36 +222,42 @@ const WaktiAIV2 = () => {
         imageUrl: response.imageUrl,
         isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
         actionResult: response.actionResult,
-        // Phase 4: Advanced features
+        fileAnalysisResults: response.fileAnalysisResults, // Include analysis results
         deepIntegration: response.deepIntegration,
         automationSuggestions: response.automationSuggestions,
         predictiveInsights: response.predictiveInsights,
         workflowActions: response.workflowActions,
         contextualActions: response.contextualActions,
-        // Task/Reminder confirmation data
         needsConfirmation: response.needsConfirmation,
         pendingTaskData: response.pendingTaskData,
         pendingReminderData: response.pendingReminderData
       };
 
-      // Add assistant message to session (limit to 20 messages)
       const finalMessages = [...updatedMessages, assistantMessage].slice(-20);
       setSessionMessages(finalMessages);
 
-      // Update quota if present
       if (response.quotaStatus) {
         setQuotaStatus(response.quotaStatus);
       }
 
-      // Handle search confirmation requirement
       if (response.requiresSearchConfirmation) {
         setSearchConfirmationRequired(true);
       }
 
-      // Refresh conversations list
       fetchConversations();
 
-      // Show success message for Phase 4 features
+      // Show success messages for different types of analysis
+      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
+        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
+        if (successfulAnalyses.length > 0) {
+          showSuccess(
+            language === 'ar' 
+              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
+              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
+          );
+        }
+      }
+
       if (response.workflowActions?.length > 0 || response.predictiveInsights) {
         showSuccess(
           language === 'ar' 
@@ -270,16 +266,6 @@ const WaktiAIV2 = () => {
         );
       }
 
-      // Show success message if files were processed
-      if (attachedFiles && attachedFiles.length > 0) {
-        showSuccess(
-          language === 'ar' 
-            ? `تم تحليل ${attachedFiles.length} ملف بنجاح` 
-            : `Successfully analyzed ${attachedFiles.length} file(s)`
-        );
-      }
-
-      // Show success message for confirmation cards
       if (response.needsConfirmation) {
         console.log('🔄 WAKTI AI V2.5: Confirmation card should be shown');
         showSuccess(
@@ -290,7 +276,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Phase 4 send message error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced file analysis error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -318,12 +304,10 @@ const WaktiAIV2 = () => {
         throw new Error(response.error);
       }
 
-      // Update conversation ID if new
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
       }
 
-      // Create assistant message
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -340,11 +324,9 @@ const WaktiAIV2 = () => {
         isTextGenerated: activeTrigger === 'image' && !!response.imageUrl
       };
 
-      // Add assistant message to session (limit to 20 messages)
       const finalMessages = [...sessionMessages, assistantMessage].slice(-20);
       setSessionMessages(finalMessages);
 
-      // Update quota if present
       if (response.quotaStatus) {
         setQuotaStatus(response.quotaStatus);
       }
@@ -360,7 +342,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // New helper function to save current conversation if needed
   const saveCurrentConversationIfNeeded = async () => {
     if (sessionMessages.length > 0 && !currentConversationId) {
       try {
@@ -369,11 +350,9 @@ const WaktiAIV2 = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Create a conversation title from the first user message
         const firstUserMessage = sessionMessages.find(msg => msg.role === 'user');
         const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'Untitled Conversation';
 
-        // Create conversation in database
         const { data: conversation, error } = await supabase
           .from('ai_conversations')
           .insert({
@@ -392,13 +371,12 @@ const WaktiAIV2 = () => {
         if (conversation) {
           console.log('✅ Created conversation:', conversation.id);
           
-          // Save all session messages to the database
           const messageInserts = sessionMessages.map((msg, index) => ({
             conversation_id: conversation.id,
             user_id: user.id,
             role: msg.role,
             content: msg.content,
-            created_at: new Date(Date.now() + index).toISOString(), // Ensure chronological order
+            created_at: new Date(Date.now() + index).toISOString(),
             language: language,
             input_type: msg.inputType || 'text',
             intent: msg.intent,
@@ -429,20 +407,16 @@ const WaktiAIV2 = () => {
   const handleNewConversation = async () => {
     console.log('🆕 Starting new conversation...');
     
-    // First, save the current conversation if it has messages but no ID
     await saveCurrentConversationIfNeeded();
     
-    // Now clear everything and start fresh
     setCurrentConversationId(null);
     setSessionMessages([]);
     WaktiAIV2Service.clearChatSession();
     setSearchConfirmationRequired(false);
     setError(null);
     
-    // Refresh conversations list to show the newly saved conversation
     await fetchConversations();
     
-    // Close conversations drawer on mobile
     setShowConversations(false);
     
     console.log('✅ New conversation started');
@@ -455,7 +429,6 @@ const WaktiAIV2 = () => {
       
       const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
       
-      // Convert database messages to AIMessage format
       const convertedMessages: AIMessage[] = messages.map(msg => ({
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
@@ -470,7 +443,6 @@ const WaktiAIV2 = () => {
         quotaStatus: msg.quota_status
       }));
       
-      // Limit to 20 most recent messages for the session
       const limitedMessages = convertedMessages.slice(-20);
       
       setCurrentConversationId(conversationId);
@@ -521,15 +493,12 @@ const WaktiAIV2 = () => {
     console.log('✨ Active trigger set to:', trigger);
   };
 
-  // Handle text generated from tools
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
     console.log('📝 Text generated from tool:', { text, mode });
     
     if (mode === 'compose') {
-      // Replace the current message input with generated text
       setMessage(text);
     } else {
-      // For reply mode, send the generated text immediately
       handleSendMessage(text);
     }
     
@@ -559,9 +528,7 @@ const WaktiAIV2 = () => {
         sessionMessages={sessionMessages}
       />
 
-      {/* Main Chat Container */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Header */}
         <div className="flex-shrink-0">
           <ChatHeader
             currentConversationId={currentConversationId}
@@ -578,7 +545,6 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Messages Area */}
         <div className="flex-1 min-h-0">
           <ChatMessages
             sessionMessages={sessionMessages}
@@ -589,7 +555,6 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Input Area */}
         <div className="flex-shrink-0">
           <ChatInput
             message={message}

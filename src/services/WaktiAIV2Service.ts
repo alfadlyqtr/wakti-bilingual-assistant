@@ -16,18 +16,18 @@ export interface AIMessage {
   imageUrl?: string;
   isTextGenerated?: boolean;
   actionResult?: any;
-  proactiveActions?: any[]; // Phase 3: Proactive suggestions
-  userProfile?: any; // Phase 3: User learning data
-  // Phase 4: Advanced Integration
-  deepIntegration?: any; // Calendar, contacts, voice integration results
-  automationSuggestions?: any[]; // Smart scheduling, prioritization suggestions
-  predictiveInsights?: any; // Predictive intelligence results
-  workflowActions?: any[]; // Automated workflow suggestions
-  contextualActions?: any[]; // Context-aware quick actions
-  // Task/Reminder confirmation properties
+  proactiveActions?: any[];
+  userProfile?: any;
+  deepIntegration?: any;
+  automationSuggestions?: any[];
+  predictiveInsights?: any;
+  workflowActions?: any[];
+  contextualActions?: any[];
   needsConfirmation?: boolean;
   pendingTaskData?: any;
   pendingReminderData?: any;
+  attachedFiles?: any[];
+  fileAnalysisResults?: any[];
 }
 
 export interface AIConversation {
@@ -298,6 +298,12 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
+      console.log('📤 Sending message with files:', {
+        message: message.slice(0, 50),
+        filesCount: attachedFiles.length,
+        activeTrigger
+      });
+
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
@@ -309,7 +315,7 @@ export class WaktiAIV2ServiceClass {
           confirmSearch,
           activeTrigger,
           textGenParams,
-          attachedFiles,
+          attachedFiles, // Now properly included
           calendarContext,
           userContext,
           enableAdvancedIntegration,
@@ -325,6 +331,11 @@ export class WaktiAIV2ServiceClass {
       if (response.error) {
         throw new Error(response.error.message || 'AI service error');
       }
+
+      console.log('📥 Received response with file analysis:', {
+        hasFileAnalysis: !!response.data?.fileAnalysisResults,
+        filesAnalyzed: response.data?.fileAnalysisResults?.length || 0
+      });
 
       return response.data;
     } catch (error: any) {
@@ -726,3 +737,5 @@ export class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
+
+}

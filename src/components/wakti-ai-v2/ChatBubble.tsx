@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,6 +5,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { ImageModal } from './ImageModal';
+import { ChatFileDisplay } from './ChatFileDisplay';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
@@ -55,11 +55,9 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
   };
 
   const addSuccessMessageToChat = (successContent: string) => {
-    // Get current session from localStorage
     const savedSession = WaktiAIV2Service.loadChatSession();
     const currentMessages = savedSession?.messages || [];
     
-    // Create success message
     const successMessage: AIMessage = {
       id: `success-${Date.now()}`,
       role: 'assistant',
@@ -70,13 +68,10 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
       actionTaken: true
     };
 
-    // Add success message to session
     const updatedMessages = [...currentMessages, successMessage];
     
-    // Save updated session
     WaktiAIV2Service.saveChatSession(updatedMessages, savedSession?.conversationId || null);
     
-    // Reload to show the new message
     setTimeout(() => {
       window.location.reload();
     }, 1000);
@@ -102,7 +97,6 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully'
       );
 
-      // Add success message to chat with thumbs up
       const successContent = language === 'ar' 
         ? '👍 تم إنشاء المهمة بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
         : '👍 Task created successfully! Please visit T & R page';
@@ -139,7 +133,6 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully'
       );
 
-      // Add success message to chat with thumbs up
       const successContent = language === 'ar' 
         ? '👍 تم إنشاء التذكير بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
         : '👍 Reminder created successfully! Please visit T & R page';
@@ -162,7 +155,6 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
     );
   };
 
-  // Simple detection for basic task/reminder confirmation
   const hasPendingTask = (message.actionTaken === 'parse_task' || message.actionTaken === 'parse_task_with_learning') && message.actionResult?.pendingTask;
   const hasPendingReminder = (message.actionTaken === 'parse_reminder' || message.actionTaken === 'parse_reminder_with_learning') && message.actionResult?.pendingReminder;
   const hasDuplicateWarning = (message.actionTaken === 'duplicate_warning' || message.actionTaken === 'smart_duplicate_warning') && message.actionResult?.duplicateTask;
@@ -173,7 +165,6 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
     message.actionTaken.includes('clarify_reminder_with_learning')
   );
 
-  // Simple confirmation detection
   const needsTaskConfirmation = message.needsConfirmation && message.pendingTaskData;
   const needsReminderConfirmation = message.needsConfirmation && message.pendingReminderData;
   
@@ -188,6 +179,11 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
       )}
       
       <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : ''}`}>
+        {/* Display attached files above user messages */}
+        {message.role === 'user' && message.attachedFiles && message.attachedFiles.length > 0 && (
+          <ChatFileDisplay files={message.attachedFiles} size="sm" />
+        )}
+
         <div
           className={`rounded-2xl px-4 py-3 ${
             message.role === 'user'
@@ -198,6 +194,34 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           <div className="text-sm whitespace-pre-wrap break-words">
             {message.content}
           </div>
+
+          {/* File Analysis Results for AI responses */}
+          {message.role === 'assistant' && message.actionResult?.fileAnalysis && (
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-700 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                <span className="font-medium text-sm">
+                  {language === 'ar' ? 'نتائج تحليل الملفات' : 'File Analysis Results'}
+                </span>
+              </div>
+              {message.actionResult.fileAnalysis.map((fileResult: any, index: number) => (
+                <div key={index} className="mb-2 last:mb-0">
+                  <div className="text-sm font-medium text-blue-600">
+                    📎 {fileResult.fileName}
+                  </div>
+                  {fileResult.analysis.success ? (
+                    <div className="text-sm text-blue-600 mt-1">
+                      {fileResult.analysis.analysis}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-red-600 mt-1">
+                      ❌ {fileResult.analysis.error}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Generated Image Display */}
           {message.imageUrl && (
