@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -170,7 +169,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
   const needsReminderConfirmation = message.needsConfirmation && message.pendingReminderData;
   
   return (
-    <div className={`flex gap-3 w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-3 w-full px-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && (
         <div className="flex-shrink-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -179,22 +178,22 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         </div>
       )}
       
-      <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-[85%] ml-auto' : 'items-start max-w-[85%]'}`}>
+      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} w-full max-w-full`}>
         {/* Display attached files above user messages */}
         {message.role === 'user' && message.attachedFiles && message.attachedFiles.length > 0 && (
-          <div className="mb-2">
+          <div className="mb-2 max-w-full">
             <ChatFileDisplay files={message.attachedFiles} size="sm" />
           </div>
         )}
 
         <div
-          className={`rounded-2xl px-4 py-3 break-words w-full ${
+          className={`rounded-2xl px-4 py-3 w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] ${
             message.role === 'user'
-              ? 'bg-primary text-primary-foreground'
-              : 'bg-muted'
+              ? 'bg-primary text-primary-foreground ml-auto'
+              : 'bg-muted mr-auto'
           }`}
         >
-          <div className="text-sm whitespace-pre-wrap break-words">
+          <div className="text-sm whitespace-pre-wrap break-words word-wrap break-word overflow-wrap break-word">
             {message.content}
           </div>
 
@@ -202,22 +201,22 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           {message.role === 'assistant' && message.actionResult?.fileAnalysis && (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
-                <AlertTriangle className="h-4 w-4" />
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                 <span className="font-medium text-sm">
                   {language === 'ar' ? 'نتائج تحليل الملفات' : 'File Analysis Results'}
                 </span>
               </div>
               {message.actionResult.fileAnalysis.map((fileResult: any, index: number) => (
                 <div key={index} className="mb-2 last:mb-0">
-                  <div className="text-sm font-medium text-blue-600">
+                  <div className="text-sm font-medium text-blue-600 break-words">
                     📎 {fileResult.fileName}
                   </div>
                   {fileResult.analysis.success ? (
-                    <div className="text-sm text-blue-600 mt-1">
+                    <div className="text-sm text-blue-600 mt-1 break-words">
                       {fileResult.analysis.analysis}
                     </div>
                   ) : (
-                    <div className="text-sm text-red-600 mt-1">
+                    <div className="text-sm text-red-600 mt-1 break-words">
                       ❌ {fileResult.analysis.error}
                     </div>
                   )}
@@ -229,7 +228,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           {/* Generated Image Display */}
           {message.imageUrl && (
             <div className="mt-3">
-              <div className="relative rounded-lg overflow-hidden border border-border group cursor-pointer">
+              <div className="relative rounded-lg overflow-hidden border border-border group cursor-pointer max-w-full">
                 {imageLoading && (
                   <div className="absolute inset-0 bg-muted flex items-center justify-center">
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -243,7 +242,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
                 {imageError ? (
                   <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                     <div className="flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-4 w-4" />
+                      <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                       <span className="text-sm">
                         {language === 'ar' ? 'فشل في تحميل الصورة' : 'Failed to load image'}
                       </span>
@@ -254,7 +253,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
                     <img
                       src={message.imageUrl}
                       alt="Generated image"
-                      className="w-full h-auto max-w-md"
+                      className="w-full h-auto max-w-full"
                       onLoad={handleImageLoad}
                       onError={handleImageError}
                       style={{ display: imageLoading ? 'none' : 'block' }}
@@ -267,7 +266,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           
           {/* Task Confirmation Card */}
           {needsTaskConfirmation && (
-            <div className="mt-3">
+            <div className="mt-3 max-w-full">
               <TaskConfirmationCard
                 type="task"
                 data={message.pendingTaskData}
@@ -280,7 +279,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
 
           {/* Reminder Confirmation Card */}
           {needsReminderConfirmation && (
-            <div className="mt-3">
+            <div className="mt-3 max-w-full">
               <TaskConfirmationCard
                 type="reminder"
                 data={message.pendingReminderData}
@@ -293,16 +292,16 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
 
           {/* Simple duplicate task warning */}
           {hasDuplicateWarning && (
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-full">
               <div className="flex items-center gap-2 text-amber-700 mb-2">
-                <AlertTriangle className="h-4 w-4" />
+                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                 <span className="font-medium text-sm">
                   {language === 'ar' ? 'تحذير: مهمة مشابهة موجودة' : 'Warning: Similar Task Exists'}
                 </span>
               </div>
               <div className="text-sm text-amber-600 mb-3">
                 <p className="font-medium">{language === 'ar' ? 'المهمة الموجودة:' : 'Existing task:'}</p>
-                <p>• {message.actionResult.duplicateTask.title}</p>
+                <p className="break-words">• {message.actionResult.duplicateTask.title}</p>
                 {message.actionResult.duplicateTask.due_date && (
                   <p className="text-xs text-amber-500 mt-1">
                     <Calendar className="h-3 w-3 inline mr-1" />
@@ -315,9 +314,9 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
 
           {/* Simple clarification needed */}
           {needsClarification && (
-            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg max-w-full">
               <div className="flex items-center gap-2 text-purple-700 mb-2">
-                <Clock className="h-4 w-4" />
+                <Clock className="h-4 w-4 flex-shrink-0" />
                 <span className="font-medium text-sm">
                   {language === 'ar' ? 'معلومات إضافية مطلوبة' : 'Additional Information Needed'}
                 </span>
@@ -327,7 +326,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
                   <p className="mb-2">{language === 'ar' ? 'المعلومات المطلوبة:' : 'Required information:'}</p>
                   <ul className="list-disc list-inside space-y-1">
                     {message.actionResult.missingFields.map((field: string, index: number) => (
-                      <li key={index}>
+                      <li key={index} className="break-words">
                         {field === 'due_date' ? (language === 'ar' ? 'تاريخ الاستحقاق' : 'Due date') : 
                          field === 'priority' ? (language === 'ar' ? 'الأولوية' : 'Priority') :
                          field === 'due_time' ? (language === 'ar' ? 'وقت التذكير' : 'Reminder time') : field}
@@ -341,7 +340,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           
           {/* Simple confirmation cards for parsed tasks/reminders */}
           {hasPendingTask && (
-            <div className="mt-3">
+            <div className="mt-3 max-w-full">
               <TaskConfirmationCard
                 type="task"
                 data={message.actionResult.pendingTask}
@@ -353,7 +352,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           )}
           
           {hasPendingReminder && (
-            <div className="mt-3">
+            <div className="mt-3 max-w-full">
               <TaskConfirmationCard
                 type="reminder"
                 data={message.actionResult.pendingReminder}
@@ -376,7 +375,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
                 variant="ghost"
                 size="sm"
                 onClick={handleCopy}
-                className="h-6 px-2 text-xs hover:bg-muted-foreground/20"
+                className="h-6 px-2 text-xs hover:bg-muted-foreground/20 flex-shrink-0"
               >
                 {copied ? (
                   <>

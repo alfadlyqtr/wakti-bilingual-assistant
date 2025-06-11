@@ -193,8 +193,8 @@ export function ChatMessages({
   return (
     <div className="h-full w-full">
       <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-        <div className="p-4 pb-6 min-h-full">
-          <div className="max-w-2xl mx-auto space-y-4">
+        <div className="p-2 pb-6 min-h-full">
+          <div className="w-full space-y-4">
             {sessionMessages.length === 0 && (
               <div className="text-center py-8">
                 <div className="text-muted-foreground text-sm">
@@ -216,7 +216,7 @@ export function ChatMessages({
             ))}
 
             {isLoading && (
-              <div className="flex justify-start">
+              <div className="flex justify-start px-2">
                 <TypingIndicator />
               </div>
             )}
