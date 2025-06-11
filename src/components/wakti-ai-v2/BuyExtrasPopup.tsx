@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -7,15 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { Coins, Search, Zap, Loader2, CheckCircle, Mic, Languages } from 'lucide-react';
 import { toast } from 'sonner';
-
 interface BuyExtrasPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
-  const { language } = useTheme();
-  const { 
+export function BuyExtrasPopup({
+  open,
+  onOpenChange
+}: BuyExtrasPopupProps) {
+  const {
+    language
+  } = useTheme();
+  const {
     userSearchQuota,
     userVoiceQuota,
     purchaseExtraSearches,
@@ -24,12 +26,10 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
-
   const [isSearchPurchasing, setIsSearchPurchasing] = useState(false);
   const [isAdvancedSearchPurchasing, setIsAdvancedSearchPurchasing] = useState(false);
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
-
   const handlePurchaseSearches = async () => {
     setIsSearchPurchasing(true);
     try {
@@ -45,7 +45,6 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       setIsSearchPurchasing(false);
     }
   };
-
   const handlePurchaseAdvancedSearches = async () => {
     setIsAdvancedSearchPurchasing(true);
     try {
@@ -61,7 +60,6 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       setIsAdvancedSearchPurchasing(false);
     }
   };
-
   const handlePurchaseVoiceCredits = async () => {
     setIsVoicePurchasing(true);
     try {
@@ -77,7 +75,6 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       setIsVoicePurchasing(false);
     }
   };
-
   const handlePurchaseTranslations = async () => {
     setIsTranslationPurchasing(true);
     try {
@@ -93,35 +90,28 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
       setIsTranslationPurchasing(false);
     }
   };
-
   const getSearchQuotaStatus = () => {
     const regularUsed = userSearchQuota.regular_search_count;
     const advancedUsed = userSearchQuota.daily_count;
     const extraSearches = userSearchQuota.extra_searches;
-
     return {
       regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
       advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
       extraSearches
     };
   };
-
   const getVoiceQuotaStatus = () => {
     const used = userVoiceQuota.characters_used;
     const limit = userVoiceQuota.characters_limit;
     const extra = userVoiceQuota.extra_characters;
-
     return {
       remaining: Math.max(0, limit - used),
       extraCharacters: extra
     };
   };
-
   const quotaStatus = getSearchQuotaStatus();
   const voiceStatus = getVoiceQuotaStatus();
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+  return <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -158,12 +148,7 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
                   {voiceStatus.remaining}/5,000 {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'الإضافات المتوفرة:' : 'Available Extras:'}</span>
-                <span className="font-medium text-blue-600">
-                  {quotaStatus.extraSearches + voiceStatus.extraCharacters} {language === 'ar' ? 'متوفر' : 'available'}
-                </span>
-              </div>
+              
             </CardContent>
           </Card>
 
@@ -179,32 +164,20 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'احصل على 50 بحث عادي إضافي صالح لمدة شهر واحد'
-                    : 'Get 50 extra regular searches valid for 1 month'
-                  }
+                  {language === 'ar' ? 'احصل على 50 بحث عادي إضافي صالح لمدة شهر واحد' : 'Get 50 extra regular searches valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-blue-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button 
-                    onClick={handlePurchaseSearches}
-                    disabled={isSearchPurchasing}
-                    className="bg-blue-600 hover:bg-blue-700"
-                    size="sm"
-                  >
-                    {isSearchPurchasing ? (
-                      <>
+                  <Button onClick={handlePurchaseSearches} disabled={isSearchPurchasing} className="bg-blue-600 hover:bg-blue-700" size="sm">
+                    {isSearchPurchasing ? <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
+                      </> : <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                      </>}
                   </Button>
                 </div>
               </CardContent>
@@ -220,32 +193,20 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'احصل على 50 بحث متقدم إضافي صالح لمدة شهر واحد'
-                    : 'Get 50 extra advanced searches valid for 1 month'
-                  }
+                  {language === 'ar' ? 'احصل على 50 بحث متقدم إضافي صالح لمدة شهر واحد' : 'Get 50 extra advanced searches valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-purple-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button 
-                    onClick={handlePurchaseAdvancedSearches}
-                    disabled={isAdvancedSearchPurchasing}
-                    className="bg-purple-600 hover:bg-purple-700"
-                    size="sm"
-                  >
-                    {isAdvancedSearchPurchasing ? (
-                      <>
+                  <Button onClick={handlePurchaseAdvancedSearches} disabled={isAdvancedSearchPurchasing} className="bg-purple-600 hover:bg-purple-700" size="sm">
+                    {isAdvancedSearchPurchasing ? <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
+                      </> : <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                      </>}
                   </Button>
                 </div>
               </CardContent>
@@ -261,32 +222,20 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'احصل على 5,000 حرف صوتي إضافي صالح لمدة شهر واحد'
-                    : 'Get 5,000 extra voice characters valid for 1 month'
-                  }
+                  {language === 'ar' ? 'احصل على 5,000 حرف صوتي إضافي صالح لمدة شهر واحد' : 'Get 5,000 extra voice characters valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-green-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button 
-                    onClick={handlePurchaseVoiceCredits}
-                    disabled={isVoicePurchasing}
-                    className="bg-green-600 hover:bg-green-700"
-                    size="sm"
-                  >
-                    {isVoicePurchasing ? (
-                      <>
+                  <Button onClick={handlePurchaseVoiceCredits} disabled={isVoicePurchasing} className="bg-green-600 hover:bg-green-700" size="sm">
+                    {isVoicePurchasing ? <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
+                      </> : <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                      </>}
                   </Button>
                 </div>
               </CardContent>
@@ -302,32 +251,20 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' 
-                    ? 'احصل على 100 ترجمة إضافية صالحة لمدة شهر واحد'
-                    : 'Get 100 extra translations valid for 1 month'
-                  }
+                  {language === 'ar' ? 'احصل على 100 ترجمة إضافية صالحة لمدة شهر واحد' : 'Get 100 extra translations valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-orange-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button 
-                    onClick={handlePurchaseTranslations}
-                    disabled={isTranslationPurchasing}
-                    className="bg-orange-600 hover:bg-orange-700"
-                    size="sm"
-                  >
-                    {isTranslationPurchasing ? (
-                      <>
+                  <Button onClick={handlePurchaseTranslations} disabled={isTranslationPurchasing} className="bg-orange-600 hover:bg-orange-700" size="sm">
+                    {isTranslationPurchasing ? <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
+                      </> : <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                      </>}
                   </Button>
                 </div>
               </CardContent>
@@ -335,13 +272,9 @@ export function BuyExtrasPopup({ open, onOpenChange }: BuyExtrasPopupProps) {
           </div>
 
           <div className="text-xs text-muted-foreground text-center">
-            {language === 'ar' 
-              ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء'
-              : 'All extras are valid for 30 days from purchase date'
-            }
+            {language === 'ar' ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء' : 'All extras are valid for 30 days from purchase date'}
           </div>
         </div>
       </DialogContent>
-    </Dialog>
-  );
+    </Dialog>;
 }
