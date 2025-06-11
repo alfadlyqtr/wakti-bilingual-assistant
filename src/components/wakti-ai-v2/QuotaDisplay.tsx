@@ -38,13 +38,19 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
     const remaining = isAdvanced ? searchQuotaStatus.advancedRemaining : searchQuotaStatus.regularRemaining;
     const limit = isAdvanced ? searchQuotaStatus.advancedLimit : searchQuotaStatus.regularLimit;
     const extraSearches = isAdvanced ? searchQuotaStatus.extraAdvancedSearches : searchQuotaStatus.extraRegularSearches;
-    const usagePercentage = limit > 0 ? Math.round(((limit - remaining) / limit) * 100) : 0;
+    
+    // Ensure we have valid numbers
+    const validRemaining = typeof remaining === 'number' && !isNaN(remaining) ? remaining : 0;
+    const validLimit = typeof limit === 'number' && !isNaN(limit) ? limit : (isAdvanced ? 5 : 15);
+    const validExtras = typeof extraSearches === 'number' && !isNaN(extraSearches) ? extraSearches : 0;
+    
+    const usagePercentage = validLimit > 0 ? Math.round(((validLimit - validRemaining) / validLimit) * 100) : 0;
     
     console.log('Quota calculation:', {
       isAdvanced,
-      remaining,
-      limit,
-      extraSearches,
+      validRemaining,
+      validLimit,
+      validExtras,
       usagePercentage
     });
     
@@ -54,12 +60,13 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
       return 'default';
     };
 
-    const totalAvailable = remaining + extraSearches;
+    const totalAvailable = validRemaining + validExtras;
+    const totalLimit = validLimit + validExtras;
 
     return (
       <div className="flex items-center gap-2">
         <Badge variant={getQuotaColor(usagePercentage)} className="text-xs">
-          {totalAvailable}/{limit + extraSearches}
+          {totalAvailable}/{totalLimit}
         </Badge>
         <div className="hidden sm:flex items-center gap-2">
           <Progress 
@@ -70,9 +77,9 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
             {language === 'ar' ? 'متبقي' : 'left'}: {totalAvailable}
           </span>
         </div>
-        {extraSearches > 0 && (
+        {validExtras > 0 && (
           <Badge variant="outline" className="text-xs text-green-600">
-            +{extraSearches}
+            +{validExtras}
           </Badge>
         )}
       </div>

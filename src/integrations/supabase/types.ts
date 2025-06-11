@@ -1165,7 +1165,9 @@ export type Database = {
           extra_regular_searches: number | null
           extra_searches: number
           id: string
+          monthly_date: string
           purchase_date: string | null
+          regular_search_count: number
           updated_at: string
           user_id: string
         }
@@ -1177,7 +1179,9 @@ export type Database = {
           extra_regular_searches?: number | null
           extra_searches?: number
           id?: string
+          monthly_date?: string
           purchase_date?: string | null
+          regular_search_count?: number
           updated_at?: string
           user_id: string
         }
@@ -1189,7 +1193,9 @@ export type Database = {
           extra_regular_searches?: number | null
           extra_searches?: number
           id?: string
+          monthly_date?: string
           purchase_date?: string | null
+          regular_search_count?: number
           updated_at?: string
           user_id?: string
         }
