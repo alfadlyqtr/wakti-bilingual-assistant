@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -12,7 +11,7 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management with Tavily Search");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management with Advanced Tavily Search");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -45,7 +44,8 @@ serve(async (req) => {
       confirmSearch = false,
       activeTrigger = 'chat',
       attachedFiles = [],
-      conversationHistory = []
+      conversationHistory = [],
+      searchTopic = 'general'
     } = requestBody;
 
     if (!message || typeof message !== 'string' || message.trim() === '') {
@@ -72,6 +72,7 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
     console.log("🚀 WAKTI AI V2 BRAIN: Active trigger mode:", activeTrigger);
+    console.log("🚀 WAKTI AI V2 BRAIN: Search topic:", searchTopic);
     console.log("🚀 WAKTI AI V2 BRAIN: Attached files count:", attachedFiles.length);
     console.log("🚀 WAKTI AI V2 BRAIN: Conversation history length:", conversationHistory.length);
 
@@ -94,7 +95,7 @@ serve(async (req) => {
     // Get browsing quota
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Handle both search and advanced_search triggers with Tavily
+    // Handle both search and advanced_search triggers with enhanced Tavily
     if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
       console.log(`🔍 ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} triggered`);
       
@@ -119,16 +120,18 @@ serve(async (req) => {
         });
       }
 
-      // Determine search depth based on trigger
-      const searchDepth = activeTrigger === 'advanced_search' ? 'advanced' : 'basic';
-      
-      // Perform Tavily search
-      const searchResults = await performTavilySearch(message, language, searchDepth);
+      // Enhanced Tavily search with different configurations
+      const searchResults = await performEnhancedTavilySearch(
+        message, 
+        language, 
+        activeTrigger, 
+        searchTopic
+      );
       
       if (searchResults.success) {
         browsingUsed = true;
         browsingData = searchResults.data;
-        actionTaken = 'web_search';
+        actionTaken = activeTrigger === 'advanced_search' ? 'advanced_web_search' : 'basic_web_search';
         actionResult = { searchResults: searchResults.data };
 
         // Increment browsing usage
@@ -219,14 +222,46 @@ serve(async (req) => {
   }
 });
 
-// Updated function to perform Tavily search with configurable depth
-async function performTavilySearch(query: string, language: string = 'en', searchDepth: string = 'basic') {
+// Enhanced Tavily search function with differentiated configurations
+async function performEnhancedTavilySearch(
+  query: string, 
+  language: string = 'en', 
+  searchMode: string = 'search',
+  topic: string = 'general'
+) {
   try {
     if (!TAVILY_API_KEY) {
       throw new Error("Tavily API key not configured");
     }
 
-    console.log(`🔍 Performing Tavily search (${searchDepth}) for:`, query.slice(0, 50));
+    const isAdvanced = searchMode === 'advanced_search';
+    console.log(`🔍 Performing ${isAdvanced ? 'Advanced' : 'Basic'} Tavily search for:`, query.slice(0, 50));
+
+    // Configure search parameters based on mode
+    const searchConfig = {
+      query: query,
+      topic: topic, // 'general' or 'news'
+      search_depth: isAdvanced ? 'advanced' : 'basic',
+      max_results: isAdvanced ? 5 : 3,
+      include_answer: true,
+      include_raw_content: false,
+      // Enhanced configurations
+      chunks_per_source: isAdvanced ? 3 : 1, // More content chunks for advanced
+      time_range: isAdvanced ? 'year' : 'week', // Longer time range for advanced
+      include_images: isAdvanced, // Only advanced search includes images
+      include_image_descriptions: isAdvanced, // With descriptions for advanced
+      include_domains: [],
+      exclude_domains: []
+    };
+
+    console.log(`🔍 Search configuration:`, {
+      mode: isAdvanced ? 'advanced' : 'basic',
+      topic,
+      chunks_per_source: searchConfig.chunks_per_source,
+      time_range: searchConfig.time_range,
+      include_images: searchConfig.include_images,
+      max_results: searchConfig.max_results
+    });
 
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -234,15 +269,7 @@ async function performTavilySearch(query: string, language: string = 'en', searc
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${TAVILY_API_KEY}`
       },
-      body: JSON.stringify({
-        query: query,
-        search_depth: searchDepth,
-        include_answer: true,
-        include_raw_content: false,
-        max_results: searchDepth === 'advanced' ? 5 : 3,
-        include_domains: [],
-        exclude_domains: []
-      })
+      body: JSON.stringify(searchConfig)
     });
 
     if (!response.ok) {
@@ -252,21 +279,29 @@ async function performTavilySearch(query: string, language: string = 'en', searc
     }
 
     const searchData = await response.json();
-    console.log(`✅ Tavily search (${searchDepth}) successful, found`, searchData.results?.length || 0, "results");
+    console.log(`✅ ${isAdvanced ? 'Advanced' : 'Basic'} Tavily search successful:`, {
+      results: searchData.results?.length || 0,
+      images: searchData.images?.length || 0,
+      hasAnswer: !!searchData.answer
+    });
 
     return {
       success: true,
       data: {
         answer: searchData.answer,
         results: searchData.results || [],
+        images: searchData.images || [],
         query: searchData.query,
         response_time: searchData.response_time,
-        search_depth: searchDepth
+        search_mode: isAdvanced ? 'advanced' : 'basic',
+        topic: topic,
+        time_range: searchConfig.time_range,
+        chunks_per_source: searchConfig.chunks_per_source
       }
     };
 
   } catch (error) {
-    console.error('Error performing Tavily search:', error);
+    console.error('Error performing enhanced Tavily search:', error);
     return {
       success: false,
       error: error.message,
@@ -300,6 +335,7 @@ async function generateResponseWithSearchAndContext(
 - استخدم المعلومات الحديثة من نتائج البحث
 - اربط إجابتك بسياق المحادثة السابق
 - اذكر المصادر عند الإمكان
+- إذا كانت هناك صور مرفقة، اذكرها في إجابتك
 - كن دقيقاً ومفيداً ومختصراً`
       : `You are WAKTI, an advanced AI assistant. You have received fresh web search results for the user's query. Use this information along with the previous conversation context to provide a comprehensive and accurate response.
 
@@ -307,6 +343,7 @@ Always remember to:
 - Use the latest information from search results
 - Connect your response to previous conversation context
 - Cite sources when possible
+- If images are included, mention them in your response
 - Be accurate, helpful, and concise`;
 
     const messages = [
@@ -324,8 +361,10 @@ Always remember to:
       }
     }
 
-    // Prepare search results summary
-    const searchSummary = `Search Results for: "${searchData.query}"
+    // Prepare enhanced search results summary
+    let searchSummary = `Search Results for: "${searchData.query}"
+Search Mode: ${searchData.search_mode} (${searchData.topic} topic)
+Time Range: ${searchData.time_range}
 
 Answer: ${searchData.answer || 'No direct answer provided'}
 
@@ -335,6 +374,14 @@ ${searchData.results.map((result: any, index: number) =>
    URL: ${result.url}
    Content: ${result.content.slice(0, 300)}...`
 ).join('\n\n')}`;
+
+    // Add image information for advanced searches
+    if (searchData.images && searchData.images.length > 0) {
+      searchSummary += `\n\nImages Found: ${searchData.images.length}
+${searchData.images.slice(0, 3).map((image: any, index: number) => 
+  `${index + 1}. ${image.url}${image.description ? `\n   Description: ${image.description}` : ''}`
+).join('\n')}`;
+    }
 
     // Add current message with search results
     messages.push({ 
