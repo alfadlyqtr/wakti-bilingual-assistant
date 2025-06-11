@@ -11,11 +11,10 @@ export const getUserPreferences = () => {
   
   // Default preferences if nothing is stored
   return {
-    tasks: true,
     calendar: true,
-    reminders: true,
+    tr: true,
+    maw3d: true,
     dailyQuote: true,
-    events: true,
   };
 };
 
@@ -30,7 +29,7 @@ export const getWidgetOrder = () => {
   }
   
   // Default order if nothing is stored
-  return ['tasks', 'calendar', 'events', 'reminders', 'quote'];
+  return ['calendar', 'tr', 'maw3d', 'quote'];
 };
 
 export const saveWidgetOrder = (newOrder: string[]) => {
