@@ -530,3 +530,5 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
+
+}
