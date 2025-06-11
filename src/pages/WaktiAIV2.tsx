@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -553,7 +552,7 @@ const WaktiAIV2 = () => {
         <div 
           className="flex-1 overflow-hidden"
           style={{ 
-            paddingTop: '140px', // Reduced from 184px - Account for AppHeader (64px) + Wakti header (76px)
+            paddingTop: '130px', // Reduced from 140px - Bringing content closer to header
             paddingBottom: '100px' // Account for input area
           }}
         >
