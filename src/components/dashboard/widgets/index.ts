@@ -1,3 +1,4 @@
 
 export { CalendarWidget } from './CalendarWidget';
-export { EventsWidget } from './EventsWidget';
+export { TRWidget } from './TRWidget';
+export { Maw3dWidget } from './Maw3dWidget';

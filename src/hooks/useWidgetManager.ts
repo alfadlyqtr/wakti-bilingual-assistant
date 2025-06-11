@@ -21,7 +21,7 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
     const widgetVisibility = getUserPreferences();
     
     // Import components dynamically to avoid circular dependencies
-    import("@/components/dashboard/widgets").then(({ CalendarWidget, EventsWidget }) => {
+    import("@/components/dashboard/widgets").then(({ CalendarWidget, TRWidget, Maw3dWidget }) => {
       import("@/components/dashboard/QuoteWidget").then(({ QuoteWidget }) => {
         const defaultWidgets = {
           calendar: {
@@ -30,11 +30,17 @@ export const useWidgetManager = (language: 'en' | 'ar', isLoading: boolean, task
             visible: widgetVisibility.calendar !== false, // Default to true if not set
             component: React.createElement(CalendarWidget, { isLoading, events: legacyEvents, language }),
           },
-          events: {
-            id: "events",
-            title: "events" as TranslationKey,
-            visible: widgetVisibility.events !== false, // Default to true if not set
-            component: React.createElement(EventsWidget, { isLoading, events: legacyEvents, language }),
+          tr: {
+            id: "tr",
+            title: "tasksReminders" as TranslationKey,
+            visible: widgetVisibility.tr !== false, // Default to true if not set
+            component: React.createElement(TRWidget, { language }),
+          },
+          maw3d: {
+            id: "maw3d",
+            title: "maw3dEvents" as TranslationKey,
+            visible: widgetVisibility.maw3d !== false, // Default to true if not set
+            component: React.createElement(Maw3dWidget, { language }),
           },
           quote: {
             id: "quote",
