@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast-helper";
-import { PlayCircle, PauseCircle, Rewind, StopCircle } from "lucide-react";
+import { PlayCircle, PauseCircle, Rewind, StopCircle, Calendar } from "lucide-react";
 import { AudioPlayerState } from "./types";
 
 interface AudioControlsProps {
@@ -14,6 +14,7 @@ interface AudioControlsProps {
     rewind: string;
     stop: string;
     error: string;
+    autoDeleted?: string;
   };
 }
 

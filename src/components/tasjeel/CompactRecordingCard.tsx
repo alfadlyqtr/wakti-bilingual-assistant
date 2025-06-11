@@ -211,7 +211,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                         rewind: t.rewindAudio,
                         stop: t.stopAudio,
                         error: t.errorPlayingAudio,
-                        autoDeleted: t.autoDeleted || "Recording was automatically deleted after 10 days"
+                        autoDeleted: t.autoDeleted
                       }}
                     />
                   </div>
@@ -229,7 +229,7 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                         rewind: t.rewindAudio,
                         stop: t.stopAudio,
                         error: t.errorPlayingAudio,
-                        autoDeleted: t.autoDeleted || "Recording was automatically deleted after 10 days"
+                        autoDeleted: t.autoDeleted
                       }}
                     />
                   </div>

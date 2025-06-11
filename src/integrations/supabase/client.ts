@@ -1,4 +1,3 @@
-
 // This file contains helper functions for interacting with Supabase
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { TasjeelRecord, AudioUploadOptions } from '@/components/tasjeel/types';
@@ -217,6 +216,42 @@ export const withRetry = async <T>(
   }
   
   throw lastError || new Error(`Failed to execute database operation after ${maxRetries} attempts`);
+};
+
+// Function to manually trigger auto-delete of old recordings
+export const manuallyDeleteOldRecordings = async (): Promise<{ success: boolean; message: string; deletedCount?: number }> => {
+  try {
+    console.log('Manually triggering auto-delete of old recordings...');
+    
+    const { data, error } = await callEdgeFunctionWithRetry<{
+      message: string;
+      deleted_count: number;
+      deleted_recordings?: Array<{ id: string; title: string; created_at: string }>;
+    }>('auto-delete-recordings', {
+      body: {},
+      maxRetries: 1,
+      retryDelay: 1000
+    });
+
+    if (error) {
+      console.error('Error calling auto-delete function:', error);
+      throw error;
+    }
+
+    console.log('Auto-delete function result:', data);
+    
+    return {
+      success: true,
+      message: data.message,
+      deletedCount: data.deleted_count
+    };
+  } catch (error) {
+    console.error('Error manually deleting old recordings:', error);
+    return {
+      success: false,
+      message: error.message || 'Failed to delete old recordings'
+    };
+  }
 };
 
 // Helper functions for Tasjeel records
