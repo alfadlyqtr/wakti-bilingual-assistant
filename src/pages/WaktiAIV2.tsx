@@ -546,8 +546,8 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area with bottom padding for fixed input */}
-        <div className="flex-1 overflow-hidden pb-[180px]">
+        {/* Scrollable Messages Area with reduced bottom padding */}
+        <div className="flex-1 overflow-hidden pb-[100px]">
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
