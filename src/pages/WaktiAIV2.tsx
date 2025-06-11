@@ -160,14 +160,13 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // Create user message with attached files
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
         content: message || '[File attachment]',
         timestamp: new Date(),
         inputType,
-        attachedFiles: attachedFiles || [] // Include files in user message
+        attachedFiles: attachedFiles || []
       };
 
       const updatedMessages = [...sessionMessages, userMessage].slice(-20);
@@ -176,7 +175,6 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Send message with attached files for analysis
       const response = await WaktiAIV2Service.sendMessage(
         message,
         user.id,
@@ -187,7 +185,7 @@ const WaktiAIV2 = () => {
         false,
         activeTrigger,
         textGenParams,
-        attachedFiles || [], // Pass files for analysis
+        attachedFiles || [],
         calendarContext,
         userContext
       );
@@ -206,7 +204,6 @@ const WaktiAIV2 = () => {
         console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
-      // Create assistant message with file analysis results
       const assistantMessage: AIMessage = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -222,7 +219,7 @@ const WaktiAIV2 = () => {
         imageUrl: response.imageUrl,
         isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
         actionResult: response.actionResult,
-        fileAnalysisResults: response.fileAnalysisResults, // Include analysis results
+        fileAnalysisResults: response.fileAnalysisResults,
         deepIntegration: response.deepIntegration,
         automationSuggestions: response.automationSuggestions,
         predictiveInsights: response.predictiveInsights,
@@ -246,7 +243,6 @@ const WaktiAIV2 = () => {
 
       fetchConversations();
 
-      // Show success messages for different types of analysis
       if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
         const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
         if (successfulAnalyses.length > 0) {
@@ -529,8 +525,14 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen">
-        {/* Fixed Header */}
-        <div className="flex-shrink-0 bg-background border-b z-10">
+        {/* Fixed Header - positioned absolutely to stay in place */}
+        <div 
+          className="fixed top-0 right-0 bg-background border-b z-50"
+          style={{ 
+            left: showConversations || showQuickActions ? '320px' : '0',
+            transition: 'left 0.3s ease-in-out'
+          }}
+        >
           <ChatHeader
             currentConversationId={currentConversationId}
             activeTrigger={activeTrigger}
@@ -546,8 +548,14 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area with reduced bottom padding */}
-        <div className="flex-1 overflow-hidden pb-[100px]">
+        {/* Scrollable Messages Area with top padding to account for fixed header */}
+        <div 
+          className="flex-1 overflow-hidden"
+          style={{ 
+            paddingTop: '120px', // Account for header + notification bars height
+            paddingBottom: '100px' // Account for input area
+          }}
+        >
           <ChatMessages
             sessionMessages={sessionMessages}
             isLoading={isLoading}
@@ -558,12 +566,13 @@ const WaktiAIV2 = () => {
         </div>
       </div>
 
-      {/* Fixed Input at Bottom - moved up from bottom-4 to bottom-8 */}
+      {/* Fixed Input at Bottom */}
       <div 
         className="fixed bottom-8 right-0 bg-background border-t z-20 pb-safe" 
         style={{ 
           left: showConversations || showQuickActions ? '320px' : '0',
-          paddingBottom: 'max(env(safe-area-inset-bottom), 20px)'
+          paddingBottom: 'max(env(safe-area-inset-bottom), 20px)',
+          transition: 'left 0.3s ease-in-out'
         }}
       >
         <ChatInput
