@@ -277,7 +277,6 @@ export const en = {
   left: "Left",
   right: "Right",
   front: "Front",
-  back: "Back",
   side: "Side",
   corner: "Corner",
   edge: "Edge",

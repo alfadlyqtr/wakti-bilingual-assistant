@@ -277,7 +277,6 @@ export const ar = {
   left: "يسار",
   right: "يمين",
   front: "أمام",
-  back: "خلف",
   side: "جانب",
   corner: "زاوية",
   edge: "حافة",
