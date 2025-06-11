@@ -1,294 +1,533 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { ChatBubble } from '@/components/wakti-ai-v2/ChatBubble';
-import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
-import { AIMessage, WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { CalendarIcon, ImageIcon, MessageSquareIcon, SearchIcon, Settings, SparklesIcon } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Button } from '@/components/ui/button';
-import { Slider } from "@/components/ui/slider"
-import { Separator } from "@/components/ui/separator"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { supabase } from '@/integrations/supabase/client';
+import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
+import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
+import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
+import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
+import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
 
-export default function WaktiAIV2() {
-  const { theme, language } = useTheme();
-  const { showSuccess, showError } = useToastHelper();
-  const [messages, setMessages] = useState<AIMessage[]>([]);
+const WaktiAIV2 = () => {
+  const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<AIConversation[]>([]);
+  const [showConversations, setShowConversations] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [quotaStatus, setQuotaStatus] = useState<any>(null);
+  const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
+  const [activeTrigger, setActiveTrigger] = useState<string>('chat');
+  const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  
+  // Phase 4: Enhanced context state
   const [calendarContext, setCalendarContext] = useState<any>(null);
   const [userContext, setUserContext] = useState<any>(null);
-  const [enableAdvancedIntegration, setEnableAdvancedIntegration] = useState(true);
-  const [enablePredictiveInsights, setEnablePredictiveInsights] = useState(true);
-  const [enableWorkflowAutomation, setEnableWorkflowAutomation] = useState(true);
-  const [activeTrigger, setActiveTrigger] = useState<string>('chat');
+  
+  const scrollAreaRef = useRef<any>(null);
+  const { language } = useTheme();
+  const { showSuccess, showError } = useToastHelper();
+
+  // Enhanced state for session management
+  const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
+  const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
   useEffect(() => {
-    loadChatSession();
-    loadUserProfile();
-    loadCalendarContext();
-    loadUserContext();
-  }, []);
+    const fetchQuota = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
 
-  const loadChatSession = () => {
-    const session = WaktiAIV2Service.loadChatSession();
-    if (session) {
-      setMessages(session.messages);
-      setCurrentConversationId(session.conversationId);
-    }
-  };
-
-  const loadUserProfile = async () => {
-    try {
-      const profile = await WaktiAIV2Service.getUserProfile();
-      setUserProfile(profile);
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-    }
-  };
-
-  const loadCalendarContext = async () => {
-    try {
-      const context = await WaktiAIV2Service.getCalendarContext();
-      setCalendarContext(context);
-    } catch (error) {
-      console.error('Error loading calendar context:', error);
-    }
-  };
-
-  const loadUserContext = async () => {
-    try {
-      const context = await WaktiAIV2Service.getUserContext();
-      setUserContext(context);
-    } catch (error) {
-      console.error('Error loading user context:', error);
-    }
-  };
-
-  const handleSendMessage = async (content: string, attachedFiles: any[] = []) => {
-    if (!content.trim() && attachedFiles.length === 0) return;
-
-    const userMessage: AIMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content,
-      timestamp: new Date(),
-      inputType: 'text',
-      attachedFiles
+        const quota = await WaktiAIV2Service.getOrFetchQuota(user.id);
+        setQuotaStatus(quota);
+      } catch (error: any) {
+        console.error('Error fetching quota:', error);
+        setError(error.message || 'Failed to fetch quota');
+      }
     };
 
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    fetchQuota();
+  }, []);
+
+  // Phase 4: Fetch enhanced context
+  useEffect(() => {
+    const fetchEnhancedContext = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        console.log('🔄 WAKTI AI V2.5: Fetching Phase 4 enhanced context...');
+
+        // Fetch calendar and user context in parallel
+        const [calendarCtx, userCtx] = await Promise.all([
+          WaktiAIV2Service.getCalendarContext(user.id),
+          WaktiAIV2Service.getUserContext(user.id)
+        ]);
+
+        setCalendarContext(calendarCtx);
+        setUserContext(userCtx);
+        
+        console.log('🔄 WAKTI AI V2.5: Enhanced context loaded:', {
+          calendar: !!calendarCtx,
+          user: !!userCtx
+        });
+      } catch (error) {
+        console.error('Error fetching enhanced context:', error);
+      }
+    };
+
+    fetchEnhancedContext();
+  }, []);
+
+  // Fetch user profile
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', user.id)
+          .single();
+
+        setUserProfile(profile);
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+      }
+    };
+
+    fetchUserProfile();
+  }, []);
+
+  // Load chat session on component mount
+  useEffect(() => {
+    if (!hasLoadedSession) {
+      const savedSession = WaktiAIV2Service.loadChatSession();
+      if (savedSession) {
+        console.log('📂 Restoring chat session...');
+        setSessionMessages(savedSession.messages || []);
+        if (savedSession.conversationId) {
+          setCurrentConversationId(savedSession.conversationId);
+        }
+      }
+      setHasLoadedSession(true);
+    }
+  }, [hasLoadedSession]);
+
+  // Save session whenever messages change
+  useEffect(() => {
+    if (hasLoadedSession && sessionMessages.length > 0) {
+      WaktiAIV2Service.saveChatSession(sessionMessages, currentConversationId);
+    }
+  }, [sessionMessages, currentConversationId, hasLoadedSession]);
+
+  useEffect(() => {
+    const fetchConversations = async () => {
+      try {
+        const fetchedConversations = await WaktiAIV2Service.getConversations();
+        setConversations(fetchedConversations);
+      } catch (error: any) {
+        console.error('Error fetching conversations:', error);
+        setError(error.message || 'Failed to fetch conversations');
+      }
+    };
+
+    fetchConversations();
+  }, []);
+
+  const fetchConversations = async () => {
+    try {
+      const fetchedConversations = await WaktiAIV2Service.getConversations();
+      setConversations(fetchedConversations);
+    } catch (error: any) {
+      console.error('Error fetching conversations:', error);
+      setError(error.message || 'Failed to fetch conversations');
+    }
+  };
+
+  const handleSendMessage = async (
+    message: string, 
+    inputType: 'text' | 'voice' = 'text',
+    attachedFiles?: any[]
+  ) => {
+    if ((!message.trim() && !attachedFiles?.length) || isLoading) return;
+
     setIsLoading(true);
+    setError(null);
 
     try {
+      console.log('🔄 WAKTI AI V2.5: === PHASE 4 SEND MESSAGE START ===');
+      console.log('🔄 WAKTI AI V2.5: Message:', message);
+      console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
+      console.log('🔄 WAKTI AI V2.5: Active Trigger (PHASE 4):', activeTrigger);
+      console.log('🔄 WAKTI AI V2.5: Calendar Context Available:', !!calendarContext);
+      console.log('🔄 WAKTI AI V2.5: User Context Available:', !!userContext);
+
+      // Create user message
+      const userMessage: AIMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message || '[File attachment]',
+        timestamp: new Date(),
+        inputType
+      };
+
+      // Add user message to session (limit to 20 messages)
+      const updatedMessages = [...sessionMessages, userMessage].slice(-20);
+      setSessionMessages(updatedMessages);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Send message with Phase 4 enhanced context
       const response = await WaktiAIV2Service.sendMessage(
-        content,
+        message,
+        user.id,
         language,
         currentConversationId,
-        'text',
-        updatedMessages,
-        attachedFiles,
-        calendarContext,
-        userContext,
-        enableAdvancedIntegration,
-        enablePredictiveInsights,
-        enableWorkflowAutomation,
-        activeTrigger
+        inputType,
+        updatedMessages.slice(-15), // Send last 15 messages for better context
+        false, // confirmSearch
+        activeTrigger,
+        textGenParams,
+        attachedFiles || [],
+        calendarContext, // Phase 4: Calendar context
+        userContext // Phase 4: User context
       );
 
-      if (response) {
-        const assistantMessage: AIMessage = {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          content: response.response,
-          timestamp: new Date(),
-          intent: response.intent,
-          confidence: response.confidence,
-          actionTaken: response.actionTaken,
-          actionResult: response.actionResult,
-          imageUrl: response.imageUrl,
-          browsingUsed: response.browsingUsed,
-          browsingData: response.browsingData,
-          quotaStatus: response.quotaStatus,
-          requiresSearchConfirmation: response.requiresSearchConfirmation,
-          needsConfirmation: response.needsConfirmation,
-          needsClarification: response.needsClarification,
-          pendingTaskData: response.pendingTaskData,
-          pendingReminderData: response.pendingReminderData,
-          isTextGenerated: response.isTextGenerated || false
-        };
+      console.log('🔄 WAKTI AI V2.5: === PHASE 4 RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
+      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
+      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', response.pendingTaskData);
+      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', response.pendingReminderData);
 
-        const finalMessages = [...updatedMessages, assistantMessage];
-        setMessages(finalMessages);
-
-        if (response.conversationId && response.conversationId !== currentConversationId) {
-          setCurrentConversationId(response.conversationId);
-        }
-
-        WaktiAIV2Service.saveChatSession(finalMessages, response.conversationId || currentConversationId);
+      if (response.error) {
+        throw new Error(response.error);
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      showError(language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message');
+
+      // Update conversation ID if new
+      if (response.conversationId && response.conversationId !== currentConversationId) {
+        setCurrentConversationId(response.conversationId);
+        console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
+      }
+
+      // Create assistant message with Phase 4 features
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        quotaStatus: response.quotaStatus,
+        requiresSearchConfirmation: response.requiresSearchConfirmation,
+        imageUrl: response.imageUrl,
+        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl,
+        actionResult: response.actionResult,
+        // Phase 4: Advanced features
+        deepIntegration: response.deepIntegration,
+        automationSuggestions: response.automationSuggestions,
+        predictiveInsights: response.predictiveInsights,
+        workflowActions: response.workflowActions,
+        contextualActions: response.contextualActions,
+        // Task/Reminder confirmation data
+        needsConfirmation: response.needsConfirmation,
+        pendingTaskData: response.pendingTaskData,
+        pendingReminderData: response.pendingReminderData
+      };
+
+      // Add assistant message to session (limit to 20 messages)
+      const finalMessages = [...updatedMessages, assistantMessage].slice(-20);
+      setSessionMessages(finalMessages);
+
+      // Update quota if present
+      if (response.quotaStatus) {
+        setQuotaStatus(response.quotaStatus);
+      }
+
+      // Handle search confirmation requirement
+      if (response.requiresSearchConfirmation) {
+        setSearchConfirmationRequired(true);
+      }
+
+      // Refresh conversations list
+      fetchConversations();
+
+      // Show success message for Phase 4 features
+      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
+            : 'Phase 4 advanced features activated'
+        );
+      }
+
+      // Show success message if files were processed
+      if (attachedFiles && attachedFiles.length > 0) {
+        showSuccess(
+          language === 'ar' 
+            ? `تم تحليل ${attachedFiles.length} ملف بنجاح` 
+            : `Successfully analyzed ${attachedFiles.length} file(s)`
+        );
+      }
+
+      // Show success message for confirmation cards
+      if (response.needsConfirmation) {
+        console.log('🔄 WAKTI AI V2.5: Confirmation card should be shown');
+        showSuccess(
+          language === 'ar' 
+            ? 'تم تحضير البيانات للتأكيد' 
+            : 'Data prepared for confirmation'
+        );
+      }
+
+    } catch (error: any) {
+      console.error('🔄 WAKTI AI V2.5: ❌ Phase 4 send message error:', error);
+      setError(error.message || 'Failed to send message');
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleTriggerChange = (newTrigger: string) => {
-    setActiveTrigger(newTrigger);
+  const handleSearchConfirmation = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const response = await WaktiAIV2Service.sendMessageWithSearchConfirmation(
+        message,
+        currentConversationId,
+        language
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      // Update conversation ID if new
+      if (response.conversationId && response.conversationId !== currentConversationId) {
+        setCurrentConversationId(response.conversationId);
+      }
+
+      // Create assistant message
+      const assistantMessage: AIMessage = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: response.response,
+        timestamp: new Date(),
+        intent: response.intent,
+        confidence: response.confidence as 'high' | 'medium' | 'low',
+        actionTaken: !!response.actionTaken,
+        browsingUsed: response.browsingUsed,
+        browsingData: response.browsingData,
+        quotaStatus: response.quotaStatus,
+        requiresSearchConfirmation: response.requiresSearchConfirmation,
+        imageUrl: response.imageUrl,
+        isTextGenerated: activeTrigger === 'image' && !!response.imageUrl
+      };
+
+      // Add assistant message to session (limit to 20 messages)
+      const finalMessages = [...sessionMessages, assistantMessage].slice(-20);
+      setSessionMessages(finalMessages);
+
+      // Update quota if present
+      if (response.quotaStatus) {
+        setQuotaStatus(response.quotaStatus);
+      }
+
+      setSearchConfirmationRequired(false);
+      fetchConversations();
+
+    } catch (error: any) {
+      console.error('Error confirming search:', error);
+      setError(error.message || 'Failed to confirm search');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNewConversation = () => {
+    console.log('🆕 Starting new conversation...');
+    setCurrentConversationId(null);
+    setSessionMessages([]);
+    WaktiAIV2Service.clearChatSession();
+    setSearchConfirmationRequired(false);
+    setError(null);
+    
+    // Close conversations drawer on mobile
+    setShowConversations(false);
+  };
+
+  const handleSelectConversation = async (conversationId: string) => {
+    try {
+      console.log('📂 Loading conversation:', conversationId);
+      setIsLoading(true);
+      
+      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
+      
+      // Convert database messages to AIMessage format
+      const convertedMessages: AIMessage[] = messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        intent: msg.intent,
+        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
+        actionTaken: !!msg.action_taken,
+        inputType: msg.input_type as 'text' | 'voice',
+        browsingUsed: msg.browsing_used,
+        browsingData: msg.browsing_data,
+        quotaStatus: msg.quota_status
+      }));
+      
+      // Limit to 20 most recent messages for the session
+      const limitedMessages = convertedMessages.slice(-20);
+      
+      setCurrentConversationId(conversationId);
+      setSessionMessages(limitedMessages);
+      setSearchConfirmationRequired(false);
+      setError(null);
+      
+      console.log('📂 Loaded conversation with', limitedMessages.length, 'messages');
+      
+    } catch (error: any) {
+      console.error('❌ Error loading conversation:', error);
+      setError('Failed to load conversation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearChat = () => {
+    console.log('🗑️ Clearing current chat session...');
+    setSessionMessages([]);
+    WaktiAIV2Service.clearChatSession();
+    setSearchConfirmationRequired(false);
+    setError(null);
+  };
+
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await WaktiAIV2Service.deleteConversation(conversationId);
+      setConversations(prev => prev.filter(c => c.id !== conversationId));
+      if (currentConversationId === conversationId) {
+        setCurrentConversationId(null);
+        setSessionMessages([]);
+      }
+      showSuccess(
+        language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully'
+      );
+    } catch (error: any) {
+      console.error('Error deleting conversation:', error);
+      setError(error.message || 'Failed to delete conversation');
+      showError(
+        error.message || (language === 'ar' ? 'فشل في حذف المحادثة' : 'Failed to delete conversation')
+      );
+    }
+  };
+
+  const handleTriggerChange = (trigger: string) => {
+    setActiveTrigger(trigger);
+    console.log('✨ Active trigger set to:', trigger);
+  };
+
+  // Handle text generated from tools
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
+    console.log('📝 Text generated from tool:', { text, mode });
+    
+    if (mode === 'compose') {
+      // Replace the current message input with generated text
+      setMessage(text);
+    } else {
+      // For reply mode, send the generated text immediately
+      handleSendMessage(text);
+    }
+    
+    showSuccess(
+      language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully'
+    );
   };
 
   return (
-    <div className="container relative min-h-screen flex flex-col">
-      <header className="sticky top-0 border-b bg-background z-50">
-        <div className="container flex h-16 items-center justify-between py-4">
-          <div className="flex items-center gap-4">
-            <Avatar>
-              <AvatarImage src="https://avatars.githubusercontent.com/u/88898944?v=4" alt="@shadcn" />
-              <AvatarFallback>CN</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col">
-              <h1 className="font-semibold">Wakti AI V2</h1>
-              <p className="text-sm text-muted-foreground">
-                {language === 'ar' ? 'مساعدك الشخصي الذكي' : 'Your smart personal assistant'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <Settings className="h-4 w-4" />
-                  <span className="sr-only">Open settings</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[260px]">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Billing
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Appearance</DropdownMenuLabel>
-                <DropdownMenuCheckboxItem
-                  checked={theme === "light"}
-                  onCheckedChange={() => console.log("toggle light")}
-                >
-                  Light
-                  <DropdownMenuShortcut>⌘⇧L</DropdownMenuShortcut>
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuCheckboxItem
-                  checked={theme === "dark"}
-                  onCheckedChange={() => console.log("toggle dark")}
-                >
-                  Dark
-                  <DropdownMenuShortcut>⌘⇧D</DropdownMenuShortcut>
-                </DropdownMenuCheckboxItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Triggers</DropdownMenuLabel>
-                <div className="p-2 space-y-1">
-                  <Button
-                    variant={activeTrigger === 'chat' ? 'secondary' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => handleTriggerChange('chat')}
-                  >
-                    <MessageSquareIcon className="mr-2 h-4 w-4" />
-                    Chat
-                  </Button>
-                  <Button
-                    variant={activeTrigger === 'search' ? 'secondary' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => handleTriggerChange('search')}
-                  >
-                    <SearchIcon className="mr-2 h-4 w-4" />
-                    Search
-                  </Button>
-                  <Button
-                    variant={activeTrigger === 'image' ? 'secondary' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => handleTriggerChange('image')}
-                  >
-                    <ImageIcon className="mr-2 h-4 w-4" />
-                    Image
-                  </Button>
-                  <Button
-                    variant={activeTrigger === 'advanced_search' ? 'secondary' : 'outline'}
-                    className="w-full justify-start"
-                    onClick={() => handleTriggerChange('advanced_search')}
-                    disabled
-                  >
-                    <SparklesIcon className="mr-2 h-4 w-4" />
-                    Advanced Search
-                  </Button>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  Log out
-                  <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+    <div className="flex h-screen bg-background overflow-hidden">
+      <ChatDrawers
+        showConversations={showConversations}
+        setShowConversations={setShowConversations}
+        showQuickActions={showQuickActions}
+        setShowQuickActions={setShowQuickActions}
+        conversations={conversations}
+        currentConversationId={currentConversationId}
+        onSelectConversation={handleSelectConversation}
+        onDeleteConversation={handleDeleteConversation}
+        fetchConversations={fetchConversations}
+        onSendMessage={handleSendMessage}
+        activeTrigger={activeTrigger}
+        onTriggerChange={handleTriggerChange}
+        onTextGenerated={handleTextGenerated}
+        onNewConversation={handleNewConversation}
+        onClearChat={handleClearChat}
+        sessionMessages={sessionMessages}
+      />
 
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col py-8">
-          {messages.map((message) => (
-            <ChatBubble
-              key={message.id}
-              message={message}
-              activeTrigger={activeTrigger}
-              userProfile={userProfile}
-            />
-          ))}
-          {isLoading && (
-            <div className="flex gap-3 justify-start">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <MessageSquareIcon className="h-4 w-4 text-primary" />
-                </div>
-              </div>
-              <div className="max-w-[80%]">
-                <div className="rounded-2xl px-4 py-3 bg-muted">
-                  <Skeleton className="h-[20px] w-[200px]" />
-                  <Skeleton className="h-[20px] w-[150px] mt-2" />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
+      {/* Main Chat Container - PROPERLY FIXED HEIGHT STRUCTURE */}
+      <div className="flex-1 flex flex-col h-screen max-h-screen overflow-hidden">
+        {/* Fixed Header - Always at top */}
+        <div className="flex-shrink-0">
+          <ChatHeader
+            currentConversationId={currentConversationId}
+            activeTrigger={activeTrigger}
+            onShowConversations={() => setShowConversations(true)}
+            onNewConversation={handleNewConversation}
+            onShowQuickActions={() => setShowQuickActions(true)}
+          />
 
-      <div className="sticky bottom-0 border-t bg-background z-50">
-        <div className="container py-4">
-          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} activeTrigger={activeTrigger} onTriggerChange={handleTriggerChange} />
+          <NotificationBars
+            searchConfirmationRequired={searchConfirmationRequired}
+            error={error}
+            onSearchConfirmation={handleSearchConfirmation}
+            onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
+          />
+        </div>
+        
+        {/* Scrollable Messages Area - Takes all remaining space */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <ChatMessages
+            sessionMessages={sessionMessages}
+            isLoading={isLoading}
+            activeTrigger={activeTrigger}
+            scrollAreaRef={scrollAreaRef}
+            userProfile={userProfile}
+          />
+        </div>
+
+        {/* Fixed Input - Always at bottom */}
+        <div className="flex-shrink-0">
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={isLoading}
+            sessionMessages={sessionMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+          />
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default WaktiAIV2;

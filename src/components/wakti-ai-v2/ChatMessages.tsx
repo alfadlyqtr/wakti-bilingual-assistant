@@ -46,10 +46,23 @@ export function ChatMessages({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const response = await WaktiAIV2Service.confirmTaskCreation(
+      const response = await WaktiAIV2Service.sendMessage(
+        '',
         user.id,
         language,
-        taskData
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        true,
+        false,
+        taskData,
+        null
       );
 
       if (response.error) {
@@ -106,9 +119,22 @@ export function ChatMessages({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const response = await WaktiAIV2Service.confirmReminderCreation(
+      const response = await WaktiAIV2Service.sendMessage(
+        '',
         user.id,
         language,
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        false,
+        true,
+        null,
         reminderData
       );
 

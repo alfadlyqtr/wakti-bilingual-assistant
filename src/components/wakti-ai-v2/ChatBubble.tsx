@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,6 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { ImageModal } from './ImageModal';
-import { AttachedFilesDisplay } from './AttachedFilesDisplay';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { supabase } from '@/integrations/supabase/client';
@@ -188,11 +188,6 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
       )}
       
       <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : ''}`}>
-        {/* Show attached files for user messages */}
-        {message.role === 'user' && message.attachedFiles && (
-          <AttachedFilesDisplay files={message.attachedFiles} />
-        )}
-        
         <div
           className={`rounded-2xl px-4 py-3 ${
             message.role === 'user'
