@@ -484,7 +484,7 @@ const WaktiAIV2 = () => {
       />
 
       {/* MAIN CHAT CONTAINER - Fixed Height Structure */}
-      <div className="flex-1 flex flex-col h-[97.5%] overflow-hidden">
+      <div className="flex-1 flex flex-col h-[98.5%] overflow-hidden">
         {/* FIXED HEADER SECTION - Always visible, never scrolls */}
         <div className="flex-shrink-0 sticky top-0 z-10 bg-background border-b">
           <ChatHeader
@@ -530,5 +530,3 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
-
-}
