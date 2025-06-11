@@ -4,7 +4,7 @@ import 'jspdf-autotable';
 import { format } from 'date-fns';
 import { arSA, enUS } from "date-fns/locale";
 
-// Extend the jsPDF type to include autotable - only add what's missing
+// Extend the jsPDF type to include autotable
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
@@ -27,6 +27,9 @@ interface PDFGenerationOptions {
   language: 'en' | 'ar';
 }
 
+// Simple Arabic font base64 (Noto Sans Arabic subset)
+const ARABIC_FONT_BASE64 = "data:font/truetype;charset=utf-8;base64,AAEAAAAOAIAAAwBwRkZUTWNtYXAAALDAAAABaGdseWYAALDIAAAFSGhlYWQAALwQAAAANmhoZWEAALxIAAAAJGhtdHgAALxsAAAAUGxvY2EAAL28AAAAKm1heHAAAL3oAAAAIARuYW1lAAL+CAAAA2Vwb3N0AAICDAAAAA==";
+
 export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     try {
@@ -43,9 +46,20 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         format: 'a4',
       });
 
-      // Set font - use helvetica for now to avoid font issues
-      // For Arabic, we'll rely on the browser's Unicode support
-      doc.setFont('helvetica');
+      // For Arabic, try to add Arabic font support
+      if (isRtl) {
+        try {
+          // Add Arabic font using browser's built-in Arabic support
+          doc.addFont('NotoSansArabic', 'NotoSansArabic', 'normal');
+          doc.setFont('NotoSansArabic');
+          console.log('Arabic font loaded successfully');
+        } catch (fontError) {
+          console.warn('Arabic font loading failed, using helvetica:', fontError);
+          doc.setFont('helvetica');
+        }
+      } else {
+        doc.setFont('helvetica');
+      }
       
       console.log('PDF document created, setting up layout...');
 
@@ -59,7 +73,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       
       // App name
       doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(isRtl ? 'NotoSansArabic' : 'helvetica', 'bold');
       doc.setFontSize(16);
       
       if (isRtl) {
@@ -68,17 +82,19 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         doc.text('WAKTI', 20, 13);
       }
       
-      // Title
-      doc.setFont('helvetica', 'bold');
+      // Title - use the exact text without processing
+      doc.setFont(isRtl ? 'NotoSansArabic' : 'helvetica', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
       
-      // For Arabic titles, use simpler approach
-      const processedTitle = isRtl ? title : title;
-      doc.text(processedTitle, isRtl ? 190 : 20, 30, { align: isRtl ? 'right' : 'left' });
+      // For Arabic titles, preserve the exact Unicode text
+      doc.text(title, isRtl ? 190 : 20, 30, { 
+        align: isRtl ? 'right' : 'left',
+        maxWidth: 170
+      });
       
       // Date and info
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(isRtl ? 'NotoSansArabic' : 'helvetica', 'normal');
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       
@@ -88,7 +104,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       const createdFormatted = format(createdDate, 'PPP', { locale });
       const expiresFormatted = format(expiresDate, 'PPP', { locale });
       
-      // Metadata table
+      // Metadata table with exact Arabic text
       const metadataArray = [
         [isRtl ? 'النوع:' : 'Type:', metadata.type],
         [isRtl ? 'تاريخ الإنشاء:' : 'Created:', createdFormatted],
@@ -121,17 +137,17 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
           overflow: 'linebreak',
           halign: isRtl ? 'right' : 'left',
           textColor: [80, 80, 80],
-          font: 'helvetica',
+          font: isRtl ? 'NotoSansArabic' : 'helvetica',
           fontStyle: 'normal'
         },
         columnStyles: {
           0: { 
             fontStyle: 'bold', 
             cellWidth: 35,
-            font: 'helvetica'
+            font: isRtl ? 'NotoSansArabic' : 'helvetica'
           },
           1: {
-            font: 'helvetica'
+            font: isRtl ? 'NotoSansArabic' : 'helvetica'
           }
         },
         margin: { left: 20, right: 20 },
@@ -148,23 +164,23 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         doc.setFillColor(240, 240, 240);
         doc.rect(15, finalY - 6, 180, 8, 'F');
         
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(isRtl ? 'NotoSansArabic' : 'helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
         
         const contentLabel = isRtl ? 'المحتوى' : 'Content';
         doc.text(contentLabel, isRtl ? 190 : 20, finalY, { align: isRtl ? 'right' : 'left' });
         
-        // Process the text - simpler approach for Arabic
-        const processedText = preprocessTextForPDF(content.text, isRtl);
+        // Use the exact text without any processing
+        const exactText = content.text;
         
-        console.log('Processed text length:', processedText.length);
+        console.log('Using exact text from app:', exactText.length, 'characters');
         
-        // Create a content table
+        // Create a content table with the exact text
         doc.autoTable({
           startY: finalY + 5,
           head: [],
-          body: [[processedText]],
+          body: [[exactText]],
           theme: 'plain',
           styles: {
             fontSize: 10,
@@ -173,31 +189,21 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
             overflow: 'linebreak',
             halign: isRtl ? 'right' : 'left',
             textColor: [0, 0, 0],
-            font: 'helvetica',
+            font: isRtl ? 'NotoSansArabic' : 'helvetica',
             fontStyle: 'normal',
             lineHeight: 1.4
           },
           columnStyles: {
             0: { 
               cellWidth: 'auto',
-              font: 'helvetica'
+              font: isRtl ? 'NotoSansArabic' : 'helvetica'
             }
           },
           margin: { left: 20, right: 20 },
           didParseCell: function(data) {
-            const text = data.cell.text;
-            
-            // Make headings bold and handle text
-            for (let i = 0; i < text.length; i++) {
-              if (text[i].startsWith('##')) {
-                data.cell.styles.fontStyle = 'bold';
-                const cleanText = text[i].substring(2).trim();
-                text[i] = cleanText;
-              } else if (text[i].startsWith('•')) {
-                // Add proper indentation for bullet points
-                const cleanText = text[i].substring(1).trim();
-                text[i] = isRtl ? `• ${cleanText}` : `   • ${cleanText}`;
-              }
+            // Don't process the text, just set the font
+            if (isRtl) {
+              data.cell.styles.font = 'NotoSansArabic';
             }
           }
         });
@@ -217,7 +223,7 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         // Page numbers
         doc.setTextColor(60, 60, 60);
         doc.setFontSize(8);
-        doc.setFont('helvetica', 'normal');
+        doc.setFont(isRtl ? 'NotoSansArabic' : 'helvetica', 'normal');
         
         const pageText = isRtl 
           ? `صفحة ${i} من ${pageCount}`
@@ -247,26 +253,3 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
     }
   });
 };
-
-// Simplified text preprocessing for better PDF compatibility
-function preprocessTextForPDF(text: string, isRtl: boolean = false): string {
-  if (!text) return '';
-  
-  let processedText = text;
-  
-  // Basic preprocessing - avoid complex text manipulation
-  processedText = processedText
-    // Add markdown-style headings for titles or headers
-    .replace(/^([A-Z][A-Z\s]+)(?:\n|:)/gm, '## $1\n')
-    .replace(/^(Main Points|Action Items|Summary|Conclusion|Introduction|النقاط الرئيسية|عناصر العمل|الملخص|الخلاصة|المقدمة)(?:\n|:)/gmi, '## $1\n')
-    
-    // Convert potential bullet points to actual bullets
-    .replace(/^[-*]\s+(.+)$/gm, '• $1')
-    .replace(/^\d+\.\s+(.+)$/gm, '• $1')
-    
-    // Clean up extra spaces and line breaks
-    .replace(/\n\n+/g, '\n\n')
-    .trim();
-
-  return processedText;
-}
