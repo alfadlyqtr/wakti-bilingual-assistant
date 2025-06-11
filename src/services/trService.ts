@@ -66,14 +66,36 @@ export class TRService {
     return sanitized;
   }
 
-  // Task operations
+  // Task operations - Updated to filter by user ID
   static async getTasks(): Promise<TRTask[]> {
+    console.log('TRService.getTasks: Starting to fetch tasks');
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.getTasks: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.getTasks: No user found');
+      throw new Error('User not authenticated. Please log in.');
+    }
+
+    console.log('TRService.getTasks: Fetching tasks for user:', user.id);
+
     const { data, error } = await supabase
       .from('tr_tasks')
       .select('*')
+      .eq('user_id', user.id)  // Only fetch tasks belonging to the current user
       .order('created_at', { ascending: false });
     
-    if (error) throw error;
+    if (error) {
+      console.error('TRService.getTasks: Database error:', error);
+      throw error;
+    }
+
+    console.log('TRService.getTasks: Fetched tasks count:', data?.length || 0);
     return data || [];
   }
 

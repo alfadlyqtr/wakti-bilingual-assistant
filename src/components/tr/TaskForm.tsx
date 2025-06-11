@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { CalendarIcon, X, Plus, Trash2 } from 'lucide-react';
+import { CalendarIcon, X, Plus, Trash2, Copy, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -68,6 +67,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   });
 
   const watchedDueDate = watch('due_date');
+  const watchedIsShared = watch('is_shared');
 
   useEffect(() => {
     if (task) {
@@ -163,6 +163,19 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
   const removeSubtask = (index: number) => {
     setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const copyShareLink = async () => {
+    if (task?.share_link) {
+      const shareUrl = `${window.location.origin}/shared-task/${task.share_link}`;
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(t('linkCopied', language));
+      } catch (error) {
+        console.error('Error copying to clipboard:', error);
+        toast.error('Error copying link');
+      }
+    }
   };
 
   return (
@@ -330,24 +343,75 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
             </div>
           )}
 
-          {/* Sharing */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label>{t('shareTask', language)}</Label>
-              <p className="text-sm text-muted-foreground">
-                {t('shareTaskDescription', language)}
-              </p>
+          {/* Enhanced Sharing Section */}
+          <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">
+                  {language === 'ar' ? 'مشاركة خارجية' : 'External Sharing'}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {language === 'ar' 
+                    ? 'مشاركة المهمة عبر رابط خارجي فقط. لن تظهر المهمة للمستخدمين الآخرين في التطبيق.'
+                    : 'Share task via external link only. Task will not be visible to other app users.'
+                  }
+                </p>
+              </div>
+              <Controller
+                name="is_shared"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
             </div>
-            <Controller
-              name="is_shared"
-              control={control}
-              render={({ field }) => (
-                <Switch
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              )}
-            />
+
+            {/* Show share link for existing shared tasks */}
+            {task?.is_shared && task?.share_link && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">
+                  {language === 'ar' ? 'رابط المشاركة:' : 'Share Link:'}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={`${window.location.origin}/shared-task/${task.share_link}`}
+                    readOnly 
+                    className="text-xs"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copyShareLink}
+                  >
+                    <Copy className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(`/shared-task/${task.share_link}`, '_blank')}
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Warning for new shared tasks */}
+            {watchedIsShared && !task && (
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
+                <p className="text-blue-800 dark:text-blue-200">
+                  {language === 'ar'
+                    ? '⚠️ سيتم إنشاء رابط مشاركة خارجي بعد حفظ المهمة.'
+                    : '⚠️ External share link will be generated after saving the task.'
+                  }
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Form Actions */}
