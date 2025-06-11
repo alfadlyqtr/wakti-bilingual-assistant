@@ -31,6 +31,7 @@ const WaktiAIV2 = () => {
   const { showSuccess, showError } = useToastHelper();
 
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
+  const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
   useEffect(() => {
@@ -107,6 +108,8 @@ const WaktiAIV2 = () => {
         setSessionMessages(savedSession.messages || []);
         if (savedSession.conversationId) {
           setCurrentConversationId(savedSession.conversationId);
+          // Load full conversation history from database
+          loadFullConversationHistory(savedSession.conversationId);
         }
       }
       setHasLoadedSession(true);
@@ -141,6 +144,65 @@ const WaktiAIV2 = () => {
       console.error('Error fetching conversations:', error);
       setError(error.message || 'Failed to fetch conversations');
     }
+  };
+
+  // Load full conversation history from database
+  const loadFullConversationHistory = async (conversationId: string) => {
+    try {
+      console.log('📚 Loading full conversation history for:', conversationId);
+      
+      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
+      
+      const convertedMessages: AIMessage[] = messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        intent: msg.intent,
+        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
+        actionTaken: !!msg.action_taken,
+        inputType: msg.input_type as 'text' | 'voice',
+        browsingUsed: msg.browsing_used,
+        browsingData: msg.browsing_data,
+        quotaStatus: msg.quota_status
+      }));
+      
+      setConversationMessages(convertedMessages);
+      console.log('📚 Loaded full conversation history:', convertedMessages.length, 'messages');
+      
+    } catch (error) {
+      console.error('❌ Error loading full conversation history:', error);
+    }
+  };
+
+  // Get complete conversation context for AI
+  const getCompleteConversationContext = (): AIMessage[] => {
+    // Combine conversation messages from DB with session messages
+    const allMessages = [...conversationMessages, ...sessionMessages];
+    
+    // Remove duplicates based on timestamp and content
+    const uniqueMessages = allMessages.filter((message, index, self) => 
+      index === self.findIndex(m => 
+        m.timestamp.getTime() === message.timestamp.getTime() && 
+        m.content === message.content &&
+        m.role === message.role
+      )
+    );
+    
+    // Sort by timestamp
+    uniqueMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    
+    // Keep last 50 messages for better context (increased from 15)
+    const contextMessages = uniqueMessages.slice(-50);
+    
+    console.log('🧠 Complete conversation context:', {
+      conversationMessages: conversationMessages.length,
+      sessionMessages: sessionMessages.length,
+      uniqueMessages: uniqueMessages.length,
+      contextMessages: contextMessages.length
+    });
+    
+    return contextMessages;
   };
 
   // Auto-create conversation and save messages after first exchange
@@ -219,7 +281,7 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === ENHANCED FILE ANALYSIS START ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED CONVERSATION CONTEXT START ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
@@ -234,11 +296,22 @@ const WaktiAIV2 = () => {
         attachedFiles: attachedFiles || []
       };
 
-      const updatedMessages = [...sessionMessages, userMessage].slice(-20);
-      setSessionMessages(updatedMessages);
+      // Add to session messages
+      const updatedSessionMessages = [...sessionMessages, userMessage];
+      setSessionMessages(updatedSessionMessages);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
+
+      // Get complete conversation context (increased from 15 to 50 messages)
+      const completeContext = getCompleteConversationContext();
+      const contextForAI = [...completeContext, userMessage].slice(-50);
+
+      console.log('🧠 WAKTI AI V2.5: Sending expanded context to AI:', {
+        contextMessages: contextForAI.length,
+        hasConversationHistory: conversationMessages.length > 0,
+        currentConversationId
+      });
 
       const response = await WaktiAIV2Service.sendMessage(
         message,
@@ -246,7 +319,7 @@ const WaktiAIV2 = () => {
         language,
         currentConversationId,
         inputType,
-        updatedMessages.slice(-15),
+        contextForAI, // Expanded context instead of just last 15
         false,
         activeTrigger,
         textGenParams,
@@ -266,6 +339,8 @@ const WaktiAIV2 = () => {
 
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
+        // Load full history for new conversation
+        loadFullConversationHistory(response.conversationId);
         console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
 
@@ -295,14 +370,18 @@ const WaktiAIV2 = () => {
         pendingReminderData: response.pendingReminderData
       };
 
-      const finalMessages = [...updatedMessages, assistantMessage].slice(-20);
-      setSessionMessages(finalMessages);
+      // Add to session messages (keep last 30 for session, expanded from 20)
+      const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
+      setSessionMessages(finalSessionMessages);
 
       // Auto-create conversation if this is the first exchange
       if (!currentConversationId) {
-        const newConversationId = await createConversationIfNeeded(finalMessages);
+        const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
+        const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
         if (newConversationId) {
           setCurrentConversationId(newConversationId);
+          // Load full history for new conversation
+          loadFullConversationHistory(newConversationId);
           console.log('🆕 Set new conversation ID:', newConversationId);
           
           // Refresh conversations list
@@ -354,7 +433,7 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced file analysis error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced conversation error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -402,7 +481,7 @@ const WaktiAIV2 = () => {
         isTextGenerated: activeTrigger === 'image' && !!response.imageUrl
       };
 
-      const finalMessages = [...sessionMessages, assistantMessage].slice(-20);
+      const finalMessages = [...sessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalMessages);
 
       if (response.quotaStatus) {
@@ -441,6 +520,7 @@ const WaktiAIV2 = () => {
     
     setCurrentConversationId(null);
     setSessionMessages([]);
+    setConversationMessages([]); // Clear conversation history
     WaktiAIV2Service.clearChatSession();
     setSearchConfirmationRequired(false);
     setError(null);
@@ -457,30 +537,19 @@ const WaktiAIV2 = () => {
       console.log('📂 Loading conversation:', conversationId);
       setIsLoading(true);
       
-      const messages = await WaktiAIV2Service.getConversationMessages(conversationId);
+      // Load full conversation history from database
+      await loadFullConversationHistory(conversationId);
       
-      const convertedMessages: AIMessage[] = messages.map(msg => ({
-        id: msg.id,
-        role: msg.role as 'user' | 'assistant',
-        content: msg.content,
-        timestamp: new Date(msg.created_at),
-        intent: msg.intent,
-        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-        actionTaken: !!msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice',
-        browsingUsed: msg.browsing_used,
-        browsingData: msg.browsing_data,
-        quotaStatus: msg.quota_status
-      }));
-      
-      const limitedMessages = convertedMessages.slice(-20);
-      
+      // Set current conversation
       setCurrentConversationId(conversationId);
-      setSessionMessages(limitedMessages);
+      
+      // Clear session messages since we're loading from DB
+      setSessionMessages([]);
+      
       setSearchConfirmationRequired(false);
       setError(null);
       
-      console.log('📂 Loaded conversation with', limitedMessages.length, 'messages');
+      console.log('📂 Conversation loaded successfully');
       
     } catch (error: any) {
       console.error('❌ Error loading conversation:', error);
@@ -493,6 +562,7 @@ const WaktiAIV2 = () => {
   const handleClearChat = () => {
     console.log('🗑️ Clearing current chat session...');
     setSessionMessages([]);
+    setConversationMessages([]);
     WaktiAIV2Service.clearChatSession();
     setSearchConfirmationRequired(false);
     setError(null);
@@ -505,6 +575,7 @@ const WaktiAIV2 = () => {
       if (currentConversationId === conversationId) {
         setCurrentConversationId(null);
         setSessionMessages([]);
+        setConversationMessages([]);
       }
       showSuccess(
         language === 'ar' ? 'تم حذف المحادثة بنجاح' : 'Conversation deleted successfully'
@@ -537,6 +608,9 @@ const WaktiAIV2 = () => {
     );
   };
 
+  // Combine conversation and session messages for display
+  const allDisplayMessages = [...conversationMessages, ...sessionMessages];
+
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <ChatDrawers
@@ -555,7 +629,7 @@ const WaktiAIV2 = () => {
         onTextGenerated={handleTextGenerated}
         onNewConversation={handleNewConversation}
         onClearChat={handleClearChat}
-        sessionMessages={sessionMessages}
+        sessionMessages={allDisplayMessages}
       />
 
       <div className="flex-1 flex flex-col h-screen">
@@ -591,7 +665,7 @@ const WaktiAIV2 = () => {
           }}
         >
           <ChatMessages
-            sessionMessages={sessionMessages}
+            sessionMessages={allDisplayMessages}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
@@ -613,7 +687,7 @@ const WaktiAIV2 = () => {
           message={message}
           setMessage={setMessage}
           isLoading={isLoading}
-          sessionMessages={sessionMessages}
+          sessionMessages={allDisplayMessages}
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}
         />

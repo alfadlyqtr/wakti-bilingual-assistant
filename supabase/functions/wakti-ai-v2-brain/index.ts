@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -11,7 +10,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - PDF uploads removed");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -24,13 +23,14 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with PDF support removed");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with enhanced context");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
       message: requestBody.message,
       userId: requestBody.userId,
-      attachedFiles: requestBody.attachedFiles?.length || 0
+      attachedFiles: requestBody.attachedFiles?.length || 0,
+      conversationHistoryLength: requestBody.conversationHistory?.length || 0
     });
 
     const {
@@ -41,7 +41,8 @@ serve(async (req) => {
       inputType = 'text',
       confirmSearch = false,
       activeTrigger = 'chat',
-      attachedFiles = []
+      attachedFiles = [],
+      conversationHistory = [] // Enhanced conversation context
     } = requestBody;
 
     if (!message || typeof message !== 'string' || message.trim() === '') {
@@ -69,6 +70,7 @@ serve(async (req) => {
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
     console.log("🚀 WAKTI AI V2 BRAIN: Active trigger mode:", activeTrigger);
     console.log("🚀 WAKTI AI V2 BRAIN: Attached files count:", attachedFiles.length);
+    console.log("🚀 WAKTI AI V2 BRAIN: Conversation history length:", conversationHistory.length);
 
     let response = '';
     let fileAnalysisResults = [];
@@ -77,6 +79,7 @@ serve(async (req) => {
     let quotaStatus = null;
     let actionTaken = null;
     let actionResult = null;
+    let contextUtilized = false;
 
     // Process attached files with simplified handling
     if (attachedFiles && attachedFiles.length > 0) {
@@ -88,15 +91,27 @@ serve(async (req) => {
     // Get browsing quota
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Generate response based on trigger and files
+    // Generate response based on trigger and files with enhanced context
     if (fileAnalysisResults.length > 0) {
-      // If files were analyzed, include analysis in the response using DeepSeek for synthesis
-      response = await generateResponseWithFileAnalysis(message, fileAnalysisResults, language);
+      // If files were analyzed, include analysis in the response using enhanced context
+      response = await generateResponseWithFileAnalysisAndContext(
+        message, 
+        fileAnalysisResults, 
+        conversationHistory, 
+        language
+      );
       actionTaken = 'file_analysis';
       actionResult = { fileAnalysis: fileAnalysisResults };
+      contextUtilized = true;
     } else {
-      // Regular chat response using DeepSeek
-      response = await processWithDeepSeekChat(message, null, language, activeTrigger);
+      // Regular chat response using enhanced conversation context
+      response = await processWithEnhancedContext(
+        message, 
+        conversationHistory, 
+        language, 
+        activeTrigger
+      );
+      contextUtilized = conversationHistory.length > 0;
     }
 
     const result = {
@@ -113,10 +128,11 @@ serve(async (req) => {
       needsConfirmation: false,
       attachedFiles: attachedFiles,
       fileAnalysisResults,
+      contextUtilized, // New field to indicate if context was used
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:", contextUtilized);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -136,6 +152,179 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced function to process message with full conversation context
+async function processWithEnhancedContext(
+  message: string, 
+  conversationHistory: any[], 
+  language: string = 'en', 
+  activeTrigger: string = 'chat'
+) {
+  try {
+    console.log("🧠 WAKTI AI V2 BRAIN: Processing with enhanced conversation context");
+    console.log("🧠 Context details:", {
+      historyLength: conversationHistory.length,
+      activeTrigger,
+      language
+    });
+    
+    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
+    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+    
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. 
+
+تذكر دائماً سياق المحادثة السابق واربط إجاباتك بما تم مناقشته من قبل. إذا كان المستخدم يشير إلى شيء تم ذكره سابقاً، تأكد من ربط إجابتك بذلك السياق.
+
+كن ودوداً ومفيداً ومختصراً في إجاباتك، واستخدم المعلومات السابقة لتقديم إجابات أكثر دقة وشخصية.`
+      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. 
+
+Always remember the previous conversation context and connect your responses to what has been discussed before. If the user refers to something mentioned earlier, make sure to link your response to that context.
+
+Be friendly, helpful, and concise in your responses, and use previous information to provide more accurate and personalized answers.`;
+    
+    // Build conversation messages with full context
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add conversation history (maintain chronological order)
+    if (conversationHistory && conversationHistory.length > 0) {
+      // Take last 30 messages to avoid token limits while maintaining good context
+      const recentHistory = conversationHistory.slice(-30);
+      
+      for (const historyMessage of recentHistory) {
+        messages.push({
+          role: historyMessage.role,
+          content: historyMessage.content
+        });
+      }
+      
+      console.log("🧠 Added conversation context:", recentHistory.length, "messages");
+    }
+
+    // Add current message
+    messages.push({ role: 'user', content: message });
+    
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`AI API failed: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ Enhanced context response generated using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    
+    return result.choices[0].message.content;
+    
+  } catch (error) {
+    console.error("🧠 WAKTI AI V2 BRAIN: Enhanced context processing error:", error);
+    
+    // Fallback response
+    return language === 'ar' 
+      ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
+      : `Sorry, there was an error processing your request. Please try again.`;
+  }
+}
+
+// Enhanced function to generate response with file analysis and conversation context
+async function generateResponseWithFileAnalysisAndContext(
+  message: string, 
+  fileAnalysis: any[], 
+  conversationHistory: any[], 
+  language: string = 'en'
+) {
+  try {
+    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
+    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    console.log(`💬 Generating response with file analysis and context using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+
+    const systemPrompt = language === 'ar' 
+      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته، واستخدم تاريخ المحادثة السابق وتحليل الملفات المرفق للإجابة على سؤاله بشكل شامل ومفيد. تذكر السياق السابق للمحادثة.'
+      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the previous conversation history and the attached file analysis to provide a comprehensive and helpful response to their question. Remember the previous conversation context.';
+
+    // Build messages with conversation context
+    const messages = [
+      { role: 'system', content: systemPrompt }
+    ];
+
+    // Add recent conversation history for context
+    if (conversationHistory && conversationHistory.length > 0) {
+      const recentHistory = conversationHistory.slice(-20); // Keep recent context
+      for (const historyMessage of recentHistory) {
+        messages.push({
+          role: historyMessage.role,
+          content: historyMessage.content
+        });
+      }
+    }
+
+    // Prepare file analysis summary
+    const fileAnalysisSummary = fileAnalysis.map(file => 
+      `File: ${file.fileName} (${file.fileType})\nAnalysis: ${file.analysis.analysis}`
+    ).join('\n\n');
+
+    // Add current message with file analysis
+    messages.push({ 
+      role: 'user', 
+      content: `${message}\n\nFile Analysis Results:\n${fileAnalysisSummary}` 
+    });
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 2000
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`AI API failed: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ File analysis with context synthesis successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    
+    return result.choices[0].message.content;
+
+  } catch (error) {
+    console.error("Error generating response with file analysis and context:", error);
+    
+    // Fallback response
+    return language === 'ar' 
+      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
+      : `Successfully analyzed ${fileAnalysis.length} attached file(s). Please rephrase your question for more detailed information.`;
+  }
+}
 
 // Simplified file processing - removed PDF specific handling
 async function processFilesSimplified(files: any[], language: string = 'en') {
@@ -334,125 +523,6 @@ async function processTextFile(file: any, language: string = 'en') {
       error: error.message,
       analysis: language === 'ar' ? 'فشل في معالجة الملف النصي' : 'Failed to process text file'
     };
-  }
-}
-
-// Generate response that includes file analysis using DeepSeek for synthesis
-async function generateResponseWithFileAnalysis(message: string, fileAnalysis: any[], language: string = 'en') {
-  try {
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    console.log(`💬 Generating response with file analysis using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'} for synthesis`);
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات المرفق للإجابة على سؤاله بشكل شامل ومفيد.'
-      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the attached file analysis to provide a comprehensive and helpful response to their question.';
-
-    // Prepare file analysis summary for the AI
-    const fileAnalysisSummary = fileAnalysis.map(file => 
-      `File: ${file.fileName} (${file.fileType})\nAnalysis: ${file.analysis.analysis}`
-    ).join('\n\n');
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `${message}\n\nFile Analysis Results:\n${fileAnalysisSummary}` }
-    ];
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log(`✅ Response synthesis successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
-    
-    return result.choices[0].message.content;
-
-  } catch (error) {
-    console.error("Error generating response with file analysis:", error);
-    
-    // Fallback response
-    return language === 'ar' 
-      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysisResults.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
-      : `Successfully analyzed ${fileAnalysisResults.length} attached file(s). Please rephrase your question for more detailed information.`;
-  }
-}
-
-// DeepSeek for general chat only (no file analysis)
-async function processWithDeepSeekChat(message: string, context: string | null, language: string = 'en', activeTrigger: string = 'chat') {
-  try {
-    console.log("🤖 WAKTI AI V2 BRAIN: Processing general chat with DeepSeek (no files)");
-    
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-    
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.`;
-    
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: message }
-    ];
-    
-    if (context) {
-      messages.splice(1, 0, { role: 'assistant', content: `Context: ${context}` });
-    }
-    
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    console.log(`✅ DeepSeek general chat response generated`);
-    
-    return result.choices[0].message.content;
-    
-  } catch (error) {
-    console.error("🤖 WAKTI AI V2 BRAIN: DeepSeek chat processing error:", error);
-    
-    // Fallback response
-    return language === 'ar' 
-      ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
-      : `Sorry, there was an error processing your request. Please try again.`;
   }
 }
 

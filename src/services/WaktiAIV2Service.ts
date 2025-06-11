@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 export interface AIMessage {
@@ -127,7 +128,7 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.executeAdvancedAction(userId, actionType, actionData, language);
   }
 
-  // Add the missing instance methods that delegate to static methods
+  // Instance methods that delegate to static methods
   ensureConversationExists(userId: string, sessionMessages: AIMessage[], language: string = 'en') {
     return WaktiAIV2ServiceClass.ensureConversationExists(userId, sessionMessages, language);
   }
@@ -253,7 +254,7 @@ export class WaktiAIV2ServiceClass {
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
       const sessionData = {
-        messages: messages.slice(-20), // Keep only last 20 messages
+        messages: messages.slice(-30), // Increased from 20 to 30
         conversationId,
         timestamp: Date.now()
       };
@@ -330,10 +331,13 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('📤 Sending message with files:', {
+      console.log('📤 WAKTI AI V2: Sending message with enhanced context:', {
         message: message.slice(0, 50),
         filesCount: attachedFiles.length,
-        activeTrigger
+        activeTrigger,
+        conversationHistoryLength: conversationHistory.length, // Log context size
+        hasCalendarContext: !!calendarContext,
+        hasUserContext: !!userContext
       });
 
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
@@ -343,11 +347,11 @@ export class WaktiAIV2ServiceClass {
           language,
           conversationId,
           inputType,
-          conversationHistory,
+          conversationHistory, // Full conversation history passed
           confirmSearch,
           activeTrigger,
           textGenParams,
-          attachedFiles, // Now properly included
+          attachedFiles,
           calendarContext,
           userContext,
           enableAdvancedIntegration,
@@ -364,9 +368,10 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
 
-      console.log('📥 Received response with file analysis:', {
+      console.log('📥 WAKTI AI V2: Received response with enhanced context processing:', {
         hasFileAnalysis: !!response.data?.fileAnalysisResults,
-        filesAnalyzed: response.data?.fileAnalysisResults?.length || 0
+        filesAnalyzed: response.data?.fileAnalysisResults?.length || 0,
+        contextUtilized: response.data?.contextUtilized || false
       });
 
       return response.data;
@@ -408,7 +413,6 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
-  // New method to confirm reminder creation
   static async confirmReminderCreation(
     userId: string,
     language: string = 'en',
