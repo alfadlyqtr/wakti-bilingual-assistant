@@ -333,4 +333,19 @@ export function BuyExtrasPopup({
                       <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="text-xs text-muted-foreground text-center">
+            {language === 'ar' ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء' : 'All extras are valid for 30 days from purchase date'}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
