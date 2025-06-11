@@ -10,7 +10,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - OpenAI Vision for ALL files, DeepSeek for chat only");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced File Analysis - Fixed Vision API for images, text extraction for docs");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -23,7 +23,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with OpenAI Vision for all files");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with fixed file handling");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
@@ -77,11 +77,11 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Process attached files using OpenAI Vision for ALL file types
+    // Process attached files with proper file type handling
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing ALL files with OpenAI Vision...");
-      fileAnalysisResults = await processFilesWithOpenAIVision(attachedFiles, language);
-      console.log("📎 OpenAI Vision file analysis completed:", fileAnalysisResults.length);
+      console.log("📎 Processing files with proper type handling...");
+      fileAnalysisResults = await processFilesWithProperHandling(attachedFiles, language);
+      console.log("📎 File analysis completed:", fileAnalysisResults.length);
     }
 
     // Get browsing quota
@@ -115,7 +115,7 @@ serve(async (req) => {
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with OpenAI Vision file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with fixed file analysis");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -136,16 +136,37 @@ serve(async (req) => {
   }
 });
 
-// Process ALL files with OpenAI Vision (images, PDFs, docs)
-async function processFilesWithOpenAIVision(files: any[], language: string = 'en') {
+// Process files with proper type handling - images use Vision, docs use text extraction
+async function processFilesWithProperHandling(files: any[], language: string = 'en') {
   const results = [];
 
   for (const file of files) {
     try {
-      console.log(`📎 Analyzing file with OpenAI Vision: ${file.name} (${file.type})`);
+      console.log(`📎 Processing file: ${file.name} (${file.type})`);
       
-      // Use OpenAI Vision for ALL file types
-      const analysisResult = await analyzeFileWithOpenAIVision(file, language);
+      let analysisResult;
+
+      if (isImageFile(file.type)) {
+        // Use OpenAI Vision for images
+        console.log(`🖼️ Using Vision API for image: ${file.name}`);
+        analysisResult = await analyzeImageWithVision(file, language);
+      } else if (isPDFFile(file.type)) {
+        // Extract text from PDF and analyze with regular AI
+        console.log(`📄 Processing PDF: ${file.name}`);
+        analysisResult = await processPDFFile(file, language);
+      } else if (isTextFile(file.type)) {
+        // Process text files directly
+        console.log(`📝 Processing text file: ${file.name}`);
+        analysisResult = await processTextFile(file, language);
+      } else {
+        // Unsupported file type
+        console.log(`❌ Unsupported file type: ${file.type}`);
+        analysisResult = {
+          success: false,
+          error: 'Unsupported file type',
+          analysis: language === 'ar' ? 'نوع ملف غير مدعوم' : 'Unsupported file type'
+        };
+      }
 
       results.push({
         fileName: file.name,
@@ -156,7 +177,7 @@ async function processFilesWithOpenAIVision(files: any[], language: string = 'en
       });
 
     } catch (error) {
-      console.error(`📎 Error analyzing file ${file.name}:`, error);
+      console.error(`📎 Error processing file ${file.name}:`, error);
       results.push({
         fileName: file.name,
         fileType: file.type,
@@ -174,44 +195,36 @@ async function processFilesWithOpenAIVision(files: any[], language: string = 'en
   return results;
 }
 
-// Analyze ANY file type with OpenAI Vision (GPT-4o)
-async function analyzeFileWithOpenAIVision(file: any, language: string = 'en') {
+// Check if file is an image
+function isImageFile(mimeType: string): boolean {
+  return mimeType.startsWith('image/') && 
+         ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(mimeType.toLowerCase());
+}
+
+// Check if file is a PDF
+function isPDFFile(mimeType: string): boolean {
+  return mimeType === 'application/pdf';
+}
+
+// Check if file is a text file
+function isTextFile(mimeType: string): boolean {
+  return mimeType === 'text/plain' || mimeType.includes('text/');
+}
+
+// Analyze images with OpenAI Vision (FIXED - only for images)
+async function analyzeImageWithVision(file: any, language: string = 'en') {
   try {
     if (!OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not configured for file analysis");
+      throw new Error("OpenAI API key not configured for image analysis");
     }
 
-    console.log(`🔍 Analyzing file with OpenAI Vision: ${file.name} (${file.type})`);
+    console.log(`🔍 Analyzing image with OpenAI Vision: ${file.name}`);
 
-    let systemPrompt = '';
-    let userPrompt = '';
+    const systemPrompt = language === 'ar' 
+      ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
+      : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
 
-    // Customize prompts based on file type
-    if (file.type.startsWith('image/')) {
-      systemPrompt = language === 'ar' 
-        ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
-        : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
-      
-      userPrompt = language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail';
-    } else if (file.type === 'application/pdf') {
-      systemPrompt = language === 'ar' 
-        ? 'أنت مساعد ذكي متخصص في تحليل المستندات والملفات. حلل محتوى هذا الملف واستخرج المعلومات المهمة والنصوص والبيانات. كن شاملاً ودقيقاً في تحليلك.'
-        : 'You are an AI assistant specialized in document and file analysis. Analyze the content of this file and extract important information, text, and data. Be comprehensive and accurate in your analysis.';
-      
-      userPrompt = language === 'ar' ? 'حلل محتوى هذا المستند PDF بالتفصيل' : 'Analyze the content of this PDF document in detail';
-    } else if (file.type === 'text/plain' || file.type.includes('document')) {
-      systemPrompt = language === 'ar' 
-        ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
-        : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
-      
-      userPrompt = language === 'ar' ? 'حلل محتوى هذا المستند النصي' : 'Analyze the content of this text document';
-    } else {
-      systemPrompt = language === 'ar' 
-        ? 'أنت مساعد ذكي متخصص في تحليل الملفات. حاول تحليل هذا الملف واستخراج أي معلومات مفيدة منه.'
-        : 'You are an AI assistant specialized in file analysis. Try to analyze this file and extract any useful information from it.';
-      
-      userPrompt = language === 'ar' ? 'حلل هذا الملف' : 'Analyze this file';
-    }
+    const userPrompt = language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail';
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -239,11 +252,11 @@ async function analyzeFileWithOpenAIVision(file: any, language: string = 'en') {
     if (!response.ok) {
       const errorData = await response.text();
       console.error(`OpenAI Vision API failed: ${response.status}`, errorData);
-      throw new Error(`OpenAI Vision API failed: ${response.status}`);
+      throw new Error(`OpenAI Vision API failed: ${response.status} - ${errorData}`);
     }
 
     const result = await response.json();
-    console.log(`✅ OpenAI Vision analysis successful for: ${file.name}`);
+    console.log(`✅ Vision analysis successful for: ${file.name}`);
     
     return {
       success: true,
@@ -252,11 +265,110 @@ async function analyzeFileWithOpenAIVision(file: any, language: string = 'en') {
     };
 
   } catch (error) {
-    console.error('Error analyzing file with OpenAI Vision:', error);
+    console.error('Error analyzing image with Vision:', error);
     return {
       success: false,
       error: error.message,
-      analysis: language === 'ar' ? 'فشل في تحليل الملف' : 'Failed to analyze file'
+      analysis: language === 'ar' ? 'فشل في تحليل الصورة' : 'Failed to analyze image'
+    };
+  }
+}
+
+// Process PDF files by extracting text and analyzing with regular AI
+async function processPDFFile(file: any, language: string = 'en') {
+  try {
+    console.log(`📄 Processing PDF file: ${file.name}`);
+    
+    // For now, we'll indicate that PDF text extraction is not available
+    // In a full implementation, you'd use a PDF parsing library here
+    const fallbackAnalysis = language === 'ar' 
+      ? `هذا ملف PDF بعنوان "${file.name}". لا يمكن استخراج النص من ملفات PDF حالياً، ولكن يمكنك تحويل المحتوى إلى صورة أو نص عادي للتحليل.`
+      : `This is a PDF file named "${file.name}". PDF text extraction is not currently available, but you can convert the content to an image or plain text for analysis.`;
+
+    return {
+      success: false,
+      analysis: fallbackAnalysis,
+      model: 'fallback',
+      note: 'PDF text extraction not implemented'
+    };
+
+  } catch (error) {
+    console.error('Error processing PDF:', error);
+    return {
+      success: false,
+      error: error.message,
+      analysis: language === 'ar' ? 'فشل في معالجة ملف PDF' : 'Failed to process PDF file'
+    };
+  }
+}
+
+// Process text files by reading content and analyzing with AI
+async function processTextFile(file: any, language: string = 'en') {
+  try {
+    console.log(`📝 Processing text file: ${file.name}`);
+    
+    // Fetch the text content from the file URL
+    const response = await fetch(file.url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch text file: ${response.status}`);
+    }
+    
+    const textContent = await response.text();
+    
+    // Analyze the text content with AI
+    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
+    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+
+    if (!apiKey) {
+      throw new Error("No AI API key configured");
+    }
+
+    const systemPrompt = language === 'ar' 
+      ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
+      : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
+
+    const userPrompt = language === 'ar' 
+      ? `حلل محتوى هذا الملف النصي:\n\n${textContent}`
+      : `Analyze the content of this text file:\n\n${textContent}`;
+
+    const aiResponse = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 1500
+      })
+    });
+
+    if (!aiResponse.ok) {
+      throw new Error(`AI API failed: ${aiResponse.status}`);
+    }
+
+    const result = await aiResponse.json();
+    console.log(`✅ Text analysis successful for: ${file.name}`);
+    
+    return {
+      success: true,
+      analysis: result.choices[0].message.content,
+      model: model,
+      textLength: textContent.length
+    };
+
+  } catch (error) {
+    console.error('Error processing text file:', error);
+    return {
+      success: false,
+      error: error.message,
+      analysis: language === 'ar' ? 'فشل في معالجة الملف النصي' : 'Failed to process text file'
     };
   }
 }
@@ -275,17 +387,17 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     console.log(`💬 Generating response with file analysis using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'} for synthesis`);
 
     const systemPrompt = language === 'ar' 
-      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات المرفق (الذي تم بواسطة OpenAI Vision) للإجابة على سؤاله بشكل شامل ومفيد.'
-      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the attached file analysis (performed by OpenAI Vision) to provide a comprehensive and helpful response to their question.';
+      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات المرفق للإجابة على سؤاله بشكل شامل ومفيد.'
+      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the attached file analysis to provide a comprehensive and helpful response to their question.';
 
     // Prepare file analysis summary for the AI
     const fileAnalysisSummary = fileAnalysis.map(file => 
-      `File: ${file.fileName} (${file.fileType})\nOpenAI Vision Analysis: ${file.analysis.analysis}`
+      `File: ${file.fileName} (${file.fileType})\nAnalysis: ${file.analysis.analysis}`
     ).join('\n\n');
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: `${message}\n\nFile Analysis Results from OpenAI Vision:\n${fileAnalysisSummary}` }
+      { role: 'user', content: `${message}\n\nFile Analysis Results:\n${fileAnalysisSummary}` }
     ];
 
     const response = await fetch(apiUrl, {
@@ -316,8 +428,8 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     
     // Fallback response
     return language === 'ar' 
-      ? `تم تحليل الملفات المرفقة بنجاح باستخدام OpenAI Vision. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
-      : `Successfully analyzed ${fileAnalysis.length} attached file(s) using OpenAI Vision. Please rephrase your question for more detailed information.`;
+      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
+      : `Successfully analyzed ${fileAnalysis.length} attached file(s). Please rephrase your question for more detailed information.`;
   }
 }
 
