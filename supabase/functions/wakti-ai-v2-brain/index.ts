@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -93,16 +94,16 @@ serve(async (req) => {
     // Get browsing quota
     quotaStatus = await checkBrowsingQuota(userId);
 
-    // Handle advanced search trigger
-    if (activeTrigger === 'advanced_search') {
-      console.log("🔍 Advanced search triggered");
+    // Handle both search and advanced_search triggers with Tavily
+    if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
+      console.log(`🔍 ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} triggered`);
       
       // Check if user has browsing quota
       if (!quotaStatus.canBrowse) {
         console.log("❌ No browsing quota remaining");
         response = language === 'ar' 
-          ? `لقد استنفدت حصتك اليومية من البحث المتقدم (${quotaStatus.limit} عملية بحث). يمكنك شراء المزيد من عمليات البحث أو المحاولة غداً.`
-          : `You've reached your daily advanced search limit (${quotaStatus.limit} searches). You can purchase more searches or try again tomorrow.`;
+          ? `لقد استنفدت حصتك اليومية من البحث (${quotaStatus.limit} عملية بحث). يمكنك شراء المزيد من عمليات البحث أو المحاولة غداً.`
+          : `You've reached your daily search limit (${quotaStatus.limit} searches). You can purchase more searches or try again tomorrow.`;
         
         return new Response(JSON.stringify({
           response,
@@ -118,8 +119,11 @@ serve(async (req) => {
         });
       }
 
+      // Determine search depth based on trigger
+      const searchDepth = activeTrigger === 'advanced_search' ? 'advanced' : 'basic';
+      
       // Perform Tavily search
-      const searchResults = await performTavilySearch(message, language);
+      const searchResults = await performTavilySearch(message, language, searchDepth);
       
       if (searchResults.success) {
         browsingUsed = true;
@@ -141,7 +145,7 @@ serve(async (req) => {
           language
         );
         
-        console.log("✅ Advanced search completed successfully");
+        console.log(`✅ ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} completed successfully`);
       } else {
         console.error("❌ Tavily search failed:", searchResults.error);
         response = language === 'ar' 
@@ -154,7 +158,7 @@ serve(async (req) => {
       
       contextUtilized = conversationHistory.length > 0;
     } else {
-      // Regular processing for other triggers
+      // Regular processing for other triggers (chat, image, etc.)
       if (fileAnalysisResults.length > 0) {
         response = await generateResponseWithFileAnalysisAndContext(
           message, 
@@ -179,7 +183,7 @@ serve(async (req) => {
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: activeTrigger === 'advanced_search' ? 'web_search' : 'general_chat',
+      intent: (activeTrigger === 'search' || activeTrigger === 'advanced_search') ? 'web_search' : 'general_chat',
       confidence: 'high',
       actionTaken,
       actionResult,
@@ -215,14 +219,14 @@ serve(async (req) => {
   }
 });
 
-// New function to perform Tavily search
-async function performTavilySearch(query: string, language: string = 'en') {
+// Updated function to perform Tavily search with configurable depth
+async function performTavilySearch(query: string, language: string = 'en', searchDepth: string = 'basic') {
   try {
     if (!TAVILY_API_KEY) {
       throw new Error("Tavily API key not configured");
     }
 
-    console.log("🔍 Performing Tavily search for:", query.slice(0, 50));
+    console.log(`🔍 Performing Tavily search (${searchDepth}) for:`, query.slice(0, 50));
 
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -232,10 +236,10 @@ async function performTavilySearch(query: string, language: string = 'en') {
       },
       body: JSON.stringify({
         query: query,
-        search_depth: "advanced",
+        search_depth: searchDepth,
         include_answer: true,
         include_raw_content: false,
-        max_results: 5,
+        max_results: searchDepth === 'advanced' ? 5 : 3,
         include_domains: [],
         exclude_domains: []
       })
@@ -248,7 +252,7 @@ async function performTavilySearch(query: string, language: string = 'en') {
     }
 
     const searchData = await response.json();
-    console.log("✅ Tavily search successful, found", searchData.results?.length || 0, "results");
+    console.log(`✅ Tavily search (${searchDepth}) successful, found`, searchData.results?.length || 0, "results");
 
     return {
       success: true,
@@ -256,7 +260,8 @@ async function performTavilySearch(query: string, language: string = 'en') {
         answer: searchData.answer,
         results: searchData.results || [],
         query: searchData.query,
-        response_time: searchData.response_time
+        response_time: searchData.response_time,
+        search_depth: searchDepth
       }
     };
 
