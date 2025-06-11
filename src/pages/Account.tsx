@@ -10,7 +10,6 @@ import { PageContainer } from "@/components/PageContainer";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
-import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
@@ -29,7 +28,6 @@ export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const { language } = useTheme();
-  const { confirm } = useToast();
   const queryClient = useQueryClient();
   
   // Account states
@@ -78,12 +76,12 @@ export default function Account() {
     try {
       const error = await updateEmail(email);
       if (error) {
-        toast(t("errorUpdatingEmail", language));
+        toast.error(t("errorUpdatingEmail", language));
       } else {
         toast.success(t("emailUpdated", language));
       }
     } catch (error) {
-      toast(t("errorUpdatingEmail", language));
+      toast.error(t("errorUpdatingEmail", language));
     } finally {
       setIsUpdatingEmail(false);
     }
@@ -93,12 +91,12 @@ export default function Account() {
     e.preventDefault();
     
     if (password !== confirmPassword) {
-      toast(t("passwordsDoNotMatch", language));
+      toast.error(t("passwordsDoNotMatch", language));
       return;
     }
     
     if (!currentPassword) {
-      toast(t("currentPasswordRequired", language));
+      toast.error(t("currentPasswordRequired", language));
       return;
     }
     
@@ -117,7 +115,7 @@ export default function Account() {
         setConfirmPassword("");
       }
     } catch (error) {
-      toast(t("errorUpdatingPassword", language));
+      toast.error(t("errorUpdatingPassword", language));
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -128,7 +126,7 @@ export default function Account() {
       await signOut();
       navigate("/login");
     } catch (error) {
-      toast(t("errorSigningOut", language));
+      toast.error(t("errorSigningOut", language));
     }
   };
   
