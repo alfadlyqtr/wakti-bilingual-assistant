@@ -41,6 +41,7 @@ export default function Account() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
+  const [dobInputValue, setDobInputValue] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -86,13 +87,40 @@ export default function Account() {
         setEmail(user.email);
       }
       if (user.user_metadata?.date_of_birth) {
-        setDateOfBirth(new Date(user.user_metadata.date_of_birth));
+        const dobDate = new Date(user.user_metadata.date_of_birth);
+        setDateOfBirth(dobDate);
+        setDobInputValue(format(dobDate, "yyyy-MM-dd"));
       }
       // Set username from metadata or user id
       setUsername(user.user_metadata?.username || user.email?.split('@')[0] || '');
       setLoadingUserData(false);
     }
   }, [user]);
+  
+  // Handle date input change
+  const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDobInputValue(value);
+    
+    if (value) {
+      const newDate = new Date(value);
+      if (!isNaN(newDate.getTime())) {
+        setDateOfBirth(newDate);
+      }
+    } else {
+      setDateOfBirth(undefined);
+    }
+  };
+
+  // Handle calendar date selection
+  const handleCalendarDateSelect = (date: Date | undefined) => {
+    setDateOfBirth(date);
+    if (date) {
+      setDobInputValue(format(date, "yyyy-MM-dd"));
+    } else {
+      setDobInputValue("");
+    }
+  };
   
   const handleUpdateEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -358,36 +386,57 @@ export default function Account() {
                 />
               </div>
 
-              {/* Date of Birth */}
+              {/* Date of Birth - Enhanced */}
               <div className="grid gap-2">
                 <Label htmlFor="dob">{t("dateOfBirth", language)}</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !dateOfBirth && "text-muted-foreground"
-                      )}
-                      disabled={isUpdatingDob}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t("selectDateOfBirth", language)}</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={dateOfBirth}
-                      onSelect={setDateOfBirth}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01")
-                      }
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+                
+                {/* Direct Date Input */}
+                <div className="space-y-3">
+                  <Input
+                    id="dob"
+                    type="date"
+                    value={dobInputValue}
+                    onChange={handleDobInputChange}
+                    disabled={isUpdatingDob}
+                    max={new Date().toISOString().split('T')[0]}
+                    min="1900-01-01"
+                    className="w-full"
+                  />
+                  
+                  {/* Alternative Calendar Picker */}
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Or use calendar picker:</span>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "justify-start text-left font-normal",
+                            !dateOfBirth && "text-muted-foreground"
+                          )}
+                          disabled={isUpdatingDob}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateOfBirth ? format(dateOfBirth, "MMM dd, yyyy") : "Pick date"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={dateOfBirth}
+                          onSelect={handleCalendarDateSelect}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                
                 <p className="text-xs text-muted-foreground">
                   {t("dobHelpText", language)}
                 </p>
