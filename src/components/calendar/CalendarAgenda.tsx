@@ -55,11 +55,15 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
   const events = dayEntries.filter(entry => entry.type === EntryType.EVENT);
   const maw3dEvents = dayEntries.filter(entry => entry.type === EntryType.MAW3D_EVENT);
   const notes = dayEntries.filter(entry => entry.type === EntryType.MANUAL_NOTE);
+  const tasks = dayEntries.filter(entry => entry.type === EntryType.TASK);
+  const reminders = dayEntries.filter(entry => entry.type === EntryType.REMINDER);
   
   console.log('CalendarAgenda - Grouped entries:', {
     events: events.length,
     maw3dEvents: maw3dEvents.length,
-    notes: notes.length
+    notes: notes.length,
+    tasks: tasks.length,
+    reminders: reminders.length
   });
   
   // Sort function to order alphabetically
@@ -76,6 +80,10 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         return <Heart className="h-4 w-4 text-purple-500" />;
       case EntryType.MANUAL_NOTE:
         return <PinIcon className="h-4 w-4 text-yellow-500" />;
+      case EntryType.TASK:
+        return <CheckSquare className="h-4 w-4 text-green-500" />;
+      case EntryType.REMINDER:
+        return <Bell className="h-4 w-4 text-red-500" />;
       default:
         return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
@@ -107,6 +115,44 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Tasks section */}
+          {tasks.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <CheckSquare className="h-4 w-4 text-green-500" />
+                Tasks ({tasks.length})
+              </h3>
+              <div className="space-y-1">
+                {tasks.sort(sortEntries).map(task => (
+                  <CompactAgendaItem 
+                    key={task.id}
+                    entry={task}
+                    onClick={() => setSelectedEntry(task)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reminders section */}
+          {reminders.length > 0 && (
+            <div>
+              <h3 className="font-medium mb-2 flex items-center gap-2">
+                <Bell className="h-4 w-4 text-red-500" />
+                Reminders ({reminders.length})
+              </h3>
+              <div className="space-y-1">
+                {reminders.sort(sortEntries).map(reminder => (
+                  <CompactAgendaItem 
+                    key={reminder.id}
+                    entry={reminder}
+                    onClick={() => setSelectedEntry(reminder)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          
           {/* Maw3d Events section */}
           {maw3dEvents.length > 0 && (
             <div>
@@ -200,6 +246,18 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 <p className="text-sm">All Day</p>
               </div>
             )}
+            {selectedEntry?.priority && (selectedEntry.type === EntryType.TASK) && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Priority</p>
+                <p className="text-sm capitalize">{selectedEntry.priority}</p>
+              </div>
+            )}
+            {selectedEntry?.completed !== undefined && (selectedEntry.type === EntryType.TASK) && (
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Status</p>
+                <p className="text-sm">{selectedEntry.completed ? 'Completed' : 'Pending'}</p>
+              </div>
+            )}
             {selectedEntry?.type === EntryType.MANUAL_NOTE && (
               <Button 
                 variant="outline" 
@@ -211,6 +269,19 @@ export const CalendarAgenda: React.FC<CalendarAgendaProps> = ({
                 className="w-full"
               >
                 Edit Note
+              </Button>
+            )}
+            {(selectedEntry?.type === EntryType.TASK || selectedEntry?.type === EntryType.REMINDER) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  // Navigate to T&R page
+                  window.location.href = '/tasks-reminders';
+                }}
+                className="w-full"
+              >
+                View in T&R
               </Button>
             )}
           </div>
@@ -235,6 +306,10 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
         return "border-l-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950/20";
       case EntryType.MANUAL_NOTE:
         return "border-l-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950/20";
+      case EntryType.TASK:
+        return "border-l-green-500 hover:bg-green-50 dark:hover:bg-green-950/20";
+      case EntryType.REMINDER:
+        return "border-l-red-500 hover:bg-red-50 dark:hover:bg-red-950/20";
       default:
         return "border-l-gray-500 hover:bg-gray-50 dark:hover:bg-gray-950/20";
     }
@@ -248,6 +323,10 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
         return <Heart className="h-4 w-4 text-purple-500" />;
       case EntryType.MANUAL_NOTE:
         return <PinIcon className="h-4 w-4 text-yellow-500" />;
+      case EntryType.TASK:
+        return <CheckSquare className="h-4 w-4 text-green-500" />;
+      case EntryType.REMINDER:
+        return <Bell className="h-4 w-4 text-red-500" />;
       default:
         return <PinIcon className="h-4 w-4 text-gray-500" />;
     }
@@ -268,6 +347,16 @@ const CompactAgendaItem: React.FC<CompactAgendaItemProps> = ({ entry, onClick })
           )}
           {entry.isAllDay && (
             <div className="text-xs text-muted-foreground">All Day</div>
+          )}
+          {entry.completed !== undefined && entry.type === EntryType.TASK && (
+            <div className="text-xs text-muted-foreground">
+              {entry.completed ? '✓ Completed' : '○ Pending'}
+            </div>
+          )}
+          {entry.priority && entry.type === EntryType.TASK && entry.priority !== 'normal' && (
+            <div className="text-xs text-muted-foreground capitalize">
+              {entry.priority} priority
+            </div>
           )}
         </div>
       </div>
