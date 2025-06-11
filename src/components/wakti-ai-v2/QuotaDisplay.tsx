@@ -24,6 +24,11 @@ interface QuotaDisplayProps {
 export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: QuotaDisplayProps) {
   const { language } = useTheme();
 
+  // Only show quota for search modes
+  if (activeTrigger !== 'search' && activeTrigger !== 'advanced_search') {
+    return null;
+  }
+
   // If we're in search mode and have search quota data, show search-specific quota
   if ((activeTrigger === 'search' || activeTrigger === 'advanced_search') && searchQuotaStatus) {
     const isAdvanced = activeTrigger === 'advanced_search';
@@ -60,31 +65,6 @@ export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: 
     );
   }
 
-  // Fallback to general quota status
-  if (!quotaStatus) {
-    return null;
-  }
-
-  const getQuotaColor = (percentage: number) => {
-    if (percentage >= 90) return 'destructive';
-    if (percentage >= 70) return 'secondary';
-    return 'default';
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <Badge variant={getQuotaColor(quotaStatus.usagePercentage)} className="text-xs">
-        {quotaStatus.count}/{quotaStatus.limit}
-      </Badge>
-      <div className="hidden sm:flex items-center gap-2">
-        <Progress 
-          value={quotaStatus.usagePercentage} 
-          className="w-16 h-2" 
-        />
-        <span className="text-xs text-muted-foreground">
-          {language === 'ar' ? 'متبقي' : 'left'}: {quotaStatus.remaining}
-        </span>
-      </div>
-    </div>
-  );
+  // Don't show general quota for non-search modes
+  return null;
 }
