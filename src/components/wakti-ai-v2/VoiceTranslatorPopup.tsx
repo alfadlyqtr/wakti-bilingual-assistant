@@ -970,5 +970,3 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
     </Dialog>
   );
 }
-
-</edits_to_apply>
