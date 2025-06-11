@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -67,7 +66,7 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
             <CheckSquare className="h-4 w-4 text-green-500" />
             <Bell className="h-4 w-4 text-red-500" />
           </div>
-          <h3 className="font-semibold text-lg bg-gradient-to-r from-green-500 to-red-500 bg-clip-text text-transparent">
+          <h3 className="font-semibold text-lg text-foreground">
             Tasks & Reminders
           </h3>
         </div>
