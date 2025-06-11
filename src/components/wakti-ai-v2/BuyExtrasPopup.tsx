@@ -35,13 +35,13 @@ export function BuyExtrasPopup({
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
   
-  const [isSearchPurchasing, setIsSearchPurchasing] = useState(false);
+  const [isRegularSearchPurchasing, setIsRegularSearchPurchasing] = useState(false);
   const [isAdvancedSearchPurchasing, setIsAdvancedSearchPurchasing] = useState(false);
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
 
-  const handlePurchaseSearches = async () => {
-    setIsSearchPurchasing(true);
+  const handlePurchaseRegularSearches = async () => {
+    setIsRegularSearchPurchasing(true);
     try {
       const success = await purchaseExtraSearches(50);
       if (success) {
@@ -52,7 +52,7 @@ export function BuyExtrasPopup({
       console.error('Error purchasing regular searches:', error);
       toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed');
     } finally {
-      setIsSearchPurchasing(false);
+      setIsRegularSearchPurchasing(false);
     }
   };
 
@@ -224,8 +224,8 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-blue-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseSearches} disabled={isSearchPurchasing} className="bg-blue-600 hover:bg-blue-700" size="sm">
-                    {isSearchPurchasing ? (
+                  <Button onClick={handlePurchaseRegularSearches} disabled={isRegularSearchPurchasing} className="bg-blue-600 hover:bg-blue-700" size="sm">
+                    {isRegularSearchPurchasing ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
@@ -333,19 +333,4 @@ export function BuyExtrasPopup({
                       <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="text-xs text-muted-foreground text-center">
-            {language === 'ar' ? 'جميع الإضافات صالحة لمدة 30 يوماً من تاريخ الشراء' : 'All extras are valid for 30 days from purchase date'}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+                      
