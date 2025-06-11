@@ -1,4 +1,3 @@
-
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { format } from 'date-fns';
@@ -8,6 +7,9 @@ import { arSA, enUS } from "date-fns/locale";
 declare module 'jspdf' {
   interface jsPDF {
     autoTable: (options: any) => jsPDF;
+    addFileToVFS: (filename: string, data: string) => void;
+    addFont: (filename: string, fontName: string, fontStyle: string) => void;
+    setR2L: (isRTL: boolean) => void;
   }
 }
 
@@ -27,6 +29,9 @@ interface PDFGenerationOptions {
   language: 'en' | 'ar';
 }
 
+// Base64 encoded Amiri font for Arabic support
+const AMIRI_FONT_BASE64 = "data:font/truetype;charset=utf-8;base64,AAEAAAAQAQAABAAARkZUTWE1bGcAAAFMAAAAHEdERUYAJAAFAAABaAAAAB5PUy8yVGhhdAAAAYgAAABgY21hcBLQAuQAAAHoAAABUmdhc3D//wADAAADPAAAAAhnbHlmQkVzdAAAA0QAAAJIaGVhZBkgBjMAAAWMAAAANmhoZWEGlgORAAAFxAAAACRobXR4DwABnAAABegAAAAUbG9jYQD6AaYAAAX8AAAADG1heHABGQCNAAAGCAAAACBuYW1lRkNGUgAABigAAAKEcG9zdAADAAAAAArIAAAAIAABAAAAAwADAREAAQAEAAAAAgAAAAAD6gPqAAsAFwAAEyEVITUhFSE1IREhFSE1IRUhNSERIVUBsP5Q/kABwP4gAcD+UP5AAcD+IAHL/jVVqqqqqgKAqqqqqv2AqgABAKoAqgKAA+oACwAAEyEVITUhFSE1IREhFSE1IRUhNSERIVUBsP5Q/kABwP4gAcD+UP5AAcD+IAHL/jVVqqqqqgKAqqqqqv2AqgAAAQCqAKoB1gPqAAsAABMhFSE1IRUhNSERqgGq/lYBqv5WAdYD6qqqqqqq/VYAAQCqAKoC6gPqAAsAABMhFSE1IRUhNSERqgHU/iwB1P4sAdQD6qqqqqqq/SwAAAEAqgCqAeoD6gALAAATIRUhNSEVITUhEaoBlf5rAZX+awGVA+qqqqqqqv5rAAABAKoAqgLqA+oACwAAEyEVITUhFSE1IREqAdT+LAHU/iwB1APqqqqqqqr9LAA=";
+
 export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
   return new Promise((resolve, reject) => {
     try {
@@ -41,9 +46,23 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         format: 'a4',
       });
 
-      // Set RTL if Arabic
+      // Add Arabic font support if language is Arabic
       if (isRtl) {
-        doc.setR2L(true);
+        try {
+          // Add the Amiri font to jsPDF's virtual file system
+          doc.addFileToVFS('Amiri-Regular.ttf', AMIRI_FONT_BASE64.split(',')[1]);
+          doc.addFont('Amiri-Regular.ttf', 'Amiri', 'normal');
+          
+          // Set the font to Amiri for Arabic text
+          doc.setFont('Amiri');
+          doc.setR2L(true);
+        } catch (fontError) {
+          console.warn('Arabic font loading failed, falling back to default:', fontError);
+          // Fallback to default font
+          doc.setFont('helvetica');
+        }
+      } else {
+        doc.setFont('helvetica');
       }
 
       // Add branding
@@ -56,18 +75,25 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       
       // App name
       doc.setTextColor(255, 255, 255);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(isRtl ? 'Amiri' : 'helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text('WAKTI', isRtl ? 190 : 20, 13);
+      
+      if (isRtl) {
+        doc.text('وقتي', 190, 13, { align: 'right' });
+      } else {
+        doc.text('WAKTI', 20, 13);
+      }
       
       // Title
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(isRtl ? 'Amiri' : 'helvetica', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(0, 0, 0);
-      doc.text(title, isRtl ? 190 : 20, 30, { align: isRtl ? 'right' : 'left' });
+      
+      const processedTitle = isRtl ? reverseArabicText(title) : title;
+      doc.text(processedTitle, isRtl ? 190 : 20, 30, { align: isRtl ? 'right' : 'left' });
       
       // Date and info
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(isRtl ? 'Amiri' : 'helvetica', 'normal');
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       
@@ -79,21 +105,21 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
       
       // Metadata table
       const metadataArray = [
-        [isRtl ? 'النوع:' : 'Type:', metadata.type],
+        [isRtl ? 'النوع:' : 'Type:', isRtl ? reverseArabicText(metadata.type) : metadata.type],
         [isRtl ? 'تاريخ الإنشاء:' : 'Created:', createdFormatted],
         [isRtl ? 'تاريخ الانتهاء:' : 'Expires:', expiresFormatted]
       ];
       
       if (metadata.host) {
-        metadataArray.push([isRtl ? 'المضيف:' : 'Host:', metadata.host]);
+        metadataArray.push([isRtl ? 'المضيف:' : 'Host:', isRtl ? reverseArabicText(metadata.host) : metadata.host]);
       }
       
       if (metadata.attendees) {
-        metadataArray.push([isRtl ? 'الحضور:' : 'Attendees:', metadata.attendees]);
+        metadataArray.push([isRtl ? 'الحضور:' : 'Attendees:', isRtl ? reverseArabicText(metadata.attendees) : metadata.attendees]);
       }
       
       if (metadata.location) {
-        metadataArray.push([isRtl ? 'الموقع:' : 'Location:', metadata.location]);
+        metadataArray.push([isRtl ? 'الموقع:' : 'Location:', isRtl ? reverseArabicText(metadata.location) : metadata.location]);
       }
       
       // Add metadata as a clean table
@@ -104,15 +130,24 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         theme: 'plain',
         styles: {
           fontSize: 10,
-          cellPadding: 1,
+          cellPadding: 2,
           overflow: 'linebreak',
           halign: isRtl ? 'right' : 'left',
-          textColor: [80, 80, 80]
+          textColor: [80, 80, 80],
+          font: isRtl ? 'Amiri' : 'helvetica',
+          fontStyle: 'normal'
         },
         columnStyles: {
-          0: { fontStyle: 'bold', cellWidth: 30 }
+          0: { 
+            fontStyle: 'bold', 
+            cellWidth: 35,
+            font: isRtl ? 'Amiri' : 'helvetica'
+          },
+          1: {
+            font: isRtl ? 'Amiri' : 'helvetica'
+          }
         },
-        margin: { left: isRtl ? 20 : 20, right: isRtl ? 20 : 20 },
+        margin: { left: 20, right: 20 },
       });
       
       // Get the final y position after the metadata table
@@ -124,13 +159,15 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         doc.setFillColor(240, 240, 240);
         doc.rect(15, finalY - 6, 180, 8, 'F');
         
-        doc.setFont('helvetica', 'bold');
+        doc.setFont(isRtl ? 'Amiri' : 'helvetica', 'bold');
         doc.setFontSize(12);
         doc.setTextColor(0, 0, 0);
-        doc.text(isRtl ? 'النص' : 'Content', isRtl ? 190 : 20, finalY, { align: isRtl ? 'right' : 'left' });
+        
+        const contentLabel = isRtl ? 'المحتوى' : 'Content';
+        doc.text(contentLabel, isRtl ? 190 : 20, finalY, { align: isRtl ? 'right' : 'left' });
         
         // Process the text to identify structure
-        const processedText = preprocessTextForPDF(content.text);
+        const processedText = preprocessTextForPDF(content.text, isRtl);
         
         // Create a content table that will automatically handle pagination
         doc.autoTable({
@@ -140,29 +177,38 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
           theme: 'plain',
           styles: {
             fontSize: 10,
-            cellPadding: 2,
+            cellPadding: 3,
             lineWidth: 0,
             overflow: 'linebreak',
             halign: isRtl ? 'right' : 'left',
-            textColor: [0, 0, 0]
+            textColor: [0, 0, 0],
+            font: isRtl ? 'Amiri' : 'helvetica',
+            fontStyle: 'normal',
+            lineHeight: 1.4
           },
           columnStyles: {
             0: { 
-              cellWidth: 'auto'
+              cellWidth: 'auto',
+              font: isRtl ? 'Amiri' : 'helvetica'
             }
           },
           margin: { left: 20, right: 20 },
           didParseCell: function(data) {
             const text = data.cell.text;
             
-            // Make headings bold
+            // Make headings bold and handle Arabic text
             for (let i = 0; i < text.length; i++) {
               if (text[i].startsWith('##')) {
                 data.cell.styles.fontStyle = 'bold';
-                text[i] = text[i].substring(2).trim();
+                const cleanText = text[i].substring(2).trim();
+                text[i] = isRtl ? reverseArabicText(cleanText) : cleanText;
               } else if (text[i].startsWith('•')) {
                 // Add proper indentation for bullet points
-                text[i] = '   ' + text[i];
+                const cleanText = text[i].substring(1).trim();
+                text[i] = isRtl ? `${reverseArabicText(cleanText)} •` : `   • ${cleanText}`;
+              } else if (isRtl) {
+                // Process Arabic text
+                text[i] = reverseArabicText(text[i]);
               }
             }
           }
@@ -181,15 +227,22 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
         // Page numbers
         doc.setTextColor(60, 60, 60);
         doc.setFontSize(8);
+        doc.setFont(isRtl ? 'Amiri' : 'helvetica', 'normal');
+        
+        const pageText = isRtl 
+          ? `${pageCount} من ${i} صفحة`
+          : `Page ${i} of ${pageCount}`;
+        
         doc.text(
-          `${isRtl ? 'صفحة ' : 'Page '} ${i} ${isRtl ? ' من ' : ' of '} ${pageCount}`,
+          pageText,
           isRtl ? 20 : 190,
           292,
           { align: isRtl ? 'left' : 'right' }
         );
         
         // App URL/info
-        doc.text('WAKTI © 2025', 105, 292, { align: 'center' });
+        const appText = isRtl ? '٢٠٢٥ © وقتي' : 'WAKTI © 2025';
+        doc.text(appText, 105, 292, { align: 'center' });
       }
       
       // Generate PDF blob and resolve the promise
@@ -202,25 +255,64 @@ export const generatePDF = (options: PDFGenerationOptions): Promise<Blob> => {
   });
 };
 
-// Helper function to preprocess the text for better formatting in PDF
-function preprocessTextForPDF(text: string): string {
+// Helper function to reverse Arabic text for proper display in PDF
+function reverseArabicText(text: string): string {
   if (!text) return '';
   
-  // Add heading markers
-  let processedText = text
-    // Add markdown-style headings for titles or headers (usually in all caps or ending with a colon)
-    .replace(/^([A-Z][A-Z\s]+)(?:\n|:)/gm, '## $1\n')
-    .replace(/^(Main Points|Action Items|Summary|Conclusion|Introduction)(?:\n|:)/gm, '## $1\n')
-    
-    // Convert potential bullet points to actual bullets
-    .replace(/^[-*]\s+(.+)$/gm, '• $1')
-    .replace(/^\d+\.\s+(.+)$/gm, '• $1')
-    
-    // Add spacing after paragraphs
-    .replace(/\n\n/g, '\n\n')
-    
-    // Handle any remaining structural elements
-    .trim();
+  // Check if text contains Arabic characters
+  const arabicRegex = /[\u0600-\u06FF\u0750-\u077F]/;
+  if (!arabicRegex.test(text)) {
+    return text; // Return as-is if no Arabic characters
+  }
+  
+  // Simple reversal for Arabic text display in PDF
+  // This is a basic approach - for production, consider using a proper BIDI library
+  const words = text.split(' ');
+  const reversedWords = words.reverse();
+  
+  return reversedWords.join(' ');
+}
+
+// Helper function to preprocess the text for better formatting in PDF
+function preprocessTextForPDF(text: string, isRtl: boolean = false): string {
+  if (!text) return '';
+  
+  let processedText = text;
+  
+  if (isRtl) {
+    // Arabic-specific preprocessing
+    processedText = processedText
+      // Handle Arabic punctuation
+      .replace(/،/g, '،')
+      .replace(/؟/g, '؟')
+      .replace(/؛/g, '؛')
+      
+      // Add markdown-style headings for Arabic titles
+      .replace(/^([^\n]*:)(?:\n|$)/gm, '## $1\n')
+      .replace(/^(النقاط الرئيسية|عناصر العمل|الملخص|الخلاصة|المقدمة)(?:\n|:)/gm, '## $1\n')
+      
+      // Convert potential bullet points to actual bullets
+      .replace(/^[-*]\s+(.+)$/gm, '• $1')
+      .replace(/^\d+\.\s+(.+)$/gm, '• $1')
+      
+      // Add spacing after paragraphs
+      .replace(/\n\n/g, '\n\n')
+      .trim();
+  } else {
+    // English preprocessing (keep existing logic)
+    processedText = processedText
+      // Add markdown-style headings for titles or headers
+      .replace(/^([A-Z][A-Z\s]+)(?:\n|:)/gm, '## $1\n')
+      .replace(/^(Main Points|Action Items|Summary|Conclusion|Introduction)(?:\n|:)/gm, '## $1\n')
+      
+      // Convert potential bullet points to actual bullets
+      .replace(/^[-*]\s+(.+)$/gm, '• $1')
+      .replace(/^\d+\.\s+(.+)$/gm, '• $1')
+      
+      // Add spacing after paragraphs
+      .replace(/\n\n/g, '\n\n')
+      .trim();
+  }
 
   return processedText;
 }
