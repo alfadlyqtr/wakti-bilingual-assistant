@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -169,7 +170,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
   const needsReminderConfirmation = message.needsConfirmation && message.pendingReminderData;
   
   return (
-    <div className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-3 w-full ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
       {message.role === 'assistant' && (
         <div className="flex-shrink-0">
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -178,16 +179,18 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
         </div>
       )}
       
-      <div className={`max-w-[80%] ${message.role === 'user' ? 'order-2' : ''}`}>
+      <div className={`flex flex-col ${message.role === 'user' ? 'items-end max-w-[85%] ml-auto' : 'items-start max-w-[85%]'}`}>
         {/* Display attached files above user messages */}
         {message.role === 'user' && message.attachedFiles && message.attachedFiles.length > 0 && (
-          <ChatFileDisplay files={message.attachedFiles} size="sm" />
+          <div className="mb-2">
+            <ChatFileDisplay files={message.attachedFiles} size="sm" />
+          </div>
         )}
 
         <div
-          className={`rounded-2xl px-4 py-3 ${
+          className={`rounded-2xl px-4 py-3 break-words w-full ${
             message.role === 'user'
-              ? 'bg-primary text-primary-foreground ml-auto'
+              ? 'bg-primary text-primary-foreground'
               : 'bg-muted'
           }`}
         >
@@ -393,7 +396,7 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
       </div>
       
       {message.role === 'user' && (
-        <div className="flex-shrink-0 order-1">
+        <div className="flex-shrink-0">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
             <User className="h-4 w-4 text-primary-foreground" />
           </div>

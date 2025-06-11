@@ -31,9 +31,13 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
-  // Add extended quota management
+  // Add extended quota management with real-time refresh functions
   const {
     userSearchQuota,
+    refreshSearchQuota,
+    refreshVoiceQuota,
+    incrementRegularSearchUsage,
+    incrementAdvancedSearchUsage,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
@@ -327,6 +331,21 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
+      // Increment quota usage based on trigger type BEFORE sending message
+      if (activeTrigger === 'search') {
+        console.log('📈 Incrementing regular search usage before operation...');
+        const canUse = await incrementRegularSearchUsage();
+        if (!canUse) {
+          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث العادي' : 'Regular search limit reached');
+        }
+      } else if (activeTrigger === 'advanced_search') {
+        console.log('📈 Incrementing advanced search usage before operation...');
+        const canUse = await incrementAdvancedSearchUsage();
+        if (!canUse) {
+          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث المتقدم' : 'Advanced search limit reached');
+        }
+      }
+
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -437,7 +456,19 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // UPDATED: Enhanced quota handling with immediate refresh for search operations
+      // ENHANCED: Real-time quota refresh after search operations
+      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+        console.log('🔄 Search operation completed - refreshing quota in real-time...');
+        await refreshSearchQuota();
+        
+        showSuccess(
+          language === 'ar' 
+            ? `تم تنفيذ البحث ${activeTrigger === 'advanced_search' ? 'المتقدم' : 'العادي'} بنجاح وتحديث الحصة` 
+            : `${activeTrigger === 'advanced_search' ? 'Advanced' : 'Basic'} search completed successfully - quota updated`
+        );
+      }
+
+      // Enhanced quota handling with immediate refresh for search operations
       if (response.quotaStatus) {
         console.log('📊 Received quota status from AI response:', response.quotaStatus);
         setQuotaStatus(response.quotaStatus);
@@ -452,6 +483,12 @@ const WaktiAIV2 = () => {
             fetchQuota(true);
           }, 1000);
         }
+      }
+
+      // Voice translation quota refresh
+      if (inputType === 'voice') {
+        console.log('🔄 Voice operation completed - refreshing voice quota...');
+        await refreshVoiceQuota();
       }
 
       if (response.requiresSearchConfirmation) {
@@ -762,3 +799,5 @@ const WaktiAIV2 = () => {
 };
 
 export default WaktiAIV2;
+
+</edits_to_apply>

@@ -111,6 +111,88 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user]);
 
+  // Real-time quota refresh functions
+  const refreshSearchQuota = useCallback(async () => {
+    console.log('🔄 Refreshing search quota in real-time...');
+    await loadUserSearchQuota();
+  }, [loadUserSearchQuota]);
+
+  const refreshVoiceQuota = useCallback(async () => {
+    console.log('🔄 Refreshing voice quota in real-time...');
+    await loadUserVoiceQuota();
+  }, [loadUserVoiceQuota]);
+
+  // Increment functions for real-time usage tracking
+  const incrementRegularSearchUsage = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      console.log('📈 Incrementing regular search usage for user:', user.id);
+      
+      const { data, error } = await supabase.rpc('increment_regular_search_usage', {
+        p_user_id: user.id
+      });
+
+      if (error) {
+        console.error('❌ Error incrementing regular search usage:', error);
+        return false;
+      }
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          console.log('✅ Regular search usage incremented successfully');
+          // Update local state immediately
+          setUserSearchQuota(prev => ({
+            ...prev,
+            regular_search_count: result.regular_search_count,
+            extra_regular_searches: result.extra_regular_searches
+          }));
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error incrementing regular search usage:', error);
+      return false;
+    }
+  }, [user]);
+
+  const incrementAdvancedSearchUsage = useCallback(async (): Promise<boolean> => {
+    if (!user) return false;
+    
+    try {
+      console.log('📈 Incrementing advanced search usage for user:', user.id);
+      
+      const { data, error } = await supabase.rpc('increment_search_usage', {
+        p_user_id: user.id
+      });
+
+      if (error) {
+        console.error('❌ Error incrementing advanced search usage:', error);
+        return false;
+      }
+
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          console.log('✅ Advanced search usage incremented successfully');
+          // Update local state immediately
+          setUserSearchQuota(prev => ({
+            ...prev,
+            daily_count: result.daily_count,
+            extra_advanced_searches: result.extra_advanced_searches
+          }));
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('❌ Error incrementing advanced search usage:', error);
+      return false;
+    }
+  }, [user]);
+
   // Purchase functions
   const purchaseExtraRegularSearches = useCallback(async (count: number): Promise<boolean> => {
     if (!user) return false;
@@ -238,6 +320,10 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     isLoadingVoiceQuota,
     loadUserSearchQuota,
     loadUserVoiceQuota,
+    refreshSearchQuota,
+    refreshVoiceQuota,
+    incrementRegularSearchUsage,
+    incrementAdvancedSearchUsage,
     searchQuotaStatus,
     totalAvailableCharacters,
     canUseVoice,

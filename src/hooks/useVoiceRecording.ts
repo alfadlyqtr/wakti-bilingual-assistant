@@ -25,8 +25,12 @@ export function useVoiceRecording() {
   const audioChunksRef = useRef<Blob[]>([]);
   const { showError } = useToastHelper();
   
-  // Get voice quota information
-  const { totalAvailableCharacters, canUseVoice, loadUserVoiceQuota } = useExtendedQuotaManagement();
+  // Get voice quota information with refresh function
+  const { 
+    totalAvailableCharacters, 
+    canUseVoice, 
+    refreshVoiceQuota 
+  } = useExtendedQuotaManagement();
 
   const startRecording = useCallback(async () => {
     try {
@@ -93,8 +97,9 @@ export function useVoiceRecording() {
         error: null
       }));
 
-      // Reload voice quota after transcription
-      await loadUserVoiceQuota();
+      // Refresh voice quota after transcription to show updated usage
+      console.log('🔄 Refreshing voice quota after transcription usage...');
+      await refreshVoiceQuota();
 
       return data.text;
     } catch (error) {
@@ -106,7 +111,7 @@ export function useVoiceRecording() {
       }));
       return null;
     }
-  }, [loadUserVoiceQuota]);
+  }, [refreshVoiceQuota]);
 
   const clearRecording = useCallback(() => {
     if (state.audioUrl) {
