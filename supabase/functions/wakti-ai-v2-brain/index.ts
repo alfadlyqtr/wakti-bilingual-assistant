@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -11,7 +10,7 @@ const corsHeaders = {
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Phase 5 - Enhanced File Analysis with DeepSeek");
+console.log("🚀 WAKTI AI V2 BRAIN: Phase 5 - Enhanced File Analysis with OpenAI Vision + DeepSeek Chat");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -78,10 +77,10 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Process attached files with DeepSeek
+    // Process attached files with hybrid approach: OpenAI for images, DeepSeek for text
     if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing attached files with DeepSeek...");
-      fileAnalysisResults = await processFilesWithDeepSeek(attachedFiles, language);
+      console.log("📎 Processing attached files with hybrid analysis...");
+      fileAnalysisResults = await processFilesWithHybridAnalysis(attachedFiles, language);
       console.log("📎 File analysis completed:", fileAnalysisResults.length);
     }
 
@@ -90,12 +89,12 @@ serve(async (req) => {
 
     // Generate response based on trigger and files
     if (fileAnalysisResults.length > 0) {
-      // If files were analyzed, include analysis in the response
+      // If files were analyzed, include analysis in the response using DeepSeek
       response = await generateResponseWithFileAnalysis(message, fileAnalysisResults, language);
       actionTaken = 'file_analysis';
       actionResult = { fileAnalysis: fileAnalysisResults };
     } else {
-      // Regular chat response
+      // Regular chat response using DeepSeek
       response = await processWithAI(message, null, language, activeTrigger);
     }
 
@@ -111,12 +110,12 @@ serve(async (req) => {
       quotaStatus,
       requiresSearchConfirmation: false,
       needsConfirmation: false,
-      attachedFiles: attachedFiles, // Include files in response
+      attachedFiles: attachedFiles,
       fileAnalysisResults,
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending enhanced response with file analysis");
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending enhanced response with hybrid file analysis");
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -137,8 +136,8 @@ serve(async (req) => {
   }
 });
 
-// Process files with DeepSeek AI
-async function processFilesWithDeepSeek(files: any[], language: string = 'en') {
+// Process files with hybrid approach: OpenAI for images, DeepSeek for text
+async function processFilesWithHybridAnalysis(files: any[], language: string = 'en') {
   const results = [];
 
   for (const file of files) {
@@ -148,13 +147,16 @@ async function processFilesWithDeepSeek(files: any[], language: string = 'en') {
       let analysisResult = null;
 
       if (file.type.startsWith('image/')) {
-        // Image analysis with DeepSeek Vision
-        analysisResult = await analyzeImageWithDeepSeek(file, language);
+        // Image analysis with OpenAI Vision
+        console.log(`🖼️ Using OpenAI Vision for image: ${file.name}`);
+        analysisResult = await analyzeImageWithOpenAI(file, language);
       } else if (file.type === 'application/pdf') {
-        // PDF analysis
+        // PDF analysis with DeepSeek
+        console.log(`📄 Using DeepSeek for PDF: ${file.name}`);
         analysisResult = await analyzePDFWithDeepSeek(file, language);
       } else if (file.type === 'text/plain') {
-        // Text file analysis
+        // Text file analysis with DeepSeek
+        console.log(`📝 Using DeepSeek for text file: ${file.name}`);
         analysisResult = await analyzeTextFileWithDeepSeek(file, language);
       } else {
         // Unsupported file type
@@ -192,31 +194,33 @@ async function processFilesWithDeepSeek(files: any[], language: string = 'en') {
   return results;
 }
 
-// Analyze image with DeepSeek Vision
-async function analyzeImageWithDeepSeek(file: any, language: string = 'en') {
+// Analyze image with OpenAI Vision (GPT-4V)
+async function analyzeImageWithOpenAI(file: any, language: string = 'en') {
   try {
-    if (!DEEPSEEK_API_KEY) {
-      throw new Error("DeepSeek API key not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key not configured for image analysis");
     }
 
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود.'
-      : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present.';
+    console.log(`🖼️ Analyzing image with OpenAI Vision: ${file.name}`);
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const systemPrompt = language === 'ar' 
+      ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
+      : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'gpt-4-vision-preview',
         messages: [
           { role: 'system', content: systemPrompt },
           { 
             role: 'user', 
             content: [
-              { type: 'text', text: language === 'ar' ? 'حلل هذه الصورة' : 'Analyze this image' },
+              { type: 'text', text: language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail' },
               { type: 'image_url', image_url: { url: file.url } }
             ]
           }
@@ -227,18 +231,22 @@ async function analyzeImageWithDeepSeek(file: any, language: string = 'en') {
     });
 
     if (!response.ok) {
-      throw new Error(`DeepSeek API failed: ${response.status}`);
+      const errorData = await response.text();
+      console.error(`OpenAI Vision API failed: ${response.status}`, errorData);
+      throw new Error(`OpenAI Vision API failed: ${response.status}`);
     }
 
     const result = await response.json();
+    console.log(`✅ OpenAI Vision analysis successful for: ${file.name}`);
+    
     return {
       success: true,
       analysis: result.choices[0].message.content,
-      model: 'deepseek-chat'
+      model: 'gpt-4-vision-preview'
     };
 
   } catch (error) {
-    console.error('Error analyzing image with DeepSeek:', error);
+    console.error('Error analyzing image with OpenAI:', error);
     return {
       success: false,
       error: error.message,
@@ -271,16 +279,18 @@ async function analyzePDFWithDeepSeek(file: any, language: string = 'en') {
 async function analyzeTextFileWithDeepSeek(file: any, language: string = 'en') {
   try {
     if (!DEEPSEEK_API_KEY) {
-      throw new Error("DeepSeek API key not configured");
+      throw new Error("DeepSeek API key not configured for text analysis");
     }
+
+    console.log(`📝 Analyzing text file with DeepSeek: ${file.name}`);
 
     // Fetch the text content
     const textResponse = await fetch(file.url);
     const textContent = await textResponse.text();
 
     const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل النصوص. حلل المحتوى واستخرج النقاط المهمة.'
-      : 'You are an AI assistant specialized in text analysis. Analyze the content and extract key points.';
+      ? 'أنت مساعد ذكي متخصص في تحليل النصوص. حلل المحتوى واستخرج النقاط المهمة والملخص.'
+      : 'You are an AI assistant specialized in text analysis. Analyze the content and extract key points and summary.';
 
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -304,6 +314,8 @@ async function analyzeTextFileWithDeepSeek(file: any, language: string = 'en') {
     }
 
     const result = await response.json();
+    console.log(`✅ DeepSeek text analysis successful for: ${file.name}`);
+    
     return {
       success: true,
       analysis: result.choices[0].message.content,
@@ -320,7 +332,7 @@ async function analyzeTextFileWithDeepSeek(file: any, language: string = 'en') {
   }
 }
 
-// Generate response that includes file analysis
+// Generate response that includes file analysis using DeepSeek
 async function generateResponseWithFileAnalysis(message: string, fileAnalysis: any[], language: string = 'en') {
   try {
     const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
@@ -330,6 +342,8 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     if (!apiKey) {
       throw new Error("No AI API key configured");
     }
+
+    console.log(`💬 Generating response with file analysis using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
 
     const systemPrompt = language === 'ar' 
       ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته. استخدم تحليل الملفات للإجابة على سؤاله بشكل شامل ومفيد.'
@@ -364,6 +378,8 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
     }
 
     const result = await response.json();
+    console.log(`✅ Response generation successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    
     return result.choices[0].message.content;
 
   } catch (error) {
@@ -376,10 +392,10 @@ async function generateResponseWithFileAnalysis(message: string, fileAnalysis: a
   }
 }
 
-// Regular AI processing function
+// Regular AI processing function using DeepSeek for general chat
 async function processWithAI(message: string, context: string | null, language: string = 'en', activeTrigger: string = 'chat') {
   try {
-    console.log("🤖 WAKTI AI V2 BRAIN: Processing with enhanced conversational AI");
+    console.log("🤖 WAKTI AI V2 BRAIN: Processing with DeepSeek for general chat");
     
     const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
     const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
@@ -421,6 +437,8 @@ async function processWithAI(message: string, context: string | null, language: 
     }
     
     const result = await response.json();
+    console.log(`✅ General chat response generated using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
+    
     return result.choices[0].message.content;
     
   } catch (error) {
