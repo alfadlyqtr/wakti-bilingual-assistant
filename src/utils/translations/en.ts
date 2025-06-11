@@ -1,3 +1,4 @@
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -329,8 +330,6 @@ export const en = {
   competition: "Competition",
   conflict: "Conflict",
   disagreement: "Disagreement",
-  agreement: "Agreement",
-  contract: "Contract",
   deal: "Deal",
   transaction: "Transaction",
   exchange: "Exchange",
@@ -391,7 +390,6 @@ export const en = {
   history: "History",
   current: "Current",
   upcoming: "Upcoming",
-  previous: "Previous",
   following: "Following",
   preceding: "Preceding",
   before: "Before",
@@ -877,7 +875,6 @@ export const en = {
   saveToCloud: "Save to cloud",
   syncWithCloud: "Sync with cloud",
   cloudSync: "Cloud sync",
-  offline: "Offline",
   offlineMode: "Offline mode",
   onlineMode: "Online mode",
   connectionLost: "Connection lost",
