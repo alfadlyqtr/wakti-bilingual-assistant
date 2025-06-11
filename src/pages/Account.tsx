@@ -21,9 +21,14 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Account() {
   const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
@@ -35,12 +40,14 @@ export default function Account() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isUpdatingDob, setIsUpdatingDob] = useState(false);
   const [loadingUserData, setLoadingUserData] = useState(true);
   
   // Delete account states
@@ -77,6 +84,9 @@ export default function Account() {
       }
       if (user.email) {
         setEmail(user.email);
+      }
+      if (user.user_metadata?.date_of_birth) {
+        setDateOfBirth(new Date(user.user_metadata.date_of_birth));
       }
       // Set username from metadata or user id
       setUsername(user.user_metadata?.username || user.email?.split('@')[0] || '');
@@ -207,6 +217,34 @@ export default function Account() {
     }
   };
   
+  // Date of Birth handler
+  const handleUpdateDateOfBirth = async () => {
+    if (!dateOfBirth) {
+      toast.error(t("dobRequired", language));
+      return;
+    }
+    
+    setIsUpdatingDob(true);
+    
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          date_of_birth: dateOfBirth.toISOString().split('T')[0]
+        }
+      });
+      
+      if (error) {
+        toast.error(t("errorUpdatingDob", language));
+      } else {
+        toast.success(t("dobUpdated", language));
+      }
+    } catch (error) {
+      toast.error(t("errorUpdatingDob", language));
+    } finally {
+      setIsUpdatingDob(false);
+    }
+  };
+  
   // Feedback handlers
   const handleSubmitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,6 +356,52 @@ export default function Account() {
                   readOnly
                   className="bg-muted cursor-not-allowed"
                 />
+              </div>
+
+              {/* Date of Birth */}
+              <div className="grid gap-2">
+                <Label htmlFor="dob">{t("dateOfBirth", language)}</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateOfBirth && "text-muted-foreground"
+                      )}
+                      disabled={isUpdatingDob}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t("selectDateOfBirth", language)}</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateOfBirth}
+                      onSelect={setDateOfBirth}
+                      disabled={(date) =>
+                        date > new Date() || date < new Date("1900-01-01")
+                      }
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">
+                  {t("dobHelpText", language)}
+                </p>
+                <div className="mt-2">
+                  <Button 
+                    onClick={handleUpdateDateOfBirth}
+                    disabled={isUpdatingDob || !dateOfBirth}
+                    size="sm"
+                  >
+                    {isUpdatingDob
+                      ? t("updating", language)
+                      : t("updateDateOfBirth", language)}
+                  </Button>
+                </div>
               </div>
 
               {/* Email */}

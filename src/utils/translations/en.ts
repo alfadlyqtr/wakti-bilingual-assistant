@@ -1,4 +1,3 @@
-
 export const en = {
   "loading": "Loading...",
   "name": "Name",
@@ -241,5 +240,13 @@ export const en = {
   "abuseReported": "Abuse report submitted successfully",
   "errorSubmittingReport": "Error submitting abuse report",
   "selectFeedbackType": "Select feedback type",
-  "selectAbuseType": "Select abuse type"
+  "selectAbuseType": "Select abuse type",
+  // Date of Birth translations
+  "dateOfBirth": "Date of Birth",
+  "selectDateOfBirth": "Select your date of birth",
+  "dobRequired": "Date of birth is required",
+  "dobHelpText": "Your date of birth helps us provide age-appropriate content",
+  "updateDateOfBirth": "Update Date of Birth",
+  "dobUpdated": "Date of birth updated successfully",
+  "errorUpdatingDob": "Error updating date of birth"
 };

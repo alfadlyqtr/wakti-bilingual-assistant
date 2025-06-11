@@ -1,4 +1,3 @@
-
 export const ar = {
   "loading": "جار التحميل",
   "save": "حفظ",
@@ -252,5 +251,13 @@ export const ar = {
   "abuseReported": "تم إرسال بلاغ الإساءة بنجاح",
   "errorSubmittingReport": "خطأ في إرسال بلاغ الإساءة",
   "selectFeedbackType": "اختر نوع الملاحظة",
-  "selectAbuseType": "اختر نوع الإساءة"
+  "selectAbuseType": "اختر نوع الإساءة",
+  // Date of Birth translations in Arabic
+  "dateOfBirth": "تاريخ الميلاد",
+  "selectDateOfBirth": "اختر تاريخ ميلادك",
+  "dobRequired": "تاريخ الميلاد مطلوب",
+  "dobHelpText": "يساعدنا تاريخ ميلادك في تقديم محتوى مناسب لعمرك",
+  "updateDateOfBirth": "تحديث تاريخ الميلاد",
+  "dobUpdated": "تم تحديث تاريخ الميلاد بنجاح",
+  "errorUpdatingDob": "خطأ في تحديث تاريخ الميلاد"
 };

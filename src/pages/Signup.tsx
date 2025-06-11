@@ -7,9 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
-import { Eye, EyeOff, Mail, Lock, User, ArrowLeft } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -18,6 +22,7 @@ export default function Signup() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -26,8 +31,8 @@ export default function Signup() {
     e.preventDefault();
     setErrorMsg(null);
     
-    if (!name || !username || !email || !password) {
-      setErrorMsg(language === 'en' ? 'Please fill in all fields' : 'يرجى تعبئة جميع الحقول');
+    if (!name || !username || !email || !password || !dateOfBirth) {
+      setErrorMsg(language === 'en' ? 'Please fill in all fields including date of birth' : 'يرجى تعبئة جميع الحقول بما في ذلك تاريخ الميلاد');
       return;
     }
     
@@ -47,6 +52,7 @@ export default function Signup() {
           data: {
             full_name: name,
             username,
+            date_of_birth: dateOfBirth.toISOString().split('T')[0],
           },
         },
       });
@@ -57,7 +63,7 @@ export default function Signup() {
         toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
       } else if (data?.user) {
         toast.success(language === 'en' ? 'Account Created: Your account has been created successfully!' : 'تم إنشاء الحساب: تم إنشاء حسابك بنجاح!');
-        navigate("/dashboard"); // Updated to redirect to /dashboard instead of /
+        navigate("/dashboard");
       }
     } catch (err) {
       console.error("Unexpected error during signup:", err);
@@ -76,6 +82,7 @@ export default function Signup() {
       username: "Username",
       email: "Email",
       password: "Password",
+      dateOfBirth: "Date of Birth",
       loading: "Loading...",
       signup: "Sign Up",
       alreadyHaveAccount: "Already have an account?",
@@ -85,7 +92,8 @@ export default function Signup() {
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
       emailPlaceholder: "example@email.com",
-      passwordPlaceholder: "Create a password"
+      passwordPlaceholder: "Create a password",
+      dobPlaceholder: "Select your date of birth"
     },
     ar: {
       appName: "وقتي",
@@ -94,6 +102,7 @@ export default function Signup() {
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
+      dateOfBirth: "تاريخ الميلاد",
       loading: "جاري التحميل...",
       signup: "إنشاء حساب",
       alreadyHaveAccount: "لديك حساب بالفعل؟",
@@ -103,7 +112,8 @@ export default function Signup() {
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
       emailPlaceholder: "example@email.com",
-      passwordPlaceholder: "إنشاء كلمة مرور"
+      passwordPlaceholder: "إنشاء كلمة مرور",
+      dobPlaceholder: "اختر تاريخ ميلادك"
     }
   };
 
@@ -117,7 +127,7 @@ export default function Signup() {
             variant="ghost"
             size="sm"
             className="flex items-center gap-1 mr-2"
-            onClick={() => navigate("/home")}  // Updated to navigate to /home
+            onClick={() => navigate("/home")}
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="text-xs">{t.backToHome}</span>
@@ -138,7 +148,7 @@ export default function Signup() {
               {/* App logo with navigation to home */}
               <div 
                 className="inline-block cursor-pointer mb-4"
-                onClick={() => navigate("/home")}  // Updated to navigate to /home
+                onClick={() => navigate("/home")}
               >
                 <Logo3D size="lg" />
               </div>
@@ -214,6 +224,37 @@ export default function Signup() {
                     required
                   />
                 </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                        !dateOfBirth && "text-muted-foreground"
+                      )}
+                      disabled={isLoading}
+                    >
+                      <CalendarIcon className="mr-2 h-5 w-5" />
+                      {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={dateOfBirth}
+                      onSelect={setDateOfBirth}
+                      disabled={(date) =>
+                        date > new Date() || date < new Date("1900-01-01")
+                      }
+                      initialFocus
+                      className="p-3 pointer-events-auto"
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
               
               <div className="space-y-2">
