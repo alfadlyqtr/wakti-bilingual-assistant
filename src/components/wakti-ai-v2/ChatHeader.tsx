@@ -52,7 +52,7 @@ export function ChatHeader({
           </span>
         </Button>
 
-        <SearchModeIndicator activeTrigger={activeTrigger} />
+        <SearchModeIndicator isVisible={activeTrigger === 'search' || activeTrigger === 'advanced_search'} />
       </div>
 
       <div className="flex items-center gap-3">

@@ -117,6 +117,31 @@ export class WaktiAIV2ServiceClass {
     return WaktiAIV2ServiceClass.saveCurrentConversationIfNeeded(userId, sessionMessages, currentConversationId, language);
   }
 
+  // Add missing instance method delegates
+  getCalendarContext(userId: string) {
+    return WaktiAIV2ServiceClass.getCalendarContext(userId);
+  }
+
+  getUserContext(userId: string) {
+    return WaktiAIV2ServiceClass.getUserContext(userId);
+  }
+
+  getConversations() {
+    return WaktiAIV2ServiceClass.getConversations();
+  }
+
+  getConversationMessages(conversationId: string) {
+    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
+  }
+
+  deleteConversation(conversationId: string) {
+    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
+  }
+
+  sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
+    return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
+  }
+
   // Enhanced static method for better conversation saving
   static async ensureConversationExists(
     userId: string, 
