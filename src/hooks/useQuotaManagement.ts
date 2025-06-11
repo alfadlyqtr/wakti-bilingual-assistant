@@ -16,9 +16,9 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
-  // Updated daily limit from 25 to 5
-  const MAX_DAILY_TRANSLATIONS = 5;
-  const SOFT_WARNING_THRESHOLD = 4; // Warn at 4 out of 5
+  // Monthly limit for translations (treating daily as monthly for display consistency)
+  const MAX_DAILY_TRANSLATIONS = 150; // Changed from 5 to 150 to match monthly terminology
+  const SOFT_WARNING_THRESHOLD = 130; // Warn at 130 out of 150
 
   // Memoize the loadUserQuota function to prevent infinite re-renders
   const loadUserQuota = useCallback(async () => {
@@ -64,7 +64,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     } finally {
       setIsLoadingQuota(false);
     }
-  }, [user, language]); // Only depend on user and language
+  }, [user, language]);
 
   const incrementTranslationCount = useCallback(async (): Promise<boolean> => {
     if (!user) {
@@ -108,8 +108,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           toast({
             title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
             description: language === 'ar' 
-              ? 'لقد وصلت للحد الأقصى من الترجمات اليومية (5 ترجمات)' 
-              : 'You have reached your daily translation limit (5 translations)',
+              ? `لقد وصلت للحد الأقصى من الترجمات الشهرية (${MAX_DAILY_TRANSLATIONS} ترجمة)` 
+              : `You have reached your monthly translation limit (${MAX_DAILY_TRANSLATIONS} translations)`,
             variant: 'destructive'
           });
           return false;
@@ -133,9 +133,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       console.log('🔄 Using fallback - allowing translation to continue despite quota error');
       return true;
     }
-  }, [user, userQuota, language]);
+  }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS]);
 
-  // Updated to use 150 extra translations instead of 100
   const purchaseExtraTranslations = useCallback(async (count: number = 150) => {
     if (!user) return false;
 
@@ -187,7 +186,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     if (user && !isLoadingQuota) {
       loadUserQuota();
     }
-  }, [user?.id]); // Only depend on user ID, not the entire user object or loadUserQuota function
+  }, [user?.id]);
 
   // Memoize computed values to prevent unnecessary re-renders
   const computedValues = useMemo(() => {

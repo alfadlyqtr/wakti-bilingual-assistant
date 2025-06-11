@@ -1,35 +1,45 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { Coins, Search, Zap, Loader2, CheckCircle, Mic, Languages } from 'lucide-react';
 import { toast } from 'sonner';
+
 interface BuyExtrasPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
 export function BuyExtrasPopup({
   open,
   onOpenChange
 }: BuyExtrasPopupProps) {
-  const {
-    language
-  } = useTheme();
+  const { language } = useTheme();
+  
   const {
     userSearchQuota,
     userVoiceQuota,
     purchaseExtraSearches,
     purchaseExtraVoiceCredits,
-    purchaseExtraTranslations,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
+
+  const {
+    userQuota: translationQuota,
+    purchaseExtraTranslations,
+    MAX_DAILY_TRANSLATIONS
+  } = useQuotaManagement(language);
+  
   const [isSearchPurchasing, setIsSearchPurchasing] = useState(false);
   const [isAdvancedSearchPurchasing, setIsAdvancedSearchPurchasing] = useState(false);
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
+
   const handlePurchaseSearches = async () => {
     setIsSearchPurchasing(true);
     try {
@@ -45,6 +55,7 @@ export function BuyExtrasPopup({
       setIsSearchPurchasing(false);
     }
   };
+
   const handlePurchaseAdvancedSearches = async () => {
     setIsAdvancedSearchPurchasing(true);
     try {
@@ -60,6 +71,7 @@ export function BuyExtrasPopup({
       setIsAdvancedSearchPurchasing(false);
     }
   };
+
   const handlePurchaseVoiceCredits = async () => {
     setIsVoicePurchasing(true);
     try {
@@ -75,12 +87,13 @@ export function BuyExtrasPopup({
       setIsVoicePurchasing(false);
     }
   };
+
   const handlePurchaseTranslations = async () => {
     setIsTranslationPurchasing(true);
     try {
-      const success = await purchaseExtraTranslations(100);
+      const success = await purchaseExtraTranslations(150);
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 100 ترجمة إضافية بنجاح!' : 'Successfully purchased 100 extra translations!');
+        toast.success(language === 'ar' ? 'تم شراء 150 ترجمة إضافية بنجاح!' : 'Successfully purchased 150 extra translations!');
         onOpenChange(false);
       }
     } catch (error) {
@@ -90,28 +103,46 @@ export function BuyExtrasPopup({
       setIsTranslationPurchasing(false);
     }
   };
+
   const getSearchQuotaStatus = () => {
     const regularUsed = userSearchQuota.regular_search_count;
     const advancedUsed = userSearchQuota.daily_count;
     const extraSearches = userSearchQuota.extra_searches;
+    
     return {
       regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
       advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
       extraSearches
     };
   };
+
   const getVoiceQuotaStatus = () => {
     const used = userVoiceQuota.characters_used;
     const limit = userVoiceQuota.characters_limit;
     const extra = userVoiceQuota.extra_characters;
+    
     return {
       remaining: Math.max(0, limit - used),
       extraCharacters: extra
     };
   };
+
+  const getTranslationQuotaStatus = () => {
+    const used = translationQuota.daily_count;
+    const extra = translationQuota.extra_translations;
+    
+    return {
+      remaining: Math.max(0, MAX_DAILY_TRANSLATIONS - used),
+      extraTranslations: extra
+    };
+  };
+
   const quotaStatus = getSearchQuotaStatus();
   const voiceStatus = getVoiceQuotaStatus();
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+  const translationStatus = getTranslationQuotaStatus();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -148,7 +179,30 @@ export function BuyExtrasPopup({
                   {voiceStatus.remaining}/5,000 {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
               </div>
-              
+              <div className="flex justify-between">
+                <span>{language === 'ar' ? 'الترجمات الشهرية:' : 'Monthly Translations:'}</span>
+                <span className="font-medium">
+                  {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
+                </span>
+              </div>
+              {quotaStatus.extraSearches > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>{language === 'ar' ? 'بحثات إضافية:' : 'Extra Searches:'}</span>
+                  <span className="font-medium">+{quotaStatus.extraSearches}</span>
+                </div>
+              )}
+              {voiceStatus.extraCharacters > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>{language === 'ar' ? 'أحرف صوتية إضافية:' : 'Extra Voice Characters:'}</span>
+                  <span className="font-medium">+{voiceStatus.extraCharacters}</span>
+                </div>
+              )}
+              {translationStatus.extraTranslations > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>{language === 'ar' ? 'ترجمات إضافية:' : 'Extra Translations:'}</span>
+                  <span className="font-medium">+{translationStatus.extraTranslations}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -171,13 +225,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseSearches} disabled={isSearchPurchasing} className="bg-blue-600 hover:bg-blue-700" size="sm">
-                    {isSearchPurchasing ? <>
+                    {isSearchPurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -200,13 +258,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseAdvancedSearches} disabled={isAdvancedSearchPurchasing} className="bg-purple-600 hover:bg-purple-700" size="sm">
-                    {isAdvancedSearchPurchasing ? <>
+                    {isAdvancedSearchPurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -229,13 +291,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseVoiceCredits} disabled={isVoicePurchasing} className="bg-green-600 hover:bg-green-700" size="sm">
-                    {isVoicePurchasing ? <>
+                    {isVoicePurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -251,20 +317,24 @@ export function BuyExtrasPopup({
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'احصل على 100 ترجمة إضافية صالحة لمدة شهر واحد' : 'Get 100 extra translations valid for 1 month'}
+                  {language === 'ar' ? 'احصل على 150 ترجمة إضافية صالحة لمدة شهر واحد' : 'Get 150 extra translations valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-orange-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseTranslations} disabled={isTranslationPurchasing} className="bg-orange-600 hover:bg-orange-700" size="sm">
-                    {isTranslationPurchasing ? <>
+                    {isTranslationPurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -276,5 +346,6 @@ export function BuyExtrasPopup({
           </div>
         </div>
       </DialogContent>
-    </Dialog>;
+    </Dialog>
+  );
 }
