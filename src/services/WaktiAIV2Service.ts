@@ -217,6 +217,25 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
+  // Enhanced method to update conversation timestamp
+  static async updateConversationTimestamp(conversationId: string): Promise<void> {
+    if (!conversationId) return;
+
+    try {
+      await supabase
+        .from('ai_conversations')
+        .update({ 
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
+      
+      console.log('✅ Updated conversation timestamp:', conversationId);
+    } catch (error) {
+      console.error('❌ Error updating conversation timestamp:', error);
+    }
+  }
+
   // Static methods (keep all existing static methods)
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
@@ -737,3 +756,5 @@ export class WaktiAIV2ServiceClass {
 }
 
 export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
+
+}
