@@ -196,6 +196,27 @@ export class WaktiAIV2ServiceClass {
     return null;
   }
 
+  // Enhanced static method for saving current conversation when starting new one
+  static async saveCurrentConversationIfNeeded(
+    userId: string,
+    sessionMessages: AIMessage[],
+    currentConversationId: string | null,
+    language: string = 'en'
+  ): Promise<void> {
+    if (sessionMessages.length > 0 && !currentConversationId) {
+      try {
+        console.log('🔄 WAKTI AI V2: Saving unsaved conversation with', sessionMessages.length, 'messages');
+        
+        const conversationId = await this.ensureConversationExists(userId, sessionMessages, language);
+        if (conversationId) {
+          console.log('✅ Conversation saved successfully:', conversationId);
+        }
+      } catch (error) {
+        console.error('❌ Error in saveCurrentConversationIfNeeded:', error);
+      }
+    }
+  }
+
   // Static methods (keep all existing static methods)
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
