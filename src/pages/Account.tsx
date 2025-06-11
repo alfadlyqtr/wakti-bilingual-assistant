@@ -386,9 +386,11 @@ export default function Account() {
                 />
               </div>
 
-              {/* Date of Birth - Enhanced */}
+              {/* Date of Birth - Enhanced with proper Arabic support */}
               <div className="grid gap-2">
-                <Label htmlFor="dob">{t("dateOfBirth", language)}</Label>
+                <Label htmlFor="dob" className="text-base font-medium">
+                  {t("dateOfBirth", language)}
+                </Label>
                 
                 {/* Direct Date Input */}
                 <div className="space-y-3">
@@ -400,25 +402,31 @@ export default function Account() {
                     disabled={isUpdatingDob}
                     max={new Date().toISOString().split('T')[0]}
                     min="1900-01-01"
-                    className="w-full"
+                    className="w-full text-base"
+                    placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                   />
                   
                   {/* Alternative Calendar Picker */}
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>Or use calendar picker:</span>
+                    <span>{t("useCalendarPicker", language)}</span>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           size="sm"
                           className={cn(
-                            "justify-start text-left font-normal",
-                            !dateOfBirth && "text-muted-foreground"
+                            "justify-start text-left font-normal min-w-[200px]",
+                            !dateOfBirth && "text-muted-foreground",
+                            language === 'ar' && "text-right"
                           )}
                           disabled={isUpdatingDob}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {dateOfBirth ? format(dateOfBirth, "MMM dd, yyyy") : "Pick date"}
+                          <CalendarIcon className={cn("h-4 w-4", language === 'ar' ? "ml-2" : "mr-2")} />
+                          {dateOfBirth ? (
+                            format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
+                          ) : (
+                            t("pickDate", language)
+                          )}
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
@@ -445,6 +453,7 @@ export default function Account() {
                     onClick={handleUpdateDateOfBirth}
                     disabled={isUpdatingDob || !dateOfBirth}
                     size="sm"
+                    className="w-full sm:w-auto"
                   >
                     {isUpdatingDob
                       ? t("updating", language)
