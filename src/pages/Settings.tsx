@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useLocation } from "react-router-dom";
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
 import { toast } from "sonner";
-import { useToast } from "@/hooks/use-toast";
+import { confirm } from "@/components/ui/use-toast";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { quotes } from "@/utils/dailyQuotes";
 import { Check, Save, Settings as SettingsIcon, Info } from "lucide-react";
@@ -26,7 +27,6 @@ export default function Settings() {
   const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
   const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
   const categories = Object.keys(quotes);
-  const { confirm } = useToast();
   const queryClient = useQueryClient();
 
   // Check if we came from Wakti AI page or are currently on it
@@ -81,29 +81,30 @@ export default function Settings() {
     toast.success(t("quotePreferencesUpdated", language));
   };
   
-  // Update the handleSaveAllSettings function to use the new confirm syntax
-  const handleSaveAllSettings = () => {
-    confirm({
+  // Update the handleSaveAllSettings function to use the confirm function
+  const handleSaveAllSettings = async () => {
+    const confirmed = await confirm({
       title: t("saveAllSettingsQuestion", language),
       description: t("saveAllSettingsConfirmation", language),
-      onConfirm: () => {
-        // Already saving on change, but we can add additional save logic here
-        // Save widget visibility settings
-        const widgetSettings = {
-          tasksWidget: true,
-          calendarWidget: true,
-          remindersWidget: true,
-          quoteWidget: true
-        };
-        
-        localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
-        localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
-        
-        toast.success(t("allSettingsSaved", language), {
-          description: <Check className="h-4 w-4" />
-        });
-      }
     });
+
+    if (confirmed) {
+      // Already saving on change, but we can add additional save logic here
+      // Save widget visibility settings
+      const widgetSettings = {
+        tasksWidget: true,
+        calendarWidget: true,
+        remindersWidget: true,
+        quoteWidget: true
+      };
+      
+      localStorage.setItem('widgetSettings', JSON.stringify(widgetSettings));
+      localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
+      
+      toast.success(t("allSettingsSaved", language), {
+        description: "Settings saved successfully"
+      });
+    }
   };
   
   // Watch for category changes to show dialog
