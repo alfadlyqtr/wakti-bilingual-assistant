@@ -404,8 +404,20 @@ async function processWithAI(message: string, context: string | null, language: 
     }
 
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.`;
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.
+
+تعليمات مهمة للتنسيق:
+- استخدم نصاً عادياً واضحاً
+- تجنب الرموز الزائدة مثل # أو ** أو ***
+- استخدم فقرات بسيطة مع فواصل أسطر طبيعية
+- اجعل الإجابة سهلة القراءة وبدون تعقيد في التنسيق`
+      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.
+
+Important formatting instructions:
+- Use clean, plain text
+- Avoid excessive symbols like #, **, or ***
+- Use simple paragraphs with natural line breaks
+- Keep responses readable and clean without formatting clutter`;
     
     const messages = [
       { role: 'system', content: systemPrompt },
