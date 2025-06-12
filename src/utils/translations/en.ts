@@ -1,4 +1,5 @@
 
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -1055,3 +1056,4 @@ export const en = {
   sending: "Sending...",
   messageSubmitted: "Message submitted successfully!"
 };
+
