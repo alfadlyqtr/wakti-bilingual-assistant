@@ -697,14 +697,12 @@ const WaktiAIV2 = () => {
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
     console.log('📝 Text generated from tool:', { text, mode });
     
-    if (mode === 'compose') {
-      setMessage(text);
-    } else {
-      handleSendMessage(text);
-    }
+    // Always send generated text as a message to the chat interface
+    // regardless of whether it's compose or reply mode
+    handleSendMessage(text);
     
     showSuccess(
-      language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully'
+      language === 'ar' ? 'تم إنشاء النص وإضافته للمحادثة' : 'Text generated and added to chat'
     );
   };
 
