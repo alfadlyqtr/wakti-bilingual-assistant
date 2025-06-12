@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -15,8 +16,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [isLoadingQuota, setIsLoadingQuota] = useState(false);
   const [quotaError, setQuotaError] = useState<string | null>(null);
 
-  // Monthly limit for translations (treating daily as monthly for display consistency)
-  const MAX_DAILY_TRANSLATIONS = 10; // Changed from 150 to 10 for translations per month
+  // Monthly limit for translations (changed from 25 to 10)
+  const MAX_DAILY_TRANSLATIONS = 10; // Now represents monthly limit
   const SOFT_WARNING_THRESHOLD = 8; // Warn at 8 out of 10
 
   // Enhanced error handling helper
@@ -154,8 +155,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS]);
 
-  // Enhanced purchase function for translations
-  const purchaseExtraTranslations = useCallback(async (count: number = 150) => {
+  // Enhanced purchase function for translations - now 100 for 10 QAR
+  const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
     if (!user) {
       console.error('❌ No authenticated user found');
       return false;

@@ -4,13 +4,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
-export interface UserSearchQuota {
+export interface ExtendedUserSearchQuota {
   daily_count: number;
-  regular_search_count: number;
   extra_searches: number;
+  purchase_date?: string;
+  regular_search_count: number;
   extra_regular_searches: number;
   extra_advanced_searches: number;
-  purchase_date?: string;
 }
 
 export interface UserVoiceQuota {
@@ -22,57 +22,61 @@ export interface UserVoiceQuota {
 
 export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
-  const [userSearchQuota, setUserSearchQuota] = useState<UserSearchQuota>({
+  
+  const [userSearchQuota, setUserSearchQuota] = useState<ExtendedUserSearchQuota>({
     daily_count: 0,
-    regular_search_count: 0,
     extra_searches: 0,
-    extra_regular_searches: 0,
+    regular_search_count: 0,
+    extra_regular_searches: 999999, // Unlimited regular searches
     extra_advanced_searches: 0
   });
+  
   const [userVoiceQuota, setUserVoiceQuota] = useState<UserVoiceQuota>({
     characters_used: 0,
     characters_limit: 5000,
     extra_characters: 0
   });
+  
   const [isLoadingSearchQuota, setIsLoadingSearchQuota] = useState(false);
   const [isLoadingVoiceQuota, setIsLoadingVoiceQuota] = useState(false);
 
-  // Search quota limits
-  const REGULAR_SEARCH_LIMIT = 15; // 15 regular searches per month
-  const ADVANCED_SEARCH_LIMIT = 5; // 5 advanced searches per month
-  const MAX_MONTHLY_REGULAR_SEARCHES = 15;
+  // Constants - Updated according to requirements
+  // Regular Search: No quota tracking (unlimited)
+  // Advanced Search: 5 free per month, 50 for 10 QAR
   const MAX_MONTHLY_ADVANCED_SEARCHES = 5;
+  const MAX_MONTHLY_REGULAR_SEARCHES = 999999; // Unlimited
 
   const loadUserSearchQuota = useCallback(async () => {
     if (!user) return;
     
     try {
       setIsLoadingSearchQuota(true);
-      console.log('🔍 Loading user search quota for user:', user.id);
+      
+      console.log('🔄 Loading user search quota for user:', user.id);
       
       const { data, error } = await supabase.rpc('get_or_create_user_search_quota', {
         p_user_id: user.id
       });
 
       if (error) {
-        console.error('❌ Error loading search quota:', error);
+        console.error('❌ Error loading user search quota:', error);
         return;
       }
 
       if (data && data.length > 0) {
         const quota = data[0];
-        console.log('✅ Search quota loaded:', quota);
+        console.log('✅ User search quota loaded successfully:', quota);
         setUserSearchQuota({
-          daily_count: quota.daily_count || 0,
-          regular_search_count: quota.regular_search_count || 0,
-          extra_searches: quota.extra_searches || 0,
-          extra_regular_searches: quota.extra_regular_searches || 0,
-          extra_advanced_searches: quota.extra_advanced_searches || 0,
-          purchase_date: quota.purchase_date
+          daily_count: quota.daily_count,
+          extra_searches: quota.extra_searches,
+          purchase_date: quota.purchase_date,
+          regular_search_count: 0, // Not tracked anymore
+          extra_regular_searches: 999999, // Unlimited
+          extra_advanced_searches: quota.extra_advanced_searches || 0
         });
       }
     } catch (error) {
-      console.error('❌ Error loading search quota:', error);
+      console.error('❌ Unexpected error loading user search quota:', error);
     } finally {
       setIsLoadingSearchQuota(false);
     }
@@ -83,151 +87,93 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     
     try {
       setIsLoadingVoiceQuota(true);
-      console.log('🎵 Loading user voice quota for user:', user.id);
+      
+      console.log('🔄 Loading user voice quota for user:', user.id);
       
       const { data, error } = await supabase.rpc('get_or_create_user_voice_quota', {
         p_user_id: user.id
       });
 
       if (error) {
-        console.error('❌ Error loading voice quota:', error);
+        console.error('❌ Error loading user voice quota:', error);
         return;
       }
 
       if (data && data.length > 0) {
         const quota = data[0];
-        console.log('✅ Voice quota loaded:', quota);
+        console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
-          characters_used: quota.characters_used || 0,
-          characters_limit: quota.characters_limit || 5000,
-          extra_characters: quota.extra_characters || 0,
+          characters_used: quota.characters_used,
+          characters_limit: quota.characters_limit,
+          extra_characters: quota.extra_characters,
           purchase_date: quota.purchase_date
         });
       }
     } catch (error) {
-      console.error('❌ Error loading voice quota:', error);
+      console.error('❌ Unexpected error loading user voice quota:', error);
     } finally {
       setIsLoadingVoiceQuota(false);
     }
   }, [user]);
 
-  // Real-time quota refresh functions
-  const refreshSearchQuota = useCallback(async () => {
-    console.log('🔄 Refreshing search quota in real-time...');
-    await loadUserSearchQuota();
-  }, [loadUserSearchQuota]);
+  // Regular search increment - always returns success (no quota)
+  const incrementRegularSearchCount = useCallback(async (): Promise<boolean> => {
+    // Regular searches are now unlimited, always return true
+    console.log('✅ Regular search - unlimited access');
+    return true;
+  }, []);
 
-  const refreshVoiceQuota = useCallback(async () => {
-    console.log('🔄 Refreshing voice quota in real-time...');
-    await loadUserVoiceQuota();
-  }, [loadUserVoiceQuota]);
-
-  // Increment functions for real-time usage tracking
-  const incrementRegularSearchUsage = useCallback(async (): Promise<boolean> => {
+  // Advanced search increment - 5 free per month
+  const incrementAdvancedSearchCount = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
-    
+
     try {
-      console.log('📈 Incrementing regular search usage for user:', user.id);
-      
-      const { data, error } = await supabase.rpc('increment_regular_search_usage', {
-        p_user_id: user.id
-      });
-
-      if (error) {
-        console.error('❌ Error incrementing regular search usage:', error);
-        return false;
-      }
-
-      if (data && data.length > 0) {
-        const result = data[0];
-        if (result.success) {
-          console.log('✅ Regular search usage incremented successfully');
-          // Update local state immediately
-          setUserSearchQuota(prev => ({
-            ...prev,
-            regular_search_count: result.regular_search_count,
-            extra_regular_searches: result.extra_regular_searches
-          }));
-          return true;
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error('❌ Error incrementing regular search usage:', error);
-      return false;
-    }
-  }, [user]);
-
-  const incrementAdvancedSearchUsage = useCallback(async (): Promise<boolean> => {
-    if (!user) return false;
-    
-    try {
-      console.log('📈 Incrementing advanced search usage for user:', user.id);
+      console.log('🔄 Incrementing advanced search count for user:', user.id);
       
       const { data, error } = await supabase.rpc('increment_search_usage', {
         p_user_id: user.id
       });
 
       if (error) {
-        console.error('❌ Error incrementing advanced search usage:', error);
+        console.error('❌ Error incrementing advanced search count:', error);
         return false;
       }
 
       if (data && data.length > 0) {
         const result = data[0];
+        
         if (result.success) {
-          console.log('✅ Advanced search usage incremented successfully');
-          // Update local state immediately
           setUserSearchQuota(prev => ({
             ...prev,
             daily_count: result.daily_count,
             extra_advanced_searches: result.extra_advanced_searches
           }));
           return true;
+        } else {
+          toast({
+            title: language === 'ar' ? 'تم الوصول للحد الأقصى' : 'Limit Reached',
+            description: language === 'ar' 
+              ? `لقد وصلت للحد الأقصى من البحثات المتقدمة الشهرية (${MAX_MONTHLY_ADVANCED_SEARCHES} بحث)` 
+              : `You have reached your monthly advanced search limit (${MAX_MONTHLY_ADVANCED_SEARCHES} searches)`,
+            variant: 'destructive'
+          });
+          return false;
         }
       }
-      return false;
-    } catch (error) {
-      console.error('❌ Error incrementing advanced search usage:', error);
-      return false;
-    }
-  }, [user]);
-
-  // Purchase functions
-  const purchaseExtraRegularSearches = useCallback(async (count: number): Promise<boolean> => {
-    if (!user) return false;
-    
-    try {
-      console.log('🛒 Purchasing extra regular searches:', count);
       
-      const { data, error } = await supabase.rpc('purchase_extra_regular_searches', {
-        p_user_id: user.id,
-        p_count: count
-      });
-
-      if (error) {
-        console.error('❌ Error purchasing regular searches:', error);
-        return false;
-      }
-
-      if (data && data.length > 0 && data[0].success) {
-        console.log('✅ Regular searches purchased successfully');
-        await loadUserSearchQuota(); // Reload quota
-        return true;
-      }
-
       return false;
     } catch (error) {
-      console.error('❌ Error purchasing regular searches:', error);
+      console.error('❌ Error incrementing advanced search count:', error);
       return false;
     }
-  }, [user, loadUserSearchQuota]);
+  }, [user, language, MAX_MONTHLY_ADVANCED_SEARCHES]);
 
-  const purchaseExtraAdvancedSearches = useCallback(async (count: number): Promise<boolean> => {
+  // Purchase extra advanced searches - 50 for 10 QAR
+  const purchaseExtraAdvancedSearches = useCallback(async (count: number = 50) => {
     if (!user) return false;
-    
+
     try {
-      console.log('🛒 Purchasing extra advanced searches:', count);
+      console.log('💰 Attempting to purchase extra advanced searches:', { userId: user.id, count });
       
       const { data, error } = await supabase.rpc('purchase_extra_advanced_searches', {
         p_user_id: user.id,
@@ -235,28 +181,39 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       });
 
       if (error) {
-        console.error('❌ Error purchasing advanced searches:', error);
+        console.error('❌ Database error during advanced search purchase:', error);
         return false;
       }
 
-      if (data && data.length > 0 && data[0].success) {
-        console.log('✅ Advanced searches purchased successfully');
-        await loadUserSearchQuota(); // Reload quota
-        return true;
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          console.log('✅ Advanced searches purchased successfully:', result.new_extra_count);
+          
+          setUserSearchQuota(prev => ({
+            ...prev,
+            extra_advanced_searches: result.new_extra_count,
+            purchase_date: new Date().toISOString()
+          }));
+          
+          await loadUserSearchQuota();
+          return true;
+        }
       }
-
+      
       return false;
     } catch (error) {
-      console.error('❌ Error purchasing advanced searches:', error);
+      console.error('❌ Unexpected error purchasing extra advanced searches:', error);
       return false;
     }
   }, [user, loadUserSearchQuota]);
 
-  const purchaseExtraVoiceCredits = useCallback(async (characters: number): Promise<boolean> => {
+  // Purchase extra voice credits - stays the same (5000 for 10 QAR)
+  const purchaseExtraVoiceCredits = useCallback(async (characters: number = 5000) => {
     if (!user) return false;
-    
+
     try {
-      console.log('🛒 Purchasing extra voice credits:', characters);
+      console.log('💰 Attempting to purchase extra voice credits:', { userId: user.id, characters });
       
       const { data, error } = await supabase.rpc('purchase_extra_voice_credits', {
         p_user_id: user.id,
@@ -264,24 +221,33 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       });
 
       if (error) {
-        console.error('❌ Error purchasing voice credits:', error);
+        console.error('❌ Database error during voice credits purchase:', error);
         return false;
       }
 
-      if (data && data.length > 0 && data[0].success) {
-        console.log('✅ Voice credits purchased successfully');
-        await loadUserVoiceQuota(); // Reload quota
-        return true;
+      if (data && data.length > 0) {
+        const result = data[0];
+        if (result.success) {
+          console.log('✅ Voice credits purchased successfully:', result.new_extra_characters);
+          
+          setUserVoiceQuota(prev => ({
+            ...prev,
+            extra_characters: result.new_extra_characters,
+            purchase_date: new Date().toISOString()
+          }));
+          
+          await loadUserVoiceQuota();
+          return true;
+        }
       }
-
+      
       return false;
     } catch (error) {
-      console.error('❌ Error purchasing voice credits:', error);
+      console.error('❌ Unexpected error purchasing extra voice credits:', error);
       return false;
     }
   }, [user, loadUserVoiceQuota]);
 
-  // Load quotas when user changes
   useEffect(() => {
     if (user) {
       loadUserSearchQuota();
@@ -289,29 +255,27 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user?.id, loadUserSearchQuota, loadUserVoiceQuota]);
 
-  // Computed values for search quotas
-  const searchQuotaStatus = useMemo(() => {
-    const regularRemaining = Math.max(0, REGULAR_SEARCH_LIMIT - userSearchQuota.regular_search_count);
-    const advancedRemaining = Math.max(0, ADVANCED_SEARCH_LIMIT - userSearchQuota.daily_count);
-    
+  const computedSearchValues = useMemo(() => {
+    const remainingAdvancedSearches = Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - userSearchQuota.daily_count);
+    const canUseAdvancedSearch = remainingAdvancedSearches > 0 || userSearchQuota.extra_advanced_searches > 0;
+    const canUseRegularSearch = true; // Always true - unlimited
+
     return {
-      regularRemaining,
-      advancedRemaining,
-      regularLimit: REGULAR_SEARCH_LIMIT,
-      advancedLimit: ADVANCED_SEARCH_LIMIT,
-      extraRegularSearches: userSearchQuota.extra_regular_searches,
-      extraAdvancedSearches: userSearchQuota.extra_advanced_searches
+      remainingAdvancedSearches,
+      canUseAdvancedSearch,
+      canUseRegularSearch
     };
-  }, [userSearchQuota]);
+  }, [userSearchQuota, MAX_MONTHLY_ADVANCED_SEARCHES]);
 
-  // Computed values for voice quota
-  const totalAvailableCharacters = useMemo(() => {
-    return Math.max(0, (userVoiceQuota.characters_limit + userVoiceQuota.extra_characters) - userVoiceQuota.characters_used);
+  const computedVoiceValues = useMemo(() => {
+    const remainingVoiceCharacters = Math.max(0, userVoiceQuota.characters_limit - userVoiceQuota.characters_used);
+    const canUseVoice = remainingVoiceCharacters > 0 || userVoiceQuota.extra_characters > 0;
+
+    return {
+      remainingVoiceCharacters,
+      canUseVoice
+    };
   }, [userVoiceQuota]);
-
-  const canUseVoice = useMemo(() => {
-    return totalAvailableCharacters > 0;
-  }, [totalAvailableCharacters]);
 
   return {
     userSearchQuota,
@@ -320,19 +284,13 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     isLoadingVoiceQuota,
     loadUserSearchQuota,
     loadUserVoiceQuota,
-    refreshSearchQuota,
-    refreshVoiceQuota,
-    incrementRegularSearchUsage,
-    incrementAdvancedSearchUsage,
-    searchQuotaStatus,
-    totalAvailableCharacters,
-    canUseVoice,
-    REGULAR_SEARCH_LIMIT,
-    ADVANCED_SEARCH_LIMIT,
-    MAX_MONTHLY_REGULAR_SEARCHES,
-    MAX_MONTHLY_ADVANCED_SEARCHES,
-    purchaseExtraRegularSearches,
+    incrementRegularSearchCount,
+    incrementAdvancedSearchCount,
     purchaseExtraAdvancedSearches,
-    purchaseExtraVoiceCredits
+    purchaseExtraVoiceCredits,
+    MAX_MONTHLY_ADVANCED_SEARCHES,
+    MAX_MONTHLY_REGULAR_SEARCHES,
+    ...computedSearchValues,
+    ...computedVoiceValues
   };
 };

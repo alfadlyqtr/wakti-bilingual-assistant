@@ -11,7 +11,8 @@ interface QuotaDisplayProps {
 export function QuotaDisplay({ quotaStatus, searchQuotaStatus, activeTrigger }: QuotaDisplayProps) {
   const { language } = useTheme();
 
-  // QUOTA REMOVAL: No longer display any quota information
-  // All users now have unlimited access to search functionality
+  // QUOTA REMOVAL: Regular search quota completely removed
+  // No longer display any quota information for regular searches
+  // All users now have unlimited access to regular search functionality
   return null;
 }
