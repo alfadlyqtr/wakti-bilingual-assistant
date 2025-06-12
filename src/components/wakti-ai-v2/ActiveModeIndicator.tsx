@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Bot, ImagePlus } from 'lucide-react';
+import { Bot, Search, ImagePlus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +18,12 @@ export function ActiveModeIndicator({ activeTrigger }: ActiveModeIndicatorProps)
           icon: Bot,
           label: language === 'ar' ? 'المحادثة' : 'Chat Mode',
           className: "bg-blue-100 text-blue-700 border border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700/50"
+        };
+      case 'search':
+        return {
+          icon: Search,
+          label: language === 'ar' ? 'البحث' : 'Search Mode',
+          className: "bg-green-100 text-green-700 border border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700/50"
         };
       case 'image':
         return {

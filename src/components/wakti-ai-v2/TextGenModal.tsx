@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Bot, Search, ImagePlus, Zap } from 'lucide-react';
+import { Bot, Search, ImagePlus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
 interface TextGenModalProps {
@@ -34,19 +34,13 @@ export function TextGenModal({ onTriggerChange, onTextGenParams }: TextGenModalP
       id: 'search',
       name: language === 'ar' ? 'بحث' : 'Search',
       icon: Search,
-      description: language === 'ar' ? 'بحث على الإنترنت' : 'Internet search'
+      description: language === 'ar' ? 'بحث على الإنترنت (غير محدود)' : 'Internet search (unlimited)'
     },
     {
       id: 'image',
       name: language === 'ar' ? 'صورة' : 'Image',
       icon: ImagePlus,
       description: language === 'ar' ? 'إنشاء الصور' : 'Image generation'
-    },
-    {
-      id: 'advanced_search',
-      name: language === 'ar' ? 'بحث متقدم' : 'Advanced',
-      icon: Zap,
-      description: language === 'ar' ? 'بحث متقدم ومعقد' : 'Advanced search'
     }
   ];
 
