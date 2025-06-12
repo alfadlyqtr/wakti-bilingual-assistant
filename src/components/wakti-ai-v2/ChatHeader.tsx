@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, Plus, Zap, History } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
-import { QuotaIndicator } from './QuotaIndicator';
+import { SearchQuotaIndicator } from './SearchQuotaIndicator';
 
 interface ChatHeaderProps {
   currentConversationId: string | null;
@@ -40,8 +40,8 @@ export function ChatHeader({
         {/* Show active mode indicator for all modes */}
         <ActiveModeIndicator activeTrigger={activeTrigger} />
         
-        {/* Show quota indicator next to the mode indicator */}
-        <QuotaIndicator />
+        {/* Show search quota indicator only when in search mode */}
+        {activeTrigger === 'search' && <SearchQuotaIndicator />}
       </div>
 
       <div className="flex items-center gap-3">
