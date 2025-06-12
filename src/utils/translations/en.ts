@@ -1,3 +1,4 @@
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -795,7 +796,6 @@ export const en = {
   dresscode: "Dress code",
   accessibility: "Accessibility",
   parking: "Parking",
-  contactInfo: "Contact info",
   organizerContact: "Organizer contact",
   emergencyContact: "Emergency contact",
   questions: "Questions",
@@ -1042,6 +1042,7 @@ export const en = {
   aiLimitationsText: "WAKTI uses advanced AI tools that are powerful but imperfect. AI can and will make mistakes and is not a replacement for human experts. Do not rely on WAKTI AI for medical, legal, psychological, or emergency advice. Always consult real professionals when needed.",
   subscriptionRefunds: "Subscription & Refunds",
   subscriptionRefundsText: "WAKTI is offered as a monthly or yearly subscription service. All payments are final and non-refundable. You may cancel at any time to stop future charges, and you retain access until your billing period ends.",
+  contactInfo: "Contact Information",
   contactInfoText: "For questions, concerns, or legal matters, contact us at support@wakti.qa",
   getInTouch: "Get in Touch",
   contactDescription: "We'd love to hear from you. Send us a message and we'll respond as soon as possible.",
