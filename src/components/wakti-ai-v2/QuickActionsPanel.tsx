@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, Zap, MessageSquare, Image, PenTool, ShoppingCart, Mic2 } from 'lucide-react';
+import { Languages, Settings, Brain, Search, MessageSquare, Image, PenTool, ShoppingCart, Mic2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
 import { BuyExtrasPopup } from './BuyExtrasPopup';
@@ -12,7 +11,7 @@ import { VoiceClonePopup } from './VoiceClonePopup';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
 import { KnowledgeModal } from './KnowledgeModal';
 
-type TriggerMode = 'chat' | 'search' | 'advanced_search' | 'image';
+type TriggerMode = 'chat' | 'search' | 'image';
 
 interface QuickActionsPanelProps {
   onSendMessage: (message: string) => void;
@@ -50,13 +49,6 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       label: language === 'ar' ? 'بحث' : 'Search',
       description: language === 'ar' ? 'البحث والمعلومات الحديثة' : 'Search & current info',
       color: 'bg-green-500'
-    },
-    {
-      id: 'advanced_search' as TriggerMode,
-      icon: Zap,
-      label: language === 'ar' ? 'بحث متقدم' : 'Advanced Search',
-      description: language === 'ar' ? 'بحث عميق وتحليل' : 'Deep search & analysis',
-      color: 'bg-purple-500'
     },
     {
       id: 'image' as TriggerMode,
@@ -147,7 +139,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           </Button>
         </div>
         
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
