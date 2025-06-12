@@ -68,8 +68,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         const quota = data[0];
         console.log('✅ User translation quota loaded successfully:', quota);
         setUserQuota({
-          daily_count: quota.daily_count,
-          extra_translations: quota.extra_translations,
+          daily_count: quota.daily_count || 0,
+          extra_translations: quota.extra_translations || 0,
           purchase_date: quota.purchase_date
         });
       } else {
@@ -112,8 +112,8 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         if (result.success) {
           // Update local state immediately
           setUserQuota(prev => ({
-            daily_count: result.daily_count,
-            extra_translations: result.extra_translations,
+            daily_count: result.daily_count || 0,
+            extra_translations: result.extra_translations || 0,
             purchase_date: prev.purchase_date
           }));
           
@@ -186,7 +186,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           // Update local state immediately
           setUserQuota(prev => ({
             ...prev,
-            extra_translations: result.new_extra_count,
+            extra_translations: result.new_extra_count || 0,
             purchase_date: new Date().toISOString()
           }));
           

@@ -67,8 +67,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         const quota = data[0];
         console.log('✅ User search quota loaded successfully:', quota);
         setUserSearchQuota({
-          daily_count: quota.daily_count,
-          extra_searches: quota.extra_searches,
+          daily_count: quota.daily_count || 0,
+          extra_searches: quota.extra_searches || 0,
           purchase_date: quota.purchase_date,
           regular_search_count: 0, // Not tracked anymore
           extra_regular_searches: 999999, // Unlimited
@@ -103,9 +103,9 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         const quota = data[0];
         console.log('✅ User voice quota loaded successfully:', quota);
         setUserVoiceQuota({
-          characters_used: quota.characters_used,
-          characters_limit: quota.characters_limit,
-          extra_characters: quota.extra_characters,
+          characters_used: quota.characters_used || 0,
+          characters_limit: quota.characters_limit || 5000,
+          extra_characters: quota.extra_characters || 0,
           purchase_date: quota.purchase_date
         });
       }
@@ -145,8 +145,8 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
         if (result.success) {
           setUserSearchQuota(prev => ({
             ...prev,
-            daily_count: result.daily_count,
-            extra_advanced_searches: result.extra_advanced_searches
+            daily_count: result.daily_count || 0,
+            extra_advanced_searches: result.extra_advanced_searches || 0
           }));
           return true;
         } else {
@@ -192,7 +192,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           
           setUserSearchQuota(prev => ({
             ...prev,
-            extra_advanced_searches: result.new_extra_count,
+            extra_advanced_searches: result.new_extra_count || 0,
             purchase_date: new Date().toISOString()
           }));
           
@@ -232,7 +232,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           
           setUserVoiceQuota(prev => ({
             ...prev,
-            extra_characters: result.new_extra_characters,
+            extra_characters: result.new_extra_characters || 0,
             purchase_date: new Date().toISOString()
           }));
           
