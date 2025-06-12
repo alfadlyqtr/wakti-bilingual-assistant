@@ -3,9 +3,9 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Plus, Zap, History } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { QuotaDisplay } from './QuotaDisplay';
 import { SearchModeIndicator } from './SearchModeIndicator';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
+import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 
 interface ChatHeaderProps {
   currentConversationId: string | null;
@@ -27,8 +27,18 @@ export function ChatHeader({
   searchQuotaStatus
 }: ChatHeaderProps) {
   const { language } = useTheme();
+  const { userSearchQuota, MAX_MONTHLY_ADVANCED_SEARCHES } = useExtendedQuotaManagement(language);
 
   const isSearchMode = activeTrigger === 'search' || activeTrigger === 'advanced_search';
+
+  const getAdvancedSearchQuotaInfo = () => {
+    if (activeTrigger === 'advanced_search') {
+      const remaining = Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - userSearchQuota.daily_count);
+      const total = MAX_MONTHLY_ADVANCED_SEARCHES;
+      return { remaining, total };
+    }
+    return undefined;
+  };
 
   return (
     <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -40,11 +50,12 @@ export function ChatHeader({
           </span>
         </Button>
 
-        {/* Show search mode indicator only for search modes */}
+        {/* Show search mode indicator with quota for advanced search */}
         {isSearchMode && (
           <SearchModeIndicator 
             isVisible={true} 
             searchType={activeTrigger as 'search' | 'advanced_search'}
+            quotaInfo={getAdvancedSearchQuotaInfo()}
           />
         )}
 
@@ -55,15 +66,6 @@ export function ChatHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Only show quota for search modes */}
-        {isSearchMode && (
-          <QuotaDisplay 
-            quotaStatus={quotaStatus} 
-            searchQuotaStatus={searchQuotaStatus}
-            activeTrigger={activeTrigger}
-          />
-        )}
-        
         <Button variant="outline" size="sm" onClick={onShowQuickActions} className="flex items-center gap-2">
           <Zap size={16} />
           <span className="hidden sm:inline">
