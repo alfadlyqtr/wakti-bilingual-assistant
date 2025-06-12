@@ -41,6 +41,8 @@ function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/privacy-terms" element={<PrivacyTerms />} />
+                <Route path="/contact" element={<ContactUs />} />
                 
                 {/* Root Route - Redirect to Home for landing */}
                 <Route path="/" element={<Navigate to="/home" replace />} />
