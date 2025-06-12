@@ -29,10 +29,6 @@ interface ChatDrawersProps {
   onNewConversation: () => void;
   onClearChat: () => void;
   sessionMessages: any[];
-  onVoiceTranslator: () => void;
-  onTextGenerator: () => void;
-  onImproveAI: () => void;
-  onVoiceClone: () => void;
 }
 
 export function ChatDrawers({
@@ -45,13 +41,13 @@ export function ChatDrawers({
   onSelectConversation,
   onDeleteConversation,
   fetchConversations,
+  onSendMessage,
+  activeTrigger,
+  onTriggerChange,
+  onTextGenerated,
   onNewConversation,
   onClearChat,
-  sessionMessages,
-  onVoiceTranslator,
-  onTextGenerator,
-  onImproveAI,
-  onVoiceClone
+  sessionMessages
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
@@ -83,14 +79,17 @@ export function ChatDrawers({
       </Sheet>
 
       {/* Right Drawer - Quick Actions */}
-      <QuickActionsPanel
-        isOpen={showQuickActions}
-        onClose={() => setShowQuickActions(false)}
-        onVoiceTranslator={onVoiceTranslator}
-        onTextGenerator={onTextGenerator}
-        onImproveAI={onImproveAI}
-        onVoiceClone={onVoiceClone}
-      />
+      <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
+        <SheetContent side="right" className="w-80 p-4">
+          <QuickActionsPanel
+            onSendMessage={onSendMessage}
+            activeTrigger={activeTrigger as any}
+            onTriggerChange={onTriggerChange}
+            onTextGenerated={onTextGenerated}
+            onClose={() => setShowQuickActions(false)}
+          />
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

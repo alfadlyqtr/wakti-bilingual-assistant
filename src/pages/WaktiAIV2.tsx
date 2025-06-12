@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -686,27 +685,6 @@ const WaktiAIV2 = () => {
     );
   };
 
-  // Tool handler functions
-  const handleVoiceTranslator = () => {
-    console.log('🎙️ Voice Translator tool activated');
-    // Add voice translator functionality here
-  };
-
-  const handleTextGenerator = () => {
-    console.log('📝 Text Generator tool activated');
-    // Add text generator functionality here
-  };
-
-  const handleImproveAI = () => {
-    console.log('✨ Improve AI tool activated');
-    // Add improve AI functionality here
-  };
-
-  const handleVoiceClone = () => {
-    console.log('🎤 Voice Clone tool activated');
-    // Add voice clone functionality here
-  };
-
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   return (
@@ -728,10 +706,6 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
         onClearChat={handleClearChat}
         sessionMessages={allDisplayMessages}
-        onVoiceTranslator={handleVoiceTranslator}
-        onTextGenerator={handleTextGenerator}
-        onImproveAI={handleImproveAI}
-        onVoiceClone={handleVoiceClone}
       />
 
       <div className="flex-1 flex flex-col h-screen">
