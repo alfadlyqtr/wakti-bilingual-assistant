@@ -1,8 +1,9 @@
+
 import { AIMessage, AIConversation } from '@/types/wakti-ai';
 import { supabase } from '@/integrations/supabase/client';
 
 // Export the types for other components to use
-export { AIMessage, AIConversation };
+export type { AIMessage, AIConversation };
 
 export class WaktiAIV2Service {
   private static quotaCache: { [userId: string]: any } = {};
@@ -169,17 +170,8 @@ export class WaktiAIV2Service {
   }
 
   static invalidateConversationCache() {
-    try {
-      const { data: { user } } = supabase.auth.getUser();
-      if (user) {
-        delete this.conversationCache[user.id];
-        console.log('🗑️  Conversation cache invalidated for user:', user.id);
-      } else {
-        console.warn('⚠️  No user found, cannot invalidate conversation cache');
-      }
-    } catch (error) {
-      console.error('❌ Error invalidating conversation cache:', error);
-    }
+    this.quotaCache = {};
+    console.log('🗑️  Conversation cache invalidated');
   }
 
   static async saveCurrentConversationIfNeeded(userId: string, messages: AIMessage[], conversationId: string | null, language: string): Promise<void> {

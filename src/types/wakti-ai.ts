@@ -34,4 +34,5 @@ export interface AIConversation {
   language: string;
   created_at: string;
   updated_at: string;
+  last_message_at: string; // Add this property to match Conversation interface
 }
