@@ -17,6 +17,8 @@ import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Contacts from "@/pages/Contacts";
+import PrivacyTerms from "@/pages/PrivacyTerms";
+import ContactUs from "@/pages/ContactUs";
 import { PageContainer } from "@/components/PageContainer";
 import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";

@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Check, ArrowRight, CircleCheck, Bot, LogIn } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
+import { Footer } from "@/components/Footer";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -126,7 +127,7 @@ export default function Home() {
         </div>
       </MobileHeader>
       
-      <div className="flex-1 overflow-y-auto pb-16">
+      <div className="flex-1 overflow-y-auto">
         {/* Hero Section */}
         <section className={`${primaryBg} px-4 py-6`}>
           <motion.div 
@@ -378,6 +379,8 @@ export default function Home() {
           </motion.div>
         </motion.section>
       </div>
+      
+      <Footer />
     </div>
   );
 }
