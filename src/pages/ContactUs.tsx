@@ -1,6 +1,7 @@
 
 import { useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -11,10 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Mail, MessageCircle, Phone } from "lucide-react";
+import { Mail, MessageCircle, CheckCircle, ArrowLeft } from "lucide-react";
 
 export default function ContactUs() {
   const { language } = useTheme();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -22,6 +24,11 @@ export default function ContactUs() {
     message: ""
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const handleBackClick = () => {
+    navigate("/home");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +38,7 @@ export default function ContactUs() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     toast.success(t("messageSubmitted", language));
-    setFormData({ name: "", email: "", subject: "", message: "" });
+    setIsSubmitted(true);
     setIsSubmitting(false);
   };
 
@@ -42,9 +49,58 @@ export default function ContactUs() {
     }));
   };
 
+  const resetForm = () => {
+    setIsSubmitted(false);
+    setFormData({ name: "", email: "", subject: "", message: "" });
+  };
+
+  // Thank you state
+  if (isSubmitted) {
+    return (
+      <div className="mobile-container">
+        <MobileHeader title={t("contactUs", language)} showBackButton={true} onBackClick={handleBackClick}>
+          <ThemeLanguageToggle />
+        </MobileHeader>
+        
+        <div className="flex-1 overflow-y-auto flex items-center justify-center">
+          <div className="px-4 py-6 w-full max-w-md">
+            <Card className="text-center">
+              <CardContent className="pt-6">
+                <div className="flex justify-center mb-4">
+                  <CheckCircle className="h-16 w-16 text-green-500" />
+                </div>
+                <h2 className="text-2xl font-bold mb-2 text-primary">
+                  {language === "ar" ? "شكراً لك!" : "Thank You!"}
+                </h2>
+                <p className="text-muted-foreground mb-6">
+                  {language === "ar" 
+                    ? "تم إرسال رسالتك بنجاح. سنقوم بالرد عليك في أقرب وقت ممكن."
+                    : "Your message has been sent successfully. We'll get back to you as soon as possible."
+                  }
+                </p>
+                <div className="space-y-3">
+                  <Button onClick={resetForm} className="w-full">
+                    {language === "ar" ? "إرسال رسالة أخرى" : "Send Another Message"}
+                  </Button>
+                  <Button variant="outline" onClick={handleBackClick} className="w-full">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    {language === "ar" ? "العودة للصفحة الرئيسية" : "Back to Home"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+        
+        <Footer />
+      </div>
+    );
+  }
+
+  // Contact form state
   return (
     <div className="mobile-container">
-      <MobileHeader title={t("contactUs", language)} showBackButton={true}>
+      <MobileHeader title={t("contactUs", language)} showBackButton={true} onBackClick={handleBackClick}>
         <ThemeLanguageToggle />
       </MobileHeader>
       
@@ -58,11 +114,16 @@ export default function ContactUs() {
           </div>
 
           <div className="grid gap-4 mb-6">
-            <Card>
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="flex items-center gap-3 p-4">
                 <Mail className="h-5 w-5 text-primary" />
-                <div>
-                  <p className="font-medium text-sm">support@wakti.qa</p>
+                <div className="flex-1">
+                  <a 
+                    href="mailto:support@wakti.qa" 
+                    className="font-medium text-sm text-primary hover:underline transition-colors"
+                  >
+                    support@wakti.qa
+                  </a>
                   <p className="text-xs text-muted-foreground">{t("emailSupport", language)}</p>
                 </div>
               </CardContent>
