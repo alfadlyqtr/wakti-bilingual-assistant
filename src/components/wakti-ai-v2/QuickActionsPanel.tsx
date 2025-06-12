@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -121,47 +122,47 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
   };
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
+    <div className="space-y-6 h-full flex flex-col p-1">
       {/* AI Trigger Controls */}
       <div className="flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5">
-            <Brain className="h-3 w-3" />
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
+            <Brain className="h-4 w-4" />
             {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
           </h3>
           <Button
             variant="outline"
             size="sm"
             onClick={toggleLanguage}
-            className="h-9 px-3 rounded-full text-sm"
+            className="h-10 px-4 rounded-full text-sm font-medium"
           >
             {language === 'ar' ? 'English' : 'العربية'}
           </Button>
         </div>
         
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-3">
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
               variant={activeTrigger === trigger.id ? "default" : "outline"}
               className={cn(
-                "h-16 p-2 flex flex-col items-center justify-center gap-1 text-center transition-all duration-200 text-xs",
+                "h-20 p-3 flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 text-sm",
                 activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1"
               )}
               onClick={() => handleTriggerChange(trigger.id)}
             >
               <div className={cn(
-                "p-1.5 rounded-md",
+                "p-2 rounded-lg",
                 activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
               )}>
                 <trigger.icon className={cn(
-                  "h-3 w-3",
+                  "h-4 w-4",
                   activeTrigger === trigger.id ? "text-primary" : "text-white"
                 )} />
               </div>
               <div className="leading-tight">
-                <div className="text-[10px] font-medium">{trigger.label}</div>
-                <div className="text-[8px] text-muted-foreground">{trigger.description}</div>
+                <div className="text-xs font-medium">{trigger.label}</div>
+                <div className="text-[10px] text-muted-foreground">{trigger.description}</div>
               </div>
             </Button>
           ))}
@@ -170,22 +171,22 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
 
       {/* Action Buttons (Not Triggers) */}
       <div className="flex-shrink-0">
-        <h3 className="font-semibold text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
-          <Settings className="h-3 w-3" />
+        <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2 mb-4">
+          <Settings className="h-4 w-4" />
           {language === 'ar' ? 'أدوات' : 'Tools'}
         </h3>
         
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-3">
           {/* Voice Translator Button */}
           <Button
             variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setVoiceTranslatorOpen(true)}
           >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-rose-500 to-pink-500">
-              <Languages className="h-3 w-3 text-white" />
+            <div className="p-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500">
+              <Languages className="h-4 w-4 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-xs font-medium leading-tight">
               {language === 'ar' ? 'مترجم' : 'Translator'}
             </span>
           </Button>
@@ -193,13 +194,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Text Generation Button */}
           <Button
             variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setTextGeneratorOpen(true)}
           >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-teal-500 to-cyan-500">
-              <PenTool className="h-3 w-3 text-white" />
+            <div className="p-2 rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500">
+              <PenTool className="h-4 w-4 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-xs font-medium leading-tight">
               {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
             </span>
           </Button>
@@ -207,13 +208,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Improve AI Button - Updated to open KnowledgeModal */}
           <Button
             variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setKnowledgeModalOpen(true)}
           >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-violet-500 to-purple-500">
-              <Brain className="h-3 w-3 text-white" />
+            <div className="p-2 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500">
+              <Brain className="h-4 w-4 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-xs font-medium leading-tight">
               {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
             </span>
           </Button>
@@ -221,13 +222,13 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           {/* Voice Clone Button */}
           <Button
             variant="ghost"
-            className="h-16 p-2 flex flex-col items-center justify-center gap-1 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
+            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
             onClick={() => setVoiceCloneOpen(true)}
           >
-            <div className="p-1 rounded-sm bg-gradient-to-r from-indigo-500 to-blue-500">
-              <Mic2 className="h-3 w-3 text-white" />
+            <div className="p-2 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500">
+              <Mic2 className="h-4 w-4 text-white" />
             </div>
-            <span className="text-[10px] font-medium leading-tight">
+            <span className="text-xs font-medium leading-tight">
               {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
             </span>
           </Button>
@@ -236,11 +237,11 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
 
       {/* Try asking me section - ONLY visible in chat mode */}
       {activeTrigger === 'chat' && (
-        <div className="flex-1 pt-2 border-t border-border/50">
-          <h4 className="text-xs font-medium text-muted-foreground mb-2">
+        <div className="flex-1 pt-4 border-t border-border/50">
+          <h4 className="text-sm font-medium text-muted-foreground mb-3">
             {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
           </h4>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {[
               language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
               language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
@@ -250,7 +251,7 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
                 key={index}
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                className="w-full justify-start text-sm text-muted-foreground hover:text-foreground h-10 px-3 hover:bg-accent/50"
                 onClick={() => handleTryExample(example)}
               >
                 "{example}"
@@ -261,14 +262,14 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
       )}
 
       {/* Buy Extras Button - Fixed at bottom */}
-      <div className="flex-shrink-0 pt-3 border-t border-border/30">
+      <div className="flex-shrink-0 pt-4 border-t border-border/30">
         <Button
           onClick={() => setBuyExtrasOpen(true)}
           variant="outline"
-          className="w-full h-12 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200"
+          className="w-full h-14 flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200 text-base font-medium"
         >
-          <ShoppingCart className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <span className="font-medium text-emerald-700 dark:text-emerald-300">
+          <ShoppingCart className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-emerald-700 dark:text-emerald-300">
             {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
           </span>
         </Button>
