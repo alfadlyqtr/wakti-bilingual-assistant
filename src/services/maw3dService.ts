@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -259,42 +258,32 @@ export class Maw3dService {
     return data;
   }
 
-  // Generate AI background using Runware
+  // Generate AI background using the existing edge function
   static async generateAIBackground(prompt: string): Promise<string> {
     try {
       console.log('Generating AI background with prompt:', prompt);
       
-      const response = await fetch('https://api.runware.ai/v1', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify([
-          {
-            taskType: "authentication",
-            apiKey: process.env.RUNWARE_API_KEY
-          },
-          {
-            taskType: "imageInference",
-            taskUUID: crypto.randomUUID(),
-            positivePrompt: prompt,
-            width: 1024,
-            height: 1024,
-            numberResults: 1,
-            model: "runware:100@1",
-            outputFormat: "WEBP"
-          }
-        ])
+      const { data, error } = await supabase.functions.invoke('generate-event-image', {
+        body: {
+          prompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion`,
+          width: 1024,
+          height: 1024,
+          style: "photographic"
+        }
       });
 
-      const result = await response.json();
-      
-      if (result.data && result.data.length > 1) {
-        console.log('AI background generated successfully');
-        return result.data[1].imageURL;
+      if (error) {
+        console.error('Error calling generate-event-image function:', error);
+        throw new Error(`Failed to generate AI background: ${error.message}`);
       }
-      
-      throw new Error('Failed to generate AI background');
+
+      if (!data?.imageUrl) {
+        console.error('No image URL in response:', data);
+        throw new Error('No image URL returned from generation service');
+      }
+
+      console.log('AI background generated successfully:', data.imageUrl);
+      return data.imageUrl;
     } catch (error) {
       console.error('Error generating AI background:', error);
       throw error;
