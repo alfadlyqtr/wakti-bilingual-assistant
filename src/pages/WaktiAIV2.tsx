@@ -352,24 +352,8 @@ const WaktiAIV2 = () => {
         console.log('✅ Voice translation quota incremented successfully');
       }
 
-      // Increment quota usage based on trigger type BEFORE sending message
-      if (activeTrigger === 'search') {
-        console.log('📈 Incrementing regular search usage before operation...');
-        const canUse = await incrementRegularSearchUsage();
-        if (!canUse) {
-          setIsLoading(false);
-          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث العادي' : 'Regular search limit reached');
-          return;
-        }
-      } else if (activeTrigger === 'advanced_search') {
-        console.log('📈 Incrementing advanced search usage before operation...');
-        const canUse = await incrementAdvancedSearchUsage();
-        if (!canUse) {
-          setIsLoading(false);
-          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث المتقدم' : 'Advanced search limit reached');
-          return;
-        }
-      }
+      // REMOVED: No more quota checking here since backend now handles it properly
+      // The backend will check and increment quotas as needed
 
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,

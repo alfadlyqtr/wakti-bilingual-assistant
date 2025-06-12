@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -110,13 +109,12 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // No quota restrictions - unlimited searches for all users
-    quotaStatus = { count: 0, limit: 999999, canBrowse: true, usagePercentage: 0, remaining: 999999 };
-
+    // FIXED: Proper quota checking for each trigger type
     switch (activeTrigger) {
       case 'search':
+        // Regular search - unlimited, just increment counter for tracking
         if (intent.allowed) {
-          // Always allow search - no quota restrictions
+          await incrementRegularSearchUsage(user.id);
           const searchResult = await executeSearch(message, language);
           if (searchResult.success) {
             browsingUsed = true;
@@ -129,6 +127,35 @@ serve(async (req) => {
           response = language === 'ar' 
             ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للبحث والمعلومات الحديثة فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
             : `⚠️ You're in Search Mode\n\nThis mode is for search and current information only.\n\nFor general chat, switch to Chat mode.`;
+        }
+        quotaStatus = { type: 'regular_search', unlimited: true };
+        break;
+
+      case 'advanced_search':
+        // FIXED: Check advanced search quota properly
+        if (intent.allowed) {
+          const canUseAdvanced = await checkAdvancedSearchQuota(user.id);
+          if (canUseAdvanced.canUse) {
+            await incrementAdvancedSearchUsage(user.id);
+            const searchResult = await executeSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
+              response = await processWithAI(message, searchResult.context, language);
+            } else {
+              response = await processWithAI(message, null, language);
+            }
+            quotaStatus = canUseAdvanced.quotaStatus;
+          } else {
+            response = language === 'ar' 
+              ? `🚫 تم الوصول للحد الأقصى من البحث المتقدم\n\nلقد استخدمت ${canUseAdvanced.quotaStatus.used}/${canUseAdvanced.quotaStatus.limit} من بحثاتك المتقدمة هذا الشهر.\n\nيمكنك شراء بحثات إضافية أو استخدام البحث العادي (غير محدود).`
+              : `🚫 Advanced Search Limit Reached\n\nYou've used ${canUseAdvanced.quotaStatus.used}/${canUseAdvanced.quotaStatus.limit} advanced searches this month.\n\nYou can purchase extra searches or use regular search (unlimited).`;
+            quotaStatus = canUseAdvanced.quotaStatus;
+          }
+        } else {
+          response = language === 'ar' 
+            ? `⚠️ أنت في وضع البحث المتقدم\n\nهذا الوضع مخصص للبحث المتقدم فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Advanced Search Mode\n\nThis mode is for advanced search only.\n\nFor general chat, switch to Chat mode.`;
         }
         break;
 
@@ -144,9 +171,10 @@ serve(async (req) => {
                 ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
                 : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
             } else {
+              console.error("Image generation failed:", imageResult.error);
               response = language === 'ar' 
-                ? `❌ عذراً، حدث خطأ في إنشاء الصورة: ${imageResult.error}`
-                : `❌ Sorry, there was an error generating the image: ${imageResult.error}`;
+                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
+                : `❌ Sorry, there was an error generating the image. Please try again.`;
             }
           } catch (error) {
             console.error("Image generation error:", error);
@@ -158,24 +186,6 @@ serve(async (req) => {
           response = language === 'ar' 
             ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
             : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
-        }
-        break;
-
-      case 'advanced_search':
-        if (intent.allowed) {
-          // Always allow advanced search - no quota restrictions
-          const searchResult = await executeSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            response = await processWithAI(message, searchResult.context, language);
-          } else {
-            response = await processWithAI(message, null, language);
-          }
-        } else {
-          response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث المتقدم\n\nهذا الوضع مخصص للبحث المتقدم فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Advanced Search Mode\n\nThis mode is for advanced search only.\n\nFor general chat, switch to Chat mode.`;
         }
         break;
 
@@ -197,7 +207,7 @@ serve(async (req) => {
       browsingUsed,
       browsingData,
       quotaStatus,
-      requiresSearchConfirmation: false, // No quota restrictions
+      requiresSearchConfirmation: false,
       needsConfirmation: false,
       needsClarification: false,
       success: true
@@ -223,6 +233,111 @@ serve(async (req) => {
     });
   }
 });
+
+// FIXED: Proper advanced search quota checking
+async function checkAdvancedSearchQuota(userId: string) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const MAX_MONTHLY_ADVANCED_SEARCHES = 5;
+
+    // Get or create current month's quota record
+    const { data, error } = await supabase
+      .from('user_search_quotas')
+      .select('daily_count, extra_advanced_searches')
+      .eq('user_id', userId)
+      .eq('monthly_date', currentMonth)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error("Error checking advanced search quota:", error);
+      return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
+    }
+
+    let usedCount = 0;
+    let extraSearches = 0;
+
+    if (data) {
+      usedCount = data.daily_count || 0; // This represents monthly advanced searches
+      extraSearches = data.extra_advanced_searches || 0;
+    } else {
+      // Create new record for this month
+      await supabase
+        .from('user_search_quotas')
+        .insert({
+          user_id: userId,
+          monthly_date: currentMonth,
+          daily_count: 0, // Used for advanced search monthly counter
+          regular_search_count: 0,
+          extra_regular_searches: 0,
+          extra_advanced_searches: 0
+        });
+    }
+
+    const totalAvailable = MAX_MONTHLY_ADVANCED_SEARCHES + extraSearches;
+    const canUse = usedCount < totalAvailable;
+
+    return {
+      canUse,
+      quotaStatus: {
+        used: usedCount,
+        limit: MAX_MONTHLY_ADVANCED_SEARCHES,
+        extra: extraSearches,
+        remaining: Math.max(0, totalAvailable - usedCount)
+      }
+    };
+  } catch (error) {
+    console.error("Error in checkAdvancedSearchQuota:", error);
+    return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
+  }
+}
+
+// FIXED: Proper advanced search usage increment
+async function incrementAdvancedSearchUsage(userId: string) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    const { error } = await supabase
+      .from('user_search_quotas')
+      .update({
+        daily_count: supabase.sql`daily_count + 1`, // Using daily_count for monthly advanced searches
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('monthly_date', currentMonth);
+
+    if (error) {
+      console.error("Error incrementing advanced search usage:", error);
+    } else {
+      console.log("✅ Advanced search usage incremented");
+    }
+  } catch (error) {
+    console.error("Error in incrementAdvancedSearchUsage:", error);
+  }
+}
+
+// FIXED: Proper regular search usage increment (just for tracking)
+async function incrementRegularSearchUsage(userId: string) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    const { error } = await supabase
+      .from('user_search_quotas')
+      .update({
+        regular_search_count: supabase.sql`regular_search_count + 1`,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('monthly_date', currentMonth);
+
+    if (error) {
+      console.error("Error incrementing regular search usage:", error);
+    } else {
+      console.log("✅ Regular search usage logged");
+    }
+  } catch (error) {
+    console.error("Error in incrementRegularSearchUsage:", error);
+  }
+}
 
 // Generate image with Runware API
 async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
@@ -365,12 +480,15 @@ async function processWithAI(message: string, context: string | null, language: 
   }
 }
 
-// Real search function
+// FIXED: Real search function with better error handling
 async function executeSearch(query: string, language: string = 'en') {
   try {
     if (!TAVILY_API_KEY) {
+      console.error("Tavily API key not configured");
       return { success: false, error: "Search not configured" };
     }
+    
+    console.log("🔍 Executing Tavily search for query:", query);
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -385,47 +503,22 @@ async function executeSearch(query: string, language: string = 'en') {
     });
     
     if (!response.ok) {
-      return { success: false, error: "Search failed" };
+      const errorText = await response.text();
+      console.error("Tavily API error:", response.status, errorText);
+      return { success: false, error: `Search API error: ${response.status}` };
     }
     
     const data = await response.json();
+    console.log("✅ Tavily search successful");
+    
     return {
       success: true,
       context: data.answer,
       data: { sources: data.results || [] }
     };
   } catch (error) {
+    console.error("Search execution error:", error);
     return { success: false, error: error.message };
-  }
-}
-
-// Check browsing quota
-async function checkBrowsingQuota(userId: string) {
-  try {
-    const { data, error } = await supabase.rpc('check_browsing_quota', {
-      p_user_id: userId
-    });
-    
-    if (error) {
-      console.error("Quota check error:", error);
-      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-    }
-    
-    const count = data || 0;
-    const limit = 60;
-    const usagePercentage = Math.round((count / limit) * 100);
-    
-    return {
-      count,
-      limit,
-      usagePercentage,
-      remaining: Math.max(0, limit - count),
-      canBrowse: count < limit,
-      requiresConfirmation: usagePercentage >= 80
-    };
-  } catch (error) {
-    console.error("Quota check error:", error);
-    return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
   }
 }
 
@@ -456,6 +549,22 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         allowed: isSearchIntent
       };
 
+    case 'advanced_search':
+      const advSearchPatterns = [
+        'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
+        'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
+        'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
+        'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
+      ];
+      
+      const isAdvSearchIntent = advSearchPatterns.some(pattern => lowerMessage.includes(pattern));
+      
+      return {
+        intent: isAdvSearchIntent ? 'advanced_search' : 'invalid_for_advanced_search',
+        confidence: isAdvSearchIntent ? 'high' : 'low',
+        allowed: isAdvSearchIntent
+      };
+
     case 'image':
       const imagePatterns = [
         'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
@@ -470,13 +579,6 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         allowed: isImageIntent
       };
 
-    case 'advanced_search':
-      return {
-        intent: 'advanced_search_unavailable',
-        confidence: 'high',
-        allowed: false
-      };
-
     case 'chat':
     default:
       // Chat mode allows everything
@@ -488,29 +590,79 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
   }
 }
 
-// General intent analysis for chat mode
-function analyzeGeneralIntent(message: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase();
-  
-  // Check for image generation patterns
-  const imagePatterns = [
-    'generate image', 'create image', 'make picture', 'draw', 'image of', 'picture of',
-    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة'
-  ];
-  
-  if (imagePatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return 'image_request';
+// Generate image with Runware API
+async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
+  try {
+    console.log("🎨 Generating image with Runware for prompt:", prompt);
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: prompt,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
+          numberResults: 1,
+          outputFormat: "WEBP",
+          CFGScale: 1,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          steps: 4,
+        },
+      ]),
+    });
+
+    console.log("🎨 Runware response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("🎨 Runware response data:", result);
+      
+      // Find the image inference result
+      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+      
+      if (imageResult && imageResult.imageURL) {
+        // Save image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: imageResult.imageURL,
+              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
+            });
+        } catch (dbError) {
+          console.log("Could not save image to database:", dbError);
+          // Continue anyway, the image was generated successfully
+        }
+
+        return {
+          success: true,
+          imageUrl: imageResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in Runware response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("🎨 Runware API error:", response.status, errorText);
+      throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
+    }
+  } catch (error) {
+    console.error('🎨 Error generating image with Runware:', error);
+    return {
+      success: false,
+      error: error.message
+    };
   }
-  
-  // Check for search patterns
-  const searchPatterns = [
-    'what is', 'who is', 'current', 'latest', 'today', 'news', 'weather',
-    'ما هو', 'من هو', 'حالي', 'آخر', 'اليوم', 'أخبار', 'طقس'
-  ];
-  
-  if (searchPatterns.some(pattern => lowerMessage.includes(pattern))) {
-    return 'search_request';
-  }
-  
-  return 'general_chat';
 }

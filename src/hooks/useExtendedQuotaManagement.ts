@@ -1,11 +1,10 @@
-
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
 export interface ExtendedUserSearchQuota {
-  daily_count: number;
+  daily_count: number; // Used for monthly advanced searches
   extra_searches: number;
   purchase_date?: string;
   regular_search_count: number;
@@ -24,7 +23,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const { user } = useAuth();
   
   const [userSearchQuota, setUserSearchQuota] = useState<ExtendedUserSearchQuota>({
-    daily_count: 0,
+    daily_count: 0, // This is actually monthly advanced search count
     extra_searches: 0,
     regular_search_count: 0,
     extra_regular_searches: 999999, // Unlimited regular searches
@@ -40,11 +39,11 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   const [isLoadingSearchQuota, setIsLoadingSearchQuota] = useState(false);
   const [isLoadingVoiceQuota, setIsLoadingVoiceQuota] = useState(false);
 
-  // Constants - Updated according to requirements
+  // FIXED: Constants - Advanced search is monthly, regular is unlimited
   const MAX_MONTHLY_ADVANCED_SEARCHES = 5;
   const MAX_MONTHLY_REGULAR_SEARCHES = 999999; // Unlimited
 
-  // Simplified search quota loading
+  // FIXED: Simplified search quota loading with proper monthly logic
   const loadUserSearchQuota = useCallback(async () => {
     if (!user) return;
     
@@ -71,7 +70,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       if (data) {
         console.log('✅ User search quota loaded successfully:', data);
         setUserSearchQuota({
-          daily_count: data.daily_count || 0,
+          daily_count: data.daily_count || 0, // This is monthly advanced search count
           extra_searches: data.extra_searches || 0,
           purchase_date: data.purchase_date,
           regular_search_count: data.regular_search_count || 0,
@@ -86,7 +85,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           .insert({
             user_id: user.id,
             monthly_date: currentMonth,
-            daily_count: 0,
+            daily_count: 0, // Monthly advanced search count
             extra_searches: 0,
             regular_search_count: 0,
             extra_regular_searches: 0,
@@ -150,7 +149,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user]);
 
-  // Regular search increment - always returns success (no quota)
+  // FIXED: Regular search increment - always returns success (no quota, just tracking)
   const incrementRegularSearchCount = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
     
@@ -185,7 +184,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user, userSearchQuota]);
 
-  // Advanced search increment with real quota enforcement
+  // FIXED: Advanced search increment with proper monthly quota enforcement
   const incrementAdvancedSearchCount = useCallback(async (): Promise<boolean> => {
     if (!user) return false;
 
@@ -195,15 +194,15 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       
       const currentMonth = new Date().toISOString().slice(0, 7);
       
-      // Check if user has quota available
+      // FIXED: Check if user has quota available (daily_count is actually monthly advanced count)
       const remainingFree = Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - userSearchQuota.daily_count);
       
       if (remainingFree > 0) {
-        // Use free quota
+        // Use free monthly quota
         const { error } = await supabase
           .from('user_search_quotas')
           .update({
-            daily_count: userSearchQuota.daily_count + 1,
+            daily_count: userSearchQuota.daily_count + 1, // Increment monthly advanced search count
             updated_at: new Date().toISOString()
           })
           .eq('user_id', user.id)
@@ -220,7 +219,7 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           daily_count: prev.daily_count + 1
         }));
         
-        console.log('✅ Advanced search count incremented (free quota)');
+        console.log('✅ Advanced search count incremented (free monthly quota)');
         return true;
         
       } else if (userSearchQuota.extra_advanced_searches > 0) {
@@ -360,7 +359,9 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     }
   }, [user?.id, loadUserSearchQuota, loadUserVoiceQuota]);
 
+  // FIXED: Computed values with proper monthly logic
   const computedSearchValues = useMemo(() => {
+    // daily_count is actually monthly advanced search count
     const remainingAdvancedSearches = Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - userSearchQuota.daily_count);
     const canUseAdvancedSearch = remainingAdvancedSearches > 0 || userSearchQuota.extra_advanced_searches > 0;
     const canUseRegularSearch = true; // Always true - unlimited
@@ -417,10 +418,10 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     purchaseExtraVoiceCredits,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES,
-    refreshSearchQuota,
-    refreshVoiceQuota,
-    incrementRegularSearchUsage,
-    incrementAdvancedSearchUsage,
+    refreshSearchQuota: loadUserSearchQuota,
+    refreshVoiceQuota: loadUserVoiceQuota,
+    incrementRegularSearchUsage: incrementRegularSearchCount,
+    incrementAdvancedSearchUsage: incrementAdvancedSearchCount,
     ...computedSearchValues,
     ...computedVoiceValues
   };
