@@ -697,9 +697,26 @@ const WaktiAIV2 = () => {
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
     console.log('📝 Text generated from tool:', { text, mode });
     
-    // Always send generated text as a message to the chat interface
-    // regardless of whether it's compose or reply mode
-    handleSendMessage(text);
+    // Create assistant message directly for generated text
+    const assistantMessage: AIMessage = {
+      id: `assistant-textgen-${Date.now()}`,
+      role: 'assistant',
+      content: text,
+      timestamp: new Date(),
+      intent: 'text_generation',
+      confidence: 'high',
+      actionTaken: true,
+      isTextGenerated: true
+    };
+
+    // Add to session messages as assistant message
+    const updatedSessionMessages = [...sessionMessages, assistantMessage].slice(-30);
+    setSessionMessages(updatedSessionMessages);
+
+    // Save to conversation if exists
+    if (currentConversationId) {
+      saveMessageToConversation(assistantMessage, currentConversationId);
+    }
     
     showSuccess(
       language === 'ar' ? 'تم إنشاء النص وإضافته للمحادثة' : 'Text generated and added to chat'
