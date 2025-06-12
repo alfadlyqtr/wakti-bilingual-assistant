@@ -7,10 +7,12 @@ import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { Coins, Zap, Loader2, CheckCircle, Mic, Languages, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+
 interface BuyExtrasPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
 export function BuyExtrasPopup({
   open,
   onOpenChange
@@ -30,9 +32,11 @@ export function BuyExtrasPopup({
     purchaseExtraTranslations,
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
+
   const [isAdvancedSearchPurchasing, setIsAdvancedSearchPurchasing] = useState(false);
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
+
   const handlePurchaseAdvancedSearches = async () => {
     setIsAdvancedSearchPurchasing(true);
     console.log('🛒 Starting advanced search purchase...');
@@ -59,6 +63,7 @@ export function BuyExtrasPopup({
       setIsAdvancedSearchPurchasing(false);
     }
   };
+
   const handlePurchaseVoiceCredits = async () => {
     setIsVoicePurchasing(true);
     console.log('🛒 Starting voice credits purchase...');
@@ -85,6 +90,7 @@ export function BuyExtrasPopup({
       setIsVoicePurchasing(false);
     }
   };
+
   const handlePurchaseTranslations = async () => {
     setIsTranslationPurchasing(true);
     console.log('🛒 Starting translations purchase...');
@@ -111,6 +117,7 @@ export function BuyExtrasPopup({
       setIsTranslationPurchasing(false);
     }
   };
+
   const getSearchQuotaStatus = () => {
     const advancedUsed = userSearchQuota.daily_count;
     const extraAdvancedSearches = userSearchQuota.extra_advanced_searches;
@@ -119,6 +126,7 @@ export function BuyExtrasPopup({
       extraAdvancedSearches
     };
   };
+
   const getVoiceQuotaStatus = () => {
     const used = userVoiceQuota.characters_used;
     const limit = userVoiceQuota.characters_limit;
@@ -128,6 +136,7 @@ export function BuyExtrasPopup({
       extraCharacters: extra
     };
   };
+
   const getTranslationQuotaStatus = () => {
     const used = translationQuota.daily_count;
     const extra = translationQuota.extra_translations;
@@ -136,11 +145,15 @@ export function BuyExtrasPopup({
       extraTranslations: extra
     };
   };
+
   const quotaStatus = getSearchQuotaStatus();
   const voiceStatus = getVoiceQuotaStatus();
   const translationStatus = getTranslationQuotaStatus();
+
   const anyPurchaseInProgress = isAdvancedSearchPurchasing || isVoicePurchasing || isTranslationPurchasing;
-  return <Dialog open={open} onOpenChange={onOpenChange}>
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -150,46 +163,50 @@ export function BuyExtrasPopup({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Current Quota Status */}
+          {/* Current Quota Status - Compact Version */}
           <Card className="bg-muted/30">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-500" />
                 {language === 'ar' ? 'حصتك الحالية' : 'Your Current Quota'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 text-sm">
+            <CardContent className="space-y-1 text-sm pt-0">
+              {/* Advanced Search */}
+              <div className="text-sm">
+                <span>
+                  {language === 'ar' ? 'البحث المتقدم:' : 'Advanced Search:'} {quotaStatus.advancedRemaining}/{MAX_MONTHLY_ADVANCED_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
+                </span>
+                {quotaStatus.extraAdvancedSearches > 0 && (
+                  <span className="text-green-600 ml-2">
+                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{quotaStatus.extraAdvancedSearches}
+                  </span>
+                )}
+              </div>
               
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'البحث المتقدم:' : 'Advanced Search:'}</span>
-                <span className="font-medium">
-                  {quotaStatus.advancedRemaining}/{MAX_MONTHLY_ADVANCED_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
+              {/* Voice Characters */}
+              <div className="text-sm">
+                <span>
+                  {language === 'ar' ? 'الأحرف الصوتية:' : 'Voice Characters:'} {voiceStatus.remaining}/5,000 {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
+                {voiceStatus.extraCharacters > 0 && (
+                  <span className="text-green-600 ml-2">
+                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{voiceStatus.extraCharacters}
+                  </span>
+                )}
               </div>
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'الأحرف الصوتية:' : 'Voice Characters:'}</span>
-                <span className="font-medium">
-                  {voiceStatus.remaining}/5,000 {language === 'ar' ? 'متبقي' : 'remaining'}
+              
+              {/* Monthly Translations */}
+              <div className="text-sm">
+                <span>
+                  {language === 'ar' ? 'الترجمات الشهرية:' : 'Monthly Translations:'} {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
+                {translationStatus.extraTranslations > 0 && (
+                  <span className="text-green-600 ml-2">
+                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{translationStatus.extraTranslations}
+                  </span>
+                )}
               </div>
-              <div className="flex justify-between">
-                <span>{language === 'ar' ? 'الترجمات الشهرية:' : 'Monthly Translations:'}</span>
-                <span className="font-medium">
-                  {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
-                </span>
-              </div>
-              {quotaStatus.extraAdvancedSearches > 0 && <div className="flex justify-between text-green-600">
-                  <span>{language === 'ar' ? 'بحثات متقدمة إضافية:' : 'Extra Advanced Searches:'}</span>
-                  <span className="font-medium">+{quotaStatus.extraAdvancedSearches}</span>
-                </div>}
-              {voiceStatus.extraCharacters > 0 && <div className="flex justify-between text-green-600">
-                  <span>{language === 'ar' ? 'أحرف صوتية إضافية:' : 'Extra Voice Characters:'}</span>
-                  <span className="font-medium">+{voiceStatus.extraCharacters}</span>
-                </div>}
-              {translationStatus.extraTranslations > 0 && <div className="flex justify-between text-green-600">
-                  <span>{language === 'ar' ? 'ترجمات إضافية:' : 'Extra Translations:'}</span>
-                  <span className="font-medium">+{translationStatus.extraTranslations}</span>
-                </div>}
             </CardContent>
           </Card>
 
@@ -212,13 +229,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseAdvancedSearches} disabled={isAdvancedSearchPurchasing || anyPurchaseInProgress} className="bg-purple-600 hover:bg-purple-700" size="sm">
-                    {isAdvancedSearchPurchasing ? <>
+                    {isAdvancedSearchPurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -241,13 +262,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseVoiceCredits} disabled={isVoicePurchasing || anyPurchaseInProgress} className="bg-green-600 hover:bg-green-700" size="sm">
-                    {isVoicePurchasing ? <>
+                    {isVoicePurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -270,13 +295,17 @@ export function BuyExtrasPopup({
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
                   <Button onClick={handlePurchaseTranslations} disabled={isTranslationPurchasing || anyPurchaseInProgress} className="bg-orange-600 hover:bg-orange-700" size="sm">
-                    {isTranslationPurchasing ? <>
+                    {isTranslationPurchasing ? (
+                      <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </> : <>
+                      </>
+                    ) : (
+                      <>
                         <Zap className="h-4 w-4 mr-2" />
                         {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>}
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardContent>
@@ -288,5 +317,6 @@ export function BuyExtrasPopup({
           </div>
         </div>
       </DialogContent>
-    </Dialog>;
+    </Dialog>
+  );
 }
