@@ -1042,9 +1042,4 @@ export type TranslationKey =
   | "saveAllSettings"
   | "reminders"
   | "activityMonitor"
-  | "time"
-  
-  // Privacy & Terms page keys
-  | "privacyAndTerms"
-  | "termsOfService"
-  | "privacyPolicy";
+  | "time";

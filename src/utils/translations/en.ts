@@ -1020,10 +1020,5 @@ export const en = {
   saveAllSettings: "Save All Settings",
   reminders: "Reminders",
   activityMonitor: "Activity Monitor",
-  time: "Time",
-  
-  // Privacy & Terms page keys
-  privacyAndTerms: "Privacy & Terms",
-  termsOfService: "Terms of Service",
-  privacyPolicy: "Privacy Policy"
+  time: "Time"
 };
