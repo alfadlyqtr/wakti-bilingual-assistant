@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -7,9 +8,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
+// API keys for real AI integration
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
+const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
 console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Chat Memory & Mode Restrictions");
 
@@ -19,6 +22,7 @@ const supabase = createClient(
 );
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -26,6 +30,33 @@ serve(async (req) => {
   try {
     console.log("🚀 WAKTI AI V2 BRAIN: Processing request with chat memory");
 
+    // CRITICAL: Extract and verify authentication token
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error("🚀 WAKTI AI V2 BRAIN: Missing authorization header");
+      return new Response(JSON.stringify({ 
+        error: "Authentication required",
+        success: false
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Verify the user is authenticated
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+    if (authError || !user) {
+      console.error("🚀 WAKTI AI V2 BRAIN: Authentication failed:", authError);
+      return new Response(JSON.stringify({ 
+        error: "Invalid authentication",
+        success: false
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Get request body
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
       message: requestBody.message,
@@ -41,183 +72,238 @@ serve(async (req) => {
       language = 'en',
       conversationId = null,
       inputType = 'text',
+      conversationHistory = [],
       confirmSearch = false,
       activeTrigger = 'chat',
+      textGenParams = null,
       attachedFiles = [],
-      conversationHistory = [],
-      searchTopic = 'general'
+      calendarContext = null,
+      userContext = null,
+      enableAdvancedIntegration = true,
+      enablePredictiveInsights = true,
+      enableWorkflowAutomation = true,
+      confirmTask = false,
+      confirmReminder = false,
+      pendingTaskData = null,
+      pendingReminderData = null
     } = requestBody;
 
-    if (!message || typeof message !== 'string' || message.trim() === '') {
-      console.error("🚀 WAKTI AI V2 BRAIN: Invalid message field");
+    // CRITICAL: Ensure userId matches authenticated user
+    if (userId !== user.id) {
+      console.error("🚀 WAKTI AI V2 BRAIN: User ID mismatch - potential security breach attempt");
       return new Response(JSON.stringify({ 
-        error: "Message is required and must be a non-empty string",
+        error: "User ID mismatch",
         success: false
       }), {
-        status: 400,
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    if (!userId) {
-      console.error("🚀 WAKTI AI V2 BRAIN: Missing userId");
-      return new Response(JSON.stringify({ 
-        error: "User ID is required",
-        success: false
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", user.id);
     console.log("🚀 WAKTI AI V2 BRAIN: Active trigger mode:", activeTrigger);
     console.log("🚀 WAKTI AI V2 BRAIN: Chat memory length:", conversationHistory.length);
 
+    // Handle task confirmation
+    if (confirmTask && pendingTaskData) {
+      console.log("✅ Processing task confirmation");
+      const taskResult = await createTask(user.id, pendingTaskData, language);
+      
+      return new Response(JSON.stringify({
+        response: language === 'ar' 
+          ? '✅ تم إنشاء المهمة بنجاح! يمكنك العثور عليها في صفحة المهام والتذكيرات.'
+          : '✅ Task created successfully! You can find it in the Tasks & Reminders page.',
+        intent: 'task_created',
+        confidence: 'high',
+        actionTaken: true,
+        actionResult: taskResult,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Handle reminder confirmation
+    if (confirmReminder && pendingReminderData) {
+      console.log("✅ Processing reminder confirmation");
+      const reminderResult = await createReminder(user.id, pendingReminderData, language);
+      
+      return new Response(JSON.stringify({
+        response: language === 'ar' 
+          ? '✅ تم إنشاء التذكير بنجاح! يمكنك العثور عليه في صفحة المهام والتذكيرات.'
+          : '✅ Reminder created successfully! You can find it in the Tasks & Reminders page.',
+        intent: 'reminder_created',
+        confidence: 'high',
+        actionTaken: true,
+        actionResult: reminderResult,
+        success: true
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Process based on trigger mode with enhanced functionality
     let response = '';
-    let fileAnalysisResults = [];
+    let imageUrl = null;
     let browsingUsed = false;
     let browsingData = null;
     let quotaStatus = null;
     let actionTaken = null;
     let actionResult = null;
-    let contextUtilized = false;
+    let intent = 'general_chat';
+    let confidence = 'high';
+    let needsConfirmation = false;
+    let pendingTaskDataResult = null;
+    let pendingReminderDataResult = null;
 
-    // Check for mode-based restrictions in chat mode
-    if (activeTrigger === 'chat') {
-      const modeRestriction = checkModeRestrictions(message, language);
-      if (modeRestriction) {
-        return new Response(JSON.stringify({
-          response: modeRestriction,
-          conversationId: conversationId || generateConversationId(),
-          intent: 'mode_restriction',
-          confidence: 'high',
-          browsingUsed: false,
-          requiresSearchConfirmation: false,
-          success: true
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    }
+    // Context details for logging
+    console.log("🧠 Context details:", {
+      historyLength: conversationHistory.length,
+      activeTrigger,
+      language
+    });
 
-    // Process attached files with simplified handling
-    if (attachedFiles && attachedFiles.length > 0) {
-      console.log("📎 Processing files...");
-      fileAnalysisResults = await processFilesSimplified(attachedFiles, language);
-      console.log("📎 File analysis completed:", fileAnalysisResults.length);
-    }
+    // Load and add chat memory context
+    console.log("🧠 Adding chat memory context:", conversationHistory.length, "messages");
 
-    // Handle both search and advanced_search triggers with enhanced Tavily
-    if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
-      console.log(`🔍 ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} triggered`);
-      
-      // Check and increment quota BEFORE performing the search
-      if (activeTrigger === 'advanced_search') {
-        console.log("📈 Checking advanced search quota...");
-        const quotaCheck = await checkAndIncrementAdvancedSearchQuota(userId);
-        if (!quotaCheck.success) {
-          console.log("❌ Advanced search quota exceeded");
+    // Analyze intent for different trigger modes
+    const intentAnalysis = analyzeIntent(message, activeTrigger, language);
+    intent = intentAnalysis.intent;
+    confidence = intentAnalysis.confidence;
+
+    console.log("🧠 WAKTI AI V2 BRAIN: Processing with DeepSeek and chat memory");
+
+    switch (activeTrigger) {
+      case 'search':
+        if (intentAnalysis.isSearchQuery) {
+          // Check search quota
+          const quotaResult = await checkSearchQuota(user.id);
+          if (!quotaResult.canSearch) {
+            response = language === 'ar' 
+              ? `🚫 تم الوصول للحد الأقصى من البحث الشهري\n\nلقد استخدمت ${quotaResult.used}/10 من عمليات البحث المجانية هذا الشهر.\n\nيمكنك شراء 50 بحث إضافي مقابل 10 ريال.`
+              : `🚫 Monthly search limit reached\n\nYou've used ${quotaResult.used}/10 free searches this month.\n\nYou can purchase 50 additional searches for 10 QAR.`;
+            
+            quotaStatus = {
+              type: 'search_quota_exceeded',
+              used: quotaResult.used,
+              limit: 10,
+              extraSearches: quotaResult.extraSearches,
+              canPurchase: true
+            };
+          } else {
+            // Execute search
+            const searchResult = await executeSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
+              response = await processWithAI(message, searchResult.context, conversationHistory, language, activeTrigger);
+              
+              // Increment search usage
+              await incrementSearchUsage(user.id);
+            } else {
+              response = await processWithAI(message, null, conversationHistory, language, activeTrigger);
+            }
+            
+            quotaStatus = {
+              type: 'regular_search',
+              used: quotaResult.used + 1,
+              limit: 10,
+              extraSearches: quotaResult.extraSearches
+            };
+          }
+        } else {
           response = language === 'ar' 
-            ? `لقد استنفدت حصتك الشهرية من البحث المتقدم (5 عمليات بحث). يمكنك شراء المزيد من عمليات البحث المتقدم.`
-            : `You've reached your monthly advanced search limit (5 searches). You can purchase more advanced searches.`;
-          
-          return new Response(JSON.stringify({
-            response,
-            conversationId: conversationId || generateConversationId(),
-            intent: 'quota_exceeded',
-            confidence: 'high',
-            browsingUsed: false,
-            quotaStatus: { advancedSearchUsed: true, quotaExceeded: true },
-            requiresSearchConfirmation: false,
-            success: true
-          }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
+            ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
         }
-        console.log("✅ Advanced search quota available, proceeding...");
-      } else {
-        // Regular search - just log usage for tracking
-        console.log("📈 Logging regular search usage...");
-        await logRegularSearchUsage(userId);
-      }
+        break;
 
-      // Enhanced Tavily search with different configurations
-      const searchResults = await performEnhancedTavilySearch(
-        message, 
-        language, 
-        activeTrigger, 
-        searchTopic
-      );
-      
-      if (searchResults.success) {
-        browsingUsed = true;
-        browsingData = searchResults.data;
-        actionTaken = activeTrigger === 'advanced_search' ? 'advanced_web_search' : 'basic_web_search';
-        actionResult = { searchResults: searchResults.data };
+      case 'image':
+        if (intentAnalysis.isImageRequest) {
+          try {
+            console.log("🎨 Generating image with Runware API for prompt:", message);
+            const imageResult = await generateImageWithRunware(message, user.id, language);
+            
+            if (imageResult.success) {
+              imageUrl = imageResult.imageUrl;
+              response = language === 'ar' 
+                ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
+                : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
+              intent = 'image_generated';
+              actionTaken = true;
+            } else {
+              console.error("Image generation failed:", imageResult.error);
+              response = language === 'ar' 
+                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
+                : `❌ Sorry, there was an error generating the image. Please try again.`;
+            }
+          } catch (error) {
+            console.error("Image generation error:", error);
+            response = language === 'ar' 
+              ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
+              : `❌ Sorry, there was an error generating the image. Please try again.`;
+          }
+        } else {
+          response = language === 'ar' 
+            ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
+        }
+        break;
 
-        // Generate AI response with search results and conversation context
-        response = await generateResponseWithSearchAndContext(
-          message,
-          searchResults.data,
-          conversationHistory,
-          language
-        );
-        
-        console.log(`✅ ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} completed successfully`);
-      } else {
-        console.error("❌ Tavily search failed:", searchResults.error);
-        response = language === 'ar' 
-          ? `حدث خطأ أثناء البحث: ${searchResults.error}. سأحاول الإجابة بناءً على معرفتي الحالية.`
-          : `Search error: ${searchResults.error}. I'll try to answer based on my current knowledge.`;
-        
-        // Fallback to regular AI response
-        response = await processWithEnhancedContext(message, conversationHistory, language, activeTrigger);
-      }
-      
-      contextUtilized = conversationHistory.length > 0;
-    } else {
-      // Regular processing for other triggers (chat, image, etc.)
-      if (fileAnalysisResults.length > 0) {
-        response = await generateResponseWithFileAnalysisAndContext(
-          message, 
-          fileAnalysisResults, 
-          conversationHistory, 
-          language
-        );
-        actionTaken = 'file_analysis';
-        actionResult = { fileAnalysis: fileAnalysisResults };
-        contextUtilized = true;
-      } else {
-        response = await processWithEnhancedContext(
-          message, 
-          conversationHistory, 
-          language, 
-          activeTrigger
-        );
-        contextUtilized = conversationHistory.length > 0;
-      }
+      case 'chat':
+      default:
+        // Check for task/reminder creation intent
+        if (intentAnalysis.isTaskCreation) {
+          const taskData = extractTaskData(message, language);
+          if (taskData) {
+            needsConfirmation = true;
+            pendingTaskDataResult = taskData;
+            intent = 'task_preview';
+            response = language === 'ar' 
+              ? `📝 سأقوم بإنشاء مهمة لك. يرجى مراجعة التفاصيل والتأكيد:`
+              : `📝 I'll create a task for you. Please review the details and confirm:`;
+          } else {
+            response = await processWithAI(message, null, conversationHistory, language, activeTrigger);
+          }
+        } else if (intentAnalysis.isReminderCreation) {
+          const reminderData = extractReminderData(message, language);
+          if (reminderData) {
+            needsConfirmation = true;
+            pendingReminderDataResult = reminderData;
+            intent = 'reminder_preview';
+            response = language === 'ar' 
+              ? `⏰ سأقوم بإنشاء تذكير لك. يرجى مراجعة التفاصيل والتأكيد:`
+              : `⏰ I'll create a reminder for you. Please review the details and confirm:`;
+          } else {
+            response = await processWithAI(message, null, conversationHistory, language, activeTrigger);
+          }
+        } else {
+          // Regular chat with AI
+          response = await processWithAI(message, null, conversationHistory, language, activeTrigger);
+        }
+        break;
     }
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: (activeTrigger === 'search' || activeTrigger === 'advanced_search') ? 'web_search' : 'general_chat',
-      confidence: 'high',
+      intent,
+      confidence,
       actionTaken,
       actionResult,
+      imageUrl,
       browsingUsed,
       browsingData,
       quotaStatus,
       requiresSearchConfirmation: false,
-      needsConfirmation: false,
-      attachedFiles: attachedFiles,
-      fileAnalysisResults,
-      contextUtilized,
+      needsConfirmation,
+      pendingTaskData: pendingTaskDataResult,
+      pendingReminderData: pendingReminderDataResult,
       success: true
     };
 
-    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:", contextUtilized);
+    console.log("✅ Enhanced context response generated using:", DEEPSEEK_API_KEY ? 'DeepSeek' : (OPENAI_API_KEY ? 'OpenAI' : 'Fallback'));
+    console.log("🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:", !!conversationHistory.length);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -238,438 +324,489 @@ serve(async (req) => {
   }
 });
 
-// NEW: Function to check mode restrictions for chat mode
-function checkModeRestrictions(message: string, language: string = 'en'): string | null {
+// Intent analysis for different modes
+function analyzeIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
-  // Image generation requests
-  const imageKeywords = [
-    'generate image', 'create image', 'make image', 'draw', 'picture', 'photo',
-    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'رسم'
+  const taskPatterns = [
+    'create task', 'add task', 'new task', 'make task', 'task for',
+    'remind me', 'reminder', 'schedule', 'appointment',
+    'أنشئ مهمة', 'اضف مهمة', 'مهمة جديدة', 'ذكرني', 'تذكير', 'موعد'
   ];
+
+  const searchPatterns = [
+    'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
+    'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
+    'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
+    'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
+  ];
+
+  const imagePatterns = [
+    'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
+    'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
+  ];
+
+  const isTaskCreation = taskPatterns.some(pattern => lowerMessage.includes(pattern));
+  const isReminderCreation = lowerMessage.includes('remind') || lowerMessage.includes('ذكر');
+  const isSearchQuery = searchPatterns.some(pattern => lowerMessage.includes(pattern)) || lowerMessage.includes('?');
+  const isImageRequest = imagePatterns.some(pattern => lowerMessage.includes(pattern));
+
+  let intent = 'general_chat';
+  if (isTaskCreation && !isReminderCreation) intent = 'task_creation';
+  else if (isReminderCreation) intent = 'reminder_creation';
+  else if (isSearchQuery && activeTrigger === 'search') intent = 'search_query';
+  else if (isImageRequest && activeTrigger === 'image') intent = 'image_generation';
+
+  return {
+    intent,
+    confidence: 'high' as const,
+    isTaskCreation,
+    isReminderCreation,
+    isSearchQuery,
+    isImageRequest
+  };
+}
+
+// Extract task data from message
+function extractTaskData(message: string, language: string = 'en') {
+  // Simple extraction - in production, you'd use more sophisticated NLP
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  // Extract basic task info
+  let title = message.replace(/create task|add task|new task|make task|أنشئ مهمة|اضف مهمة|مهمة جديدة/gi, '').trim();
+  if (title.length < 3) {
+    title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
+  }
+
+  // Basic due date detection
+  let due_date = null;
+  let due_time = null;
   
-  // Search requests
-  const searchKeywords = [
-    'search for', 'find information', 'look up', 'what is happening', 'current news',
-    'ابحث عن', 'ابحث في', 'ما الأخبار', 'معلومات حديثة', 'آخر الأخبار'
-  ];
-
-  const hasImageRequest = imageKeywords.some(keyword => lowerMessage.includes(keyword));
-  const hasSearchRequest = searchKeywords.some(keyword => lowerMessage.includes(keyword));
-
-  if (hasImageRequest) {
-    return language === 'ar' 
-      ? "أنا حالياً في وضع المحادثة. يرجى التبديل إلى وضع الصورة لإنشاء الصور."
-      : "I'm currently in Chat Mode. Please switch to Image Mode to generate images.";
+  if (message.includes('tomorrow') || message.includes('غداً')) {
+    due_date = tomorrow.toISOString().split('T')[0];
+  } else if (message.includes('today') || message.includes('اليوم')) {
+    due_date = today.toISOString().split('T')[0];
   }
 
-  if (hasSearchRequest) {
-    return language === 'ar' 
-      ? "أنا حالياً في وضع المحادثة. يرجى التبديل إلى وضع البحث للحصول على معلومات حديثة."
-      : "I'm currently in Chat Mode. Please switch to Search Mode to get current information.";
+  // Time extraction (basic)
+  const timeMatch = message.match(/(\d{1,2}):(\d{2})|(\d{1,2})\s*(am|pm)/i);
+  if (timeMatch) {
+    due_time = timeMatch[0];
   }
 
-  return null; // No restrictions
+  return {
+    title,
+    description: '',
+    due_date,
+    due_time,
+    priority: 'normal',
+    subtasks: []
+  };
 }
 
-// NEW: Simple function to check and increment advanced search quota
-async function checkAndIncrementAdvancedSearchQuota(userId: string) {
+// Extract reminder data from message
+function extractReminderData(message: string, language: string = 'en') {
+  // Similar to task extraction but for reminders
+  let title = message.replace(/remind me|reminder|ذكرني|تذكير/gi, '').trim();
+  if (title.length < 3) {
+    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
+  }
+
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  let due_date = null;
+  let due_time = null;
+  
+  if (message.includes('tomorrow') || message.includes('غداً')) {
+    due_date = tomorrow.toISOString().split('T')[0];
+  } else if (message.includes('today') || message.includes('اليوم')) {
+    due_date = today.toISOString().split('T')[0];
+  }
+
+  const timeMatch = message.match(/(\d{1,2}):(\d{2})|(\d{1,2})\s*(am|pm)/i);
+  if (timeMatch) {
+    due_time = timeMatch[0];
+  }
+
+  return {
+    title,
+    due_date,
+    due_time
+  };
+}
+
+// Create task in database
+async function createTask(userId: string, taskData: any, language: string = 'en') {
   try {
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    console.log("📝 Creating task in database:", taskData);
     
-    // Get or create quota record for current month
-    const { data: quotaData, error: quotaError } = await supabase
-      .from('user_search_quotas')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('monthly_date', currentMonth)
+    const { data, error } = await supabase
+      .from('tr_tasks')
+      .insert({
+        user_id: userId,
+        title: taskData.title,
+        description: taskData.description,
+        due_date: taskData.due_date,
+        due_time: taskData.due_time,
+        priority: taskData.priority || 'normal'
+      })
+      .select()
       .single();
-    
-    if (quotaError && quotaError.code !== 'PGRST116') { // PGRST116 is "not found"
-      console.error("Error fetching quota:", quotaError);
-      return { success: false, error: quotaError.message };
+
+    if (error) {
+      console.error("❌ Error creating task:", error);
+      throw error;
     }
-    
-    let currentUsage = 0;
-    let extraSearches = 0;
-    
-    if (quotaData) {
-      currentUsage = quotaData.daily_count || 0;
-      extraSearches = quotaData.extra_advanced_searches || 0;
-    }
-    
-    // Check if user has quota available (5 free + extras)
-    const maxFreeSearches = 5;
-    if (currentUsage >= maxFreeSearches && extraSearches <= 0) {
-      console.log("Quota exceeded:", { currentUsage, maxFreeSearches, extraSearches });
-      return { success: false, error: "Quota exceeded" };
-    }
-    
-    // Increment usage
-    if (quotaData) {
-      // Update existing record
-      if (currentUsage < maxFreeSearches) {
-        // Use free quota
-        const { error: updateError } = await supabase
-          .from('user_search_quotas')
-          .update({ 
-            daily_count: currentUsage + 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', userId)
-          .eq('monthly_date', currentMonth);
-        
-        if (updateError) {
-          console.error("Error updating quota:", updateError);
-          return { success: false, error: updateError.message };
-        }
-      } else {
-        // Use extra searches
-        const { error: updateError } = await supabase
-          .from('user_search_quotas')
-          .update({ 
-            extra_advanced_searches: extraSearches - 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('user_id', userId)
-          .eq('monthly_date', currentMonth);
-        
-        if (updateError) {
-          console.error("Error updating extra searches:", updateError);
-          return { success: false, error: updateError.message };
+
+    // Create subtasks if any
+    if (taskData.subtasks && taskData.subtasks.length > 0) {
+      for (let i = 0; i < taskData.subtasks.length; i++) {
+        const subtask = taskData.subtasks[i];
+        if (subtask.trim()) {
+          await supabase
+            .from('tr_subtasks')
+            .insert({
+              task_id: data.id,
+              title: subtask,
+              order_index: i
+            });
         }
       }
-    } else {
-      // Create new record
-      const { error: insertError } = await supabase
-        .from('user_search_quotas')
-        .insert({
-          user_id: userId,
-          monthly_date: currentMonth,
-          daily_count: 1,
-          extra_searches: 0,
-          regular_search_count: 0,
-          extra_regular_searches: 0,
-          extra_advanced_searches: 0
-        });
-      
-      if (insertError) {
-        console.error("Error creating quota record:", insertError);
-        return { success: false, error: insertError.message };
-      }
     }
-    
-    console.log("✅ Advanced search quota incremented successfully");
-    return { success: true };
-    
+
+    console.log("✅ Task created successfully:", data.id);
+    return { success: true, taskId: data.id };
   } catch (error) {
-    console.error("❌ Error in checkAndIncrementAdvancedSearchQuota:", error);
-    return { success: false, error: error.message };
+    console.error("❌ Error creating task:", error);
+    throw error;
   }
 }
 
-// NEW: Simple function to log regular search usage (no quota limit)
-async function logRegularSearchUsage(userId: string) {
+// Create reminder in database
+async function createReminder(userId: string, reminderData: any, language: string = 'en') {
   try {
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    console.log("⏰ Creating reminder in database:", reminderData);
     
-    // Get or create quota record
-    const { data: quotaData, error: quotaError } = await supabase
-      .from('user_search_quotas')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('monthly_date', currentMonth)
+    const { data, error } = await supabase
+      .from('tr_reminders')
+      .insert({
+        user_id: userId,
+        title: reminderData.title,
+        due_date: reminderData.due_date,
+        due_time: reminderData.due_time
+      })
+      .select()
       .single();
-    
-    if (quotaData) {
-      // Update existing record
-      await supabase
-        .from('user_search_quotas')
-        .update({ 
-          regular_search_count: (quotaData.regular_search_count || 0) + 1,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .eq('monthly_date', currentMonth);
-    } else {
-      // Create new record
-      await supabase
-        .from('user_search_quotas')
-        .insert({
-          user_id: userId,
-          monthly_date: currentMonth,
-          daily_count: 0,
-          extra_searches: 0,
-          regular_search_count: 1,
-          extra_regular_searches: 0,
-          extra_advanced_searches: 0
-        });
+
+    if (error) {
+      console.error("❌ Error creating reminder:", error);
+      throw error;
     }
-    
-    console.log("✅ Regular search usage logged");
+
+    console.log("✅ Reminder created successfully:", data.id);
+    return { success: true, reminderId: data.id };
   } catch (error) {
-    console.error("⚠️ Error logging regular search usage:", error);
-    // Don't throw error for logging failures
+    console.error("❌ Error creating reminder:", error);
+    throw error;
   }
 }
 
-// Enhanced Tavily search function with differentiated configurations
-async function performEnhancedTavilySearch(
-  query: string, 
-  language: string = 'en', 
-  searchMode: string = 'search',
-  topic: string = 'general'
-) {
+// Check search quota
+async function checkSearchQuota(userId: string) {
+  try {
+    console.log("🔍 Checking search quota for user:", userId);
+    
+    const { data, error } = await supabase.rpc('get_or_create_user_search_quota', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error("❌ Error checking search quota:", error);
+      return { canSearch: true, used: 0, extraSearches: 0 };
+    }
+
+    const quota = data[0];
+    const used = quota.regular_search_count || 0;
+    const extraSearches = quota.extra_regular_searches || 0;
+    const monthlyLimit = 10;
+
+    const canSearch = used < monthlyLimit || extraSearches > 0;
+
+    console.log("📊 Search quota status:", {
+      used,
+      limit: monthlyLimit,
+      extraSearches,
+      canSearch
+    });
+
+    return {
+      canSearch,
+      used,
+      extraSearches
+    };
+  } catch (error) {
+    console.error("❌ Unexpected error checking search quota:", error);
+    return { canSearch: true, used: 0, extraSearches: 0 };
+  }
+}
+
+// Increment search usage
+async function incrementSearchUsage(userId: string) {
+  try {
+    console.log("🔄 Incrementing search usage for user:", userId);
+    
+    const { data, error } = await supabase.rpc('increment_regular_search_usage', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error("❌ Error incrementing search usage:", error);
+    } else {
+      console.log("✅ Search usage incremented successfully");
+    }
+  } catch (error) {
+    console.error("❌ Unexpected error incrementing search usage:", error);
+  }
+}
+
+// Execute search with Tavily API
+async function executeSearch(query: string, language: string = 'en') {
   try {
     if (!TAVILY_API_KEY) {
-      throw new Error("Tavily API key not configured");
+      console.log("🔍 No Tavily API - using AI for search response");
+      
+      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+      return {
+        success: true,
+        context: searchContext,
+        data: { 
+          sources: [],
+          enhanced: false,
+          note: "AI response without web search"
+        }
+      };
     }
-
-    const isAdvanced = searchMode === 'advanced_search';
-    console.log(`🔍 Performing ${isAdvanced ? 'Advanced' : 'Basic'} Tavily search for:`, query.slice(0, 50));
-
-    // Configure search parameters based on mode
-    const searchConfig = {
-      query: query,
-      topic: topic, // 'general' or 'news'
-      search_depth: isAdvanced ? 'advanced' : 'basic',
-      max_results: isAdvanced ? 5 : 3,
-      include_answer: true,
-      include_raw_content: false,
-      // Enhanced configurations
-      chunks_per_source: isAdvanced ? 3 : 1, // More content chunks for advanced
-      time_range: isAdvanced ? 'year' : 'week', // Longer time range for advanced
-      include_images: isAdvanced, // Only advanced search includes images
-      include_image_descriptions: isAdvanced, // With descriptions for advanced
-      include_domains: [],
-      exclude_domains: []
-    };
-
-    console.log(`🔍 Search configuration:`, {
-      mode: isAdvanced ? 'advanced' : 'basic',
-      topic,
-      chunks_per_source: searchConfig.chunks_per_source,
-      time_range: searchConfig.time_range,
-      include_images: searchConfig.include_images,
-      max_results: searchConfig.max_results
-    });
-
+    
+    console.log("🔍 Executing Tavily search for query:", query);
+    
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${TAVILY_API_KEY}`
-      },
-      body: JSON.stringify(searchConfig)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`Tavily API failed: ${response.status}`, errorData);
-      throw new Error(`Tavily API failed: ${response.status} - ${errorData}`);
-    }
-
-    const searchData = await response.json();
-    console.log(`✅ ${isAdvanced ? 'Advanced' : 'Basic'} Tavily search successful:`, {
-      results: searchData.results?.length || 0,
-      images: searchData.images?.length || 0,
-      hasAnswer: !!searchData.answer
-    });
-
-    return {
-      success: true,
-      data: {
-        answer: searchData.answer,
-        results: searchData.results || [],
-        images: searchData.images || [],
-        query: searchData.query,
-        response_time: searchData.response_time,
-        search_mode: isAdvanced ? 'advanced' : 'basic',
-        topic: topic,
-        time_range: searchConfig.time_range,
-        chunks_per_source: searchConfig.chunks_per_source
-      }
-    };
-
-  } catch (error) {
-    console.error('Error performing enhanced Tavily search:', error);
-    return {
-      success: false,
-      error: error.message,
-      data: null
-    };
-  }
-}
-
-// New function to generate response with search results and context
-async function generateResponseWithSearchAndContext(
-  message: string,
-  searchData: any,
-  conversationHistory: any[],
-  language: string = 'en'
-) {
-  try {
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    console.log(`🔍 Generating response with search results and context using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
-
-    const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. لقد حصلت على نتائج بحث حديثة من الويب لسؤال المستخدم. استخدم هذه المعلومات مع سياق المحادثة السابق لتقديم إجابة شاملة ودقيقة.
-
-تذكر دائماً:
-- استخدم المعلومات الحديثة من نتائج البحث
-- اربط إجابتك بسياق المحادثة السابق
-- اذكر المصادر عند الإمكان
-- إذا كانت هناك صور مرفقة، اذكرها في إجابتك
-- كن دقيقاً ومفيداً ومختصراً`
-      : `You are WAKTI, an advanced AI assistant. You have received fresh web search results for the user's query. Use this information along with the previous conversation context to provide a comprehensive and accurate response.
-
-Always remember to:
-- Use the latest information from search results
-- Connect your response to previous conversation context
-- Cite sources when possible
-- If images are included, mention them in your response
-- Be accurate, helpful, and concise`;
-
-    const messages = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    // Add recent conversation history for context
-    if (conversationHistory && conversationHistory.length > 0) {
-      const recentHistory = conversationHistory.slice(-20);
-      for (const historyMessage of recentHistory) {
-        messages.push({
-          role: historyMessage.role,
-          content: historyMessage.content
-        });
-      }
-    }
-
-    // Prepare enhanced search results summary
-    let searchSummary = `Search Results for: "${searchData.query}"
-Search Mode: ${searchData.search_mode} (${searchData.topic} topic)
-Time Range: ${searchData.time_range}
-
-Answer: ${searchData.answer || 'No direct answer provided'}
-
-Top Results:
-${searchData.results.map((result: any, index: number) => 
-  `${index + 1}. ${result.title}
-   URL: ${result.url}
-   Content: ${result.content.slice(0, 300)}...`
-).join('\n\n')}`;
-
-    // Add image information for advanced searches
-    if (searchData.images && searchData.images.length > 0) {
-      searchSummary += `\n\nImages Found: ${searchData.images.length}
-${searchData.images.slice(0, 3).map((image: any, index: number) => 
-  `${index + 1}. ${image.url}${image.description ? `\n   Description: ${image.description}` : ''}`
-).join('\n')}`;
-    }
-
-    // Add current message with search results
-    messages.push({ 
-      role: 'user', 
-      content: `${message}\n\nWeb Search Results:\n${searchSummary}` 
-    });
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 2000
+        api_key: TAVILY_API_KEY,
+        query: query,
+        search_depth: "basic",
+        include_answer: true,
+        include_raw_content: false,
+        max_results: 10,
+        max_chunks: 5,
+        include_domains: [],
+        exclude_domains: []
       })
     });
-
+    
     if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error("Tavily API error:", response.status, errorText);
+      
+      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+      return {
+        success: true,
+        context: searchContext,
+        data: { 
+          sources: [],
+          enhanced: false,
+          fallback: true,
+          note: "AI response (Tavily fallback)"
+        }
+      };
     }
-
-    const result = await response.json();
-    console.log(`✅ Search response generated successfully using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
     
-    return result.choices[0].message.content;
-
+    const data = await response.json();
+    console.log("✅ Tavily search successful");
+    
+    let searchContext = `Search results for: "${query}"\n\n`;
+    if (data.answer) {
+      searchContext += `Summary: ${data.answer}\n\n`;
+    }
+    
+    if (data.results && data.results.length > 0) {
+      searchContext += "Sources:\n";
+      data.results.forEach((result, index) => {
+        searchContext += `${index + 1}. ${result.title}\n`;
+        searchContext += `   ${result.content}\n`;
+        searchContext += `   Source: ${result.url}\n\n`;
+      });
+    }
+    
+    return {
+      success: true,
+      context: searchContext,
+      data: { 
+        sources: data.results || [],
+        enhanced: false,
+        searchDepth: "basic",
+        answer: data.answer
+      }
+    };
   } catch (error) {
-    console.error("Error generating response with search and context:", error);
+    console.error("Search execution error:", error);
     
-    // Fallback response
-    return language === 'ar' 
-      ? `تم العثور على نتائج البحث ولكن حدث خطأ في معالجتها. إليك ما وجدته: ${searchData.answer || 'لم يتم العثور على إجابة مباشرة'}`
-      : `Found search results but encountered an error processing them. Here's what I found: ${searchData.answer || 'No direct answer found'}`;
+    const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
+    return {
+      success: true,
+      context: searchContext,
+      data: { 
+        sources: [],
+        enhanced: false,
+        fallback: true,
+        note: "AI response (error fallback)"
+      }
+    };
   }
 }
 
-// Enhanced function to process message with full conversation context
-async function processWithEnhancedContext(
-  message: string, 
-  conversationHistory: any[], 
-  language: string = 'en', 
-  activeTrigger: string = 'chat'
-) {
+// Generate image with Runware API
+async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
   try {
-    console.log("🧠 WAKTI AI V2 BRAIN: Processing with DeepSeek and chat memory");
-    console.log("🧠 Context details:", {
-      historyLength: conversationHistory.length,
-      activeTrigger,
-      language
+    console.log("🎨 Generating image with Runware for prompt:", prompt);
+
+    const response = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: RUNWARE_API_KEY,
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: prompt,
+          model: "runware:100@1",
+          width: 512,
+          height: 512,
+          numberResults: 1,
+          outputFormat: "WEBP",
+          CFGScale: 1,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          steps: 4,
+        },
+      ]),
     });
+
+    console.log("🎨 Runware response status:", response.status);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log("🎨 Runware response data:", result);
+      
+      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
+      
+      if (imageResult && imageResult.imageURL) {
+        // Save image to database
+        try {
+          await supabase
+            .from('images')
+            .insert({
+              user_id: userId,
+              prompt: prompt,
+              image_url: imageResult.imageURL,
+              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
+            });
+        } catch (dbError) {
+          console.log("Could not save image to database:", dbError);
+        }
+
+        return {
+          success: true,
+          imageUrl: imageResult.imageURL
+        };
+      } else {
+        throw new Error('No image URL in Runware response');
+      }
+    } else {
+      const errorText = await response.text();
+      console.error("🎨 Runware API error:", response.status, errorText);
+      throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
+    }
+  } catch (error) {
+    console.error('🎨 Error generating image with Runware:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Real AI processing function
+async function processWithAI(message: string, context: string | null, conversationHistory: any[], language: string = 'en', activeTrigger: string = 'chat') {
+  try {
+    console.log("🤖 Processing with real AI");
     
-    // Always prefer DeepSeek for chat interactions
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
+    // Try DeepSeek first, fallback to OpenAI
+    let apiKey = DEEPSEEK_API_KEY;
+    let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+    let model = 'deepseek-chat';
+    
+    if (!apiKey) {
+      apiKey = OPENAI_API_KEY;
+      apiUrl = 'https://api.openai.com/v1/chat/completions';
+      model = 'gpt-4o-mini';
+    }
     
     if (!apiKey) {
       throw new Error("No AI API key configured");
     }
 
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. 
+      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.
 
-تذكر دائماً سياق المحادثة السابق واربط إجاباتك بما تم مناقشته من قبل. إذا كان المستخدم يشير إلى شيء تم ذكره سابقاً، تأكد من ربط إجابتك بذلك السياق.
+وضع التشغيل الحالي: ${activeTrigger === 'chat' ? 'محادثة' : activeTrigger === 'search' ? 'بحث' : 'إنشاء صور'}
 
-كن ودوداً ومفيداً ومختصراً في إجاباتك، واستخدم المعلومات السابقة لتقديم إجابات أكثر دقة وشخصية.
+تعليمات مهمة للتنسيق:
+- استخدم نصاً عادياً واضحاً
+- تجنب الرموز الزائدة مثل # أو ** أو ***
+- استخدم فقرات بسيطة مع فواصل أسطر طبيعية
+- اجعل الإجابة سهلة القراءة وبدون تعقيد في التنسيق
+- استخدم سياق المحادثة السابقة للإجابة بطريقة طبيعية ومتسقة`
+      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.
 
-أنت حالياً في وضع المحادثة. إذا طلب المستخدم إنشاء صور أو البحث في الويب، أخبره بالتبديل إلى الوضع المناسب.`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. 
+Current mode: ${activeTrigger}
 
-Always remember the previous conversation context and connect your responses to what has been discussed before. If the user refers to something mentioned earlier, make sure to link your response to that context.
-
-Be friendly, helpful, and concise in your responses, and use previous information to provide more accurate and personalized answers.
-
-You are currently in Chat Mode. If the user asks for image generation or web search, tell them to switch to the appropriate mode.`;
+Important formatting instructions:
+- Use clean, plain text
+- Avoid excessive symbols like #, **, or ***
+- Use simple paragraphs with natural line breaks
+- Keep responses readable and clean without formatting clutter
+- Use conversation context to provide natural, consistent responses`;
     
-    // Build conversation messages with full context
     const messages = [
       { role: 'system', content: systemPrompt }
     ];
-
-    // Add conversation history (maintain chronological order)
+    
+    // Add conversation history for context (last 10 messages)
     if (conversationHistory && conversationHistory.length > 0) {
-      console.log("🧠 Adding chat memory context:", conversationHistory.length, "messages");
-      
-      for (const historyMessage of conversationHistory) {
+      const recentHistory = conversationHistory.slice(-10);
+      recentHistory.forEach(msg => {
         messages.push({
-          role: historyMessage.role,
-          content: historyMessage.content
+          role: msg.role,
+          content: msg.content
         });
-      }
+      });
     }
-
+    
+    // Add context if provided (for search results)
+    if (context) {
+      messages.push({ role: 'assistant', content: `Context: ${context}` });
+    }
+    
     // Add current message
     messages.push({ role: 'user', content: message });
     
@@ -683,7 +820,7 @@ You are currently in Chat Mode. If the user asks for image generation or web sea
         model: model,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1500
+        max_tokens: 1000
       })
     });
     
@@ -692,299 +829,15 @@ You are currently in Chat Mode. If the user asks for image generation or web sea
     }
     
     const result = await response.json();
-    console.log(`✅ Enhanced context response generated using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
-    
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🧠 WAKTI AI V2 BRAIN: Enhanced context processing error:", error);
+    console.error("🤖 AI processing error:", error);
     
     // Fallback response
     return language === 'ar' 
       ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
       : `Sorry, there was an error processing your request. Please try again.`;
-  }
-}
-
-// Enhanced function to generate response with file analysis and conversation context
-async function generateResponseWithFileAnalysisAndContext(
-  message: string, 
-  fileAnalysis: any[], 
-  conversationHistory: any[], 
-  language: string = 'en'
-) {
-  try {
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    console.log(`💬 Generating response with file analysis and context using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت WAKTI، مساعد ذكي متقدم. المستخدم أرسل ملفات مع رسالته، واستخدم تاريخ المحادثة السابق وتحليل الملفات المرفق للإجابة على سؤاله بشكل شامل ومفيد. تذكر السياق السابق للمحادثة.'
-      : 'You are WAKTI, an advanced AI assistant. The user sent files with their message. Use the previous conversation history and the attached file analysis to provide a comprehensive and helpful response to their question. Remember the previous conversation context.';
-
-    // Build messages with conversation context
-    const messages = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    // Add recent conversation history for context
-    if (conversationHistory && conversationHistory.length > 0) {
-      const recentHistory = conversationHistory.slice(-20); // Keep recent context
-      for (const historyMessage of recentHistory) {
-        messages.push({
-          role: historyMessage.role,
-          content: historyMessage.content
-        });
-      }
-    }
-
-    // Prepare file analysis summary
-    const fileAnalysisSummary = fileAnalysis.map(file => 
-      `File: ${file.fileName} (${file.fileType})\nAnalysis: ${file.analysis.analysis}`
-    ).join('\n\n');
-
-    // Add current message with file analysis
-    messages.push({ 
-      role: 'user', 
-      content: `${message}\n\nFile Analysis Results:\n${fileAnalysisSummary}` 
-    });
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 2000
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log(`✅ File analysis with context synthesis successful using: ${DEEPSEEK_API_KEY ? 'DeepSeek' : 'OpenAI'}`);
-    
-    return result.choices[0].message.content;
-
-  } catch (error) {
-    console.error("Error generating response with file analysis and context:", error);
-    
-    // Fallback response
-    return language === 'ar' 
-      ? `تم تحليل الملفات المرفقة بنجاح. ${fileAnalysis.length} ملف تم تحليله. يرجى إعادة صياغة سؤالك للحصول على معلومات أكثر تفصيلاً.`
-      : `Successfully analyzed ${fileAnalysis.length} attached file(s). Please rephrase your question for more detailed information.`;
-  }
-}
-
-// Simplified file processing - removed PDF specific handling
-async function processFilesSimplified(files: any[], language: string = 'en') {
-  const results = [];
-
-  for (const file of files) {
-    try {
-      console.log(`📎 Processing file: ${file.name} (${file.type})`);
-      
-      let analysisResult;
-
-      if (isImageFile(file.type)) {
-        // Use OpenAI Vision for images
-        console.log(`🖼️ Using Vision API for image: ${file.name}`);
-        analysisResult = await analyzeImageWithVision(file, language);
-      } else if (isTextFile(file.type)) {
-        // Process text files directly
-        console.log(`📝 Processing text file: ${file.name}`);
-        analysisResult = await processTextFile(file, language);
-      } else {
-        // Unsupported file type
-        console.log(`❌ Unsupported file type: ${file.type}`);
-        analysisResult = {
-          success: false,
-          error: 'Unsupported file type',
-          analysis: language === 'ar' ? 'نوع ملف غير مدعوم' : 'Unsupported file type'
-        };
-      }
-
-      results.push({
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        fileUrl: file.url,
-        analysis: analysisResult
-      });
-
-    } catch (error) {
-      console.error(`📎 Error processing file ${file.name}:`, error);
-      results.push({
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        fileUrl: file.url,
-        analysis: {
-          success: false,
-          error: error.message,
-          analysis: language === 'ar' ? 'فشل في تحليل الملف' : 'Failed to analyze file'
-        }
-      });
-    }
-  }
-
-  return results;
-}
-
-// Check if file is an image
-function isImageFile(mimeType: string): boolean {
-  return mimeType.startsWith('image/') && 
-         ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'].includes(mimeType.toLowerCase());
-}
-
-// Check if file is a text file
-function isTextFile(mimeType: string): boolean {
-  return mimeType === 'text/plain' || mimeType.includes('text/');
-}
-
-// Analyze images with OpenAI Vision
-async function analyzeImageWithVision(file: any, language: string = 'en') {
-  try {
-    if (!OPENAI_API_KEY) {
-      throw new Error("OpenAI API key not configured for image analysis");
-    }
-
-    console.log(`🔍 Analyzing image with OpenAI Vision: ${file.name}`);
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل الصور. صف ما تراه في الصورة بالتفصيل واستخرج أي نص موجود. كن دقيقاً ومفصلاً في وصفك.'
-      : 'You are an AI assistant specialized in image analysis. Describe what you see in the image in detail and extract any text present. Be accurate and detailed in your description.';
-
-    const userPrompt = language === 'ar' ? 'حلل هذه الصورة بالتفصيل' : 'Analyze this image in detail';
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { 
-            role: 'user', 
-            content: [
-              { type: 'text', text: userPrompt },
-              { type: 'image_url', image_url: { url: file.url } }
-            ]
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error(`OpenAI Vision API failed: ${response.status}`, errorData);
-      throw new Error(`OpenAI Vision API failed: ${response.status} - ${errorData}`);
-    }
-
-    const result = await response.json();
-    console.log(`✅ Vision analysis successful for: ${file.name}`);
-    
-    return {
-      success: true,
-      analysis: result.choices[0].message.content,
-      model: 'gpt-4o-vision'
-    };
-
-  } catch (error) {
-    console.error('Error analyzing image with Vision:', error);
-    return {
-      success: false,
-      error: error.message,
-      analysis: language === 'ar' ? 'فشل في تحليل الصورة' : 'Failed to analyze image'
-    };
-  }
-}
-
-// Process text files by reading content and analyzing with AI
-async function processTextFile(file: any, language: string = 'en') {
-  try {
-    console.log(`📝 Processing text file: ${file.name}`);
-    
-    // Fetch the text content from the file URL
-    const response = await fetch(file.url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch text file: ${response.status}`);
-    }
-    
-    const textContent = await response.text();
-    
-    // Analyze the text content with AI
-    const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
-    const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
-    const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
-
-    if (!apiKey) {
-      throw new Error("No AI API key configured");
-    }
-
-    const systemPrompt = language === 'ar' 
-      ? 'أنت مساعد ذكي متخصص في تحليل النصوص والمستندات. حلل المحتوى واستخرج النقاط المهمة والملخص والبيانات الرئيسية.'
-      : 'You are an AI assistant specialized in text and document analysis. Analyze the content and extract key points, summary, and main data.';
-
-    const userPrompt = language === 'ar' 
-      ? `حلل محتوى هذا الملف النصي:\n\n${textContent}`
-      : `Analyze the content of this text file:\n\n${textContent}`;
-
-    const aiResponse = await fetch(apiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1500
-      })
-    });
-
-    if (!aiResponse.ok) {
-      throw new Error(`AI API failed: ${aiResponse.status}`);
-    }
-
-    const result = await aiResponse.json();
-    console.log(`✅ Text analysis successful for: ${file.name}`);
-    
-    return {
-      success: true,
-      analysis: result.choices[0].message.content,
-      model: model,
-      textLength: textContent.length
-    };
-
-  } catch (error) {
-    console.error('Error processing text file:', error);
-    return {
-      success: false,
-      error: error.message,
-      analysis: language === 'ar' ? 'فشل في معالجة الملف النصي' : 'Failed to process text file'
-    };
   }
 }
 
