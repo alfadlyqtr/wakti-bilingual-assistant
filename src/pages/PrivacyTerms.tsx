@@ -8,6 +8,14 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 export default function PrivacyTerms() {
   const { language } = useTheme();
 
+  const formatText = (text: string) => {
+    return text.split('\n').map((line, index) => (
+      <div key={index} className="mb-1">
+        {line}
+      </div>
+    ));
+  };
+
   return (
     <div className="mobile-container">
       <MobileHeader title={t("privacyAndTerms", language)} showBackButton={true}>
@@ -15,78 +23,284 @@ export default function PrivacyTerms() {
       </MobileHeader>
       
       <div className="flex-1 overflow-y-auto">
-        <div className="px-4 py-6 space-y-6">
-          <div className="prose prose-sm max-w-none">
-            <p className="text-sm text-muted-foreground mb-6">
-              {t("lastUpdated", language)}: {t("june11_2025", language)}
+        <div className="px-4 py-6 space-y-8">
+          {/* Header */}
+          <div className="text-center space-y-4">
+            <h1 className="text-2xl font-bold text-center">
+              {t("privacyPolicyHeader", language)}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              <strong>{t("lastUpdated", language)}:</strong> {t("lastUpdatedDate", language)}
             </p>
+            <div className="text-sm leading-relaxed text-muted-foreground border-l-4 border-primary pl-4 bg-muted/30 p-4 rounded-r-lg">
+              {t("welcomeText", language)}
+            </div>
+          </div>
 
-            <div className="space-y-6">
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("legalCompliance", language)}</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("legalComplianceText", language)}
+          <div className="space-y-8">
+            {/* Section 1 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section1Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section1Text", language)}</p>
+                <p className="text-sm leading-relaxed font-medium text-accent-foreground">
+                  {t("section1Text2", language)}
                 </p>
-              </section>
+              </div>
+            </section>
 
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("dataPrivacy", language)}</h2>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-medium mb-2">{t("whatWeCollect", language)}</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {t("whatWeCollectText", language)}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">{t("howItsUsed", language)}</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {t("howItsUsedText", language)}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">{t("dataSharing", language)}</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {t("dataSharingText", language)}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="font-medium mb-2">{t("yourRights", language)}</h3>
-                    <p className="text-sm leading-relaxed text-muted-foreground">
-                      {t("yourRightsText", language)}
-                    </p>
+            {/* Section 2 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section2Title", language)}
+              </h2>
+              
+              <div className="space-y-4">
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-primary">{t("section2_1Title", language)}</h3>
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section2_1Text", language))}
                   </div>
                 </div>
-              </section>
 
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("responsibleUse", language)}</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("responsibleUseText", language)}
-                </p>
-              </section>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-primary">{t("section2_2Title", language)}</h3>
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section2_2Text", language))}
+                  </div>
+                </div>
 
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("aiLimitations", language)}</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("aiLimitationsText", language)}
-                </p>
-              </section>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-primary">{t("section2_3Title", language)}</h3>
+                  <div className="space-y-2 text-sm leading-relaxed">
+                    <p>{t("section2_3Text", language)}</p>
+                    <p>{t("section2_3Text2", language)}</p>
+                    <p className="font-medium">{t("section2_3Text3", language)}</p>
+                  </div>
+                </div>
 
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("subscriptionRefunds", language)}</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("subscriptionRefundsText", language)}
-                </p>
-              </section>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-primary">{t("section2_4Title", language)}</h3>
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section2_4Text", language))}
+                  </div>
+                </div>
 
-              <section>
-                <h2 className="text-lg font-semibold mb-3">{t("contactInfo", language)}</h2>
-                <p className="text-sm leading-relaxed text-muted-foreground">
-                  {t("contactInfoText", language)}
-                </p>
-              </section>
-            </div>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2 text-primary">{t("section2_5Title", language)}</h3>
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section2_5Text", language))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 3 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section3Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section3Text", language)}</p>
+                <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section3List", language))}
+                  </div>
+                </div>
+                <div className="bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-destructive-foreground">
+                    {t("section3Warning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 4 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section4Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed font-medium">{t("section4Text", language)}</p>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section4List", language))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 5 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section5Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section5Text", language)}</p>
+                <p className="text-sm leading-relaxed font-medium">{t("section5Text2", language)}</p>
+                <div className="bg-orange-50 dark:bg-orange-950/30 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section5List", language))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 6 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section6Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section6Text", language)}</p>
+                <div className="bg-yellow-50 dark:bg-yellow-950/30 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section6List", language))}
+                  </div>
+                </div>
+                <div className="bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-destructive-foreground">
+                    {t("section6Warning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 7 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section7Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section7Text", language)}</p>
+                <div className="bg-destructive/10 p-4 rounded-lg border border-destructive/20">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section7List", language))}
+                  </div>
+                </div>
+                <div className="bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-destructive-foreground">
+                    {t("section7Warning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 8 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section8Title", language)}
+              </h2>
+              <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="text-sm leading-relaxed">
+                  {formatText(t("section8List", language))}
+                </div>
+              </div>
+            </section>
+
+            {/* Section 9 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section9Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section9Text", language)}</p>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section9List", language))}
+                  </div>
+                </div>
+                <div className="bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-destructive-foreground">
+                    {t("section9Warning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 10 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section10Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section10Text", language)}</p>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section10List", language))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 11 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section11Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section11Text", language)}</p>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section11List", language))}
+                  </div>
+                </div>
+                <div className="bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-medium text-destructive-foreground">
+                    {t("section11Warning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 12 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section12Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section12Text", language)}</p>
+                <div className="bg-muted/20 p-4 rounded-lg">
+                  <div className="text-sm leading-relaxed">
+                    {formatText(t("section12List", language))}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Section 13 */}
+            <section className="space-y-4">
+              <h2 className="text-xl font-semibold text-primary border-b pb-2">
+                {t("section13Title", language)}
+              </h2>
+              <div className="space-y-3">
+                <p className="text-sm leading-relaxed">{t("section13Text", language)}</p>
+                <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 text-center">
+                  <p className="text-lg font-semibold text-primary">
+                    {t("section13Contact", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {/* Footer */}
+            <section className="border-t pt-6 space-y-4">
+              <div className="bg-muted/30 p-6 rounded-lg space-y-4">
+                <blockquote className="text-sm leading-relaxed italic border-l-4 border-primary pl-4">
+                  {t("footerQuote", language)}
+                </blockquote>
+                <div className="text-center space-y-2">
+                  <p className="font-bold text-primary">
+                    {t("footerCopyright", language)}
+                  </p>
+                  <p className="text-sm font-medium text-accent-foreground">
+                    {t("footerWarning", language)}
+                  </p>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </div>

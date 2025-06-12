@@ -1,4 +1,3 @@
-
 import { common } from "./modules/common";
 import { auth } from "./modules/auth";
 import { navigation } from "./modules/navigation";
@@ -214,12 +213,11 @@ export const en = {
   reloadPage: "Reload page",
   reloadApp: "Reload app",
   refreshApp: "Refresh app",
-  
-  // Additional event specific
   whenYouAttend: "When you attend",
   howAttending: "How attending",
   attendanceType: "Attendance type",
   mustRsvpBefore: "Must RSVP before",
   notEligibleToRsvp: "Not eligible to RSVP",
-  thankYouRsvp: "Thank you for your RSVP"
+  thankYouRsvp: "Thank you for your RSVP",
+  privacyAndTerms: "Privacy & Terms"
 };
