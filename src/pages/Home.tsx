@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,7 +99,7 @@ export default function Home() {
             className="flex items-center gap-1 border-primary/20 hover:border-primary/40"
             onClick={() => navigate('/login')}
           >
-            {t("loginBtn", language)}
+            {t("login", language)}
             <LogIn className="h-4 w-4" />
           </Button>
           <ThemeLanguageToggle />
