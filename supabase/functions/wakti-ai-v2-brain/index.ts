@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -14,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Chat Memory & Mode Restrictions");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Smart Date/Time Intelligence");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -28,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with chat memory");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with smart date/time intelligence");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -171,7 +170,7 @@ serve(async (req) => {
     intent = intentAnalysis.intent;
     confidence = intentAnalysis.confidence;
 
-    console.log("🧠 WAKTI AI V2 BRAIN: Processing with DeepSeek and chat memory");
+    console.log("🧠 WAKTI AI V2 BRAIN: Processing with enhanced intelligence");
 
     switch (activeTrigger) {
       case 'search':
@@ -302,7 +301,7 @@ serve(async (req) => {
       success: true
     };
 
-    console.log("✅ Enhanced context response generated using:", DEEPSEEK_API_KEY ? 'DeepSeek' : (OPENAI_API_KEY ? 'OpenAI' : 'Fallback'));
+    console.log("✅ Enhanced response generated with smart date/time processing");
     console.log("🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:", !!conversationHistory.length);
 
     return new Response(JSON.stringify(result), {
@@ -323,6 +322,287 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced time parsing function
+function parseTimeString(timeStr: string): string | null {
+  if (!timeStr) return null;
+  
+  const cleanTime = timeStr.toLowerCase().trim();
+  
+  // Handle common formats
+  const patterns = [
+    // 9 am, 9pm, 2:30 am, 2:30pm
+    /^(\d{1,2}):?(\d{2})?\s*(am|pm)$/,
+    // 9:00, 14:30, 09:00
+    /^(\d{1,2}):(\d{2})$/,
+    // Just hour: 9, 14
+    /^(\d{1,2})$/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = cleanTime.match(pattern);
+    if (match) {
+      let hour = parseInt(match[1]);
+      const minute = match[2] ? parseInt(match[2]) : 0;
+      const ampm = match[3];
+      
+      // Handle AM/PM
+      if (ampm) {
+        if (ampm === 'pm' && hour !== 12) hour += 12;
+        if (ampm === 'am' && hour === 12) hour = 0;
+      }
+      
+      // Validate ranges
+      if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Enhanced date parsing function
+function parseDateString(dateStr: string, language: string = 'en'): string | null {
+  if (!dateStr) return null;
+  
+  const cleanDate = dateStr.toLowerCase().trim();
+  const today = new Date();
+  
+  // Handle relative dates
+  if (cleanDate === 'today' || cleanDate === 'اليوم') {
+    return today.toISOString().split('T')[0];
+  }
+  
+  if (cleanDate === 'tomorrow' || cleanDate === 'غداً' || cleanDate === 'غدا') {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return tomorrow.toISOString().split('T')[0];
+  }
+  
+  if (cleanDate === 'yesterday' || cleanDate === 'أمس') {
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    return yesterday.toISOString().split('T')[0];
+  }
+  
+  // Handle weekdays
+  const weekdays = {
+    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0,
+    'الاثنين': 1, 'الثلاثاء': 2, 'الأربعاء': 3, 'الخميس': 4, 'الجمعة': 5, 'السبت': 6, 'الأحد': 0
+  };
+  
+  for (const [day, dayNum] of Object.entries(weekdays)) {
+    if (cleanDate.includes(day)) {
+      const targetDate = getNextWeekday(today, dayNum);
+      return targetDate.toISOString().split('T')[0];
+    }
+  }
+  
+  // Handle relative days (in X days, next week, etc.)
+  const relativeDayMatch = cleanDate.match(/in (\d+) days?|خلال (\d+) أيام?/);
+  if (relativeDayMatch) {
+    const days = parseInt(relativeDayMatch[1] || relativeDayMatch[2]);
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + days);
+    return targetDate.toISOString().split('T')[0];
+  }
+  
+  if (cleanDate.includes('next week') || cleanDate.includes('الأسبوع القادم')) {
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    return nextWeek.toISOString().split('T')[0];
+  }
+  
+  // Try to parse as regular date
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  
+  return null;
+}
+
+// Helper function to get next occurrence of a weekday
+function getNextWeekday(date: Date, targetDay: number): Date {
+  const currentDay = date.getDay();
+  let daysToAdd = targetDay - currentDay;
+  
+  // If target day is today or has passed this week, get next week's occurrence
+  if (daysToAdd <= 0) {
+    daysToAdd += 7;
+  }
+  
+  const targetDate = new Date(date);
+  targetDate.setDate(date.getDate() + daysToAdd);
+  return targetDate;
+}
+
+// Enhanced task data extraction with better NLP
+function extractTaskData(message: string, language: string = 'en') {
+  console.log("📝 Extracting task data from:", message);
+  
+  // Remove task creation keywords to get clean title
+  let cleanMessage = message.replace(/create task|add task|new task|make task|task for|أنشئ مهمة|اضف مهمة|مهمة جديدة/gi, '').trim();
+  
+  // Extract date information
+  const datePatterns = [
+    /tomorrow|غداً|غدا/gi,
+    /today|اليوم/gi,
+    /monday|tuesday|wednesday|thursday|friday|saturday|sunday|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد/gi,
+    /\d{4}-\d{2}-\d{2}/g,
+    /\d{1,2}\/\d{1,2}\/\d{4}/g,
+    /in \d+ days?|خلال \d+ أيام?/gi,
+    /next week|الأسبوع القادم/gi
+  ];
+  
+  let extractedDate = null;
+  for (const pattern of datePatterns) {
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      extractedDate = parseDateString(match[0], language);
+      cleanMessage = cleanMessage.replace(pattern, '').trim();
+      break;
+    }
+  }
+  
+  // Extract time information
+  const timePatterns = [
+    /\d{1,2}:?\d{0,2}\s*(am|pm)/gi,
+    /\d{1,2}:\d{2}/g
+  ];
+  
+  let extractedTime = null;
+  for (const pattern of timePatterns) {
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      extractedTime = parseTimeString(match[0]);
+      cleanMessage = cleanMessage.replace(pattern, '').trim();
+      break;
+    }
+  }
+  
+  // Extract shopping list items for subtasks
+  const subtasks = [];
+  const shoppingIndicators = ['shopping', 'buy', 'need to buy', 'تسوق', 'شراء', 'أحتاج لشراء'];
+  const isShoppingTask = shoppingIndicators.some(indicator => 
+    message.toLowerCase().includes(indicator.toLowerCase())
+  );
+  
+  if (isShoppingTask) {
+    // Look for items mentioned after shopping indicators
+    const items = ['milk', 'rice', 'beans', 'bread', 'eggs', 'حليب', 'أرز', 'فاصوليا', 'خبز', 'بيض'];
+    for (const item of items) {
+      if (message.toLowerCase().includes(item.toLowerCase())) {
+        subtasks.push(item);
+      }
+    }
+  }
+  
+  // Clean up the title further
+  let title = cleanMessage
+    .replace(/shopping at \w+|تسوق في \w+/gi, '')
+    .replace(/need to buy|أحتاج لشراء/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // If title is too short or empty, create a meaningful one
+  if (title.length < 3) {
+    if (isShoppingTask) {
+      title = language === 'ar' ? 'مهمة تسوق' : 'Shopping Task';
+    } else {
+      title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
+    }
+  }
+  
+  // Ensure we have valid data
+  if (!extractedDate) {
+    // Default to tomorrow if no date specified
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    extractedDate = tomorrow.toISOString().split('T')[0];
+  }
+  
+  console.log("📝 Extracted task data:", {
+    title,
+    due_date: extractedDate,
+    due_time: extractedTime,
+    subtasks
+  });
+  
+  return {
+    title,
+    description: '',
+    due_date: extractedDate,
+    due_time: extractedTime,
+    priority: 'normal',
+    subtasks
+  };
+}
+
+// Enhanced reminder data extraction
+function extractReminderData(message: string, language: string = 'en') {
+  console.log("⏰ Extracting reminder data from:", message);
+  
+  let cleanMessage = message.replace(/remind me|reminder|ذكرني|تذكير/gi, '').trim();
+  
+  // Extract date and time similar to task extraction
+  let extractedDate = null;
+  let extractedTime = null;
+  
+  // Date extraction
+  const datePatterns = [
+    /tomorrow|غداً|غدا/gi,
+    /today|اليوم/gi,
+    /monday|tuesday|wednesday|thursday|friday|saturday|sunday|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد/gi
+  ];
+  
+  for (const pattern of datePatterns) {
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      extractedDate = parseDateString(match[0], language);
+      cleanMessage = cleanMessage.replace(pattern, '').trim();
+      break;
+    }
+  }
+  
+  // Time extraction
+  const timePatterns = [
+    /\d{1,2}:?\d{0,2}\s*(am|pm)/gi,
+    /\d{1,2}:\d{2}/g
+  ];
+  
+  for (const pattern of timePatterns) {
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      extractedTime = parseTimeString(match[0]);
+      cleanMessage = cleanMessage.replace(pattern, '').trim();
+      break;
+    }
+  }
+  
+  let title = cleanMessage.trim();
+  if (title.length < 3) {
+    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
+  }
+  
+  // Default to today if no date specified for reminders
+  if (!extractedDate) {
+    extractedDate = new Date().toISOString().split('T')[0];
+  }
+  
+  console.log("⏰ Extracted reminder data:", {
+    title,
+    due_date: extractedDate,
+    due_time: extractedTime
+  });
+  
+  return {
+    title,
+    due_date: extractedDate,
+    due_time: extractedTime
+  };
+}
 
 // Intent analysis for different modes
 function analyzeIntent(message: string, activeTrigger: string, language: string = 'en') {
@@ -367,99 +647,32 @@ function analyzeIntent(message: string, activeTrigger: string, language: string 
   };
 }
 
-// Extract task data from message
-function extractTaskData(message: string, language: string = 'en') {
-  // Simple extraction - in production, you'd use more sophisticated NLP
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  // Extract basic task info
-  let title = message.replace(/create task|add task|new task|make task|أنشئ مهمة|اضف مهمة|مهمة جديدة/gi, '').trim();
-  if (title.length < 3) {
-    title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
-  }
-
-  // Basic due date detection
-  let due_date = null;
-  let due_time = null;
-  
-  if (message.includes('tomorrow') || message.includes('غداً')) {
-    due_date = tomorrow.toISOString().split('T')[0];
-  } else if (message.includes('today') || message.includes('اليوم')) {
-    due_date = today.toISOString().split('T')[0];
-  }
-
-  // Time extraction (basic)
-  const timeMatch = message.match(/(\d{1,2}):(\d{2})|(\d{1,2})\s*(am|pm)/i);
-  if (timeMatch) {
-    due_time = timeMatch[0];
-  }
-
-  return {
-    title,
-    description: '',
-    due_date,
-    due_time,
-    priority: 'normal',
-    subtasks: []
-  };
-}
-
-// Extract reminder data from message
-function extractReminderData(message: string, language: string = 'en') {
-  // Similar to task extraction but for reminders
-  let title = message.replace(/remind me|reminder|ذكرني|تذكير/gi, '').trim();
-  if (title.length < 3) {
-    title = language === 'ar' ? 'تذكير جديد' : 'New Reminder';
-  }
-
-  const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-
-  let due_date = null;
-  let due_time = null;
-  
-  if (message.includes('tomorrow') || message.includes('غداً')) {
-    due_date = tomorrow.toISOString().split('T')[0];
-  } else if (message.includes('today') || message.includes('اليوم')) {
-    due_date = today.toISOString().split('T')[0];
-  }
-
-  const timeMatch = message.match(/(\d{1,2}):(\d{2})|(\d{1,2})\s*(am|pm)/i);
-  if (timeMatch) {
-    due_time = timeMatch[0];
-  }
-
-  return {
-    title,
-    due_date,
-    due_time
-  };
-}
-
-// Create task in database
+// Create task in database with error handling
 async function createTask(userId: string, taskData: any, language: string = 'en') {
   try {
     console.log("📝 Creating task in database:", taskData);
     
+    // Validate and sanitize data before insertion
+    const sanitizedTaskData = {
+      user_id: userId,
+      title: taskData.title || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
+      description: taskData.description || '',
+      due_date: taskData.due_date || null,
+      due_time: taskData.due_time || null, // This should now be in HH:MM:SS format
+      priority: taskData.priority || 'normal'
+    };
+    
+    console.log("📝 Sanitized task data for insertion:", sanitizedTaskData);
+    
     const { data, error } = await supabase
       .from('tr_tasks')
-      .insert({
-        user_id: userId,
-        title: taskData.title,
-        description: taskData.description,
-        due_date: taskData.due_date,
-        due_time: taskData.due_time,
-        priority: taskData.priority || 'normal'
-      })
+      .insert(sanitizedTaskData)
       .select()
       .single();
 
     if (error) {
       console.error("❌ Error creating task:", error);
-      throw error;
+      throw new Error(`Task creation failed: ${error.message}`);
     }
 
     // Create subtasks if any
@@ -467,13 +680,17 @@ async function createTask(userId: string, taskData: any, language: string = 'en'
       for (let i = 0; i < taskData.subtasks.length; i++) {
         const subtask = taskData.subtasks[i];
         if (subtask.trim()) {
-          await supabase
+          const { error: subtaskError } = await supabase
             .from('tr_subtasks')
             .insert({
               task_id: data.id,
               title: subtask,
               order_index: i
             });
+          
+          if (subtaskError) {
+            console.error("❌ Error creating subtask:", subtaskError);
+          }
         }
       }
     }
@@ -482,36 +699,49 @@ async function createTask(userId: string, taskData: any, language: string = 'en'
     return { success: true, taskId: data.id };
   } catch (error) {
     console.error("❌ Error creating task:", error);
-    throw error;
+    
+    // Return a more user-friendly error
+    return { 
+      success: false, 
+      error: error.message || 'Failed to create task' 
+    };
   }
 }
 
-// Create reminder in database
+// Create reminder in database with error handling
 async function createReminder(userId: string, reminderData: any, language: string = 'en') {
   try {
     console.log("⏰ Creating reminder in database:", reminderData);
     
+    const sanitizedReminderData = {
+      user_id: userId,
+      title: reminderData.title || (language === 'ar' ? 'تذكير جديد' : 'New Reminder'),
+      due_date: reminderData.due_date || null,
+      due_time: reminderData.due_time || null
+    };
+    
+    console.log("⏰ Sanitized reminder data for insertion:", sanitizedReminderData);
+    
     const { data, error } = await supabase
       .from('tr_reminders')
-      .insert({
-        user_id: userId,
-        title: reminderData.title,
-        due_date: reminderData.due_date,
-        due_time: reminderData.due_time
-      })
+      .insert(sanitizedReminderData)
       .select()
       .single();
 
     if (error) {
       console.error("❌ Error creating reminder:", error);
-      throw error;
+      throw new Error(`Reminder creation failed: ${error.message}`);
     }
 
     console.log("✅ Reminder created successfully:", data.id);
     return { success: true, reminderId: data.id };
   } catch (error) {
     console.error("❌ Error creating reminder:", error);
-    throw error;
+    
+    return { 
+      success: false, 
+      error: error.message || 'Failed to create reminder' 
+    };
   }
 }
 
@@ -710,7 +940,6 @@ async function generateImageWithRunware(prompt: string, userId: string, language
       const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
       
       if (imageResult && imageResult.imageURL) {
-        // Save image to database
         try {
           await supabase
             .from('images')
