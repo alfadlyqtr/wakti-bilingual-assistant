@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -38,6 +37,25 @@ export function ChatMessages({
       }
     }
   }, [sessionMessages, isLoading]);
+
+  // Clear chat memory when starting a completely new conversation (no messages)
+  useEffect(() => {
+    if (sessionMessages.length === 0) {
+      const clearMemory = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            WaktiAIV2Service.clearChatMemory(user.id);
+            console.log('🧠 Chat memory cleared for new conversation');
+          }
+        } catch (error) {
+          console.error('Error clearing chat memory:', error);
+        }
+      };
+      
+      clearMemory();
+    }
+  }, [sessionMessages.length]);
 
   const handleTaskConfirmation = async (taskData: any) => {
     try {

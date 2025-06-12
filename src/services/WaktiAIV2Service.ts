@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { ChatMemoryService } from './ChatMemoryService';
 
 export interface AIMessage {
   id: string;
@@ -143,6 +144,11 @@ export class WaktiAIV2ServiceClass {
 
   sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
     return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
+  }
+
+  // NEW: Clear chat memory
+  clearChatMemory(userId?: string) {
+    return ChatMemoryService.clearMemory(userId);
   }
 
   // SECURITY FIX: Enhanced static method for better conversation saving with user isolation
@@ -343,15 +349,23 @@ export class WaktiAIV2ServiceClass {
     try {
       console.log('📤 WAKTI AI V2: Sending message with user isolation for user:', userId);
 
-      // SECURITY: Use the new unified-ai-brain function with proper authentication
-      const response = await supabase.functions.invoke('unified-ai-brain', {
+      // Load chat memory for chat mode only
+      let chatMemory: any[] = [];
+      if (activeTrigger === 'chat') {
+        const memoryExchanges = ChatMemoryService.loadMemory(userId);
+        chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
+        console.log(`🧠 Loaded ${memoryExchanges.length} chat exchanges from memory`);
+      }
+
+      // CORRECTED: Use the wakti-ai-v2-brain function with proper authentication
+      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
           userId, // CRITICAL: Always include userId for verification
           language,
           conversationId,
           inputType,
-          conversationHistory,
+          conversationHistory: activeTrigger === 'chat' ? chatMemory : conversationHistory,
           confirmSearch,
           activeTrigger,
           textGenParams,
@@ -370,6 +384,11 @@ export class WaktiAIV2ServiceClass {
 
       if (response.error) {
         throw new Error(response.error.message || 'AI service error');
+      }
+
+      // Save to chat memory if this was a successful chat mode interaction
+      if (activeTrigger === 'chat' && response.data?.response) {
+        ChatMemoryService.addExchange(message, response.data.response, userId);
       }
 
       console.log('📥 WAKTI AI V2: Received response with user isolation');

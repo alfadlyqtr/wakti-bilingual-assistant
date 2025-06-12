@@ -11,7 +11,7 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced Conversation Context Management with Advanced Tavily Search");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Chat Memory & Mode Restrictions");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -24,7 +24,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with enhanced context");
+    console.log("🚀 WAKTI AI V2 BRAIN: Processing request with chat memory");
 
     const requestBody = await req.json();
     console.log("🚀 WAKTI AI V2 BRAIN: Request body received:", {
@@ -72,9 +72,7 @@ serve(async (req) => {
 
     console.log("🚀 WAKTI AI V2 BRAIN: Processing message for user:", userId);
     console.log("🚀 WAKTI AI V2 BRAIN: Active trigger mode:", activeTrigger);
-    console.log("🚀 WAKTI AI V2 BRAIN: Search topic:", searchTopic);
-    console.log("🚀 WAKTI AI V2 BRAIN: Attached files count:", attachedFiles.length);
-    console.log("🚀 WAKTI AI V2 BRAIN: Conversation history length:", conversationHistory.length);
+    console.log("🚀 WAKTI AI V2 BRAIN: Chat memory length:", conversationHistory.length);
 
     let response = '';
     let fileAnalysisResults = [];
@@ -84,6 +82,24 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
     let contextUtilized = false;
+
+    // Check for mode-based restrictions in chat mode
+    if (activeTrigger === 'chat') {
+      const modeRestriction = checkModeRestrictions(message, language);
+      if (modeRestriction) {
+        return new Response(JSON.stringify({
+          response: modeRestriction,
+          conversationId: conversationId || generateConversationId(),
+          intent: 'mode_restriction',
+          confidence: 'high',
+          browsingUsed: false,
+          requiresSearchConfirmation: false,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
 
     // Process attached files with simplified handling
     if (attachedFiles && attachedFiles.length > 0) {
@@ -221,6 +237,40 @@ serve(async (req) => {
     });
   }
 });
+
+// NEW: Function to check mode restrictions for chat mode
+function checkModeRestrictions(message: string, language: string = 'en'): string | null {
+  const lowerMessage = message.toLowerCase();
+  
+  // Image generation requests
+  const imageKeywords = [
+    'generate image', 'create image', 'make image', 'draw', 'picture', 'photo',
+    'أنشئ صورة', 'اصنع صورة', 'ارسم', 'صورة', 'رسم'
+  ];
+  
+  // Search requests
+  const searchKeywords = [
+    'search for', 'find information', 'look up', 'what is happening', 'current news',
+    'ابحث عن', 'ابحث في', 'ما الأخبار', 'معلومات حديثة', 'آخر الأخبار'
+  ];
+
+  const hasImageRequest = imageKeywords.some(keyword => lowerMessage.includes(keyword));
+  const hasSearchRequest = searchKeywords.some(keyword => lowerMessage.includes(keyword));
+
+  if (hasImageRequest) {
+    return language === 'ar' 
+      ? "أنا حالياً في وضع المحادثة. يرجى التبديل إلى وضع الصورة لإنشاء الصور."
+      : "I'm currently in Chat Mode. Please switch to Image Mode to generate images.";
+  }
+
+  if (hasSearchRequest) {
+    return language === 'ar' 
+      ? "أنا حالياً في وضع المحادثة. يرجى التبديل إلى وضع البحث للحصول على معلومات حديثة."
+      : "I'm currently in Chat Mode. Please switch to Search Mode to get current information.";
+  }
+
+  return null; // No restrictions
+}
 
 // NEW: Simple function to check and increment advanced search quota
 async function checkAndIncrementAdvancedSearchQuota(userId: string) {
@@ -571,13 +621,14 @@ async function processWithEnhancedContext(
   activeTrigger: string = 'chat'
 ) {
   try {
-    console.log("🧠 WAKTI AI V2 BRAIN: Processing with enhanced conversation context");
+    console.log("🧠 WAKTI AI V2 BRAIN: Processing with DeepSeek and chat memory");
     console.log("🧠 Context details:", {
       historyLength: conversationHistory.length,
       activeTrigger,
       language
     });
     
+    // Always prefer DeepSeek for chat interactions
     const apiKey = DEEPSEEK_API_KEY || OPENAI_API_KEY;
     const apiUrl = DEEPSEEK_API_KEY ? 'https://api.deepseek.com/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
     const model = DEEPSEEK_API_KEY ? 'deepseek-chat' : 'gpt-4o-mini';
@@ -591,12 +642,16 @@ async function processWithEnhancedContext(
 
 تذكر دائماً سياق المحادثة السابق واربط إجاباتك بما تم مناقشته من قبل. إذا كان المستخدم يشير إلى شيء تم ذكره سابقاً، تأكد من ربط إجابتك بذلك السياق.
 
-كن ودوداً ومفيداً ومختصراً في إجاباتك، واستخدم المعلومات السابقة لتقديم إجابات أكثر دقة وشخصية.`
+كن ودوداً ومفيداً ومختصراً في إجاباتك، واستخدم المعلومات السابقة لتقديم إجابات أكثر دقة وشخصية.
+
+أنت حالياً في وضع المحادثة. إذا طلب المستخدم إنشاء صور أو البحث في الويب، أخبره بالتبديل إلى الوضع المناسب.`
       : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. 
 
 Always remember the previous conversation context and connect your responses to what has been discussed before. If the user refers to something mentioned earlier, make sure to link your response to that context.
 
-Be friendly, helpful, and concise in your responses, and use previous information to provide more accurate and personalized answers.`;
+Be friendly, helpful, and concise in your responses, and use previous information to provide more accurate and personalized answers.
+
+You are currently in Chat Mode. If the user asks for image generation or web search, tell them to switch to the appropriate mode.`;
     
     // Build conversation messages with full context
     const messages = [
@@ -605,17 +660,14 @@ Be friendly, helpful, and concise in your responses, and use previous informatio
 
     // Add conversation history (maintain chronological order)
     if (conversationHistory && conversationHistory.length > 0) {
-      // Take last 30 messages to avoid token limits while maintaining good context
-      const recentHistory = conversationHistory.slice(-30);
+      console.log("🧠 Adding chat memory context:", conversationHistory.length, "messages");
       
-      for (const historyMessage of recentHistory) {
+      for (const historyMessage of conversationHistory) {
         messages.push({
           role: historyMessage.role,
           content: historyMessage.content
         });
       }
-      
-      console.log("🧠 Added conversation context:", recentHistory.length, "messages");
     }
 
     // Add current message
