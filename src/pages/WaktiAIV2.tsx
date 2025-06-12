@@ -32,14 +32,14 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
-  // Add extended quota management with real-time refresh functions
+  // Add extended quota management with enhanced search (renamed from advanced)
   const {
     userSearchQuota,
     refreshSearchQuota,
     refreshVoiceQuota,
     incrementRegularSearchUsage,
-    incrementAdvancedSearchUsage,
-    MAX_MONTHLY_ADVANCED_SEARCHES,
+    incrementEnhancedSearchUsage, // Renamed from incrementAdvancedSearchUsage
+    MAX_MONTHLY_ENHANCED_SEARCHES, // Renamed from MAX_MONTHLY_ADVANCED_SEARCHES
     MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
 
@@ -55,17 +55,17 @@ const WaktiAIV2 = () => {
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
 
-  // Get search quota status for the header
+  // SIMPLIFIED: Get search quota status for the header
   const getSearchQuotaStatus = () => {
     const regularUsed = userSearchQuota.regular_search_count;
-    const advancedUsed = userSearchQuota.daily_count;
+    const enhancedUsed = userSearchQuota.daily_count; // This is monthly enhanced search count
     const extraSearches = userSearchQuota.extra_searches;
     
     return {
       regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
-      advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
+      enhancedRemaining: Math.max(0, MAX_MONTHLY_ENHANCED_SEARCHES - enhancedUsed), // Renamed
       regularLimit: MAX_MONTHLY_REGULAR_SEARCHES,
-      advancedLimit: MAX_MONTHLY_ADVANCED_SEARCHES,
+      enhancedLimit: MAX_MONTHLY_ENHANCED_SEARCHES, // Renamed
       extraSearches
     };
   };
@@ -334,10 +334,9 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === ENHANCED CONVERSATION CONTEXT START ===');
+      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SEARCH SYSTEM ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
-      console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
       // NEW: Handle Voice Translator quota increment BEFORE sending
@@ -351,9 +350,6 @@ const WaktiAIV2 = () => {
         }
         console.log('✅ Voice translation quota incremented successfully');
       }
-
-      // REMOVED: No more quota checking here since backend now handles it properly
-      // The backend will check and increment quotas as needed
 
       const userMessage: AIMessage = {
         id: `user-${Date.now()}`,
@@ -387,7 +383,7 @@ const WaktiAIV2 = () => {
         language,
         currentConversationId,
         inputType,
-        contextForAI, // Expanded context instead of just last 15
+        contextForAI,
         false,
         activeTrigger,
         textGenParams,
@@ -396,10 +392,8 @@ const WaktiAIV2 = () => {
         userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: File Analysis Results:', response.fileAnalysisResults?.length || 0);
-      console.log('🔄 WAKTI AI V2.5: Action Taken:', response.actionTaken);
       console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
 
       if (response.error) {
@@ -465,15 +459,15 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // ENHANCED: Real-time quota refresh after operations
-      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+      // SIMPLIFIED: Real-time quota refresh after operations
+      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
         console.log('🔄 Search operation completed - refreshing search quota in real-time...');
         await refreshSearchQuota();
         
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث ${activeTrigger === 'advanced_search' ? 'المتقدم' : 'العادي'} بنجاح وتحديث الحصة` 
-            : `${activeTrigger === 'advanced_search' ? 'Advanced' : 'Basic'} search completed successfully - quota updated`
+            ? `تم تنفيذ البحث ${activeTrigger === 'enhanced_search' ? 'المحسن' : 'الأساسي'} بنجاح وتحديث الحصة` 
+            : `${activeTrigger === 'enhanced_search' ? 'Enhanced' : 'Basic'} search completed successfully - quota updated`
         );
       }
 
@@ -495,8 +489,8 @@ const WaktiAIV2 = () => {
         console.log('📊 Received quota status from AI response:', response.quotaStatus);
         setQuotaStatus(response.quotaStatus);
         
-        // If browsing was used (search/advanced_search), invalidate cache and force refresh
-        if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+        // If browsing was used (search/enhanced_search), invalidate cache and force refresh
+        if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
           console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
           WaktiAIV2Service.invalidateQuotaCache();
           
@@ -545,17 +539,17 @@ const WaktiAIV2 = () => {
         );
       }
 
-      // Show success message for search operations
-      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
+      // SIMPLIFIED: Show success message for search operations
+      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث ${activeTrigger === 'advanced_search' ? 'المتقدم' : 'العادي'} بنجاح` 
-            : `${activeTrigger === 'advanced_search' ? 'Advanced' : 'Basic'} search completed successfully`
+            ? `تم تنفيذ البحث ${activeTrigger === 'enhanced_search' ? 'المحسن' : 'الأساسي'} بنجاح` 
+            : `${activeTrigger === 'enhanced_search' ? 'Enhanced' : 'Basic'} search completed successfully`
         );
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced conversation error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Simplified search system error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')

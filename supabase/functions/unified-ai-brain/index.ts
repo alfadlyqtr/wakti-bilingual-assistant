@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -13,7 +14,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with real AI integration and user isolation");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with simplified search system");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -109,35 +110,28 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // FIXED: Proper quota checking for each trigger type
+    // SIMPLIFIED: Only 3 trigger types now - chat, search (unlimited), enhanced_search (5/month), image
     switch (activeTrigger) {
       case 'search':
-        // Regular search - unlimited, just increment counter for tracking
+        // Basic search - unlimited, just increment counter for tracking
         if (intent.allowed) {
           await incrementRegularSearchUsage(user.id);
-          const searchResult = await executeSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            response = await processWithAI(message, searchResult.context, language);
-          } else {
-            response = await processWithAI(message, null, language);
-          }
+          response = await processWithAI(message, null, language);
         } else {
           response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للبحث والمعلومات الحديثة فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Search Mode\n\nThis mode is for search and current information only.\n\nFor general chat, switch to Chat mode.`;
+            ? `⚠️ أنت في وضع البحث الأساسي\n\nهذا الوضع مخصص للأسئلة العامة.\n\nللبحث المتقدم مع التصفح، انتقل إلى وضع البحث المحسن.`
+            : `⚠️ You're in Basic Search Mode\n\nThis mode is for general questions.\n\nFor web browsing, switch to Enhanced Search mode.`;
         }
         quotaStatus = { type: 'regular_search', unlimited: true };
         break;
 
-      case 'advanced_search':
-        // FIXED: Check advanced search quota properly
+      case 'enhanced_search':
+        // Enhanced search with web browsing - 5/month quota
         if (intent.allowed) {
-          const canUseAdvanced = await checkAdvancedSearchQuota(user.id);
-          if (canUseAdvanced.canUse) {
-            await incrementAdvancedSearchUsage(user.id);
-            const searchResult = await executeSearch(message, language);
+          const canUseEnhanced = await checkEnhancedSearchQuota(user.id);
+          if (canUseEnhanced.canUse) {
+            await incrementEnhancedSearchUsage(user.id);
+            const searchResult = await executeEnhancedSearch(message, language);
             if (searchResult.success) {
               browsingUsed = true;
               browsingData = searchResult.data;
@@ -145,17 +139,17 @@ serve(async (req) => {
             } else {
               response = await processWithAI(message, null, language);
             }
-            quotaStatus = canUseAdvanced.quotaStatus;
+            quotaStatus = canUseEnhanced.quotaStatus;
           } else {
             response = language === 'ar' 
-              ? `🚫 تم الوصول للحد الأقصى من البحث المتقدم\n\nلقد استخدمت ${canUseAdvanced.quotaStatus.used}/${canUseAdvanced.quotaStatus.limit} من بحثاتك المتقدمة هذا الشهر.\n\nيمكنك شراء بحثات إضافية أو استخدام البحث العادي (غير محدود).`
-              : `🚫 Advanced Search Limit Reached\n\nYou've used ${canUseAdvanced.quotaStatus.used}/${canUseAdvanced.quotaStatus.limit} advanced searches this month.\n\nYou can purchase extra searches or use regular search (unlimited).`;
-            quotaStatus = canUseAdvanced.quotaStatus;
+              ? `🚫 تم الوصول للحد الأقصى من البحث المحسن\n\nلقد استخدمت ${canUseEnhanced.quotaStatus.used}/${canUseEnhanced.quotaStatus.limit} من بحثاتك المحسنة هذا الشهر.\n\nيمكنك استخدام البحث الأساسي (غير محدود) أو شراء بحثات إضافية.`
+              : `🚫 Enhanced Search Limit Reached\n\nYou've used ${canUseEnhanced.quotaStatus.used}/${canUseEnhanced.quotaStatus.limit} enhanced searches this month.\n\nYou can use basic search (unlimited) or purchase extra searches.`;
+            quotaStatus = canUseEnhanced.quotaStatus;
           }
         } else {
           response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث المتقدم\n\nهذا الوضع مخصص للبحث المتقدم فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Advanced Search Mode\n\nThis mode is for advanced search only.\n\nFor general chat, switch to Chat mode.`;
+            ? `⚠️ أنت في وضع البحث المحسن\n\nهذا الوضع مخصص للبحث مع التصفح.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Enhanced Search Mode\n\nThis mode is for search with web browsing.\n\nFor general chat, switch to Chat mode.`;
         }
         break;
 
@@ -234,11 +228,11 @@ serve(async (req) => {
   }
 });
 
-// FIXED: Proper advanced search quota checking
-async function checkAdvancedSearchQuota(userId: string) {
+// SIMPLIFIED: Enhanced search quota checking (uses the old advanced search quota)
+async function checkEnhancedSearchQuota(userId: string) {
   try {
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const MAX_MONTHLY_ADVANCED_SEARCHES = 5;
+    const MAX_MONTHLY_ENHANCED_SEARCHES = 5;
 
     // Get or create current month's quota record
     const { data, error } = await supabase
@@ -249,7 +243,7 @@ async function checkAdvancedSearchQuota(userId: string) {
       .single();
 
     if (error && error.code !== 'PGRST116') {
-      console.error("Error checking advanced search quota:", error);
+      console.error("Error checking enhanced search quota:", error);
       return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
     }
 
@@ -257,7 +251,7 @@ async function checkAdvancedSearchQuota(userId: string) {
     let extraSearches = 0;
 
     if (data) {
-      usedCount = data.daily_count || 0; // This represents monthly advanced searches
+      usedCount = data.daily_count || 0; // This represents monthly enhanced searches
       extraSearches = data.extra_advanced_searches || 0;
     } else {
       // Create new record for this month
@@ -266,56 +260,56 @@ async function checkAdvancedSearchQuota(userId: string) {
         .insert({
           user_id: userId,
           monthly_date: currentMonth,
-          daily_count: 0, // Used for advanced search monthly counter
+          daily_count: 0, // Used for enhanced search monthly counter
           regular_search_count: 0,
           extra_regular_searches: 0,
           extra_advanced_searches: 0
         });
     }
 
-    const totalAvailable = MAX_MONTHLY_ADVANCED_SEARCHES + extraSearches;
+    const totalAvailable = MAX_MONTHLY_ENHANCED_SEARCHES + extraSearches;
     const canUse = usedCount < totalAvailable;
 
     return {
       canUse,
       quotaStatus: {
         used: usedCount,
-        limit: MAX_MONTHLY_ADVANCED_SEARCHES,
+        limit: MAX_MONTHLY_ENHANCED_SEARCHES,
         extra: extraSearches,
         remaining: Math.max(0, totalAvailable - usedCount)
       }
     };
   } catch (error) {
-    console.error("Error in checkAdvancedSearchQuota:", error);
+    console.error("Error in checkEnhancedSearchQuota:", error);
     return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
   }
 }
 
-// FIXED: Proper advanced search usage increment
-async function incrementAdvancedSearchUsage(userId: string) {
+// SIMPLIFIED: Enhanced search usage increment
+async function incrementEnhancedSearchUsage(userId: string) {
   try {
     const currentMonth = new Date().toISOString().slice(0, 7);
 
     const { error } = await supabase
       .from('user_search_quotas')
       .update({
-        daily_count: supabase.sql`daily_count + 1`, // Using daily_count for monthly advanced searches
+        daily_count: supabase.sql`daily_count + 1`, // Using daily_count for monthly enhanced searches
         updated_at: new Date().toISOString()
       })
       .eq('user_id', userId)
       .eq('monthly_date', currentMonth);
 
     if (error) {
-      console.error("Error incrementing advanced search usage:", error);
+      console.error("Error incrementing enhanced search usage:", error);
     } else {
-      console.log("✅ Advanced search usage incremented");
+      console.log("✅ Enhanced search usage incremented");
     }
   } catch (error) {
-    console.error("Error in incrementAdvancedSearchUsage:", error);
+    console.error("Error in incrementEnhancedSearchUsage:", error);
   }
 }
 
-// FIXED: Proper regular search usage increment (just for tracking)
+// SIMPLIFIED: Regular search usage increment (just for tracking)
 async function incrementRegularSearchUsage(userId: string) {
   try {
     const currentMonth = new Date().toISOString().slice(0, 7);
@@ -336,6 +330,106 @@ async function incrementRegularSearchUsage(userId: string) {
     }
   } catch (error) {
     console.error("Error in incrementRegularSearchUsage:", error);
+  }
+}
+
+// ENHANCED: Better search function with multiple chunks and richer context
+async function executeEnhancedSearch(query: string, language: string = 'en') {
+  try {
+    if (!TAVILY_API_KEY) {
+      console.log("🔍 No Tavily API - using AI for enhanced response");
+      
+      // Even without Tavily, provide enhanced AI response
+      const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+      return {
+        success: true,
+        context: enhancedContext,
+        data: { 
+          sources: [],
+          enhanced: true,
+          note: "Enhanced AI response without web search"
+        }
+      };
+    }
+    
+    console.log("🔍 Executing enhanced Tavily search for query:", query);
+    
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query: query,
+        search_depth: "advanced", // Use advanced for enhanced search
+        include_answer: true,
+        include_raw_content: true,
+        max_results: 5, // More results for enhanced search
+        include_domains: [],
+        exclude_domains: []
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Tavily API error:", response.status, errorText);
+      
+      // Fallback to enhanced AI response
+      const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+      return {
+        success: true,
+        context: enhancedContext,
+        data: { 
+          sources: [],
+          enhanced: true,
+          fallback: true,
+          note: "Enhanced AI response (Tavily fallback)"
+        }
+      };
+    }
+    
+    const data = await response.json();
+    console.log("✅ Enhanced Tavily search successful");
+    
+    // Create richer context from multiple sources
+    let enhancedContext = `Enhanced web search results for: "${query}"\n\n`;
+    if (data.answer) {
+      enhancedContext += `Summary: ${data.answer}\n\n`;
+    }
+    
+    if (data.results && data.results.length > 0) {
+      enhancedContext += "Detailed Sources:\n";
+      data.results.forEach((result, index) => {
+        enhancedContext += `${index + 1}. ${result.title}\n`;
+        enhancedContext += `   ${result.content}\n`;
+        enhancedContext += `   Source: ${result.url}\n\n`;
+      });
+    }
+    
+    return {
+      success: true,
+      context: enhancedContext,
+      data: { 
+        sources: data.results || [],
+        enhanced: true,
+        searchDepth: "advanced",
+        answer: data.answer
+      }
+    };
+  } catch (error) {
+    console.error("Enhanced search execution error:", error);
+    
+    // Always provide enhanced AI response as fallback
+    const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+    return {
+      success: true,
+      context: enhancedContext,
+      data: { 
+        sources: [],
+        enhanced: true,
+        fallback: true,
+        note: "Enhanced AI response (error fallback)"
+      }
+    };
   }
 }
 
@@ -480,53 +574,11 @@ async function processWithAI(message: string, context: string | null, language: 
   }
 }
 
-// FIXED: Real search function with better error handling
-async function executeSearch(query: string, language: string = 'en') {
-  try {
-    if (!TAVILY_API_KEY) {
-      console.error("Tavily API key not configured");
-      return { success: false, error: "Search not configured" };
-    }
-    
-    console.log("🔍 Executing Tavily search for query:", query);
-    
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query: query,
-        search_depth: "basic",
-        include_answer: true,
-        max_results: 3
-      })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Tavily API error:", response.status, errorText);
-      return { success: false, error: `Search API error: ${response.status}` };
-    }
-    
-    const data = await response.json();
-    console.log("✅ Tavily search successful");
-    
-    return {
-      success: true,
-      context: data.answer,
-      data: { sources: data.results || [] }
-    };
-  } catch (error) {
-    console.error("Search execution error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
 function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Trigger isolation logic
+// SIMPLIFIED: Trigger isolation logic
 function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
@@ -534,6 +586,15 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
   
   switch (activeTrigger) {
     case 'search':
+      // Basic search - allows general questions
+      return {
+        intent: 'basic_search',
+        confidence: 'high',
+        allowed: true
+      };
+
+    case 'enhanced_search':
+      // Enhanced search with web browsing
       const searchPatterns = [
         'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
         'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
@@ -544,25 +605,9 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
       const isSearchIntent = searchPatterns.some(pattern => lowerMessage.includes(pattern));
       
       return {
-        intent: isSearchIntent ? 'real_time_search' : 'invalid_for_search',
+        intent: isSearchIntent ? 'enhanced_search' : 'invalid_for_enhanced_search',
         confidence: isSearchIntent ? 'high' : 'low',
         allowed: isSearchIntent
-      };
-
-    case 'advanced_search':
-      const advSearchPatterns = [
-        'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
-        'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
-        'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
-        'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
-      ];
-      
-      const isAdvSearchIntent = advSearchPatterns.some(pattern => lowerMessage.includes(pattern));
-      
-      return {
-        intent: isAdvSearchIntent ? 'advanced_search' : 'invalid_for_advanced_search',
-        confidence: isAdvSearchIntent ? 'high' : 'low',
-        allowed: isAdvSearchIntent
       };
 
     case 'image':
@@ -587,82 +632,5 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         confidence: 'high',
         allowed: true
       };
-  }
-}
-
-// Generate image with Runware API
-async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
-  try {
-    console.log("🎨 Generating image with Runware for prompt:", prompt);
-
-    const response = await fetch("https://api.runware.ai/v1", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([
-        {
-          taskType: "authentication",
-          apiKey: RUNWARE_API_KEY,
-        },
-        {
-          taskType: "imageInference",
-          taskUUID: crypto.randomUUID(),
-          positivePrompt: prompt,
-          model: "runware:100@1",
-          width: 512,
-          height: 512,
-          numberResults: 1,
-          outputFormat: "WEBP",
-          CFGScale: 1,
-          scheduler: "FlowMatchEulerDiscreteScheduler",
-          steps: 4,
-        },
-      ]),
-    });
-
-    console.log("🎨 Runware response status:", response.status);
-
-    if (response.ok) {
-      const result = await response.json();
-      console.log("🎨 Runware response data:", result);
-      
-      // Find the image inference result
-      const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
-      
-      if (imageResult && imageResult.imageURL) {
-        // Save image to database
-        try {
-          await supabase
-            .from('images')
-            .insert({
-              user_id: userId,
-              prompt: prompt,
-              image_url: imageResult.imageURL,
-              metadata: { provider: 'runware', imageUUID: imageResult.imageUUID }
-            });
-        } catch (dbError) {
-          console.log("Could not save image to database:", dbError);
-          // Continue anyway, the image was generated successfully
-        }
-
-        return {
-          success: true,
-          imageUrl: imageResult.imageURL
-        };
-      } else {
-        throw new Error('No image URL in Runware response');
-      }
-    } else {
-      const errorText = await response.text();
-      console.error("🎨 Runware API error:", response.status, errorText);
-      throw new Error(`Runware API failed: ${response.status} - ${errorText}`);
-    }
-  } catch (error) {
-    console.error('🎨 Error generating image with Runware:', error);
-    return {
-      success: false,
-      error: error.message
-    };
   }
 }
