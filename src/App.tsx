@@ -7,6 +7,12 @@ import { Toaster } from "@/components/ui/sonner";
 import Dashboard from "@/pages/Dashboard";
 import Calendar from "@/pages/Calendar";
 import Maw3d from "@/pages/Maw3d";
+import Maw3dCreate from "@/pages/Maw3dCreate";
+import Maw3dEdit from "@/pages/Maw3dEdit";
+import Maw3dManage from "@/pages/Maw3dManage";
+import Maw3dView from "@/pages/Maw3dView";
+import Maw3dEvents from "@/pages/Maw3dEvents";
+import StandaloneEvent from "@/pages/StandaloneEvent";
 import Tasjeel from "@/pages/Tasjeel";
 import WaktiAi from "@/pages/WaktiAi";
 import Settings from "@/pages/Settings";
@@ -81,6 +87,67 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
+                
+                {/* Maw3d Events Routes */}
+                <Route
+                  path="/maw3d-events"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Maw3dEvents />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maw3d/create"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Maw3dCreate />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maw3d/edit/:id"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Maw3dEdit />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maw3d/manage/:id"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Maw3dManage />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/maw3d/view/:id"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Maw3dView />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                
+                {/* Public Standalone Event Route */}
+                <Route path="/event/:shortId" element={<StandaloneEvent />} />
+                
                 <Route
                   path="/tasjeel"
                   element={
