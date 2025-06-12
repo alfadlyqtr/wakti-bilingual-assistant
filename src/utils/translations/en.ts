@@ -219,5 +219,52 @@ export const en = {
   mustRsvpBefore: "Must RSVP before",
   notEligibleToRsvp: "Not eligible to RSVP",
   thankYouRsvp: "Thank you for your RSVP",
-  privacyAndTerms: "Privacy & Terms"
+  privacyAndTerms: "Privacy & Terms",
+  
+  // New landing page content
+  mainTagline: "All-in-One AI App",
+  heroSubtitle: "Smarter. Faster. Easier.",
+  createAccountNow: "Create Account Now",
+  getStarted: "Get Started",
+  
+  // Updated pricing
+  monthly: "Monthly",
+  yearly: "Yearly (Save 17%)",
+  monthlyPrice: "60 QAR",
+  yearlyPrice: "600 QAR",
+  
+  // New features
+  waktiAiTitle: "WAKTI AI",
+  waktiAiDesc: "Talk or type, translate, search, generate text or reports, clone your voice — chat with smart AI.",
+  
+  tasksRemindersTitle: "Tasks & Reminders",
+  tasksRemindersDesc: "Stay organized with smart tasks. Add subtasks, set priorities, share, snooze, and track everything in one smooth flow.",
+  
+  maw3dEventsTitle: "Maw3d Events",
+  maw3dEventsDesc: "Design stunning invites, track who's attending, customize everything, and let WAKTI follow up so you don't.",
+  
+  tasjeelRecorderTitle: "Tasjeel Audio Recorder",
+  tasjeelRecorderDesc: "Record meetings or ideas, then get instant summaries you can read or hear — saved, organized, ready anytime.",
+  
+  contactsMessagingTitle: "Contacts & Messaging",
+  contactsMessagingDesc: "Chat, voice note, block, or connect — stay in control of your conversations, your privacy, and your circle.",
+  
+  // Additional translations
+  allInOneApp: "All-in-One App",
+  smarterFasterEasier: "Smarter. Faster. Easier.",
+  discoverFeatures: "Discover Features",
+  chooseYourPlan: "Choose Your Plan",
+  perfectForEveryone: "Perfect for Everyone",
+  
+  // Feature benefits
+  voiceCloning: "Voice Cloning",
+  textGeneration: "Text Generation",
+  smartSearch: "Smart Search",
+  instantSummaries: "Instant Summaries",
+  eventCustomization: "Event Customization",
+  attendanceTracking: "Attendance Tracking",
+  smartOrganization: "Smart Organization",
+  priorityManagement: "Priority Management",
+  voiceMessaging: "Voice Messaging",
+  privacyControl: "Privacy Control"
 };

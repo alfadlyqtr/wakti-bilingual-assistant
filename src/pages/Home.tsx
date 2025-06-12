@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -6,10 +7,11 @@ import { Logo3D } from "@/components/Logo3D";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { useTheme } from "@/providers/ThemeProvider";
 import { motion } from "framer-motion";
-import { Check, ArrowRight, CircleCheck, Bot, LogIn } from "lucide-react";
+import { Check, ArrowRight, Sparkles, Bot, Calendar, Mic, Users, MessageSquare, LogIn, Zap, Star } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
+import { t } from "@/utils/translations";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -22,72 +24,7 @@ export default function Home() {
       navigate('/dashboard');
     }
   }, [user, navigate]);
-
-  const translations = {
-    en: {
-      tagline: "AI Productivity Assistant",
-      description: "Manage tasks, events, reminders with AI-powered productivity tools",
-      loginBtn: "Login",
-      trial: "Start 3-Day Free Trial",
-      monthly: "Monthly",
-      yearly: "Yearly (Save 17%)",
-      monthlyPrice: "55 QAR",
-      yearlyPrice: "550 QAR",
-      featureSectionTitle: "Boost your productivity",
-      feature1Title: "Smart Task Management",
-      feature1Desc: "Create, prioritize, and share tasks with AI sorting",
-      feature2Title: "Event Planning",
-      feature2Desc: "Schedule events with RSVP and map integration",
-      feature3Title: "Bilingual Support",
-      feature3Desc: "Full Arabic and English language support",
-      feature4Title: "AI Assistant",
-      feature4Desc: "Get guidance and knowledge on demand",
-      aiSectionTitle: "WAKTI AI Capabilities",
-      aiFeature1Title: "Smart Task Generation",
-      aiFeature1Desc: "Generate optimized tasks with priorities and deadlines",
-      aiFeature2Title: "Content Summarization",
-      aiFeature2Desc: "Create concise summaries from voice or text inputs",
-      aiFeature3Title: "Creative Content",
-      aiFeature3Desc: "Write professional content in multiple tones and styles",
-      aiFeature4Title: "Learning Assistant",
-      aiFeature4Desc: "Get guidance, tutoring, and knowledge on demand"
-    },
-    ar: {
-      tagline: "مساعد الإنتاجية الذكي",
-      description: "إدارة المهام والفعاليات والتذكيرات مع أدوات الإنتاجية المدعومة بالذكاء الاصطناعي",
-      loginBtn: "تسجيل الدخول",
-      trial: "ابدأ التجربة المجانية لمدة 3 أيام",
-      monthly: "شهري",
-      yearly: "سنوي (وفر 17٪)",
-      monthlyPrice: "55 ر.ق",
-      yearlyPrice: "550 ر.ق",
-      featureSectionTitle: "عزز إنتاجيتك",
-      feature1Title: "إدارة المهام الذكية",
-      feature1Desc: "إنشاء وترتيب ومشاركة المهام مع فرز متقدم",
-      feature2Title: "تخطيط الفعاليات",
-      feature2Desc: "جدولة الفعاليات مع تأكيد الحضور والخرائط",
-      feature3Title: "دعم ثنائي اللغة",
-      feature3Desc: "دعم كامل للغتين العربية والإنجليزية",
-      feature4Title: "مساعد الذكاء الاصطناعي",
-      feature4Desc: "الحصول على التوجيه والمعرفة عند الطلب",
-      aiSectionTitle: "إمكانيات الذكاء الاصطناعي في WAKTI",
-      aiFeature1Title: "إنشاء المهام الذكية",
-      aiFeature1Desc: "توليد مهام محسنة مع أولويات ومواعيد نهائية",
-      aiFeature2Title: "تلخيص المحتوى",
-      aiFeature2Desc: "إنشاء ملخصات موجزة من المدخلات الصوتية أو النصية",
-      aiFeature3Title: "المحتوى الإبداعي",
-      aiFeature3Desc: "كتابة محتوى احترافي بنبرات وأساليب متعددة",
-      aiFeature4Title: "مساعد التعلم",
-      aiFeature4Desc: "الحصول على التوجيه والدروس والمعرفة عند الطلب"
-    }
-  };
   
-  const t = translations[language];
-  
-  // Define colors based on theme
-  const primaryBg = theme === "dark" ? "bg-dark-bg" : "bg-light-bg";
-  const primaryText = theme === "dark" ? "text-white" : "text-light-primary";
-  const accentBg = theme === "dark" ? "bg-dark-tertiary/20" : "bg-light-secondary/20";
   const [pricingPlan, setPricingPlan] = useState("monthly");
 
   const containerVariants = {
@@ -95,20 +32,63 @@ export default function Home() {
     visible: { 
       opacity: 1,
       transition: { 
-        staggerChildren: 0.1,
-        delayChildren: 0.2,
+        staggerChildren: 0.15,
+        delayChildren: 0.3,
       }
     }
   };
   
   const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
+    hidden: { y: 30, opacity: 0 },
     visible: { 
       y: 0, 
       opacity: 1,
-      transition: { duration: 0.5, ease: "easeOut" }
+      transition: { duration: 0.6, ease: "easeOut" }
     }
   };
+
+  const features = [
+    {
+      icon: Bot,
+      title: t("waktiAiTitle", language),
+      description: t("waktiAiDesc", language),
+      gradient: "from-blue-500 via-purple-500 to-indigo-600",
+      bgGradient: "from-blue-50 to-purple-50",
+      iconColor: "text-blue-600"
+    },
+    {
+      icon: Calendar,
+      title: t("tasksRemindersTitle", language),
+      description: t("tasksRemindersDesc", language),
+      gradient: "from-emerald-500 via-teal-500 to-cyan-600",
+      bgGradient: "from-emerald-50 to-teal-50",
+      iconColor: "text-emerald-600"
+    },
+    {
+      icon: Sparkles,
+      title: t("maw3dEventsTitle", language),
+      description: t("maw3dEventsDesc", language),
+      gradient: "from-pink-500 via-rose-500 to-red-600",
+      bgGradient: "from-pink-50 to-rose-50",
+      iconColor: "text-pink-600"
+    },
+    {
+      icon: Mic,
+      title: t("tasjeelRecorderTitle", language),
+      description: t("tasjeelRecorderDesc", language),
+      gradient: "from-amber-500 via-orange-500 to-red-600",
+      bgGradient: "from-amber-50 to-orange-50",
+      iconColor: "text-amber-600"
+    },
+    {
+      icon: MessageSquare,
+      title: t("contactsMessagingTitle", language),
+      description: t("contactsMessagingDesc", language),
+      gradient: "from-violet-500 via-purple-500 to-fuchsia-600",
+      bgGradient: "from-violet-50 to-purple-50",
+      iconColor: "text-violet-600"
+    }
+  ];
 
   return (
     <div className="mobile-container">
@@ -117,10 +97,10 @@ export default function Home() {
           <Button 
             variant="outline"
             size="sm"
-            className="flex items-center gap-1"
+            className="flex items-center gap-1 border-primary/20 hover:border-primary/40"
             onClick={() => navigate('/login')}
           >
-            {t.loginBtn}
+            {t("loginBtn", language)}
             <LogIn className="h-4 w-4" />
           </Button>
           <ThemeLanguageToggle />
@@ -129,253 +109,178 @@ export default function Home() {
       
       <div className="flex-1 overflow-y-auto">
         {/* Hero Section */}
-        <section className={`${primaryBg} px-4 py-6`}>
+        <section className="relative px-4 py-8 bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-indigo-950/30 dark:via-background dark:to-purple-950/30">
+          <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.05"%3E%3Ccircle cx="30" cy="30" r="2"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')] opacity-50"></div>
+          
           <motion.div 
             initial="hidden"
             animate="visible"
             variants={containerVariants}
-            className="mb-6"
+            className="relative z-10 text-center"
           >
-            <motion.div variants={itemVariants}>
-              <Logo3D size="lg" className="mx-auto mb-2" />
+            <motion.div variants={itemVariants} className="mb-6">
+              <Logo3D size="lg" className="mx-auto mb-4" />
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  WAKTI
+                </h1>
+                <Zap className="h-6 w-6 text-yellow-500" />
+              </div>
+              <p className="text-lg font-semibold text-muted-foreground">
+                {t("mainTagline", language)}
+              </p>
             </motion.div>
             
-            <motion.h1 
-              variants={itemVariants} 
-              className={`text-3xl font-bold mb-2 ${primaryText}`}
-            >
-              {t.tagline}
-            </motion.h1>
+            <motion.div variants={itemVariants} className="mb-6">
+              <h2 className="text-2xl font-bold mb-3 bg-gradient-to-r from-slate-700 to-slate-900 dark:from-slate-200 dark:to-white bg-clip-text text-transparent">
+                {t("heroSubtitle", language)}
+              </h2>
+              <p className="text-muted-foreground max-w-sm mx-auto leading-relaxed">
+                {t("description", language)}
+              </p>
+            </motion.div>
             
-            <motion.p 
-              variants={itemVariants}
-              className="text-sm text-muted-foreground mb-4 max-w-xs mx-auto"
-            >
-              {t.description}
-            </motion.p>
-            
-            <motion.div variants={itemVariants} className="mt-6 flex flex-col gap-3 max-w-xs mx-auto">
+            <motion.div variants={itemVariants} className="mb-8">
               <Button 
                 size="lg" 
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+                className="w-full max-w-xs bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-4 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                 onClick={() => navigate('/signup')}
               >
-                {t.trial}
-                <ArrowRight className="h-4 w-4 ml-1" />
+                <Star className="h-5 w-5 mr-2" />
+                {t("createAccountNow", language)}
+                <ArrowRight className="h-5 w-5 ml-2" />
               </Button>
             </motion.div>
           </motion.div>
         </section>
         
-        {/* Features Section with Modern Cards */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={containerVariants}
-          className="px-4 py-8"
-        >
-          <motion.h2 
-            variants={itemVariants}
-            className="text-xl font-bold mb-6 text-center"
-          >
-            {t.featureSectionTitle}
-          </motion.h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-blue-500" /> {t.feature1Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature1Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-purple-500 to-pink-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-purple-500" /> {t.feature2Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature2Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-amber-500 to-orange-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-amber-500" /> {t.feature3Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature3Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-green-500 to-teal-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-green-500" /> {t.feature4Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.feature4Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </motion.section>
-        
-        {/* WAKTI AI Section */}
-        <motion.section 
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={containerVariants}
-          className="px-4 py-8 bg-gradient-to-b from-transparent to-slate-50/5"
-        >
-          <motion.h2 
-            variants={itemVariants}
-            className="text-xl font-bold mb-6 text-center flex items-center justify-center gap-2"
-          >
-            <Bot className="h-5 w-5 text-blue-500" />
-            {t.aiSectionTitle}
-          </motion.h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-indigo-500 to-blue-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-indigo-500" /> {t.aiFeature1Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature1Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-fuchsia-500 to-violet-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-fuchsia-500" /> {t.aiFeature2Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature2Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-rose-500 to-red-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-rose-500" /> {t.aiFeature3Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature3Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-            
-            <motion.div variants={itemVariants}>
-              <Card className="overflow-hidden border-0 shadow-lg">
-                <div className="bg-gradient-to-r from-emerald-500 to-green-400 h-2"></div>
-                <div className="p-5">
-                  <h3 className="font-semibold text-lg mb-1 flex items-center">
-                    <CircleCheck className="h-5 w-5 mr-2 text-emerald-500" /> {t.aiFeature4Title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">{t.aiFeature4Desc}</p>
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-        </motion.section>
-        
-        {/* Pricing Section with Modern Design */}
+        {/* Features Section */}
         <motion.section 
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-50px" }}
           variants={containerVariants}
-          className={`px-4 py-8 mx-4 my-4 rounded-2xl ${accentBg} backdrop-blur-sm`}
+          className="px-4 py-12 bg-gradient-to-b from-transparent to-slate-50/50 dark:to-slate-900/20"
         >
-          <motion.div 
-            variants={itemVariants}
-            className="text-center mb-5"
-          >
-            <div className="inline-flex items-center gap-2 bg-background/80 backdrop-blur-sm rounded-full p-1 border mb-6 shadow-sm">
+          <motion.div variants={itemVariants} className="text-center mb-10">
+            <h2 className="text-2xl font-bold mb-3">
+              {t("discoverFeatures", language)}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {t("perfectForEveryone", language)}
+            </p>
+          </motion.div>
+          
+          <div className="space-y-6 max-w-lg mx-auto">
+            {features.map((feature, index) => (
+              <motion.div 
+                key={index}
+                variants={itemVariants}
+                className="group"
+              >
+                <Card className={`overflow-hidden border-0 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 bg-gradient-to-br ${feature.bgGradient} dark:from-slate-800/50 dark:to-slate-900/50`}>
+                  <div className={`h-1 bg-gradient-to-r ${feature.gradient}`}></div>
+                  <div className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={`p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm ${feature.iconColor}`}>
+                        <feature.icon className="h-6 w-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
+                          {feature.title}
+                          <Check className="h-4 w-4 text-green-500" />
+                        </h3>
+                        <p className="text-sm text-muted-foreground leading-relaxed">
+                          {feature.description}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </motion.section>
+        
+        {/* Pricing Section */}
+        <motion.section 
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-50px" }}
+          variants={containerVariants}
+          className="px-4 py-12 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-950/20 dark:via-purple-950/20 dark:to-pink-950/20 mx-4 my-8 rounded-3xl backdrop-blur-sm border border-indigo-100 dark:border-indigo-800/30"
+        >
+          <motion.div variants={itemVariants} className="text-center mb-8">
+            <h2 className="text-2xl font-bold mb-3">
+              {t("chooseYourPlan", language)}
+            </h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              {t("perfectForEveryone", language)}
+            </p>
+            
+            <div className="inline-flex items-center gap-2 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full p-1 border shadow-sm">
               <Button 
                 size="sm" 
                 variant={pricingPlan === "monthly" ? "default" : "ghost"}
-                className="rounded-full text-xs px-4"
+                className="rounded-full text-sm px-6 py-2"
                 onClick={() => setPricingPlan("monthly")}
               >
-                {t.monthly}
+                {t("monthly", language)}
               </Button>
               <Button 
                 size="sm"
                 variant={pricingPlan === "yearly" ? "default" : "ghost"}
-                className="rounded-full text-xs px-4"
+                className="rounded-full text-sm px-6 py-2"
                 onClick={() => setPricingPlan("yearly")}
               >
-                {t.yearly}
+                {t("yearly", language)}
               </Button>
             </div>
-            
-            <motion.div 
-              key={pricingPlan}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-              className="bg-background/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border max-w-xs mx-auto"
-            >
-              <div className="flex justify-between items-baseline mb-6">
-                <h3 className="text-2xl font-bold">
-                  {pricingPlan === "monthly" ? t.monthlyPrice : t.yearlyPrice}
-                </h3>
+          </motion.div>
+          
+          <motion.div 
+            key={pricingPlan}
+            variants={itemVariants}
+            className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/50 dark:border-slate-700/50 max-w-sm mx-auto"
+          >
+            <div className="text-center mb-8">
+              <div className="flex justify-center items-baseline gap-2 mb-4">
+                <span className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                  {pricingPlan === "monthly" ? t("monthlyPrice", language) : t("yearlyPrice", language)}
+                </span>
                 {pricingPlan === "yearly" && (
-                  <span className="text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
+                  <span className="text-sm bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1 rounded-full font-medium shadow-sm">
                     {language === 'en' ? 'SAVE 17%' : 'وفر 17٪'}
                   </span>
                 )}
               </div>
-              
-              <ul className="space-y-3 mb-6 text-sm">
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature1Title}</span>
+              <p className="text-sm text-muted-foreground">
+                {pricingPlan === "monthly" 
+                  ? (language === "en" ? "per month" : "شهرياً")
+                  : (language === "en" ? "per year" : "سنوياً")
+                }
+              </p>
+            </div>
+            
+            <ul className="space-y-4 mb-8">
+              {features.map((feature, index) => (
+                <li key={index} className="flex items-start gap-3">
+                  <div className={`p-1 rounded-full ${feature.iconColor} bg-white dark:bg-slate-800 shadow-sm`}>
+                    <Check className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">{feature.title}</span>
                 </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature2Title}</span>
-                </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature3Title}</span>
-                </li>
-                <li className="flex items-start">
-                  <Check className="h-5 w-5 mr-2 shrink-0 text-primary mt-0.5" />
-                  <span>{t.feature4Title}</span>
-                </li>
-              </ul>
-              
-              <Button
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                onClick={() => navigate('/signup')}
-              >
-                {t.trial}
-              </Button>
-            </motion.div>
+              ))}
+            </ul>
+            
+            <Button
+              className="w-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 hover:from-indigo-600 hover:via-purple-600 hover:to-pink-600 text-white font-semibold py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              onClick={() => navigate('/signup')}
+            >
+              <Star className="h-5 w-5 mr-2" />
+              {t("createAccountNow", language)}
+              <ArrowRight className="h-5 w-5 ml-2" />
+            </Button>
           </motion.div>
         </motion.section>
       </div>

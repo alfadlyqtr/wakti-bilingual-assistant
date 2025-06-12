@@ -1,4 +1,3 @@
-
 import { common } from "./modules/common";
 import { auth } from "./modules/auth";
 import { navigation } from "./modules/navigation";
@@ -304,5 +303,52 @@ export const ar = {
   attendanceType: "نوع الحضور",
   mustRsvpBefore: "يجب تأكيد الحضور قبل",
   notEligibleToRsvp: "غير مؤهل لتأكيد الحضور",
-  thankYouRsvp: "شكراً لتأكيد حضورك"
+  thankYouRsvp: "شكراً لتأكيد حضورك",
+  
+  // New landing page content
+  mainTagline: "تطبيق شامل واحد بالذكاء الاصطناعي",
+  heroSubtitle: "أذكى. أسرع. أسهل.",
+  createAccountNow: "إنشاء حساب الآن",
+  getStarted: "ابدأ الآن",
+  
+  // Updated pricing
+  monthly: "شهري",
+  yearly: "سنوي (وفر 17٪)",
+  monthlyPrice: "60 ر.ق",
+  yearlyPrice: "600 ر.ق",
+  
+  // New features
+  waktiAiTitle: "WAKTI AI ذكاء اصطناعي",
+  waktiAiDesc: "تحدث أو اكتب، ترجم، ابحث، أنشئ نصوص أو تقارير، استنسخ صوتك — تحدث مع الذكاء الاصطناعي الذكي.",
+  
+  tasksRemindersTitle: "المهام والتذكيرات",
+  tasksRemindersDesc: "ابق منظماً مع المهام الذكية. أضف مهام فرعية، حدد الأولويات، شارك، أجل، وتتبع كل شيء في تدفق سلس واحد.",
+  
+  maw3dEventsTitle: "أحداث Maw3d",
+  maw3dEventsDesc: "صمم دعوات مذهلة، تتبع من سيحضر، خصص كل شيء، ودع WAKTI يتابع حتى لا تضطر أنت لذلك.",
+  
+  tasjeelRecorderTitle: "مسجل Tasjeel الصوتي",
+  tasjeelRecorderDesc: "سجل الاجتماعات أو الأفكار، ثم احصل على ملخصات فورية يمكنك قراءتها أو سماعها — محفوظة ومنظمة وجاهزة في أي وقت.",
+  
+  contactsMessagingTitle: "جهات الاتصال والمراسلة",
+  contactsMessagingDesc: "تحدث، أرسل ملاحظات صوتية، احجب، أو تواصل — ابق متحكماً في محادثاتك وخصوصيتك ودائرتك.",
+  
+  // Additional translations
+  allInOneApp: "تطبيق شامل واحد",
+  smarterFasterEasier: "أذكى. أسرع. أسهل.",
+  discoverFeatures: "اكتشف الميزات",
+  chooseYourPlan: "اختر خطتك",
+  perfectForEveryone: "مثالي للجميع",
+  
+  // Feature benefits
+  voiceCloning: "استنساخ الصوت",
+  textGeneration: "توليد النصوص",
+  smartSearch: "البحث الذكي",
+  instantSummaries: "الملخصات الفورية",
+  eventCustomization: "تخصيص الأحداث",
+  attendanceTracking: "تتبع الحضور",
+  smartOrganization: "التنظيم الذكي",
+  priorityManagement: "إدارة الأولويات",
+  voiceMessaging: "المراسلة الصوتية",
+  privacyControl: "التحكم في الخصوصية"
 };
