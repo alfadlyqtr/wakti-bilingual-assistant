@@ -183,7 +183,6 @@ export const misc = {
   competition: "Competition",
   conflict: "Conflict",
   disagreement: "Disagreement",
-  agreement: "Agreement",
   contract: "Contract",
   deal: "Deal",
   transaction: "Transaction",
