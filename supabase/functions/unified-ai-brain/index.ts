@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -236,7 +235,8 @@ async function executeRegularSearch(query: string, language: string = 'en') {
         search_depth: "basic", // Use basic for regular search
         include_answer: true,
         include_raw_content: false,
-        max_results: 3, // Fewer results for regular search
+        max_results: 10, // Updated from 3 to 10
+        max_chunks: 5, // Added max_chunks parameter
         include_domains: [],
         exclude_domains: []
       })
