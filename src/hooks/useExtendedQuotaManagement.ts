@@ -269,13 +269,33 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
 
   const computedVoiceValues = useMemo(() => {
     const remainingVoiceCharacters = Math.max(0, userVoiceQuota.characters_limit - userVoiceQuota.characters_used);
-    const canUseVoice = remainingVoiceCharacters > 0 || userVoiceQuota.extra_characters > 0;
+    const totalAvailableCharacters = remainingVoiceCharacters + userVoiceQuota.extra_characters;
+    const canUseVoice = totalAvailableCharacters > 0;
 
     return {
       remainingVoiceCharacters,
+      totalAvailableCharacters,
       canUseVoice
     };
   }, [userVoiceQuota]);
+
+  // Add missing refresh functions
+  const refreshSearchQuota = useCallback(async () => {
+    await loadUserSearchQuota();
+  }, [loadUserSearchQuota]);
+
+  const refreshVoiceQuota = useCallback(async () => {
+    await loadUserVoiceQuota();
+  }, [loadUserVoiceQuota]);
+
+  // Add missing increment functions with proper names
+  const incrementRegularSearchUsage = useCallback(async (): Promise<boolean> => {
+    return await incrementRegularSearchCount();
+  }, [incrementRegularSearchCount]);
+
+  const incrementAdvancedSearchUsage = useCallback(async (): Promise<boolean> => {
+    return await incrementAdvancedSearchCount();
+  }, [incrementAdvancedSearchCount]);
 
   return {
     userSearchQuota,
@@ -290,6 +310,11 @@ export const useExtendedQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     purchaseExtraVoiceCredits,
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES,
+    // Add missing properties
+    refreshSearchQuota,
+    refreshVoiceQuota,
+    incrementRegularSearchUsage,
+    incrementAdvancedSearchUsage,
     ...computedSearchValues,
     ...computedVoiceValues
   };
