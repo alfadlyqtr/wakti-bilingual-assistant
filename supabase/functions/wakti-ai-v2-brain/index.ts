@@ -96,11 +96,11 @@ serve(async (req) => {
     if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
       console.log(`🔍 ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} triggered`);
       
-      // First, increment the appropriate search quota BEFORE performing the search
+      // Check and increment quota BEFORE performing the search
       if (activeTrigger === 'advanced_search') {
-        console.log("📈 Incrementing advanced search quota before search...");
-        const advancedSearchResult = await incrementAdvancedSearchQuota(userId);
-        if (!advancedSearchResult.success) {
+        console.log("📈 Checking advanced search quota...");
+        const quotaCheck = await checkAndIncrementAdvancedSearchQuota(userId);
+        if (!quotaCheck.success) {
           console.log("❌ Advanced search quota exceeded");
           response = language === 'ar' 
             ? `لقد استنفدت حصتك الشهرية من البحث المتقدم (5 عمليات بحث). يمكنك شراء المزيد من عمليات البحث المتقدم.`
@@ -119,10 +119,11 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }
+        console.log("✅ Advanced search quota available, proceeding...");
       } else {
-        // Regular search - always increment (unlimited but for tracking)
-        console.log("📈 Incrementing regular search quota before search...");
-        await incrementRegularSearchQuota(userId);
+        // Regular search - just log usage for tracking
+        console.log("📈 Logging regular search usage...");
+        await logRegularSearchUsage(userId);
       }
 
       // Enhanced Tavily search with different configurations
@@ -139,9 +140,6 @@ serve(async (req) => {
         actionTaken = activeTrigger === 'advanced_search' ? 'advanced_web_search' : 'basic_web_search';
         actionResult = { searchResults: searchResults.data };
 
-        // Also increment browsing usage for general tracking
-        await incrementBrowsingUsage(userId);
-        
         // Generate AI response with search results and conversation context
         response = await generateResponseWithSearchAndContext(
           message,
@@ -224,56 +222,144 @@ serve(async (req) => {
   }
 });
 
-// NEW: Function to increment advanced search quota with proper checking
-async function incrementAdvancedSearchQuota(userId: string) {
+// NEW: Simple function to check and increment advanced search quota
+async function checkAndIncrementAdvancedSearchQuota(userId: string) {
   try {
-    console.log("📈 Incrementing advanced search quota for user:", userId);
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
     
-    const { data, error } = await supabase.rpc('increment_search_usage', {
-      p_user_id: userId
-    });
-
-    if (error) {
-      console.error("❌ Error incrementing advanced search quota:", error);
-      return { success: false, error: error.message };
-    }
-
-    if (data && data.length > 0) {
-      const result = data[0];
-      console.log("✅ Advanced search quota increment result:", result);
-      return {
-        success: result.success,
-        daily_count: result.daily_count,
-        extra_advanced_searches: result.extra_advanced_searches
-      };
+    // Get or create quota record for current month
+    const { data: quotaData, error: quotaError } = await supabase
+      .from('user_search_quotas')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('monthly_date', currentMonth)
+      .single();
+    
+    if (quotaError && quotaError.code !== 'PGRST116') { // PGRST116 is "not found"
+      console.error("Error fetching quota:", quotaError);
+      return { success: false, error: quotaError.message };
     }
     
-    return { success: false, error: "No data returned from quota function" };
+    let currentUsage = 0;
+    let extraSearches = 0;
+    
+    if (quotaData) {
+      currentUsage = quotaData.daily_count || 0;
+      extraSearches = quotaData.extra_advanced_searches || 0;
+    }
+    
+    // Check if user has quota available (5 free + extras)
+    const maxFreeSearches = 5;
+    if (currentUsage >= maxFreeSearches && extraSearches <= 0) {
+      console.log("Quota exceeded:", { currentUsage, maxFreeSearches, extraSearches });
+      return { success: false, error: "Quota exceeded" };
+    }
+    
+    // Increment usage
+    if (quotaData) {
+      // Update existing record
+      if (currentUsage < maxFreeSearches) {
+        // Use free quota
+        const { error: updateError } = await supabase
+          .from('user_search_quotas')
+          .update({ 
+            daily_count: currentUsage + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('monthly_date', currentMonth);
+        
+        if (updateError) {
+          console.error("Error updating quota:", updateError);
+          return { success: false, error: updateError.message };
+        }
+      } else {
+        // Use extra searches
+        const { error: updateError } = await supabase
+          .from('user_search_quotas')
+          .update({ 
+            extra_advanced_searches: extraSearches - 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', userId)
+          .eq('monthly_date', currentMonth);
+        
+        if (updateError) {
+          console.error("Error updating extra searches:", updateError);
+          return { success: false, error: updateError.message };
+        }
+      }
+    } else {
+      // Create new record
+      const { error: insertError } = await supabase
+        .from('user_search_quotas')
+        .insert({
+          user_id: userId,
+          monthly_date: currentMonth,
+          daily_count: 1,
+          extra_searches: 0,
+          regular_search_count: 0,
+          extra_regular_searches: 0,
+          extra_advanced_searches: 0
+        });
+      
+      if (insertError) {
+        console.error("Error creating quota record:", insertError);
+        return { success: false, error: insertError.message };
+      }
+    }
+    
+    console.log("✅ Advanced search quota incremented successfully");
+    return { success: true };
+    
   } catch (error) {
-    console.error("❌ Error in incrementAdvancedSearchQuota:", error);
+    console.error("❌ Error in checkAndIncrementAdvancedSearchQuota:", error);
     return { success: false, error: error.message };
   }
 }
 
-// NEW: Function to increment regular search quota (for tracking, always succeeds)
-async function incrementRegularSearchQuota(userId: string) {
+// NEW: Simple function to log regular search usage (no quota limit)
+async function logRegularSearchUsage(userId: string) {
   try {
-    console.log("📈 Incrementing regular search quota for user:", userId);
+    const currentMonth = new Date().toISOString().slice(0, 7);
     
-    const { data, error } = await supabase.rpc('increment_regular_search_usage', {
-      p_user_id: userId
-    });
-
-    if (error) {
-      console.error("⚠️ Error incrementing regular search quota (non-blocking):", error);
+    // Get or create quota record
+    const { data: quotaData, error: quotaError } = await supabase
+      .from('user_search_quotas')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('monthly_date', currentMonth)
+      .single();
+    
+    if (quotaData) {
+      // Update existing record
+      await supabase
+        .from('user_search_quotas')
+        .update({ 
+          regular_search_count: (quotaData.regular_search_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('monthly_date', currentMonth);
     } else {
-      console.log("✅ Regular search quota incremented successfully");
+      // Create new record
+      await supabase
+        .from('user_search_quotas')
+        .insert({
+          user_id: userId,
+          monthly_date: currentMonth,
+          daily_count: 0,
+          extra_searches: 0,
+          regular_search_count: 1,
+          extra_regular_searches: 0,
+          extra_advanced_searches: 0
+        });
     }
     
-    return { success: true }; // Always return success for regular search
+    console.log("✅ Regular search usage logged");
   } catch (error) {
-    console.error("⚠️ Error in incrementRegularSearchQuota (non-blocking):", error);
-    return { success: true }; // Always return success for regular search
+    console.error("⚠️ Error logging regular search usage:", error);
+    // Don't throw error for logging failures
   }
 }
 
@@ -474,28 +560,6 @@ ${searchData.images.slice(0, 3).map((image: any, index: number) =>
     return language === 'ar' 
       ? `تم العثور على نتائج البحث ولكن حدث خطأ في معالجتها. إليك ما وجدته: ${searchData.answer || 'لم يتم العثور على إجابة مباشرة'}`
       : `Found search results but encountered an error processing them. Here's what I found: ${searchData.answer || 'No direct answer found'}`;
-  }
-}
-
-// Function to increment browsing usage
-async function incrementBrowsingUsage(userId: string) {
-  try {
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    
-    const { error } = await supabase.rpc('log_ai_usage', {
-      p_user_id: userId,
-      p_model_used: 'tavily-search',
-      p_has_browsing: true,
-      p_tokens_used: null
-    });
-
-    if (error) {
-      console.error("Error logging browsing usage:", error);
-    } else {
-      console.log("✅ Browsing usage logged successfully");
-    }
-  } catch (error) {
-    console.error("Error in incrementBrowsingUsage:", error);
   }
 }
 
@@ -869,36 +933,6 @@ async function processTextFile(file: any, language: string = 'en') {
       error: error.message,
       analysis: language === 'ar' ? 'فشل في معالجة الملف النصي' : 'Failed to process text file'
     };
-  }
-}
-
-// Check browsing quota
-async function checkBrowsingQuota(userId: string) {
-  try {
-    const { data, error } = await supabase.rpc('check_browsing_quota', {
-      p_user_id: userId
-    });
-    
-    if (error) {
-      console.error("Quota check error:", error);
-      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-    }
-    
-    const count = data || 0;
-    const limit = 60;
-    const usagePercentage = Math.round((count / limit) * 100);
-    
-    return {
-      count,
-      limit,
-      usagePercentage,
-      remaining: Math.max(0, limit - count),
-      canBrowse: count < limit,
-      requiresConfirmation: usagePercentage >= 80
-    };
-  } catch (error) {
-    console.error("Quota check error:", error);
-    return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
   }
 }
 

@@ -340,13 +340,16 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // NEW: Handle Voice Translator quota increment before sending
+      // NEW: Handle Voice Translator quota increment BEFORE sending
       if (inputType === 'voice') {
-        console.log('📈 Voice translation detected - incrementing translation quota...');
+        console.log('📈 Voice translation detected - checking and incrementing translation quota...');
         const canTranslate = await incrementTranslationCount();
         if (!canTranslate) {
-          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
+          setIsLoading(false);
+          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
+          return;
         }
+        console.log('✅ Voice translation quota incremented successfully');
       }
 
       // Increment quota usage based on trigger type BEFORE sending message
@@ -354,13 +357,17 @@ const WaktiAIV2 = () => {
         console.log('📈 Incrementing regular search usage before operation...');
         const canUse = await incrementRegularSearchUsage();
         if (!canUse) {
-          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث العادي' : 'Regular search limit reached');
+          setIsLoading(false);
+          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث العادي' : 'Regular search limit reached');
+          return;
         }
       } else if (activeTrigger === 'advanced_search') {
         console.log('📈 Incrementing advanced search usage before operation...');
         const canUse = await incrementAdvancedSearchUsage();
         if (!canUse) {
-          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث المتقدم' : 'Advanced search limit reached');
+          setIsLoading(false);
+          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث المتقدم' : 'Advanced search limit reached');
+          return;
         }
       }
 
@@ -486,15 +493,16 @@ const WaktiAIV2 = () => {
         );
       }
 
-      // NEW: Voice Translation quota refresh
+      // NEW: Voice Translation quota refresh with immediate UI update
       if (inputType === 'voice') {
         console.log('🔄 Voice translation completed - refreshing translation quota...');
         await refreshTranslationQuota();
         
+        const remainingTranslations = MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1;
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
-            : `Voice translation completed successfully - quota updated (${MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1}/${MAX_DAILY_TRANSLATIONS} remaining)`
+            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
+            : `Voice translation completed successfully - quota updated (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
         );
       }
 
