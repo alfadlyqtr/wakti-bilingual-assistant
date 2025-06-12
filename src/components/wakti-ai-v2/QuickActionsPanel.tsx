@@ -60,25 +60,6 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     }
   ];
 
-  const handleTryExample = (example: string) => {
-    onSendMessage(example);
-    onClose?.();
-    // If in search mode, auto-switch to chat mode for better experience
-    if (activeTrigger === 'search') {
-      setTimeout(() => {
-        onTriggerChange('chat');
-      }, 100);
-    }
-  };
-
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    if (onTextGenerated) {
-      onTextGenerated(text, mode);
-    }
-    // Close drawer after text is generated and applied
-    onClose?.();
-  };
-
   const handleTriggerChange = (trigger: TriggerMode) => {
     onTriggerChange(trigger);
     onClose?.();
@@ -121,6 +102,14 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
     }
   };
 
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
+    if (onTextGenerated) {
+      onTextGenerated(text, mode);
+    }
+    // Close drawer after text is generated and applied
+    onClose?.();
+  };
+
   return (
     <div className="space-y-6 h-full flex flex-col p-1">
       {/* AI Trigger Controls */}
@@ -140,19 +129,20 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
           </Button>
         </div>
         
-        <div className="grid grid-cols-3 gap-3">
+        {/* Updated trigger layout - vertical with more spacing */}
+        <div className="space-y-4">
           {triggerButtons.map((trigger) => (
             <Button
               key={trigger.id}
               variant={activeTrigger === trigger.id ? "default" : "outline"}
               className={cn(
-                "h-20 p-3 flex flex-col items-center justify-center gap-2 text-center transition-all duration-200 text-sm",
+                "w-full h-16 p-4 flex items-center justify-start gap-4 text-left transition-all duration-200",
                 activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1"
               )}
               onClick={() => handleTriggerChange(trigger.id)}
             >
               <div className={cn(
-                "p-2 rounded-lg",
+                "p-2 rounded-lg flex-shrink-0",
                 activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
               )}>
                 <trigger.icon className={cn(
@@ -160,9 +150,9 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
                   activeTrigger === trigger.id ? "text-primary" : "text-white"
                 )} />
               </div>
-              <div className="leading-tight">
-                <div className="text-xs font-medium">{trigger.label}</div>
-                <div className="text-[10px] text-muted-foreground">{trigger.description}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">{trigger.label}</div>
+                <div className="text-xs text-muted-foreground">{trigger.description}</div>
               </div>
             </Button>
           ))}
@@ -235,34 +225,8 @@ export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChang
         </div>
       </div>
 
-      {/* Try asking me section - ONLY visible in chat mode */}
-      {activeTrigger === 'chat' && (
-        <div className="flex-1 pt-4 border-t border-border/50">
-          <h4 className="text-sm font-medium text-muted-foreground mb-3">
-            {language === 'ar' ? 'أمثلة للتجربة' : 'Try asking me'}
-          </h4>
-          <div className="space-y-2">
-            {[
-              language === 'ar' ? 'ما هي مهامي اليوم؟' : 'What are my tasks today?',
-              language === 'ar' ? 'ساعدني في التخطيط لهذا الأسبوع' : 'Help me plan this week',
-              language === 'ar' ? 'أرني تقويمي' : 'Show me my calendar'
-            ].map((example, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-sm text-muted-foreground hover:text-foreground h-10 px-3 hover:bg-accent/50"
-                onClick={() => handleTryExample(example)}
-              >
-                "{example}"
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Buy Extras Button - Fixed at bottom */}
-      <div className="flex-shrink-0 pt-4 border-t border-border/30">
+      <div className="flex-shrink-0 pt-4 border-t border-border/30 mt-auto">
         <Button
           onClick={() => setBuyExtrasOpen(true)}
           variant="outline"
