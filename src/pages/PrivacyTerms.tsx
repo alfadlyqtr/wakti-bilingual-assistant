@@ -1,5 +1,5 @@
-
 import { useTheme } from "@/providers/ThemeProvider";
+import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
@@ -7,6 +7,11 @@ import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 
 export default function PrivacyTerms() {
   const { language } = useTheme();
+  const navigate = useNavigate();
+
+  const handleBackClick = () => {
+    navigate("/home");
+  };
 
   const formatText = (text: string) => {
     return text.split('\n').map((line, index) => (
@@ -18,7 +23,11 @@ export default function PrivacyTerms() {
 
   return (
     <div className="mobile-container">
-      <MobileHeader title={t("privacyAndTerms", language)} showBackButton={true}>
+      <MobileHeader 
+        title={t("privacyAndTerms", language)} 
+        showBackButton={true}
+        onBackClick={handleBackClick}
+      >
         <ThemeLanguageToggle />
       </MobileHeader>
       
