@@ -277,7 +277,9 @@ TONE: ${formData.tone}
 LENGTH: ${formData.length}
 ${formData.format ? `FORMAT: ${formData.format}` : ''}
 ${formData.to ? `To: ${formData.to}` : ''}
-${formData.from ? `From: ${formData.from}` : ''}`;
+${formData.from ? `From: ${formData.from}` : ''}
+
+IMPORTANT: Do not use asterisks (*) for formatting. Use clean, readable text without asterisk emphasis.`;
     } else {
       // Enhanced reply prompt with analysis context
       let prompt = `Reply to this message: "${formData.originalMessage}"
@@ -287,7 +289,9 @@ REPLY REQUIREMENTS:
 - LENGTH: ${formData.length}
 ${formData.format ? `- FORMAT: ${formData.format}` : ''}
 ${formData.to ? `- To: ${formData.to}` : ''}
-${formData.from ? `- From: ${formData.from}` : ''}`;
+${formData.from ? `- From: ${formData.from}` : ''}
+
+IMPORTANT: Do not use asterisks (*) for formatting. Use clean, readable text without asterisk emphasis.`;
 
       // Add analysis context if available
       if (messageAnalysis) {
