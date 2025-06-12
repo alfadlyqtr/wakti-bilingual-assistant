@@ -1,5 +1,8 @@
-import { AIMessage } from '@/types/wakti-ai';
+import { AIMessage, AIConversation } from '@/types/wakti-ai';
 import { supabase } from '@/integrations/supabase/client';
+
+// Export the types for other components to use
+export { AIMessage, AIConversation };
 
 export class WaktiAIV2Service {
   private static quotaCache: { [userId: string]: any } = {};
@@ -527,6 +530,78 @@ export class WaktiAIV2Service {
       console.log('🧠 Chat memory cleared successfully');
     } catch (error) {
       console.error('❌ Error in clearChatMemory:', error);
+    }
+  }
+
+  static async confirmTaskCreation(
+    userId: string,
+    language: string,
+    taskData: any
+  ): Promise<any> {
+    try {
+      console.log('✅ Confirming task creation:', taskData);
+
+      const response = await WaktiAIV2Service.sendMessage(
+        'confirm_task',
+        userId,
+        language,
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        true,
+        false,
+        taskData,
+        null
+      );
+
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error confirming task creation:', error);
+      return {
+        error: error.message || 'Failed to confirm task creation'
+      };
+    }
+  }
+
+  static async confirmReminderCreation(
+    userId: string,
+    language: string,
+    reminderData: any
+  ): Promise<any> {
+    try {
+      console.log('✅ Confirming reminder creation:', reminderData);
+
+      const response = await WaktiAIV2Service.sendMessage(
+        'confirm_reminder',
+        userId,
+        language,
+        null,
+        'text',
+        [],
+        false,
+        'chat',
+        null,
+        [],
+        null,
+        null,
+        false,
+        true,
+        null,
+        reminderData
+      );
+
+      return response;
+    } catch (error: any) {
+      console.error('❌ Error confirming reminder creation:', error);
+      return {
+        error: error.message || 'Failed to confirm reminder creation'
+      };
     }
   }
 }

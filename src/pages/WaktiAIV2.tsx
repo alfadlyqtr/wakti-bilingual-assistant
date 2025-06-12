@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { AIMessage, AIConversation } from '@/types/wakti-ai';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';

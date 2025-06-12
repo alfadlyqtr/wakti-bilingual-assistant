@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { AIMessage } from '@/services/WaktiAIV2Service';
+import { AIMessage } from '@/types/wakti-ai';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { ImageModal } from './ImageModal';
 import { ChatFileDisplay } from './ChatFileDisplay';

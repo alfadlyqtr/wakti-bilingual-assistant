@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   Sheet,
@@ -10,7 +9,7 @@ import {
 import { useTheme } from '@/providers/ThemeProvider';
 import { ConversationsList } from './ConversationsList';
 import { QuickActionsPanel } from './QuickActionsPanel';
-import { AIConversation } from '@/services/WaktiAIV2Service';
+import { AIConversation } from '@/types/wakti-ai';
 
 interface ChatDrawersProps {
   showConversations: boolean;
