@@ -23,9 +23,9 @@ export function BuyExtrasPopup({
   const {
     userSearchQuota,
     userVoiceQuota,
-    purchaseExtraAdvancedSearches,
+    purchaseExtraEnhancedSearches,
     purchaseExtraVoiceCredits,
-    MAX_MONTHLY_ADVANCED_SEARCHES
+    MAX_MONTHLY_ENHANCED_SEARCHES
   } = useExtendedQuotaManagement(language);
   const {
     userQuota: translationQuota,
@@ -33,34 +33,34 @@ export function BuyExtrasPopup({
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
 
-  const [isAdvancedSearchPurchasing, setIsAdvancedSearchPurchasing] = useState(false);
+  const [isEnhancedSearchPurchasing, setIsEnhancedSearchPurchasing] = useState(false);
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
 
-  const handlePurchaseAdvancedSearches = async () => {
-    setIsAdvancedSearchPurchasing(true);
-    console.log('🛒 Starting advanced search purchase...');
+  const handlePurchaseEnhancedSearches = async () => {
+    setIsEnhancedSearchPurchasing(true);
+    console.log('🛒 Starting enhanced search purchase...');
     try {
-      const success = await purchaseExtraAdvancedSearches(50);
-      console.log('🛒 Advanced search purchase result:', success);
+      const success = await purchaseExtraEnhancedSearches(50);
+      console.log('🛒 Enhanced search purchase result:', success);
       if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 50 بحث متقدم إضافي بنجاح!' : 'Successfully purchased 50 extra advanced searches!', {
+        toast.success(language === 'ar' ? 'تم شراء 50 بحث محسن إضافي بنجاح!' : 'Successfully purchased 50 extra enhanced searches!', {
           description: language === 'ar' ? 'صالح لمدة 30 يوماً من تاريخ الشراء' : 'Valid for 30 days from purchase date'
         });
         setTimeout(() => onOpenChange(false), 1500);
       } else {
-        console.error('❌ Advanced search purchase failed');
+        console.error('❌ Enhanced search purchase failed');
         toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed', {
           description: language === 'ar' ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' : 'Please try again or contact support'
         });
       }
     } catch (error) {
-      console.error('❌ Unexpected error during advanced search purchase:', error);
+      console.error('❌ Unexpected error during enhanced search purchase:', error);
       toast.error(language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error', {
         description: language === 'ar' ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' : 'An unexpected error occurred, please try again later'
       });
     } finally {
-      setIsAdvancedSearchPurchasing(false);
+      setIsEnhancedSearchPurchasing(false);
     }
   };
 
@@ -95,7 +95,7 @@ export function BuyExtrasPopup({
     setIsTranslationPurchasing(true);
     console.log('🛒 Starting translations purchase...');
     try {
-      const success = await purchaseExtraTranslations(100); // Changed from 150 to 100
+      const success = await purchaseExtraTranslations(100);
       console.log('🛒 Translations purchase result:', success);
       if (success) {
         toast.success(language === 'ar' ? 'تم شراء 100 ترجمة إضافية بنجاح!' : 'Successfully purchased 100 extra translations!', {
@@ -119,11 +119,11 @@ export function BuyExtrasPopup({
   };
 
   const getSearchQuotaStatus = () => {
-    const advancedUsed = userSearchQuota.daily_count;
-    const extraAdvancedSearches = userSearchQuota.extra_advanced_searches;
+    const enhancedUsed = userSearchQuota.daily_count;
+    const extraEnhancedSearches = userSearchQuota.extra_enhanced_searches;
     return {
-      advancedRemaining: Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - advancedUsed),
-      extraAdvancedSearches
+      enhancedRemaining: Math.max(0, MAX_MONTHLY_ENHANCED_SEARCHES - enhancedUsed),
+      extraEnhancedSearches
     };
   };
 
@@ -150,7 +150,7 @@ export function BuyExtrasPopup({
   const voiceStatus = getVoiceQuotaStatus();
   const translationStatus = getTranslationQuotaStatus();
 
-  const anyPurchaseInProgress = isAdvancedSearchPurchasing || isVoicePurchasing || isTranslationPurchasing;
+  const anyPurchaseInProgress = isEnhancedSearchPurchasing || isVoicePurchasing || isTranslationPurchasing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -172,14 +172,14 @@ export function BuyExtrasPopup({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1 text-sm pt-0">
-              {/* Advanced Search */}
+              {/* Enhanced Search */}
               <div className="text-sm">
                 <span>
-                  {language === 'ar' ? 'البحث المتقدم:' : 'Advanced Search:'} {quotaStatus.advancedRemaining}/{MAX_MONTHLY_ADVANCED_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
+                  {language === 'ar' ? 'البحث المحسن:' : 'Enhanced Search:'} {quotaStatus.enhancedRemaining}/{MAX_MONTHLY_ENHANCED_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
-                {quotaStatus.extraAdvancedSearches > 0 && (
+                {quotaStatus.extraEnhancedSearches > 0 && (
                   <span className="text-green-600 ml-2">
-                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{quotaStatus.extraAdvancedSearches}
+                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{quotaStatus.extraEnhancedSearches}
                   </span>
                 )}
               </div>
@@ -210,26 +210,26 @@ export function BuyExtrasPopup({
             </CardContent>
           </Card>
 
-          {/* Purchase Options - Removed Regular Search */}
+          {/* Purchase Options - Updated naming */}
           <div className="space-y-3">
-            {/* Advanced Search Extras */}
+            {/* Enhanced Search Extras */}
             <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/20 dark:border-purple-800">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Zap className="h-4 w-4 text-purple-500" />
-                  {language === 'ar' ? 'بحثات متقدمة إضافية' : 'Extra Advanced Searches'}
+                  {language === 'ar' ? 'بحثات محسنة إضافية' : 'Extra Enhanced Searches'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'احصل على 50 بحث متقدم إضافي صالح لمدة شهر واحد' : 'Get 50 extra advanced searches valid for 1 month'}
+                  {language === 'ar' ? 'احصل على 50 بحث محسن إضافي صالح لمدة شهر واحد' : 'Get 50 extra enhanced searches valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-purple-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseAdvancedSearches} disabled={isAdvancedSearchPurchasing || anyPurchaseInProgress} className="bg-purple-600 hover:bg-purple-700" size="sm">
-                    {isAdvancedSearchPurchasing ? (
+                  <Button onClick={handlePurchaseEnhancedSearches} disabled={isEnhancedSearchPurchasing || anyPurchaseInProgress} className="bg-purple-600 hover:bg-purple-700" size="sm">
+                    {isEnhancedSearchPurchasing ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}

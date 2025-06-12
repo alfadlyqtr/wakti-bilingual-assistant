@@ -27,14 +27,14 @@ export function ChatHeader({
   searchQuotaStatus
 }: ChatHeaderProps) {
   const { language } = useTheme();
-  const { userSearchQuota, MAX_MONTHLY_ADVANCED_SEARCHES } = useExtendedQuotaManagement(language);
+  const { userSearchQuota, MAX_MONTHLY_ENHANCED_SEARCHES } = useExtendedQuotaManagement(language); // Fixed: renamed from MAX_MONTHLY_ADVANCED_SEARCHES
 
-  const isSearchMode = activeTrigger === 'search' || activeTrigger === 'advanced_search';
+  const isSearchMode = activeTrigger === 'search' || activeTrigger === 'enhanced_search'; // Fixed: renamed from advanced_search
 
-  const getAdvancedSearchQuotaInfo = () => {
-    if (activeTrigger === 'advanced_search') {
-      const remaining = Math.max(0, MAX_MONTHLY_ADVANCED_SEARCHES - userSearchQuota.daily_count);
-      const total = MAX_MONTHLY_ADVANCED_SEARCHES;
+  const getEnhancedSearchQuotaInfo = () => { // Fixed: renamed from getAdvancedSearchQuotaInfo
+    if (activeTrigger === 'enhanced_search') { // Fixed: renamed from advanced_search
+      const remaining = Math.max(0, MAX_MONTHLY_ENHANCED_SEARCHES - userSearchQuota.daily_count);
+      const total = MAX_MONTHLY_ENHANCED_SEARCHES;
       return { remaining, total };
     }
     return undefined;
@@ -50,12 +50,12 @@ export function ChatHeader({
           </span>
         </Button>
 
-        {/* Show search mode indicator with quota for advanced search */}
+        {/* Show search mode indicator with quota for enhanced search */}
         {isSearchMode && (
           <SearchModeIndicator 
             isVisible={true} 
-            searchType={activeTrigger as 'search' | 'advanced_search'}
-            quotaInfo={getAdvancedSearchQuotaInfo()}
+            searchType={activeTrigger as 'search' | 'enhanced_search'} // Fixed: renamed from advanced_search
+            quotaInfo={getEnhancedSearchQuotaInfo()} // Fixed: renamed
           />
         )}
 
