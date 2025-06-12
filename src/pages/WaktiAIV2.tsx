@@ -32,18 +32,12 @@ const WaktiAIV2 = () => {
   const { language } = useTheme();
   const { showSuccess, showError } = useToastHelper();
 
-  // Add extended quota management with enhanced search (renamed from advanced)
+  // Simplified quota management - only voice
   const {
-    userSearchQuota,
-    refreshSearchQuota,
-    refreshVoiceQuota,
-    incrementRegularSearchUsage,
-    incrementEnhancedSearchUsage, // Renamed from incrementAdvancedSearchUsage
-    MAX_MONTHLY_ENHANCED_SEARCHES, // Renamed from MAX_MONTHLY_ADVANCED_SEARCHES
-    MAX_MONTHLY_REGULAR_SEARCHES
+    refreshVoiceQuota
   } = useExtendedQuotaManagement(language);
 
-  // NEW: Add translation quota management for Voice Translator
+  // Translation quota management for Voice Translator
   const {
     userQuota: translationQuota,
     refreshTranslationQuota,
@@ -54,21 +48,6 @@ const WaktiAIV2 = () => {
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
-
-  // SIMPLIFIED: Get search quota status for the header
-  const getSearchQuotaStatus = () => {
-    const regularUsed = userSearchQuota.regular_search_count;
-    const enhancedUsed = userSearchQuota.daily_count; // This is monthly enhanced search count
-    const extraSearches = userSearchQuota.extra_searches;
-    
-    return {
-      regularRemaining: Math.max(0, MAX_MONTHLY_REGULAR_SEARCHES - regularUsed),
-      enhancedRemaining: Math.max(0, MAX_MONTHLY_ENHANCED_SEARCHES - enhancedUsed), // Renamed
-      regularLimit: MAX_MONTHLY_REGULAR_SEARCHES,
-      enhancedLimit: MAX_MONTHLY_ENHANCED_SEARCHES, // Renamed
-      extraSearches
-    };
-  };
 
   useEffect(() => {
     const fetchQuota = async () => {
@@ -87,7 +66,7 @@ const WaktiAIV2 = () => {
     fetchQuota();
   }, []);
 
-  // UPDATED: Enhanced fetchQuota function with force refresh option
+  // Updated fetchQuota function with force refresh option
   const fetchQuota = async (forceRefresh: boolean = false) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -161,7 +140,6 @@ const WaktiAIV2 = () => {
         setSessionMessages(savedSession.messages || []);
         if (savedSession.conversationId) {
           setCurrentConversationId(savedSession.conversationId);
-          // Load full conversation history from database
           loadFullConversationHistory(savedSession.conversationId);
         }
       }
@@ -199,7 +177,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // Load full conversation history from database
   const loadFullConversationHistory = async (conversationId: string) => {
     try {
       console.log('📚 Loading full conversation history for:', conversationId);
@@ -228,12 +205,9 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // Get complete conversation context for AI
   const getCompleteConversationContext = (): AIMessage[] => {
-    // Combine conversation messages from DB with session messages
     const allMessages = [...conversationMessages, ...sessionMessages];
     
-    // Remove duplicates based on timestamp and content
     const uniqueMessages = allMessages.filter((message, index, self) => 
       index === self.findIndex(m => 
         m.timestamp.getTime() === message.timestamp.getTime() && 
@@ -242,10 +216,8 @@ const WaktiAIV2 = () => {
       )
     );
     
-    // Sort by timestamp
     uniqueMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     
-    // Keep last 50 messages for better context (increased from 15)
     const contextMessages = uniqueMessages.slice(-50);
     
     console.log('🧠 Complete conversation context:', {
@@ -258,7 +230,6 @@ const WaktiAIV2 = () => {
     return contextMessages;
   };
 
-  // Auto-create conversation and save messages after first exchange
   const createConversationIfNeeded = async (messages: AIMessage[]) => {
     if (currentConversationId || messages.length < 2) return null;
 
@@ -282,7 +253,6 @@ const WaktiAIV2 = () => {
     }
   };
 
-  // Save a single message to existing conversation
   const saveMessageToConversation = async (message: AIMessage, conversationId: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -314,7 +284,6 @@ const WaktiAIV2 = () => {
         return;
       }
 
-      // Update conversation's last_message_at
       await WaktiAIV2Service.updateConversationTimestamp(conversationId);
 
       console.log('✅ Message saved successfully');
@@ -334,12 +303,12 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SEARCH SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SYSTEM ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // NEW: Handle Voice Translator quota increment BEFORE sending
+      // Handle Voice Translator quota increment BEFORE sending
       if (inputType === 'voice') {
         console.log('📈 Voice translation detected - checking and incrementing translation quota...');
         const canTranslate = await incrementTranslationCount();
@@ -360,14 +329,12 @@ const WaktiAIV2 = () => {
         attachedFiles: attachedFiles || []
       };
 
-      // Add to session messages
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Get complete conversation context (increased from 15 to 50 messages)
       const completeContext = getCompleteConversationContext();
       const contextForAI = [...completeContext, userMessage].slice(-50);
 
@@ -402,7 +369,6 @@ const WaktiAIV2 = () => {
 
       if (response.conversationId && response.conversationId !== currentConversationId) {
         setCurrentConversationId(response.conversationId);
-        // Load full history for new conversation
         loadFullConversationHistory(response.conversationId);
         console.log('🔄 WAKTI AI V2.5: Updated conversation ID:', response.conversationId);
       }
@@ -433,45 +399,37 @@ const WaktiAIV2 = () => {
         pendingReminderData: response.pendingReminderData
       };
 
-      // Add to session messages (keep last 30 for session, expanded from 20)
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalSessionMessages);
 
-      // Auto-create conversation if this is the first exchange
       if (!currentConversationId) {
         const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
         const newConversationId = await createConversationIfNeeded(allMessagesForConversation);
         if (newConversationId) {
           setCurrentConversationId(newConversationId);
-          // Load full history for new conversation
           loadFullConversationHistory(newConversationId);
           console.log('🆕 Set new conversation ID:', newConversationId);
           
-          // Refresh conversations list
           fetchConversations();
         }
       } else {
-        // Save messages to existing conversation
         await saveMessageToConversation(userMessage, currentConversationId);
         await saveMessageToConversation(assistantMessage, currentConversationId);
         
-        // Refresh conversations list to update last_message_at
         fetchConversations();
       }
 
-      // SIMPLIFIED: Real-time quota refresh after operations
-      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
-        console.log('🔄 Search operation completed - refreshing search quota in real-time...');
-        await refreshSearchQuota();
-        
+      // Simplified: Only search operation quota handling (no enhanced search)
+      if (response.browsingUsed && activeTrigger === 'search') {
+        console.log('🔄 Search operation completed');
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث ${activeTrigger === 'enhanced_search' ? 'المحسن' : 'الأساسي'} بنجاح وتحديث الحصة` 
-            : `${activeTrigger === 'enhanced_search' ? 'Enhanced' : 'Basic'} search completed successfully - quota updated`
+            ? 'تم تنفيذ البحث بنجاح' 
+            : 'Search completed successfully'
         );
       }
 
-      // NEW: Voice Translation quota refresh with immediate UI update
+      // Voice Translation quota refresh with immediate UI update
       if (inputType === 'voice') {
         console.log('🔄 Voice translation completed - refreshing translation quota...');
         await refreshTranslationQuota();
@@ -484,24 +442,20 @@ const WaktiAIV2 = () => {
         );
       }
 
-      // Enhanced quota handling with immediate refresh for search operations
       if (response.quotaStatus) {
         console.log('📊 Received quota status from AI response:', response.quotaStatus);
         setQuotaStatus(response.quotaStatus);
         
-        // If browsing was used (search/enhanced_search), invalidate cache and force refresh
-        if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
+        if (response.browsingUsed && activeTrigger === 'search') {
           console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
           WaktiAIV2Service.invalidateQuotaCache();
           
-          // Force refresh quota after a brief delay to ensure backend is updated
           setTimeout(() => {
             fetchQuota(true);
           }, 1000);
         }
       }
 
-      // Voice translation quota refresh
       if (inputType === 'voice') {
         console.log('🔄 Voice operation completed - refreshing voice quota...');
         await refreshVoiceQuota();
@@ -539,17 +493,16 @@ const WaktiAIV2 = () => {
         );
       }
 
-      // SIMPLIFIED: Show success message for search operations
-      if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'enhanced_search')) {
+      if (response.browsingUsed && activeTrigger === 'search') {
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث ${activeTrigger === 'enhanced_search' ? 'المحسن' : 'الأساسي'} بنجاح` 
-            : `${activeTrigger === 'enhanced_search' ? 'Enhanced' : 'Basic'} search completed successfully`
+            ? 'تم تنفيذ البحث بنجاح' 
+            : 'Search completed successfully'
         );
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Simplified search system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Simplified system error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -616,7 +569,6 @@ const WaktiAIV2 = () => {
   };
 
   const saveCurrentConversationIfNeeded = async () => {
-    // Save current conversation before starting new one
     if (sessionMessages.length > 0 && !currentConversationId) {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -636,7 +588,7 @@ const WaktiAIV2 = () => {
     
     setCurrentConversationId(null);
     setSessionMessages([]);
-    setConversationMessages([]); // Clear conversation history
+    setConversationMessages([]);
     WaktiAIV2Service.clearChatSession();
     setSearchConfirmationRequired(false);
     setError(null);
@@ -653,13 +605,10 @@ const WaktiAIV2 = () => {
       console.log('📂 Loading conversation:', conversationId);
       setIsLoading(true);
       
-      // Load full conversation history from database
       await loadFullConversationHistory(conversationId);
       
-      // Set current conversation
       setCurrentConversationId(conversationId);
       
-      // Clear session messages since we're loading from DB
       setSessionMessages([]);
       
       setSearchConfirmationRequired(false);
@@ -713,7 +662,6 @@ const WaktiAIV2 = () => {
   const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
     console.log('📝 Text generated from tool:', { text, mode });
     
-    // Create assistant message directly for generated text
     const assistantMessage: AIMessage = {
       id: `assistant-textgen-${Date.now()}`,
       role: 'assistant',
@@ -725,11 +673,9 @@ const WaktiAIV2 = () => {
       isTextGenerated: true
     };
 
-    // Add to session messages as assistant message
     const updatedSessionMessages = [...sessionMessages, assistantMessage].slice(-30);
     setSessionMessages(updatedSessionMessages);
 
-    // Save to conversation if exists
     if (currentConversationId) {
       saveMessageToConversation(assistantMessage, currentConversationId);
     }
@@ -739,7 +685,6 @@ const WaktiAIV2 = () => {
     );
   };
 
-  // Combine conversation and session messages for display
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   return (
@@ -764,7 +709,6 @@ const WaktiAIV2 = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen">
-        {/* Fixed Header - positioned below the main app header with glass effect */}
         <div 
           className="fixed top-16 right-0 bg-background/80 backdrop-blur-md border-b rounded-b-2xl z-40"
           style={{ 
@@ -779,7 +723,7 @@ const WaktiAIV2 = () => {
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
             quotaStatus={quotaStatus}
-            searchQuotaStatus={getSearchQuotaStatus()}
+            searchQuotaStatus={undefined}
           />
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
@@ -789,12 +733,11 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        {/* Scrollable Messages Area with reduced top padding for better spacing */}
         <div 
           className="flex-1 overflow-hidden"
           style={{ 
-            paddingTop: '130px', // Reduced from 140px - Bringing content closer to header
-            paddingBottom: '100px' // Account for input area
+            paddingTop: '130px',
+            paddingBottom: '100px'
           }}
         >
           <ChatMessages
@@ -807,7 +750,6 @@ const WaktiAIV2 = () => {
         </div>
       </div>
 
-      {/* Fixed Input at Bottom */}
       <div 
         className="fixed bottom-8 right-0 bg-background border-t z-20 pb-safe" 
         style={{ 

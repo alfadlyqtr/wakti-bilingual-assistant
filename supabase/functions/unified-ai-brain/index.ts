@@ -14,7 +14,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with simplified search system");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with simplified system - Regular Search only");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -110,47 +110,26 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // SIMPLIFIED: Only 3 trigger types now - chat, search (unlimited), enhanced_search (5/month), image
+    // SIMPLIFIED: Only 3 trigger types now - chat, search (unlimited), image
     switch (activeTrigger) {
       case 'search':
-        // Basic search - unlimited, just increment counter for tracking
+        // Regular search - unlimited, optionally use web browsing
         if (intent.allowed) {
-          await incrementRegularSearchUsage(user.id);
-          response = await processWithAI(message, null, language);
-        } else {
-          response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث الأساسي\n\nهذا الوضع مخصص للأسئلة العامة.\n\nللبحث المتقدم مع التصفح، انتقل إلى وضع البحث المحسن.`
-            : `⚠️ You're in Basic Search Mode\n\nThis mode is for general questions.\n\nFor web browsing, switch to Enhanced Search mode.`;
-        }
-        quotaStatus = { type: 'regular_search', unlimited: true };
-        break;
-
-      case 'enhanced_search':
-        // Enhanced search with web browsing - 5/month quota
-        if (intent.allowed) {
-          const canUseEnhanced = await checkEnhancedSearchQuota(user.id);
-          if (canUseEnhanced.canUse) {
-            await incrementEnhancedSearchUsage(user.id);
-            const searchResult = await executeEnhancedSearch(message, language);
-            if (searchResult.success) {
-              browsingUsed = true;
-              browsingData = searchResult.data;
-              response = await processWithAI(message, searchResult.context, language);
-            } else {
-              response = await processWithAI(message, null, language);
-            }
-            quotaStatus = canUseEnhanced.quotaStatus;
+          // Try to use web browsing for better search results
+          const searchResult = await executeRegularSearch(message, language);
+          if (searchResult.success) {
+            browsingUsed = true;
+            browsingData = searchResult.data;
+            response = await processWithAI(message, searchResult.context, language);
           } else {
-            response = language === 'ar' 
-              ? `🚫 تم الوصول للحد الأقصى من البحث المحسن\n\nلقد استخدمت ${canUseEnhanced.quotaStatus.used}/${canUseEnhanced.quotaStatus.limit} من بحثاتك المحسنة هذا الشهر.\n\nيمكنك استخدام البحث الأساسي (غير محدود) أو شراء بحثات إضافية.`
-              : `🚫 Enhanced Search Limit Reached\n\nYou've used ${canUseEnhanced.quotaStatus.used}/${canUseEnhanced.quotaStatus.limit} enhanced searches this month.\n\nYou can use basic search (unlimited) or purchase extra searches.`;
-            quotaStatus = canUseEnhanced.quotaStatus;
+            response = await processWithAI(message, null, language);
           }
         } else {
           response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث المحسن\n\nهذا الوضع مخصص للبحث مع التصفح.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Enhanced Search Mode\n\nThis mode is for search with web browsing.\n\nFor general chat, switch to Chat mode.`;
+            ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+            : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
         }
+        quotaStatus = { type: 'regular_search', unlimited: true };
         break;
 
       case 'image':
@@ -228,131 +207,25 @@ serve(async (req) => {
   }
 });
 
-// SIMPLIFIED: Enhanced search quota checking (uses the old advanced search quota)
-async function checkEnhancedSearchQuota(userId: string) {
-  try {
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const MAX_MONTHLY_ENHANCED_SEARCHES = 5;
-
-    // Get or create current month's quota record
-    const { data, error } = await supabase
-      .from('user_search_quotas')
-      .select('daily_count, extra_advanced_searches')
-      .eq('user_id', userId)
-      .eq('monthly_date', currentMonth)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error("Error checking enhanced search quota:", error);
-      return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
-    }
-
-    let usedCount = 0;
-    let extraSearches = 0;
-
-    if (data) {
-      usedCount = data.daily_count || 0; // This represents monthly enhanced searches
-      extraSearches = data.extra_advanced_searches || 0;
-    } else {
-      // Create new record for this month
-      await supabase
-        .from('user_search_quotas')
-        .insert({
-          user_id: userId,
-          monthly_date: currentMonth,
-          daily_count: 0, // Used for enhanced search monthly counter
-          regular_search_count: 0,
-          extra_regular_searches: 0,
-          extra_advanced_searches: 0
-        });
-    }
-
-    const totalAvailable = MAX_MONTHLY_ENHANCED_SEARCHES + extraSearches;
-    const canUse = usedCount < totalAvailable;
-
-    return {
-      canUse,
-      quotaStatus: {
-        used: usedCount,
-        limit: MAX_MONTHLY_ENHANCED_SEARCHES,
-        extra: extraSearches,
-        remaining: Math.max(0, totalAvailable - usedCount)
-      }
-    };
-  } catch (error) {
-    console.error("Error in checkEnhancedSearchQuota:", error);
-    return { canUse: true, quotaStatus: { used: 0, limit: 5, remaining: 5 } };
-  }
-}
-
-// SIMPLIFIED: Enhanced search usage increment
-async function incrementEnhancedSearchUsage(userId: string) {
-  try {
-    const currentMonth = new Date().toISOString().slice(0, 7);
-
-    const { error } = await supabase
-      .from('user_search_quotas')
-      .update({
-        daily_count: supabase.sql`daily_count + 1`, // Using daily_count for monthly enhanced searches
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId)
-      .eq('monthly_date', currentMonth);
-
-    if (error) {
-      console.error("Error incrementing enhanced search usage:", error);
-    } else {
-      console.log("✅ Enhanced search usage incremented");
-    }
-  } catch (error) {
-    console.error("Error in incrementEnhancedSearchUsage:", error);
-  }
-}
-
-// SIMPLIFIED: Regular search usage increment (just for tracking)
-async function incrementRegularSearchUsage(userId: string) {
-  try {
-    const currentMonth = new Date().toISOString().slice(0, 7);
-
-    const { error } = await supabase
-      .from('user_search_quotas')
-      .update({
-        regular_search_count: supabase.sql`regular_search_count + 1`,
-        updated_at: new Date().toISOString()
-      })
-      .eq('user_id', userId)
-      .eq('monthly_date', currentMonth);
-
-    if (error) {
-      console.error("Error incrementing regular search usage:", error);
-    } else {
-      console.log("✅ Regular search usage logged");
-    }
-  } catch (error) {
-    console.error("Error in incrementRegularSearchUsage:", error);
-  }
-}
-
-// ENHANCED: Better search function with multiple chunks and richer context
-async function executeEnhancedSearch(query: string, language: string = 'en') {
+// SIMPLIFIED: Regular search function with optional web browsing
+async function executeRegularSearch(query: string, language: string = 'en') {
   try {
     if (!TAVILY_API_KEY) {
-      console.log("🔍 No Tavily API - using AI for enhanced response");
+      console.log("🔍 No Tavily API - using AI for search response");
       
-      // Even without Tavily, provide enhanced AI response
-      const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
       return {
         success: true,
-        context: enhancedContext,
+        context: searchContext,
         data: { 
           sources: [],
-          enhanced: true,
-          note: "Enhanced AI response without web search"
+          enhanced: false,
+          note: "AI response without web search"
         }
       };
     }
     
-    console.log("🔍 Executing enhanced Tavily search for query:", query);
+    console.log("🔍 Executing regular Tavily search for query:", query);
     
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
@@ -360,10 +233,10 @@ async function executeEnhancedSearch(query: string, language: string = 'en') {
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query: query,
-        search_depth: "advanced", // Use advanced for enhanced search
+        search_depth: "basic", // Use basic for regular search
         include_answer: true,
-        include_raw_content: true,
-        max_results: 5, // More results for enhanced search
+        include_raw_content: false,
+        max_results: 3, // Fewer results for regular search
         include_domains: [],
         exclude_domains: []
       })
@@ -373,61 +246,61 @@ async function executeEnhancedSearch(query: string, language: string = 'en') {
       const errorText = await response.text();
       console.error("Tavily API error:", response.status, errorText);
       
-      // Fallback to enhanced AI response
-      const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+      // Fallback to AI response
+      const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
       return {
         success: true,
-        context: enhancedContext,
+        context: searchContext,
         data: { 
           sources: [],
-          enhanced: true,
+          enhanced: false,
           fallback: true,
-          note: "Enhanced AI response (Tavily fallback)"
+          note: "AI response (Tavily fallback)"
         }
       };
     }
     
     const data = await response.json();
-    console.log("✅ Enhanced Tavily search successful");
+    console.log("✅ Regular Tavily search successful");
     
-    // Create richer context from multiple sources
-    let enhancedContext = `Enhanced web search results for: "${query}"\n\n`;
+    // Create context from search results
+    let searchContext = `Search results for: "${query}"\n\n`;
     if (data.answer) {
-      enhancedContext += `Summary: ${data.answer}\n\n`;
+      searchContext += `Summary: ${data.answer}\n\n`;
     }
     
     if (data.results && data.results.length > 0) {
-      enhancedContext += "Detailed Sources:\n";
+      searchContext += "Sources:\n";
       data.results.forEach((result, index) => {
-        enhancedContext += `${index + 1}. ${result.title}\n`;
-        enhancedContext += `   ${result.content}\n`;
-        enhancedContext += `   Source: ${result.url}\n\n`;
+        searchContext += `${index + 1}. ${result.title}\n`;
+        searchContext += `   ${result.content}\n`;
+        searchContext += `   Source: ${result.url}\n\n`;
       });
     }
     
     return {
       success: true,
-      context: enhancedContext,
+      context: searchContext,
       data: { 
         sources: data.results || [],
-        enhanced: true,
-        searchDepth: "advanced",
+        enhanced: false,
+        searchDepth: "basic",
         answer: data.answer
       }
     };
   } catch (error) {
-    console.error("Enhanced search execution error:", error);
+    console.error("Regular search execution error:", error);
     
-    // Always provide enhanced AI response as fallback
-    const enhancedContext = `Enhanced search request: "${query}". Provide comprehensive information with multiple perspectives and detailed analysis.`;
+    // Always provide AI response as fallback
+    const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
     return {
       success: true,
-      context: enhancedContext,
+      context: searchContext,
       data: { 
         sources: [],
-        enhanced: true,
+        enhanced: false,
         fallback: true,
-        note: "Enhanced AI response (error fallback)"
+        note: "AI response (error fallback)"
       }
     };
   }
@@ -578,7 +451,7 @@ function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// SIMPLIFIED: Trigger isolation logic
+// SIMPLIFIED: Trigger isolation logic - only chat, search, image
 function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
@@ -586,15 +459,7 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
   
   switch (activeTrigger) {
     case 'search':
-      // Basic search - allows general questions
-      return {
-        intent: 'basic_search',
-        confidence: 'high',
-        allowed: true
-      };
-
-    case 'enhanced_search':
-      // Enhanced search with web browsing
+      // Search allows questions and search queries
       const searchPatterns = [
         'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
         'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
@@ -602,12 +467,12 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
       ];
       
-      const isSearchIntent = searchPatterns.some(pattern => lowerMessage.includes(pattern));
+      const isSearchIntent = searchPatterns.some(pattern => lowerMessage.includes(pattern)) || lowerMessage.includes('?');
       
       return {
-        intent: isSearchIntent ? 'enhanced_search' : 'invalid_for_enhanced_search',
-        confidence: isSearchIntent ? 'high' : 'low',
-        allowed: isSearchIntent
+        intent: isSearchIntent ? 'search' : 'general_query',
+        confidence: 'high',
+        allowed: true // Allow all queries in search mode
       };
 
     case 'image':
