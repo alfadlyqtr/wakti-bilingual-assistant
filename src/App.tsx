@@ -17,6 +17,7 @@ import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
 import Contacts from "@/pages/Contacts";
+import PrivacyTerms from "@/pages/PrivacyTerms";
 import { PageContainer } from "@/components/PageContainer";
 import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
@@ -39,6 +40,7 @@ function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 
                 {/* Root Route - Redirect to Home for landing */}
                 <Route path="/" element={<Navigate to="/home" replace />} />
