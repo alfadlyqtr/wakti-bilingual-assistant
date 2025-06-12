@@ -241,14 +241,36 @@ export class TRService {
     if (error) throw error;
   }
 
-  // Reminder operations
+  // Reminder operations - FIXED to include user authentication and filtering
   static async getReminders(): Promise<TRReminder[]> {
+    console.log('TRService.getReminders: Starting to fetch reminders');
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) {
+      console.error('TRService.getReminders: Authentication error:', authError);
+      throw new Error('Authentication failed. Please log in again.');
+    }
+    
+    if (!user) {
+      console.error('TRService.getReminders: No user found');
+      throw new Error('User not authenticated. Please log in.');
+    }
+
+    console.log('TRService.getReminders: Fetching reminders for user:', user.id);
+
     const { data, error } = await supabase
       .from('tr_reminders')
       .select('*')
+      .eq('user_id', user.id)  // Only fetch reminders belonging to the current user
       .order('due_date', { ascending: true });
     
-    if (error) throw error;
+    if (error) {
+      console.error('TRService.getReminders: Database error:', error);
+      throw error;
+    }
+
+    console.log('TRService.getReminders: Fetched reminders count:', data?.length || 0);
     return data || [];
   }
 

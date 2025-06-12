@@ -32,6 +32,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
 
   useEffect(() => {
     if (propReminders) {
+      console.log('ReminderList - Using prop reminders:', propReminders.length);
       // Filter out snoozed reminders if using prop reminders
       const now = new Date();
       const activeReminders = propReminders.filter(reminder => {
@@ -41,6 +42,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       setReminders(activeReminders);
       setLoading(false);
     } else {
+      console.log('ReminderList - Loading own reminders');
       loadReminders();
     }
   }, [propReminders]);
@@ -48,7 +50,10 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const loadReminders = async () => {
     try {
       setLoading(true);
+      console.log('ReminderList - Fetching reminders from service');
       const data = await TRService.getReminders();
+      
+      console.log('ReminderList - Fetched reminders:', data.length);
       
       // Filter out snoozed reminders
       const now = new Date();
@@ -57,10 +62,12 @@ export const ReminderList: React.FC<ReminderListProps> = ({
         return parseISO(reminder.snoozed_until) <= now;
       });
       
+      console.log('ReminderList - Active reminders after filtering:', activeReminders.length);
       setReminders(activeReminders);
     } catch (error) {
-      console.error('Error loading reminders:', error);
+      console.error('ReminderList - Error loading reminders:', error);
       toast.error('Failed to load reminders');
+      setReminders([]);
     } finally {
       setLoading(false);
     }
@@ -77,6 +84,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
 
   const handleSnoozeReminder = async (reminder: TRReminder) => {
     try {
+      console.log('ReminderList - Snoozing reminder:', reminder.id);
       await TRService.snoozeReminder(reminder.id);
       toast.success('Reminder snoozed for 1 day');
       if (onRemindersChanged) {
@@ -86,7 +94,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       }
       onReminderUpdate?.();
     } catch (error) {
-      console.error('Error snoozing reminder:', error);
+      console.error('ReminderList - Error snoozing reminder:', error);
       toast.error('Failed to snooze reminder');
     }
   };
@@ -94,6 +102,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   const handleDeleteReminder = async (reminder: TRReminder) => {
     if (window.confirm('Are you sure you want to delete this reminder?')) {
       try {
+        console.log('ReminderList - Deleting reminder:', reminder.id);
         await TRService.deleteReminder(reminder.id);
         toast.success(t('reminderDeleted', language));
         if (onRemindersChanged) {
@@ -103,7 +112,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
         }
         onReminderUpdate?.();
       } catch (error) {
-        console.error('Error deleting reminder:', error);
+        console.error('ReminderList - Error deleting reminder:', error);
         toast.error('Failed to delete reminder');
       }
     }
@@ -115,6 +124,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   const handleReminderSaved = () => {
+    console.log('ReminderList - Reminder saved, refreshing data');
     if (onRemindersChanged) {
       onRemindersChanged();
     } else {
@@ -133,13 +143,19 @@ export const ReminderList: React.FC<ReminderListProps> = ({
   };
 
   if (loading) {
-    return <div className="text-center py-8">{t('loading', language)}</div>;
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+        <p className="text-sm text-muted-foreground mt-2">{t('loading', language)}</p>
+      </div>
+    );
   }
 
   if (reminders.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        {t('noReminders', language)}
+        <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+        <p>{t('noReminders', language)}</p>
       </div>
     );
   }

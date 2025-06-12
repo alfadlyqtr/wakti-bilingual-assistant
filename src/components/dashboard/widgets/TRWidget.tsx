@@ -1,10 +1,12 @@
+
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
-import { Hand, CheckSquare, Bell, Calendar, Plus } from "lucide-react";
+import { Hand, CheckSquare, Bell, Calendar, Plus, RefreshCw } from "lucide-react";
+import { toast } from 'sonner';
 
 interface TRWidgetProps {
   language: 'en' | 'ar';
@@ -15,29 +17,40 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
   const [tasks, setTasks] = useState<TRTask[]>([]);
   const [reminders, setReminders] = useState<TRReminder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [tasksData, remindersData] = await Promise.all([
-          TRService.getTasks(),
-          TRService.getReminders()
-        ]);
-        console.log('T&R Widget fetched tasks:', tasksData.length);
-        console.log('T&R Widget fetched reminders:', remindersData.length);
-        setTasks(tasksData);
-        setReminders(remindersData);
-      } catch (error) {
-        console.error('Error fetching T&R data for widget:', error);
-        setTasks([]);
-        setReminders([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log('T&R Widget - Fetching data...');
+      const [tasksData, remindersData] = await Promise.all([
+        TRService.getTasks(),
+        TRService.getReminders()
+      ]);
+      
+      console.log('T&R Widget - Data fetched successfully:', {
+        tasksCount: tasksData.length,
+        remindersCount: remindersData.length
+      });
+      
+      setTasks(tasksData);
+      setReminders(remindersData);
+    } catch (error) {
+      console.error('T&R Widget - Error fetching data:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
+      setError(errorMessage);
+      setTasks([]);
+      setReminders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const pendingTasks = tasks.filter(task => !task.completed);
   const todayReminders = reminders.filter(reminder => {
@@ -46,6 +59,36 @@ export const TRWidget: React.FC<TRWidgetProps> = ({ language }) => {
   });
 
   const hasContent = pendingTasks.length > 0 || todayReminders.length > 0;
+
+  if (error) {
+    return (
+      <div className="relative group">
+        {/* Liquid Glass Background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-background/80 via-background/40 to-background/60 backdrop-blur-xl rounded-xl border border-white/10 shadow-2xl"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-red-500/5 rounded-xl"></div>
+        
+        {/* Drag handle */}
+        <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-white/10 backdrop-blur-sm border border-white/20 cursor-grab">
+          <Hand className="h-3 w-3 text-primary/70" />
+        </div>
+
+        {/* Error Content */}
+        <div className="relative z-10 p-6 pt-12 text-center">
+          <h3 className="font-semibold text-lg text-foreground mb-4">Tasks & Reminders</h3>
+          <p className="text-sm text-red-500 mb-4">Error loading data</p>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={fetchData}
+            className="bg-white/10 backdrop-blur-sm border-white/20"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative group">
