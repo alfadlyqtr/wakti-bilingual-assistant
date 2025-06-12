@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,11 +26,22 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
   const [imageModalOpen, setImageModalOpen] = useState(false);
 
   const formatTime = (timestamp: Date) => {
-    return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: language !== 'ar'
-    }).format(timestamp);
+    // Add validation to ensure timestamp is a valid date
+    if (!timestamp || !(timestamp instanceof Date) || isNaN(timestamp.getTime())) {
+      console.warn('Invalid timestamp provided to formatTime:', timestamp);
+      return ''; // Return empty string for invalid dates
+    }
+
+    try {
+      return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: language !== 'ar'
+      }).format(timestamp);
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return ''; // Return empty string if formatting fails
+    }
   };
 
   const handleCopy = async () => {
