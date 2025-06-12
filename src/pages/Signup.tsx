@@ -5,6 +5,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { Eye, EyeOff, Mail, Lock, User, ArrowLeft, CalendarIcon } from "lucide-react";
@@ -23,6 +24,7 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -33,6 +35,11 @@ export default function Signup() {
     
     if (!name || !username || !email || !password || !dateOfBirth) {
       setErrorMsg(language === 'en' ? 'Please fill in all fields including date of birth' : 'يرجى تعبئة جميع الحقول بما في ذلك تاريخ الميلاد');
+      return;
+    }
+    
+    if (!agreedToTerms) {
+      setErrorMsg(language === 'en' ? 'Please agree to the Privacy Policy and Terms of Service' : 'يرجى الموافقة على سياسة الخصوصية وشروط الخدمة');
       return;
     }
     
@@ -88,6 +95,10 @@ export default function Signup() {
       alreadyHaveAccount: "Already have an account?",
       login: "Login",
       backToHome: "Back to Home",
+      agreeToTerms: "I agree to the",
+      privacyPolicy: "Privacy Policy",
+      and: "and",
+      termsOfService: "Terms of Service",
       // Placeholders
       namePlaceholder: "Your Name",
       usernamePlaceholder: "username",
@@ -108,6 +119,10 @@ export default function Signup() {
       alreadyHaveAccount: "لديك حساب بالفعل؟",
       login: "تسجيل الدخول",
       backToHome: "العودة للرئيسية",
+      agreeToTerms: "أوافق على",
+      privacyPolicy: "سياسة الخصوصية",
+      and: "و",
+      termsOfService: "شروط الخدمة",
       // Placeholders
       namePlaceholder: "اسمك",
       usernamePlaceholder: "اسم المستخدم",
@@ -289,10 +304,41 @@ export default function Signup() {
                 </div>
               </div>
               
+              {/* Privacy and Terms Checkbox */}
+              <div className="flex items-start space-x-3">
+                <Checkbox
+                  id="terms"
+                  checked={agreedToTerms}
+                  onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                  disabled={isLoading}
+                  className="mt-1"
+                />
+                <div className="text-sm leading-relaxed">
+                  <label htmlFor="terms" className="cursor-pointer">
+                    {t.agreeToTerms}{" "}
+                    <button
+                      type="button"
+                      onClick={() => navigate("/privacy-terms")}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {t.privacyPolicy}
+                    </button>
+                    {" "}{t.and}{" "}
+                    <button
+                      type="button"
+                      onClick={() => navigate("/privacy-terms")}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      {t.termsOfService}
+                    </button>
+                  </label>
+                </div>
+              </div>
+              
               <Button
                 type="submit"
                 className="w-full text-base py-6 shadow-md hover:shadow-lg transition-all"
-                disabled={isLoading}
+                disabled={isLoading || !agreedToTerms}
               >
                 {isLoading ? t.loading : t.signup}
               </Button>
