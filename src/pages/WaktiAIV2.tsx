@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -320,20 +319,10 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // Handle Search quota increment BEFORE sending (only for search trigger)
+      // Simple search quota handling - just decrement when searching
       if (activeTrigger === 'search') {
-        console.log('🔍 Search operation detected - checking search quota...');
+        console.log('🔍 Search operation - decrementing quota...');
         
-        if (!canSearch) {
-          setIsLoading(false);
-          const errorMsg = language === 'ar' 
-            ? `تم الوصول للحد الأقصى من البحث (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} استخدمت، ${extraSearches} إضافي متبقي)`
-            : `Search quota exceeded (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} used, ${extraSearches} extra remaining)`;
-          showError(errorMsg);
-          return;
-        }
-
-        // Increment search quota BEFORE sending the request
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('User not authenticated');
 
@@ -342,22 +331,23 @@ const WaktiAIV2 = () => {
         });
 
         if (quotaError) {
-          console.error('❌ Error incrementing search quota:', quotaError);
+          console.error('❌ Search quota error:', quotaError);
           setIsLoading(false);
-          showError(language === 'ar' ? 'خطأ في إدارة حصة البحث' : 'Error managing search quota');
+          showError(language === 'ar' ? 'خطأ في حصة البحث' : 'Search quota error');
           return;
         }
 
-        if (!data || !data[0]?.success) {
-          console.error('❌ Search quota increment failed:', data);
+        // Simple check: if no data or success is false, show error
+        if (!data || !data[0] || data[0].success !== true) {
+          console.log('❌ Search quota exceeded');
           setIsLoading(false);
           showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث' : 'Search quota exceeded');
           return;
         }
 
-        console.log('✅ Search quota incremented successfully:', data[0]);
+        console.log('✅ Search quota decremented successfully');
         
-        // Refresh search quota display immediately
+        // Refresh search quota display
         await refreshSearchQuota();
       }
 
@@ -475,17 +465,11 @@ const WaktiAIV2 = () => {
       // Search operation success handling
       if (response.browsingUsed && activeTrigger === 'search') {
         console.log('🔄 Search operation completed successfully');
-        const remainingAfterSearch = remainingFreeSearches - 1;
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث بنجاح (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} متبقي)`
-            : `Search completed successfully (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} remaining)`
+            ? 'تم تنفيذ البحث بنجاح'
+            : 'Search completed successfully'
         );
-        
-        // Force refresh search quota display
-        setTimeout(() => {
-          refreshSearchQuota();
-        }, 500);
       }
 
       // Voice Translation quota refresh with immediate UI update
