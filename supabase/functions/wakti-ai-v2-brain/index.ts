@@ -372,6 +372,14 @@ function parseTimeString(timeStr: string): string | null {
   const cleanTime = timeStr.toLowerCase().trim();
   console.log("⏰ Parsing time string:", cleanTime);
   
+  // Handle word-based times first
+  if (cleanTime.includes('morning')) return '09:00:00';
+  if (cleanTime.includes('afternoon')) return '14:00:00';
+  if (cleanTime.includes('evening')) return '18:00:00';
+  if (cleanTime.includes('night')) return '20:00:00';
+  if (cleanTime.includes('noon')) return '12:00:00';
+  if (cleanTime.includes('midnight')) return '00:00:00';
+  
   // Handle common formats
   const patterns = [
     // 9 am, 9pm, 2:30 am, 2:30pm (with optional space before am/pm)
@@ -492,8 +500,26 @@ function getNextWeekday(date: Date, targetDay: number): Date {
 function extractTaskData(message: string, language: string = 'en') {
   console.log("📝 Extracting task data from:", message);
   
-  // Remove task creation keywords to get clean title
+  // Remove task creation keywords to get clean message
   let cleanMessage = message.replace(/create task|add task|new task|make task|task for|أنشئ مهمة|اضف مهمة|مهمة جديدة/gi, '').trim();
+  
+  // Extract location/store information first
+  let extractedLocation = null;
+  const locationPatterns = [
+    /shopping\s+at\s+([a-zA-Z]+)/gi,
+    /shop\s+at\s+([a-zA-Z]+)/gi,
+    /go\s+to\s+([a-zA-Z]+)/gi
+  ];
+  
+  for (const pattern of locationPatterns) {
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      extractedLocation = match[1].toLowerCase();
+      // Remove the location phrase from clean message for further processing
+      cleanMessage = cleanMessage.replace(pattern, '').trim();
+      break;
+    }
+  }
   
   // Extract date information
   const datePatterns = [
@@ -519,7 +545,8 @@ function extractTaskData(message: string, language: string = 'en') {
   // Extract time information
   const timePatterns = [
     /\d{1,2}:?\d{0,2}\s*(am|pm)/gi,
-    /\d{1,2}:\d{2}/g
+    /\d{1,2}:\d{2}/g,
+    /morning|afternoon|evening|night|noon|midnight/gi
   ];
   
   let extractedTime = null;
@@ -534,34 +561,67 @@ function extractTaskData(message: string, language: string = 'en') {
     }
   }
   
-  // Extract shopping list items for subtasks
+  // Extract items for subtasks - improved logic
   const subtasks = [];
-  const shoppingIndicators = ['shopping', 'buy', 'need to buy', 'تسوق', 'شراء', 'أحتاج لشراء'];
-  const isShoppingTask = shoppingIndicators.some(indicator => 
-    message.toLowerCase().includes(indicator.toLowerCase())
-  );
   
-  if (isShoppingTask) {
-    // Look for items mentioned after shopping indicators
-    const items = ['milk', 'rice', 'beans', 'bread', 'eggs', 'حليب', 'أرز', 'فاصوليا', 'خبز', 'بيض'];
-    for (const item of items) {
-      if (message.toLowerCase().includes(item.toLowerCase())) {
-        subtasks.push(item);
-      }
+  // Look for explicit item lists after keywords
+  const itemKeywords = ['buy', 'get', 'pick up', 'need', 'purchase', 'شراء', 'أحتاج', 'اشتري'];
+  let itemsText = '';
+  
+  for (const keyword of itemKeywords) {
+    const pattern = new RegExp(`\\b${keyword}\\s+(.+?)(?:\\s+(?:due|at|tomorrow|today|for|من|في|غداً)|$)`, 'gi');
+    const match = cleanMessage.match(pattern);
+    if (match) {
+      // Extract everything after the keyword
+      const afterKeyword = match[0].replace(new RegExp(`\\b${keyword}\\s+`, 'gi'), '');
+      itemsText = afterKeyword.trim();
+      cleanMessage = cleanMessage.replace(match[0], '').trim();
+      break;
     }
   }
   
-  // Clean up the title further
-  let title = cleanMessage
-    .replace(/shopping at \w+|تسوق في \w+/gi, '')
-    .replace(/need to buy|أحتاج لشراء/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // If we found items text, parse it into individual items
+  if (itemsText) {
+    // Split by common separators and clean up
+    const rawItems = itemsText.split(/\s+and\s+|,\s*|\s+&\s+|\s+/).filter(item => item.length > 0);
+    
+    // Filter out common non-item words and duplicates
+    const excludeWords = ['and', 'or', 'to', 'from', 'at', 'in', 'on', 'the', 'a', 'an', 'due', 'for', 'with'];
+    const seenItems = new Set();
+    
+    for (const item of rawItems) {
+      const cleanItem = item.toLowerCase().replace(/[^\w\s]/g, '').trim();
+      if (cleanItem.length > 1 && 
+          !excludeWords.includes(cleanItem) && 
+          !seenItems.has(cleanItem)) {
+        subtasks.push(cleanItem);
+        seenItems.add(cleanItem);
+      }
+    }
+    
+    // Limit to 10 subtasks
+    subtasks.splice(10);
+  }
   
-  // If title is too short or empty, create a meaningful one
-  if (title.length < 3) {
-    if (isShoppingTask) {
-      title = language === 'ar' ? 'مهمة تسوق' : 'Shopping Task';
+  // Generate appropriate title based on context
+  let title = '';
+  
+  if (extractedLocation) {
+    // Shopping task with location
+    const locationName = extractedLocation.charAt(0).toUpperCase() + extractedLocation.slice(1);
+    title = language === 'ar' ? `تسوق في ${locationName}` : `Shopping at ${locationName}`;
+  } else if (subtasks.length > 0) {
+    // Generic shopping task
+    title = language === 'ar' ? 'قائمة تسوق' : 'Shopping List';
+  } else {
+    // Clean up remaining message for title
+    let remainingText = cleanMessage
+      .replace(/shopping|shop|buy|purchase|get|pick up|need to|تسوق|شراء|اشتري/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    if (remainingText.length > 3) {
+      title = remainingText.charAt(0).toUpperCase() + remainingText.slice(1);
     } else {
       title = language === 'ar' ? 'مهمة جديدة' : 'New Task';
     }
@@ -579,12 +639,13 @@ function extractTaskData(message: string, language: string = 'en') {
     title,
     due_date: extractedDate,
     due_time: extractedTime,
-    subtasks
+    subtasks,
+    location: extractedLocation
   });
   
   return {
     title,
-    description: '',
+    description: extractedLocation ? `Shopping at ${extractedLocation.charAt(0).toUpperCase() + extractedLocation.slice(1)}` : '',
     due_date: extractedDate,
     due_time: extractedTime,
     priority: 'normal',
@@ -671,7 +732,7 @@ function analyzeIntent(message: string, activeTrigger: string, language: string 
   const searchPatterns = [
     'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
     'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
-    'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
+    'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'مؤخراً', 'اليوم', 'أخبار',
     'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
   ];
 
