@@ -1481,6 +1481,13 @@ export type Database = {
           new_extra_characters: number
         }[]
       }
+      purchase_search_package: {
+        Args: { p_user_id: string }
+        Returns: {
+          success: boolean
+          new_extra_count: number
+        }[]
+      }
       set_limit: {
         Args: { "": number }
         Returns: number
