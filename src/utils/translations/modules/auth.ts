@@ -1,0 +1,25 @@
+
+export const auth = {
+  welcome: "Welcome",
+  login: "Login",
+  signup: "Sign Up",
+  email: "Email",
+  password: "Password",
+  confirmPassword: "Confirm Password",
+  name: "Name",
+  forgotPassword: "Forgot Password",
+  resetPassword: "Reset Password",
+  signInWithGoogle: "Sign in with Google",
+  alreadyHaveAccount: "Already have an account?",
+  dontHaveAccount: "Don't have an account?",
+  createAccount: "Create Account",
+  signInInstead: "Sign in instead",
+  logout: "Logout",
+  currentPassword: "Current Password",
+  newPassword: "New Password",
+  passwordsDoNotMatch: "Passwords do not match",
+  currentPasswordRequired: "Current password is required",
+  errorUpdatingPassword: "Error updating password",
+  passwordUpdated: "Password updated successfully",
+  errorSigningOut: "Error signing out"
+};
