@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Smart Date/Time Intelligence");
+console.log("🚀 WAKTI AI V2 BRAIN: Enhanced with Smart Date/Time Intelligence & Fixed Task Creation");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -106,39 +106,75 @@ serve(async (req) => {
     // Handle task confirmation
     if (confirmTask && pendingTaskData) {
       console.log("✅ Processing task confirmation");
+      console.log("📝 Task data being processed:", pendingTaskData);
+      
       const taskResult = await createTask(user.id, pendingTaskData, language);
       
-      return new Response(JSON.stringify({
-        response: language === 'ar' 
-          ? '✅ تم إنشاء المهمة بنجاح! يمكنك العثور عليها في صفحة المهام والتذكيرات.'
-          : '✅ Task created successfully! You can find it in the Tasks & Reminders page.',
-        intent: 'task_created',
-        confidence: 'high',
-        actionTaken: true,
-        actionResult: taskResult,
-        success: true
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      if (taskResult.success) {
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? '✅ تم إنشاء المهمة بنجاح! يمكنك العثور عليها في صفحة المهام والتذكيرات.'
+            : '✅ Task created successfully! You can find it in the Tasks & Reminders page.',
+          intent: 'task_created',
+          confidence: 'high',
+          actionTaken: true,
+          actionResult: taskResult,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else {
+        console.error("❌ Task creation failed:", taskResult.error);
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `❌ فشل في إنشاء المهمة: ${taskResult.error}`
+            : `❌ Failed to create task: ${taskResult.error}`,
+          intent: 'task_creation_failed',
+          confidence: 'high',
+          actionTaken: false,
+          actionResult: taskResult,
+          success: false
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Handle reminder confirmation
     if (confirmReminder && pendingReminderData) {
       console.log("✅ Processing reminder confirmation");
+      console.log("⏰ Reminder data being processed:", pendingReminderData);
+      
       const reminderResult = await createReminder(user.id, pendingReminderData, language);
       
-      return new Response(JSON.stringify({
-        response: language === 'ar' 
-          ? '✅ تم إنشاء التذكير بنجاح! يمكنك العثور عليه في صفحة المهام والتذكيرات.'
-          : '✅ Reminder created successfully! You can find it in the Tasks & Reminders page.',
-        intent: 'reminder_created',
-        confidence: 'high',
-        actionTaken: true,
-        actionResult: reminderResult,
-        success: true
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+      if (reminderResult.success) {
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? '✅ تم إنشاء التذكير بنجاح! يمكنك العثور عليه في صفحة المهام والتذكيرات.'
+            : '✅ Reminder created successfully! You can find it in the Tasks & Reminders page.',
+          intent: 'reminder_created',
+          confidence: 'high',
+          actionTaken: true,
+          actionResult: reminderResult,
+          success: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else {
+        console.error("❌ Reminder creation failed:", reminderResult.error);
+        return new Response(JSON.stringify({
+          response: language === 'ar' 
+            ? `❌ فشل في إنشاء التذكير: ${reminderResult.error}`
+            : `❌ Failed to create reminder: ${reminderResult.error}`,
+          intent: 'reminder_creation_failed',
+          confidence: 'high',
+          actionTaken: false,
+          actionResult: reminderResult,
+          success: false
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
     }
 
     // Process based on trigger mode with enhanced functionality
@@ -253,7 +289,10 @@ serve(async (req) => {
       default:
         // Check for task/reminder creation intent
         if (intentAnalysis.isTaskCreation) {
+          console.log("📝 Task creation detected, extracting data...");
           const taskData = extractTaskData(message, language);
+          console.log("📝 Extracted task data:", taskData);
+          
           if (taskData) {
             needsConfirmation = true;
             pendingTaskDataResult = taskData;
@@ -265,7 +304,10 @@ serve(async (req) => {
             response = await processWithAI(message, null, conversationHistory, language, activeTrigger);
           }
         } else if (intentAnalysis.isReminderCreation) {
+          console.log("⏰ Reminder creation detected, extracting data...");
           const reminderData = extractReminderData(message, language);
+          console.log("⏰ Extracted reminder data:", reminderData);
+          
           if (reminderData) {
             needsConfirmation = true;
             pendingReminderDataResult = reminderData;
@@ -328,10 +370,11 @@ function parseTimeString(timeStr: string): string | null {
   if (!timeStr) return null;
   
   const cleanTime = timeStr.toLowerCase().trim();
+  console.log("⏰ Parsing time string:", cleanTime);
   
   // Handle common formats
   const patterns = [
-    // 9 am, 9pm, 2:30 am, 2:30pm
+    // 9 am, 9pm, 2:30 am, 2:30pm (with optional space before am/pm)
     /^(\d{1,2}):?(\d{2})?\s*(am|pm)$/,
     // 9:00, 14:30, 09:00
     /^(\d{1,2}):(\d{2})$/,
@@ -346,6 +389,8 @@ function parseTimeString(timeStr: string): string | null {
       const minute = match[2] ? parseInt(match[2]) : 0;
       const ampm = match[3];
       
+      console.log("⏰ Matched pattern, hour:", hour, "minute:", minute, "ampm:", ampm);
+      
       // Handle AM/PM
       if (ampm) {
         if (ampm === 'pm' && hour !== 12) hour += 12;
@@ -354,11 +399,14 @@ function parseTimeString(timeStr: string): string | null {
       
       // Validate ranges
       if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
-        return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+        const result = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
+        console.log("⏰ Parsed time result:", result);
+        return result;
       }
     }
   }
   
+  console.log("⏰ Failed to parse time string:", cleanTime);
   return null;
 }
 
@@ -368,6 +416,8 @@ function parseDateString(dateStr: string, language: string = 'en'): string | nul
   
   const cleanDate = dateStr.toLowerCase().trim();
   const today = new Date();
+  
+  console.log("📅 Parsing date string:", cleanDate);
   
   // Handle relative dates
   if (cleanDate === 'today' || cleanDate === 'اليوم') {
@@ -476,7 +526,9 @@ function extractTaskData(message: string, language: string = 'en') {
   for (const pattern of timePatterns) {
     const match = cleanMessage.match(pattern);
     if (match) {
+      console.log("📝 Found time match:", match[0]);
       extractedTime = parseTimeString(match[0]);
+      console.log("📝 Parsed time result:", extractedTime);
       cleanMessage = cleanMessage.replace(pattern, '').trim();
       break;
     }
@@ -575,7 +627,9 @@ function extractReminderData(message: string, language: string = 'en') {
   for (const pattern of timePatterns) {
     const match = cleanMessage.match(pattern);
     if (match) {
+      console.log("⏰ Found time match:", match[0]);
       extractedTime = parseTimeString(match[0]);
+      console.log("⏰ Parsed time result:", extractedTime);
       cleanMessage = cleanMessage.replace(pattern, '').trim();
       break;
     }
@@ -664,6 +718,15 @@ async function createTask(userId: string, taskData: any, language: string = 'en'
     
     console.log("📝 Sanitized task data for insertion:", sanitizedTaskData);
     
+    // Validate time format if provided
+    if (sanitizedTaskData.due_time) {
+      const timeRegex = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/;
+      if (!timeRegex.test(sanitizedTaskData.due_time)) {
+        console.error("❌ Invalid time format:", sanitizedTaskData.due_time);
+        throw new Error(`Invalid time format: ${sanitizedTaskData.due_time}. Expected HH:MM:SS format.`);
+      }
+    }
+    
     const { data, error } = await supabase
       .from('tr_tasks')
       .insert(sanitizedTaskData)
@@ -721,6 +784,15 @@ async function createReminder(userId: string, reminderData: any, language: strin
     };
     
     console.log("⏰ Sanitized reminder data for insertion:", sanitizedReminderData);
+    
+    // Validate time format if provided
+    if (sanitizedReminderData.due_time) {
+      const timeRegex = /^([01]\d|2[0-3]):([0-5]\d):([0-5]\d)$/;
+      if (!timeRegex.test(sanitizedReminderData.due_time)) {
+        console.error("❌ Invalid time format:", sanitizedReminderData.due_time);
+        throw new Error(`Invalid time format: ${sanitizedReminderData.due_time}. Expected HH:MM:SS format.`);
+      }
+    }
     
     const { data, error } = await supabase
       .from('tr_reminders')
