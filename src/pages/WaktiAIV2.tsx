@@ -3,6 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
+import { useQuotaManagement } from '@/hooks/useQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
@@ -41,6 +42,14 @@ const WaktiAIV2 = () => {
     MAX_MONTHLY_ADVANCED_SEARCHES,
     MAX_MONTHLY_REGULAR_SEARCHES
   } = useExtendedQuotaManagement(language);
+
+  // NEW: Add translation quota management for Voice Translator
+  const {
+    userQuota: translationQuota,
+    refreshTranslationQuota,
+    incrementTranslationCount,
+    MAX_DAILY_TRANSLATIONS
+  } = useQuotaManagement(language);
 
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
@@ -331,6 +340,15 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Attached Files:', attachedFiles?.length || 0);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
+      // NEW: Handle Voice Translator quota increment before sending
+      if (inputType === 'voice') {
+        console.log('📈 Voice translation detected - incrementing translation quota...');
+        const canTranslate = await incrementTranslationCount();
+        if (!canTranslate) {
+          throw new Error(language === 'ar' ? 'تم الوصول للحد الأقصى من الترجمات' : 'Translation quota exceeded');
+        }
+      }
+
       // Increment quota usage based on trigger type BEFORE sending message
       if (activeTrigger === 'search') {
         console.log('📈 Incrementing regular search usage before operation...');
@@ -456,15 +474,27 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // ENHANCED: Real-time quota refresh after search operations
+      // ENHANCED: Real-time quota refresh after operations
       if (response.browsingUsed && (activeTrigger === 'search' || activeTrigger === 'advanced_search')) {
-        console.log('🔄 Search operation completed - refreshing quota in real-time...');
+        console.log('🔄 Search operation completed - refreshing search quota in real-time...');
         await refreshSearchQuota();
         
         showSuccess(
           language === 'ar' 
             ? `تم تنفيذ البحث ${activeTrigger === 'advanced_search' ? 'المتقدم' : 'العادي'} بنجاح وتحديث الحصة` 
             : `${activeTrigger === 'advanced_search' ? 'Advanced' : 'Basic'} search completed successfully - quota updated`
+        );
+      }
+
+      // NEW: Voice Translation quota refresh
+      if (inputType === 'voice') {
+        console.log('🔄 Voice translation completed - refreshing translation quota...');
+        await refreshTranslationQuota();
+        
+        showSuccess(
+          language === 'ar' 
+            ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
+            : `Voice translation completed successfully - quota updated (${MAX_DAILY_TRANSLATIONS - translationQuota.daily_count - 1}/${MAX_DAILY_TRANSLATIONS} remaining)`
         );
       }
 

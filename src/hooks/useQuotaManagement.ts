@@ -44,14 +44,14 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
   };
 
   // Memoize the loadUserQuota function to prevent infinite re-renders
-  const loadUserQuota = useCallback(async () => {
+  const loadUserQuota = useCallback(async (forceRefresh: boolean = false) => {
     if (!user) return;
     
     try {
       setIsLoadingQuota(true);
       setQuotaError(null);
       
-      console.log('🔄 Loading user translation quota for user:', user.id);
+      console.log('🔄 Loading user translation quota for user:', user.id, forceRefresh ? '(force refresh)' : '');
       
       const { data, error } = await supabase.rpc('get_or_create_user_quota', {
         p_user_id: user.id
@@ -122,6 +122,12 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
             extra_translations: result.extra_translations
           });
           
+          // NEW: Force refresh quota after increment for immediate UI update
+          setTimeout(() => {
+            console.log('🔄 Force refreshing quota after translation...');
+            loadUserQuota(true);
+          }, 500);
+          
           return true;
         } else {
           console.warn('⚠️ Translation count increment failed - quota exceeded');
@@ -153,7 +159,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       console.log('🔄 Using fallback - allowing translation to continue despite quota error');
       return true;
     }
-  }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS]);
+  }, [user, userQuota, language, MAX_DAILY_TRANSLATIONS, loadUserQuota]);
 
   // Enhanced purchase function for translations - now 100 for 10 QAR
   const purchaseExtraTranslations = useCallback(async (count: number = 100) => {
@@ -191,7 +197,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
           }));
           
           // Reload quota to ensure consistency
-          await loadUserQuota();
+          await loadUserQuota(true);
           
           toast({
             title: language === 'ar' ? 'تم الشراء بنجاح' : 'Purchase Successful',
@@ -217,6 +223,12 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
       return false;
     }
   }, [user, language, loadUserQuota]);
+
+  // NEW: Add a refresh function that can be called externally
+  const refreshTranslationQuota = useCallback(async () => {
+    console.log('🔄 External refresh of translation quota requested');
+    await loadUserQuota(true);
+  }, [loadUserQuota]);
 
   // Only load quota when user changes, not on every render
   useEffect(() => {
@@ -247,6 +259,7 @@ export const useQuotaManagement = (language: 'en' | 'ar' = 'en') => {
     loadUserQuota,
     incrementTranslationCount,
     purchaseExtraTranslations,
+    refreshTranslationQuota, // NEW: Export the refresh function
     MAX_DAILY_TRANSLATIONS,
     SOFT_WARNING_THRESHOLD,
     ...computedValues

@@ -92,32 +92,37 @@ serve(async (req) => {
       console.log("📎 File analysis completed:", fileAnalysisResults.length);
     }
 
-    // Get browsing quota
-    quotaStatus = await checkBrowsingQuota(userId);
-
     // Handle both search and advanced_search triggers with enhanced Tavily
     if (activeTrigger === 'search' || activeTrigger === 'advanced_search') {
       console.log(`🔍 ${activeTrigger === 'advanced_search' ? 'Advanced search' : 'Search'} triggered`);
       
-      // Check if user has browsing quota
-      if (!quotaStatus.canBrowse) {
-        console.log("❌ No browsing quota remaining");
-        response = language === 'ar' 
-          ? `لقد استنفدت حصتك اليومية من البحث (${quotaStatus.limit} عملية بحث). يمكنك شراء المزيد من عمليات البحث أو المحاولة غداً.`
-          : `You've reached your daily search limit (${quotaStatus.limit} searches). You can purchase more searches or try again tomorrow.`;
-        
-        return new Response(JSON.stringify({
-          response,
-          conversationId: conversationId || generateConversationId(),
-          intent: 'quota_exceeded',
-          confidence: 'high',
-          browsingUsed: false,
-          quotaStatus,
-          requiresSearchConfirmation: false,
-          success: true
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+      // First, increment the appropriate search quota BEFORE performing the search
+      if (activeTrigger === 'advanced_search') {
+        console.log("📈 Incrementing advanced search quota before search...");
+        const advancedSearchResult = await incrementAdvancedSearchQuota(userId);
+        if (!advancedSearchResult.success) {
+          console.log("❌ Advanced search quota exceeded");
+          response = language === 'ar' 
+            ? `لقد استنفدت حصتك الشهرية من البحث المتقدم (5 عمليات بحث). يمكنك شراء المزيد من عمليات البحث المتقدم.`
+            : `You've reached your monthly advanced search limit (5 searches). You can purchase more advanced searches.`;
+          
+          return new Response(JSON.stringify({
+            response,
+            conversationId: conversationId || generateConversationId(),
+            intent: 'quota_exceeded',
+            confidence: 'high',
+            browsingUsed: false,
+            quotaStatus: { advancedSearchUsed: true, quotaExceeded: true },
+            requiresSearchConfirmation: false,
+            success: true
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      } else {
+        // Regular search - always increment (unlimited but for tracking)
+        console.log("📈 Incrementing regular search quota before search...");
+        await incrementRegularSearchQuota(userId);
       }
 
       // Enhanced Tavily search with different configurations
@@ -134,12 +139,9 @@ serve(async (req) => {
         actionTaken = activeTrigger === 'advanced_search' ? 'advanced_web_search' : 'basic_web_search';
         actionResult = { searchResults: searchResults.data };
 
-        // Increment browsing usage
+        // Also increment browsing usage for general tracking
         await incrementBrowsingUsage(userId);
         
-        // Update quota status
-        quotaStatus = await checkBrowsingQuota(userId);
-
         // Generate AI response with search results and conversation context
         response = await generateResponseWithSearchAndContext(
           message,
@@ -221,6 +223,59 @@ serve(async (req) => {
     });
   }
 });
+
+// NEW: Function to increment advanced search quota with proper checking
+async function incrementAdvancedSearchQuota(userId: string) {
+  try {
+    console.log("📈 Incrementing advanced search quota for user:", userId);
+    
+    const { data, error } = await supabase.rpc('increment_search_usage', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error("❌ Error incrementing advanced search quota:", error);
+      return { success: false, error: error.message };
+    }
+
+    if (data && data.length > 0) {
+      const result = data[0];
+      console.log("✅ Advanced search quota increment result:", result);
+      return {
+        success: result.success,
+        daily_count: result.daily_count,
+        extra_advanced_searches: result.extra_advanced_searches
+      };
+    }
+    
+    return { success: false, error: "No data returned from quota function" };
+  } catch (error) {
+    console.error("❌ Error in incrementAdvancedSearchQuota:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// NEW: Function to increment regular search quota (for tracking, always succeeds)
+async function incrementRegularSearchQuota(userId: string) {
+  try {
+    console.log("📈 Incrementing regular search quota for user:", userId);
+    
+    const { data, error } = await supabase.rpc('increment_regular_search_usage', {
+      p_user_id: userId
+    });
+
+    if (error) {
+      console.error("⚠️ Error incrementing regular search quota (non-blocking):", error);
+    } else {
+      console.log("✅ Regular search quota incremented successfully");
+    }
+    
+    return { success: true }; // Always return success for regular search
+  } catch (error) {
+    console.error("⚠️ Error in incrementRegularSearchQuota (non-blocking):", error);
+    return { success: true }; // Always return success for regular search
+  }
+}
 
 // Enhanced Tavily search function with differentiated configurations
 async function performEnhancedTavilySearch(
