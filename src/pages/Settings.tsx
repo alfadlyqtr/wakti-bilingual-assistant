@@ -14,7 +14,6 @@ import { CustomQuoteManager } from '@/components/settings/CustomQuoteManager';
 import { QuotePreferencesManager } from '@/components/settings/QuotePreferencesManager';
 import { PrivacySettings } from '@/components/settings/PrivacySettings';
 import { NotificationSetupCard } from '@/components/settings/NotificationSetupCard';
-import { NotificationTestCard } from '@/components/settings/NotificationTestCard';
 import { PageContainer } from '@/components/PageContainer';
 import { Sun, Moon, Bell, Layout, Palette } from 'lucide-react';
 import { getUserPreferences, saveUserPreferences } from '@/utils/widgetPreferences';
@@ -143,9 +142,6 @@ export default function Settings() {
           <TabsContent value="notifications" className="space-y-4">
             {/* Notification Setup */}
             <NotificationSetupCard />
-
-            {/* Notification Testing */}
-            <NotificationTestCard />
 
             {/* Notification Settings */}
             <NotificationSettings />
