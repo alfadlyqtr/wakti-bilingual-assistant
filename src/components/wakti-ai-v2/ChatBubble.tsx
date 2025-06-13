@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
-import { useAuthContext } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatBubbleProps {
   message: any;
@@ -24,7 +23,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdate }: ChatBubbleProps) {
   const { language } = useTheme();
-  const { user } = useAuthContext();
+  const { user } = useAuth();
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [isCreatingReminder, setIsCreatingReminder] = useState(false);
