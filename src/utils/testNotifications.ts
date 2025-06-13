@@ -10,7 +10,7 @@ export async function testPushNotification(message: string = 'Test notification 
       return false;
     }
 
-    console.log('Testing push notification for user:', user.id);
+    console.log('🧪 Testing push notification for user:', user.id);
 
     const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/test-push-notification`, {
       method: 'POST',
@@ -24,17 +24,21 @@ export async function testPushNotification(message: string = 'Test notification 
       }),
     });
 
+    console.log('📡 Response status:', response.status);
+
     const result = await response.json();
     
+    console.log('📊 Full test result:', result);
+    
     if (result.success) {
-      console.log('Test notification sent successfully:', result);
+      console.log('✅ Test notification sent successfully');
       return true;
     } else {
-      console.error('Failed to send test notification:', result.error);
+      console.error('❌ Failed to send test notification:', result.error);
       return false;
     }
   } catch (error) {
-    console.error('Error testing push notification:', error);
+    console.error('🚨 Error testing push notification:', error);
     return false;
   }
 }
@@ -42,6 +46,8 @@ export async function testPushNotification(message: string = 'Test notification 
 // Function to manually trigger queue processing
 export async function triggerNotificationProcessing(): Promise<boolean> {
   try {
+    console.log('🔄 Manually triggering notification queue processing...');
+    
     const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/process-notification-queue`, {
       method: 'POST',
       headers: {
@@ -50,11 +56,14 @@ export async function triggerNotificationProcessing(): Promise<boolean> {
       },
     });
 
+    console.log('📡 Processing response status:', response.status);
+    
     const result = await response.json();
-    console.log('Notification queue processing result:', result);
+    console.log('📊 Processing result:', result);
+    
     return result.success;
   } catch (error) {
-    console.error('Error triggering notification processing:', error);
+    console.error('🚨 Error triggering notification processing:', error);
     return false;
   }
 }
@@ -62,7 +71,7 @@ export async function triggerNotificationProcessing(): Promise<boolean> {
 // Function to set up the cron job using the new database function
 export async function setupNotificationCron(): Promise<boolean> {
   try {
-    console.log('Setting up notification cron job using database function...');
+    console.log('⚙️ Setting up notification cron job using database function...');
     
     const { data, error } = await supabase.rpc('setup_notification_cron_job');
     
@@ -71,7 +80,7 @@ export async function setupNotificationCron(): Promise<boolean> {
       return false;
     }
     
-    console.log('Database function result:', data);
+    console.log('📊 Database function result:', data);
     
     if (data?.success) {
       console.log('✅ Notification cron job configured successfully - will run every 30 seconds');
@@ -86,7 +95,7 @@ export async function setupNotificationCron(): Promise<boolean> {
       return false;
     }
   } catch (error) {
-    console.error('Error setting up notification cron:', error);
+    console.error('🚨 Error setting up notification cron:', error);
     return false;
   }
 }
@@ -97,6 +106,57 @@ export async function checkCronStatus(): Promise<void> {
     console.log('🔍 Checking cron job status...');
     await setupNotificationCron();
   } catch (error) {
-    console.error('Error checking cron status:', error);
+    console.error('🚨 Error checking cron status:', error);
+  }
+}
+
+// Enhanced function to debug the entire notification pipeline
+export async function debugNotificationPipeline(): Promise<void> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('❌ User not authenticated');
+      return;
+    }
+
+    console.log('🔍 === NOTIFICATION PIPELINE DEBUG ===');
+    
+    // 1. Check user subscription
+    const { data: subscription } = await supabase
+      .from('user_push_subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+    
+    console.log('📱 User subscription:', subscription);
+    
+    // 2. Check pending notifications
+    const { data: pendingNotifications } = await supabase
+      .from('notification_queue')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'pending');
+    
+    console.log('📋 Pending notifications:', pendingNotifications?.length || 0);
+    
+    // 3. Check recent notification history
+    const { data: recentHistory } = await supabase
+      .from('notification_history')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('sent_at', { ascending: false })
+      .limit(5);
+    
+    console.log('📚 Recent notification history:', recentHistory);
+    
+    // 4. Test cron status
+    console.log('⚙️ Testing cron job setup...');
+    await checkCronStatus();
+    
+    console.log('🔍 === DEBUG COMPLETE ===');
+  } catch (error) {
+    console.error('🚨 Error in pipeline debug:', error);
   }
 }
