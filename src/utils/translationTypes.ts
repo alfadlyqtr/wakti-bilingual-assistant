@@ -1199,12 +1199,4 @@ export type TranslationKey =
   | "errorCopyingLink"
   | "dueOn"
   | "hideSubtasks"
-  | "showSubtasks"
-  
-  // Missing text styling keys
-  | "fontWeight"
-  | "fontStyle"
-  | "textDecoration"
-  | "bold"
-  | "italic"
-  | "underline";
+  | "showSubtasks";
