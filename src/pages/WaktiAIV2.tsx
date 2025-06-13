@@ -280,18 +280,29 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED AUTHENTICATION FLOW ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
+
+      // Get authenticated user with better error handling
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('❌ WAKTI AI V2.5: Authentication error:', authError);
+        throw new Error('Authentication failed. Please refresh and try again.');
+      }
+      
+      if (!user) {
+        console.error('❌ WAKTI AI V2.5: No authenticated user found');
+        throw new Error('User not authenticated. Please log in and try again.');
+      }
+
+      console.log('✅ WAKTI AI V2.5: User authenticated:', { userId: user.id, email: user.email });
 
       // Simple search quota handling - just decrement when searching
       if (activeTrigger === 'search') {
         console.log('🔍 Search operation - decrementing quota...');
         
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
         const { data, error: quotaError } = await supabase.rpc('increment_regular_search_usage', {
           p_user_id: user.id
         });
@@ -341,21 +352,19 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
       const completeContext = getCompleteConversationContext();
       const contextForAI = [...completeContext, userMessage].slice(-50);
 
       console.log('🧠 WAKTI AI V2.5: Sending expanded context to AI:', {
         contextMessages: contextForAI.length,
         hasConversationHistory: conversationMessages.length > 0,
-        currentConversationId
+        currentConversationId,
+        authenticatedUserId: user.id
       });
 
       const response = await WaktiAIV2Service.sendMessage(
         message,
-        user.id,
+        user.id, // Pass the authenticated user's ID
         language,
         currentConversationId,
         inputType,
@@ -368,11 +377,13 @@ const WaktiAIV2 = () => {
         userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
       console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
+      console.log('🔄 WAKTI AI V2.5: Has Error:', !!response.error);
 
       if (response.error) {
+        console.error('❌ WAKTI AI V2.5: Response contains error:', response.error);
         throw new Error(response.error);
       }
 
@@ -489,11 +500,26 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Simplified system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
       setError(error.message || 'Failed to send message');
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
-      );
+      
+      // Provide specific error messages for common issues
+      let errorMessage = error.message || 'Failed to send message';
+      if (error.message?.includes('User ID mismatch')) {
+        errorMessage = language === 'ar' ? 'خطأ في المصادقة - يرجى تحديث الصفحة والمحاولة مرة أخرى' : 'Authentication error - please refresh and try again';
+      } else if (error.message?.includes('not authenticated')) {
+        errorMessage = language === 'ar' ? 'يرجى تسجيل الدخول والمحاولة مرة أخرى' : 'Please log in and try again';
+      } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
+        errorMessage = language === 'ar' ? 'خطأ في الخادم - يرجى التحقق من المصادقة والمحاولة مرة أخرى' : 'Server error - please check authentication and try again';
+      }
+      
+      showError(errorMessage);
     } finally {
       setIsLoading(false);
     }

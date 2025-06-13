@@ -221,6 +221,7 @@ export class WaktiAIV2Service {
     try {
       console.log('🔄 WAKTI AI V2.5: Sending message to unified brain...', {
         message: message.slice(0, 100),
+        userId: userId, // Log the userId being sent
         activeTrigger,
         inputType,
         contextLength: context.length,
@@ -230,14 +231,25 @@ export class WaktiAIV2Service {
         confirmReminder
       });
 
-      // Skip the informational message for search mode - go directly to search
-      if (activeTrigger === 'search' && message.trim() && !confirmTask && !confirmReminder) {
-        console.log('🔍 Direct search mode - bypassing informational message');
+      // Verify user is authenticated before making the request
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('❌ WAKTI AI V2.5: User not authenticated');
+        throw new Error('User not authenticated');
       }
+
+      // Ensure userId matches authenticated user
+      if (userId !== user.id) {
+        console.error('❌ WAKTI AI V2.5: User ID mismatch', { providedUserId: userId, authenticatedUserId: user.id });
+        throw new Error('User ID mismatch');
+      }
+
+      console.log('✅ WAKTI AI V2.5: User authentication verified', { userId: user.id });
 
       const requestData = {
         message,
-        user_id: userId,
+        user_id: user.id, // Use authenticated user's ID
+        userId: user.id, // Also include as userId for backward compatibility
         language,
         conversation_id: conversationId,
         input_type: inputType,
@@ -251,9 +263,14 @@ export class WaktiAIV2Service {
         confirm_reminder: confirmReminder,
         task_data: taskData,
         reminder_data: reminderData,
-        // Add flag to skip informational messages for direct search
         direct_search: activeTrigger === 'search' && message.trim() && !confirmTask && !confirmReminder
       };
+
+      console.log('🔄 WAKTI AI V2.5: Calling wakti-ai-v2-brain with request:', {
+        ...requestData,
+        message: requestData.message.slice(0, 50) + '...',
+        context: `${requestData.context.length} messages`
+      });
 
       const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: requestData
@@ -261,6 +278,17 @@ export class WaktiAIV2Service {
 
       if (error) {
         console.error('❌ WAKTI AI V2.5: Supabase function error:', error);
+        console.error('❌ WAKTI AI V2.5: Error details:', JSON.stringify(error, null, 2));
+        
+        // Handle specific error types
+        if (error.message?.includes('User ID mismatch')) {
+          throw new Error('Authentication error: User ID mismatch. Please refresh and try again.');
+        } else if (error.message?.includes('Authentication required')) {
+          throw new Error('Authentication required. Please log in and try again.');
+        } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
+          throw new Error('Server error occurred. Please check your authentication and try again.');
+        }
+        
         throw new Error(error.message || 'Failed to process request');
       }
 
@@ -306,6 +334,8 @@ export class WaktiAIV2Service {
 
     } catch (error: any) {
       console.error('❌ WAKTI AI V2.5: Service error:', error);
+      console.error('❌ WAKTI AI V2.5: Error stack:', error.stack);
+      
       return {
         response: '',
         intent: 'error',
