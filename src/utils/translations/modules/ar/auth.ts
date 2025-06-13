@@ -1,0 +1,25 @@
+
+export const authAr = {
+  welcome: "مرحباً",
+  login: "تسجيل الدخول",
+  signup: "إنشاء حساب",
+  email: "البريد الإلكتروني",
+  password: "كلمة المرور",
+  confirmPassword: "تأكيد كلمة المرور",
+  name: "الاسم",
+  forgotPassword: "نسيت كلمة المرور",
+  resetPassword: "إعادة تعيين كلمة المرور",
+  signInWithGoogle: "تسجيل الدخول بجوجل",
+  alreadyHaveAccount: "لديك حساب بالفعل؟",
+  dontHaveAccount: "ليس لديك حساب؟",
+  createAccount: "إنشاء حساب",
+  signInInstead: "تسجيل الدخول بدلاً من ذلك",
+  logout: "تسجيل الخروج",
+  currentPassword: "كلمة المرور الحالية",
+  newPassword: "كلمة المرور الجديدة",
+  passwordsDoNotMatch: "كلمات المرور غير متطابقة",
+  currentPasswordRequired: "كلمة المرور الحالية مطلوبة",
+  errorUpdatingPassword: "خطأ في تحديث كلمة المرور",
+  passwordUpdated: "تم تحديث كلمة المرور بنجاح",
+  errorSigningOut: "خطأ في تسجيل الخروج"
+};
