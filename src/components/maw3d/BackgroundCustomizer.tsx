@@ -6,11 +6,10 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea';
-import { Palette, Image, Sparkles, Upload, Loader2 } from 'lucide-react';
+import { Palette, Image, Sparkles, Upload, Loader2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { Maw3dService } from '@/services/maw3dService';
+import { useNavigate } from 'react-router-dom';
 import { t } from '@/utils/translations';
 
 interface BackgroundCustomizerProps {
@@ -39,9 +38,8 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
   onImageBlurChange,
   language
 }) => {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const navigate = useNavigate();
 
   const handleColorChange = (color: string) => {
     onBackgroundChange('color', color);
@@ -86,25 +84,18 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
     }
   };
 
-  const handleAIGeneration = async () => {
-    if (!aiPrompt.trim()) {
-      toast.error('Please enter a prompt for AI image generation');
-      return;
-    }
-
-    try {
-      setIsGenerating(true);
-      
-      const imageUrl = await Maw3dService.generateAIBackground(aiPrompt);
-      onBackgroundChange('ai', imageUrl);
-      toast.success('AI background generated successfully');
-      setAiPrompt('');
-    } catch (error) {
-      console.error('Error generating AI background:', error);
-      toast.error('Failed to generate AI background');
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleAIImageRedirect = () => {
+    // Create a prompt suggestion for event background
+    const promptSuggestion = 'Professional event background, elegant and suitable for text overlay, modern design';
+    
+    // Redirect to Wakti AI in image mode with return parameter
+    const params = new URLSearchParams({
+      mode: 'image',
+      return: 'maw3d',
+      prompt: promptSuggestion
+    });
+    
+    navigate(`/wakti-ai?${params.toString()}`);
   };
 
   const handleBlurChange = (value: number[]) => {
@@ -287,33 +278,25 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         </TabsContent>
         
         <TabsContent value="ai" className="space-y-4">
-          <div>
-            <Label>{t('aiImagePrompt', language)}</Label>
-            <Textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder={t('describeBackground', language)}
-              className="mt-2"
-              rows={3}
-            />
+          <div className="text-center space-y-4">
+            <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-6 border border-purple-200 dark:border-purple-800">
+              <Sparkles className="h-12 w-12 mx-auto mb-4 text-purple-600" />
+              <h3 className="text-lg font-semibold mb-2">Generate AI Background</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Use our powerful AI image generator to create the perfect background for your event.
+              </p>
+              <Button
+                onClick={handleAIImageRedirect}
+                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Go to AI Image Generator
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You'll be redirected to the AI image generator. After creating your image, you can easily apply it as your event background.
+            </p>
           </div>
-          <Button
-            onClick={handleAIGeneration}
-            disabled={isGenerating || !aiPrompt.trim()}
-            className="w-full"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {t('generating', language)}...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 mr-2" />
-                {t('generateAIBackground', language)}
-              </>
-            )}
-          </Button>
           
           {/* Enhanced blur control for AI images */}
           {backgroundType === 'ai' && backgroundValue && (
