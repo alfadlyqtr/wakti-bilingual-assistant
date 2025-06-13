@@ -1,4 +1,5 @@
 
+
 import { common } from "./modules/common";
 import { auth } from "./modules/auth";
 import { navigation } from "./modules/navigation";
@@ -191,6 +192,7 @@ export const ar = {
   
   // Footer translations
   contactUs: "اتصل بنا",
+  privacyAndTerms: "الخصوصية والشروط",
   allRightsReserved: "جميع الحقوق محفوظة",
   
   // Privacy Policy comprehensive translations
@@ -308,6 +310,7 @@ export const ar = {
   textAlignment: "محاذاة النص",
   textStyling: "تنسيق النص",
   backgroundCustomization: "تخصيص الخلفية",
+  privacySettings: "إعدادات الخصوصية",
   enableShareableLink: "تفعيل الرابط القابل للمشاركة",
   showAttendingCount: "إظهار عدد الحضور",
   shareableLinkDescription: "السماح للآخرين بعرض وتأكيد الحضور لهذا الحدث",
@@ -515,3 +518,4 @@ export const ar = {
   dragModeActivated: "تم تفعيل وضع السحب",
   dragModeDeactivated: "تم إلغاء تفعيل وضع السحب",
 };
+
