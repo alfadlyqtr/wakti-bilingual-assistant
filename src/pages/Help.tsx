@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -64,8 +63,20 @@ export default function Help() {
             <p className="text-sm text-muted-foreground/80">{t('searchModeDesc', language)}</p>
           </div>
           <div>
-            <h4 className="font-medium mb-1 text-orange-400">{t('imageMode', language)}</h4>
-            <p className="text-sm text-muted-foreground/80">{t('imageModeDesc', language)}</p>
+            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'وضع الصور' : 'Image Mode'}</h4>
+            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ارفع الصور لتحليل الذكاء الاصطناعي، استخراج النص، أو الوصف التفصيلي.' : 'Upload images for AI analysis, text extraction, or detailed description.'}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'مولد النصوص' : 'Text Generator'}</h4>
+            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'أنشئ نصوص مخصصة للرسائل، المقالات، أو أي محتوى نصي تحتاجه بمساعدة الذكاء الاصطناعي.' : 'Generate custom texts for messages, articles, or any written content you need with AI assistance.'}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'المترجم الصوتي' : 'Voice Translator'}</h4>
+            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'ترجم النصوص أو الصوت بين اللغات المختلفة مع إمكانية التحويل إلى كلام.' : 'Translate text or voice between different languages with text-to-speech conversion.'}</p>
+          </div>
+          <div>
+            <h4 className="font-medium mb-1 text-orange-400">{language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}</h4>
+            <p className="text-sm text-muted-foreground/80">{language === 'ar' ? 'أنشئ نسخة صوتية مخصصة من صوتك لاستخدامها في الردود الصوتية والتفاعلات.' : 'Create a personalized voice clone of your voice for use in voice responses and interactions.'}</p>
           </div>
           <div>
             <h4 className="font-medium mb-1 text-orange-400">{t('voiceFeatures', language)}</h4>
