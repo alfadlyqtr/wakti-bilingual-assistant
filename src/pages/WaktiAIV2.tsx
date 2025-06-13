@@ -44,6 +44,11 @@ export default function WaktiAIV2() {
   const [translationQuota, setTranslationQuota] = useState<any>(null);
   const MAX_DAILY_TRANSLATIONS = 5;
 
+  // Helper function to handle activeTrigger changes
+  const handleSetActiveTrigger = (trigger: string) => {
+    setActiveTrigger(trigger as ActiveTrigger);
+  };
+
   // Load user profile on authentication
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -390,7 +395,7 @@ export default function WaktiAIV2() {
     <div className="flex flex-col h-screen bg-background">
       <ChatHeader
         activeTrigger={activeTrigger}
-        setActiveTrigger={setActiveTrigger}
+        setActiveTrigger={handleSetActiveTrigger}
         onNewConversation={handleNewConversation}
         onToggleConversations={() => setShowConversations(true)}
         onToggleQuickActions={() => setShowQuickActions(true)}
@@ -446,7 +451,9 @@ export default function WaktiAIV2() {
         isLoading={isLoading}
         activeTrigger={activeTrigger}
         onSendMessage={handleSendMessage}
-        setActiveTrigger={setActiveTrigger}
+        setActiveTrigger={handleSetActiveTrigger}
+        currentConversationId={currentConversationId}
+        sessionMessages={sessionMessages}
       />
     </div>
   );

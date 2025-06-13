@@ -29,6 +29,8 @@ interface ChatDrawersProps {
   activeTrigger: string;
   onSendMessage: (message: string) => void;
   setActiveTrigger: (trigger: string) => void;
+  currentConversationId: string | null;
+  sessionMessages: any[];
 }
 
 export function ChatDrawers({
@@ -44,7 +46,9 @@ export function ChatDrawers({
   isLoading,
   activeTrigger,
   onSendMessage,
-  setActiveTrigger
+  setActiveTrigger,
+  currentConversationId,
+  sessionMessages
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
@@ -54,6 +58,12 @@ export function ChatDrawers({
     title: conv.name || conv.title || 'Untitled Conversation',
     last_message_at: conv.last_message_at || conv.created_at
   }));
+
+  // Mock refresh function
+  const handleRefresh = () => {
+    // This would typically refetch conversations
+    console.log('Refreshing conversations...');
+  };
 
   return (
     <>
@@ -67,10 +77,14 @@ export function ChatDrawers({
           </SheetHeader>
           <ConversationsList
             conversations={transformedConversations}
+            currentConversationId={currentConversationId}
             onSelectConversation={onSelectConversation}
             onDeleteConversation={onDeleteConversation}
-            onClearChat={onClearChat}
+            onRefresh={handleRefresh}
+            onClose={() => setShowConversations(false)}
             onNewConversation={onNewConversation}
+            onClearChat={onClearChat}
+            sessionMessages={sessionMessages}
           />
         </SheetContent>
       </Sheet>
@@ -85,7 +99,7 @@ export function ChatDrawers({
           </SheetHeader>
           <QuickActionsPanel 
             onSendMessage={onSendMessage}
-            activeTrigger={activeTrigger}
+            activeTrigger={activeTrigger as any}
             onTriggerChange={setActiveTrigger}
           />
         </SheetContent>
