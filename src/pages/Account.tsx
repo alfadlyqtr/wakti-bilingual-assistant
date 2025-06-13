@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageContainer } from "@/components/PageContainer";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ProfileImageUpload } from "@/components/ProfileImageUpload";
+import { BillingTab } from "@/components/account/BillingTab";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUserProfile } from "@/services/contactsService";
 import { t } from "@/utils/translations";
@@ -21,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon } from "lucide-react";
+import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
@@ -344,272 +346,289 @@ export default function Account() {
           {t("account", language)}
         </h1>
         
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("profile", language)}</CardTitle>
-              <CardDescription>
-                {t("profileManagement", language)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <ProfileImageUpload />
-              
-              {/* Username - Read-only */}
-              <div className="grid gap-2">
-                <Label htmlFor="username">{t("username", language)}</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  value={username}
-                  readOnly
-                  className="bg-muted cursor-not-allowed"
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t("usernameHelpText", language)}
-                </p>
-              </div>
-              
-              {/* Name - Now read-only */}
-              <div className="grid gap-2">
-                <Label htmlFor="name">{t("name", language)}</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  readOnly
-                  className="bg-muted cursor-not-allowed"
-                />
-              </div>
+        <Tabs defaultValue="profile" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 h-auto p-1">
+            <TabsTrigger value="profile" className="flex flex-col items-center gap-1 p-3">
+              <User className="h-4 w-4" />
+              <span className="text-xs">{t("profile", language)}</span>
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="flex flex-col items-center gap-1 p-3">
+              <CreditCard className="h-4 w-4" />
+              <span className="text-xs">{t("billing", language)}</span>
+            </TabsTrigger>
+          </TabsList>
 
-              {/* Date of Birth - Enhanced with proper Arabic support */}
-              <div className="grid gap-2">
-                <Label htmlFor="dob" className="text-base font-medium">
-                  {t("dateOfBirth", language)}
-                </Label>
+          <TabsContent value="profile" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("profile", language)}</CardTitle>
+                <CardDescription>
+                  {t("profileManagement", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <ProfileImageUpload />
                 
-                {/* Direct Date Input */}
-                <div className="space-y-3">
-                  <Input
-                    id="dob"
-                    type="date"
-                    value={dobInputValue}
-                    onChange={handleDobInputChange}
-                    disabled={isUpdatingDob}
-                    max={new Date().toISOString().split('T')[0]}
-                    min="1900-01-01"
-                    className="w-full text-base"
-                    placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
-                  />
-                  
-                  {/* Alternative Calendar Picker */}
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{t("useCalendarPicker", language)}</span>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            "justify-start text-left font-normal min-w-[200px]",
-                            !dateOfBirth && "text-muted-foreground",
-                            language === 'ar' && "text-right"
-                          )}
-                          disabled={isUpdatingDob}
-                        >
-                          <CalendarIcon className={cn("h-4 w-4", language === 'ar' ? "ml-2" : "mr-2")} />
-                          {dateOfBirth ? (
-                            format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
-                          ) : (
-                            t("pickDate", language)
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          mode="single"
-                          selected={dateOfBirth}
-                          onSelect={handleCalendarDateSelect}
-                          disabled={(date) =>
-                            date > new Date() || date < new Date("1900-01-01")
-                          }
-                          initialFocus
-                          className="p-3 pointer-events-auto"
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                </div>
-                
-                <p className="text-xs text-muted-foreground">
-                  {t("dobHelpText", language)}
-                </p>
-                <div className="mt-2">
-                  <Button 
-                    onClick={handleUpdateDateOfBirth}
-                    disabled={isUpdatingDob || !dateOfBirth}
-                    size="sm"
-                    className="w-full sm:w-auto"
-                  >
-                    {isUpdatingDob
-                      ? t("updating", language)
-                      : t("updateDateOfBirth", language)}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Email */}
-              <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
+                {/* Username - Read-only */}
                 <div className="grid gap-2">
-                  <Label htmlFor="email">{t("email", language)}</Label>
+                  <Label htmlFor="username">{t("username", language)}</Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={loadingUserData || isUpdatingEmail}
+                    id="username"
+                    type="text"
+                    value={username}
+                    readOnly
+                    className="bg-muted cursor-not-allowed"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t("usernameHelpText", language)}
+                  </p>
+                </div>
+                
+                {/* Name - Now read-only */}
+                <div className="grid gap-2">
+                  <Label htmlFor="name">{t("name", language)}</Label>
+                  <Input
+                    id="name"
+                    type="text"
+                    value={name}
+                    readOnly
+                    className="bg-muted cursor-not-allowed"
                   />
                 </div>
-                <div className="mt-4">
-                  <Button 
-                    disabled={isUpdatingEmail || loadingUserData} 
-                    type="submit"
-                  >
-                    {isUpdatingEmail
-                      ? t("updating", language)
-                      : t("updateEmail", language)}
-                  </Button>
-                </div>
-              </form>
 
-              {/* Password */}
-              <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
-                <div className="space-y-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
+                {/* Date of Birth - Enhanced with proper Arabic support */}
+                <div className="grid gap-2">
+                  <Label htmlFor="dob" className="text-base font-medium">
+                    {t("dateOfBirth", language)}
+                  </Label>
+                  
+                  {/* Direct Date Input */}
+                  <div className="space-y-3">
                     <Input
-                      id="current-password"
-                      type="password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
+                      id="dob"
+                      type="date"
+                      value={dobInputValue}
+                      onChange={handleDobInputChange}
+                      disabled={isUpdatingDob}
+                      max={new Date().toISOString().split('T')[0]}
+                      min="1900-01-01"
+                      className="w-full text-base"
+                      placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
                     />
+                    
+                    {/* Alternative Calendar Picker */}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{t("useCalendarPicker", language)}</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={cn(
+                              "justify-start text-left font-normal min-w-[200px]",
+                              !dateOfBirth && "text-muted-foreground",
+                              language === 'ar' && "text-right"
+                            )}
+                            disabled={isUpdatingDob}
+                          >
+                            <CalendarIcon className={cn("h-4 w-4", language === 'ar' ? "ml-2" : "mr-2")} />
+                            {dateOfBirth ? (
+                              format(dateOfBirth, language === 'ar' ? "dd/MM/yyyy" : "MMM dd, yyyy")
+                            ) : (
+                              t("pickDate", language)
+                            )}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={dateOfBirth}
+                            onSelect={handleCalendarDateSelect}
+                            disabled={(date) =>
+                              date > new Date() || date < new Date("1900-01-01")
+                            }
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                   </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="password">{t("newPassword", language)}</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={isUpdatingPassword}
-                    />
+                  
+                  <p className="text-xs text-muted-foreground">
+                    {t("dobHelpText", language)}
+                  </p>
+                  <div className="mt-2">
+                    <Button 
+                      onClick={handleUpdateDateOfBirth}
+                      disabled={isUpdatingDob || !dateOfBirth}
+                      size="sm"
+                      className="w-full sm:w-auto"
+                    >
+                      {isUpdatingDob
+                        ? t("updating", language)
+                        : t("updateDateOfBirth", language)}
+                    </Button>
                   </div>
                 </div>
-                <div className="mt-4">
-                  <Button 
-                    disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
-                    type="submit"
-                  >
-                    {isUpdatingPassword
-                      ? t("updating", language)
-                      : t("updatePassword", language)}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-          
-          {/* Submit Feedback Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
-                {t("submitFeedback", language)}
-              </CardTitle>
-              <CardDescription>
-                {t("feedbackDescription", language)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsFeedbackDialogOpen(true)}
-                className="w-full sm:w-auto"
-              >
-                {t("submitFeedback", language)}
-              </Button>
-            </CardContent>
-          </Card>
-          
-          {/* Report Abuse Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Flag className="h-5 w-5" />
-                {t("reportAbuse", language)}
-              </CardTitle>
-              <CardDescription>
-                {t("abuseDescription", language)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsAbuseDialogOpen(true)}
-                className="w-full sm:w-auto"
-              >
-                {t("reportAbuse", language)}
-              </Button>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("accountOptions", language)}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Button 
-                variant="destructive" 
-                onClick={handleSignout}
-              >
-                {t("logout", language)}
-              </Button>
-            </CardContent>
-          </Card>
-          
-          {/* Delete Account Section */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-destructive">
-                <AlertTriangle className="h-5 w-5" />
-                {t("deleteAccount", language)}
-              </CardTitle>
-              <CardDescription>
-                {t("deleteAccountDescription", language)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="destructive" 
-                onClick={openDeleteDialog}
-                className="w-full sm:w-auto"
-              >
-                {t("deleteMyAccount", language)}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+
+                {/* Email */}
+                <form onSubmit={handleUpdateEmail} className="pt-4 border-t border-border">
+                  <div className="grid gap-2">
+                    <Label htmlFor="email">{t("email", language)}</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={loadingUserData || isUpdatingEmail}
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <Button 
+                      disabled={isUpdatingEmail || loadingUserData} 
+                      type="submit"
+                    >
+                      {isUpdatingEmail
+                        ? t("updating", language)
+                        : t("updateEmail", language)}
+                    </Button>
+                  </div>
+                </form>
+
+                {/* Password */}
+                <form onSubmit={handleUpdatePassword} className="pt-4 border-t border-border">
+                  <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="current-password">{t("currentPassword", language)}</Label>
+                      <Input
+                        id="current-password"
+                        type="password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        disabled={isUpdatingPassword}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="password">{t("newPassword", language)}</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={isUpdatingPassword}
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="confirm-password">{t("confirmPassword", language)}</Label>
+                      <Input
+                        id="confirm-password"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        disabled={isUpdatingPassword}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <Button 
+                      disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
+                      type="submit"
+                    >
+                      {isUpdatingPassword
+                        ? t("updating", language)
+                        : t("updatePassword", language)}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+            
+            {/* Submit Feedback Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  {t("submitFeedback", language)}
+                </CardTitle>
+                <CardDescription>
+                  {t("feedbackDescription", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsFeedbackDialogOpen(true)}
+                  className="w-full sm:w-auto"
+                >
+                  {t("submitFeedback", language)}
+                </Button>
+              </CardContent>
+            </Card>
+            
+            {/* Report Abuse Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Flag className="h-5 w-5" />
+                  {t("reportAbuse", language)}
+                </CardTitle>
+                <CardDescription>
+                  {t("abuseDescription", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsAbuseDialogOpen(true)}
+                  className="w-full sm:w-auto"
+                >
+                  {t("reportAbuse", language)}
+                </Button>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("accountOptions", language)}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button 
+                  variant="destructive" 
+                  onClick={handleSignout}
+                >
+                  {t("logout", language)}
+                </Button>
+              </CardContent>
+            </Card>
+            
+            {/* Delete Account Section */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  {t("deleteAccount", language)}
+                </CardTitle>
+                <CardDescription>
+                  {t("deleteAccountDescription", language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="destructive" 
+                  onClick={openDeleteDialog}
+                  className="w-full sm:w-auto"
+                >
+                  {t("deleteMyAccount", language)}
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="billing" className="space-y-6">
+            <BillingTab />
+          </TabsContent>
+        </Tabs>
       </div>
       
       {/* Submit Feedback Dialog */}

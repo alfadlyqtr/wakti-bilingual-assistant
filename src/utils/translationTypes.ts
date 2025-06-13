@@ -1,4 +1,3 @@
-
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey = 
@@ -1301,4 +1300,22 @@ export type TranslationKey =
   | "userMenu"
   | "backButtons"
   | "needHelp"
-  | "contactSupport";
+  | "contactSupport"
+  | "billing"
+  | "subscriptionInfo"
+  | "planName"
+  | "subscriptionStatus"
+  | "nextBillingDate"
+  | "billingStartDate"
+  | "upgradeOptions"
+  | "upgradeToYearly"
+  | "highestPlanMessage"
+  | "paymentHistory"
+  | "amount"
+  | "date"
+  | "noPaymentHistory"
+  | "active"
+  | "inactive"
+  | "cancelled"
+  | "monthly"
+  | "yearly";

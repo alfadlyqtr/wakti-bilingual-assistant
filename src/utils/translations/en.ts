@@ -1,3 +1,4 @@
+import { billing } from "./modules/billing";
 
 export const en = {
   welcome: "Welcome",
@@ -1271,5 +1272,6 @@ export const en = {
   userMenu: "User menu",
   backButtons: "Back buttons",
   needHelp: "Need help?",
-  contactSupport: "Contact support"
+  contactSupport: "Contact support",
+  ...billing
 };

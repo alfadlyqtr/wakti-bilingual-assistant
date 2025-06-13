@@ -1,4 +1,3 @@
-
 export const ar = {
   welcome: "أهلاً وسهلاً",
   login: "تسجيل الدخول",
@@ -1271,5 +1270,6 @@ export const ar = {
   userMenu: "قائمة المستخدم",
   backButtons: "أزرار الرجوع",
   needHelp: "تحتاج مساعدة؟",
-  contactSupport: "اتصل بالدعم"
+  contactSupport: "اتصل بالدعم",
+  ...billingAr
 };
