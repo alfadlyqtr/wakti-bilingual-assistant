@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Copy, Download, ExternalLink, Calendar, Clock, MapPin, User, CheckCircle, XCircle, Wand2, ArrowRight } from 'lucide-react';
+import { Copy, Download, ExternalLink, Calendar, Clock, MapPin, User, CheckCircle, XCircle, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
+import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -60,11 +62,6 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     toast.success(language === 'ar' ? 'جاري تطبيق الخلفية...' : 'Applying background...');
   };
 
-  const redirectToTasksReminders = () => {
-    navigate('/tr');
-    toast.success(language === 'ar' ? 'جاري التوجيه إلى صفحة المهام والتذكيرات...' : 'Redirecting to Tasks & Reminders...');
-  };
-
   const formatTime = (timestamp: Date) => {
     return new Intl.DateTimeFormat(language === 'ar' ? 'ar' : 'en', {
       hour: '2-digit',
@@ -76,14 +73,6 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
   // Show copy button for AI messages in chat and search modes (not image mode)
   const shouldShowCopyButton = !isUser && message.content && activeTrigger !== 'image';
-
-  // Check if this message contains task or reminder creation intent
-  const isTaskOrReminderIntent = !isUser && (
-    message.intent === 'task_preview' || 
-    message.intent === 'reminder_preview' ||
-    message.taskData ||
-    message.reminderData
-  );
 
   return (
     <div className={cn(
@@ -217,19 +206,35 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             )}
           </div>
 
-          {/* Task/Reminder Redirect Button */}
-          {isTaskOrReminderIntent && (
-            <div className="mt-3">
-              <Button
-                onClick={redirectToTasksReminders}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg"
-                size="sm"
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                {language === 'ar' ? 'إنشاء في المهام والتذكيرات' : 'Create in Tasks & Reminders'}
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
+          {/* Task/Reminder Confirmation Cards */}
+          {!isUser && message.intent === 'task_preview' && message.taskData && (
+            <EditableTaskConfirmationCard
+              type="task"
+              data={message.taskData}
+              onConfirm={(updatedTaskData) => {
+                // Handle task confirmation with updated data
+                console.log('Task confirmed with data:', updatedTaskData);
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Task creation cancelled');
+              }}
+            />
+          )}
+
+          {message.intent === 'reminder_preview' && message.reminderData && (
+            <TaskConfirmationCard
+              type="reminder"
+              data={message.reminderData}
+              onConfirm={() => {
+                // Handle reminder confirmation
+                console.log('Reminder confirmed');
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Reminder creation cancelled');
+              }}
+            />
           )}
 
           {/* Timestamp */}
