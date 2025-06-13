@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -270,14 +269,32 @@ function extractTaskDataFromMessage(text: string) {
 
   // Check for task keywords (both English and Arabic)
   if (lowerText.includes('task') || lowerText.includes('shopping') || lowerText.includes('buy') || 
-      lowerText.includes('get') || lowerText.includes('sub tasks') || lowerText.includes('مهمة') || 
+      lowerText.includes('get') || lowerText.includes('need to') || lowerText.includes('مهمة') || 
       lowerText.includes('تسوق') || lowerText.includes('شراء')) {
     hasTaskKeywords = true;
   }
 
+  // ENHANCED: Better extraction for "need to buy X Y Z" format
+  const needToBuyMatch = text.match(/\b(need to buy|have to buy|must buy|buy|get|pick up)\s+(.+?)(\s+due|\s+tomorrow|\s+today|$)/i);
+  if (needToBuyMatch && !title) {
+    const itemsText = needToBuyMatch[2].trim();
+    title = `Buy ${itemsText}`;
+    
+    // Extract individual items as subtasks
+    const items = itemsText
+      .split(/\s+and\s+|,\s*|\s+/)
+      .map(item => item.trim())
+      .filter(item => item && item.length > 0 && !item.match(/\b(due|at|to|in|from|for|on|when|where|why|how)\b/i))
+      .slice(0, 10);
+    
+    if (items.length > 1) {
+      subtasks = items;
+    }
+  }
+
   // Extract shopping list format: "shopping list lulu" or "shopping at lulu"
   const shoppingMatch = text.match(/\b(shopping\s+list|shop\s+at|shopping\s+at|قائمة\s+تسوق|تسوق\s+في)\s+([^,\.\s]+)/i);
-  if (shoppingMatch) {
+  if (shoppingMatch && !title) {
     const location = shoppingMatch[2].trim();
     title = `Shopping at ${location.charAt(0).toUpperCase() + location.slice(1)}`;
   }
@@ -288,36 +305,18 @@ function extractTaskDataFromMessage(text: string) {
     title = taskMatch[4].trim();
   }
 
-  // Extract title from "task due" format
-  const taskDueMatch = text.match(/\b(task|مهمة)\s+due\s+.+?\s+(.+?)(\s+sub\s+tasks?|$)/i);
-  if (taskDueMatch && !title) {
-    const fullText = text;
-    const afterDue = fullText.substring(fullText.toLowerCase().indexOf('due') + 3);
-    const titleMatch = afterDue.match(/\w+\s+\w+\s+(.+?)(\s+sub\s+tasks?|$)/i);
-    if (titleMatch) {
-      title = titleMatch[1].trim();
+  // ENHANCED: Extract subtasks from various formats
+  if (!subtasks.length) {
+    // Format: "sub tasks rice milk water"
+    const subtaskMatch = text.match(/\b(sub\s+tasks?|المهام\s+الفرعية)\s+(.+?)(\s+due|$)/i);
+    if (subtaskMatch) {
+      const itemsText = subtaskMatch[2];
+      subtasks = itemsText
+        .split(/\s+(?:and\s+)?|,\s*|\s*&\s*/)
+        .map(item => item.trim())
+        .filter(item => item && item.length > 0 && !item.match(/\b(due|at|to|in|from|for|on|when|where|why|how)\b/i))
+        .slice(0, 10);
     }
-  }
-
-  // If no title found but has shopping keywords, make a generic shopping title
-  if (!title && (lowerText.includes('shopping') || lowerText.includes('shop') || lowerText.includes('تسوق'))) {
-    title = lowerText.includes('تسوق') ? "التسوق" : "Shopping";
-  }
-
-  // If still no title but has task keywords, make a generic title
-  if (!title && hasTaskKeywords) {
-    title = lowerText.includes('مهمة') ? "مهمة جديدة" : "New task";
-  }
-
-  // Extract subtasks from "sub tasks rice milk water" format
-  const subtaskMatch = text.match(/\b(sub\s+tasks?|المهام\s+الفرعية)\s+(.+?)(\s+due|$)/i);
-  if (subtaskMatch) {
-    const itemsText = subtaskMatch[2];
-    subtasks = itemsText
-      .split(/\s+(?:and\s+)?|,\s*|\s*&\s*/)
-      .map(item => item.trim())
-      .filter(item => item && item.length > 0 && !item.match(/\b(due|at|to|in|from|for|on|when|where|why|how)\b/i))
-      .slice(0, 10);
   }
 
   // Extract due date - enhanced patterns

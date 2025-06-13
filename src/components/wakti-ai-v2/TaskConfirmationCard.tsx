@@ -28,6 +28,8 @@ export function TaskConfirmationCard({
     return formatDateForDisplay(dateString);
   };
 
+  console.log('TaskConfirmationCard data:', data); // Debug log
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
       <div className="flex items-center justify-between mb-3">
@@ -60,8 +62,8 @@ export function TaskConfirmationCard({
           )}
         </div>
 
-        {/* Subtasks */}
-        {data.subtasks && data.subtasks.length > 0 && (
+        {/* FIXED: Subtasks display - ensure they're shown */}
+        {data.subtasks && Array.isArray(data.subtasks) && data.subtasks.length > 0 && (
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">
               {language === 'ar' ? 'المهام الفرعية:' : 'Subtasks:'}
@@ -70,7 +72,7 @@ export function TaskConfirmationCard({
               {data.subtasks.map((subtask: string, index: number) => (
                 <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
-                  {subtask}
+                  {typeof subtask === 'string' ? subtask : subtask.title || subtask}
                 </li>
               ))}
             </ul>
@@ -101,6 +103,24 @@ export function TaskConfirmationCard({
               </span>
               <span className="text-gray-900">
                 {data.due_time}
+              </span>
+            </div>
+          )}
+
+          {/* Priority */}
+          {data.priority && data.priority !== 'normal' && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-gray-600">
+                {language === 'ar' ? 'الأولوية:' : 'Priority:'}
+              </span>
+              <span className={`text-sm font-medium ${
+                data.priority === 'urgent' ? 'text-red-600' : 
+                data.priority === 'high' ? 'text-orange-600' : 
+                'text-gray-900'
+              }`}>
+                {data.priority === 'urgent' ? (language === 'ar' ? 'عاجل' : 'Urgent') :
+                 data.priority === 'high' ? (language === 'ar' ? 'عالي' : 'High') :
+                 (language === 'ar' ? 'عادي' : 'Normal')}
               </span>
             </div>
           )}
