@@ -49,7 +49,7 @@ export default function Settings() {
   };
 
   return (
-    <PageContainer>
+    <PageContainer showHeader={false}>
       <div className="container mx-auto max-w-4xl p-4 space-y-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">{t('settings', language)}</h1>

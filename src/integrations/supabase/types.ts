@@ -1630,6 +1630,10 @@ export type Database = {
         Args: { "": number }
         Returns: number
       }
+      setup_notification_cron_job: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       show_limit: {
         Args: Record<PropertyKey, never>
         Returns: number
