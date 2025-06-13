@@ -1,4 +1,3 @@
-
 import { commonAr } from "./modules/ar/common";
 import { authAr } from "./modules/ar/auth";
 import { navigationAr } from "./modules/ar/navigation";
@@ -16,6 +15,7 @@ import { formsAr } from "./modules/ar/forms";
 import { feedbackAr } from "./modules/ar/feedback";
 import { legalAr } from "./modules/ar/legal";
 import { miscAr } from "./modules/ar/misc";
+import { helpAr } from "./modules/ar/help";
 
 // Arabic translations for WAKTI app
 export const ar = {
@@ -36,6 +36,10 @@ export const ar = {
   ...feedbackAr,
   ...legalAr,
   ...miscAr,
+  ...helpAr,
+  
+  // Help page specific
+  help: "المساعدة",
   
   // Additional specific translations that might still be needed
   blocked: "محظور",

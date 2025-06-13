@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -30,6 +29,7 @@ import { MobileNav } from "@/components/MobileNav";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import TasksReminders from "@/pages/TasksReminders";
 import SharedTask from "@/pages/SharedTask";
+import Help from "@/pages/Help";
 
 const queryClient = new QueryClient();
 
@@ -187,6 +187,17 @@ function App() {
                     <ProtectedRoute>
                       <PageContainer>
                         <Account />
+                      </PageContainer>
+                      <MobileNav />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/help"
+                  element={
+                    <ProtectedRoute>
+                      <PageContainer>
+                        <Help />
                       </PageContainer>
                       <MobileNav />
                     </ProtectedRoute>

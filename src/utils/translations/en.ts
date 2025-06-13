@@ -15,6 +15,7 @@ import { feedback } from "./modules/feedback";
 import { legal } from "./modules/legal";
 import { dashboard } from "./modules/dashboard";
 import { misc } from "./modules/misc";
+import { help } from "./modules/help";
 
 export const en = {
   ...common,
@@ -34,6 +35,7 @@ export const en = {
   ...legal,
   ...dashboard,
   ...misc,
+  ...help,
   
   // Additional specific translations that might be missing
   notesLabel: "Notes",

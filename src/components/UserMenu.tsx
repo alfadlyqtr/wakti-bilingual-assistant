@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  LogOut, Users, User as UserIcon, ChevronDown 
+  LogOut, Users, User as UserIcon, ChevronDown, Book
 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -71,6 +71,7 @@ export function UserMenu() {
   const menuOptions = [
     { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
+    { icon: <Book size={16} />, label: t("help", language), path: "/help" },
     { divider: true },
     { icon: <LogOut size={16} />, label: t("logout", language), action: handleLogout },
   ];
