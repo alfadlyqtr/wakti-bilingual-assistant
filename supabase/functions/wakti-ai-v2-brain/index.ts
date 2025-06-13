@@ -22,6 +22,45 @@ serve(async (req) => {
   try {
     console.log('🚀 WAKTI AI V2 BRAIN: Processing request with smart date/time intelligence');
 
+    // Get authorization header
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.error('❌ No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
+
+    // Create Supabase client with auth header
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        global: {
+          headers: {
+            Authorization: authHeader,
+          },
+        },
+      }
+    );
+
+    // Get authenticated user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('❌ Authentication failed:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Authentication failed' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
+      );
+    }
+
     const body = await req.json();
     const {
       message,
@@ -48,29 +87,17 @@ serve(async (req) => {
     console.log('🚀 WAKTI AI V2 BRAIN: Request body received:', {
       message: message,
       userId: userId,
+      authenticatedUserId: user.id,
       attachedFiles: attachedFiles?.length || 0,
       conversationHistoryLength: conversationHistory?.length || 0,
       activeTrigger: activeTrigger
     });
 
-    if (!userId) {
-      console.error('❌ No userId provided');
-      return new Response(
-        JSON.stringify({ error: 'User ID is required' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
+    // Use authenticated user ID instead of provided userId for security
+    const secureUserId = user.id;
 
-    console.log('🚀 WAKTI AI V2 BRAIN: Processing message for user:', userId);
+    console.log('🚀 WAKTI AI V2 BRAIN: Processing message for user:', secureUserId);
     console.log('🚀 WAKTI AI V2 BRAIN: Active trigger mode:', activeTrigger);
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
 
     // Load chat memory for chat mode
     const ChatMemoryService = {
@@ -112,7 +139,7 @@ serve(async (req) => {
 
     let chatMemory: any[] = [];
     if (activeTrigger === 'chat') {
-      const memoryExchanges = ChatMemoryService.loadMemory(userId);
+      const memoryExchanges = ChatMemoryService.loadMemory(secureUserId);
       chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
       console.log(`🧠 Loaded ${memoryExchanges.length} chat exchanges from memory`);
     }
@@ -156,11 +183,11 @@ serve(async (req) => {
 
     // Handle search functionality with proper quota management
     if (shouldPerformSearch && TAVILY_API_KEY) {
-      console.log('🔍 Checking search quota for user:', userId);
+      console.log('🔍 Checking search quota for user:', secureUserId);
       
       // Check current search quota using the correct function
       const { data: quotaData, error: quotaError } = await supabase.rpc('get_or_create_user_search_quota', {
-        p_user_id: userId
+        p_user_id: secureUserId
       });
 
       if (quotaError) {
@@ -210,9 +237,9 @@ serve(async (req) => {
             console.log('✅ Tavily search successful');
             
             // Increment search usage using the correct function
-            console.log('🔄 Incrementing search usage for user:', userId);
-            const { data: incrementData, error: incrementError } = await supabase.rpc('increment_search_usage', {
-              p_user_id: userId
+            console.log('🔄 Incrementing search usage for user:', secureUserId);
+            const { data: incrementData, error: incrementError } = await supabase.rpc('increment_regular_search_usage', {
+              p_user_id: secureUserId
             });
 
             if (incrementError) {
@@ -222,8 +249,8 @@ serve(async (req) => {
               
               // Update quota status after increment
               if (incrementData && incrementData[0]) {
-                quotaStatus.used = incrementData[0].daily_count;
-                quotaStatus.extraSearches = incrementData[0].extra_advanced_searches;
+                quotaStatus.used = incrementData[0].regular_search_count;
+                quotaStatus.extraSearches = incrementData[0].extra_regular_searches;
               }
             }
           } else {
@@ -233,7 +260,7 @@ serve(async (req) => {
           console.error('❌ Error in Tavily search:', error);
         }
       } else {
-        console.log('🚫 Search quota exceeded for user:', userId);
+        console.log('🚫 Search quota exceeded for user:', secureUserId);
         return new Response(
           JSON.stringify({
             error: 'Search quota exceeded',
@@ -249,13 +276,13 @@ serve(async (req) => {
 
     // Handle task/reminder confirmation
     if (confirmTask && pendingTaskData) {
-      console.log('🔧 Processing task confirmation for user:', userId);
+      console.log('🔧 Processing task confirmation for user:', secureUserId);
       
       try {
         const { data, error } = await supabase
           .from('tasks')
           .insert({
-            user_id: userId,
+            user_id: secureUserId,
             title: pendingTaskData.title,
             description: pendingTaskData.description || '',
             due_date: pendingTaskData.due_date,
@@ -296,13 +323,13 @@ serve(async (req) => {
     }
 
     if (confirmReminder && pendingReminderData) {
-      console.log('🔔 Processing reminder confirmation for user:', userId);
+      console.log('🔔 Processing reminder confirmation for user:', secureUserId);
       
       try {
         const { data, error } = await supabase
           .from('tr_reminders')
           .insert({
-            user_id: userId,
+            user_id: secureUserId,
             title: pendingReminderData.title,
             description: pendingReminderData.description || '',
             due_date: pendingReminderData.due_date,
@@ -438,7 +465,7 @@ serve(async (req) => {
 
     // Save to chat memory if this was a chat mode interaction
     if (activeTrigger === 'chat' && aiResponse) {
-      ChatMemoryService.addExchange(message, aiResponse, userId);
+      ChatMemoryService.addExchange(message, aiResponse, secureUserId);
     }
 
     console.log('🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:', browsingData ? true : false);
