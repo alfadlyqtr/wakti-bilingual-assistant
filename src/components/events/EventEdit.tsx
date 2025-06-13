@@ -53,6 +53,7 @@ export default function EventEdit() {
   const [fontStyle, setFontStyle] = useState<'normal' | 'italic'>('normal');
   const [textDecoration, setTextDecoration] = useState<'none' | 'underline'>('none');
   const [fontFamily, setFontFamily] = useState('Inter');
+  const [textShadow, setTextShadow] = useState(false);
 
   // Fetch event data
   const { data: event, isLoading: eventLoading } = useQuery({
@@ -450,18 +451,20 @@ export default function EventEdit() {
           <TextStyleControls
             fontSize={fontSize}
             textColor={textColor}
-            textAlign={textAlign}
+            textAlignment={textAlign}
             fontWeight={fontWeight}
             fontStyle={fontStyle}
             textDecoration={textDecoration}
             fontFamily={fontFamily}
+            textShadow={textShadow}
             onFontSizeChange={handleFontSizeChange}
             onTextColorChange={setTextColor}
-            onTextAlignChange={setTextAlign}
+            onTextAlignmentChange={setTextAlign}
             onFontWeightChange={setFontWeight}
             onFontStyleChange={setFontStyle}
             onTextDecorationChange={setTextDecoration}
             onFontFamilyChange={setFontFamily}
+            onTextShadowChange={setTextShadow}
           />
         </div>
       </div>

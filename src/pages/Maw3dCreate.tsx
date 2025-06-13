@@ -14,7 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { BackgroundCustomizer } from '@/components/maw3d/BackgroundCustomizer';
-import { TextStyleCustomizer } from '@/components/maw3d/TextStyleCustomizer';
+import TextStyleCustomizer from '@/components/maw3d/TextStyleCustomizer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
 import { EventTemplates } from '@/components/maw3d/EventTemplates';
 import AutoDeleteToggle from '@/components/maw3d/AutoDeleteToggle';
