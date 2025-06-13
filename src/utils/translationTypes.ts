@@ -1199,4 +1199,12 @@ export type TranslationKey =
   | "errorCopyingLink"
   | "dueOn"
   | "hideSubtasks"
-  | "showSubtasks";
+  | "showSubtasks"
+  
+  // New translation keys for fixing build errors
+  | "fontWeight"
+  | "bold"
+  | "fontStyle"
+  | "italic"
+  | "textDecoration"
+  | "underline";

@@ -7,8 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Copy, Download, ExternalLink, Calendar, Clock, MapPin, User, CheckCircle, XCircle, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-import { TaskConfirmationCard } from './TaskConfirmationCard';
+import { SimpleTaskRedirect } from './SimpleTaskRedirect';
 import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -206,35 +205,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             )}
           </div>
 
-          {/* Task/Reminder Confirmation Cards */}
-          {!isUser && message.intent === 'task_preview' && message.taskData && (
-            <EditableTaskConfirmationCard
-              type="task"
-              data={message.taskData}
-              onConfirm={(updatedTaskData) => {
-                // Handle task confirmation with updated data
-                console.log('Task confirmed with data:', updatedTaskData);
-              }}
-              onCancel={() => {
-                // Handle cancellation
-                console.log('Task creation cancelled');
-              }}
-            />
-          )}
-
-          {message.intent === 'reminder_preview' && message.reminderData && (
-            <TaskConfirmationCard
-              type="reminder"
-              data={message.reminderData}
-              onConfirm={() => {
-                // Handle reminder confirmation
-                console.log('Reminder confirmed');
-              }}
-              onCancel={() => {
-                // Handle cancellation
-                console.log('Reminder creation cancelled');
-              }}
-            />
+          {/* Simple Task Redirect - Show for task-related intents */}
+          {!isUser && (message.intent === 'task_preview' || message.intent === 'task_creation' || message.intent?.includes('task')) && (
+            <SimpleTaskRedirect />
           )}
 
           {/* Timestamp */}
