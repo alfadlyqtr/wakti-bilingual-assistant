@@ -183,7 +183,6 @@ export const misc = {
   competition: "Competition",
   conflict: "Conflict",
   disagreement: "Disagreement",
-  agreement: "Agreement",
   contract: "Contract",
   deal: "Deal",
   transaction: "Transaction",
@@ -365,13 +364,6 @@ export const misc = {
   aiImagePrompt: "AI Image Prompt",
   describeBackground: "Describe the background you want",
   generateAIBackground: "Generate AI Background",
-  
-  // Success/error messages
-  imageUploadedSuccessfully: "Image uploaded successfully",
-  errorUploadingImage: "Error uploading image",
-  pleaseEnterPrompt: "Please enter a prompt",
-  backgroundGeneratedSuccessfully: "Background generated successfully",
-  errorGeneratingBackground: "Error generating background",
   
   // Privacy settings
   privacySettings: "Privacy Settings",

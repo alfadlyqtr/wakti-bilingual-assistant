@@ -33,23 +33,17 @@ const eventSchema = z.object({
 
 type EventFormData = z.infer<typeof eventSchema>;
 
-interface BackgroundData {
-  type: 'color' | 'gradient' | 'image' | 'ai';
-  backgroundColor?: string;
-  backgroundGradient?: string;
-  backgroundImage?: string;
-}
-
 export default function EventEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { language } = useTheme();
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
-  const [backgroundData, setBackgroundData] = useState<BackgroundData>({
-    type: 'color',
-    backgroundColor: '#3b82f6'
-  });
+  
+  // Background states
+  const [backgroundColor, setBackgroundColor] = useState('#3b82f6');
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [imageBlur, setImageBlur] = useState(0);
   
   // Text styling states
   const [fontSize, setFontSize] = useState(18);
@@ -111,12 +105,9 @@ export default function EventEdit() {
       });
 
       // Set background data
-      setBackgroundData({
-        type: event.background_type || 'color',
-        backgroundColor: event.background_color || '#3b82f6',
-        backgroundGradient: event.background_gradient || undefined,
-        backgroundImage: event.background_image || undefined,
-      });
+      setBackgroundColor(event.background_color || '#3b82f6');
+      setBackgroundImage(event.background_image || null);
+      setImageBlur(event.image_blur || 0);
 
       // Set text styling
       setFontSize(event.font_size || 18);
@@ -151,10 +142,9 @@ export default function EventEdit() {
         is_public: data.is_public,
         rsvp_enabled: data.rsvp_enabled,
         rsvp_deadline: data.rsvp_deadline || null,
-        background_type: backgroundData.type,
-        background_color: backgroundData.backgroundColor || null,
-        background_gradient: backgroundData.backgroundGradient || null,
-        background_image: backgroundData.backgroundImage || null,
+        background_color: backgroundColor,
+        background_image: backgroundImage,
+        image_blur: imageBlur,
         font_size: fontSize,
         text_color: textColor,
         text_align: textAlign,
@@ -202,6 +192,10 @@ export default function EventEdit() {
       setValue('start_time', startOfDay.toISOString().slice(0, 16));
       setValue('end_time', endOfDay.toISOString().slice(0, 16));
     }
+  };
+
+  const handleFontSizeChange = (value: number[]) => {
+    setFontSize(value[0]);
   };
 
   if (eventLoading) {
@@ -444,10 +438,12 @@ export default function EventEdit() {
 
           {/* Background Customization */}
           <BackgroundCustomizer 
-            onBackgroundChange={setBackgroundData}
-            currentBackground={backgroundData}
-            eventTitle={watchedTitle}
-            eventDescription={watchedDescription}
+            backgroundColor={backgroundColor}
+            backgroundImage={backgroundImage}
+            imageBlur={imageBlur}
+            onBackgroundColorChange={setBackgroundColor}
+            onBackgroundImageChange={setBackgroundImage}
+            onImageBlurChange={setImageBlur}
           />
 
           {/* Text Style Controls */}
@@ -459,7 +455,7 @@ export default function EventEdit() {
             fontStyle={fontStyle}
             textDecoration={textDecoration}
             fontFamily={fontFamily}
-            onFontSizeChange={setFontSize}
+            onFontSizeChange={handleFontSizeChange}
             onTextColorChange={setTextColor}
             onTextAlignChange={setTextAlign}
             onFontWeightChange={setFontWeight}

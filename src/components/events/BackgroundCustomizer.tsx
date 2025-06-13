@@ -60,16 +60,16 @@ export default function BackgroundCustomizer({
         .getPublicUrl(data.path);
 
       onBackgroundImageChange(urlData.publicUrl);
-      toast.success(t('imageUploadedSuccessfully', language));
+      toast.success('Image uploaded successfully');
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error(t('errorUploadingImage', language));
+      toast.error('Error uploading image');
     }
   };
 
   const generateAIBackground = async () => {
     if (!aiPrompt.trim()) {
-      toast.error(t('pleaseEnterPrompt', language));
+      toast.error('Please enter a prompt');
       return;
     }
 
@@ -82,10 +82,10 @@ export default function BackgroundCustomizer({
       if (error) throw error;
 
       onBackgroundImageChange(data.imageUrl);
-      toast.success(t('backgroundGeneratedSuccessfully', language));
+      toast.success('Background generated successfully');
     } catch (error) {
       console.error('Error generating background:', error);
-      toast.error(t('errorGeneratingBackground', language));
+      toast.error('Error generating background');
     } finally {
       setIsGenerating(false);
     }
