@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent, Maw3dRsvp, CreateEventFormData } from "@/types/maw3d";
 
@@ -199,7 +200,7 @@ export class Maw3dService {
     console.log('Number of RSVPs found:', data?.length || 0);
     
     if (data && data.length > 0) {
-      data.forEach((rsvp, index) => {
+      data.forEach((rsvp,  index) => {
         console.log(`RSVP ${index + 1}:`, {
           id: rsvp.id,
           event_id: rsvp.event_id,
@@ -258,32 +259,64 @@ export class Maw3dService {
     return data;
   }
 
-  // Generate AI background using the existing edge function
+  // Generate AI background using the working wakti-ai-v2-brain function
   static async generateAIBackground(prompt: string): Promise<string> {
     try {
-      console.log('Generating AI background with prompt:', prompt);
+      console.log('🎨 Generating AI background using wakti-ai-v2-brain with prompt:', prompt);
       
-      const { data, error } = await supabase.functions.invoke('generate-event-image', {
+      // Get current user for authentication
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData.user) {
+        throw new Error('User authentication required for AI background generation');
+      }
+
+      // Use the working wakti-ai-v2-brain function instead of generate-event-image
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
-          prompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion`,
-          width: 1024,
-          height: 1024,
-          style: "photographic"
+          message: `Event background: ${prompt}. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+          userId: userData.user.id,
+          language: 'en',
+          attachedFiles: [],
+          messageType: 'text',
+          conversationHistory: [],
+          isVoiceMode: false,
+          activeTrigger: 'image', // This triggers image generation mode
+          searchResults: [],
+          isTaskConfirmation: false,
+          isReminderConfirmation: false,
+          taskData: null,
+          reminderData: null
         }
       });
 
       if (error) {
-        console.error('Error calling generate-event-image function:', error);
+        console.error('Error calling wakti-ai-v2-brain function:', error);
         throw new Error(`Failed to generate AI background: ${error.message}`);
       }
 
-      if (!data?.imageUrl) {
-        console.error('No image URL in response:', data);
-        throw new Error('No image URL returned from generation service');
+      console.log('🎨 Response from wakti-ai-v2-brain:', data);
+
+      // Extract image URL from the AI response
+      let imageUrl = null;
+      
+      if (data?.imageUrl) {
+        imageUrl = data.imageUrl;
+      } else if (data?.response && typeof data.response === 'string') {
+        // Try to extract image URL from response text if it contains one
+        const urlMatch = data.response.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|webp|gif)/i);
+        if (urlMatch) {
+          imageUrl = urlMatch[0];
+        }
       }
 
-      console.log('AI background generated successfully:', data.imageUrl);
-      return data.imageUrl;
+      if (!imageUrl) {
+        console.error('No image URL found in response:', data);
+        throw new Error('No image URL returned from AI generation service');
+      }
+
+      console.log('🎨 AI background generated successfully:', imageUrl);
+      return imageUrl;
     } catch (error) {
       console.error('Error generating AI background:', error);
       throw error;
