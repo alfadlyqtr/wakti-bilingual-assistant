@@ -1,40 +1,10 @@
-
 import React, { useEffect, useRef, forwardRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTheme } from '@/providers/ThemeProvider';
+import { AIMessage } from '@/services/WaktiAIV2Service';
 import { MessageBubble } from './MessageBubble';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
-
-interface AIMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  intent?: string;
-  confidence?: 'high' | 'medium' | 'low';
-  actionTaken?: boolean;
-  inputType?: 'text' | 'voice';
-  browsingUsed?: boolean;
-  browsingData?: any;
-  quotaStatus?: any;
-  requiresSearchConfirmation?: boolean;
-  imageUrl?: string;
-  isTextGenerated?: boolean;
-  actionResult?: any;
-  fileAnalysisResults?: any;
-  deepIntegration?: any;
-  automationSuggestions?: any;
-  predictiveInsights?: any;
-  workflowActions?: any;
-  contextualActions?: any;
-  attachedFiles?: any[];
-  needsConfirmation?: boolean;
-  needsClarification?: boolean;
-  pendingTaskData?: any;
-  partialTaskData?: any;
-  pendingReminderData?: any;
-}
 
 interface ChatMessagesProps {
   sessionMessages: AIMessage[];

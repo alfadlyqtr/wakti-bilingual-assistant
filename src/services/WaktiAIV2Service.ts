@@ -8,7 +8,7 @@ export interface AIMessage {
   timestamp: Date;
   intent?: string;
   confidence?: 'high' | 'medium' | 'low';
-  actionTaken?: boolean | string;
+  actionTaken?: boolean;
   inputType?: 'text' | 'voice';
   browsingUsed?: boolean;
   browsingData?: any;
@@ -17,18 +17,18 @@ export interface AIMessage {
   imageUrl?: string;
   isTextGenerated?: boolean;
   actionResult?: any;
-  proactiveActions?: any[];
-  userProfile?: any;
+  fileAnalysisResults?: any;
   deepIntegration?: any;
-  automationSuggestions?: any[];
+  automationSuggestions?: any;
   predictiveInsights?: any;
-  workflowActions?: any[];
-  contextualActions?: any[];
-  needsConfirmation?: boolean;
-  pendingTaskData?: any;
-  pendingReminderData?: any;
+  workflowActions?: any;
+  contextualActions?: any;
   attachedFiles?: any[];
-  fileAnalysisResults?: any[];
+  needsConfirmation?: boolean;
+  needsClarification?: boolean;
+  pendingTaskData?: any;
+  partialTaskData?: any;
+  pendingReminderData?: any;
 }
 
 export interface AIConversation {

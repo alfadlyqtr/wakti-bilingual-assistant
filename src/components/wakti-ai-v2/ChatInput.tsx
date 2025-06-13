@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,19 +12,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface ChatInputProps {
   message: string;
   setMessage: (message: string) => void;
+  onSendMessage: (message: string, inputType?: 'text' | 'voice', attachedFiles?: any[]) => void;
   isLoading: boolean;
-  sessionMessages: any[];
-  onSendMessage: (message: string, inputType?: 'text' | 'voice', files?: any[]) => void;
-  onClearChat: () => void;
+  activeTrigger: string;
+  userProfile: any;
 }
 
 export function ChatInput({
   message,
   setMessage,
-  isLoading,
-  sessionMessages,
   onSendMessage,
-  onClearChat
+  isLoading,
+  activeTrigger,
+  userProfile
 }: ChatInputProps) {
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);

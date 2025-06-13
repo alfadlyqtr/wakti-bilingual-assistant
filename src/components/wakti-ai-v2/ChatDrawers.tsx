@@ -18,17 +18,12 @@ interface ChatDrawersProps {
   showQuickActions: boolean;
   setShowQuickActions: (show: boolean) => void;
   conversations: AIConversation[];
-  currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
-  fetchConversations: () => void;
-  onSendMessage: (message: string) => void;
-  activeTrigger: string;
-  onTriggerChange: (trigger: string) => void;
-  onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
-  onNewConversation: () => void;
   onClearChat: () => void;
-  sessionMessages: any[];
+  onNewConversation: () => void;
+  quotaStatus: any;
+  isLoading: boolean;
 }
 
 export function ChatDrawers({
@@ -37,17 +32,12 @@ export function ChatDrawers({
   showQuickActions,
   setShowQuickActions,
   conversations,
-  currentConversationId,
   onSelectConversation,
   onDeleteConversation,
-  fetchConversations,
-  onSendMessage,
-  activeTrigger,
-  onTriggerChange,
-  onTextGenerated,
-  onNewConversation,
   onClearChat,
-  sessionMessages
+  onNewConversation,
+  quotaStatus,
+  isLoading
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
@@ -66,14 +56,14 @@ export function ChatDrawers({
           </SheetHeader>
           <ConversationsList
             conversations={conversations}
-            currentConversationId={currentConversationId}
+            currentConversationId={null}
             onSelectConversation={onSelectConversation}
             onDeleteConversation={onDeleteConversation}
-            onRefresh={fetchConversations}
+            onRefresh={() => {}}
             onClose={() => setShowConversations(false)}
             onNewConversation={onNewConversation}
             onClearChat={onClearChat}
-            sessionMessages={sessionMessages}
+            sessionMessages={[]}
           />
         </SheetContent>
       </Sheet>
@@ -82,10 +72,10 @@ export function ChatDrawers({
       <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
         <SheetContent side="right" className="w-80 p-4">
           <QuickActionsPanel
-            onSendMessage={onSendMessage}
-            activeTrigger={activeTrigger as any}
-            onTriggerChange={onTriggerChange}
-            onTextGenerated={onTextGenerated}
+            onSendMessage={() => {}}
+            activeTrigger={'chat' as any}
+            onTriggerChange={() => {}}
+            onTextGenerated={() => {}}
             onClose={() => setShowQuickActions(false)}
           />
         </SheetContent>

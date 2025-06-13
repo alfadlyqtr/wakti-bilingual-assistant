@@ -1,36 +1,6 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-
-interface AIMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  intent?: string;
-  confidence?: 'high' | 'medium' | 'low';
-  actionTaken?: boolean;
-  inputType?: 'text' | 'voice';
-  browsingUsed?: boolean;
-  browsingData?: any;
-  quotaStatus?: any;
-  requiresSearchConfirmation?: boolean;
-  imageUrl?: string;
-  isTextGenerated?: boolean;
-  actionResult?: any;
-  fileAnalysisResults?: any;
-  deepIntegration?: any;
-  automationSuggestions?: any;
-  predictiveInsights?: any;
-  workflowActions?: any;
-  contextualActions?: any;
-  attachedFiles?: any[];
-  needsConfirmation?: boolean;
-  needsClarification?: boolean;
-  pendingTaskData?: any;
-  partialTaskData?: any;
-  pendingReminderData?: any;
-}
+import { AIMessage } from '@/services/WaktiAIV2Service';
 
 interface MessageBubbleProps {
   message: AIMessage;

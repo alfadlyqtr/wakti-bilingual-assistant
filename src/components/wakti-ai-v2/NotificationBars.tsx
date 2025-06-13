@@ -4,49 +4,57 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 
 interface NotificationBarsProps {
-  searchConfirmationRequired: boolean;
-  error: string | null;
-  onSearchConfirmation: () => void;
-  onDismissSearchConfirmation: () => void;
+  quotaStatus: any;
+  searchQuotaStatus: {
+    remainingFreeSearches: number;
+    extraSearches: number;
+    isAtLimit: boolean;
+    maxMonthlySearches: number;
+  };
+  translationQuota: any;
+  maxDailyTranslations: number;
+  language: string;
 }
 
 export function NotificationBars({
-  searchConfirmationRequired,
-  error,
-  onSearchConfirmation,
-  onDismissSearchConfirmation
+  quotaStatus,
+  searchQuotaStatus,
+  translationQuota,
+  maxDailyTranslations,
+  language
 }: NotificationBarsProps) {
-  const { language } = useTheme();
-
   return (
     <>
-      {/* Search Confirmation */}
-      {searchConfirmationRequired && (
+      {/* Quota status notifications can be added here if needed */}
+      {quotaStatus && quotaStatus.showWarning && (
         <div className="bg-yellow-100 border-b p-4">
           <p className="text-sm text-yellow-800">
-            {language === 'ar'
-              ? 'هل تريد إجراء بحث على الإنترنت؟'
-              : 'Do you want to perform an internet search?'}
+            {language === 'ar' ? 'تحذير الحصة' : 'Quota Warning'}
           </p>
-          <div className="mt-2 flex gap-2">
-            <Button size="sm" onClick={onSearchConfirmation}>
-              {language === 'ar' ? 'نعم، ابحث' : 'Yes, Search'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onDismissSearchConfirmation}
-            >
-              {language === 'ar' ? 'لا، شكراً' : 'No, Thanks'}
-            </Button>
-          </div>
         </div>
       )}
       
-      {/* Error Display */}
-      {error && (
+      {/* Search quota notifications */}
+      {searchQuotaStatus.isAtLimit && (
         <div className="bg-red-100 border-b p-4">
-          <p className="text-sm text-red-800">{error}</p>
+          <p className="text-sm text-red-800">
+            {language === 'ar' 
+              ? `تم الوصول للحد الأقصى من البحث (${searchQuotaStatus.maxMonthlySearches}/${searchQuotaStatus.maxMonthlySearches})`
+              : `Search limit reached (${searchQuotaStatus.maxMonthlySearches}/${searchQuotaStatus.maxMonthlySearches})`
+            }
+          </p>
+        </div>
+      )}
+
+      {/* Translation quota notifications */}
+      {translationQuota && translationQuota.daily_count >= maxDailyTranslations && (
+        <div className="bg-orange-100 border-b p-4">
+          <p className="text-sm text-orange-800">
+            {language === 'ar' 
+              ? `تم الوصول للحد الأقصى من الترجمات (${maxDailyTranslations}/${maxDailyTranslations})`
+              : `Translation limit reached (${maxDailyTranslations}/${maxDailyTranslations})`
+            }
+          </p>
         </div>
       )}
     </>
