@@ -1,394 +1,376 @@
-
-import { useState, useEffect } from "react";
-import { useTheme } from "@/providers/ThemeProvider";
-import { useLocation } from "react-router-dom";
-import { t } from "@/utils/translations";
-import { PageContainer } from "@/components/PageContainer";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { getQuotePreferences, saveQuotePreferences } from "@/utils/quoteService";
-import { toast } from "sonner";
-import { confirm } from "@/components/ui/use-toast";
-import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
-import { quotes } from "@/utils/dailyQuotes";
-import { Check, Save, Settings as SettingsIcon, Info } from "lucide-react";
-import { updateAutoApproveContacts, getCurrentUserProfile } from "@/services/contactsService";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { TranslationKey } from "@/utils/translationTypes";
-import { cn } from "@/lib/utils";
-import { getUserPreferences } from "@/utils/widgetPreferences";
+import React, { useState, useEffect } from 'react';
+import { useTheme } from '@/providers/ThemeProvider';
+import { t } from '@/utils/translations';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { useToastHelper } from '@/components/ui/toast-helper';
+import { signOut, updateProfile, updateUserPassword, deleteUserAccount } from '@/utils/auth';
+import { useNavigate } from 'react-router-dom';
+import { Moon, Sun } from 'lucide-react';
+import { Switch } from "@/components/ui/switch"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Bell } from 'lucide-react';
+import NotificationSettings from '@/components/notifications/NotificationSettings';
 
 export default function Settings() {
-  const { theme, language, toggleTheme, toggleLanguage } = useTheme();
-  const location = useLocation();
-  const [quotePreferences, setQuotePreferences] = useState(getQuotePreferences());
-  const [customQuoteDialogOpen, setCustomQuoteDialogOpen] = useState(false);
-  const [widgetVisibility, setWidgetVisibility] = useState(getUserPreferences());
-  const categories = Object.keys(quotes);
-  const queryClient = useQueryClient();
+  const { language, theme, setTheme } = useTheme();
+  const [activeTab, setActiveTab] = React.useState("account");
+  const [displayName, setDisplayName] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const { toast } = useToastHelper();
+  const navigate = useNavigate();
 
-  // Check if we came from Wakti AI page or are currently on it
-  const isFromWaktiAI = location.pathname === '/wakti-ai' || 
-                       (location.state as any)?.from === '/wakti-ai' ||
-                       document.referrer.includes('/wakti-ai');
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
-  const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
-    queryKey: ['userProfile'],
-    queryFn: getCurrentUserProfile,
-  });
-
-  const autoApproveMutation = useMutation({
-    mutationFn: (autoApprove: boolean) => updateAutoApproveContacts(autoApprove),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userProfile'] });
-      toast.success(t("settingsUpdated", language), {
-        description: t("contactSettingsUpdated", language)
+  const handleProfileUpdate = async () => {
+    setIsSavingProfile(true);
+    try {
+      const result = await updateProfile({
+        user_metadata: {
+          display_name: displayName,
+          full_name: fullName,
+          avatar_url: avatarUrl
+        }
       });
-    },
-    onError: (error) => {
-      console.error("Error updating contact settings:", error);
-      toast.error(t("error", language), {
-        description: t("errorUpdatingSettings", language)
+
+      if (result.error) {
+        toast({
+          title: t('error', language),
+          description: result.error.message,
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: t('success', language),
+          description: t('profileUpdated', language)
+        });
+      }
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    setIsChangingPassword(true);
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: t('error', language),
+        description: t('passwordsDoNotMatch', language),
+        variant: 'destructive'
+      });
+      setIsChangingPassword(false);
+      return;
+    }
+
+    try {
+      const result = await updateUserPassword(currentPassword, newPassword);
+      if (result.error) {
+        toast({
+          title: t('error', language),
+          description: result.error.message || t('passwordUpdateFailed', language),
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: t('success', language),
+          description: t('passwordUpdated', language)
+        });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const result = await deleteUserAccount();
+      if (result.error) {
+        toast({
+          title: t('error', language),
+          description: result.error.message || t('accountDeletionFailed', language),
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: t('success', language),
+          description: t('accountDeleted', language)
+        });
+        navigate('/register');
+      }
+    } catch (error: any) {
+      toast({
+        title: t('error', language),
+        description: error.message || t('accountDeletionFailed', language),
+        variant: 'destructive'
       });
     }
-  });
-
-  const handleAutoApproveToggle = (checked: boolean) => {
-    console.log("Toggle auto-approve to:", checked);
-    autoApproveMutation.mutate(checked);
   };
 
-  const handleQuoteCategoryChange = (category: string) => {
-    const newPreferences = { ...quotePreferences, category };
-    setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
-    
-    // Open dialog when custom is selected
-    if (category === 'custom') {
-      setCustomQuoteDialogOpen(true);
-    }
-    
-    toast.success(t("quotePreferencesUpdated", language));
-  };
-  
-  const handleQuoteFrequencyChange = (frequency: string) => {
-    const newPreferences = { ...quotePreferences, frequency };
-    setQuotePreferences(newPreferences);
-    saveQuotePreferences(newPreferences);
-    
-    toast.success(t("quotePreferencesUpdated", language));
-  };
-
-  // Widget visibility handlers
-  const handleWidgetToggle = (widgetId: string, checked: boolean) => {
-    const newVisibility = { ...widgetVisibility, [widgetId]: checked };
-    setWidgetVisibility(newVisibility);
-    localStorage.setItem('widgetVisibility', JSON.stringify(newVisibility));
-    
-    toast.success(
-      language === 'ar' 
-        ? `تم ${checked ? 'تفعيل' : 'إلغاء'} عرض الودجت`
-        : `Widget ${checked ? 'enabled' : 'disabled'}`
-    );
-  };
-  
-  // Update the handleSaveAllSettings function to use the confirm function
-  const handleSaveAllSettings = async () => {
-    const confirmed = await confirm({
-      title: t("saveAllSettingsQuestion", language),
-      description: t("saveAllSettingsConfirmation", language),
-    });
-
-    if (confirmed) {
-      // Save widget visibility settings
-      localStorage.setItem('widgetVisibility', JSON.stringify(widgetVisibility));
-      localStorage.setItem('quotePreferences', JSON.stringify(quotePreferences));
-      
-      toast.success(t("allSettingsSaved", language), {
-        description: "Settings saved successfully"
-      });
-    }
-  };
-  
-  // Watch for category changes to show dialog
-  useEffect(() => {
-    if (quotePreferences.category === 'custom') {
-      setCustomQuoteDialogOpen(true);
-    }
-  }, []); // Only run once on component mount
-  
   return (
-    <div className="flex-1 overflow-y-auto py-6 pb-24 px-4">
-      <h2 className="text-xl font-bold mb-4">{t("settings", language)}</h2>
-      
-      {/* Notice for Wakti AI restrictions - only for language */}
-      {isFromWaktiAI && (
-        <Card className="mb-4 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-              <Info className="h-4 w-4" />
-              <p className="text-sm">
-                {language === 'ar' 
-                  ? 'تغيير اللغة معطل أثناء استخدام WAKTI AI لضمان الاستقرار'
-                  : 'Language changes are disabled while using WAKTI AI for stability'}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-      
-      {/* Appearance Card */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>{t("appearance", language)}</CardTitle>
-          <CardDescription>{t("appearanceSettings", language)}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Language Settings - disabled on Wakti AI page */}
-          <div className="flex justify-between items-center">
-            <span>{t("language", language)}</span>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={isFromWaktiAI ? undefined : toggleLanguage}
-                    className={cn(
-                      "h-9 px-3 rounded-full text-sm",
-                      isFromWaktiAI && "opacity-50 cursor-not-allowed"
-                    )}
-                    disabled={isFromWaktiAI}
-                  >
-                    {language === "en" ? t("arabic", language) : t("english", language)}
-                  </Button>
-                </TooltipTrigger>
-                {isFromWaktiAI && (
-                  <TooltipContent>
-                    <p>{language === 'ar' ? 'معطل أثناء استخدام WAKTI AI' : 'Disabled while using WAKTI AI'}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-          
-          {/* Theme Toggle - always functional */}
-          <div className="flex justify-between items-center">
-            <span>{t("theme", language)}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleTheme}
-              className="h-9 px-3 rounded-full text-sm"
-            >
-              {theme === "dark"
-                ? t("lightMode", language)
-                : t("darkMode", language)}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide bg-gradient-background min-h-screen">
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">
+            {t('settingsTitle', language)}
+          </h1>
+          <p className="text-muted-foreground">{t('settingsDesc', language)}</p>
+        </div>
 
-      {/* Contacts Settings Card */}
-      <Card className="mb-4">
-        <CardHeader>
-          <CardTitle>{t("contactsSettings", language)}</CardTitle>
-          <CardDescription>{t("contactsSettingsDescription", language)}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label htmlFor="auto-approve" className="mb-1 block font-medium">
-                {t("autoApproveRequests", language)}
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                {t("autoApproveExplanation", language)}
-              </p>
-            </div>
-            <Switch 
-              id="auto-approve" 
-              checked={userProfile?.auto_approve_contacts || false}
-              onCheckedChange={handleAutoApproveToggle}
-              disabled={isLoadingProfile || autoApproveMutation.isPending}
-            />
-          </div>
-        </CardContent>
-      </Card>
+        {/* Settings Sections */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6 bg-gradient-card/50 backdrop-blur-lg border border-border/50">
+            <TabsTrigger value="account" className="text-xs">{t('account', language)}</TabsTrigger>
+            <TabsTrigger value="appearance" className="text-xs">{t('appearance', language)}</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs">{t('notifications', language)}</TabsTrigger>
+            <TabsTrigger value="privacy" className="text-xs">{t('privacy', language)}</TabsTrigger>
+            <TabsTrigger value="quotes" className="text-xs">{t('quotes', language)}</TabsTrigger>
+            <TabsTrigger value="billing" className="text-xs">{t('billing', language)}</TabsTrigger>
+          </TabsList>
 
-      {/* Quote Settings */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{t("dailyQuoteSettings", language)}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">
-              {t("quoteCategory", language)}
-            </label>
-            <Select 
-              value={quotePreferences.category} 
-              onValueChange={handleQuoteCategoryChange}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {t(category as TranslationKey, language)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Account Tab */}
+          <TabsContent value="account">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('accountSettings', language)}</CardTitle>
+                <CardDescription>{t('manageYourAccount', language)}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="display_name">{t('displayName', language)}</Label>
+                  <Input
+                    id="display_name"
+                    placeholder={t('displayName', language)}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="full_name">{t('fullName', language)}</Label>
+                  <Input
+                    id="full_name"
+                    placeholder={t('fullName', language)}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="avatar_url">{t('avatarURL', language)}</Label>
+                  <Input
+                    id="avatar_url"
+                    placeholder={t('avatarURL', language)}
+                    value={avatarUrl}
+                    onChange={(e) => setAvatarUrl(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleProfileUpdate} disabled={isSavingProfile}>
+                  {isSavingProfile ? t('saving', language) + '...' : t('saveProfile', language)}
+                </Button>
+              </CardContent>
+            </Card>
 
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">
-              {t("quoteChangeFrequency", language)}
-            </label>
-            <Select 
-              value={quotePreferences.frequency}
-              onValueChange={handleQuoteFrequencyChange}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2xday">
-                  {t("twiceDaily", language)}
-                </SelectItem>
-                <SelectItem value="4xday">
-                  {t("fourTimesDaily", language)}
-                </SelectItem>
-                <SelectItem value="6xday">
-                  {t("sixTimesDaily", language)}
-                </SelectItem>
-                <SelectItem value="appStart">
-                  {t("everyAppStart", language)}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {/* Button to manage custom quotes */}
-          {quotePreferences.category === 'custom' && (
-            <Button 
-              variant="outline" 
-              className="w-full mt-4" 
-              onClick={() => setCustomQuoteDialogOpen(true)}
-            >
-              {t("manageCustomQuotes", language)}
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('changePassword', language)}</CardTitle>
+                <CardDescription>{t('updateYourPassword', language)}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="current_password">{t('currentPassword', language)}</Label>
+                  <Input
+                    id="current_password"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="new_password">{t('newPassword', language)}</Label>
+                  <Input
+                    id="new_password"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="confirm_password">{t('confirmPassword', language)}</Label>
+                  <Input
+                    id="confirm_password"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handlePasswordChange} disabled={isChangingPassword}>
+                  {isChangingPassword ? t('changingPassword', language) + '...' : t('changePassword', language)}
+                </Button>
+              </CardContent>
+            </Card>
 
-      {/* Notification Preferences */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{t("notificationPreferences", language)}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>{t("pushNotifications", language)}</span>
-            <Switch defaultChecked id="push-notifications" />
-          </div>
-          <div className="flex justify-between items-center">
-            <span>{t("emailNotifications", language)}</span>
-            <Switch id="email-notifications" />
-          </div>
-        </CardContent>
-      </Card>
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle className="text-destructive">{t('deleteAccount', language)}</CardTitle>
+                <CardDescription>{t('permanentlyDeleteAccount', language)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">{t('deleteAccount', language)}</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t('areYouSure', language)}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {t('accountDeletionWarning', language)}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t('cancel', language)}</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteAccount}>{t('delete', language)}</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </CardContent>
+            </Card>
 
-      {/* Widget Visibility */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{t("widgetVisibility", language)}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>
-              {language === 'ar' ? 'ودجت التقويم' : 'Calendar Widget'}
-            </span>
-            <Switch 
-              checked={widgetVisibility.calendar !== false}
-              onCheckedChange={(checked) => handleWidgetToggle('calendar', checked)}
-              id="calendar-widget" 
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span>
-              {language === 'ar' ? 'ودجت المهام والتذكيرات' : 'Tasks & Reminders Widget'}
-            </span>
-            <Switch 
-              checked={widgetVisibility.tr !== false}
-              onCheckedChange={(checked) => handleWidgetToggle('tr', checked)}
-              id="tr-widget" 
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span>
-              {language === 'ar' ? 'ودجت مواعيد الأحداث' : 'Maw3d Events Widget'}
-            </span>
-            <Switch 
-              checked={widgetVisibility.maw3d !== false}
-              onCheckedChange={(checked) => handleWidgetToggle('maw3d', checked)}
-              id="maw3d-widget" 
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span>
-              {language === 'ar' ? 'ودجت الاقتباس اليومي' : 'Daily Quote Widget'}
-            </span>
-            <Switch 
-              checked={widgetVisibility.dailyQuote !== false}
-              onCheckedChange={(checked) => handleWidgetToggle('dailyQuote', checked)}
-              id="quote-widget" 
-            />
-          </div>
-        </CardContent>
-      </Card>
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('signOut', language)}</CardTitle>
+                <CardDescription>{t('signOutDescription', language)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleSignOut}>{t('signOut', language)}</Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-      {/* Privacy Controls */}
-      <Card className="mb-4">
-        <CardHeader className="pb-2">
-          <h2 className="text-lg font-medium">{t("privacyControls", language)}</h2>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex justify-between items-center">
-            <span>{t("profileVisibility", language)}</span>
-            <Switch defaultChecked id="profile-visibility" />
-          </div>
-          <div className="flex justify-between items-center">
-            <span>{t("activityStatus", language)}</span>
-            <Switch defaultChecked id="activity-status" />
-          </div>
-        </CardContent>
-      </Card>
+          {/* Appearance Tab */}
+          <TabsContent value="appearance">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('appearanceSettings', language)}</CardTitle>
+                <CardDescription>{t('customizeYourAppearance', language)}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between font-medium">
+                  <span>{t('theme', language)}</span>
+                  <Select value={theme} onValueChange={setTheme}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Theme" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="light">
+                        <Sun className="mr-2 h-4 w-4" />
+                        {t('light', language)}
+                      </SelectItem>
+                      <SelectItem value="dark">
+                        <Moon className="mr-2 h-4 w-4" />
+                        {t('dark', language)}
+                      </SelectItem>
+                      <SelectItem value="system">
+                        <Sun className="mr-2 h-4 w-4" />
+                        <Moon className="mr-2 h-4 w-4" />
+                        {t('system', language)}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-      {/* Save All Settings Button */}
-      <Button 
-        className="w-full mt-6 flex items-center gap-2" 
-        onClick={handleSaveAllSettings}
-      >
-        <Save className="h-4 w-4" />
-        {t("saveAllSettings", language)}
-      </Button>
-      
-      {/* Custom Quote Manager Dialog */}
-      <CustomQuoteManager 
-        open={customQuoteDialogOpen} 
-        onOpenChange={setCustomQuoteDialogOpen}
-        onUpdate={() => {
-          // Refresh any state if needed after quotes are updated
-          const updatedPrefs = getQuotePreferences();
-          setQuotePreferences(updatedPrefs);
-        }}
-      />
+          {/* Notifications Tab - NEW */}
+          <TabsContent value="notifications">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5" />
+                  {t('notificationSettings', language)}
+                </CardTitle>
+                <CardDescription>
+                  {t('notificationSettingsDesc', language)}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <NotificationSettings />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Privacy Tab */}
+          <TabsContent value="privacy">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('privacySettings', language)}</CardTitle>
+                <CardDescription>{t('manageYourPrivacy', language)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Privacy settings content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Quotes Tab */}
+          <TabsContent value="quotes">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('quotesSettings', language)}</CardTitle>
+                <CardDescription>{t('customizeYourQuotes', language)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Quotes settings content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Billing Tab */}
+          <TabsContent value="billing">
+            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+              <CardHeader>
+                <CardTitle>{t('billingSettings', language)}</CardTitle>
+                <CardDescription>{t('manageYourBilling', language)}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {/* Billing settings content */}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }

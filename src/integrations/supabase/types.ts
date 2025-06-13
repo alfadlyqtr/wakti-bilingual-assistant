@@ -675,6 +675,90 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_history: {
+        Row: {
+          body: string
+          data: Json | null
+          deep_link: string | null
+          delivery_status: string
+          id: string
+          notification_type: string
+          progressier_response: Json | null
+          sent_at: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          data?: Json | null
+          deep_link?: string | null
+          delivery_status?: string
+          id?: string
+          notification_type: string
+          progressier_response?: Json | null
+          sent_at?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          data?: Json | null
+          deep_link?: string | null
+          delivery_status?: string
+          id?: string
+          notification_type?: string
+          progressier_response?: Json | null
+          sent_at?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      notification_queue: {
+        Row: {
+          attempts: number | null
+          body: string
+          created_at: string
+          data: Json | null
+          deep_link: string | null
+          id: string
+          notification_type: string
+          scheduled_for: string | null
+          sent_at: string | null
+          status: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number | null
+          body: string
+          created_at?: string
+          data?: Json | null
+          deep_link?: string | null
+          id?: string
+          notification_type: string
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number | null
+          body?: string
+          created_at?: string
+          data?: Json | null
+          deep_link?: string | null
+          id?: string
+          notification_type?: string
+          scheduled_for?: string | null
+          sent_at?: string | null
+          status?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           auto_approve_contacts: boolean | null
@@ -682,7 +766,10 @@ export type Database = {
           created_at: string | null
           display_name: string | null
           email: string | null
+          first_name: string | null
           id: string
+          last_name: string | null
+          notification_preferences: Json | null
           settings: Json | null
           updated_at: string | null
           username: string | null
@@ -693,7 +780,10 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          first_name?: string | null
           id: string
+          last_name?: string | null
+          notification_preferences?: Json | null
           settings?: Json | null
           updated_at?: string | null
           username?: string | null
@@ -704,7 +794,10 @@ export type Database = {
           created_at?: string | null
           display_name?: string | null
           email?: string | null
+          first_name?: string | null
           id?: string
+          last_name?: string | null
+          notification_preferences?: Json | null
           settings?: Json | null
           updated_at?: string | null
           username?: string | null
@@ -1156,6 +1249,39 @@ export type Database = {
           },
         ]
       }
+      user_push_subscriptions: {
+        Row: {
+          created_at: string
+          device_info: Json | null
+          id: string
+          is_active: boolean
+          progressier_user_id: string | null
+          subscription_data: Json | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          is_active?: boolean
+          progressier_user_id?: string | null
+          subscription_data?: Json | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_info?: Json | null
+          id?: string
+          is_active?: boolean
+          progressier_user_id?: string | null
+          subscription_data?: Json | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_search_quotas: {
         Row: {
           created_at: string
@@ -1487,6 +1613,18 @@ export type Database = {
           success: boolean
           new_extra_count: number
         }[]
+      }
+      queue_notification: {
+        Args: {
+          p_user_id: string
+          p_notification_type: string
+          p_title: string
+          p_body: string
+          p_data?: Json
+          p_deep_link?: string
+          p_scheduled_for?: string
+        }
+        Returns: string
       }
       set_limit: {
         Args: { "": number }

@@ -1,301 +1,322 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Session, User, AuthError } from '@supabase/supabase-js';
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useToastHelper } from '@/hooks/use-toast-helper';
+import { useRouter } from 'next/navigation';
+import { UserAttributes } from '@supabase/supabase-js';
+import { useProgressierSync } from '@/hooks/useProgressierSync';
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-  isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<AuthError | null>;
-  signUp: (email: string, password: string) => Promise<AuthError | null>;
+  signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  resetPassword: (token: string, newPassword: string) => Promise<AuthError | null>;
-  forgotPassword: (email: string) => Promise<AuthError | null>;
-  updateProfile: (data: Partial<User>) => Promise<{ user: User | null, error: any | null }>;
-  updateEmail: (email: string) => Promise<AuthError | null>;
-  updatePassword: (password: string) => Promise<AuthError | null>;
-  refreshSession: () => Promise<void>;
+  signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+  updateProfile: (data: { user_metadata: { display_name?: string; avatar_url?: string; full_name?: string; } }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  session: null,
-  loading: true,
-  isLoading: true,
-  signIn: async () => null,
-  signUp: async () => null,
-  signOut: async () => {},
-  resetPassword: async () => null,
-  forgotPassword: async () => null,
-  updateProfile: async () => null,
-  updateEmail: async () => null,
-  updatePassword: async () => null,
-  refreshSession: async () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: React.ReactNode;
-  requireAuth?: boolean;
+export function useAuth(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }
 
-export const AuthProvider = ({ children, requireAuth = false }: AuthProviderProps) => {
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
-  const navigationInProgress = useRef(false);
-  
-  // Debug helper to track auth state changes
-  const logAuthState = (message: string, details?: any) => {
-    console.log(`AuthContext: ${message}`, {
-      hasUser: !!user,
-      hasSession: !!session,
-      isLoading: loading,
-      currentPath: location.pathname,
-      userEmail: user?.email,
-      userId: user?.id,
-      ...(details || {})
-    });
-  };
+  const { toast } = useToastHelper();
+  const router = useRouter();
 
   useEffect(() => {
-    logAuthState('Setting up authentication listeners');
-    
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
-        logAuthState(`Auth state change event: ${event}`, { 
-          hasNewSession: !!currentSession,
-          newUserEmail: currentSession?.user?.email,
-          newUserId: currentSession?.user?.id
+    const getSession = async () => {
+      try {
+        setLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+
+        setUser(session?.user ?? null);
+      } catch (error) {
+        console.error("Error getting session:", error);
+        toast({
+          title: "Authentication Error",
+          description: "Failed to retrieve session. Please try again.",
+          variant: "destructive",
         });
-        
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
+      } finally {
         setLoading(false);
+      }
+    };
 
-        // Additional debug for user state
-        console.log('AuthContext: User state updated:', {
-          user: currentSession?.user ?? null,
-          userEmail: currentSession?.user?.email,
-          userId: currentSession?.user?.id
-        });
+    getSession();
 
-        // Only redirect on signout if explicitly required and we're not already navigating
-        if (event === 'SIGNED_OUT' && requireAuth && !navigationInProgress.current) {
-          logAuthState('User signed out, redirecting to login');
-          navigationInProgress.current = true;
-          // Use a timeout to avoid potential race conditions
-          setTimeout(() => {
-            navigate('/login');
-            navigationInProgress.current = false;
-          }, 100);
-        }
+    // Listen for changes on auth state (login, signout, etc.)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user ?? null);
       }
     );
 
-    // THEN check for existing session
-    const initializeAuth = async () => {
-      try {
-        logAuthState('Checking for existing session');
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        logAuthState('Initial session check complete', { 
-          hasSession: !!currentSession,
-          sessionUserEmail: currentSession?.user?.email,
-          sessionUserId: currentSession?.user?.id
-        });
-        
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        setLoading(false);
-        setInitialized(true);
-        
-        // Additional debug for initial user state
-        console.log('AuthContext: Initial user state set:', {
-          user: currentSession?.user ?? null,
-          userEmail: currentSession?.user?.email,
-          userId: currentSession?.user?.id
-        });
-        
-        // Only redirect if authentication is required but user is not logged in
-        // Remove the automatic redirect to dashboard - let the router handle where the user should go
-        if (requireAuth && !currentSession && !navigationInProgress.current && !location.pathname.includes('/login')) {
-          logAuthState('No session found, redirecting to login');
-          navigationInProgress.current = true;
-          navigate('/login');
-          navigationInProgress.current = false;
-        }
-      } catch (error) {
-        console.error('AuthProvider: Error initializing auth', error);
-        setLoading(false);
-        setInitialized(true);
-        if (requireAuth && !navigationInProgress.current && !location.pathname.includes('/login')) {
-          navigationInProgress.current = true;
-          navigate('/login');
-          navigationInProgress.current = false;
-        }
-      }
-    };
-
-    initializeAuth();
-
     return () => {
-      logAuthState('Cleaning up auth subscription');
       subscription.unsubscribe();
     };
-  }, [navigate, requireAuth, location.pathname]);
+  }, []);
 
-  // Add a function to refresh the session
-  const refreshSession = async () => {
+  const signIn = async (email: string) => {
     try {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (currentSession) {
-        setSession(currentSession);
-        setUser(currentSession.user);
-        console.log('AuthContext: Session refreshed:', {
-          userEmail: currentSession.user?.email,
-          userId: currentSession.user?.id
-        });
-      }
-    } catch (error) {
-      console.error("Error refreshing session:", error);
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) throw error;
+      toast({
+        title: "Check your email",
+        description: "We've sent you a magic link to sign in.",
+      });
+    } catch (error: any) {
+      console.error("Error signing in:", error);
+      toast({
+        title: "Sign In Error",
+        description: error.message || "Failed to sign in. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const signIn = async (email: string, password: string) => {
-    logAuthState('Attempting sign in for email:', { email });
+  const signUp = async (email: string, password: string, displayName: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        console.error("AuthProvider: Error signing in:", error);
-      } else {
-        logAuthState("Sign in successful");
-      }
-      return error;
-    } catch (error) {
-      console.error("AuthProvider: Exception during sign in:", error);
-      return error as AuthError;
-    }
-  };
-
-  const signUp = async (email: string, password: string) => {
-    console.log('AuthProvider: Attempting sign up for email:', email);
-    try {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) {
-        console.error("AuthProvider: Error signing up:", error);
-      } else {
-        console.log("AuthProvider: Sign up successful");
-      }
-      return error;
-    } catch (error) {
-      console.error("AuthProvider: Exception during sign up:", error);
-      return error as AuthError;
+      setLoading(true);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            display_name: displayName,
+          },
+        },
+      });
+      if (error) throw error;
+      toast({
+        title: "Check your email",
+        description: "We've sent you a confirmation link to verify your email.",
+      });
+      setUser(data.user);
+    } catch (error: any) {
+      console.error("Error signing up:", error);
+      toast({
+        title: "Sign Up Error",
+        description: error.message || "Failed to sign up. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
-    console.log('AuthProvider: Attempting sign out');
     try {
+      setLoading(true);
       await supabase.auth.signOut();
-      console.log('AuthProvider: Sign out successful');
-      navigate('/login');
-    } catch (error) {
-      console.error("AuthProvider: Error signing out:", error);
-    }
-  };
-
-  const resetPassword = async (token: string, newPassword: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      setUser(null);
+      router.push('/');
+    } catch (error: any) {
+      console.error("Error signing out:", error);
+      toast({
+        title: "Sign Out Error",
+        description: error.message || "Failed to sign out. Please try again.",
+        variant: "destructive",
       });
-      return error;
-    } catch (error) {
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPassword = async (email: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/update-password`,
+      });
+      if (error) throw error;
+      toast({
+        title: "Check your email",
+        description: "We've sent you a link to reset your password.",
+      });
+    } catch (error: any) {
       console.error("Error resetting password:", error);
-      return error as AuthError;
+      toast({
+        title: "Reset Password Error",
+        description:
+          error.message || "Failed to reset password. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const forgotPassword = async (email: string) => {
+  const updatePassword = async (newPassword: string) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      return error;
-    } catch (error) {
-      console.error("Error sending password reset email:", error);
-      return error as AuthError;
-    }
-  };
-
-  const updateProfile = async (data: Partial<User>) => {
-    try {
-      const { data: userData, error } = await supabase.auth.updateUser(data);
-      if (error) {
-        console.error("Error updating profile:", error);
-        return { user: null, error };
-      }
-      
-      // Refresh the session after profile update
-      await refreshSession();
-      
-      return { user: userData.user, error: null };
-    } catch (error) {
-      console.error("Error updating profile:", error);
-      return { user: null, error };
-    }
-  };
-
-  const updateEmail = async (email: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ email });
-      
-      // Refresh the session after email update
-      if (!error) {
-        await refreshSession();
-      }
-      
-      return error;
-    } catch (error) {
-      console.error("Error updating email:", error);
-      return error as AuthError;
-    }
-  };
-
-  const updatePassword = async (password: string) => {
-    try {
-      const { error } = await supabase.auth.updateUser({ password });
-      return error;
-    } catch (error) {
+      setLoading(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({
+        title: "Password Updated",
+        description: "Your password has been updated successfully.",
+      });
+    } catch (error: any) {
       console.error("Error updating password:", error);
-      return error as AuthError;
+      toast({
+        title: "Update Password Error",
+        description:
+          error.message || "Failed to update password. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const value = {
-    user,
-    session,
-    loading,
-    isLoading: loading,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    forgotPassword,
-    updateProfile,
-    updateEmail,
-    updatePassword,
-    refreshSession
+  const updateProfile = async (data: { user_metadata: { display_name?: string; avatar_url?: string; full_name?: string; } }) => {
+    try {
+      setLoading(true);
+      // Convert to the format expected by Supabase
+      const userData: UserAttributes = {
+        data: data.user_metadata
+      };
+      const { error } = await supabase.auth.updateUser(userData);
+      if (error) throw error;
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    } catch (error: any) {
+      console.error("Error updating profile:", error);
+      toast({
+        title: "Update Profile Error",
+        description:
+          error.message || "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+  const deleteAccount = async () => {
+    try {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
 
-export const useAuth = () => useContext(AuthContext);
+      if (!session) {
+        toast({
+          title: "Delete Account Error",
+          description: "No active session found.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-export const AuthRoute = ({ children }: { children: React.ReactNode }) => {
-  return <AuthProvider requireAuth={true}>{children}</AuthProvider>;
-};
+      // Call our serverless function to delete the user account
+      const SUPABASE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co";
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast({
+          title: "Delete Account Error",
+          description: result.error || "Failed to delete account.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Sign out the user locally after successful deletion
+      await supabase.auth.signOut();
+      setUser(null);
+      router.push('/');
+      toast({
+        title: "Account Deleted",
+        description: "Your account has been successfully deleted.",
+      });
+    } catch (error: any) {
+      console.error("Error deleting account:", error);
+      toast({
+        title: "Delete Account Error",
+        description: error.message || "Failed to delete account. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update the AuthProvider to include Progressier sync
+  const contextValue = {
+    user,
+    loading,
+    signIn,
+    signOut,
+    signUp,
+    resetPassword,
+    updatePassword,
+    updateProfile,
+    deleteAccount,
+  };
+
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+      {/* Add Progressier sync component */}
+      <ProgressierSync />
+    </AuthContext.Provider>
+  );
+}
+
+// Add ProgressierSync component at the end of the file
+function ProgressierSync() {
+  const { user } = useAuth();
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Only render on client side and when user is authenticated
+  if (!mounted || !user) return null;
+
+  return <ProgressierSyncComponent />;
+}
+
+function ProgressierSyncComponent() {
+  const { isSync, syncError, retrySync } = useProgressierSync();
+
+  // Show error toast if sync fails
+  React.useEffect(() => {
+    if (syncError) {
+      console.error('Progressier sync error:', syncError);
+      // Don't show error toast to user as this is not critical for app functionality
+    }
+  }, [syncError]);
+
+  // Show success message when sync completes (optional, can be removed)
+  React.useEffect(() => {
+    if (isSync) {
+      console.log('Progressier sync completed successfully');
+    }
+  }, [isSync]);
+
+  return null; // This component doesn't render anything visible
+}
