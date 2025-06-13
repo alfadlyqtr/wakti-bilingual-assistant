@@ -1,3 +1,4 @@
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -285,7 +286,6 @@ export const en = {
   left: "Left",
   right: "Right",
   front: "Front",
-  back: "Back",
   side: "Side",
   corner: "Corner",
   edge: "Edge",
@@ -1038,7 +1038,6 @@ export const en = {
   contactUs: "Contact Us",
   privacyAndTerms: "Privacy & Terms",
   allRightsReserved: "All Rights Reserved",
-  lastUpdated: "Last Updated",
   june11_2025: "June 11, 2025",
   legalCompliance: "Legal Compliance",
   legalComplianceText: "We comply with all applicable laws and regulations",
