@@ -95,25 +95,38 @@ serve(async (req) => {
       )
     }
 
-    // Try Runware first
-    const runwareResponse = await fetch('https://api.runware.ai/v1/images/generations', {
+    // Use the correct Runware API format (same as working implementation)
+    console.log('🎨 Generating image with Runware API for prompt:', prompt)
+    
+    const runwareResponse = await fetch('https://api.runware.ai/v1', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${runwareApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        prompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion`,
-        width,
-        height,
-        style,
-        num_images: 1,
-        model: "runware:100@1"
-      }),
+      body: JSON.stringify([
+        {
+          taskType: "authentication",
+          apiKey: runwareApiKey
+        },
+        {
+          taskType: "imageInference",
+          taskUUID: crypto.randomUUID(),
+          positivePrompt: `Event background: ${prompt}. High quality, professional, suitable for event promotion with good contrast for text overlay.`,
+          width,
+          height,
+          model: "runware:100@1",
+          numberResults: 1,
+          outputFormat: "WEBP",
+          CFGScale: 1,
+          scheduler: "FlowMatchEulerDiscreteScheduler",
+          strength: 0.8
+        }
+      ]),
     })
 
     if (!runwareResponse.ok) {
-      console.error('Runware API error:', await runwareResponse.text())
+      console.error('🎨 Runware API error:', await runwareResponse.text())
       
       // Fallback to OpenAI if Runware fails
       const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
@@ -160,16 +173,21 @@ serve(async (req) => {
     }
 
     const data = await runwareResponse.json()
+    console.log('🎨 Runware response data:', data)
+
+    // Find the image generation result in the response array
+    const imageResult = data.data?.find((item: any) => item.taskType === "imageInference")
     
-    if (!data.data || !data.data[0] || !data.data[0].imageURL) {
-      throw new Error('Invalid response from Runware API')
+    if (!imageResult || !imageResult.imageURL) {
+      console.error('Invalid response from Runware API:', data)
+      throw new Error('Invalid response from Runware API - no image URL found')
     }
 
     console.log('Successfully generated image via Runware')
 
     return new Response(
       JSON.stringify({ 
-        imageUrl: data.data[0].imageURL,
+        imageUrl: imageResult.imageURL,
         provider: 'runware'
       }),
       { 
