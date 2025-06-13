@@ -61,5 +61,17 @@ export const tasks = {
   snoozeRequestsTitle: "Snooze Requests",
   snoozeRequests: "Snooze Requests",
   reason: "Reason",
-  noSnoozeRequests: "No snooze requests"
+  noSnoozeRequests: "No snooze requests",
+  
+  // New additions for current fixes
+  loadingTasks: "Loading tasks...",
+  confirmDeleteTask: "Are you sure you want to delete this task?",
+  taskSnoozedUntilTomorrow: "Task snoozed until tomorrow",
+  errorUpdatingTask: "Error updating task",
+  errorSnoozingTask: "Error snoozing task",
+  errorDeletingTask: "Error deleting task",
+  errorCopyingLink: "Error copying link",
+  dueOn: "Due on",
+  hideSubtasks: "Hide",
+  showSubtasks: "Show"
 };

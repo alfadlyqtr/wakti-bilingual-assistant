@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -59,7 +60,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
       onTasksChanged();
     } catch (error) {
       console.error('Error toggling task completion:', error);
-      toast.error('Error updating task');
+      toast.error(t('errorUpdatingTask', language));
     }
   };
 
@@ -71,23 +72,23 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
       };
       
       await TRService.updateTask(task.id, updates);
-      toast.success('Task snoozed until tomorrow');
+      toast.success(t('taskSnoozedUntilTomorrow', language));
       onTasksChanged();
     } catch (error) {
       console.error('Error snoozing task:', error);
-      toast.error('Error snoozing task');
+      toast.error(t('errorSnoozingTask', language));
     }
   };
 
   const handleDeleteTask = async (task: TRTask) => {
-    if (confirm('Are you sure you want to delete this task?')) {
+    if (confirm(t('confirmDeleteTask', language))) {
       try {
         await TRService.deleteTask(task.id);
         toast.success(t('taskDeleted', language));
         onTasksChanged();
       } catch (error) {
         console.error('Error deleting task:', error);
-        toast.error('Error deleting task');
+        toast.error(t('errorDeletingTask', language));
       }
     }
   };
@@ -100,7 +101,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
         toast.success(t('linkCopied', language));
       } catch (error) {
         console.error('Error copying to clipboard:', error);
-        toast.error('Error copying link');
+        toast.error(t('errorCopyingLink', language));
       }
     }
   };
@@ -191,7 +192,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                   <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
                     <Clock className="w-4 h-4" />
                     <span>
-                      Due on {format(parseISO(task.due_date), 'MMM dd, yyyy')}
+                      {t('dueOn', language)} {format(parseISO(task.due_date), 'MMM dd, yyyy')}
                       {task.due_time && ` at ${task.due_time}`}
                     </span>
                   </div>
@@ -214,7 +215,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                   onClick={() => toggleTaskExpanded(task.id)}
                   className="mt-2 h-8 px-2 text-xs"
                 >
-                  {expandedTasks.has(task.id) ? 'Hide' : 'Show'} {t('subtasks', language)}
+                  {expandedTasks.has(task.id) ? t('hideSubtasks', language) : t('showSubtasks', language)} {t('subtasks', language)}
                 </Button>
 
                 {/* Subtasks - View Only */}

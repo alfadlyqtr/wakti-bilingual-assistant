@@ -41,7 +41,7 @@ export default function TasksReminders() {
     
     if (error) {
       console.error('T&R Page - Auth error:', error);
-      setError('Authentication error. Please refresh the page.');
+      setError(t('error', language) + ': Authentication error. Please refresh the page.');
     } else if (!user) {
       console.error('T&R Page - No user authenticated');
       setError('Please log in to view your tasks and reminders.');
@@ -71,7 +71,7 @@ export default function TasksReminders() {
       console.error('T&R Page - Error loading data:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to load data';
       setError(errorMessage);
-      toast.error(`Error loading T&R data: ${errorMessage}`);
+      toast.error(`${t('error', language)}: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -118,10 +118,10 @@ export default function TasksReminders() {
       <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95">
         <div className="max-w-md mx-auto">
           <div className="text-center py-8">
-            <div className="text-red-500 mb-4">Error</div>
+            <div className="text-red-500 mb-4">{t('error', language)}</div>
             <p className="text-muted-foreground mb-4">{error}</p>
             <Button onClick={loadData} variant="outline">
-              Retry
+              {t('retry', language)}
             </Button>
           </div>
         </div>
@@ -132,13 +132,6 @@ export default function TasksReminders() {
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
       <div className="max-w-md mx-auto space-y-4">
-        {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-            Debug: Tasks={tasks.length}, Reminders={reminders.length}, Loading={loading.toString()}
-          </div>
-        )}
-
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
@@ -164,7 +157,7 @@ export default function TasksReminders() {
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">Loading tasks...</p>
+                <p className="text-sm text-muted-foreground mt-2">{t('loadingTasks', language)}</p>
               </div>
             ) : (
               <TaskList 
@@ -188,7 +181,7 @@ export default function TasksReminders() {
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">Loading reminders...</p>
+                <p className="text-sm text-muted-foreground mt-2">{t('loadingReminders', language)}</p>
               </div>
             ) : (
               <ReminderList 
@@ -204,14 +197,14 @@ export default function TasksReminders() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">{t('activityMonitor', language)}</h2>
               <Button onClick={loadData} variant="outline" size="sm">
-                Refresh
+                {t('refresh', language)}
               </Button>
             </div>
 
             {loading ? (
               <div className="text-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">Loading activity...</p>
+                <p className="text-sm text-muted-foreground mt-2">{t('loadingActivity', language)}</p>
               </div>
             ) : (
               <ActivityMonitor tasks={tasks} onTasksChanged={handleDataChanged} />

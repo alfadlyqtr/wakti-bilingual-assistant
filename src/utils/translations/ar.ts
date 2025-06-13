@@ -517,5 +517,27 @@ export const ar = {
   maw3dEvents: "أحداث Maw3d",
   dragModeActivated: "تم تفعيل وضع السحب",
   dragModeDeactivated: "تم إلغاء تفعيل وضع السحب",
+  
+  // Tasks & Reminders specific Arabic translations
+  loadingTasks: "جاري تحميل المهام...",
+  loadingReminders: "جاري تحميل التذكيرات...",
+  loadingActivity: "جاري تحميل النشاط...",
+  refresh: "تحديث",
+  retry: "إعادة المحاولة",
+  error: "خطأ",
+  confirmDeleteTask: "هل أنت متأكد من أنك تريد حذف هذه المهمة؟",
+  taskSnoozedUntilTomorrow: "تم تأجيل المهمة حتى الغد",
+  errorUpdatingTask: "خطأ في تحديث المهمة",
+  errorSnoozingTask: "خطأ في تأجيل المهمة",
+  errorDeletingTask: "خطأ في حذف المهمة",
+  errorCopyingLink: "خطأ في نسخ الرابط",
+  dueOn: "مستحق في",
+  hideSubtasks: "إخفاء",
+  showSubtasks: "إظهار",
+  confirmDeleteReminder: "هل أنت متأكد من أنك تريد حذف هذا التذكير؟",
+  snoozeReminder: "تأجيل التذكير ليوم واحد",
+  errorSnoozing: "فشل في تأجيل التذكير",
+  errorDeleting: "فشل في حذف التذكير",
+  overdue: "متأخر",
+  activityMonitor: "مراقب النشاط"
 };
-

@@ -66,7 +66,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       setReminders(activeReminders);
     } catch (error) {
       console.error('ReminderList - Error loading reminders:', error);
-      toast.error('Failed to load reminders');
+      toast.error(t('errorLoadingReminders', language));
       setReminders([]);
     } finally {
       setLoading(false);
@@ -86,7 +86,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
     try {
       console.log('ReminderList - Snoozing reminder:', reminder.id);
       await TRService.snoozeReminder(reminder.id);
-      toast.success('Reminder snoozed for 1 day');
+      toast.success(t('snoozeReminder', language));
       if (onRemindersChanged) {
         onRemindersChanged();
       } else {
@@ -95,12 +95,12 @@ export const ReminderList: React.FC<ReminderListProps> = ({
       onReminderUpdate?.();
     } catch (error) {
       console.error('ReminderList - Error snoozing reminder:', error);
-      toast.error('Failed to snooze reminder');
+      toast.error(t('errorSnoozing', language));
     }
   };
 
   const handleDeleteReminder = async (reminder: TRReminder) => {
-    if (window.confirm('Are you sure you want to delete this reminder?')) {
+    if (window.confirm(t('confirmDeleteReminder', language))) {
       try {
         console.log('ReminderList - Deleting reminder:', reminder.id);
         await TRService.deleteReminder(reminder.id);
@@ -113,7 +113,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
         onReminderUpdate?.();
       } catch (error) {
         console.error('ReminderList - Error deleting reminder:', error);
-        toast.error('Failed to delete reminder');
+        toast.error(t('errorDeleting', language));
       }
     }
   };
@@ -188,7 +188,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                       </div>
                     )}
                     {isOverdue(reminder) && (
-                      <span className="text-red-600 font-medium">Overdue</span>
+                      <span className="text-red-600 font-medium">{t('overdue', language)}</span>
                     )}
                   </div>
                 </div>
@@ -206,7 +206,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleSnoozeReminder(reminder)}>
                       <Pause className="h-4 w-4 mr-2" />
-                      Snooze
+                      {t('snooze', language)}
                     </DropdownMenuItem>
                     <DropdownMenuItem 
                       onClick={() => handleDeleteReminder(reminder)}
