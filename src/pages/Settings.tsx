@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -5,18 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToastHelper } from '@/hooks/use-toast-helper';
 import { useTheme } from '@/providers/ThemeProvider';
-import { translations } from '@/utils/translations';
-import { NotificationSettings } from '@/components/notifications/NotificationSettings';
-import PageContainer from '@/components/PageContainer';
+import { t } from '@/utils/translations';
+import NotificationSettings from '@/components/notifications/NotificationSettings';
+import { PageContainer } from '@/components/PageContainer';
+import { Sun, Moon } from 'lucide-react';
 
 export default function Settings() {
   const { user, updateProfile, updatePassword, deleteAccount } = useAuth();
   const { showSuccess, showError } = useToastHelper();
   const { language, theme, setTheme, setLanguage } = useTheme();
-  const t = translations[language];
 
   const [profileData, setProfileData] = useState({
     displayName: '',
@@ -109,7 +111,7 @@ export default function Settings() {
     <PageContainer>
       <div className="container mx-auto max-w-4xl p-6">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold">{t.navigation.settings}</h1>
+          <h1 className="text-3xl font-bold">{t('settings', language)}</h1>
           <p className="text-muted-foreground mt-2">
             Manage your account settings and preferences
           </p>
@@ -117,11 +119,11 @@ export default function Settings() {
 
         <Tabs defaultValue="account" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="account">{t.settings.account}</TabsTrigger>
-            <TabsTrigger value="appearance">{t.settings.appearance}</TabsTrigger>
-            <TabsTrigger value="notifications">{t.settings.notifications}</TabsTrigger>
-            <TabsTrigger value="privacy">{t.settings.privacy}</TabsTrigger>
-            <TabsTrigger value="about">{t.settings.about}</TabsTrigger>
+            <TabsTrigger value="account">{t('account', language)}</TabsTrigger>
+            <TabsTrigger value="appearance">{t('appearance', language)}</TabsTrigger>
+            <TabsTrigger value="notifications">{t('notifications', language)}</TabsTrigger>
+            <TabsTrigger value="privacy">{t('privacy', language)}</TabsTrigger>
+            <TabsTrigger value="about">{t('about', language)}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="account" className="space-y-6">

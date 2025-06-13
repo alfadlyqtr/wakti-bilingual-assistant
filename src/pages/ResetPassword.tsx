@@ -1,15 +1,16 @@
+
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { resetPassword } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -32,14 +33,14 @@ export default function ResetPassword() {
     setIsLoading(true);
     
     try {
-      const error = await resetPassword(token, password);
+      const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         toast.error(error.message);
       } else {
         toast.success("Password reset successful. You can now log in with your new password");
         navigate("/login");
       }
-    } catch (error) {
+    } catch (error: any) {
       toast.error("Password reset failed. Please try again or request a new reset link");
     } finally {
       setIsLoading(false);

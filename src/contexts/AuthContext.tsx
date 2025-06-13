@@ -9,14 +9,19 @@ import { useProgressierSync } from '@/hooks/useProgressierSync';
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   loading: boolean;
+  isLoading: boolean;
   signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
   updatePassword: (newPassword: string) => Promise<void>;
+  updateEmail: (newEmail: string) => Promise<void>;
   updateProfile: (data: { user_metadata: { display_name?: string; avatar_url?: string; full_name?: string; } }) => Promise<void>;
   deleteAccount: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,6 +36,7 @@ export function useAuth(): AuthContextType {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
@@ -41,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
 
+        setSession(session);
         setUser(session?.user ?? null);
       } catch (error) {
         console.error("Error getting session:", error);
@@ -55,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for changes on auth state (login, signout, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        setSession(session);
         setUser(session?.user ?? null);
       }
     );
@@ -106,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       await supabase.auth.signOut();
       setUser(null);
+      setSession(null);
       navigate('/');
     } catch (error: any) {
       console.error("Error signing out:", error);
@@ -131,6 +140,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const forgotPassword = async (email: string) => {
+    return resetPassword(email);
+  };
+
   const updatePassword = async (newPassword: string) => {
     try {
       setLoading(true);
@@ -140,6 +153,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error("Error updating password:", error);
       showError(error.message || "Failed to update password. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateEmail = async (newEmail: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      if (error) throw error;
+      showSuccess("Your email has been updated successfully.");
+    } catch (error: any) {
+      console.error("Error updating email:", error);
+      showError(error.message || "Failed to update email. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -160,6 +187,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       showError(error.message || "Failed to update profile. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshSession = async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.refreshSession();
+      if (error) throw error;
+      setSession(session);
+      setUser(session?.user ?? null);
+    } catch (error: any) {
+      console.error("Error refreshing session:", error);
     }
   };
 
@@ -193,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Sign out the user locally after successful deletion
       await supabase.auth.signOut();
       setUser(null);
+      setSession(null);
       navigate('/');
       showSuccess("Your account has been successfully deleted.");
     } catch (error: any) {
@@ -206,14 +245,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Update the AuthProvider to include Progressier sync
   const contextValue = {
     user,
+    session,
     loading,
+    isLoading: loading,
     signIn,
     signOut,
     signUp,
     resetPassword,
+    forgotPassword,
     updatePassword,
+    updateEmail,
     updateProfile,
     deleteAccount,
+    refreshSession,
   };
 
   return (
