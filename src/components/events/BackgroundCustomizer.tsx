@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Palette, Image, Sparkles, Upload, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Maw3dService } from "@/services/maw3dService";
 
 interface BackgroundCustomizerProps {
   onBackgroundChange: (background: {
@@ -118,50 +118,19 @@ export default function BackgroundCustomizer({
       console.log('Starting AI image generation...');
       console.log('Full prompt:', fullPrompt);
 
-      const { data, error } = await supabase.functions.invoke('generate-event-image', {
-        body: { 
-          prompt: fullPrompt,
-          width: 1200,
-          height: 600,
-          style: 'photographic'
-        }
+      // Use the working Maw3dService.generateAIBackground method
+      const imageUrl = await Maw3dService.generateAIBackground(fullPrompt);
+
+      console.log('AI image generated successfully:', imageUrl);
+      onBackgroundChange({
+        type: 'ai',
+        backgroundImage: imageUrl
       });
-
-      console.log('Edge function response:', { data, error });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        toast.error(`AI generation failed: ${error.message || 'Unknown error'}`);
-        return;
-      }
-
-      if (!data) {
-        console.error('No data returned from edge function');
-        toast.error('No response from AI service');
-        return;
-      }
-
-      if (data.error) {
-        console.error('AI service error:', data.error);
-        toast.error(`AI service error: ${data.error}`);
-        return;
-      }
-
-      if (data.imageUrl) {
-        console.log('AI image generated successfully:', data.imageUrl);
-        onBackgroundChange({
-          type: 'ai',
-          backgroundImage: data.imageUrl
-        });
-        toast.success(`Image generated successfully${data.provider ? ` via ${data.provider}` : ''}`);
-        setAiPrompt('');
-      } else {
-        console.error('No image URL in response:', data);
-        toast.error('No image was generated. Please try again.');
-      }
+      toast.success('Image generated successfully');
+      setAiPrompt('');
     } catch (error) {
-      console.error('Unexpected error generating AI image:', error);
-      toast.error('Failed to generate AI image. Please check your connection and try again.');
+      console.error('Error generating AI image:', error);
+      toast.error('Failed to generate AI image. Please try again.');
     } finally {
       setIsGenerating(false);
     }
