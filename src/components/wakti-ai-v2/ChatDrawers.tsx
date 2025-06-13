@@ -1,35 +1,33 @@
 
 import React from 'react';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useTheme } from '@/providers/ThemeProvider';
 import { ConversationsList } from './ConversationsList';
 import { QuickActionsPanel } from './QuickActionsPanel';
-
-interface Conversation {
-  id: string;
-  created_at: string;
-  name: string;
-  user_id: string;
-  title?: string;
-  last_message_at?: string;
-}
+import { AIConversation } from '@/services/WaktiAIV2Service';
 
 interface ChatDrawersProps {
   showConversations: boolean;
   setShowConversations: (show: boolean) => void;
   showQuickActions: boolean;
   setShowQuickActions: (show: boolean) => void;
-  conversations: Conversation[];
-  onSelectConversation: (conversationId: string) => void;
-  onDeleteConversation: (conversationId: string) => void;
-  onClearChat: () => void;
-  onNewConversation: () => void;
-  isLoading: boolean;
-  activeTrigger: string;
-  onSendMessage: (message: string) => void;
-  setActiveTrigger: (trigger: string) => void;
+  conversations: AIConversation[];
   currentConversationId: string | null;
+  onSelectConversation: (id: string) => void;
+  onDeleteConversation: (id: string) => void;
+  fetchConversations: () => void;
+  onSendMessage: (message: string) => void;
+  activeTrigger: string;
+  onTriggerChange: (trigger: string) => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
+  onNewConversation: () => void;
+  onClearChat: () => void;
   sessionMessages: any[];
 }
 
@@ -39,48 +37,39 @@ export function ChatDrawers({
   showQuickActions,
   setShowQuickActions,
   conversations,
+  currentConversationId,
   onSelectConversation,
   onDeleteConversation,
-  onClearChat,
-  onNewConversation,
-  isLoading,
-  activeTrigger,
+  fetchConversations,
   onSendMessage,
-  setActiveTrigger,
-  currentConversationId,
+  activeTrigger,
+  onTriggerChange,
+  onTextGenerated,
+  onNewConversation,
+  onClearChat,
   sessionMessages
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
-  // Transform conversations to match expected format
-  const transformedConversations = conversations.map(conv => ({
-    ...conv,
-    title: conv.name || conv.title || 'Untitled Conversation',
-    last_message_at: conv.last_message_at || conv.created_at
-  }));
-
-  // Mock refresh function
-  const handleRefresh = () => {
-    // This would typically refetch conversations
-    console.log('Refreshing conversations...');
-  };
-
   return (
     <>
-      {/* Conversations Drawer */}
+      {/* Left Drawer - Conversations */}
       <Sheet open={showConversations} onOpenChange={setShowConversations}>
-        <SheetContent side="left" className="w-80">
-          <SheetHeader>
-            <SheetTitle>
-              {language === 'ar' ? 'المحادثات' : 'Conversations'}
-            </SheetTitle>
+        <SheetContent side="left" className="w-80 p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle>{language === 'ar' ? 'المحادثات' : 'Conversations'}</SheetTitle>
+            <SheetDescription>
+              {language === 'ar'
+                ? 'اختر محادثة موجودة أو ابدأ واحدة جديدة.'
+                : 'Select an existing conversation or start a new one.'}
+            </SheetDescription>
           </SheetHeader>
           <ConversationsList
-            conversations={transformedConversations}
+            conversations={conversations}
             currentConversationId={currentConversationId}
             onSelectConversation={onSelectConversation}
             onDeleteConversation={onDeleteConversation}
-            onRefresh={handleRefresh}
+            onRefresh={fetchConversations}
             onClose={() => setShowConversations(false)}
             onNewConversation={onNewConversation}
             onClearChat={onClearChat}
@@ -89,18 +78,15 @@ export function ChatDrawers({
         </SheetContent>
       </Sheet>
 
-      {/* Quick Actions Drawer */}
+      {/* Right Drawer - Quick Actions */}
       <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
-        <SheetContent side="right" className="w-80">
-          <SheetHeader>
-            <SheetTitle>
-              {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
-            </SheetTitle>
-          </SheetHeader>
-          <QuickActionsPanel 
+        <SheetContent side="right" className="w-80 p-4">
+          <QuickActionsPanel
             onSendMessage={onSendMessage}
             activeTrigger={activeTrigger as any}
-            onTriggerChange={setActiveTrigger}
+            onTriggerChange={onTriggerChange}
+            onTextGenerated={onTextGenerated}
+            onClose={() => setShowQuickActions(false)}
           />
         </SheetContent>
       </Sheet>

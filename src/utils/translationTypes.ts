@@ -1207,23 +1207,4 @@ export type TranslationKey =
   | "textDecoration"
   | "bold"
   | "italic"
-  | "underline"
-  
-  // Enhanced task creation system keys
-  | "confirmTask"
-  | "confirmReminder"
-  | "editAndConfirmTask"
-  | "editAndConfirmReminder"
-  | "taskPreparedForReview"
-  | "clarificationNeeded"
-  | "provideInformation"
-  | "taskCreationCancelled"
-  | "requestNewTask"
-  | "taskConfirmationCard"
-  | "editableTaskCard"
-  | "needsConfirmation"
-  | "needsClarification"
-  | "pendingTaskData"
-  | "partialTaskData"
-  | "missingFields"
-  | "enhancedTaskSystem";
+  | "underline";

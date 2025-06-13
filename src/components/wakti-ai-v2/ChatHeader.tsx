@@ -7,42 +7,30 @@ import { ActiveModeIndicator } from './ActiveModeIndicator';
 import { SearchQuotaIndicator } from './SearchQuotaIndicator';
 
 interface ChatHeaderProps {
+  currentConversationId: string | null;
   activeTrigger: string;
-  setActiveTrigger: (trigger: string) => void;
+  onShowConversations: () => void;
   onNewConversation: () => void;
-  onToggleConversations: () => void;
-  onToggleQuickActions: () => void;
+  onShowQuickActions: () => void;
   quotaStatus?: any;
-  searchConfirmationRequired: boolean;
-  onSearchConfirmation: () => void;
-  remainingFreeSearches: number;
-  extraSearches: number;
-  isAtSearchLimit: boolean;
-  translationQuota: any;
-  MAX_DAILY_TRANSLATIONS: number;
+  searchQuotaStatus?: any;
 }
 
 export function ChatHeader({
+  currentConversationId,
   activeTrigger,
-  setActiveTrigger,
+  onShowConversations,
   onNewConversation,
-  onToggleConversations,
-  onToggleQuickActions,
+  onShowQuickActions,
   quotaStatus,
-  searchConfirmationRequired,
-  onSearchConfirmation,
-  remainingFreeSearches,
-  extraSearches,
-  isAtSearchLimit,
-  translationQuota,
-  MAX_DAILY_TRANSLATIONS
+  searchQuotaStatus
 }: ChatHeaderProps) {
   const { language } = useTheme();
 
   return (
     <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={onToggleConversations} className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onShowConversations} className="flex items-center gap-2">
           <History size={16} />
           <span className="hidden sm:inline">
             {language === 'ar' ? 'المحادثات' : 'History'}
@@ -57,7 +45,7 @@ export function ChatHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" onClick={onToggleQuickActions} className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={onShowQuickActions} className="flex items-center gap-2">
           <Zap size={16} />
           <span className="hidden sm:inline">
             {language === 'ar' ? 'الأدوات' : 'Tools'}
