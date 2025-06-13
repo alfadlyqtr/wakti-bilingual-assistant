@@ -1,3 +1,4 @@
+
 export const en = {
   welcome: "Welcome",
   login: "Login",
@@ -338,7 +339,6 @@ export const en = {
   competition: "Competition",
   conflict: "Conflict",
   disagreement: "Disagreement",
-  agreement: "Agreement",
   contract: "Contract",
   deal: "Deal",
   transaction: "Transaction",
@@ -400,7 +400,6 @@ export const en = {
   history: "History",
   current: "Current",
   upcoming: "Upcoming",
-  previous: "Previous",
   following: "Following",
   preceding: "Preceding",
   before: "Before",
@@ -525,7 +524,7 @@ export const en = {
   newPassword: "New Password",
   updating: "Updating...",
   
-  // Additional missing keys from build errors
+  // Additional keys for various components
   privateEvent: "Private Event",
   eventCreated: "Event Created",
   rsvpDeadlinePassed: "RSVP Deadline Passed",
@@ -581,7 +580,6 @@ export const en = {
   googleMapsLink: "Google Maps Link",
   textStyling: "Text Styling",
   backgroundCustomization: "Background Customization",
-  privacySettings: "Privacy Settings",
   enableShareableLink: "Enable Shareable Link",
   showAttendingCount: "Show Attending Count",
   shareableLinkDescription: "Anyone with the link can view this event",
@@ -643,7 +641,7 @@ export const en = {
   passwordUpdated: "Password updated successfully",
   errorSigningOut: "Error signing out",
   
-  // Missing keys from the build errors
+  // More comprehensive keys
   maw3dEvents: "Maw3d Events",
   manageEvent: "Manage Event",
   createEvent: "Create Event",
@@ -702,8 +700,6 @@ export const en = {
   errorLoadingRequests: "Error loading requests",
   noContactRequests: "No contact requests",
   waitingForRequests: "Waiting for requests",
-  
-  // Additional missing keys from ContactSearch and other components
   requestSent: "Request sent",
   errorSendingRequest: "Error sending request",
   enterAtLeastThreeCharacters: "Enter at least three characters",
@@ -886,7 +882,6 @@ export const en = {
   saveToCloud: "Save to cloud",
   syncWithCloud: "Sync with cloud",
   cloudSync: "Cloud sync",
-  offline: "Offline",
   offlineMode: "Offline mode",
   onlineMode: "Online mode",
   connectionLost: "Connection lost",
@@ -926,8 +921,6 @@ export const en = {
   reloadPage: "Reload page",
   reloadApp: "Reload app",
   refreshApp: "Refresh app",
-  
-  // More missing keys from the errors
   user: "User",
   title: "Title",
   date: "Date",
@@ -971,8 +964,6 @@ export const en = {
   noSnoozeRequests: "No snooze requests",
   failedToUpdateReminder: "Failed to update reminder",
   failedToCreateReminder: "Failed to create reminder",
-  
-  // TR specific keys
   editReminder: "Edit reminder",
   createReminder: "Create reminder",
   enterReminderTitle: "Enter reminder title",
@@ -1011,8 +1002,6 @@ export const en = {
   markComplete: "Mark complete",
   snooze: "Snooze",
   shareLink: "Share link",
-  
-  // Additional missing keys from current errors
   username: "Username",
   updatePassword: "Update Password",
   blocked: "Blocked",
@@ -1047,8 +1036,6 @@ export const en = {
   reminders: "Reminders",
   activityMonitor: "Activity Monitor",
   time: "Time",
-  
-  // Footer and new pages
   contactUs: "Contact Us",
   privacyAndTerms: "Privacy & Terms",
   allRightsReserved: "All Rights Reserved",
@@ -1083,8 +1070,6 @@ export const en = {
   enterYourMessage: "Enter your message",
   sending: "Sending...",
   messageSubmitted: "Message submitted",
-
-  // Legal/Privacy Policy keys - New additions
   privacyPolicyHeader: "Privacy Policy",
   lastUpdatedDate: "Last Updated: June 11, 2023",
   welcomeText: "Welcome to our Privacy Policy",
@@ -1145,8 +1130,6 @@ export const en = {
   footerQuote: "Your privacy is our priority.",
   footerCopyright: "© 2023 All Rights Reserved.",
   footerWarning: "This document was last updated on June 11, 2023.",
-
-  // New landing page content keys that were missing
   loginBtn: "Login",
   mainTagline: "Organize your life with AI",
   heroSubtitle: "The all-in-one productivity app with powerful AI features",
@@ -1179,13 +1162,9 @@ export const en = {
   priorityManagement: "Priority management",
   voiceMessaging: "Voice messaging",
   privacyControl: "Privacy control",
-  
-  // Dashboard specific keys that are missing
   dragMode: "Drag mode",
   dragModeActivated: "Drag mode activated",
   dragModeDeactivated: "Drag mode deactivated",
-  
-  // NEW KEYS TO FIX THE CURRENT BUILD ERRORS:
   retry: "Retry",
   loadingTasks: "Loading tasks",
   loadingReminders: "Loading reminders",
@@ -1204,16 +1183,12 @@ export const en = {
   dueOn: "Due on",
   hideSubtasks: "Hide subtasks",
   showSubtasks: "Show subtasks",
-  
-  // New translation keys for fixing build errors
   fontWeight: "Font weight",
   bold: "Bold",
   fontStyle: "Font style",
   italic: "Italic",
   textDecoration: "Text decoration",
   underline: "Underline",
-  
-  // Help page specific keys
   howToUseWakti: "How to use Wakti",
   helpAndGuides: "Help and guides",
   tableOfContents: "Table of contents",
