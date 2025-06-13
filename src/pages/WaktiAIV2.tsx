@@ -25,6 +25,7 @@ const WaktiAIV2 = () => {
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [pendingTaskData, setPendingTaskData] = useState<any>(null);
   
   const [calendarContext, setCalendarContext] = useState<any>(null);
   const [userContext, setUserContext] = useState<any>(null);
