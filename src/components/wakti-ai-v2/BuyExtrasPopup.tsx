@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { useSearchQuotaManagement } from '@/hooks/useSearchQuotaManagement';
-import { Coins, Zap, Loader2, CheckCircle, Mic, Languages, Search } from 'lucide-react';
+import { Coins, Zap, Loader2, CheckCircle, Mic, Languages } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BuyExtrasPopupProps {
@@ -31,18 +30,9 @@ export function BuyExtrasPopup({
     purchaseExtraTranslations,
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
-  const {
-    remainingFreeSearches,
-    extraSearches,
-    MAX_MONTHLY_SEARCHES,
-    SEARCH_PACKAGE_SIZE,
-    SEARCH_PACKAGE_PRICE,
-    purchaseSearchPackage
-  } = useSearchQuotaManagement(language);
 
   const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
   const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
-  const [isSearchPurchasing, setIsSearchPurchasing] = useState(false);
 
   const handlePurchaseVoiceCredits = async () => {
     setIsVoicePurchasing(true);
@@ -98,33 +88,6 @@ export function BuyExtrasPopup({
     }
   };
 
-  const handlePurchaseSearches = async () => {
-    setIsSearchPurchasing(true);
-    console.log('🛒 Starting search package purchase...');
-    try {
-      const success = await purchaseSearchPackage();
-      console.log('🛒 Search package purchase result:', success);
-      if (success) {
-        toast.success(language === 'ar' ? `تم شراء ${SEARCH_PACKAGE_SIZE} بحث إضافي بنجاح!` : `Successfully purchased ${SEARCH_PACKAGE_SIZE} extra searches!`, {
-          description: language === 'ar' ? 'صالح لمدة 30 يوماً من تاريخ الشراء' : 'Valid for 30 days from purchase date'
-        });
-        setTimeout(() => onOpenChange(false), 1500);
-      } else {
-        console.error('❌ Search package purchase failed');
-        toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed', {
-          description: language === 'ar' ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' : 'Please try again or contact support'
-        });
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error during search package purchase:', error);
-      toast.error(language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error', {
-        description: language === 'ar' ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' : 'An unexpected error occurred, please try again later'
-      });
-    } finally {
-      setIsSearchPurchasing(false);
-    }
-  };
-
   const getVoiceQuotaStatus = () => {
     const used = userVoiceQuota.characters_used;
     const limit = userVoiceQuota.characters_limit;
@@ -144,18 +107,10 @@ export function BuyExtrasPopup({
     };
   };
 
-  const getSearchQuotaStatus = () => {
-    return {
-      remaining: remainingFreeSearches,
-      extraSearches: extraSearches
-    };
-  };
-
   const voiceStatus = getVoiceQuotaStatus();
   const translationStatus = getTranslationQuotaStatus();
-  const searchStatus = getSearchQuotaStatus();
 
-  const anyPurchaseInProgress = isVoicePurchasing || isTranslationPurchasing || isSearchPurchasing;
+  const anyPurchaseInProgress = isVoicePurchasing || isTranslationPurchasing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,18 +152,6 @@ export function BuyExtrasPopup({
                 {translationStatus.extraTranslations > 0 && (
                   <span className="text-green-600 ml-2">
                     - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{translationStatus.extraTranslations}
-                  </span>
-                )}
-              </div>
-
-              {/* Monthly Searches */}
-              <div className="text-sm">
-                <span>
-                  {language === 'ar' ? 'البحث الشهري:' : 'Monthly Searches:'} {searchStatus.remaining}/{MAX_MONTHLY_SEARCHES} {language === 'ar' ? 'متبقي' : 'remaining'}
-                </span>
-                {searchStatus.extraSearches > 0 && (
-                  <span className="text-green-600 ml-2">
-                    - {language === 'ar' ? 'إضافية:' : 'Extra:'} +{searchStatus.extraSearches}
                   </span>
                 )}
               </div>
@@ -268,39 +211,6 @@ export function BuyExtrasPopup({
                   </div>
                   <Button onClick={handlePurchaseTranslations} disabled={isTranslationPurchasing || anyPurchaseInProgress} className="bg-orange-600 hover:bg-orange-700" size="sm">
                     {isTranslationPurchasing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4 mr-2" />
-                        {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Search Package */}
-            <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm flex items-center gap-2">
-                  <Search className="h-4 w-4 text-blue-500" />
-                  {language === 'ar' ? 'عمليات بحث إضافية' : 'Extra Searches'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? `احصل على ${SEARCH_PACKAGE_SIZE} بحث إضافي صالح لمدة شهر واحد` : `Get ${SEARCH_PACKAGE_SIZE} extra searches valid for 1 month`}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-lg font-bold text-blue-600">
-                    {SEARCH_PACKAGE_PRICE} {language === 'ar' ? 'ريال' : 'QAR'}
-                  </div>
-                  <Button onClick={handlePurchaseSearches} disabled={isSearchPurchasing || anyPurchaseInProgress} className="bg-blue-600 hover:bg-blue-700" size="sm">
-                    {isSearchPurchasing ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
