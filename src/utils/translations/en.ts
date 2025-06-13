@@ -1,4 +1,3 @@
-
 export const en = {
   welcome: "Welcome",
   login: "Login",
