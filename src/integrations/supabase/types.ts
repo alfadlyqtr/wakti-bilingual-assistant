@@ -763,42 +763,60 @@ export type Database = {
         Row: {
           auto_approve_contacts: boolean | null
           avatar_url: string | null
+          billing_start_date: string | null
           created_at: string | null
           display_name: string | null
           email: string | null
           first_name: string | null
           id: string
+          is_subscribed: boolean | null
           last_name: string | null
+          next_billing_date: string | null
           notification_preferences: Json | null
+          paypal_subscription_id: string | null
+          plan_name: string | null
           settings: Json | null
+          subscription_status: string | null
           updated_at: string | null
           username: string | null
         }
         Insert: {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
+          billing_start_date?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
           first_name?: string | null
           id: string
+          is_subscribed?: boolean | null
           last_name?: string | null
+          next_billing_date?: string | null
           notification_preferences?: Json | null
+          paypal_subscription_id?: string | null
+          plan_name?: string | null
           settings?: Json | null
+          subscription_status?: string | null
           updated_at?: string | null
           username?: string | null
         }
         Update: {
           auto_approve_contacts?: boolean | null
           avatar_url?: string | null
+          billing_start_date?: string | null
           created_at?: string | null
           display_name?: string | null
           email?: string | null
           first_name?: string | null
           id?: string
+          is_subscribed?: boolean | null
           last_name?: string | null
+          next_billing_date?: string | null
           notification_preferences?: Json | null
+          paypal_subscription_id?: string | null
+          plan_name?: string | null
           settings?: Json | null
+          subscription_status?: string | null
           updated_at?: string | null
           username?: string | null
         }
@@ -841,6 +859,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscriptions: {
+        Row: {
+          billing_amount: number
+          billing_currency: string
+          billing_cycle: string
+          created_at: string | null
+          id: string
+          next_billing_date: string
+          paypal_plan_id: string
+          paypal_subscription_id: string
+          plan_name: string
+          start_date: string
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          billing_amount: number
+          billing_currency?: string
+          billing_cycle?: string
+          created_at?: string | null
+          id?: string
+          next_billing_date: string
+          paypal_plan_id: string
+          paypal_subscription_id: string
+          plan_name: string
+          start_date: string
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          billing_amount?: number
+          billing_currency?: string
+          billing_cycle?: string
+          created_at?: string | null
+          id?: string
+          next_billing_date?: string
+          paypal_plan_id?: string
+          paypal_subscription_id?: string
+          plan_name?: string
+          start_date?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       subtasks: {
         Row: {
