@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,96 +12,21 @@ import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { WaktiAIV2ServiceClass } from '@/services/WaktiAIV2Service';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatBubbleProps {
   message: any;
   userProfile: any;
   activeTrigger: string;
-  onMessageUpdate?: (messageId: string, updates: any) => void;
 }
 
-export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdate }: ChatBubbleProps) {
+export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
   const { language } = useTheme();
-  const { user } = useAuth();
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [isExecutingAction, setIsExecutingAction] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   // Check if we're in return mode from Maw3D
   const isReturnMode = searchParams.get('return') === 'maw3d';
-
-  // Auto-execute actions when AI suggests them
-  useEffect(() => {
-    const executeAutomaticAction = async () => {
-      if (!user || !message || isExecutingAction) return;
-      
-      // Check if message has action data that should be executed automatically
-      if (message.role === 'assistant' && message.actionData && !message.actionExecuted) {
-        console.log('🚀 Auto-executing action:', message.actionData);
-        setIsExecutingAction(true);
-        
-        try {
-          let result;
-          
-          if (message.actionData.type === 'create_task') {
-            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
-              user.id,
-              'create_task',
-              message.actionData.data,
-              language
-            );
-          } else if (message.actionData.type === 'create_reminder') {
-            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
-              user.id,
-              'create_reminder',
-              message.actionData.data,
-              language
-            );
-          } else if (message.actionData.type === 'create_event') {
-            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
-              user.id,
-              'create_event',
-              message.actionData.data,
-              language
-            );
-          }
-          
-          if (result && result.success) {
-            toast.success(
-              language === 'ar' 
-                ? `✅ ${result.message || 'تم تنفيذ العملية بنجاح'}`
-                : `✅ ${result.message || 'Action completed successfully'}`
-            );
-            
-            // Update message to mark action as executed
-            if (onMessageUpdate) {
-              onMessageUpdate(message.id, {
-                ...message,
-                actionExecuted: true,
-                actionResult: result
-              });
-            }
-          } else {
-            throw new Error(result?.message || 'Action failed');
-          }
-        } catch (error: any) {
-          console.error('❌ Auto-action execution error:', error);
-          toast.error(
-            language === 'ar' 
-              ? `❌ فشل في تنفيذ العملية: ${error.message}`
-              : `❌ Failed to execute action: ${error.message}`
-          );
-        } finally {
-          setIsExecutingAction(false);
-        }
-      }
-    };
-
-    executeAutomaticAction();
-  }, [message, user, language, onMessageUpdate, isExecutingAction]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -245,30 +171,6 @@ export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdat
               </div>
             )}
 
-            {/* Action Execution Status */}
-            {message.actionData && !message.actionExecuted && isExecutingAction && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-3">
-                <div className="flex items-center gap-2 text-blue-700">
-                  <div className="animate-spin h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                  <span className="text-sm font-medium">
-                    {language === 'ar' ? 'جاري تنفيذ العملية...' : 'Executing action...'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Action Success Status */}
-            {message.actionExecuted && message.actionResult?.success && (
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-3">
-                <div className="flex items-center gap-2 text-green-700">
-                  <CheckCircle className="h-4 w-4" />
-                  <span className="text-sm font-medium">
-                    {message.actionResult.message || (language === 'ar' ? 'تم تنفيذ العملية بنجاح' : 'Action completed successfully')}
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Intent and Confidence Badges */}
             {!isUser && (message.intent || message.confidence) && (
               <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/20">
@@ -304,55 +206,35 @@ export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdat
             )}
           </div>
 
-          {/* Keep existing confirmation cards for manual operations if needed */}
-          {!isUser && message.intent === 'task_preview' && message.taskData && !message.actionData && (
+          {/* Task/Reminder Confirmation Cards */}
+          {!isUser && message.intent === 'task_preview' && message.taskData && (
             <EditableTaskConfirmationCard
               type="task"
               data={message.taskData}
-              onConfirm={() => {}}
-              onCancel={() => {}}
-              isLoading={false}
+              onConfirm={(updatedTaskData) => {
+                // Handle task confirmation with updated data
+                console.log('Task confirmed with data:', updatedTaskData);
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Task creation cancelled');
+              }}
             />
           )}
 
-          {!isUser && message.intent === 'reminder_preview' && message.reminderData && !message.actionData && (
+          {message.intent === 'reminder_preview' && message.reminderData && (
             <TaskConfirmationCard
               type="reminder"
               data={message.reminderData}
-              onConfirm={() => {}}
-              onCancel={() => {}}
-              isLoading={false}
+              onConfirm={() => {
+                // Handle reminder confirmation
+                console.log('Reminder confirmed');
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Reminder creation cancelled');
+              }}
             />
-          )}
-
-          {/* Show completion status */}
-          {!isUser && (message.intent === 'task_completed' || message.intent === 'reminder_completed') && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
-              <div className="flex items-center gap-2 text-green-700">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {message.intent === 'task_completed' 
-                    ? (language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully')
-                    : (language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully')
-                  }
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Show cancellation status */}
-          {!isUser && (message.intent === 'task_cancelled' || message.intent === 'reminder_cancelled') && (
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
-              <div className="flex items-center gap-2 text-gray-600">
-                <XCircle className="h-4 w-4" />
-                <span className="text-sm">
-                  {message.intent === 'task_cancelled' 
-                    ? (language === 'ar' ? 'تم إلغاء إنشاء المهمة' : 'Task creation cancelled')
-                    : (language === 'ar' ? 'تم إلغاء إنشاء التذكير' : 'Reminder creation cancelled')
-                  }
-                </span>
-              </div>
-            </div>
           )}
 
           {/* Timestamp */}
