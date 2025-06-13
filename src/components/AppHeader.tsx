@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -45,6 +44,7 @@ export function AppHeader() {
   const menuItems = [
     { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
     { title: language === 'ar' ? 'الحساب' : 'Account', href: '/account' },
+    { title: t("help", language), href: '/help' },
     { title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', href: '/contacts' },
     { title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', onClick: handleLogout }
   ];
