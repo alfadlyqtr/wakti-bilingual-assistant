@@ -299,5 +299,15 @@ export const misc = {
   sixty: "Sixty",
   seventy: "Seventy",
   eighty: "Eighty",
-  ninety: "Ninety"
+  ninety: "Ninety",
+  // Additional common UI text that was missing
+  save17Percent: "SAVE 17%",
+  perMonth: "per month",
+  perYear: "per year",
+  getStartedFree: "Get Started Free",
+  tryFreeFor3Days: "Try free for 3 days",
+  dragMode: "Drag Mode",
+  dragModeEnabled: "Drag mode enabled",
+  dragModeDisabled: "Drag mode disabled",
+  widgetSettings: "Widget Settings"
 };

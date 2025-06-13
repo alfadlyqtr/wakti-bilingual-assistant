@@ -6,6 +6,7 @@ import { DragModeToggle } from "@/components/dashboard/DragModeToggle";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
+import { t } from "@/utils/translations";
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -40,9 +41,9 @@ export default function Dashboard() {
     const newDraggingState = !isDragging;
     setIsDragging(newDraggingState);
     if (newDraggingState) {
-      toast.info(language === 'ar' ? "تم تفعيل وضع السحب" : "Drag mode activated");
+      toast.info(t("dragModeActivated", language));
     } else {
-      toast.info(language === 'ar' ? "تم إلغاء تفعيل وضع السحب" : "Drag mode deactivated");
+      toast.info(t("dragModeDeactivated", language));
     }
   };
 
