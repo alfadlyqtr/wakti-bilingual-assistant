@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
@@ -315,7 +314,7 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED TASK SYSTEM ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
@@ -356,8 +355,6 @@ const WaktiAIV2 = () => {
         }
 
         console.log('✅ Search quota incremented successfully:', data[0]);
-        
-        // Refresh search quota display immediately
         await refreshSearchQuota();
       }
 
@@ -391,7 +388,7 @@ const WaktiAIV2 = () => {
       const completeContext = getCompleteConversationContext();
       const contextForAI = [...completeContext, userMessage].slice(-50);
 
-      console.log('🧠 WAKTI AI V2.5: Sending expanded context to AI:', {
+      console.log('🧠 WAKTI AI V2.5: Sending enhanced context to AI:', {
         contextMessages: contextForAI.length,
         hasConversationHistory: conversationMessages.length > 0,
         currentConversationId
@@ -412,9 +409,11 @@ const WaktiAIV2 = () => {
         userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
+      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
+      console.log('🔄 WAKTI AI V2.5: Needs Clarification:', response.needsClarification);
+      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', response.pendingTaskData);
 
       if (response.error) {
         throw new Error(response.error);
@@ -448,12 +447,19 @@ const WaktiAIV2 = () => {
         workflowActions: response.workflowActions,
         contextualActions: response.contextualActions,
         needsConfirmation: response.needsConfirmation,
+        needsClarification: response.needsClarification,
         pendingTaskData: response.pendingTaskData,
+        partialTaskData: response.partialTaskData,
         pendingReminderData: response.pendingReminderData
       };
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalSessionMessages);
+
+      // Store pending task data for confirmation handling
+      if (response.pendingTaskData) {
+        setPendingTaskData(response.pendingTaskData);
+      }
 
       if (!currentConversationId) {
         const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
@@ -472,7 +478,7 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // Search operation success handling
+      // Handle quota updates and success messages
       if (response.browsingUsed && activeTrigger === 'search') {
         console.log('🔄 Search operation completed successfully');
         const remainingAfterSearch = remainingFreeSearches - 1;
@@ -482,13 +488,11 @@ const WaktiAIV2 = () => {
             : `Search completed successfully (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} remaining)`
         );
         
-        // Force refresh search quota display
         setTimeout(() => {
           refreshSearchQuota();
         }, 500);
       }
 
-      // Voice Translation quota refresh with immediate UI update
       if (inputType === 'voice') {
         console.log('🔄 Voice translation completed - refreshing translation quota...');
         await refreshTranslationQuota();
@@ -524,36 +528,26 @@ const WaktiAIV2 = () => {
         setSearchConfirmationRequired(true);
       }
 
-      if (response.fileAnalysisResults && response.fileAnalysisResults.length > 0) {
-        const successfulAnalyses = response.fileAnalysisResults.filter((result: any) => result.analysis.success);
-        if (successfulAnalyses.length > 0) {
-          showSuccess(
-            language === 'ar' 
-              ? `تم تحليل ${successfulAnalyses.length} ملف بنجاح` 
-              : `Successfully analyzed ${successfulAnalyses.length} file(s)`
-          );
-        }
-      }
-
-      if (response.workflowActions?.length > 0 || response.predictiveInsights) {
+      if (response.needsConfirmation) {
+        console.log('🔄 WAKTI AI V2.5: Task confirmation card should be shown');
         showSuccess(
           language === 'ar' 
-            ? 'تم تفعيل الميزات المتقدمة للجيل الرابع' 
-            : 'Phase 4 advanced features activated'
+            ? 'تم تحضير المهمة للتأكيد' 
+            : 'Task prepared for confirmation'
         );
       }
 
-      if (response.needsConfirmation) {
-        console.log('🔄 WAKTI AI V2.5: Confirmation card should be shown');
+      if (response.needsClarification) {
+        console.log('🔄 WAKTI AI V2.5: Task clarification needed');
         showSuccess(
           language === 'ar' 
-            ? 'تم تحضير البيانات للتأكيد' 
-            : 'Data prepared for confirmation'
+            ? 'نحتاج المزيد من المعلومات لإنشاء المهمة' 
+            : 'Need more information to create the task'
         );
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Simplified system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -738,92 +732,196 @@ const WaktiAIV2 = () => {
 
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
+  const handleTaskConfirm = async (taskData: any) => {
+    try {
+      setIsLoading(true);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      console.log('✅ Creating confirmed task:', taskData);
+
+      // Create the task
+      const { data: newTask, error } = await supabase
+        .from('tasks')
+        .insert({
+          user_id: user.id,
+          title: taskData.title,
+          description: taskData.description || '',
+          due_date: taskData.due_date || null,
+          due_time: taskData.due_time || null,
+          priority: taskData.priority || 'normal',
+          task_type: taskData.task_type || 'one-time',
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Create subtasks if any
+      if (taskData.subtasks && taskData.subtasks.length > 0) {
+        const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
+          task_id: newTask.id,
+          user_id: user.id,
+          title: subtask,
+          order_index: index,
+          completed: false
+        }));
+
+        const { error: subtaskError } = await supabase
+          .from('subtasks')
+          .insert(subtaskInserts);
+
+        if (subtaskError) {
+          console.error('Error creating subtasks:', subtaskError);
+        }
+      }
+
+      // Clear pending task data
+      setPendingTaskData(null);
+
+      // Add success message to chat
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `✅ تم إنشاء المهمة "${taskData.title}" بنجاح!`
+          : `✅ Task "${taskData.title}" created successfully!`,
+        timestamp: new Date(),
+        intent: 'task_created',
+        confidence: 'high'
+      };
+
+      setSessionMessages(prev => [...prev, successMessage]);
+
+      showSuccess(
+        language === 'ar' 
+          ? 'تم إنشاء المهمة بنجاح!' 
+          : 'Task created successfully!'
+      );
+
+    } catch (error: any) {
+      console.error('Error creating task:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTaskEdit = async (editedTaskData: any) => {
+    try {
+      // Send the edited task data back to AI for final confirmation
+      const confirmationMessage = language === 'ar' 
+        ? `تأكيد إنشاء المهمة: ${editedTaskData.title}`
+        : `Confirm task creation: ${editedTaskData.title}`;
+      
+      await handleSendMessage(confirmationMessage, 'text');
+      
+    } catch (error: any) {
+      console.error('Error handling task edit:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في تعديل المهمة' : 'Failed to edit task')
+      );
+    }
+  };
+
+  const handleTaskCancel = () => {
+    setPendingTaskData(null);
+    
+    const cancelMessage: AIMessage = {
+      id: `cancel-${Date.now()}`,
+      role: 'assistant',
+      content: language === 'ar' 
+        ? 'تم إلغاء إنشاء المهمة. يمكنك طلب مهمة جديدة في أي وقت.'
+        : 'Task creation cancelled. You can request a new task anytime.',
+      timestamp: new Date(),
+      intent: 'task_cancelled',
+      confidence: 'high'
+    };
+
+    setSessionMessages(prev => [...prev, cancelMessage]);
+  };
+
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <ChatDrawers
-        showConversations={showConversations}
-        setShowConversations={setShowConversations}
-        showQuickActions={showQuickActions}
-        setShowQuickActions={setShowQuickActions}
-        conversations={conversations}
-        currentConversationId={currentConversationId}
-        onSelectConversation={handleSelectConversation}
-        onDeleteConversation={handleDeleteConversation}
-        fetchConversations={fetchConversations}
-        onSendMessage={handleSendMessage}
+    <div className="flex flex-col h-screen bg-gray-50">
+      <ChatHeader 
         activeTrigger={activeTrigger}
-        onTriggerChange={handleTriggerChange}
-        onTextGenerated={handleTextGenerated}
+        setActiveTrigger={setActiveTrigger}
         onNewConversation={handleNewConversation}
-        onClearChat={handleClearChat}
-        sessionMessages={allDisplayMessages}
+        onToggleConversations={() => setShowConversations(!showConversations)}
+        onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
+        quotaStatus={quotaStatus}
+        searchConfirmationRequired={searchConfirmationRequired}
+        onSearchConfirmation={handleSearchConfirmation}
+        remainingFreeSearches={remainingFreeSearches}
+        extraSearches={extraSearches}
+        isAtSearchLimit={isAtLimit}
+        translationQuota={translationQuota}
+        MAX_DAILY_TRANSLATIONS={MAX_DAILY_TRANSLATIONS}
       />
 
-      <div className="flex-1 flex flex-col h-screen">
-        <div 
-          className="fixed top-16 right-0 bg-background/80 backdrop-blur-md border-b rounded-b-2xl z-40"
-          style={{ 
-            left: showConversations || showQuickActions ? '320px' : '0',
-            transition: 'left 0.3s ease-in-out'
-          }}
-        >
-          <ChatHeader
-            currentConversationId={currentConversationId}
-            activeTrigger={activeTrigger}
-            onShowConversations={() => setShowConversations(true)}
-            onNewConversation={handleNewConversation}
-            onShowQuickActions={() => setShowQuickActions(true)}
-            quotaStatus={quotaStatus}
-            searchQuotaStatus={{ 
-              remainingFreeSearches, 
-              extraSearches, 
-              isAtLimit, 
-              canSearch, 
-              MAX_MONTHLY_SEARCHES 
-            }}
-          />
-          <NotificationBars
-            searchConfirmationRequired={searchConfirmationRequired}
-            error={error}
-            onSearchConfirmation={handleSearchConfirmation}
-            onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
-          />
-        </div>
+      <NotificationBars 
+        quotaStatus={quotaStatus}
+        searchQuotaStatus={{
+          remainingFreeSearches,
+          extraSearches,
+          isAtLimit,
+          maxMonthlySearches: MAX_MONTHLY_SEARCHES
+        }}
+        translationQuota={translationQuota}
+        maxDailyTranslations={MAX_DAILY_TRANSLATIONS}
+        language={language}
+      />
 
-        <div 
-          className="flex-1 overflow-hidden"
-          style={{ 
-            paddingTop: '130px',
-            paddingBottom: '100px'
-          }}
-        >
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col">
           <ChatMessages
-            sessionMessages={allDisplayMessages}
+            ref={scrollAreaRef}
+            sessionMessages={sessionMessages}
+            conversationMessages={conversationMessages}
+            isLoading={isLoading}
+            onTaskConfirm={handleTaskConfirm}
+            onTaskEdit={handleTaskEdit}
+            onTaskCancel={handleTaskCancel}
+          />
+
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            onSendMessage={handleSendMessage}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
-            scrollAreaRef={scrollAreaRef}
             userProfile={userProfile}
           />
         </div>
-      </div>
 
-      <div 
-        className="fixed bottom-8 right-0 bg-background border-t z-20 pb-safe" 
-        style={{ 
-          left: showConversations || showQuickActions ? '320px' : '0',
-          paddingBottom: 'max(env(safe-area-inset-bottom), 20px)',
-          transition: 'left 0.3s ease-in-out'
-        }}
-      >
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading}
-          sessionMessages={allDisplayMessages}
-          onSendMessage={handleSendMessage}
+        <ChatDrawers
+          showConversations={showConversations}
+          showQuickActions={showQuickActions}
+          conversations={conversations}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={handleDeleteConversation}
           onClearChat={handleClearChat}
+          onNewConversation={handleNewConversation}
+          setShowConversations={setShowConversations}
+          setShowQuickActions={setShowQuickActions}
+          quotaStatus={quotaStatus}
+          isLoading={isLoading}
         />
       </div>
+
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4">
+          <div className="flex">
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
