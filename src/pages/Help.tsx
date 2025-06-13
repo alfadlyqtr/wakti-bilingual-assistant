@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -271,64 +272,69 @@ export default function Help() {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide bg-gradient-background min-h-screen">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header - Liquid Glass Effect */}
+      <div className="max-w-2xl mx-auto space-y-8">
+        {/* Header - Enhanced 3D Liquid Glass Effect */}
         <div className="text-center relative">
-          <div className="absolute inset-0 bg-gradient-card rounded-2xl blur-xl opacity-30"></div>
-          <div className="relative bg-gradient-card/20 backdrop-blur-xl border border-border/20 rounded-2xl p-8 shadow-vibrant">
-            <h1 className="text-3xl font-bold mb-3 bg-gradient-primary bg-clip-text text-transparent animate-shimmer">
-              {t('howToUseWakti', language)}
-            </h1>
-            <p className="text-muted-foreground/80 text-lg">{t('helpAndGuides', language)}</p>
+          <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-20 scale-110"></div>
+          <div className="absolute inset-0 bg-gradient-card rounded-3xl blur-xl opacity-40 scale-105"></div>
+          <div className="relative bg-gradient-card/30 backdrop-blur-2xl border border-border/30 rounded-3xl p-10 shadow-2xl transform perspective-1000 hover:rotate-x-2 transition-all duration-700 hover:shadow-colored">
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-secondary/10 rounded-3xl"></div>
+            <div className="relative z-10">
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-primary bg-clip-text text-transparent animate-shimmer drop-shadow-lg">
+                {t('howToUseWakti', language)}
+              </h1>
+              <p className="text-muted-foreground/90 text-xl font-medium">{t('helpAndGuides', language)}</p>
+            </div>
           </div>
         </div>
 
-        {/* Main Sections - Enhanced Liquid Glass */}
-        <div className="space-y-4">
+        {/* Main Sections - Enhanced 3D Glass */}
+        <div className="space-y-6">
           {sections.map((section) => (
             <div key={section.id} className="relative group">
               <div className={cn(
-                "absolute inset-0 rounded-2xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-500",
+                "absolute inset-0 rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110",
                 section.glowClass
               )}></div>
+              <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-30 group-hover:opacity-50 transition-all duration-500 scale-105"></div>
               <Card className={cn(
-                "overflow-hidden relative bg-gradient-card/30 backdrop-blur-xl border-border/30",
-                "hover:bg-gradient-card/40 hover:border-border/50 hover:shadow-vibrant",
-                "transform hover:-translate-y-1 transition-all duration-500",
-                "hover:scale-[1.02]"
+                "overflow-hidden relative bg-gradient-card/40 backdrop-blur-2xl border-border/40",
+                "hover:bg-gradient-card/50 hover:border-border/60 hover:shadow-2xl",
+                "transform hover:-translate-y-2 hover:scale-[1.01] transition-all duration-700",
+                "shadow-xl hover:shadow-colored perspective-1000"
               )}>
                 <Collapsible 
                   open={openSections.includes(section.id)}
                   onOpenChange={() => toggleSection(section.id)}
                 >
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-gradient-card/20 transition-all duration-300 group/header">
+                    <CardHeader className="cursor-pointer hover:bg-gradient-card/30 transition-all duration-500 group/header">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-5">
                           <div className={cn(
-                            "p-3 rounded-xl bg-gradient-card/40 backdrop-blur-sm border border-border/30",
-                            "group-hover/header:scale-110 transition-all duration-300",
-                            "group-hover/header:shadow-glow",
+                            "p-4 rounded-2xl bg-gradient-card/50 backdrop-blur-sm border border-border/40",
+                            "group-hover/header:scale-110 transition-all duration-500 shadow-lg",
+                            "group-hover/header:shadow-2xl group-hover/header:rotate-3",
                             section.colorClass
                           )}>
                             {section.icon}
                           </div>
                           <div className="text-left">
                             <CardTitle className={cn(
-                              "text-xl bg-gradient-primary bg-clip-text text-transparent",
-                              "group-hover/header:animate-shimmer"
+                              "text-2xl bg-gradient-primary bg-clip-text text-transparent font-bold",
+                              "group-hover/header:animate-shimmer drop-shadow-sm"
                             )}>
                               {section.title}
                             </CardTitle>
-                            <CardDescription className="text-sm text-muted-foreground/70">
+                            <CardDescription className="text-base text-muted-foreground/80 font-medium">
                               {section.description}
                             </CardDescription>
                           </div>
                         </div>
                         <ChevronRight 
                           className={cn(
-                            "h-6 w-6 transition-all duration-300 text-muted-foreground/60",
-                            "group-hover/header:text-foreground group-hover/header:scale-110",
+                            "h-7 w-7 transition-all duration-500 text-muted-foreground/60",
+                            "group-hover/header:text-foreground group-hover/header:scale-125",
                             openSections.includes(section.id) ? 'rotate-90' : ''
                           )} 
                         />
@@ -336,8 +342,8 @@ export default function Help() {
                     </CardHeader>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
-                    <CardContent className="pt-0 pb-6">
-                      <div className="bg-gradient-card/20 backdrop-blur-sm rounded-xl p-4 border border-border/20">
+                    <CardContent className="pt-0 pb-8">
+                      <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
                         {section.content}
                       </div>
                     </CardContent>
@@ -348,29 +354,32 @@ export default function Help() {
           ))}
         </div>
 
-        {/* Tips Section - Enhanced Glass Effect */}
+        {/* Tips Section - Enhanced 3D Glass Effect with Shadow Behind Title */}
         <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-warm rounded-2xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-500"></div>
-          <Card className="relative bg-gradient-card/30 backdrop-blur-xl border-border/30 hover:bg-gradient-card/40 hover:border-border/50 transition-all duration-500 hover:shadow-vibrant transform hover:-translate-y-1">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="p-2 rounded-lg bg-gradient-warm/40 backdrop-blur-sm border border-border/30">
-                  <Lightbulb className="h-6 w-6 text-yellow-400" />
+          <div className="absolute inset-0 bg-gradient-warm rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
+          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
+          <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
+            <CardHeader className="relative">
+              {/* Shadow behind title */}
+              <div className="absolute -inset-2 bg-gradient-warm/30 rounded-2xl blur-xl opacity-60 scale-110"></div>
+              <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
+                <div className="p-3 rounded-2xl bg-gradient-warm/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
+                  <Lightbulb className="h-7 w-7 text-yellow-400" />
                 </div>
-                <span className="bg-gradient-warm bg-clip-text text-transparent">
+                <span className="bg-gradient-warm bg-clip-text text-transparent font-bold drop-shadow-lg">
                   {t('tipsTitle', language)}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-gradient-card/20 backdrop-blur-sm rounded-xl p-4 border border-border/20">
-                <ul className="space-y-3">
+              <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
+                <ul className="space-y-4">
                   {tips.map((tip, index) => (
-                    <li key={index} className="text-sm flex items-start gap-3 group/tip">
-                      <span className="text-yellow-400 font-bold text-base bg-gradient-warm/30 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center border border-yellow-400/30 group-hover/tip:scale-110 transition-transform duration-300">
+                    <li key={index} className="text-sm flex items-start gap-4 group/tip">
+                      <span className="text-yellow-400 font-bold text-lg bg-gradient-warm/40 backdrop-blur-sm rounded-full w-8 h-8 flex items-center justify-center border border-yellow-400/40 group-hover/tip:scale-110 group-hover/tip:rotate-12 transition-all duration-500 shadow-lg">
                         {index + 1}
                       </span>
-                      <span className="text-muted-foreground/80 group-hover/tip:text-foreground transition-colors duration-300">
+                      <span className="text-muted-foreground/90 group-hover/tip:text-foreground transition-colors duration-500 font-medium leading-relaxed">
                         {tip}
                       </span>
                     </li>
@@ -381,52 +390,56 @@ export default function Help() {
           </Card>
         </div>
 
-        {/* Navigation Tips - Enhanced Glass Effect */}
+        {/* Navigation Tips - Enhanced 3D Glass Effect with Shadow Behind Title */}
         <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-cool rounded-2xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-500"></div>
-          <Card className="relative bg-gradient-card/30 backdrop-blur-xl border-border/30 hover:bg-gradient-card/40 hover:border-border/50 transition-all duration-500 hover:shadow-vibrant transform hover:-translate-y-1">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3 text-xl">
-                <div className="p-2 rounded-lg bg-gradient-cool/40 backdrop-blur-sm border border-border/30">
-                  <Navigation className="h-6 w-6 text-blue-400" />
+          <div className="absolute inset-0 bg-gradient-cool rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
+          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
+          <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
+            <CardHeader className="relative">
+              {/* Shadow behind title */}
+              <div className="absolute -inset-2 bg-gradient-cool/30 rounded-2xl blur-xl opacity-60 scale-110"></div>
+              <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
+                <div className="p-3 rounded-2xl bg-gradient-cool/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
+                  <Navigation className="h-7 w-7 text-blue-400" />
                 </div>
-                <span className="bg-gradient-cool bg-clip-text text-transparent">
+                <span className="bg-gradient-cool bg-clip-text text-transparent font-bold drop-shadow-lg">
                   {t('navigationTitle', language)}
                 </span>
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="bg-gradient-card/20 backdrop-blur-sm rounded-xl p-4 border border-border/20">
-                <ul className="space-y-2 text-sm">
-                  <li className="text-muted-foreground/80">• {t('mobileNav', language)}</li>
-                  <li className="text-muted-foreground/80">• {t('userMenu', language)}</li>
-                  <li className="text-muted-foreground/80">• {t('backButtons', language)}</li>
+              <div className="bg-gradient-card/30 backdrop-blur-lg rounded-2xl p-6 border border-border/30 shadow-inner">
+                <ul className="space-y-3 text-base">
+                  <li className="text-muted-foreground/90 font-medium">• {t('mobileNav', language)}</li>
+                  <li className="text-muted-foreground/90 font-medium">• {t('userMenu', language)}</li>
+                  <li className="text-muted-foreground/90 font-medium">• {t('backButtons', language)}</li>
                 </ul>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Support Section - Premium Glass Effect */}
+        {/* Support Section - Premium 3D Glass Effect */}
         <div className="relative group">
-          <div className="absolute inset-0 bg-gradient-vibrant rounded-2xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-500"></div>
-          <Card className="relative bg-gradient-vibrant/20 backdrop-blur-xl border-primary/30 hover:bg-gradient-vibrant/30 hover:border-primary/50 transition-all duration-500 hover:shadow-colored transform hover:-translate-y-2 hover:scale-[1.02]">
-            <CardContent className="text-center p-8">
-              <div className="mb-4">
-                <div className="inline-flex p-4 rounded-2xl bg-gradient-primary/20 backdrop-blur-sm border border-primary/30">
-                  <MessageCircle className="h-8 w-8 text-primary animate-pulse-color" />
+          <div className="absolute inset-0 bg-gradient-vibrant rounded-3xl blur-2xl opacity-0 group-hover:opacity-50 transition-all duration-700 scale-110"></div>
+          <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-50 group-hover:opacity-70 transition-all duration-500 scale-105"></div>
+          <Card className="relative bg-gradient-vibrant/30 backdrop-blur-2xl border-primary/40 hover:bg-gradient-vibrant/40 hover:border-primary/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-3 hover:scale-[1.02] shadow-xl perspective-1000">
+            <CardContent className="text-center p-12">
+              <div className="mb-6">
+                <div className="inline-flex p-6 rounded-3xl bg-gradient-primary/30 backdrop-blur-lg border border-primary/40 shadow-2xl hover:scale-110 hover:rotate-3 transition-all duration-700">
+                  <MessageCircle className="h-10 w-10 text-primary animate-pulse-color" />
                 </div>
               </div>
-              <h3 className="font-bold text-xl mb-3 bg-gradient-primary bg-clip-text text-transparent">
+              <h3 className="font-bold text-3xl mb-4 bg-gradient-primary bg-clip-text text-transparent drop-shadow-lg">
                 {t('needHelp', language)}
               </h3>
-              <p className="text-sm text-muted-foreground/80 mb-6 leading-relaxed">
+              <p className="text-base text-muted-foreground/90 mb-8 leading-relaxed font-medium max-w-md mx-auto">
                 {t('contactSupport', language)}
               </p>
               <Button 
                 variant="outline" 
                 size="lg"
-                className="bg-gradient-card/40 backdrop-blur-sm border-primary/30 hover:bg-gradient-primary/20 hover:border-primary/50 hover:shadow-glow transition-all duration-300 hover:scale-105"
+                className="bg-gradient-card/50 backdrop-blur-lg border-primary/40 hover:bg-gradient-primary/30 hover:border-primary/60 hover:shadow-2xl transition-all duration-500 hover:scale-110 hover:rotate-1 text-lg px-8 py-3 font-semibold"
               >
                 {t('contact', language)}
               </Button>
