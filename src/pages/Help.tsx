@@ -97,10 +97,11 @@ export default function Help() {
           <div>
             <h4 className="font-medium mb-2 text-cyan-400">{t('recordingSteps', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>{t('step1Record', language)}</li>
-              <li>{t('step2Stop', language)}</li>
-              <li>{t('step3Transcribe', language)}</li>
-              <li>{t('step4Save', language)}</li>
+              <li>1. {language === 'ar' ? 'اضغط على زر التسجيل لبدء التسجيل' : 'Tap the record button to start recording'}</li>
+              <li>2. {language === 'ar' ? 'اضغط على إيقاف عند الانتهاء' : 'Tap stop when finished'}</li>
+              <li>3. {language === 'ar' ? 'سيقوم الذكاء الاصطناعي بالنسخ والتلخيص تلقائياً - اقرأ بعناية يمكنك التعديل في حالة الحاجة!' : 'AI will transcribe and summarize automatically - read carefully you can edit just in case!'}</li>
+              <li>4. {language === 'ar' ? 'اختر صوت ذكر أو أنثى ثم اضغط على إنشاء' : 'Choose male or female voice press generate'}</li>
+              <li>5. {language === 'ar' ? 'احفظ، توجه إلى علامة تبويب المحفوظات حيث يمكنك التصدير أو حذف التسجيلات حسب الحاجة أو تشغيل الصوت وتحميل الصوت' : 'Save, head over to saved tab you can export, or delete recordings as needed or play audio download audio'}</li>
             </ul>
           </div>
           <p className="text-sm text-muted-foreground/80">{t('autoDeleteFeature', language)}</p>
@@ -119,19 +120,18 @@ export default function Help() {
           <div>
             <h4 className="font-medium mb-2 text-purple-400">{t('createEvent', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>{t('eventStep1', language)}</li>
-              <li>{t('eventStep2', language)}</li>
-              <li>{t('eventStep3', language)}</li>
-              <li>{t('eventStep4', language)}</li>
-              <li>{t('eventStep5', language)}</li>
+              <li>1. {language === 'ar' ? 'اذهب إلى صفحة أحداث Maw3d' : 'Go to Maw3d Events page'}</li>
+              <li>2. {language === 'ar' ? 'اضغط على "إنشاء حدث جديد"' : "Tap 'Create New Event'"}</li>
+              <li>3. {language === 'ar' ? 'املأ تفاصيل الحدث وخصص التصميم' : 'Fill in event details and customize design'}</li>
+              <li>4. {language === 'ar' ? 'رابط المشاركة تشغيل - إيقاف، إظهار الحضور تشغيل - إيقاف' : 'Share link on - off, show attendees on - off'}</li>
+              <li>5. {language === 'ar' ? 'رابط المشاركة للدعوات - رسائل WAKTI أو منصات التواصل الاجتماعي الأخرى' : 'Share link invitations - WAKTI messages or other social media platforms'}</li>
             </ul>
           </div>
           <div>
             <h4 className="font-medium mb-2 text-purple-400">{t('manageEvent', language)}</h4>
             <ul className="text-sm space-y-1">
-              <li>• {t('checkAttendance', language)}</li>
-              <li>• {t('eventCustomization', language)}</li>
-              <li>• {t('eventFollowup', language)}</li>
+              <li>• {language === 'ar' ? 'عرض من استجاب (الحضور، الرفض)' : 'View who has responded (attending, declined)'}</li>
+              <li>• {language === 'ar' ? 'تخصيص الحدث - تعديل' : 'Event Customization - edit'}</li>
             </ul>
           </div>
         </div>
