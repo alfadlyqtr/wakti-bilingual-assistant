@@ -15,7 +15,7 @@ export function SimpleTaskRedirect({ onClose }: SimpleTaskRedirectProps) {
   const navigate = useNavigate();
 
   const handleRedirect = () => {
-    navigate('/tasks-reminders');
+    navigate('/tr');
     if (onClose) onClose();
   };
 
