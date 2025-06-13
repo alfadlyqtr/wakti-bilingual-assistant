@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -354,19 +353,20 @@ export default function Help() {
           ))}
         </div>
 
-        {/* Tips Section - Enhanced 3D Glass Effect with Shadow Behind Title */}
+        {/* Tips Section - Enhanced 3D Glass Effect with Stronger Shadow Behind Title */}
         <div className="relative group">
           <div className="absolute inset-0 bg-gradient-warm rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
           <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
           <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
             <CardHeader className="relative">
-              {/* Shadow behind title */}
-              <div className="absolute -inset-2 bg-gradient-warm/30 rounded-2xl blur-xl opacity-60 scale-110"></div>
+              {/* Enhanced shadow behind title */}
+              <div className="absolute -inset-4 bg-gradient-warm/60 rounded-3xl blur-2xl opacity-80 scale-125"></div>
+              <div className="absolute -inset-2 bg-black/40 rounded-2xl blur-lg opacity-60 scale-110"></div>
               <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
                 <div className="p-3 rounded-2xl bg-gradient-warm/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
                   <Lightbulb className="h-7 w-7 text-yellow-400" />
                 </div>
-                <span className="bg-gradient-warm bg-clip-text text-transparent font-bold drop-shadow-lg">
+                <span className="bg-gradient-warm bg-clip-text text-transparent font-bold drop-shadow-2xl shadow-black/80">
                   {t('tipsTitle', language)}
                 </span>
               </CardTitle>
@@ -390,19 +390,20 @@ export default function Help() {
           </Card>
         </div>
 
-        {/* Navigation Tips - Enhanced 3D Glass Effect with Shadow Behind Title */}
+        {/* Navigation Tips - Enhanced 3D Glass Effect with Stronger Shadow Behind Title */}
         <div className="relative group">
           <div className="absolute inset-0 bg-gradient-cool rounded-3xl blur-2xl opacity-0 group-hover:opacity-40 transition-all duration-700 scale-110"></div>
           <div className="absolute inset-0 bg-gradient-card/20 rounded-3xl blur-lg opacity-40 group-hover:opacity-60 transition-all duration-500 scale-105"></div>
           <Card className="relative bg-gradient-card/40 backdrop-blur-2xl border-border/40 hover:bg-gradient-card/50 hover:border-border/60 transition-all duration-700 hover:shadow-2xl transform hover:-translate-y-2 hover:scale-[1.01] shadow-xl perspective-1000">
             <CardHeader className="relative">
-              {/* Shadow behind title */}
-              <div className="absolute -inset-2 bg-gradient-cool/30 rounded-2xl blur-xl opacity-60 scale-110"></div>
+              {/* Enhanced shadow behind title */}
+              <div className="absolute -inset-4 bg-gradient-cool/60 rounded-3xl blur-2xl opacity-80 scale-125"></div>
+              <div className="absolute -inset-2 bg-black/40 rounded-2xl blur-lg opacity-60 scale-110"></div>
               <CardTitle className="flex items-center gap-4 text-2xl relative z-10">
                 <div className="p-3 rounded-2xl bg-gradient-cool/50 backdrop-blur-sm border border-border/40 shadow-lg hover:scale-110 hover:rotate-3 transition-all duration-500">
                   <Navigation className="h-7 w-7 text-blue-400" />
                 </div>
-                <span className="bg-gradient-cool bg-clip-text text-transparent font-bold drop-shadow-lg">
+                <span className="bg-gradient-cool bg-clip-text text-transparent font-bold drop-shadow-2xl shadow-black/80">
                   {t('navigationTitle', language)}
                 </span>
               </CardTitle>
