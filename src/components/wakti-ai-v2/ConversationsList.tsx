@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, MessageSquare, Clock, Plus, RefreshCw, Trash, Eraser } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AIConversation } from '@/services/WaktiAIV2Service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,15 +18,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-interface Conversation {
-  id: string;
-  title: string;
-  last_message_at: string;
-  created_at: string;
-}
-
 interface ConversationsListProps {
-  conversations: Conversation[];
+  conversations: AIConversation[];
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
@@ -99,8 +93,7 @@ export function ConversationsList({
     }
   };
 
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatRelativeTime = (date: Date) => {
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
     
@@ -250,7 +243,7 @@ export function ConversationsList({
                   </p>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>
-                      {new Date(conversation.last_message_at).toLocaleDateString(
+                      {conversation.lastMessageAt.toLocaleDateString(
                         language === 'ar' ? 'ar' : 'en',
                         { 
                           month: 'short',
@@ -261,7 +254,7 @@ export function ConversationsList({
                       )}
                     </span>
                     <span className="opacity-70">
-                      • {formatRelativeTime(conversation.last_message_at)}
+                      • {formatRelativeTime(conversation.lastMessageAt)}
                     </span>
                   </div>
                 </div>
