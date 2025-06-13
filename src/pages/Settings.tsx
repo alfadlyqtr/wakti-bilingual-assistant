@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,8 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import NotificationSettings from '@/components/notifications/NotificationSettings';
 import { PageContainer } from '@/components/PageContainer';
-import { Sun, Moon } from 'lucide-react';
+import { Sun, Moon, Bell, CheckCircle } from 'lucide-react';
+import { setupNotificationCron } from '@/utils/testNotifications';
 
 export default function Settings() {
   const { user, updateProfile, updatePassword, deleteAccount } = useAuth();
@@ -30,6 +30,8 @@ export default function Settings() {
     confirmPassword: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isSettingUpNotifications, setIsSettingUpNotifications] = useState(false);
+  const [notificationSetupComplete, setNotificationSetupComplete] = useState(false);
 
   useEffect(() => {
     if (user?.user_metadata) {
@@ -40,6 +42,31 @@ export default function Settings() {
       });
     }
   }, [user]);
+
+  useEffect(() => {
+    // Check if notification setup was already completed
+    const setupComplete = localStorage.getItem('wakti-notification-setup-complete');
+    setNotificationSetupComplete(setupComplete === 'true');
+  }, []);
+
+  const handleNotificationSetup = async () => {
+    setIsSettingUpNotifications(true);
+    try {
+      const success = await setupNotificationCron();
+      if (success) {
+        showSuccess('Notification system set up successfully!');
+        setNotificationSetupComplete(true);
+        localStorage.setItem('wakti-notification-setup-complete', 'true');
+      } else {
+        showError('Failed to set up notification system. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error setting up notifications:', error);
+      showError('An error occurred while setting up notifications.');
+    } finally {
+      setIsSettingUpNotifications(false);
+    }
+  };
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,7 +285,53 @@ export default function Settings() {
           </TabsContent>
 
           <TabsContent value="notifications">
-            <NotificationSettings />
+            <div className="space-y-6">
+              {!notificationSetupComplete && (
+                <Card className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                      <Bell className="h-5 w-5" />
+                      Setup Notification System
+                    </CardTitle>
+                    <CardDescription className="text-blue-600 dark:text-blue-400">
+                      Set up the automatic notification processing system to receive real-time alerts.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button 
+                      onClick={handleNotificationSetup}
+                      disabled={isSettingUpNotifications}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {isSettingUpNotifications ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Setting up...
+                        </>
+                      ) : (
+                        <>
+                          <Bell className="mr-2 h-4 w-4" />
+                          Setup Notification System
+                        </>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
+
+              {notificationSetupComplete && (
+                <Card className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                      <CheckCircle className="h-5 w-5" />
+                      <span className="font-medium">Notification system is active and running</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <NotificationSettings />
+            </div>
           </TabsContent>
 
           <TabsContent value="privacy">
