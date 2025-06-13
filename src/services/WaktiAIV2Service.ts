@@ -6,40 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 export type { AIMessage, AIConversation };
 
 export class WaktiAIV2Service {
-  private static quotaCache: { [userId: string]: any } = {};
   private static conversationCache: { [userId: string]: any[] } = {};
-
-  static async getOrFetchQuota(userId: string, forceRefresh: boolean = false): Promise<any> {
-    if (this.quotaCache[userId] && !forceRefresh) {
-      console.log('📊 Returning cached quota for user:', userId);
-      return this.quotaCache[userId];
-    }
-
-    try {
-      console.log('📊 Fetching quota from Supabase for user:', userId);
-      const { data, error } = await supabase
-        .from('ai_quota')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) {
-        console.error('❌ Error fetching quota from Supabase:', error);
-        throw error;
-      }
-
-      this.quotaCache[userId] = data;
-      return data;
-    } catch (error) {
-      console.error('❌ Error in getOrFetchQuota:', error);
-      throw error;
-    }
-  }
-
-  static invalidateQuotaCache() {
-    this.quotaCache = {};
-    console.log('🗑️  Quota cache invalidated');
-  }
 
   static async getConversations(): Promise<any[]> {
     try {
@@ -170,7 +137,7 @@ export class WaktiAIV2Service {
   }
 
   static invalidateConversationCache() {
-    this.quotaCache = {};
+    this.conversationCache = {};
     console.log('🗑️  Conversation cache invalidated');
   }
 

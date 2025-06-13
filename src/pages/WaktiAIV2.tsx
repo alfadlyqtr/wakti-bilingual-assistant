@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
@@ -22,7 +21,6 @@ const WaktiAIV2 = () => {
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [quotaStatus, setQuotaStatus] = useState<any>(null);
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
@@ -61,40 +59,6 @@ const WaktiAIV2 = () => {
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
-
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
-        const quota = await WaktiAIV2Service.getOrFetchQuota(user.id);
-        setQuotaStatus(quota);
-      } catch (error: any) {
-        console.error('Error fetching quota:', error);
-        setError(error.message || 'Failed to fetch quota');
-      }
-    };
-
-    fetchQuota();
-  }, []);
-
-  // Updated fetchQuota function with force refresh option
-  const fetchQuota = async (forceRefresh: boolean = false) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      console.log(`📊 Fetching quota ${forceRefresh ? 'with force refresh' : 'normally'}`);
-      const quota = await WaktiAIV2Service.getOrFetchQuota(user.id, forceRefresh);
-      setQuotaStatus(quota);
-      
-      console.log('📊 Updated quota state:', quota);
-    } catch (error: any) {
-      console.error('Error fetching quota:', error);
-      setError(error.message || 'Failed to fetch quota');
-    }
-  };
 
   useEffect(() => {
     const fetchEnhancedContext = async () => {
@@ -487,20 +451,6 @@ const WaktiAIV2 = () => {
         );
       }
 
-      if (response.quotaStatus) {
-        console.log('📊 Received quota status from AI response:', response.quotaStatus);
-        setQuotaStatus(response.quotaStatus);
-        
-        if (response.browsingUsed && activeTrigger === 'search') {
-          console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
-          WaktiAIV2Service.invalidateQuotaCache();
-          
-          setTimeout(() => {
-            fetchQuota(true);
-          }, 1000);
-        }
-      }
-
       if (inputType === 'voice') {
         console.log('🔄 Voice operation completed - refreshing voice quota...');
         await refreshVoiceQuota();
@@ -589,10 +539,6 @@ const WaktiAIV2 = () => {
 
       const finalMessages = [...sessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalMessages);
-
-      if (response.quotaStatus) {
-        setQuotaStatus(response.quotaStatus);
-      }
 
       setSearchConfirmationRequired(false);
       fetchConversations();
@@ -759,7 +705,7 @@ const WaktiAIV2 = () => {
             onShowConversations={() => setShowConversations(true)}
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
-            quotaStatus={quotaStatus}
+            quotaStatus={null}
             searchQuotaStatus={{ 
               remainingFreeSearches, 
               extraSearches, 
