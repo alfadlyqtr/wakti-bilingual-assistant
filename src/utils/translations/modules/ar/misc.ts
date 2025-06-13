@@ -343,5 +343,39 @@ export const miscAr = {
   voiceMessaging: "مراسلة صوتية",
   privacyControl: "التحكم في الخصوصية",
   loginBtn: "تسجيل الدخول",
-  retry: "إعادة المحاولة"
+  retry: "إعادة المحاولة",
+  
+  // Text styling translations
+  textStyling: "تصميم النص",
+  fontFamily: "نوع الخط",
+  fontSize: "حجم الخط",
+  textColor: "لون النص",
+  textShadow: "ظل النص",
+  textAlignment: "محاذاة النص",
+  
+  // Background customization translations
+  backgroundCustomization: "تخصيص الخلفية",
+  backgroundColor: "لون الخلفية",
+  gradientPresets: "الخلفيات المتدرجة",
+  uploadImage: "رفع صورة",
+  chooseImage: "اختر صورة",
+  imageBlur: "ضبابية الصورة",
+  adjustBlurForReadability: "اضبط الضبابية لتحسين القراءة",
+  aiImagePrompt: "وصف الخلفية بالذكاء الاصطناعي",
+  describeBackground: "صف الخلفية التي تريدها",
+  generateAIBackground: "توليد خلفية بالذكاء الاصطناعي",
+  
+  // Success/error messages
+  imageUploadedSuccessfully: "تم رفع الصورة بنجاح",
+  errorUploadingImage: "خطأ في رفع الصورة",
+  pleaseEnterPrompt: "يرجى إدخال وصف للخلفية",
+  backgroundGeneratedSuccessfully: "تم توليد الخلفية بنجاح",
+  errorGeneratingBackground: "خطأ في توليد الخلفية",
+  
+  // Privacy settings
+  privacySettings: "إعدادات الخصوصية",
+  
+  // Shadow settings
+  shadowEnabled: "مُفعّل",
+  shadowDisabled: "مُعطّل"
 };
