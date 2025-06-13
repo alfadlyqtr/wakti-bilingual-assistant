@@ -55,6 +55,8 @@ serve(async (req) => {
   }
 
   try {
+    console.log('PayPal subscription function called with method:', req.method);
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -68,10 +70,24 @@ serve(async (req) => {
     const { data: { user } } = await supabaseClient.auth.getUser()
     
     if (!user) {
+      console.error('No user found');
       throw new Error('No user found')
     }
 
-    const { action } = await req.json()
+    console.log('User authenticated:', user.id);
+
+    // Parse request body once
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body parsed:', requestBody);
+    } catch (error) {
+      console.error('Error parsing request body:', error);
+      throw new Error('Invalid request body');
+    }
+
+    const { action, planId, subscriptionId } = requestBody;
+    console.log('Action:', action, 'PlanId:', planId, 'SubscriptionId:', subscriptionId);
 
     const clientId = 'AZUxooULlaqDWjkPEml7YssHn7o97b9a5KIGg7QoT-0ns7H74Ws81Aeg_Ch0tesWpfD1QUS3lW2egXO'
     const clientSecret = 'EC20j2Ed6sxpKivELoyLZ3NgHoNlHF_pxkjXEtYvCNlnmRomtrkqg4AFIMaFok3PAfJz8dpd8hD7ypP8W'
@@ -79,6 +95,7 @@ serve(async (req) => {
 
     // Get PayPal access token
     const getAccessToken = async (): Promise<string> => {
+      console.log('Getting PayPal access token...');
       const response = await fetch(`${baseUrl}/v1/oauth2/token`, {
         method: 'POST',
         headers: {
@@ -90,13 +107,22 @@ serve(async (req) => {
         body: 'grant_type=client_credentials'
       })
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('PayPal token request failed:', response.status, errorText);
+        throw new Error(`PayPal authentication failed: ${response.status}`);
+      }
+
       const data: PayPalTokenResponse = await response.json()
+      console.log('PayPal access token obtained successfully');
       return data.access_token
     }
 
     const accessToken = await getAccessToken()
 
     if (action === 'create-subscription-plan') {
+      console.log('Creating subscription plan...');
+      
       // Create product first
       const productResponse = await fetch(`${baseUrl}/v1/catalogs/products`, {
         method: 'POST',
@@ -112,7 +138,14 @@ serve(async (req) => {
         })
       })
 
+      if (!productResponse.ok) {
+        const errorText = await productResponse.text();
+        console.error('PayPal product creation failed:', productResponse.status, errorText);
+        throw new Error(`Failed to create PayPal product: ${productResponse.status}`);
+      }
+
       const product: PayPalProduct = await productResponse.json()
+      console.log('PayPal product created:', product.id);
 
       // Create subscription plan
       const planResponse = await fetch(`${baseUrl}/v1/billing/plans`, {
@@ -151,7 +184,14 @@ serve(async (req) => {
         })
       })
 
+      if (!planResponse.ok) {
+        const errorText = await planResponse.text();
+        console.error('PayPal plan creation failed:', planResponse.status, errorText);
+        throw new Error(`Failed to create PayPal plan: ${planResponse.status}`);
+      }
+
       const plan: PayPalPlan = await planResponse.json()
+      console.log('PayPal plan created:', plan.id);
 
       return new Response(
         JSON.stringify({ 
@@ -167,7 +207,11 @@ serve(async (req) => {
     }
 
     if (action === 'create-subscription') {
-      const { planId } = await req.json()
+      console.log('Creating subscription with planId:', planId);
+      
+      if (!planId) {
+        throw new Error('Plan ID is required for subscription creation');
+      }
       
       // Create subscription
       const subscriptionResponse = await fetch(`${baseUrl}/v1/billing/subscriptions`, {
@@ -197,13 +241,29 @@ serve(async (req) => {
         })
       })
 
+      if (!subscriptionResponse.ok) {
+        const errorText = await subscriptionResponse.text();
+        console.error('PayPal subscription creation failed:', subscriptionResponse.status, errorText);
+        throw new Error(`Failed to create PayPal subscription: ${subscriptionResponse.status}`);
+      }
+
       const subscription = await subscriptionResponse.json()
+      console.log('PayPal subscription created:', subscription.id);
+
+      // Find the approval URL in the links array
+      const approvalLink = subscription.links?.find((link: any) => link.rel === 'approve');
+      if (!approvalLink) {
+        console.error('No approval URL found in subscription response:', subscription);
+        throw new Error('No approval URL returned from PayPal');
+      }
+
+      console.log('Approval URL found:', approvalLink.href);
 
       return new Response(
         JSON.stringify({ 
           success: true, 
           subscriptionId: subscription.id,
-          approvalUrl: subscription.links.find((link: any) => link.rel === 'approve')?.href
+          approvalUrl: approvalLink.href
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -213,7 +273,11 @@ serve(async (req) => {
     }
 
     if (action === 'complete-subscription') {
-      const { subscriptionId } = await req.json()
+      console.log('Completing subscription:', subscriptionId);
+      
+      if (!subscriptionId) {
+        throw new Error('Subscription ID is required');
+      }
       
       // Get subscription details from PayPal
       const subscriptionResponse = await fetch(`${baseUrl}/v1/billing/subscriptions/${subscriptionId}`, {
@@ -223,14 +287,21 @@ serve(async (req) => {
         }
       })
 
+      if (!subscriptionResponse.ok) {
+        const errorText = await subscriptionResponse.text();
+        console.error('PayPal subscription retrieval failed:', subscriptionResponse.status, errorText);
+        throw new Error(`Failed to retrieve PayPal subscription: ${subscriptionResponse.status}`);
+      }
+
       const subscription = await subscriptionResponse.json()
+      console.log('PayPal subscription retrieved:', subscription.status);
 
       if (subscription.status === 'ACTIVE') {
         const startDate = new Date(subscription.start_time)
         const nextBillingDate = new Date(subscription.billing_info.next_billing_time)
 
         // Update user profile
-        await supabaseClient
+        const { error: profileError } = await supabaseClient
           .from('profiles')
           .update({
             is_subscribed: true,
@@ -242,8 +313,13 @@ serve(async (req) => {
           })
           .eq('id', user.id)
 
+        if (profileError) {
+          console.error('Profile update error:', profileError);
+          throw new Error('Failed to update user profile');
+        }
+
         // Create subscription record
-        await supabaseClient
+        const { error: subscriptionError } = await supabaseClient
           .from('subscriptions')
           .insert({
             user_id: user.id,
@@ -257,6 +333,13 @@ serve(async (req) => {
             start_date: startDate.toISOString(),
             next_billing_date: nextBillingDate.toISOString()
           })
+
+        if (subscriptionError) {
+          console.error('Subscription insert error:', subscriptionError);
+          throw new Error('Failed to create subscription record');
+        }
+
+        console.log('Subscription completed successfully');
 
         return new Response(
           JSON.stringify({ 
@@ -278,7 +361,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('PayPal subscription error:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false,
+        error: error.message 
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
