@@ -93,6 +93,7 @@ serve(async (req) => {
     const { action, planId, subscriptionId } = requestBody;
     console.log('Extracted values - Action:', action, 'PlanId:', planId, 'SubscriptionId:', subscriptionId);
 
+    // Updated PayPal credentials as provided by user
     const clientId = 'AZUxooULlaqDWjkPEml7YssHn7o97b9a5KIGg7QoT-0ns7H74Ws81Aeg_Ch0tesWpfD1QUS3lW2egXO'
     const clientSecret = 'EC20j2Ed6sxpKivELoyLZ3NgHoNlHF_pxkjXEtYvCNlnmRomtrkqg4AFIMaFok3PAfJz8dpd8hD7ypP8W'
     const baseUrl = 'https://api-m.sandbox.paypal.com'

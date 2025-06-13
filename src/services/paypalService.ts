@@ -89,14 +89,27 @@ export class PayPalService {
   static async getUserSubscription() {
     console.log('Fetching user subscription...');
     
+    // Fix: Use .maybeSingle() instead of .single() to handle cases with multiple or no rows
     const { data: profile, error } = await supabase
       .from('profiles')
       .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error fetching user subscription:', error);
       throw error;
+    }
+    
+    // If no profile found, return default values
+    if (!profile) {
+      console.log('No profile found, returning default subscription data');
+      return {
+        is_subscribed: false,
+        subscription_status: 'inactive',
+        plan_name: null,
+        billing_start_date: null,
+        next_billing_date: null
+      };
     }
     
     console.log('User subscription data:', profile);
