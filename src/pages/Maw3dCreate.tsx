@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -40,6 +40,7 @@ export default function Maw3dCreate() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EventTemplate | null>(null);
   const [imageBlur, setImageBlur] = useState(0);
+  const [searchParams] = useSearchParams();
 
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
@@ -61,6 +62,32 @@ export default function Maw3dCreate() {
     invited_contacts: [],
     image_blur: 0
   });
+
+  // Check for background image URL parameter on component mount
+  useEffect(() => {
+    const bgImage = searchParams.get('bg_image');
+    const bgType = searchParams.get('bg_type');
+    
+    if (bgImage) {
+      console.log('Applying background image from URL parameter:', bgImage);
+      setFormData(prev => ({
+        ...prev,
+        background_type: (bgType as 'ai' | 'image') || 'ai',
+        background_value: bgImage
+      }));
+      
+      // Show success message
+      toast.success(
+        language === 'ar' 
+          ? 'تم تطبيق خلفية الذكي الاصطناعي بنجاح!' 
+          : 'AI background applied successfully!'
+      );
+      
+      // Clear the URL parameters for cleaner URL
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [searchParams, language]);
 
   const handleInputChange = (field: keyof EventFormData, value: any) => {
     console.log(`Updating field ${String(field)} with value:`, value);

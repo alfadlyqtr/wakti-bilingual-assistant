@@ -1,406 +1,234 @@
+
 import React, { useState } from 'react';
-import { Bot, User, Copy, CheckCheck, AlertTriangle, Calendar, Clock } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useTheme } from '@/providers/ThemeProvider';
-import { AIMessage } from '@/services/WaktiAIV2Service';
+import { Copy, Download, ExternalLink, Calendar, Clock, MapPin, User, CheckCircle, XCircle, Wand2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { EditableTaskConfirmationCard } from './EditableTaskConfirmationCard';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
+import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
-import { ChatFileDisplay } from './ChatFileDisplay';
-import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
-import { useToastHelper } from "@/hooks/use-toast-helper";
-import { supabase } from '@/integrations/supabase/client';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface ChatBubbleProps {
-  message: AIMessage;
+  message: any;
+  userProfile: any;
   activeTrigger: string;
-  userProfile?: any;
 }
 
-export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubbleProps) {
+export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
   const { language } = useTheme();
-  const { showSuccess, showError } = useToastHelper();
-  const [copied, setCopied] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
-  const [imageError, setImageError] = useState(false);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Check if we're in return mode from Maw3D
+  const isReturnMode = searchParams.get('return') === 'maw3d';
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!');
+  };
+
+  const downloadImage = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wakti-ai-image-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(language === 'ar' ? 'تم تحميل الصورة!' : 'Image downloaded!');
+    } catch (error) {
+      toast.error(language === 'ar' ? 'فشل في تحميل الصورة' : 'Failed to download image');
+    }
+  };
+
+  const useAsMaw3dBackground = (imageUrl: string) => {
+    // Redirect to Maw3D create page with the image URL
+    const params = new URLSearchParams({
+      bg_image: imageUrl,
+      bg_type: 'ai'
+    });
+    
+    navigate(`/maw3d-create?${params.toString()}`);
+    toast.success(language === 'ar' ? 'جاري تطبيق الخلفية...' : 'Applying background...');
+  };
 
   const formatTime = (timestamp: Date) => {
-    return new Intl.DateTimeFormat(language === 'ar' ? 'ar-SA' : 'en-US', {
+    return new Intl.DateTimeFormat(language === 'ar' ? 'ar' : 'en', {
       hour: '2-digit',
-      minute: '2-digit',
-      hour12: language !== 'ar'
-    }).format(timestamp);
+      minute: '2-digit'
+    }).format(new Date(timestamp));
   };
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(message.content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      showSuccess(language === 'ar' ? 'تم النسخ بنجاح' : 'Copied successfully');
-    } catch (error) {
-      showError(language === 'ar' ? 'فشل في النسخ' : 'Failed to copy');
-    }
-  };
+  const isUser = message.role === 'user';
 
-  const handleImageLoad = () => {
-    setImageLoading(false);
-    setImageError(false);
-  };
-
-  const handleImageError = () => {
-    setImageLoading(false);
-    setImageError(true);
-  };
-
-  const addSuccessMessageToChat = (successContent: string) => {
-    const savedSession = WaktiAIV2Service.loadChatSession();
-    const currentMessages = savedSession?.messages || [];
-    
-    const successMessage: AIMessage = {
-      id: `success-${Date.now()}`,
-      role: 'assistant',
-      content: successContent,
-      timestamp: new Date(),
-      intent: 'task_created_success',
-      confidence: 'high',
-      actionTaken: true
-    };
-
-    const updatedMessages = [...currentMessages, successMessage];
-    
-    WaktiAIV2Service.saveChatSession(updatedMessages, savedSession?.conversationId || null);
-    
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
-  };
-
-  const handleTaskConfirmation = async (pendingTask: any) => {
-    setIsConfirming(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const response = await WaktiAIV2Service.confirmTaskCreation(
-        user.id,
-        language,
-        pendingTask
-      );
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully'
-      );
-
-      const successContent = language === 'ar' 
-        ? '👍 تم إنشاء المهمة بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
-        : '👍 Task created successfully! Please visit T & R page';
-      
-      addSuccessMessageToChat(successContent);
-
-    } catch (error: any) {
-      console.error('Error confirming task:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
-      );
-    } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  const handleReminderConfirmation = async (pendingReminder: any) => {
-    setIsConfirming(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const response = await WaktiAIV2Service.confirmReminderCreation(
-        user.id,
-        language,
-        pendingReminder
-      );
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
-
-      showSuccess(
-        language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully'
-      );
-
-      const successContent = language === 'ar' 
-        ? '👍 تم إنشاء التذكير بنجاح! يرجى زيارة صفحة المهام والتذكيرات'
-        : '👍 Reminder created successfully! Please visit T & R page';
-      
-      addSuccessMessageToChat(successContent);
-
-    } catch (error: any) {
-      console.error('Error confirming reminder:', error);
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
-      );
-    } finally {
-      setIsConfirming(false);
-    }
-  };
-
-  const handleCancelConfirmation = () => {
-    showSuccess(
-      language === 'ar' ? 'تم إلغاء العملية' : 'Operation cancelled'
-    );
-  };
-
-  const hasPendingTask = (message.actionTaken === 'parse_task' || message.actionTaken === 'parse_task_with_learning') && message.actionResult?.pendingTask;
-  const hasPendingReminder = (message.actionTaken === 'parse_reminder' || message.actionTaken === 'parse_reminder_with_learning') && message.actionResult?.pendingReminder;
-  const hasDuplicateWarning = (message.actionTaken === 'duplicate_warning' || message.actionTaken === 'smart_duplicate_warning') && message.actionResult?.duplicateTask;
-  
-  const needsClarification = typeof message.actionTaken === 'string' && (
-    message.actionTaken.includes('clarify') || 
-    message.actionTaken.includes('clarify_task_with_learning') || 
-    message.actionTaken.includes('clarify_reminder_with_learning')
-  );
-
-  const needsTaskConfirmation = message.needsConfirmation && message.pendingTaskData;
-  const needsReminderConfirmation = message.needsConfirmation && message.pendingReminderData;
-  
   return (
-    <div className={`flex gap-3 w-full px-2 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-      {message.role === 'assistant' && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Bot className="h-4 w-4 text-primary" />
-          </div>
-        </div>
-      )}
-      
-      <div className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'} w-full max-w-full`}>
-        {/* Display attached files above user messages */}
-        {message.role === 'user' && message.attachedFiles && message.attachedFiles.length > 0 && (
-          <div className="mb-2 max-w-full">
-            <ChatFileDisplay files={message.attachedFiles} size="sm" />
-          </div>
-        )}
+    <div className={cn(
+      "flex w-full mb-4",
+      isUser ? "justify-end" : "justify-start"
+    )}>
+      <div className={cn(
+        "flex max-w-[85%] gap-3",
+        isUser ? "flex-row-reverse" : "flex-row"
+      )}>
+        {/* Avatar */}
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          {isUser ? (
+            userProfile?.avatar_url ? (
+              <AvatarImage src={userProfile.avatar_url} alt="User" />
+            ) : (
+              <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                {userProfile?.full_name?.charAt(0) || 'U'}
+              </AvatarFallback>
+            )
+          ) : (
+            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xs font-bold">
+              AI
+            </AvatarFallback>
+          )}
+        </Avatar>
 
-        <div
-          className={`rounded-2xl px-4 py-3 w-full max-w-[95%] sm:max-w-[90%] md:max-w-[85%] ${
-            message.role === 'user'
-              ? 'bg-primary text-primary-foreground ml-auto'
-              : 'bg-muted mr-auto'
-          }`}
-        >
-          <div className="text-sm whitespace-pre-wrap break-words word-wrap break-word overflow-wrap break-word">
-            {message.content}
-          </div>
-
-          {/* File Analysis Results for AI responses */}
-          {message.role === 'assistant' && message.actionResult?.fileAnalysis && (
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2 text-blue-700 mb-2">
-                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium text-sm">
-                  {language === 'ar' ? 'نتائج تحليل الملفات' : 'File Analysis Results'}
-                </span>
-              </div>
-              {message.actionResult.fileAnalysis.map((fileResult: any, index: number) => (
-                <div key={index} className="mb-2 last:mb-0">
-                  <div className="text-sm font-medium text-blue-600 break-words">
-                    📎 {fileResult.fileName}
+        {/* Message Content */}
+        <div className="flex flex-col space-y-1 min-w-0">
+          {/* Message Bubble */}
+          <div className={cn(
+            "px-4 py-3 rounded-2xl shadow-sm",
+            isUser
+              ? "bg-primary text-primary-foreground rounded-br-md"
+              : "bg-muted rounded-bl-md"
+          )}>
+            {/* Image Content */}
+            {message.imageUrl && (
+              <div className="mb-3">
+                <div 
+                  className="relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                  onClick={() => setImageModalOpen(true)}
+                >
+                  <img 
+                    src={message.imageUrl} 
+                    alt="Generated content"
+                    className="w-full max-w-sm rounded-lg"
+                  />
+                  <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                    <ExternalLink className="h-6 w-6 text-white opacity-0 hover:opacity-100 transition-opacity" />
                   </div>
-                  {fileResult.analysis.success ? (
-                    <div className="text-sm text-blue-600 mt-1 break-words">
-                      {fileResult.analysis.analysis}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-red-600 mt-1 break-words">
-                      ❌ {fileResult.analysis.error}
-                    </div>
-                  )}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Generated Image Display */}
-          {message.imageUrl && (
-            <div className="mt-3">
-              <div className="relative rounded-lg overflow-hidden border border-border group cursor-pointer max-w-full">
-                {imageLoading && (
-                  <div className="absolute inset-0 bg-muted flex items-center justify-center">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="h-4 w-4 animate-pulse bg-muted-foreground rounded" />
-                      <span className="text-sm">
-                        {language === 'ar' ? 'جارٍ تحميل الصورة...' : 'Loading image...'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-                {imageError ? (
-                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
-                    <div className="flex items-center gap-2 text-destructive">
-                      <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                      <span className="text-sm">
-                        {language === 'ar' ? 'فشل في تحميل الصورة' : 'Failed to load image'}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative" onClick={() => setImageModalOpen(true)}>
-                    <img
-                      src={message.imageUrl}
-                      alt="Generated image"
-                      className="w-full h-auto max-w-full"
-                      onLoad={handleImageLoad}
-                      onError={handleImageError}
-                      style={{ display: imageLoading ? 'none' : 'block' }}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Task Confirmation Card */}
-          {needsTaskConfirmation && (
-            <div className="mt-3 max-w-full">
-              <TaskConfirmationCard
-                type="task"
-                data={message.pendingTaskData}
-                onConfirm={() => handleTaskConfirmation(message.pendingTaskData)}
-                onCancel={handleCancelConfirmation}
-                isLoading={isConfirming}
-              />
-            </div>
-          )}
-
-          {/* Reminder Confirmation Card */}
-          {needsReminderConfirmation && (
-            <div className="mt-3 max-w-full">
-              <TaskConfirmationCard
-                type="reminder"
-                data={message.pendingReminderData}
-                onConfirm={() => handleReminderConfirmation(message.pendingReminderData)}
-                onCancel={handleCancelConfirmation}
-                isLoading={isConfirming}
-              />
-            </div>
-          )}
-
-          {/* Simple duplicate task warning */}
-          {hasDuplicateWarning && (
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg max-w-full">
-              <div className="flex items-center gap-2 text-amber-700 mb-2">
-                <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium text-sm">
-                  {language === 'ar' ? 'تحذير: مهمة مشابهة موجودة' : 'Warning: Similar Task Exists'}
-                </span>
-              </div>
-              <div className="text-sm text-amber-600 mb-3">
-                <p className="font-medium">{language === 'ar' ? 'المهمة الموجودة:' : 'Existing task:'}</p>
-                <p className="break-words">• {message.actionResult.duplicateTask.title}</p>
-                {message.actionResult.duplicateTask.due_date && (
-                  <p className="text-xs text-amber-500 mt-1">
-                    <Calendar className="h-3 w-3 inline mr-1" />
-                    {new Date(message.actionResult.duplicateTask.due_date).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Simple clarification needed */}
-          {needsClarification && (
-            <div className="mt-3 p-3 bg-purple-50 border border-purple-200 rounded-lg max-w-full">
-              <div className="flex items-center gap-2 text-purple-700 mb-2">
-                <Clock className="h-4 w-4 flex-shrink-0" />
-                <span className="font-medium text-sm">
-                  {language === 'ar' ? 'معلومات إضافية مطلوبة' : 'Additional Information Needed'}
-                </span>
-              </div>
-              {message.actionResult?.missingFields && (
-                <div className="text-sm text-purple-600 mb-3">
-                  <p className="mb-2">{language === 'ar' ? 'المعلومات المطلوبة:' : 'Required information:'}</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    {message.actionResult.missingFields.map((field: string, index: number) => (
-                      <li key={index} className="break-words">
-                        {field === 'due_date' ? (language === 'ar' ? 'تاريخ الاستحقاق' : 'Due date') : 
-                         field === 'priority' ? (language === 'ar' ? 'الأولوية' : 'Priority') :
-                         field === 'due_time' ? (language === 'ar' ? 'وقت التذكير' : 'Reminder time') : field}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-          
-          {/* Simple confirmation cards for parsed tasks/reminders */}
-          {hasPendingTask && (
-            <div className="mt-3 max-w-full">
-              <TaskConfirmationCard
-                type="task"
-                data={message.actionResult.pendingTask}
-                onConfirm={() => handleTaskConfirmation(message.actionResult.pendingTask)}
-                onCancel={handleCancelConfirmation}
-                isLoading={isConfirming}
-              />
-            </div>
-          )}
-          
-          {hasPendingReminder && (
-            <div className="mt-3 max-w-full">
-              <TaskConfirmationCard
-                type="reminder"
-                data={message.actionResult.pendingReminder}
-                onConfirm={() => handleReminderConfirmation(message.actionResult.pendingReminder)}
-                onCancel={handleCancelConfirmation}
-                isLoading={isConfirming}
-              />
-            </div>
-          )}
-
-          {message.role === 'assistant' && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-muted-foreground/20">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  {formatTime(message.timestamp)}
-                </span>
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopy}
-                className="h-6 px-2 text-xs hover:bg-muted-foreground/20 flex-shrink-0"
-              >
-                {copied ? (
-                  <>
-                    <CheckCheck className="h-3 w-3 mr-1" />
-                    {language === 'ar' ? 'تم' : 'Copied'}
-                  </>
-                ) : (
-                  <>
+                
+                {/* Image Action Buttons */}
+                <div className="flex items-center gap-2 mt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(message.imageUrl)}
+                    className="h-7 px-2 text-xs"
+                  >
                     <Copy className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'نسخ' : 'Copy'}
-                  </>
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => downloadImage(message.imageUrl)}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <Download className="h-3 w-3 mr-1" />
+                    {language === 'ar' ? 'تحميل' : 'Download'}
+                  </Button>
+
+                  {/* Maw3D Background Button - show when in image mode and we have return parameter */}
+                  {activeTrigger === 'image' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => useAsMaw3dBackground(message.imageUrl)}
+                      className="h-7 px-2 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300"
+                    >
+                      <Wand2 className="h-3 w-3 mr-1" />
+                      {language === 'ar' ? 'استخدم كخلفية' : 'Use as Maw3D BG'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Text Content */}
+            {message.content && (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {message.content}
+              </div>
+            )}
+
+            {/* Intent and Confidence Badges */}
+            {!isUser && (message.intent || message.confidence) && (
+              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/20">
+                {message.intent && (
+                  <Badge variant="secondary" className="text-xs">
+                    {message.intent}
+                  </Badge>
                 )}
-              </Button>
-            </div>
+                {message.confidence && (
+                  <Badge 
+                    variant={message.confidence === 'high' ? 'default' : 'secondary'} 
+                    className="text-xs"
+                  >
+                    {message.confidence}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Task/Reminder Confirmation Cards */}
+          {!isUser && message.intent === 'task_preview' && message.taskData && (
+            <EditableTaskConfirmationCard
+              taskData={message.taskData}
+              onConfirm={(updatedTaskData) => {
+                // Handle task confirmation with updated data
+                console.log('Task confirmed with data:', updatedTaskData);
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Task creation cancelled');
+              }}
+              language={language}
+            />
           )}
-        </div>
-      </div>
-      
-      {message.role === 'user' && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-            <User className="h-4 w-4 text-primary-foreground" />
+
+          {message.intent === 'reminder_preview' && message.reminderData && (
+            <TaskConfirmationCard
+              type="reminder"
+              data={message.reminderData}
+              onConfirm={() => {
+                // Handle reminder confirmation
+                console.log('Reminder confirmed');
+              }}
+              onCancel={() => {
+                // Handle cancellation
+                console.log('Reminder creation cancelled');
+              }}
+              language={language}
+            />
+          )}
+
+          {/* Timestamp */}
+          <div className={cn(
+            "text-xs text-muted-foreground px-1",
+            isUser ? "text-right" : "text-left"
+          )}>
+            {formatTime(message.timestamp)}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Image Modal */}
       {message.imageUrl && (
@@ -408,7 +236,8 @@ export function ChatBubble({ message, activeTrigger, userProfile }: ChatBubblePr
           isOpen={imageModalOpen}
           onClose={() => setImageModalOpen(false)}
           imageUrl={message.imageUrl}
-          prompt={message.content}
+          onCopy={() => copyToClipboard(message.imageUrl)}
+          onDownload={() => downloadImage(message.imageUrl)}
         />
       )}
     </div>
