@@ -11,7 +11,7 @@ import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2ServiceClass } from '@/services/WaktiAIV2Service';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatBubbleProps {
@@ -46,21 +46,21 @@ export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdat
           let result;
           
           if (message.actionData.type === 'create_task') {
-            result = await WaktiAIV2Service.executeAdvancedAction(
+            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
               user.id,
               'create_task',
               message.actionData.data,
               language
             );
           } else if (message.actionData.type === 'create_reminder') {
-            result = await WaktiAIV2Service.executeAdvancedAction(
+            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
               user.id,
               'create_reminder',
               message.actionData.data,
               language
             );
           } else if (message.actionData.type === 'create_event') {
-            result = await WaktiAIV2Service.executeAdvancedAction(
+            result = await WaktiAIV2ServiceClass.executeAdvancedAction(
               user.id,
               'create_event',
               message.actionData.data,
