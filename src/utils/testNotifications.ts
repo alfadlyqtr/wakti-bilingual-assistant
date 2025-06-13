@@ -59,28 +59,30 @@ export async function triggerNotificationProcessing(): Promise<boolean> {
   }
 }
 
-// Function to set up the cron job for automatic processing
+// Function to set up the cron job using the new database function
 export async function setupNotificationCron(): Promise<boolean> {
   try {
-    console.log('Setting up notification cron job...');
+    console.log('Setting up notification cron job using database function...');
     
-    const response = await fetch(`https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/setup-notification-cron`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU`,
-      },
-    });
-
-    const result = await response.json();
-    console.log('Cron setup result:', result);
+    const { data, error } = await supabase.rpc('setup_notification_cron_job');
     
-    if (result.success) {
+    if (error) {
+      console.error('❌ Database function error:', error);
+      return false;
+    }
+    
+    console.log('Database function result:', data);
+    
+    if (data?.success) {
       console.log('✅ Notification cron job configured successfully - will run every 30 seconds');
       console.log('📧 Queued notifications will now be processed automatically');
+      
+      // Trigger an immediate test run
+      await triggerNotificationProcessing();
+      
       return true;
     } else {
-      console.error('❌ Failed to set up cron job:', result.error);
+      console.error('❌ Failed to set up cron job:', data?.error);
       return false;
     }
   } catch (error) {
@@ -93,10 +95,7 @@ export async function setupNotificationCron(): Promise<boolean> {
 export async function checkCronStatus(): Promise<void> {
   try {
     console.log('🔍 Checking cron job status...');
-    
-    // This will be handled by the setup function which includes a test run
     await setupNotificationCron();
-    
   } catch (error) {
     console.error('Error checking cron status:', error);
   }
