@@ -1,14 +1,21 @@
+
 import { commonAr } from "./modules/ar/common";
 import { authAr } from "./modules/ar/auth";
 import { navigationAr } from "./modules/ar/navigation";
 import { tasksAr } from "./modules/ar/tasks";
 import { remindersAr } from "./modules/ar/reminders";
+import { eventsAr } from "./modules/ar/events";
+import { rsvpAr } from "./modules/ar/rsvp";
+import { contactsAr } from "./modules/ar/contacts";
+import { settingsAr } from "./modules/ar/settings";
+import { accountAr } from "./modules/ar/account";
 import { dashboardAr } from "./modules/ar/dashboard";
 import { timeAr } from "./modules/ar/time";
 import { statusAr } from "./modules/ar/status";
 import { formsAr } from "./modules/ar/forms";
-import { settingsAr } from "./modules/ar/settings";
-import { contactsAr } from "./modules/ar/contacts";
+import { feedbackAr } from "./modules/ar/feedback";
+import { legalAr } from "./modules/ar/legal";
+import { miscAr } from "./modules/ar/misc";
 
 // Arabic translations for WAKTI app
 export const ar = {
@@ -17,95 +24,41 @@ export const ar = {
   ...navigationAr,
   ...tasksAr,
   ...remindersAr,
+  ...eventsAr,
+  ...rsvpAr,
+  ...contactsAr,
+  ...settingsAr,
+  ...accountAr,
   ...dashboardAr,
   ...timeAr,
   ...statusAr,
   ...formsAr,
-  ...settingsAr,
-  ...contactsAr,
+  ...feedbackAr,
+  ...legalAr,
+  ...miscAr,
   
-  // Additional specific translations
+  // Additional specific translations that might still be needed
   blocked: "محظور",
   unblock: "إلغاء الحظر",
   contact: "جهة اتصال",
   username: "اسم المستخدم",
   updatePassword: "تحديث كلمة المرور",
   
-  // Event specific
-  eventTitle: "عنوان الحدث",
-  eventDescription: "وصف الحدث",
-  eventDate: "تاريخ الحدث",
-  eventTime: "وقت الحدث",
-  eventLocation: "موقع الحدث",
-  addEvent: "إضافة حدث",
-  editEvent: "تعديل الحدث",
-  deleteEvent: "حذف الحدث",
-  noEvents: "لا توجد أحداث",
-  noEventsYet: "لا توجد أحداث بعد",
-  createEvent: "إنشاء حدث",
-  
-  // Account specific
-  dateOfBirth: "تاريخ الميلاد",
-  updateDateOfBirth: "تحديث تاريخ الميلاد",
-  updateEmail: "تحديث البريد الإلكتروني",
-  
-  // Additional missing keys for complete coverage
-  all: "الكل",
-  none: "لا شيء",
-  some: "بعض",
-  many: "كثير",
-  few: "قليل",
-  most: "معظم",
-  least: "الأقل",
-  first: "الأول",
-  last: "الأخير",
-  latest: "الأحدث",
-  oldest: "الأقدم",
-  newest: "الأجدد",
-  recent: "حديث",
-  old: "قديم",
-  new: "جديد",
-  updated: "محدث",
-  created: "منشأ",
-  modified: "معدل",
-  deleted: "محذوف",
-  added: "مضاف",
-  removed: "مزال",
-  changed: "متغير",
-  unchanged: "غير متغير",
-  saved: "محفوظ",
-  unsaved: "غير محفوظ",
-  synced: "متزامن",
-  unsynced: "غير متزامن",
-  connected: "متصل",
-  disconnected: "منقطع",
-  secure: "آمن",
-  insecure: "غير آمن",
-  verified: "موثق",
-  unverified: "غير موثق",
-  valid: "صالح",
-  invalid: "غير صالح",
-  required: "مطلوب",
-  optional: "اختياري",
-  recommended: "موصى به",
-  
-  // Numbers
-  zero: "صفر",
-  one: "واحد",
-  two: "اثنان",
-  three: "ثلاثة",
-  four: "أربعة",
-  five: "خمسة",
-  six: "ستة",
-  seven: "سبعة",
-  eight: "ثمانية",
-  nine: "تسعة",
-  ten: "عشرة",
-  
-  // Frequency
-  never: "أبداً",
-  always: "دائماً",
-  sometimes: "أحياناً",
-  often: "غالباً",
-  rarely: "نادراً"
+  // Missing keys from build errors
+  loadingTasks: "جاري تحميل المهام...",
+  loadingReminders: "جاري تحميل التذكيرات...",
+  errorLoadingReminders: "خطأ في تحميل التذكيرات",
+  errorSnoozing: "فشل في تأجيل التذكير",
+  errorDeleting: "فشل في حذف التذكير",
+  confirmDeleteReminder: "هل أنت متأكد من أنك تريد حذف هذا التذكير؟",
+  snoozeReminder: "تأجيل التذكير ليوم واحد",
+  errorUpdatingTask: "خطأ في تحديث المهمة",
+  taskSnoozedUntilTomorrow: "تم تأجيل المهمة حتى الغد",
+  errorSnoozingTask: "خطأ في تأجيل المهمة",
+  confirmDeleteTask: "هل أنت متأكد من أنك تريد حذف هذه المهمة؟",
+  errorDeletingTask: "خطأ في حذف المهمة",
+  errorCopyingLink: "خطأ في نسخ الرابط",
+  dueOn: "مستحق في",
+  hideSubtasks: "إخفاء المهام الفرعية",
+  showSubtasks: "إظهار المهام الفرعية"
 };

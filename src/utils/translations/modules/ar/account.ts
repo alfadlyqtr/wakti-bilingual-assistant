@@ -1,0 +1,25 @@
+
+export const accountAr = {
+  deleteAccount: "حذف الحساب",
+  deleteAccountDescription: "حذف حسابك نهائياً مع جميع البيانات",
+  deleteMyAccount: "احذف حسابي",
+  accountOptions: "خيارات الحساب",
+  dateOfBirth: "تاريخ الميلاد",
+  dobHelpText: "سيساعدنا هذا في تخصيص تجربتك",
+  updateDateOfBirth: "تحديث تاريخ الميلاد",
+  dobRequired: "تاريخ الميلاد مطلوب",
+  dobUpdated: "تم تحديث تاريخ الميلاد بنجاح",
+  errorUpdatingDob: "خطأ في تحديث تاريخ الميلاد",
+  pickDate: "اختر التاريخ",
+  useCalendarPicker: "استخدم منتقي التقويم",
+  profileManagement: "إدارة الملف الشخصي",
+  usernameHelpText: "اسمك المستخدم الفريد",
+  updateEmail: "تحديث البريد الإلكتروني",
+  updating: "جاري التحديث",
+  profileImageUpdated: "تم تحديث صورة الملف الشخصي",
+  profileImage: "صورة الملف الشخصي",
+  uploading: "جاري الرفع",
+  changeImage: "تغيير الصورة",
+  errorUpdatingEmail: "خطأ في تحديث البريد الإلكتروني",
+  emailUpdated: "تم تحديث البريد الإلكتروني بنجاح"
+};
