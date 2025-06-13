@@ -191,7 +191,8 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
           {/* Task/Reminder Confirmation Cards */}
           {!isUser && message.intent === 'task_preview' && message.taskData && (
             <EditableTaskConfirmationCard
-              taskData={message.taskData}
+              type="task"
+              data={message.taskData}
               onConfirm={(updatedTaskData) => {
                 // Handle task confirmation with updated data
                 console.log('Task confirmed with data:', updatedTaskData);
@@ -200,7 +201,6 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 // Handle cancellation
                 console.log('Task creation cancelled');
               }}
-              language={language}
             />
           )}
 
@@ -216,7 +216,6 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 // Handle cancellation
                 console.log('Reminder creation cancelled');
               }}
-              language={language}
             />
           )}
 
@@ -236,8 +235,6 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
           isOpen={imageModalOpen}
           onClose={() => setImageModalOpen(false)}
           imageUrl={message.imageUrl}
-          onCopy={() => copyToClipboard(message.imageUrl)}
-          onDownload={() => downloadImage(message.imageUrl)}
         />
       )}
     </div>
