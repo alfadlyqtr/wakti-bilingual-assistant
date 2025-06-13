@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '@supabase/auth-helpers-react';
 import { toast } from 'react-hot-toast';
@@ -391,19 +390,24 @@ export default function WaktiAIV2() {
     <div className="flex flex-col h-screen bg-background">
       <ChatHeader
         activeTrigger={activeTrigger}
+        setActiveTrigger={setActiveTrigger}
         onNewConversation={handleNewConversation}
         onToggleConversations={() => setShowConversations(true)}
         onToggleQuickActions={() => setShowQuickActions(true)}
+        quotaStatus={quotaStatus}
         searchConfirmationRequired={searchConfirmationRequired}
         onSearchConfirmation={handleSearchConfirmation}
         remainingFreeSearches={searchQuotaStatus.remainingFreeSearches}
         extraSearches={searchQuotaStatus.extraSearches}
         isAtSearchLimit={searchQuotaStatus.isAtLimit}
+        translationQuota={translationQuota}
         MAX_DAILY_TRANSLATIONS={MAX_DAILY_TRANSLATIONS}
       />
 
       <NotificationBars
+        quotaStatus={quotaStatus}
         searchQuotaStatus={searchQuotaStatus}
+        translationQuota={translationQuota}
         maxDailyTranslations={MAX_DAILY_TRANSLATIONS}
         language={language}
       />
@@ -424,6 +428,7 @@ export default function WaktiAIV2() {
           setMessage={setMessage}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
+          activeTrigger={activeTrigger}
           userProfile={userProfile}
         />
       </div>
@@ -439,6 +444,9 @@ export default function WaktiAIV2() {
         onClearChat={handleClearChat}
         onNewConversation={handleNewConversation}
         isLoading={isLoading}
+        activeTrigger={activeTrigger}
+        onSendMessage={handleSendMessage}
+        setActiveTrigger={setActiveTrigger}
       />
     </div>
   );

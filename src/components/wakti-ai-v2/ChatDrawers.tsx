@@ -26,6 +26,9 @@ interface ChatDrawersProps {
   onClearChat: () => void;
   onNewConversation: () => void;
   isLoading: boolean;
+  activeTrigger: string;
+  onSendMessage: (message: string) => void;
+  setActiveTrigger: (trigger: string) => void;
 }
 
 export function ChatDrawers({
@@ -38,7 +41,10 @@ export function ChatDrawers({
   onDeleteConversation,
   onClearChat,
   onNewConversation,
-  isLoading
+  isLoading,
+  activeTrigger,
+  onSendMessage,
+  setActiveTrigger
 }: ChatDrawersProps) {
   const { language } = useTheme();
 
@@ -65,7 +71,6 @@ export function ChatDrawers({
             onDeleteConversation={onDeleteConversation}
             onClearChat={onClearChat}
             onNewConversation={onNewConversation}
-            isLoading={isLoading}
           />
         </SheetContent>
       </Sheet>
@@ -78,7 +83,11 @@ export function ChatDrawers({
               {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
             </SheetTitle>
           </SheetHeader>
-          <QuickActionsPanel />
+          <QuickActionsPanel 
+            onSendMessage={onSendMessage}
+            activeTrigger={activeTrigger}
+            onTriggerChange={setActiveTrigger}
+          />
         </SheetContent>
       </Sheet>
     </>
