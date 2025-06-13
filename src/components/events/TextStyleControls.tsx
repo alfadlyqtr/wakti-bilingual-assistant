@@ -16,11 +16,17 @@ interface TextStyleControlsProps {
   textColor: string;
   textShadow: boolean;
   textAlignment: 'left' | 'center' | 'right';
+  fontWeight: 'normal' | 'bold';
+  fontStyle: 'normal' | 'italic';
+  textDecoration: 'none' | 'underline';
   onFontFamilyChange: (value: string) => void;
   onFontSizeChange: (value: number[]) => void;
   onTextColorChange: (value: string) => void;
   onTextShadowChange: (value: boolean) => void;
   onTextAlignmentChange: (value: 'left' | 'center' | 'right') => void;
+  onFontWeightChange: (value: 'normal' | 'bold') => void;
+  onFontStyleChange: (value: 'normal' | 'italic') => void;
+  onTextDecorationChange: (value: 'none' | 'underline') => void;
 }
 
 export default function TextStyleControls({
@@ -29,11 +35,17 @@ export default function TextStyleControls({
   textColor,
   textShadow,
   textAlignment,
+  fontWeight,
+  fontStyle,
+  textDecoration,
   onFontFamilyChange,
   onFontSizeChange,
   onTextColorChange,
   onTextShadowChange,
   onTextAlignmentChange,
+  onFontWeightChange,
+  onFontStyleChange,
+  onTextDecorationChange,
 }: TextStyleControlsProps) {
   const { language } = useTheme();
 
@@ -83,6 +95,45 @@ export default function TextStyleControls({
             onChange={(e) => onTextColorChange(e.target.value)}
             className="w-full h-10 rounded border"
           />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label>{t('fontWeight', language)}</Label>
+          <Select value={fontWeight} onValueChange={onFontWeightChange}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">{t('normal', language)}</SelectItem>
+              <SelectItem value="bold">{t('bold', language)}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label>{t('fontStyle', language)}</Label>
+          <Select value={fontStyle} onValueChange={onFontStyleChange}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">{t('normal', language)}</SelectItem>
+              <SelectItem value="italic">{t('italic', language)}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label>{t('textDecoration', language)}</Label>
+          <Select value={textDecoration} onValueChange={onTextDecorationChange}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">{t('none', language)}</SelectItem>
+              <SelectItem value="underline">{t('underline', language)}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center justify-between">
