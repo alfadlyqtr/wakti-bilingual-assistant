@@ -12,16 +12,22 @@ import { TaskConfirmationCard } from './TaskConfirmationCard';
 import { cn } from '@/lib/utils';
 import { ImageModal } from './ImageModal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 interface ChatBubbleProps {
   message: any;
   userProfile: any;
   activeTrigger: string;
+  onMessageUpdate?: (messageId: string, updates: any) => void;
 }
 
-export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
+export function ChatBubble({ message, userProfile, activeTrigger, onMessageUpdate }: ChatBubbleProps) {
   const { language } = useTheme();
+  const { user } = useAuthContext();
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [isCreatingReminder, setIsCreatingReminder] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -60,6 +66,127 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     
     navigate(`/maw3d-create?${params.toString()}`);
     toast.success(language === 'ar' ? 'جاري تطبيق الخلفية...' : 'Applying background...');
+  };
+
+  const handleTaskConfirmation = async (updatedTaskData: any) => {
+    if (!user) {
+      toast.error(language === 'ar' ? 'يجب تسجيل الدخول' : 'Please login first');
+      return;
+    }
+
+    setIsCreatingTask(true);
+    
+    try {
+      console.log('🔧 Creating task with data:', updatedTaskData);
+      
+      const result = await WaktiAIV2Service.confirmTaskCreation(
+        user.id,
+        language,
+        updatedTaskData
+      );
+
+      if (result.success) {
+        toast.success(language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!');
+        
+        // Update the message to show it was completed
+        if (onMessageUpdate) {
+          onMessageUpdate(message.id, {
+            ...message,
+            intent: 'task_completed',
+            actionTaken: true,
+            actionResult: result
+          });
+        }
+      } else {
+        throw new Error(result.message || 'Failed to create task');
+      }
+    } catch (error: any) {
+      console.error('❌ Task creation error:', error);
+      toast.error(
+        language === 'ar' 
+          ? `فشل في إنشاء المهمة: ${error.message}` 
+          : `Failed to create task: ${error.message}`
+      );
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  const handleReminderConfirmation = async () => {
+    if (!user) {
+      toast.error(language === 'ar' ? 'يجب تسجيل الدخول' : 'Please login first');
+      return;
+    }
+
+    if (!message.reminderData) {
+      toast.error(language === 'ar' ? 'بيانات التذكير مفقودة' : 'Reminder data missing');
+      return;
+    }
+
+    setIsCreatingReminder(true);
+    
+    try {
+      console.log('🔔 Creating reminder with data:', message.reminderData);
+      
+      const result = await WaktiAIV2Service.confirmReminderCreation(
+        user.id,
+        language,
+        message.reminderData
+      );
+
+      if (result.success) {
+        toast.success(language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!');
+        
+        // Update the message to show it was completed
+        if (onMessageUpdate) {
+          onMessageUpdate(message.id, {
+            ...message,
+            intent: 'reminder_completed',
+            actionTaken: true,
+            actionResult: result
+          });
+        }
+      } else {
+        throw new Error(result.message || 'Failed to create reminder');
+      }
+    } catch (error: any) {
+      console.error('❌ Reminder creation error:', error);
+      toast.error(
+        language === 'ar' 
+          ? `فشل في إنشاء التذكير: ${error.message}` 
+          : `Failed to create reminder: ${error.message}`
+      );
+    } finally {
+      setIsCreatingReminder(false);
+    }
+  };
+
+  const handleTaskCancellation = () => {
+    console.log('Task creation cancelled');
+    toast.info(language === 'ar' ? 'تم إلغاء إنشاء المهمة' : 'Task creation cancelled');
+    
+    // Update the message to show it was cancelled
+    if (onMessageUpdate) {
+      onMessageUpdate(message.id, {
+        ...message,
+        intent: 'task_cancelled',
+        actionTaken: false
+      });
+    }
+  };
+
+  const handleReminderCancellation = () => {
+    console.log('Reminder creation cancelled');
+    toast.info(language === 'ar' ? 'تم إلغاء إنشاء التذكير' : 'Reminder creation cancelled');
+    
+    // Update the message to show it was cancelled
+    if (onMessageUpdate) {
+      onMessageUpdate(message.id, {
+        ...message,
+        intent: 'reminder_cancelled',
+        actionTaken: false
+      });
+    }
   };
 
   const formatTime = (timestamp: Date) => {
@@ -211,30 +338,50 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
             <EditableTaskConfirmationCard
               type="task"
               data={message.taskData}
-              onConfirm={(updatedTaskData) => {
-                // Handle task confirmation with updated data
-                console.log('Task confirmed with data:', updatedTaskData);
-              }}
-              onCancel={() => {
-                // Handle cancellation
-                console.log('Task creation cancelled');
-              }}
+              onConfirm={handleTaskConfirmation}
+              onCancel={handleTaskCancellation}
+              isLoading={isCreatingTask}
             />
           )}
 
-          {message.intent === 'reminder_preview' && message.reminderData && (
+          {!isUser && message.intent === 'reminder_preview' && message.reminderData && (
             <TaskConfirmationCard
               type="reminder"
               data={message.reminderData}
-              onConfirm={() => {
-                // Handle reminder confirmation
-                console.log('Reminder confirmed');
-              }}
-              onCancel={() => {
-                // Handle cancellation
-                console.log('Reminder creation cancelled');
-              }}
+              onConfirm={handleReminderConfirmation}
+              onCancel={handleReminderCancellation}
+              isLoading={isCreatingReminder}
             />
+          )}
+
+          {/* Show completion status */}
+          {!isUser && (message.intent === 'task_completed' || message.intent === 'reminder_completed') && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {message.intent === 'task_completed' 
+                    ? (language === 'ar' ? 'تم إنشاء المهمة بنجاح' : 'Task created successfully')
+                    : (language === 'ar' ? 'تم إنشاء التذكير بنجاح' : 'Reminder created successfully')
+                  }
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Show cancellation status */}
+          {!isUser && (message.intent === 'task_cancelled' || message.intent === 'reminder_cancelled') && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
+              <div className="flex items-center gap-2 text-gray-600">
+                <XCircle className="h-4 w-4" />
+                <span className="text-sm">
+                  {message.intent === 'task_cancelled' 
+                    ? (language === 'ar' ? 'تم إلغاء إنشاء المهمة' : 'Task creation cancelled')
+                    : (language === 'ar' ? 'تم إلغاء إنشاء التذكير' : 'Reminder creation cancelled')
+                  }
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Timestamp */}
