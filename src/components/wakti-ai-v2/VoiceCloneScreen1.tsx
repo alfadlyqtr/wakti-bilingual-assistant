@@ -78,8 +78,8 @@ export function VoiceCloneScreen1({ onNext, onSkip, hasExistingVoices }: VoiceCl
             </div>
             <p className="text-sm text-muted-foreground">
               {language === 'ar' 
-                ? 'يمكنك إنشاء حتى 3 أصوات - بمجرد الحفظ، يمكن حذفها لإنشاء أصوات جديدة. لديك 5000 حرف، يمكن شراء المزيد.' 
-                : 'You can create up to 3 voices total — once saved, they can be deleted to clone more voices. You get 5,000 characters, if all used up you can always buy more.'
+                ? 'يمكنك إنشاء حتى 3 أصوات - بمجرد الحفظ، يمكن حذفها لإنشاء أصوات جديدة. لديك 3000 حرف شهرياً، يمكن شراء المزيد.' 
+                : 'You can create up to 3 voices total — once saved, they can be deleted to clone more voices. You get 3,000 characters monthly, if all used up you can always buy more.'
               }
             </p>
           </div>
