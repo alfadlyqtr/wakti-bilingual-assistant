@@ -1179,4 +1179,24 @@ export type TranslationKey =
   // Dashboard specific keys that are missing
   | "dragMode"
   | "dragModeActivated"
-  | "dragModeDeactivated";
+  | "dragModeDeactivated"
+  
+  // NEW KEYS TO FIX THE CURRENT BUILD ERRORS:
+  | "retry"
+  | "loadingTasks"
+  | "loadingReminders"
+  | "loadingActivity"
+  | "errorLoadingReminders"
+  | "errorSnoozing"
+  | "errorDeleting"
+  | "confirmDeleteReminder"
+  | "snoozeReminder"
+  | "errorUpdatingTask"
+  | "taskSnoozedUntilTomorrow"
+  | "errorSnoozingTask"
+  | "confirmDeleteTask"
+  | "errorDeletingTask"
+  | "errorCopyingLink"
+  | "dueOn"
+  | "hideSubtasks"
+  | "showSubtasks";
