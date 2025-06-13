@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const PROGRESSIER_API_KEY = 'fgo11ohil51zyccdhs9cy00w7pgx38dzw6xq5lgmyo8pvy63';
-const PROGRESSIER_API_URL = 'https://progressier.app/api/v1/push';
+const PROGRESSIER_API_URL = 'https://progressier.app/JnUBjX03FyINDYcP2hjx/send';
 
 interface NotificationPayload {
   userIds?: string[];
@@ -57,7 +57,9 @@ serve(async (req) => {
       }
     };
 
-    // Send to Progressier API
+    console.log('Sending to Progressier with payload:', JSON.stringify(progressierPayload, null, 2));
+
+    // Send to Progressier API with correct endpoint and headers
     const response = await fetch(PROGRESSIER_API_URL, {
       method: 'POST',
       headers: {
@@ -68,6 +70,12 @@ serve(async (req) => {
     });
 
     const responseData = await response.text();
+    
+    console.log('Progressier API response:', {
+      status: response.status,
+      statusText: response.statusText,
+      response: responseData
+    });
     
     if (!response.ok) {
       console.error('Progressier API error:', {
