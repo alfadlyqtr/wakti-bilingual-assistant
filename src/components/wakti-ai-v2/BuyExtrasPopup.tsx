@@ -135,7 +135,7 @@ export function BuyExtrasPopup({
               {/* Voice Characters */}
               <div className="text-sm">
                 <span>
-                  {language === 'ar' ? 'الأحرف الصوتية:' : 'Voice Characters:'} {voiceStatus.remaining}/5,000 {language === 'ar' ? 'متبقي' : 'remaining'}
+                  {language === 'ar' ? 'الأحرف الصوتية:' : 'Voice Characters:'} {voiceStatus.remaining}/3,000 {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
                 {voiceStatus.extraCharacters > 0 && (
                   <span className="text-green-600 ml-2">
