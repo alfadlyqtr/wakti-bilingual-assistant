@@ -1174,4 +1174,9 @@ export type TranslationKey =
   | "smartOrganization"
   | "priorityManagement"
   | "voiceMessaging"
-  | "privacyControl";
+  | "privacyControl"
+  
+  // Dashboard specific keys that are missing
+  | "dragMode"
+  | "dragModeActivated"
+  | "dragModeDeactivated";

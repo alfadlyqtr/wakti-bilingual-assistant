@@ -1,3 +1,4 @@
+
 import { common } from "./modules/common";
 import { auth } from "./modules/auth";
 import { navigation } from "./modules/navigation";
@@ -190,7 +191,6 @@ export const ar = {
   
   // Footer translations
   contactUs: "اتصل بنا",
-  privacyAndTerms: "الخصوصية والشروط",
   allRightsReserved: "جميع الحقوق محفوظة",
   
   // Privacy Policy comprehensive translations
@@ -308,7 +308,6 @@ export const ar = {
   textAlignment: "محاذاة النص",
   textStyling: "تنسيق النص",
   backgroundCustomization: "تخصيص الخلفية",
-  privacySettings: "إعدادات الخصوصية",
   enableShareableLink: "تفعيل الرابط القابل للمشاركة",
   showAttendingCount: "إظهار عدد الحضور",
   shareableLinkDescription: "السماح للآخرين بعرض وتأكيد الحضور لهذا الحدث",
@@ -457,7 +456,6 @@ export const ar = {
   mustRsvpBefore: "يجب تأكيد الحضور قبل",
   notEligibleToRsvp: "غير مؤهل لتأكيد الحضور",
   thankYouRsvp: "شكراً لتأكيد حضورك",
-  privacyAndTerms: "الخصوصية والشروط",
   
   // New landing page content
   mainTagline: "تطبيق شامل واحد بالذكاء الاصطناعي",
@@ -514,7 +512,6 @@ export const ar = {
   events_view_all: "عرض جميع الأحداث",
   tasksReminders: "المهام والتذكيرات",
   maw3dEvents: "أحداث Maw3d",
-  dragMode: "وضع السحب",
   dragModeActivated: "تم تفعيل وضع السحب",
   dragModeDeactivated: "تم إلغاء تفعيل وضع السحب",
 };
