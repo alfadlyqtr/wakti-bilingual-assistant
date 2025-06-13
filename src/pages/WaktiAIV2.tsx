@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '@supabase/auth-helpers-react';
 import { toast } from 'react-hot-toast';
@@ -14,6 +15,8 @@ function generateId() {
   return uuidv4();
 }
 
+type ActiveTrigger = 'chat' | 'search' | 'image';
+
 export default function WaktiAIV2() {
   const user = useUser();
   const { language } = useTheme();
@@ -28,7 +31,7 @@ export default function WaktiAIV2() {
   const [isLoading, setIsLoading] = useState(false);
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
-  const [activeTrigger, setActiveTrigger] = useState<'chat' | 'search' | 'image'>('chat');
+  const [activeTrigger, setActiveTrigger] = useState<ActiveTrigger>('chat');
   const [userProfile, setUserProfile] = useState<any>(null);
   const [quotaStatus, setQuotaStatus] = useState<any>(null);
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
@@ -388,24 +391,19 @@ export default function WaktiAIV2() {
     <div className="flex flex-col h-screen bg-background">
       <ChatHeader
         activeTrigger={activeTrigger}
-        setActiveTrigger={setActiveTrigger}
         onNewConversation={handleNewConversation}
         onToggleConversations={() => setShowConversations(true)}
         onToggleQuickActions={() => setShowQuickActions(true)}
-        quotaStatus={quotaStatus}
         searchConfirmationRequired={searchConfirmationRequired}
         onSearchConfirmation={handleSearchConfirmation}
         remainingFreeSearches={searchQuotaStatus.remainingFreeSearches}
         extraSearches={searchQuotaStatus.extraSearches}
         isAtSearchLimit={searchQuotaStatus.isAtLimit}
-        translationQuota={translationQuota}
         MAX_DAILY_TRANSLATIONS={MAX_DAILY_TRANSLATIONS}
       />
 
       <NotificationBars
-        quotaStatus={quotaStatus}
         searchQuotaStatus={searchQuotaStatus}
-        translationQuota={translationQuota}
         maxDailyTranslations={MAX_DAILY_TRANSLATIONS}
         language={language}
       />
@@ -426,7 +424,6 @@ export default function WaktiAIV2() {
           setMessage={setMessage}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
-          activeTrigger={activeTrigger}
           userProfile={userProfile}
         />
       </div>
@@ -441,7 +438,6 @@ export default function WaktiAIV2() {
         onDeleteConversation={handleDeleteConversation}
         onClearChat={handleClearChat}
         onNewConversation={handleNewConversation}
-        quotaStatus={quotaStatus}
         isLoading={isLoading}
       />
     </div>

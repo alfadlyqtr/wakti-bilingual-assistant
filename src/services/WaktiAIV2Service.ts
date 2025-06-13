@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface AIMessage {
@@ -24,6 +25,8 @@ export interface AIConversation {
   created_at: string;
   name: string;
   user_id: string;
+  title?: string;
+  last_message_at?: string;
 }
 
 export class WaktiAIV2Service {
@@ -45,6 +48,81 @@ export class WaktiAIV2Service {
       console.error('Error in getConversations:', error);
       throw new Error(error.message);
     }
+  }
+
+  static async getConversationMessages(conversationId: string): Promise<AIMessage[]> {
+    try {
+      const { data, error } = await supabase
+        .from('ai_chat_history')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching conversation messages:', error);
+        throw new Error(error.message);
+      }
+
+      return (data || []).map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: new Date(msg.created_at),
+        userId: msg.user_id,
+        conversationId: msg.conversation_id,
+        language: msg.language || 'en'
+      }));
+    } catch (error: any) {
+      console.error('Error in getConversationMessages:', error);
+      throw new Error(error.message);
+    }
+  }
+
+  static async getUserProfile(userId: string): Promise<any> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching user profile:', error);
+        throw new Error(error.message);
+      }
+
+      return data;
+    } catch (error: any) {
+      console.error('Error in getUserProfile:', error);
+      throw new Error(error.message);
+    }
+  }
+
+  static async getQuotaStatus(userId: string): Promise<any> {
+    // Mock implementation - replace with actual quota logic if needed
+    return {
+      showWarning: false,
+      remaining: 100,
+      total: 100
+    };
+  }
+
+  static async getSearchQuotaStatus(userId: string): Promise<any> {
+    // Mock implementation - replace with actual search quota logic if needed
+    return {
+      remainingFreeSearches: 5,
+      extraSearches: 0,
+      isAtLimit: false,
+      maxMonthlySearches: 5
+    };
+  }
+
+  static async getTranslationQuota(userId: string): Promise<any> {
+    // Mock implementation - replace with actual translation quota logic if needed
+    return {
+      daily_count: 0,
+      max_daily: 25
+    };
   }
 
   static async createConversation(userId: string, name: string): Promise<AIConversation> {
@@ -200,8 +278,7 @@ export class WaktiAIV2Service {
     ];
 
     for (const pattern of timePatterns) {
-      if (timePatterns) {
-        const timeMatch = text.match(pattern);
+      const timeMatch = text.match(pattern);
       if (timeMatch) {
         if (timeMatch[0].toLowerCase() === 'noon' || timeMatch[0].includes('ظهراً')) {
           due_time = '12:00';
@@ -212,7 +289,6 @@ export class WaktiAIV2Service {
         }
         break;
       }
-    }
     }
 
     // Extract priority
@@ -258,7 +334,8 @@ export class WaktiAIV2Service {
         due_date: taskData.due_date,
         due_time: taskData.due_time,
         priority: taskData.priority || 'normal',
-        task_type: taskData.task_type || 'one-time'
+        task_type: taskData.task_type || 'one-time',
+        is_shared: false // Add the required field
       };
 
       // Create the main task using TRService

@@ -69,12 +69,16 @@ export function TaskConfirmationCard({
               {language === 'ar' ? 'المهام الفرعية:' : 'Subtasks:'}
             </p>
             <ul className="space-y-1">
-              {data.subtasks.map((subtask: string, index: number) => (
-                <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
-                  {typeof subtask === 'string' ? subtask : subtask.title || subtask}
-                </li>
-              ))}
+              {data.subtasks.map((subtask: any, index: number) => {
+                // Handle both string and object subtasks
+                const subtaskTitle = typeof subtask === 'string' ? subtask : (subtask?.title || subtask?.name || String(subtask));
+                return (
+                  <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 bg-gray-400 rounded-full" />
+                    {subtaskTitle}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}
