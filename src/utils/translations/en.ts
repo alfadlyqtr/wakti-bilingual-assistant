@@ -327,7 +327,6 @@ export const en = {
   format: "Format",
   structure: "Structure",
   framework: "Framework",
-  system: "System",
   network: "Network",
   connection: "Connection",
   relationship: "Relationship",
