@@ -183,7 +183,6 @@ export const miscAr = {
   competition: "منافسة",
   conflict: "صراع",
   disagreement: "خلاف",
-  agreement: "اتفاق",
   contract: "عقد",
   deal: "صفقة",
   transaction: "معاملة",
