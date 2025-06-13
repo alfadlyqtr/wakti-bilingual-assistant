@@ -132,13 +132,6 @@ export default function TasksReminders() {
   return (
     <div className="flex-1 overflow-y-auto p-4 pb-28 bg-gradient-to-b from-background to-background/95 scrollbar-hide">
       <div className="max-w-md mx-auto space-y-4">
-        {/* Debug info in development */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
-            Debug: Tasks={tasks.length}, Reminders={reminders.length}, Loading={loading.toString()}
-          </div>
-        )}
-
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">

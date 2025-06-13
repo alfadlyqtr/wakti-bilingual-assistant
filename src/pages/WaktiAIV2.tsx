@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
+import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
+import { AIMessage, AIConversation } from '@/types/wakti-ai';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
@@ -21,7 +21,6 @@ const WaktiAIV2 = () => {
   const [showConversations, setShowConversations] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [quotaStatus, setQuotaStatus] = useState<any>(null);
   const [searchConfirmationRequired, setSearchConfirmationRequired] = useState(false);
   const [activeTrigger, setActiveTrigger] = useState<string>('chat');
   const [textGenParams, setTextGenParams] = useState<any>(null);
@@ -60,40 +59,6 @@ const WaktiAIV2 = () => {
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
   const [hasLoadedSession, setHasLoadedSession] = useState(false);
-
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
-        const quota = await WaktiAIV2Service.getOrFetchQuota(user.id);
-        setQuotaStatus(quota);
-      } catch (error: any) {
-        console.error('Error fetching quota:', error);
-        setError(error.message || 'Failed to fetch quota');
-      }
-    };
-
-    fetchQuota();
-  }, []);
-
-  // Updated fetchQuota function with force refresh option
-  const fetchQuota = async (forceRefresh: boolean = false) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      console.log(`📊 Fetching quota ${forceRefresh ? 'with force refresh' : 'normally'}`);
-      const quota = await WaktiAIV2Service.getOrFetchQuota(user.id, forceRefresh);
-      setQuotaStatus(quota);
-      
-      console.log('📊 Updated quota state:', quota);
-    } catch (error: any) {
-      console.error('Error fetching quota:', error);
-      setError(error.message || 'Failed to fetch quota');
-    }
-  };
 
   useEffect(() => {
     const fetchEnhancedContext = async () => {
@@ -315,49 +280,51 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED AUTHENTICATION FLOW ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // Handle Search quota increment BEFORE sending (only for search trigger)
+      // Get authenticated user with better error handling
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) {
+        console.error('❌ WAKTI AI V2.5: Authentication error:', authError);
+        throw new Error('Authentication failed. Please refresh and try again.');
+      }
+      
+      if (!user) {
+        console.error('❌ WAKTI AI V2.5: No authenticated user found');
+        throw new Error('User not authenticated. Please log in and try again.');
+      }
+
+      console.log('✅ WAKTI AI V2.5: User authenticated:', { userId: user.id, email: user.email });
+
+      // Simple search quota handling - just decrement when searching
       if (activeTrigger === 'search') {
-        console.log('🔍 Search operation detected - checking search quota...');
+        console.log('🔍 Search operation - decrementing quota...');
         
-        if (!canSearch) {
-          setIsLoading(false);
-          const errorMsg = language === 'ar' 
-            ? `تم الوصول للحد الأقصى من البحث (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} استخدمت، ${extraSearches} إضافي متبقي)`
-            : `Search quota exceeded (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} used, ${extraSearches} extra remaining)`;
-          showError(errorMsg);
-          return;
-        }
-
-        // Increment search quota BEFORE sending the request
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
         const { data, error: quotaError } = await supabase.rpc('increment_regular_search_usage', {
           p_user_id: user.id
         });
 
         if (quotaError) {
-          console.error('❌ Error incrementing search quota:', quotaError);
+          console.error('❌ Search quota error:', quotaError);
           setIsLoading(false);
-          showError(language === 'ar' ? 'خطأ في إدارة حصة البحث' : 'Error managing search quota');
+          showError(language === 'ar' ? 'خطأ في حصة البحث' : 'Search quota error');
           return;
         }
 
-        if (!data || !data[0]?.success) {
-          console.error('❌ Search quota increment failed:', data);
+        // Simple check: if no data or success is false, show error
+        if (!data || !data[0] || data[0].success !== true) {
+          console.log('❌ Search quota exceeded');
           setIsLoading(false);
           showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث' : 'Search quota exceeded');
           return;
         }
 
-        console.log('✅ Search quota incremented successfully:', data[0]);
+        console.log('✅ Search quota decremented successfully');
         
-        // Refresh search quota display immediately
+        // Refresh search quota display
         await refreshSearchQuota();
       }
 
@@ -385,21 +352,19 @@ const WaktiAIV2 = () => {
       const updatedSessionMessages = [...sessionMessages, userMessage];
       setSessionMessages(updatedSessionMessages);
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
       const completeContext = getCompleteConversationContext();
       const contextForAI = [...completeContext, userMessage].slice(-50);
 
       console.log('🧠 WAKTI AI V2.5: Sending expanded context to AI:', {
         contextMessages: contextForAI.length,
         hasConversationHistory: conversationMessages.length > 0,
-        currentConversationId
+        currentConversationId,
+        authenticatedUserId: user.id
       });
 
       const response = await WaktiAIV2Service.sendMessage(
         message,
-        user.id,
+        user.id, // Pass the authenticated user's ID
         language,
         currentConversationId,
         inputType,
@@ -412,11 +377,13 @@ const WaktiAIV2 = () => {
         userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
       console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
+      console.log('🔄 WAKTI AI V2.5: Has Error:', !!response.error);
 
       if (response.error) {
+        console.error('❌ WAKTI AI V2.5: Response contains error:', response.error);
         throw new Error(response.error);
       }
 
@@ -475,17 +442,11 @@ const WaktiAIV2 = () => {
       // Search operation success handling
       if (response.browsingUsed && activeTrigger === 'search') {
         console.log('🔄 Search operation completed successfully');
-        const remainingAfterSearch = remainingFreeSearches - 1;
         showSuccess(
           language === 'ar' 
-            ? `تم تنفيذ البحث بنجاح (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} متبقي)`
-            : `Search completed successfully (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} remaining)`
+            ? 'تم تنفيذ البحث بنجاح'
+            : 'Search completed successfully'
         );
-        
-        // Force refresh search quota display
-        setTimeout(() => {
-          refreshSearchQuota();
-        }, 500);
       }
 
       // Voice Translation quota refresh with immediate UI update
@@ -499,20 +460,6 @@ const WaktiAIV2 = () => {
             ? `تم تنفيذ الترجمة الصوتية بنجاح وتحديث الحصة (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} متبقية)` 
             : `Voice translation completed successfully - quota updated (${remainingTranslations}/${MAX_DAILY_TRANSLATIONS} remaining)`
         );
-      }
-
-      if (response.quotaStatus) {
-        console.log('📊 Received quota status from AI response:', response.quotaStatus);
-        setQuotaStatus(response.quotaStatus);
-        
-        if (response.browsingUsed && activeTrigger === 'search') {
-          console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
-          WaktiAIV2Service.invalidateQuotaCache();
-          
-          setTimeout(() => {
-            fetchQuota(true);
-          }, 1000);
-        }
       }
 
       if (inputType === 'voice') {
@@ -553,11 +500,26 @@ const WaktiAIV2 = () => {
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Simplified system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
       setError(error.message || 'Failed to send message');
-      showError(
-        error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
-      );
+      
+      // Provide specific error messages for common issues
+      let errorMessage = error.message || 'Failed to send message';
+      if (error.message?.includes('User ID mismatch')) {
+        errorMessage = language === 'ar' ? 'خطأ في المصادقة - يرجى تحديث الصفحة والمحاولة مرة أخرى' : 'Authentication error - please refresh and try again';
+      } else if (error.message?.includes('not authenticated')) {
+        errorMessage = language === 'ar' ? 'يرجى تسجيل الدخول والمحاولة مرة أخرى' : 'Please log in and try again';
+      } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
+        errorMessage = language === 'ar' ? 'خطأ في الخادم - يرجى التحقق من المصادقة والمحاولة مرة أخرى' : 'Server error - please check authentication and try again';
+      }
+      
+      showError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -603,10 +565,6 @@ const WaktiAIV2 = () => {
 
       const finalMessages = [...sessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalMessages);
-
-      if (response.quotaStatus) {
-        setQuotaStatus(response.quotaStatus);
-      }
 
       setSearchConfirmationRequired(false);
       fetchConversations();
@@ -773,7 +731,7 @@ const WaktiAIV2 = () => {
             onShowConversations={() => setShowConversations(true)}
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
-            quotaStatus={quotaStatus}
+            quotaStatus={null}
             searchQuotaStatus={{ 
               remainingFreeSearches, 
               extraSearches, 
