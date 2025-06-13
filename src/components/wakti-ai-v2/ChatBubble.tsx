@@ -71,6 +71,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
   const isUser = message.role === 'user';
 
+  // Show copy button for AI messages in chat and search modes (not image mode)
+  const shouldShowCopyButton = !isUser && message.content && activeTrigger !== 'image';
+
   return (
     <div className={cn(
       "flex w-full mb-4",
@@ -101,11 +104,23 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
         <div className="flex flex-col space-y-1 min-w-0">
           {/* Message Bubble */}
           <div className={cn(
-            "px-4 py-3 rounded-2xl shadow-sm",
+            "px-4 py-3 rounded-2xl shadow-sm relative group",
             isUser
               ? "bg-primary text-primary-foreground rounded-br-md"
               : "bg-muted rounded-bl-md"
           )}>
+            {/* Copy Button for AI messages in chat/search modes */}
+            {shouldShowCopyButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => copyToClipboard(message.content)}
+                className="absolute top-2 right-2 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
+            )}
+
             {/* Image Content */}
             {message.imageUrl && (
               <div className="mb-3">
