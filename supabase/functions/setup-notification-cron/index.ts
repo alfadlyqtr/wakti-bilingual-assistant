@@ -12,22 +12,10 @@ serve(async (req) => {
       auth: { persistSession: false }
     });
 
-    console.log('Setting up notification cron job to run every 30 seconds...');
-
-    // First, unschedule any existing notification cron job
-    try {
-      await supabase.rpc('cron.unschedule', {
-        jobname: 'process-notifications'
-      });
-      console.log('Unscheduled existing notification cron job');
-    } catch (error) {
-      console.log('No existing cron job to unschedule:', error.message);
-    }
-
-    // Create cron job to process notifications every 30 seconds
+    // Create cron job to process notifications every minute
     const { data, error } = await supabase.rpc('cron.schedule', {
       jobname: 'process-notifications',
-      schedule: '*/30 * * * * *', // Every 30 seconds
+      schedule: '* * * * *', // Every minute
       command: `
         SELECT net.http_post(
           url := '${supabaseUrl}/functions/v1/process-notification-queue',
@@ -39,10 +27,7 @@ serve(async (req) => {
 
     if (error) {
       console.error('Error setting up cron job:', error);
-      return new Response(JSON.stringify({ 
-        error: error.message,
-        details: 'Failed to schedule notification cron job'
-      }), {
+      return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -50,24 +35,10 @@ serve(async (req) => {
 
     console.log('Notification processing cron job set up successfully');
 
-    // Trigger an immediate test run
-    console.log('Triggering immediate test run...');
-    const testResponse = await fetch(`${supabaseUrl}/functions/v1/process-notification-queue`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${supabaseKey}`,
-      },
-    });
-
-    const testResult = await testResponse.json();
-    console.log('Test run result:', testResult);
-
     return new Response(JSON.stringify({
       success: true,
-      message: 'Notification cron job configured to run every 30 seconds',
-      data: data,
-      testRun: testResult
+      message: 'Notification cron job configured',
+      data: data
     }), {
       headers: { 'Content-Type': 'application/json' }
     });
