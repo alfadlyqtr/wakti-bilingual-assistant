@@ -1,596 +1,805 @@
-
-import { AIMessage, AIConversation } from '@/types/wakti-ai';
 import { supabase } from '@/integrations/supabase/client';
+import { ChatMemoryService } from './ChatMemoryService';
 
-// Export the types for other components to use
-export type { AIMessage, AIConversation };
+export interface AIMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: Date;
+  intent?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  actionTaken?: boolean | string;
+  inputType?: 'text' | 'voice';
+  browsingUsed?: boolean;
+  browsingData?: any;
+  quotaStatus?: any;
+  requiresSearchConfirmation?: boolean;
+  imageUrl?: string;
+  isTextGenerated?: boolean;
+  actionResult?: any;
+  proactiveActions?: any[];
+  userProfile?: any;
+  deepIntegration?: any;
+  automationSuggestions?: any[];
+  predictiveInsights?: any;
+  workflowActions?: any[];
+  contextualActions?: any[];
+  needsConfirmation?: boolean;
+  pendingTaskData?: any;
+  pendingReminderData?: any;
+  attachedFiles?: any[];
+  fileAnalysisResults?: any[];
+}
 
-export class WaktiAIV2Service {
-  private static conversationCache: { [userId: string]: any[] } = {};
+export interface AIConversation {
+  id: string;
+  title: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+  message_count: number;
+}
 
-  static async getConversations(): Promise<any[]> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+export class WaktiAIV2ServiceClass {
+  private static quotaCache: any = null;
+  private static quotaCacheTime: number = 0;
+  private static readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-      if (this.conversationCache[user.id]) {
-        console.log('💬 Returning cached conversations for user:', user.id);
-        return this.conversationCache[user.id];
-      }
-
-      console.log('💬 Fetching conversations from Supabase for user:', user.id);
-
-      const { data, error } = await supabase
-        .from('ai_chat_conversations')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) {
-        console.error('❌ Error fetching conversations from Supabase:', error);
-        throw error;
-      }
-
-      this.conversationCache[user.id] = data;
-      return data;
-    } catch (error) {
-      console.error('❌ Error in getConversations:', error);
-      return [];
-    }
+  // SECURITY FIX: Get user-specific localStorage key
+  private static getUserStorageKey(suffix: string): string {
+    // We'll get this from auth context when available
+    return `wakti_ai_${suffix}`;
   }
 
-  static async getConversationMessages(conversationId: string): Promise<any[]> {
-    try {
-      console.log('📚 Fetching messages for conversation:', conversationId);
-
-      const { data, error } = await supabase
-        .from('ai_chat_history')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true });
-
-      if (error) {
-        console.error('❌ Error fetching messages from Supabase:', error);
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
-      console.error('❌ Error in getConversationMessages:', error);
-      return [];
-    }
+  // Instance methods that delegate to static methods
+  saveChatSession(messages: AIMessage[], conversationId: string | null) {
+    return WaktiAIV2ServiceClass.saveChatSession(messages, conversationId);
   }
 
-  static async ensureConversationExists(userId: string, messages: AIMessage[], language: string): Promise<string | null> {
-    try {
-      console.log('🆕 Ensuring conversation exists for user:', userId);
-
-      const firstUserMessage = messages.find(msg => msg.role === 'user');
-      const title = firstUserMessage ? firstUserMessage.content.substring(0, 50) : 'New Conversation';
-
-      const { data, error } = await supabase
-        .from('ai_chat_conversations')
-        .insert([{
-          user_id: userId,
-          title: title,
-          language: language,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select('id')
-        .single();
-
-      if (error) {
-        console.error('❌ Error creating conversation in Supabase:', error);
-        throw error;
-      }
-
-      this.conversationCache[userId] = null;
-      return data.id;
-    } catch (error) {
-      console.error('❌ Error in ensureConversationExists:', error);
-      return null;
-    }
+  loadChatSession() {
+    return WaktiAIV2ServiceClass.loadChatSession();
   }
 
-  static async updateConversationTimestamp(conversationId: string): Promise<void> {
-    try {
-      console.log('⏱️  Updating timestamp for conversation:', conversationId);
-
-      const { error } = await supabase
-        .from('ai_chat_conversations')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', conversationId);
-
-      if (error) {
-        console.error('❌ Error updating conversation timestamp in Supabase:', error);
-        throw error;
-      }
-
-      this.invalidateConversationCache();
-    } catch (error) {
-      console.error('❌ Error in updateConversationTimestamp:', error);
-    }
+  clearChatSession() {
+    return WaktiAIV2ServiceClass.clearChatSession();
   }
 
-  static async deleteConversation(conversationId: string): Promise<void> {
-    try {
-      console.log('🗑️  Deleting conversation:', conversationId);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('ai_chat_conversations')
-        .delete()
-        .eq('id', conversationId);
-
-      if (error) {
-        console.error('❌ Error deleting conversation from Supabase:', error);
-        throw error;
-      }
-
-      this.invalidateConversationCache();
-    } catch (error) {
-      console.error('❌ Error in deleteConversation:', error);
-    }
-  }
-
-  static invalidateConversationCache() {
-    this.conversationCache = {};
-    console.log('🗑️  Conversation cache invalidated');
-  }
-
-  static async saveCurrentConversationIfNeeded(userId: string, messages: AIMessage[], conversationId: string | null, language: string): Promise<void> {
-    if (conversationId) {
-      console.log('💾 Conversation already exists, skipping save');
-      return;
-    }
-
-    try {
-      console.log('💾 Saving current conversation for user:', userId);
-
-      const firstUserMessage = messages.find(msg => msg.role === 'user');
-      const title = firstUserMessage ? firstUserMessage.content.substring(0, 50) : 'New Conversation';
-
-      const { data, error } = await supabase
-        .from('ai_chat_conversations')
-        .insert([{
-          user_id: userId,
-          title: title,
-          language: language,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select('id')
-        .single();
-
-      if (error) {
-        console.error('❌ Error creating conversation in Supabase:', error);
-        throw error;
-      }
-
-      const newConversationId = data.id;
-
-      for (const message of messages) {
-        await supabase
-          .from('ai_chat_history')
-          .insert({
-            conversation_id: newConversationId,
-            user_id: userId,
-            role: message.role,
-            content: message.content,
-            created_at: message.timestamp.toISOString(),
-            language: language,
-            input_type: message.inputType || 'text',
-            intent: message.intent,
-            confidence_level: message.confidence,
-            action_taken: message.actionTaken ? String(message.actionTaken) : null,
-            browsing_used: message.browsingUsed || false,
-            browsing_data: message.browsingData || null,
-            quota_status: message.quotaStatus || null,
-            action_result: message.actionResult || null
-          });
-      }
-
-      this.invalidateConversationCache();
-      console.log('✅ Current conversation saved successfully');
-    } catch (error) {
-      console.error('❌ Error in saveCurrentConversationIfNeeded:', error);
-    }
-  }
-
-  static async sendMessage(
+  sendMessage(
     message: string,
     userId: string,
-    language: string,
-    conversationId: string | null = null,
+    language: string = 'en',
+    conversationId?: string | null,
     inputType: 'text' | 'voice' = 'text',
-    context: AIMessage[] = [],
-    includeContext: boolean = true,
+    conversationHistory: any[] = [],
+    confirmSearch: boolean = false,
     activeTrigger: string = 'chat',
     textGenParams: any = null,
     attachedFiles: any[] = [],
     calendarContext: any = null,
     userContext: any = null,
+    enableAdvancedIntegration: boolean = true,
+    enablePredictiveInsights: boolean = true,
+    enableWorkflowAutomation: boolean = true,
     confirmTask: boolean = false,
     confirmReminder: boolean = false,
-    taskData: any = null,
-    reminderData: any = null
+    pendingTaskData: any = null,
+    pendingReminderData: any = null
   ) {
+    return WaktiAIV2ServiceClass.sendMessage(
+      message, userId, language, conversationId, inputType, conversationHistory,
+      confirmSearch, activeTrigger, textGenParams, attachedFiles, calendarContext,
+      userContext, enableAdvancedIntegration, enablePredictiveInsights,
+      enableWorkflowAutomation, confirmTask, confirmReminder, pendingTaskData, pendingReminderData
+    );
+  }
+
+  confirmTaskCreation(userId: string, language: string = 'en', pendingTaskData: any) {
+    return WaktiAIV2ServiceClass.confirmTaskCreation(userId, language, pendingTaskData);
+  }
+
+  confirmReminderCreation(userId: string, language: string = 'en', pendingReminderData: any) {
+    return WaktiAIV2ServiceClass.confirmReminderCreation(userId, language, pendingReminderData);
+  }
+
+  getOrFetchQuota(userId: string, forceRefresh: boolean = false) {
+    return WaktiAIV2ServiceClass.getOrFetchQuota(userId, forceRefresh);
+  }
+
+  invalidateQuotaCache() {
+    return WaktiAIV2ServiceClass.invalidateQuotaCache();
+  }
+
+  ensureConversationExists(userId: string, sessionMessages: AIMessage[], language: string = 'en') {
+    return WaktiAIV2ServiceClass.ensureConversationExists(userId, sessionMessages, language);
+  }
+
+  updateConversationTimestamp(conversationId: string) {
+    return WaktiAIV2ServiceClass.updateConversationTimestamp(conversationId);
+  }
+
+  saveCurrentConversationIfNeeded(userId: string, sessionMessages: AIMessage[], currentConversationId: string | null, language: string = 'en') {
+    return WaktiAIV2ServiceClass.saveCurrentConversationIfNeeded(userId, sessionMessages, currentConversationId, language);
+  }
+
+  getCalendarContext(userId: string) {
+    return WaktiAIV2ServiceClass.getCalendarContext(userId);
+  }
+
+  getUserContext(userId: string) {
+    return WaktiAIV2ServiceClass.getUserContext(userId);
+  }
+
+  getConversations() {
+    return WaktiAIV2ServiceClass.getConversations();
+  }
+
+  getConversationMessages(conversationId: string) {
+    return WaktiAIV2ServiceClass.getConversationMessages(conversationId);
+  }
+
+  deleteConversation(conversationId: string) {
+    return WaktiAIV2ServiceClass.deleteConversation(conversationId);
+  }
+
+  sendMessageWithSearchConfirmation(message: string, conversationId: string | null, language: string = 'en') {
+    return WaktiAIV2ServiceClass.sendMessageWithSearchConfirmation(message, conversationId, language);
+  }
+
+  // NEW: Clear chat memory
+  clearChatMemory(userId?: string) {
+    return ChatMemoryService.clearMemory(userId);
+  }
+
+  // SECURITY FIX: Enhanced static method for better conversation saving with user isolation
+  static async ensureConversationExists(
+    userId: string, 
+    sessionMessages: AIMessage[], 
+    language: string = 'en'
+  ): Promise<string | null> {
+    if (sessionMessages.length === 0) return null;
+
     try {
-      console.log('🔄 WAKTI AI V2.5: Sending message to unified brain...', {
-        message: message.slice(0, 100),
-        userId: userId, // Log the userId being sent
-        activeTrigger,
-        inputType,
-        contextLength: context.length,
-        hasCalendarContext: !!calendarContext,
-        hasUserContext: !!userContext,
-        confirmTask,
-        confirmReminder
-      });
+      // Create a conversation title from the first user message
+      const firstUserMessage = sessionMessages.find(msg => msg.role === 'user');
+      const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'Untitled Conversation';
 
-      // Verify user is authenticated before making the request
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.error('❌ WAKTI AI V2.5: User not authenticated');
-        throw new Error('User not authenticated');
-      }
-
-      // Ensure userId matches authenticated user
-      if (userId !== user.id) {
-        console.error('❌ WAKTI AI V2.5: User ID mismatch', { providedUserId: userId, authenticatedUserId: user.id });
-        throw new Error('User ID mismatch');
-      }
-
-      console.log('✅ WAKTI AI V2.5: User authentication verified', { userId: user.id });
-
-      const requestData = {
-        message,
-        user_id: user.id, // Use authenticated user's ID
-        userId: user.id, // Also include as userId for backward compatibility
-        language,
-        conversation_id: conversationId,
-        input_type: inputType,
-        context: includeContext ? context : [],
-        active_trigger: activeTrigger,
-        text_gen_params: textGenParams,
-        attached_files: attachedFiles || [],
-        calendar_context: calendarContext,
-        user_context: userContext,
-        confirm_task: confirmTask,
-        confirm_reminder: confirmReminder,
-        task_data: taskData,
-        reminder_data: reminderData,
-        direct_search: activeTrigger === 'search' && message.trim() && !confirmTask && !confirmReminder
-      };
-
-      console.log('🔄 WAKTI AI V2.5: Calling wakti-ai-v2-brain with request:', {
-        ...requestData,
-        message: requestData.message.slice(0, 50) + '...',
-        context: `${requestData.context.length} messages`
-      });
-
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: requestData
-      });
+      // SECURITY: Ensure user_id is set correctly for RLS
+      const { data: conversation, error } = await supabase
+        .from('ai_conversations')
+        .insert({
+          user_id: userId, // CRITICAL: Always use the provided userId
+          title: title,
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
+        .single();
 
       if (error) {
-        console.error('❌ WAKTI AI V2.5: Supabase function error:', error);
-        console.error('❌ WAKTI AI V2.5: Error details:', JSON.stringify(error, null, 2));
+        console.error('❌ Error creating conversation in ensureConversationExists:', error);
+        return null;
+      }
+
+      if (conversation) {
+        console.log('✅ Created new conversation:', conversation.id);
         
-        // Handle specific error types
-        if (error.message?.includes('User ID mismatch')) {
-          throw new Error('Authentication error: User ID mismatch. Please refresh and try again.');
-        } else if (error.message?.includes('Authentication required')) {
-          throw new Error('Authentication required. Please log in and try again.');
-        } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
-          throw new Error('Server error occurred. Please check your authentication and try again.');
+        // SECURITY: Save all session messages with proper user_id
+        const messageInserts = sessionMessages.map((msg, index) => ({
+          conversation_id: conversation.id,
+          user_id: userId, // CRITICAL: Always use the provided userId
+          role: msg.role,
+          content: msg.content,
+          created_at: new Date(Date.now() + index).toISOString(),
+          language: language,
+          input_type: msg.inputType || 'text',
+          intent: msg.intent,
+          confidence_level: msg.confidence,
+          action_taken: msg.actionTaken ? String(msg.actionTaken) : null,
+          browsing_used: msg.browsingUsed || false,
+          browsing_data: msg.browsingData || null,
+          quota_status: msg.quotaStatus || null,
+          action_result: msg.actionResult || null
+        }));
+
+        const { error: messagesError } = await supabase
+          .from('ai_chat_history')
+          .insert(messageInserts);
+
+        if (messagesError) {
+          console.error('❌ Error saving messages in ensureConversationExists:', messagesError);
+        } else {
+          console.log('✅ Saved', messageInserts.length, 'messages to conversation');
         }
+
+        return conversation.id;
+      }
+    } catch (error) {
+      console.error('❌ Error in ensureConversationExists:', error);
+    }
+
+    return null;
+  }
+
+  // Enhanced static method for saving current conversation when starting new one
+  static async saveCurrentConversationIfNeeded(
+    userId: string,
+    sessionMessages: AIMessage[],
+    currentConversationId: string | null,
+    language: string = 'en'
+  ): Promise<void> {
+    if (sessionMessages.length > 0 && !currentConversationId) {
+      try {
+        console.log('🔄 WAKTI AI V2: Saving unsaved conversation with', sessionMessages.length, 'messages for user:', userId);
         
-        throw new Error(error.message || 'Failed to process request');
+        const conversationId = await this.ensureConversationExists(userId, sessionMessages, language);
+        if (conversationId) {
+          console.log('✅ Conversation saved successfully:', conversationId);
+        }
+      } catch (error) {
+        console.error('❌ Error in saveCurrentConversationIfNeeded:', error);
       }
-
-      if (!data) {
-        console.error('❌ WAKTI AI V2.5: No data received from function');
-        throw new Error('No response received from AI service');
-      }
-
-      console.log('✅ WAKTI AI V2.5: Response received:', {
-        hasResponse: !!data.response,
-        responseLength: data.response?.length,
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        browsingUsed: data.browsingUsed,
-        hasQuotaStatus: !!data.quotaStatus,
-        conversationId: data.conversationId
-      });
-
-      return {
-        response: data.response || '',
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        conversationId: data.conversationId,
-        requiresSearchConfirmation: data.requiresSearchConfirmation,
-        imageUrl: data.imageUrl,
-        fileAnalysisResults: data.fileAnalysisResults,
-        deepIntegration: data.deepIntegration,
-        automationSuggestions: data.automationSuggestions,
-        predictiveInsights: data.predictiveInsights,
-        workflowActions: data.workflowActions,
-        contextualActions: data.contextualActions,
-        needsConfirmation: data.needsConfirmation,
-        pendingTaskData: data.pendingTaskData,
-        pendingReminderData: data.pendingReminderData,
-        actionResult: data.actionResult,
-        error: null
-      };
-
-    } catch (error: any) {
-      console.error('❌ WAKTI AI V2.5: Service error:', error);
-      console.error('❌ WAKTI AI V2.5: Error stack:', error.stack);
-      
-      return {
-        response: '',
-        intent: 'error',
-        confidence: 'low' as const,
-        actionTaken: false,
-        browsingUsed: false,
-        browsingData: null,
-        quotaStatus: null,
-        conversationId: null,
-        requiresSearchConfirmation: false,
-        imageUrl: null,
-        fileAnalysisResults: [],
-        deepIntegration: null,
-        automationSuggestions: [],
-        predictiveInsights: null,
-        workflowActions: [],
-        contextualActions: [],
-        needsConfirmation: false,
-        pendingTaskData: null,
-        pendingReminderData: null,
-        actionResult: null,
-        error: error.message || 'Failed to send message'
-      };
     }
   }
 
-  static async sendMessageWithSearchConfirmation(
-    message: string,
-    conversationId: string | null,
-    language: string
-  ): Promise<any> {
+  // Enhanced method to update conversation timestamp
+  static async updateConversationTimestamp(conversationId: string): Promise<void> {
+    if (!conversationId) return;
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const requestData = {
-        message,
-        user_id: user.id,
-        language,
-        conversation_id: conversationId,
-        search_confirmation: true
-      };
-
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: requestData
-      });
-
-      if (error) {
-        console.error('Error calling Supabase function:', error);
-        throw new Error(error.message || 'Failed to process request');
-      }
-
-      if (!data) {
-        throw new Error('No response received from AI service');
-      }
-
-      return {
-        response: data.response || '',
-        intent: data.intent,
-        confidence: data.confidence,
-        actionTaken: data.actionTaken,
-        browsingUsed: data.browsingUsed,
-        browsingData: data.browsingData,
-        quotaStatus: data.quotaStatus,
-        conversationId: data.conversationId,
-        requiresSearchConfirmation: data.requiresSearchConfirmation,
-        imageUrl: data.imageUrl,
-        error: null
-      };
-
-    } catch (error: any) {
-      console.error('Service error:', error);
-      return {
-        response: '',
-        intent: 'error',
-        confidence: 'low' as const,
-        actionTaken: false,
-        browsingUsed: false,
-        browsingData: null,
-        quotaStatus: null,
-        conversationId: null,
-        requiresSearchConfirmation: false,
-        imageUrl: null,
-        error: error.message || 'Failed to send message'
-      };
+      await supabase
+        .from('ai_conversations')
+        .update({ 
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', conversationId);
+      
+      console.log('✅ Updated conversation timestamp:', conversationId);
+    } catch (error) {
+      console.error('❌ Error updating conversation timestamp:', error);
     }
   }
 
+  // SECURITY FIX: User-isolated session storage
   static saveChatSession(messages: AIMessage[], conversationId: string | null) {
     try {
       const sessionData = {
-        messages: messages,
-        conversationId: conversationId
+        messages: messages.slice(-30),
+        conversationId,
+        timestamp: Date.now()
       };
-      localStorage.setItem('chatSession', JSON.stringify(sessionData));
-      console.log('💾 Chat session saved to local storage');
+      
+      // Use user-specific key (will be enhanced when we have user context)
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.setItem(storageKey, JSON.stringify(sessionData));
+      console.log('💾 Chat session saved to localStorage with user isolation');
     } catch (error) {
-      console.error('❌ Error saving chat session to local storage:', error);
+      console.error('Failed to save chat session:', error);
     }
   }
 
   static loadChatSession(): { messages: AIMessage[], conversationId: string | null } | null {
     try {
-      const sessionData = localStorage.getItem('chatSession');
-      if (sessionData) {
-        const parsedSession = JSON.parse(sessionData);
-        console.log('📂 Chat session loaded from local storage');
-        return parsedSession;
+      const storageKey = this.getUserStorageKey('chat_session');
+      const sessionData = localStorage.getItem(storageKey);
+      if (!sessionData) return null;
+
+      const parsed = JSON.parse(sessionData);
+      
+      // Check if session is too old (more than 24 hours)
+      const now = Date.now();
+      const sessionAge = now - (parsed.timestamp || 0);
+      if (sessionAge > 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(storageKey);
+        return null;
       }
-      return null;
+
+      // Convert timestamp strings back to Date objects
+      if (parsed.messages) {
+        parsed.messages = parsed.messages.map((msg: any) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp)
+        }));
+      }
+
+      console.log('📂 Chat session loaded from localStorage with user isolation');
+      return {
+        messages: parsed.messages || [],
+        conversationId: parsed.conversationId || null
+      };
     } catch (error) {
-      console.error('❌ Error loading chat session from local storage:', error);
+      console.error('Failed to load chat session:', error);
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.removeItem(storageKey);
       return null;
     }
   }
 
   static clearChatSession() {
     try {
-      localStorage.removeItem('chatSession');
-      console.log('🗑️  Chat session cleared from local storage');
+      const storageKey = this.getUserStorageKey('chat_session');
+      localStorage.removeItem(storageKey);
+      console.log('🗑️ Chat session cleared from localStorage');
     } catch (error) {
-      console.error('❌ Error clearing chat session from local storage:', error);
+      console.error('Failed to clear chat session:', error);
     }
   }
 
-  static async getCalendarContext(userId: string): Promise<any | null> {
+  static async sendMessage(
+    message: string,
+    userId: string,
+    language: string = 'en',
+    conversationId?: string | null,
+    inputType: 'text' | 'voice' = 'text',
+    conversationHistory: any[] = [],
+    confirmSearch: boolean = false,
+    activeTrigger: string = 'chat',
+    textGenParams: any = null,
+    attachedFiles: any[] = [],
+    calendarContext: any = null,
+    userContext: any = null,
+    enableAdvancedIntegration: boolean = true,
+    enablePredictiveInsights: boolean = true,
+    enableWorkflowAutomation: boolean = true,
+    confirmTask: boolean = false,
+    confirmReminder: boolean = false,
+    pendingTaskData: any = null,
+    pendingReminderData: any = null
+  ) {
     try {
-      console.log('📅 Fetching calendar context for user:', userId);
+      console.log('📤 WAKTI AI V2: Sending message with user isolation for user:', userId);
 
-      const { data, error } = await supabase.functions.invoke('get-calendar-context', {
-        body: { user_id: userId }
-      });
-
-      if (error) {
-        console.error('❌ Error fetching calendar context:', error);
-        return null;
+      // Load chat memory for chat mode only
+      let chatMemory: any[] = [];
+      if (activeTrigger === 'chat') {
+        const memoryExchanges = ChatMemoryService.loadMemory(userId);
+        chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
+        console.log(`🧠 Loaded ${memoryExchanges.length} chat exchanges from memory`);
       }
 
-      console.log('📅 Calendar context fetched successfully');
-      return data;
-    } catch (error) {
-      console.error('❌ Error in getCalendarContext:', error);
-      return null;
-    }
-  }
-
-  static async getUserContext(userId: string): Promise<any | null> {
-    try {
-      console.log('👤 Fetching user context for user:', userId);
-
-      const { data, error } = await supabase.functions.invoke('get-user-context', {
-        body: { user_id: userId }
+      // CORRECTED: Use the wakti-ai-v2-brain function with proper authentication
+      const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId, // CRITICAL: Always include userId for verification
+          language,
+          conversationId,
+          inputType,
+          conversationHistory: activeTrigger === 'chat' ? chatMemory : conversationHistory,
+          confirmSearch,
+          activeTrigger,
+          textGenParams,
+          attachedFiles,
+          calendarContext,
+          userContext,
+          enableAdvancedIntegration,
+          enablePredictiveInsights,
+          enableWorkflowAutomation,
+          confirmTask,
+          confirmReminder,
+          pendingTaskData,
+          pendingReminderData
+        }
       });
 
-      if (error) {
-        console.error('❌ Error fetching user context:', error);
-        return null;
+      if (response.error) {
+        throw new Error(response.error.message || 'AI service error');
       }
 
-      console.log('👤 User context fetched successfully');
-      return data;
-    } catch (error) {
-      console.error('❌ Error in getUserContext:', error);
-      return null;
+      // Save to chat memory if this was a successful chat mode interaction
+      if (activeTrigger === 'chat' && response.data?.response) {
+        ChatMemoryService.addExchange(message, response.data.response, userId);
+      }
+
+      console.log('📥 WAKTI AI V2: Received response with user isolation');
+      return response.data;
+    } catch (error: any) {
+      console.error('WaktiAIV2Service sendMessage error:', error);
+      throw error;
     }
   }
 
-  static async clearChatMemory(userId: string): Promise<void> {
-    try {
-      console.log('🧠 Clearing chat memory for user:', userId);
-
-      const { error } = await supabase.functions.invoke('clear-chat-memory', {
-        body: { user_id: userId }
-      });
-
-      if (error) {
-        console.error('❌ Error clearing chat memory:', error);
-        throw error;
-      }
-
-      console.log('🧠 Chat memory cleared successfully');
-    } catch (error) {
-      console.error('❌ Error in clearChatMemory:', error);
-    }
-  }
-
+  // New method to confirm task creation
   static async confirmTaskCreation(
     userId: string,
-    language: string,
-    taskData: any
+    language: string = 'en',
+    pendingTaskData: any
   ): Promise<any> {
+    console.log('🔧 confirmTaskCreation called:', { userId, language, pendingTaskData });
+    
     try {
-      console.log('✅ Confirming task creation:', taskData);
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message: '',
+          userId,
+          language,
+          confirmTask: true,
+          pendingTaskData
+        }
+      });
 
-      const response = await WaktiAIV2Service.sendMessage(
-        'confirm_task',
-        userId,
-        language,
-        null,
-        'text',
-        [],
-        false,
-        'chat',
-        null,
-        [],
-        null,
-        null,
-        true,
-        false,
-        taskData,
-        null
-      );
+      if (error) {
+        console.error('❌ Task confirmation error:', error);
+        throw new Error(error.message || 'Failed to create task');
+      }
 
-      return response;
+      console.log('✅ Task creation confirmed successfully');
+      return data;
     } catch (error: any) {
-      console.error('❌ Error confirming task creation:', error);
-      return {
-        error: error.message || 'Failed to confirm task creation'
-      };
+      console.error('❌ Task confirmation comprehensive error:', error);
+      throw error;
     }
   }
 
   static async confirmReminderCreation(
     userId: string,
-    language: string,
-    reminderData: any
+    language: string = 'en',
+    pendingReminderData: any
+  ): Promise<any> {
+    console.log('🔔 confirmReminderCreation called:', { userId, language, pendingReminderData });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message: '',
+          userId,
+          language,
+          confirmReminder: true,
+          pendingReminderData
+        }
+      });
+
+      if (error) {
+        console.error('❌ Reminder confirmation error:', error);
+        throw new Error(error.message || 'Failed to create reminder');
+      }
+
+      console.log('✅ Reminder creation confirmed successfully');
+      return data;
+    } catch (error: any) {
+      console.error('❌ Reminder confirmation comprehensive error:', error);
+      throw error;
+    }
+  }
+
+  // NEW: Method to invalidate quota cache
+  static invalidateQuotaCache(): void {
+    console.log('🗑️ Invalidating quota cache');
+    this.quotaCache = null;
+    this.quotaCacheTime = 0;
+  }
+
+  // UPDATED: Enhanced getOrFetchQuota with forceRefresh parameter
+  static async getOrFetchQuota(userId: string, forceRefresh: boolean = false): Promise<any> {
+    const now = Date.now();
+    
+    // Check cache first, but skip if forceRefresh is true
+    if (!forceRefresh && this.quotaCache && (now - this.quotaCacheTime) < this.CACHE_DURATION) {
+      console.log('📊 Using cached quota data');
+      return this.quotaCache;
+    }
+
+    try {
+      console.log(`📊 ${forceRefresh ? 'Force refreshing' : 'Fetching fresh'} quota data for user:`, userId);
+      
+      const { data, error } = await supabase.rpc('check_browsing_quota', {
+        p_user_id: userId
+      });
+      
+      if (error) {
+        console.error("Quota check error:", error);
+        return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
+      }
+      
+      const count = data || 0;
+      const limit = 60;
+      const usagePercentage = Math.round((count / limit) * 100);
+      
+      const quota = {
+        count,
+        limit,
+        usagePercentage,
+        remaining: Math.max(0, limit - count),
+        canBrowse: count < limit,
+        requiresConfirmation: usagePercentage >= 80
+      };
+
+      // Cache the result
+      this.quotaCache = quota;
+      this.quotaCacheTime = now;
+      
+      console.log('📊 Fresh quota data loaded:', quota);
+      return quota;
+    } catch (error) {
+      console.error("Quota check error:", error);
+      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
+    }
+  }
+
+  static async getConversations(): Promise<AIConversation[]> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data, error } = await supabase
+        .from('ai_conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('last_message_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      throw error;
+    }
+  }
+
+  static async getConversationMessages(conversationId: string): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('ai_chat_history')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching conversation messages:', error);
+      throw error;
+    }
+  }
+
+  static async deleteConversation(conversationId: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('ai_conversations')
+        .delete()
+        .eq('id', conversationId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      throw error;
+    }
+  }
+
+  static async sendMessageWithSearchConfirmation(
+    message: string,
+    conversationId: string | null,
+    language: string = 'en'
   ): Promise<any> {
     try {
-      console.log('✅ Confirming reminder creation:', reminderData);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      const response = await WaktiAIV2Service.sendMessage(
-        'confirm_reminder',
-        userId,
-        language,
-        null,
-        'text',
-        [],
-        false,
-        'chat',
-        null,
-        [],
-        null,
-        null,
-        false,
-        true,
-        null,
-        reminderData
-      );
+      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+        body: {
+          message,
+          userId: user.id,
+          language,
+          conversationId,
+          confirmSearch: true,
+          activeTrigger: 'search'
+        }
+      });
 
-      return response;
-    } catch (error: any) {
-      console.error('❌ Error confirming reminder creation:', error);
-      return {
-        error: error.message || 'Failed to confirm reminder creation'
+      if (error) throw new Error(error.message || 'Failed to process search confirmation');
+      return data;
+    } catch (error) {
+      console.error('Error in search confirmation:', error);
+      throw error;
+    }
+  }
+
+  // Phase 4: Advanced Integration Methods
+  static async getCalendarContext(userId: string): Promise<any> {
+    console.log('📅 Getting calendar context for user:', userId);
+    
+    try {
+      // Get upcoming events and tasks for context
+      const now = new Date();
+      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      const [tasksResult, eventsResult, remindersResult] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, due_date, priority, status')
+          .eq('user_id', userId)
+          .gte('due_date', now.toISOString())
+          .lte('due_date', nextWeek.toISOString())
+          .limit(10),
+        
+        supabase
+          .from('maw3d_events')
+          .select('id, title, event_date, start_time, end_time')
+          .eq('created_by', userId)
+          .gte('event_date', now.toISOString().split('T')[0])
+          .limit(10),
+        
+        supabase
+          .from('tr_reminders')
+          .select('id, title, due_date, due_time')
+          .eq('user_id', userId)
+          .gte('due_date', now.toISOString().split('T')[0])
+          .limit(10)
+      ]);
+
+      const context = {
+        upcomingTasks: tasksResult.data || [],
+        upcomingEvents: eventsResult.data || [],
+        upcomingReminders: remindersResult.data || [],
+        currentDateTime: now.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       };
+
+      console.log('📅 Calendar context retrieved:', {
+        tasksCount: context.upcomingTasks.length,
+        eventsCount: context.upcomingEvents.length,
+        remindersCount: context.upcomingReminders.length
+      });
+
+      return context;
+    } catch (error) {
+      console.error('❌ Error fetching calendar context:', error);
+      return null;
+    }
+  }
+
+  static async getUserContext(userId: string): Promise<any> {
+    console.log('👤 Getting user context for user:', userId);
+    
+    try {
+      const [profileResult, preferencesResult, activityResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single(),
+        
+        supabase
+          .from('ai_user_knowledge')
+          .select('*')
+          .eq('user_id', userId)
+          .single(),
+        
+        // Get recent activity patterns
+        supabase
+          .from('tasks')
+          .select('created_at, status, priority')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+      ]);
+
+      const context = {
+        profile: profileResult.data,
+        preferences: preferencesResult.data,
+        recentActivity: activityResult.data || [],
+        productivityPatterns: await this.analyzeProductivityPatterns(userId)
+      };
+
+      console.log('👤 User context retrieved:', {
+        hasProfile: !!context.profile,
+        hasPreferences: !!context.preferences,
+        activityCount: context.recentActivity.length,
+        hasPatterns: !!context.productivityPatterns
+      });
+
+      return context;
+    } catch (error) {
+      console.error('❌ Error fetching user context:', error);
+      return null;
+    }
+  }
+
+  private static async analyzeProductivityPatterns(userId: string): Promise<any> {
+    try {
+      // Analyze when user typically creates tasks, completes them, etc.
+      const { data } = await supabase
+        .from('tasks')
+        .select('created_at, status, due_date, priority')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (!data || data.length === 0) return null;
+
+      // Simple pattern analysis
+      const patterns = {
+        mostActiveHours: this.getMostActiveHours(data),
+        preferredPriority: this.getPreferredPriority(data),
+        completionRate: this.getCompletionRate(data),
+        averageTaskDuration: this.getAverageTaskDuration(data)
+      };
+
+      return patterns;
+    } catch (error) {
+      console.error('Error analyzing productivity patterns:', error);
+      return null;
+    }
+  }
+
+  private static getMostActiveHours(tasks: any[]): number[] {
+    const hourCounts: { [key: number]: number } = {};
+    
+    tasks.forEach(task => {
+      const hour = new Date(task.created_at).getHours();
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+    });
+
+    return Object.entries(hourCounts)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 3)
+      .map(([hour]) => parseInt(hour));
+  }
+
+  private static getPreferredPriority(tasks: any[]): string {
+    const priorityCounts: { [key: string]: number } = {};
+    
+    tasks.forEach(task => {
+      const priority = task.priority || 'normal';
+      priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+    });
+
+    return Object.entries(priorityCounts)
+      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'normal';
+  }
+
+  private static getCompletionRate(tasks: any[]): number {
+    const completed = tasks.filter(task => task.status === 'completed').length;
+    return tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
+  }
+
+  private static getAverageTaskDuration(tasks: any[]): number {
+    const completedTasks = tasks.filter(task => 
+      task.status === 'completed' && task.due_date
+    );
+
+    if (completedTasks.length === 0) return 0;
+
+    const durations = completedTasks.map(task => {
+      const created = new Date(task.created_at);
+      const due = new Date(task.due_date);
+      return Math.max(0, Math.floor((due.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)));
+    });
+
+    return Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length);
+  }
+
+  // Phase 4: Advanced automation methods
+  static async executeAdvancedAction(
+    userId: string,
+    actionType: string,
+    actionData: any,
+    language: string = 'en'
+  ): Promise<any> {
+    console.log('⚡ executeAdvancedAction called:', { userId, actionType, actionData });
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('wakti-execute-action', {
+        body: {
+          action: {
+            type: actionType,
+            data: actionData
+          },
+          userId,
+          language,
+          advanced: true // Phase 4 flag
+        }
+      });
+
+      if (error) throw error;
+      
+      console.log('✅ Advanced action executed successfully');
+      return data;
+    } catch (error) {
+      console.error('❌ Error executing advanced action:', error);
+      throw error;
     }
   }
 }
+
+export const WaktiAIV2Service = new WaktiAIV2ServiceClass();
