@@ -1,284 +1,226 @@
 import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToastHelper } from '@/hooks/use-toast-helper';
 import { useTheme } from '@/providers/ThemeProvider';
-import { t } from '@/utils/translations';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { useToastHelper } from '@/components/ui/toast-helper';
-import { signOut, updateProfile, updateUserPassword, deleteUserAccount } from '@/utils/auth';
-import { useNavigate } from 'react-router-dom';
-import { Moon, Sun } from 'lucide-react';
-import { Switch } from "@/components/ui/switch"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Bell } from 'lucide-react';
-import NotificationSettings from '@/components/notifications/NotificationSettings';
+import { translations } from '@/utils/translations';
+import { NotificationSettings } from '@/components/notifications/NotificationSettings';
+import PageContainer from '@/components/PageContainer';
 
 export default function Settings() {
-  const { language, theme, setTheme } = useTheme();
-  const [activeTab, setActiveTab] = React.useState("account");
-  const [displayName, setDisplayName] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [isSavingProfile, setIsSavingProfile] = useState(false);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  const { toast } = useToastHelper();
-  const navigate = useNavigate();
+  const { user, updateProfile, updatePassword, deleteAccount } = useAuth();
+  const { showSuccess, showError } = useToastHelper();
+  const { language, theme, setTheme, setLanguage } = useTheme();
+  const t = translations[language];
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login');
-  };
+  const [profileData, setProfileData] = useState({
+    displayName: '',
+    fullName: '',
+    avatarUrl: ''
+  });
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleProfileUpdate = async () => {
-    setIsSavingProfile(true);
-    try {
-      const result = await updateProfile({
-        user_metadata: {
-          display_name: displayName,
-          full_name: fullName,
-          avatar_url: avatarUrl
-        }
+  useEffect(() => {
+    if (user?.user_metadata) {
+      setProfileData({
+        displayName: user.user_metadata.display_name || '',
+        fullName: user.user_metadata.full_name || '',
+        avatarUrl: user.user_metadata.avatar_url || ''
       });
-
-      if (result.error) {
-        toast({
-          title: t('error', language),
-          description: result.error.message,
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: t('success', language),
-          description: t('profileUpdated', language)
-        });
-      }
-    } finally {
-      setIsSavingProfile(false);
     }
-  };
+  }, [user]);
 
-  const handlePasswordChange = async () => {
-    setIsChangingPassword(true);
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: t('error', language),
-        description: t('passwordsDoNotMatch', language),
-        variant: 'destructive'
-      });
-      setIsChangingPassword(false);
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileData.displayName.trim()) {
+      showError('Display name is required');
       return;
     }
 
+    setIsLoading(true);
     try {
-      const result = await updateUserPassword(currentPassword, newPassword);
-      if (result.error) {
-        toast({
-          title: t('error', language),
-          description: result.error.message || t('passwordUpdateFailed', language),
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: t('success', language),
-          description: t('passwordUpdated', language)
-        });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      }
+      await updateProfile({
+        user_metadata: {
+          display_name: profileData.displayName,
+          full_name: profileData.fullName,
+          avatar_url: profileData.avatarUrl
+        }
+      });
+      showSuccess('Profile updated successfully');
+    } catch (error) {
+      console.error('Profile update error:', error);
+      showError('Failed to update profile');
     } finally {
-      setIsChangingPassword(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      showError('Passwords do not match');
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      showError('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await updatePassword(passwordData.newPassword);
+      setPasswordData({ newPassword: '', confirmPassword: '' });
+      showSuccess('Password updated successfully');
+    } catch (error) {
+      console.error('Password update error:', error);
+      showError('Failed to update password');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleDeleteAccount = async () => {
+    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const result = await deleteUserAccount();
-      if (result.error) {
-        toast({
-          title: t('error', language),
-          description: result.error.message || t('accountDeletionFailed', language),
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: t('success', language),
-          description: t('accountDeleted', language)
-        });
-        navigate('/register');
-      }
-    } catch (error: any) {
-      toast({
-        title: t('error', language),
-        description: error.message || t('accountDeletionFailed', language),
-        variant: 'destructive'
-      });
+      await deleteAccount();
+      showSuccess('Account deleted successfully');
+    } catch (error) {
+      console.error('Account deletion error:', error);
+      showError('Failed to delete account');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 pb-28 scrollbar-hide bg-gradient-background min-h-screen">
-      <div className="max-w-2xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">
-            {t('settingsTitle', language)}
-          </h1>
-          <p className="text-muted-foreground">{t('settingsDesc', language)}</p>
+    <PageContainer>
+      <div className="container mx-auto max-w-4xl p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold">{t.navigation.settings}</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage your account settings and preferences
+          </p>
         </div>
 
-        {/* Settings Sections */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 bg-gradient-card/50 backdrop-blur-lg border border-border/50">
-            <TabsTrigger value="account" className="text-xs">{t('account', language)}</TabsTrigger>
-            <TabsTrigger value="appearance" className="text-xs">{t('appearance', language)}</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs">{t('notifications', language)}</TabsTrigger>
-            <TabsTrigger value="privacy" className="text-xs">{t('privacy', language)}</TabsTrigger>
-            <TabsTrigger value="quotes" className="text-xs">{t('quotes', language)}</TabsTrigger>
-            <TabsTrigger value="billing" className="text-xs">{t('billing', language)}</TabsTrigger>
+        <Tabs defaultValue="account" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="account">{t.settings.account}</TabsTrigger>
+            <TabsTrigger value="appearance">{t.settings.appearance}</TabsTrigger>
+            <TabsTrigger value="notifications">{t.settings.notifications}</TabsTrigger>
+            <TabsTrigger value="privacy">{t.settings.privacy}</TabsTrigger>
+            <TabsTrigger value="about">{t.settings.about}</TabsTrigger>
           </TabsList>
 
-          {/* Account Tab */}
-          <TabsContent value="account">
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+          <TabsContent value="account" className="space-y-6">
+            <Card>
               <CardHeader>
-                <CardTitle>{t('accountSettings', language)}</CardTitle>
-                <CardDescription>{t('manageYourAccount', language)}</CardDescription>
+                <CardTitle>Account Information</CardTitle>
+                <CardDescription>
+                  Update your account details and profile information
+                </CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="display_name">{t('displayName', language)}</Label>
-                  <Input
-                    id="display_name"
-                    placeholder={t('displayName', language)}
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="full_name">{t('fullName', language)}</Label>
-                  <Input
-                    id="full_name"
-                    placeholder={t('fullName', language)}
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="avatar_url">{t('avatarURL', language)}</Label>
-                  <Input
-                    id="avatar_url"
-                    placeholder={t('avatarURL', language)}
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                  />
-                </div>
-                <Button onClick={handleProfileUpdate} disabled={isSavingProfile}>
-                  {isSavingProfile ? t('saving', language) + '...' : t('saveProfile', language)}
-                </Button>
+              <CardContent className="space-y-4">
+                <form onSubmit={handleProfileUpdate} className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="displayName">Display Name</Label>
+                    <Input
+                      id="displayName"
+                      value={profileData.displayName}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, displayName: e.target.value }))}
+                      placeholder="Display Name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={profileData.fullName}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, fullName: e.target.value }))}
+                      placeholder="Full Name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="avatarUrl">Avatar URL</Label>
+                    <Input
+                      id="avatarUrl"
+                      value={profileData.avatarUrl}
+                      onChange={(e) => setProfileData(prev => ({ ...prev, avatarUrl: e.target.value }))}
+                      placeholder="Avatar URL"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? 'Saving...' : 'Save Profile'}
+                  </Button>
+                </form>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+            <Card>
               <CardHeader>
-                <CardTitle>{t('changePassword', language)}</CardTitle>
-                <CardDescription>{t('updateYourPassword', language)}</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="current_password">{t('currentPassword', language)}</Label>
-                  <Input
-                    id="current_password"
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="new_password">{t('newPassword', language)}</Label>
-                  <Input
-                    id="new_password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="confirm_password">{t('confirmPassword', language)}</Label>
-                  <Input
-                    id="confirm_password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
-                </div>
-                <Button onClick={handlePasswordChange} disabled={isChangingPassword}>
-                  {isChangingPassword ? t('changingPassword', language) + '...' : t('changePassword', language)}
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
-              <CardHeader>
-                <CardTitle className="text-destructive">{t('deleteAccount', language)}</CardTitle>
-                <CardDescription>{t('permanentlyDeleteAccount', language)}</CardDescription>
+                <CardTitle>Change Password</CardTitle>
+                <CardDescription>Update your account password</CardDescription>
               </CardHeader>
               <CardContent>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive">{t('deleteAccount', language)}</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t('areYouSure', language)}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {t('accountDeletionWarning', language)}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t('cancel', language)}</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAccount}>{t('delete', language)}</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={passwordData.newPassword}
+                      onChange={(e) => setPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={passwordData.confirmPassword}
+                      onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading ? 'Changing Password...' : 'Change Password'}
+                  </Button>
+                </form>
               </CardContent>
             </Card>
 
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
+            <Card className="border-destructive">
               <CardHeader>
-                <CardTitle>{t('signOut', language)}</CardTitle>
-                <CardDescription>{t('signOutDescription', language)}</CardDescription>
+                <CardTitle className="text-destructive">Delete Account</CardTitle>
+                <CardDescription>
+                  Permanently delete your account and all associated data
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleSignOut}>{t('signOut', language)}</Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteAccount}
+                  disabled={isLoading}
+                >
+                  Are you sure? Delete Account
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Appearance Tab */}
           <TabsContent value="appearance">
             <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
               <CardHeader>
@@ -313,25 +255,10 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          {/* Notifications Tab - NEW */}
           <TabsContent value="notifications">
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="h-5 w-5" />
-                  {t('notificationSettings', language)}
-                </CardTitle>
-                <CardDescription>
-                  {t('notificationSettingsDesc', language)}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <NotificationSettings />
-              </CardContent>
-            </Card>
+            <NotificationSettings />
           </TabsContent>
 
-          {/* Privacy Tab */}
           <TabsContent value="privacy">
             <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
               <CardHeader>
@@ -344,33 +271,19 @@ export default function Settings() {
             </Card>
           </TabsContent>
 
-          {/* Quotes Tab */}
-          <TabsContent value="quotes">
+          <TabsContent value="about">
             <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
               <CardHeader>
-                <CardTitle>{t('quotesSettings', language)}</CardTitle>
-                <CardDescription>{t('customizeYourQuotes', language)}</CardDescription>
+                <CardTitle>{t('about', language)}</CardTitle>
+                <CardDescription>{t('aboutDescription', language)}</CardDescription>
               </CardHeader>
               <CardContent>
-                {/* Quotes settings content */}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Billing Tab */}
-          <TabsContent value="billing">
-            <Card className="bg-gradient-card/40 backdrop-blur-lg border-border/40">
-              <CardHeader>
-                <CardTitle>{t('billingSettings', language)}</CardTitle>
-                <CardDescription>{t('manageYourBilling', language)}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* Billing settings content */}
+                {/* About section content */}
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </PageContainer>
   );
 }

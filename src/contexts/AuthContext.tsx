@@ -1,8 +1,9 @@
+
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
-import { useRouter } from 'next/navigation';
+import { useNavigate } from 'react-router-dom';
 import { UserAttributes } from '@supabase/supabase-js';
 import { useProgressierSync } from '@/hooks/useProgressierSync';
 
@@ -31,8 +32,8 @@ export function useAuth(): AuthContextType {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToastHelper();
-  const router = useRouter();
+  const { showSuccess, showError } = useToastHelper();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const getSession = async () => {
@@ -43,11 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
       } catch (error) {
         console.error("Error getting session:", error);
-        toast({
-          title: "Authentication Error",
-          description: "Failed to retrieve session. Please try again.",
-          variant: "destructive",
-        });
+        showError("Failed to retrieve session. Please try again.");
       } finally {
         setLoading(false);
       }
@@ -72,17 +69,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
-      toast({
-        title: "Check your email",
-        description: "We've sent you a magic link to sign in.",
-      });
+      showSuccess("Check your email - we've sent you a magic link to sign in.");
     } catch (error: any) {
       console.error("Error signing in:", error);
-      toast({
-        title: "Sign In Error",
-        description: error.message || "Failed to sign in. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to sign in. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -101,18 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (error) throw error;
-      toast({
-        title: "Check your email",
-        description: "We've sent you a confirmation link to verify your email.",
-      });
+      showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
     } catch (error: any) {
       console.error("Error signing up:", error);
-      toast({
-        title: "Sign Up Error",
-        description: error.message || "Failed to sign up. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to sign up. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -123,14 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       await supabase.auth.signOut();
       setUser(null);
-      router.push('/');
+      navigate('/');
     } catch (error: any) {
       console.error("Error signing out:", error);
-      toast({
-        title: "Sign Out Error",
-        description: error.message || "Failed to sign out. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to sign out. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -143,18 +122,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         redirectTo: `${window.location.origin}/update-password`,
       });
       if (error) throw error;
-      toast({
-        title: "Check your email",
-        description: "We've sent you a link to reset your password.",
-      });
+      showSuccess("Check your email - we've sent you a link to reset your password.");
     } catch (error: any) {
       console.error("Error resetting password:", error);
-      toast({
-        title: "Reset Password Error",
-        description:
-          error.message || "Failed to reset password. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to reset password. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -165,18 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      toast({
-        title: "Password Updated",
-        description: "Your password has been updated successfully.",
-      });
+      showSuccess("Your password has been updated successfully.");
     } catch (error: any) {
       console.error("Error updating password:", error);
-      toast({
-        title: "Update Password Error",
-        description:
-          error.message || "Failed to update password. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to update password. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -191,18 +154,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
       const { error } = await supabase.auth.updateUser(userData);
       if (error) throw error;
-      toast({
-        title: "Profile Updated",
-        description: "Your profile has been updated successfully.",
-      });
+      showSuccess("Your profile has been updated successfully.");
     } catch (error: any) {
       console.error("Error updating profile:", error);
-      toast({
-        title: "Update Profile Error",
-        description:
-          error.message || "Failed to update profile. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to update profile. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -214,11 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (!session) {
-        toast({
-          title: "Delete Account Error",
-          description: "No active session found.",
-          variant: "destructive",
-        });
+        showError("No active session found.");
         return;
       }
 
@@ -235,29 +186,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const result = await response.json();
 
       if (!response.ok) {
-        toast({
-          title: "Delete Account Error",
-          description: result.error || "Failed to delete account.",
-          variant: "destructive",
-        });
+        showError(result.error || "Failed to delete account.");
         return;
       }
 
       // Sign out the user locally after successful deletion
       await supabase.auth.signOut();
       setUser(null);
-      router.push('/');
-      toast({
-        title: "Account Deleted",
-        description: "Your account has been successfully deleted.",
-      });
+      navigate('/');
+      showSuccess("Your account has been successfully deleted.");
     } catch (error: any) {
       console.error("Error deleting account:", error);
-      toast({
-        title: "Delete Account Error",
-        description: error.message || "Failed to delete account. Please try again.",
-        variant: "destructive",
-      });
+      showError(error.message || "Failed to delete account. Please try again.");
     } finally {
       setLoading(false);
     }
