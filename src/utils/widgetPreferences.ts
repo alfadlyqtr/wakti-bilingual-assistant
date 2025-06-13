@@ -25,6 +25,15 @@ export const getUserPreferences = () => {
   return defaultPrefs;
 };
 
+export const saveUserPreferences = (preferences: any) => {
+  try {
+    console.log('Saving user preferences:', preferences);
+    localStorage.setItem('widgetVisibility', JSON.stringify(preferences));
+  } catch (error) {
+    console.error('Error saving widget preferences:', error);
+  }
+};
+
 export const getWidgetOrder = () => {
   try {
     const storedOrder = localStorage.getItem('widgetOrder');

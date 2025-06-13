@@ -52,15 +52,15 @@ export default function Settings() {
     try {
       const success = await setupNotificationCron();
       if (success) {
-        showSuccess(t('notificationSystemSetupSuccess', language) || 'Notification system set up successfully!');
+        showSuccess(language === 'ar' ? 'تم إعداد نظام الإشعارات بنجاح!' : 'Notification system set up successfully!');
         setNotificationSetupComplete(true);
         localStorage.setItem('wakti-notification-setup-complete', 'true');
       } else {
-        showError(t('notificationSystemSetupFailed', language) || 'Failed to set up notification system. Please try again.');
+        showError(language === 'ar' ? 'فشل إعداد نظام الإشعارات. يرجى المحاولة مرة أخرى.' : 'Failed to set up notification system. Please try again.');
       }
     } catch (error) {
       console.error('Error setting up notifications:', error);
-      showError(t('notificationSystemSetupError', language) || 'An error occurred while setting up notifications.');
+      showError(language === 'ar' ? 'حدث خطأ أثناء إعداد الإشعارات.' : 'An error occurred while setting up notifications.');
     } finally {
       setIsSettingUpNotifications(false);
     }
