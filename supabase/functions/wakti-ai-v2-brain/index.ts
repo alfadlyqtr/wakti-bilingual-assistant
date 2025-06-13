@@ -12,7 +12,7 @@ const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 
-console.log('🚀 WAKTI AI V2 BRAIN: Enhanced with Smart Date/Time Intelligence & Fixed Task Creation');
+console.log('🚀 WAKTI AI V2 BRAIN: Enhanced with Fixed Authentication & Request Handling');
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -20,7 +20,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log('🚀 WAKTI AI V2 BRAIN: Processing request with smart date/time intelligence');
+    console.log('🚀 WAKTI AI V2 BRAIN: Processing request with fixed authentication');
 
     // Get authorization header
     const authHeader = req.headers.get('authorization');
@@ -35,10 +35,10 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client with auth header
+    // Create Supabase client with proper configuration
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       {
         global: {
           headers: {
@@ -64,7 +64,6 @@ serve(async (req) => {
     const body = await req.json();
     const {
       message,
-      userId,
       language = 'en',
       conversationId,
       inputType = 'text',
@@ -81,78 +80,31 @@ serve(async (req) => {
       confirmTask = false,
       confirmReminder = false,
       pendingTaskData = null,
-      pendingReminderData = null
+      pendingReminderData = null,
+      chatMemory = []
     } = body;
 
     console.log('🚀 WAKTI AI V2 BRAIN: Request body received:', {
       message: message,
-      userId: userId,
       authenticatedUserId: user.id,
       attachedFiles: attachedFiles?.length || 0,
       conversationHistoryLength: conversationHistory?.length || 0,
+      chatMemoryLength: chatMemory?.length || 0,
       activeTrigger: activeTrigger
     });
 
-    // Use authenticated user ID instead of provided userId for security
+    // Use authenticated user ID for security
     const secureUserId = user.id;
 
     console.log('🚀 WAKTI AI V2 BRAIN: Processing message for user:', secureUserId);
     console.log('🚀 WAKTI AI V2 BRAIN: Active trigger mode:', activeTrigger);
 
-    // Load chat memory for chat mode
-    const ChatMemoryService = {
-      formatForAI: (exchanges: any[]) => {
-        const formatted = [];
-        for (const exchange of exchanges) {
-          formatted.push({ role: 'user', content: exchange.user_message });
-          formatted.push({ role: 'assistant', content: exchange.ai_response });
-        }
-        return formatted;
-      },
-      
-      loadMemory: (userId: string) => {
-        try {
-          const key = `wakti_chat_memory_${userId}`;
-          const stored = localStorage?.getItem(key);
-          return stored ? JSON.parse(stored) : [];
-        } catch {
-          return [];
-        }
-      },
-
-      addExchange: (userMsg: string, aiResponse: string, userId: string) => {
-        try {
-          const key = `wakti_chat_memory_${userId}`;
-          const existing = JSON.parse(localStorage?.getItem(key) || '[]');
-          existing.push({
-            user_message: userMsg,
-            ai_response: aiResponse,
-            timestamp: new Date().toISOString()
-          });
-          const recent = existing.slice(-20);
-          localStorage?.setItem(key, JSON.stringify(recent));
-        } catch (error) {
-          console.error('Failed to save chat memory:', error);
-        }
-      }
-    };
-
-    let chatMemory: any[] = [];
-    if (activeTrigger === 'chat') {
-      const memoryExchanges = ChatMemoryService.loadMemory(secureUserId);
-      chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
-      console.log(`🧠 Loaded ${memoryExchanges.length} chat exchanges from memory`);
-    }
-
-    console.log('🚀 WAKTI AI V2 BRAIN: Chat memory length:', chatMemory.length);
-
     console.log('🧠 Context details:', {
       historyLength: conversationHistory.length,
+      chatMemoryLength: chatMemory.length,
       activeTrigger: activeTrigger,
       language: language
     });
-
-    console.log('🧠 Adding chat memory context:', chatMemory.length, 'messages');
 
     console.log('🧠 WAKTI AI V2 BRAIN: Processing with enhanced intelligence');
 
@@ -381,8 +333,8 @@ serve(async (req) => {
     
     aiMessages.push({ role: 'system', content: systemPrompt });
 
-    // Add chat memory context
-    if (chatMemory.length > 0) {
+    // Add chat memory context (passed from frontend)
+    if (chatMemory && chatMemory.length > 0) {
       aiMessages.push(...chatMemory.slice(-10)); // Last 10 exchanges
     }
 
@@ -461,12 +413,7 @@ serve(async (req) => {
       console.log("OpenAI fallback successful");
     }
 
-    console.log('✅ Enhanced response generated with smart date/time processing');
-
-    // Save to chat memory if this was a chat mode interaction
-    if (activeTrigger === 'chat' && aiResponse) {
-      ChatMemoryService.addExchange(message, aiResponse, secureUserId);
-    }
+    console.log('✅ Enhanced response generated with fixed authentication');
 
     console.log('🚀 WAKTI AI V2 BRAIN: Sending response with context utilization:', browsingData ? true : false);
 

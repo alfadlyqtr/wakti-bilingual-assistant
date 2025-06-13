@@ -36,15 +36,20 @@ export default function TasksReminders() {
   }, []);
 
   const checkAuthStatus = async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    console.log('T&R Page - Auth check:', { user: user?.id, error });
-    
-    if (error) {
-      console.error('T&R Page - Auth error:', error);
-      setError('Authentication error. Please refresh the page.');
-    } else if (!user) {
-      console.error('T&R Page - No user authenticated');
-      setError('Please log in to view your tasks and reminders.');
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      console.log('T&R Page - Auth check:', { user: user?.id, error });
+      
+      if (error) {
+        console.error('T&R Page - Auth error:', error);
+        setError('Authentication error. Please refresh the page.');
+      } else if (!user) {
+        console.error('T&R Page - No user authenticated');
+        setError('Please log in to view your tasks and reminders.');
+      }
+    } catch (err) {
+      console.error('T&R Page - Auth check failed:', err);
+      setError('Failed to verify authentication status.');
     }
   };
 
