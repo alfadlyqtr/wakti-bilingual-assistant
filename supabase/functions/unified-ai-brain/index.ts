@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with search quota system - 10 free searches per month");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with no search quota restrictions");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -27,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with user isolation and search quotas");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with user isolation and no search restrictions");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -109,54 +109,25 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
 
-    // Handle trigger types with search quota checking
+    // Handle trigger types with NO search quota restrictions
     switch (activeTrigger) {
       case 'search':
-        // Check search quota before executing search
+        // No quota checking - execute search directly
         if (intent.allowed) {
-          console.log("🔍 Checking search quota for user:", user.id);
+          console.log("🔍 Executing search for user:", user.id);
           
-          const quotaResult = await checkSearchQuota(user.id);
-          if (!quotaResult.canSearch) {
-            console.log("🚫 Search quota exceeded for user:", user.id);
-            response = language === 'ar' 
-              ? `🚫 تم الوصول للحد الأقصى من البحث الشهري\n\nلقد استخدمت ${quotaResult.used}/10 من عمليات البحث المجانية هذا الشهر.\n\nيمكنك شراء 50 بحث إضافي مقابل 10 ريال من قائمة "شراء إضافات".`
-              : `🚫 Monthly search limit reached\n\nYou've used ${quotaResult.used}/10 free searches this month.\n\nYou can purchase 50 additional searches for 10 QAR from "Buy Extras".`;
-            
-            quotaStatus = {
-              type: 'search_quota_exceeded',
-              used: quotaResult.used,
-              limit: 10,
-              extraSearches: quotaResult.extraSearches,
-              canPurchase: true
-            };
+          const searchResult = await executeRegularSearch(message, language);
+          if (searchResult.success) {
+            browsingUsed = true;
+            browsingData = searchResult.data;
+            response = await processWithAI(message, searchResult.context, language);
           } else {
-            // Execute search and increment quota
-            const searchResult = await executeRegularSearch(message, language);
-            if (searchResult.success) {
-              browsingUsed = true;
-              browsingData = searchResult.data;
-              response = await processWithAI(message, searchResult.context, language);
-              
-              // Increment search usage after successful search
-              await incrementSearchUsage(user.id);
-            } else {
-              response = await processWithAI(message, null, language);
-            }
-            
-            quotaStatus = {
-              type: 'regular_search',
-              used: quotaResult.used + 1,
-              limit: 10,
-              extraSearches: quotaResult.extraSearches
-            };
+            response = await processWithAI(message, null, language);
           }
         } else {
           response = language === 'ar' 
             ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
             : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
-          
-          quotaStatus = { type: 'search_mode_restriction' };
         }
         break;
 
@@ -192,7 +163,7 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        // Chat mode - use real AI without quota restrictions
+        // Chat mode - use real AI
         response = await processWithAI(message, null, language);
         break;
     }
@@ -234,66 +205,6 @@ serve(async (req) => {
     });
   }
 });
-
-// Check search quota for user
-async function checkSearchQuota(userId: string) {
-  try {
-    console.log("🔍 Checking search quota for user:", userId);
-    
-    const { data, error } = await supabase.rpc('get_or_create_user_search_quota', {
-      p_user_id: userId
-    });
-
-    if (error) {
-      console.error("❌ Error checking search quota:", error);
-      // Allow search on error (fail-safe)
-      return { canSearch: true, used: 0, extraSearches: 0 };
-    }
-
-    const quota = data[0];
-    const used = quota.regular_search_count || 0;
-    const extraSearches = quota.extra_regular_searches || 0;
-    const monthlyLimit = 10;
-
-    const canSearch = used < monthlyLimit || extraSearches > 0;
-
-    console.log("📊 Search quota status:", {
-      used,
-      limit: monthlyLimit,
-      extraSearches,
-      canSearch
-    });
-
-    return {
-      canSearch,
-      used,
-      extraSearches
-    };
-  } catch (error) {
-    console.error("❌ Unexpected error checking search quota:", error);
-    // Allow search on error (fail-safe)
-    return { canSearch: true, used: 0, extraSearches: 0 };
-  }
-}
-
-// Increment search usage
-async function incrementSearchUsage(userId: string) {
-  try {
-    console.log("🔄 Incrementing search usage for user:", userId);
-    
-    const { data, error } = await supabase.rpc('increment_regular_search_usage', {
-      p_user_id: userId
-    });
-
-    if (error) {
-      console.error("❌ Error incrementing search usage:", error);
-    } else {
-      console.log("✅ Search usage incremented successfully");
-    }
-  } catch (error) {
-    console.error("❌ Unexpected error incrementing search usage:", error);
-  }
-}
 
 // SIMPLIFIED: Regular search function with optional web browsing
 async function executeRegularSearch(query: string, language: string = 'en') {

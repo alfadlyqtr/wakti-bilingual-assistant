@@ -1,11 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage, AIConversation } from '@/services/WaktiAIV2Service';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { useSearchQuotaManagement } from '@/hooks/useSearchQuotaManagement';
 import { supabase } from '@/integrations/supabase/client';
 import { ChatHeader } from '@/components/wakti-ai-v2/ChatHeader';
 import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
@@ -46,16 +44,6 @@ const WaktiAIV2 = () => {
     incrementTranslationCount,
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
-
-  // Search quota management
-  const {
-    remainingFreeSearches,
-    extraSearches,
-    isAtLimit,
-    canSearch,
-    refreshSearchQuota,
-    MAX_MONTHLY_SEARCHES
-  } = useSearchQuotaManagement(language);
 
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>([]);
   const [conversationMessages, setConversationMessages] = useState<AIMessage[]>([]);
@@ -320,47 +308,6 @@ const WaktiAIV2 = () => {
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
 
-      // Handle Search quota increment BEFORE sending (only for search trigger)
-      if (activeTrigger === 'search') {
-        console.log('🔍 Search operation detected - checking search quota...');
-        
-        if (!canSearch) {
-          setIsLoading(false);
-          const errorMsg = language === 'ar' 
-            ? `تم الوصول للحد الأقصى من البحث (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} استخدمت، ${extraSearches} إضافي متبقي)`
-            : `Search quota exceeded (${MAX_MONTHLY_SEARCHES}/${MAX_MONTHLY_SEARCHES} used, ${extraSearches} extra remaining)`;
-          showError(errorMsg);
-          return;
-        }
-
-        // Increment search quota BEFORE sending the request
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('User not authenticated');
-
-        const { data, error: quotaError } = await supabase.rpc('increment_regular_search_usage', {
-          p_user_id: user.id
-        });
-
-        if (quotaError) {
-          console.error('❌ Error incrementing search quota:', quotaError);
-          setIsLoading(false);
-          showError(language === 'ar' ? 'خطأ في إدارة حصة البحث' : 'Error managing search quota');
-          return;
-        }
-
-        if (!data || !data[0]?.success) {
-          console.error('❌ Search quota increment failed:', data);
-          setIsLoading(false);
-          showError(language === 'ar' ? 'تم الوصول للحد الأقصى من البحث' : 'Search quota exceeded');
-          return;
-        }
-
-        console.log('✅ Search quota incremented successfully:', data[0]);
-        
-        // Refresh search quota display immediately
-        await refreshSearchQuota();
-      }
-
       // Handle Voice Translator quota increment BEFORE sending
       if (inputType === 'voice') {
         console.log('📈 Voice translation detected - checking and incrementing translation quota...');
@@ -472,22 +419,6 @@ const WaktiAIV2 = () => {
         fetchConversations();
       }
 
-      // Search operation success handling
-      if (response.browsingUsed && activeTrigger === 'search') {
-        console.log('🔄 Search operation completed successfully');
-        const remainingAfterSearch = remainingFreeSearches - 1;
-        showSuccess(
-          language === 'ar' 
-            ? `تم تنفيذ البحث بنجاح (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} متبقي)`
-            : `Search completed successfully (${remainingAfterSearch}/${MAX_MONTHLY_SEARCHES} remaining)`
-        );
-        
-        // Force refresh search quota display
-        setTimeout(() => {
-          refreshSearchQuota();
-        }, 500);
-      }
-
       // Voice Translation quota refresh with immediate UI update
       if (inputType === 'voice') {
         console.log('🔄 Voice translation completed - refreshing translation quota...');
@@ -504,15 +435,6 @@ const WaktiAIV2 = () => {
       if (response.quotaStatus) {
         console.log('📊 Received quota status from AI response:', response.quotaStatus);
         setQuotaStatus(response.quotaStatus);
-        
-        if (response.browsingUsed && activeTrigger === 'search') {
-          console.log('🔄 Search operation detected - invalidating quota cache and forcing refresh');
-          WaktiAIV2Service.invalidateQuotaCache();
-          
-          setTimeout(() => {
-            fetchQuota(true);
-          }, 1000);
-        }
       }
 
       if (inputType === 'voice') {
@@ -774,13 +696,6 @@ const WaktiAIV2 = () => {
             onNewConversation={handleNewConversation}
             onShowQuickActions={() => setShowQuickActions(true)}
             quotaStatus={quotaStatus}
-            searchQuotaStatus={{ 
-              remainingFreeSearches, 
-              extraSearches, 
-              isAtLimit, 
-              canSearch, 
-              MAX_MONTHLY_SEARCHES 
-            }}
           />
           <NotificationBars
             searchConfirmationRequired={searchConfirmationRequired}
