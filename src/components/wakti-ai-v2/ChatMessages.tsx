@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -66,21 +67,11 @@ export function ChatMessages({
 
       const response = await WaktiAIV2Service.sendMessage(
         '',
-        user.id,
-        language,
-        null, 
-        'text',
-        [],
-        false,
-        'chat',
-        null,
-        [],
-        null,
-        null,
-        true,
-        false,
-        taskData,
-        null
+        {
+          language,
+          confirmTask: true,
+          pendingTaskData: taskData
+        }
       );
 
       if (response.error) {
@@ -138,21 +129,11 @@ export function ChatMessages({
 
       const response = await WaktiAIV2Service.sendMessage(
         '',
-        user.id,
-        language,
-        null,
-        'text',
-        [],
-        false,
-        'chat',
-        null,
-        [],
-        null,
-        null,
-        false,
-        true,
-        null,
-        reminderData
+        {
+          language,
+          confirmReminder: true,
+          pendingReminderData: reminderData
+        }
       );
 
       if (response.error) {

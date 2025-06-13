@@ -199,14 +199,14 @@ const WaktiAIV2 = () => {
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
-        timestamp: new Date(msg.created_at),
+        timestamp: new Date(msg.timestamp),
         intent: msg.intent,
-        confidence: msg.confidence_level as 'high' | 'medium' | 'low',
-        actionTaken: !!msg.action_taken,
-        inputType: msg.input_type as 'text' | 'voice',
-        browsingUsed: msg.browsing_used,
-        browsingData: msg.browsing_data,
-        quotaStatus: msg.quota_status
+        confidence: msg.confidence as 'high' | 'medium' | 'low',
+        actionTaken: !!msg.actionTaken,
+        inputType: msg.inputType as 'text' | 'voice',
+        browsingUsed: msg.browsingUsed,
+        browsingData: msg.browsingData,
+        quotaStatus: msg.quotaStatus
       }));
       
       setConversationMessages(convertedMessages);
@@ -399,17 +399,18 @@ const WaktiAIV2 = () => {
 
       const response = await WaktiAIV2Service.sendMessage(
         message,
-        user.id,
-        language,
-        currentConversationId,
-        inputType,
-        contextForAI,
-        false,
-        activeTrigger,
-        textGenParams,
-        attachedFiles || [],
-        calendarContext,
-        userContext
+        {
+          language,
+          conversationId: currentConversationId,
+          inputType,
+          conversationHistory: contextForAI,
+          confirmSearch: false,
+          activeTrigger,
+          textGenParams,
+          attachedFiles: attachedFiles || [],
+          calendarContext,
+          userContext
+        }
       );
 
       console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
