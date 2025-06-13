@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,10 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Palette, Image, Sparkles, Upload, Loader2, ExternalLink } from 'lucide-react';
+import { Palette, Image, Sparkles, Upload, Loader2, Link2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from 'react-router-dom';
 import { t } from '@/utils/translations';
 
 interface BackgroundCustomizerProps {
@@ -39,7 +37,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
   language
 }) => {
   const [uploadingImage, setUploadingImage] = useState(false);
-  const navigate = useNavigate();
+  const [imageUrl, setImageUrl] = useState('');
 
   const handleColorChange = (color: string) => {
     onBackgroundChange('color', color);
@@ -82,20 +80,6 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
     } finally {
       setUploadingImage(false);
     }
-  };
-
-  const handleAIImageRedirect = () => {
-    // Create a prompt suggestion for event background
-    const promptSuggestion = 'Professional event background, elegant and suitable for text overlay, modern design';
-    
-    // Redirect to Wakti AI in image mode with return parameter
-    const params = new URLSearchParams({
-      mode: 'image',
-      return: 'maw3d',
-      prompt: promptSuggestion
-    });
-    
-    navigate(`/wakti-ai?${params.toString()}`);
   };
 
   const handleBlurChange = (value: number[]) => {
@@ -157,6 +141,36 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
     
     console.log('Final background style:', style);
     return style;
+  };
+
+  const handleApplyImageUrl = () => {
+    if (!imageUrl.trim()) {
+      toast.error(language === 'ar' ? 'الرجاء إدخال رابط الصورة' : 'Please enter an image URL');
+      return;
+    }
+
+    // Basic URL validation
+    try {
+      new URL(imageUrl);
+    } catch {
+      toast.error(language === 'ar' ? 'الرجاء إدخال رابط صالح' : 'Please enter a valid URL');
+      return;
+    }
+
+    // Check if it looks like an image URL (basic check)
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
+    const hasImageExtension = imageExtensions.some(ext => 
+      imageUrl.toLowerCase().includes(ext)
+    );
+    
+    if (!hasImageExtension && !imageUrl.includes('data:image') && !imageUrl.includes('blob:')) {
+      toast.error(language === 'ar' ? 'الرابط لا يبدو كرابط صورة صالح' : 'URL doesn\'t appear to be a valid image URL');
+      return;
+    }
+
+    onBackgroundChange('ai', imageUrl);
+    toast.success(language === 'ar' ? 'تم تطبيق الصورة بنجاح!' : 'Image applied successfully!');
+    setImageUrl('');
   };
 
   console.log('=== BACKGROUND CUSTOMIZER RENDER ===');
@@ -278,24 +292,67 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         </TabsContent>
         
         <TabsContent value="ai" className="space-y-4">
-          <div className="text-center space-y-4">
+          <div className="space-y-4">
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-6 border border-purple-200 dark:border-purple-800">
-              <Sparkles className="h-12 w-12 mx-auto mb-4 text-purple-600" />
-              <h3 className="text-lg font-semibold mb-2">Generate AI Background</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Use our powerful AI image generator to create the perfect background for your event.
-              </p>
-              <Button
-                onClick={handleAIImageRedirect}
-                className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Go to AI Image Generator
-              </Button>
+              <div className="flex items-center gap-3 mb-4">
+                <Sparkles className="h-6 w-6 text-purple-600" />
+                <h3 className="text-lg font-semibold">
+                  {language === 'ar' ? 'استخدام صورة من الذكاء الاصطناعي' : 'Use AI Generated Image'}
+                </h3>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="image-url" className="text-sm font-medium">
+                    {language === 'ar' ? 'رابط الصورة' : 'Image URL'}
+                  </Label>
+                  <div className="flex gap-2 mt-2">
+                    <Input
+                      id="image-url"
+                      type="url"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      placeholder={language === 'ar' ? 'الصق رابط الصورة هنا...' : 'Paste image URL here...'}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={handleApplyImageUrl}
+                      disabled={!imageUrl.trim()}
+                      className="bg-purple-600 hover:bg-purple-700"
+                    >
+                      <Check className="h-4 w-4 mr-2" />
+                      {language === 'ar' ? 'تطبيق' : 'Apply'}
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p className="font-medium">
+                    {language === 'ar' ? 'كيفية الاستخدام:' : 'How to use:'}
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs">
+                    <li>
+                      {language === 'ar' 
+                        ? 'اذهب إلى Wakti AI وولّد صورة في وضع الصورة'
+                        : 'Go to Wakti AI and generate an image in image mode'
+                      }
+                    </li>
+                    <li>
+                      {language === 'ar' 
+                        ? 'انسخ رابط الصورة باستخدام زر النسخ'
+                        : 'Copy the image URL using the copy button'
+                      }
+                    </li>
+                    <li>
+                      {language === 'ar' 
+                        ? 'الصق الرابط هنا واضغط تطبيق'
+                        : 'Paste the URL here and click Apply'
+                      }
+                    </li>
+                  </ol>
+                </div>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              You'll be redirected to the AI image generator. After creating your image, you can easily apply it as your event background.
-            </p>
           </div>
           
           {/* Enhanced blur control for AI images */}
