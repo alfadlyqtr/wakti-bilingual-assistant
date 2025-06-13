@@ -32,17 +32,12 @@ export default function ForgotPassword() {
     setIsLoading(true);
     
     try {
-      const error = await forgotPassword(email);
-      
-      if (error) {
-        toast.error("Password reset failed: " + error.message);
-      } else {
-        toast.success("Password reset link sent. Check your email for the reset link");
-        // Redirect to login after a short delay
-        setTimeout(() => navigate('/login'), 2000);
-      }
-    } catch (error) {
-      toast.error("Password reset failed: An unexpected error occurred");
+      await forgotPassword(email);
+      toast.success("Password reset link sent. Check your email for the reset link");
+      // Redirect to login after a short delay
+      setTimeout(() => navigate('/login'), 2000);
+    } catch (error: any) {
+      toast.error("Password reset failed: " + (error?.message || "An unexpected error occurred"));
     } finally {
       setIsLoading(false);
     }

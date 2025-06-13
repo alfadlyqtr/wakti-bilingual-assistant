@@ -127,13 +127,9 @@ export default function Account() {
     setIsUpdatingEmail(true);
     
     try {
-      const error = await updateEmail(email);
-      if (error) {
-        toast.error(t("errorUpdatingEmail", language));
-      } else {
-        toast.success(t("emailUpdated", language));
-      }
-    } catch (error) {
+      await updateEmail(email);
+      toast.success(t("emailUpdated", language));
+    } catch (error: any) {
       toast.error(t("errorUpdatingEmail", language));
     } finally {
       setIsUpdatingEmail(false);
