@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
@@ -64,53 +63,52 @@ export const QuoteWidget: React.FC<QuoteWidgetProps> = ({ className }) => {
   
   return (
     <div 
-      className={`${className} relative p-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300`}
+      className={`${className} relative p-4 rounded-xl shadow-glow transition-all duration-300 overflow-visible`}
       style={{
-        background: 'rgba(30, 58, 138, 0.1)', // Light navy blue with 90% transparency
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(30, 58, 138, 0.2)',
-        boxShadow: '0 8px 32px rgba(30, 58, 138, 0.15), 0 4px 16px rgba(0, 0, 0, 0.1)',
+        background: 'rgba(87, 124, 255, 0.12)', // Vibrant blue tint with glass effect
+        backdropFilter: 'blur(14px)',
+        border: '1.5px solid rgba(87, 124, 255, 0.20)',
+        boxShadow: '0 8px 32px rgba(87, 124, 255, 0.12), 0 2px 12px rgba(30, 58, 138, 0.08)',
       }}
     >
-      {/* 3D effect overlay */}
-      <div 
-        className="absolute inset-0 rounded-xl pointer-events-none"
+      {/* Glass/Glare Overlays */}
+      <div className="absolute inset-0 rounded-xl pointer-events-none" 
         style={{
-          background: 'linear-gradient(145deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(0, 0, 0, 0.05) 100%)',
-          borderRadius: 'inherit',
-        }}
+          background: "linear-gradient(135deg, rgba(87,124,255,0.20) 0%, rgba(255,255,255,0.08) 45%, rgba(87,124,255,0.08) 100%)"
+        }} 
       />
-      
+      <div className="absolute -top-6 -left-6 w-24 h-24 bg-accent-blue/20 rounded-full blur-xl opacity-30 pointer-events-none" />
+      <div className="absolute bottom-2 right-3 w-16 h-6 bg-accent-blue/10 rounded-lg blur-md opacity-20 pointer-events-none" />
+
       {/* Drag handle inside the container */}
-      <div className="absolute top-2 left-2 z-20 p-1 rounded-md bg-muted/60 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-grab active:cursor-grabbing">
-        <Hand className="h-4 w-4" />
+      <div className="absolute top-2 left-2 z-20 p-1 rounded-md bg-accent-blue/10 hover:bg-accent-blue/30 hover:text-background transition-colors cursor-grab active:cursor-grabbing border border-accent-blue/30">
+        <Hand className="h-4 w-4 text-accent-blue" />
       </div>
       
       {/* Header */}
       <div className="flex justify-between items-center mb-3 relative z-10 ml-10">
-        <h3 className="text-lg text-foreground font-semibold">
+        <h3 className="text-lg font-semibold text-accent-blue bg-gradient-to-r from-accent-blue to-accent-blue/90 bg-clip-text text-transparent drop-shadow-md">
           {t("dailyQuote", language)}
         </h3>
         <Button 
           variant="ghost" 
           size="icon" 
-          className="h-8 w-8 hover:bg-muted/50" 
+          className="h-8 w-8 hover:bg-accent-blue/30" 
           onClick={handleRefresh}
           disabled={isLoading}
         >
-          <RefreshCw className={`h-4 w-4 text-foreground ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 text-accent-blue ${isLoading ? 'animate-spin' : ''}`} />
           <span className="sr-only">
             {language === 'ar' ? "تحديث الاقتباس" : "Refresh quote"}
           </span>
         </Button>
       </div>
-
       {/* Quote Content */}
-      <div className={`relative z-10 ${language === 'ar' ? 'text-right' : ''}`}>
-        <p className="text-sm italic text-foreground font-medium leading-relaxed mb-2">
+      <div className={`relative z-10 px-2 pb-2 ${language === 'ar' ? 'text-right' : ''}`}>
+        <p className="text-sm italic font-medium mb-2 text-accent-blue/90">
           "{quoteText}"
         </p>
-        <p className="text-xs text-muted-foreground font-medium">
+        <p className="text-xs text-accent-blue/70">
           — {quoteAuthor}
         </p>
       </div>
