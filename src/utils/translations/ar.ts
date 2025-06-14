@@ -1,3 +1,4 @@
+
 import { authAr } from "./modules/ar/auth";
 import { commonAr } from "./modules/ar/common";
 import { navigationAr } from "./modules/ar/navigation";
@@ -17,6 +18,7 @@ import { miscAr } from "./modules/ar/misc";
 import { helpAr } from "./modules/ar/help";
 import { legalAr } from "./modules/ar/legal";
 import { billingAr } from "./modules/ar/billing";
+import { confirmationAr } from "./modules/ar/confirmation";
 
 export const ar = {
   ...commonAr,
@@ -38,4 +40,5 @@ export const ar = {
   ...helpAr,
   ...legalAr,
   ...billingAr,
+  ...confirmationAr,
 };
