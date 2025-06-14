@@ -59,9 +59,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
-
-  // Remove sessionMismatch, session token, and validation complexity.
-  // We only track is_logged_in flag now.
   const [loginBlockedEmail, setLoginBlockedEmail] = useState<string | null>(null);
 
   // Completely block sign-in if is_logged_in true; only allow force
@@ -115,12 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-      if (data?.user && data.session) {
-        // Set profile online ONLY after successful login
-        await setLoggedInFlag(data.user.id, true);
-        setUser(data.user);
-        setSession(data.session ?? null);
-      }
+      // Note: is_logged_in flag will be set by onAuthStateChange listener
       showSuccess("Sign in successful.");
       navigate('/dashboard');
     } catch (error: any) {
@@ -131,7 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // On sign up, set is_logged_in to true if session exists
+  // On sign up, is_logged_in will be set by onAuthStateChange
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
       setLoading(true);
@@ -147,9 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
-      if (data.user && data.user.id) {
-        await setLoggedInFlag(data.user.id, true);
-      }
+      // Note: is_logged_in flag will be set by onAuthStateChange listener when session is confirmed
     } catch (error: any) {
       console.error("Error signing up:", error);
       showError(error.message || "Failed to sign up. Please try again.");
@@ -296,49 +286,79 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth state changes; make this synchronous (NO async allowed!)
+  // Listen for auth state changes; make this synchronous and properly manage is_logged_in flag
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
+        console.log("Auth state change:", event, newSession?.user?.id);
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        
+        // Properly manage is_logged_in flag based on auth events
+        if (event === 'SIGNED_IN' && newSession?.user) {
+          // User just signed in - set flag to true
+          console.log("Setting is_logged_in to true for user:", newSession.user.id);
+          setTimeout(() => {
+            setLoggedInFlag(newSession.user.id, true);
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          // User signed out - flag will be cleared by signOut function
+          console.log("User signed out");
+        }
       }
     );
 
-    // Restore session, check is_logged_in (only ONCE)
+    // Restore session on initialization
     const getSession = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (session?.user) {
-        // Check is_logged_in
+        console.log("Restoring session for user:", session.user.id);
+        
+        // Check is_logged_in flag
         const profile = await supabase
           .from('profiles')
           .select('is_logged_in')
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (profile.error || !profile.data || !profile.data.is_logged_in) {
-          // If not allowed, sign out immediately and clear session/user
-          await supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-          showError("You were logged out because your account was accessed elsewhere.");
+        if (profile.error) {
+          console.error("Error checking profile:", profile.error);
+          // If we can't check the profile, assume it's valid for now
+          setSession(session);
+          setUser(session.user);
+        } else if (!profile.data) {
+          console.log("No profile found for user, creating session anyway");
+          setSession(session);
+          setUser(session.user);
+          // Set the flag to true since we have a valid session
+          await setLoggedInFlag(session.user.id, true);
+        } else if (!profile.data.is_logged_in) {
+          console.log("User session exists but is_logged_in is false, setting to true");
+          // User has a valid session but flag is false (maybe server restart)
+          // Set flag to true instead of logging out
+          await setLoggedInFlag(session.user.id, true);
+          setSession(session);
+          setUser(session.user);
         } else {
+          console.log("User session and flag are valid");
           setSession(session);
           setUser(session.user);
         }
       } else {
+        console.log("No session to restore");
         setSession(null);
         setUser(null);
       }
       setLoading(false);
     };
+    
     getSession();
 
     return () => {
       subscription.unsubscribe();
     };
-    // eslint-disable-next-line
   }, []);
 
   // Force logout modal UI
