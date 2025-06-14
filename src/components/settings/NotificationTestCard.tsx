@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   triggerNotificationProcessing, 
   getNotificationQueueStatus, 
-  fixStuckNotifications,
+  fixAllStuckNotifications,
   sendTestNotification 
 } from '@/utils/notificationUtils';
 
@@ -67,7 +67,7 @@ export const NotificationTestCard: React.FC = () => {
   const handleFixStuck = async () => {
     setIsFixing(true);
     try {
-      const result = await fixStuckNotifications();
+      const result = await fixAllStuckNotifications();
       
       if (result.success) {
         showSuccess(language === 'ar' ? 'تم إصلاح الإشعارات العالقة بنجاح' : 'Stuck notifications fixed successfully');
