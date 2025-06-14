@@ -24,6 +24,7 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
+  const [dobInputValue, setDobInputValue] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -77,6 +78,31 @@ export default function Signup() {
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Sync manual date input to picker and vice versa
+  const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDobInputValue(value);
+
+    if (value) {
+      const newDate = new Date(value);
+      if (!isNaN(newDate.getTime())) {
+        setDateOfBirth(newDate);
+      }
+    } else {
+      setDateOfBirth(undefined);
+    }
+  };
+
+  // When picking from calendar
+  const handleCalendarDateSelect = (date: Date | undefined) => {
+    setDateOfBirth(date);
+    if (date) {
+      setDobInputValue(date.toISOString().split("T")[0]);
+    } else {
+      setDobInputValue("");
     }
   };
 
@@ -243,33 +269,48 @@ export default function Signup() {
               
               <div className="space-y-2">
                 <Label htmlFor="dateOfBirth" className="text-base">{t.dateOfBirth}</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
-                        !dateOfBirth && "text-muted-foreground"
-                      )}
-                      disabled={isLoading}
-                    >
-                      <CalendarIcon className="mr-2 h-5 w-5" />
-                      {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={dateOfBirth}
-                      onSelect={setDateOfBirth}
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01")
-                      }
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="space-y-2">
+                  {/* Manual date entry */}
+                  <Input
+                    id="dob"
+                    type="date"
+                    value={dobInputValue}
+                    onChange={handleDobInputChange}
+                    max={new Date().toISOString().split('T')[0]}
+                    min="1900-01-01"
+                    className="w-full text-base"
+                    disabled={isLoading}
+                    placeholder={language === 'ar' ? 'اختر التاريخ' : 'Select date'}
+                  />
+                  {/* OR calendar picker */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal py-6 text-base shadow-sm",
+                          !dateOfBirth && "text-muted-foreground"
+                        )}
+                        disabled={isLoading}
+                      >
+                        <CalendarIcon className="mr-2 h-5 w-5" />
+                        {dateOfBirth ? format(dateOfBirth, "PPP") : <span>{t.dobPlaceholder}</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={dateOfBirth}
+                        onSelect={handleCalendarDateSelect}
+                        disabled={(date) =>
+                          date > new Date() || date < new Date("1900-01-01")
+                        }
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
               
               <div className="space-y-2">
