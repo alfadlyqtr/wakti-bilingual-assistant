@@ -36,7 +36,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
-  // Enhanced liquid glass styles with dark green accents
+  // Enhanced liquid glass styles with liquid light red and better contrast
   const glassStyles = theme === 'dark' ? {
     // Dark mode liquid glass
     overlayBg: 'rgba(12, 15, 20, 0.05)', // More transparent to show dashboard
@@ -44,11 +44,12 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     cardBorder: 'rgba(233, 206, 176, 0.15)',
     textColor: '#e9ceb0',
     primaryText: '#ffffff',
-    buttonBg: 'rgba(233, 206, 176, 0.08)',
-    buttonBorder: 'rgba(233, 206, 176, 0.2)',
-    buttonText: '#1a1a3a', // Dark navy blue for button text
-    buttonHoverBg: 'rgba(233, 206, 176, 0.15)',
+    buttonBg: 'rgba(233, 206, 176, 0.12)',
+    buttonBorder: 'rgba(233, 206, 176, 0.25)',
+    buttonText: '#ffffff', // White text for dark mode
+    buttonHoverBg: 'rgba(233, 206, 176, 0.18)',
     highlightColor: '#2d5a3d', // Dark liquid green accent
+    logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(26, 26, 58, 0.05)',
     textAreaBorder: 'rgba(233, 206, 176, 0.08)'
@@ -59,11 +60,12 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     cardBorder: 'rgba(6, 5, 65, 0.15)',
     textColor: '#060541',
     primaryText: '#060541',
-    buttonBg: 'rgba(6, 5, 65, 0.08)',
-    buttonBorder: 'rgba(6, 5, 65, 0.2)',
-    buttonText: '#1a1a3a', // Dark navy blue for button text
-    buttonHoverBg: 'rgba(6, 5, 65, 0.15)',
+    buttonBg: 'rgba(6, 5, 65, 0.12)',
+    buttonBorder: 'rgba(6, 5, 65, 0.25)',
+    buttonText: '#060541', // Dark blue text for light mode
+    buttonHoverBg: 'rgba(6, 5, 65, 0.18)',
     highlightColor: '#2d5a3d', // Dark liquid green accent
+    logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(6, 5, 65, 0.03)',
     textAreaBorder: 'rgba(6, 5, 65, 0.08)'
@@ -80,15 +82,20 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     >
       {/* Top Controls */}
       <div className="fixed top-4 left-0 right-0 z-10 flex justify-between items-center px-4 max-w-md mx-auto">
-        {/* Logout Button with liquid glass effect */}
+        {/* Logout Button with liquid light red 3D effect */}
         <div
-          className="px-4 py-2 rounded-xl transition-all duration-300 hover:scale-105"
+          className="px-4 py-2 rounded-xl transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
           style={{
-            background: `linear-gradient(135deg, ${glassStyles.highlightColor}80, ${glassStyles.highlightColor}60)`,
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: `1px solid ${glassStyles.highlightColor}40`,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            background: `linear-gradient(135deg, ${glassStyles.logoutColor}90, ${glassStyles.logoutColor}70)`,
+            backdropFilter: 'blur(15px)',
+            WebkitBackdropFilter: 'blur(15px)',
+            border: `2px solid ${glassStyles.logoutColor}60`,
+            boxShadow: `
+              0 8px 32px rgba(255, 107, 107, 0.3),
+              0 4px 16px rgba(255, 107, 107, 0.2),
+              inset 0 2px 0 rgba(255, 255, 255, 0.3),
+              inset 0 -2px 0 rgba(0, 0, 0, 0.1)
+            `,
           }}
         >
           <button
@@ -166,42 +173,65 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </p>
           </div>
 
-          {/* Liquid Glass Subscribe Buttons */}
+          {/* 3D Subscribe Buttons with pressable effect */}
           <div className="space-y-4">
-            {/* Monthly Plan - Liquid Glass Button */}
+            {/* Monthly Plan - 3D Pressable Button */}
             <button
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base font-bold transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] group"
+              className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.95] group relative"
               style={{
                 background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
-                backdropFilter: 'blur(15px)',
-                WebkitBackdropFilter: 'blur(15px)',
+                backdropFilter: 'blur(20px)',
+                WebkitBackdropFilter: 'blur(20px)',
                 border: `2px solid ${glassStyles.buttonBorder}`,
                 borderRadius: '16px',
                 color: glassStyles.buttonText,
                 boxShadow: `
-                  0 16px 32px rgba(0, 0, 0, 0.1),
-                  0 8px 16px rgba(0, 0, 0, 0.05),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                  0 0 0 1px ${glassStyles.buttonBorder}40
+                  0 8px 32px rgba(0, 0, 0, 0.15),
+                  0 4px 16px rgba(0, 0, 0, 0.1),
+                  inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                  inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+                  0 0 0 1px ${glassStyles.buttonBorder}60
                 `,
+                transform: 'translateZ(0)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonHoverBg} 0%, ${glassStyles.buttonBg} 50%, ${glassStyles.buttonHoverBg} 100%)`;
+                e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
                 e.currentTarget.style.boxShadow = `
-                  0 20px 40px rgba(0, 0, 0, 0.15),
-                  0 12px 24px rgba(0, 0, 0, 0.1),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.3),
-                  0 0 0 2px ${glassStyles.buttonBorder}60
+                  0 12px 48px rgba(0, 0, 0, 0.2),
+                  0 6px 24px rgba(0, 0, 0, 0.15),
+                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                  inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+                  0 0 0 2px ${glassStyles.buttonBorder}80
                 `;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`;
+                e.currentTarget.style.transform = 'translateY(0) translateZ(0)';
                 e.currentTarget.style.boxShadow = `
-                  0 16px 32px rgba(0, 0, 0, 0.1),
-                  0 8px 16px rgba(0, 0, 0, 0.05),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                  0 0 0 1px ${glassStyles.buttonBorder}40
+                  0 8px 32px rgba(0, 0, 0, 0.15),
+                  0 4px 16px rgba(0, 0, 0, 0.1),
+                  inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                  inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+                  0 0 0 1px ${glassStyles.buttonBorder}60
+                `;
+              }}
+              onMouseDown={(e) => {
+                e.currentTarget.style.transform = 'translateY(1px) translateZ(0)';
+                e.currentTarget.style.boxShadow = `
+                  0 4px 16px rgba(0, 0, 0, 0.2),
+                  0 2px 8px rgba(0, 0, 0, 0.15),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                  inset 0 -1px 0 rgba(0, 0, 0, 0.2)
+                `;
+              }}
+              onMouseUp={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                e.currentTarget.style.boxShadow = `
+                  0 12px 48px rgba(0, 0, 0, 0.2),
+                  0 6px 24px rgba(0, 0, 0, 0.15),
+                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                  inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+                  0 0 0 2px ${glassStyles.buttonBorder}80
                 `;
               }}
             >
@@ -211,41 +241,64 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
               </div>
             </button>
 
-            {/* Yearly Plan with Best Value Badge - Liquid Glass Button */}
+            {/* Yearly Plan with Best Value Badge - 3D Pressable Button */}
             <div className="relative">
               <button
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base font-bold transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] group"
+                className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.95] group relative"
                 style={{
                   background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
-                  backdropFilter: 'blur(15px)',
-                  WebkitBackdropFilter: 'blur(15px)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
                   border: `2px solid ${glassStyles.buttonBorder}`,
                   borderRadius: '16px',
                   color: glassStyles.buttonText,
                   boxShadow: `
-                    0 16px 32px rgba(0, 0, 0, 0.1),
-                    0 8px 16px rgba(0, 0, 0, 0.05),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                    0 0 0 1px ${glassStyles.buttonBorder}40
+                    0 8px 32px rgba(0, 0, 0, 0.15),
+                    0 4px 16px rgba(0, 0, 0, 0.1),
+                    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                    inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+                    0 0 0 1px ${glassStyles.buttonBorder}60
                   `,
+                  transform: 'translateZ(0)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonHoverBg} 0%, ${glassStyles.buttonBg} 50%, ${glassStyles.buttonHoverBg} 100%)`;
+                  e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
                   e.currentTarget.style.boxShadow = `
-                    0 20px 40px rgba(0, 0, 0, 0.15),
-                    0 12px 24px rgba(0, 0, 0, 0.1),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.3),
-                    0 0 0 2px ${glassStyles.buttonBorder}60
+                    0 12px 48px rgba(0, 0, 0, 0.2),
+                    0 6px 24px rgba(0, 0, 0, 0.15),
+                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                    inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+                    0 0 0 2px ${glassStyles.buttonBorder}80
                   `;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`;
+                  e.currentTarget.style.transform = 'translateY(0) translateZ(0)';
                   e.currentTarget.style.boxShadow = `
-                    0 16px 32px rgba(0, 0, 0, 0.1),
-                    0 8px 16px rgba(0, 0, 0, 0.05),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-                    0 0 0 1px ${glassStyles.buttonBorder}40
+                    0 8px 32px rgba(0, 0, 0, 0.15),
+                    0 4px 16px rgba(0, 0, 0, 0.1),
+                    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                    inset 0 -2px 0 rgba(0, 0, 0, 0.1),
+                    0 0 0 1px ${glassStyles.buttonBorder}60
+                  `;
+                }}
+                onMouseDown={(e) => {
+                  e.currentTarget.style.transform = 'translateY(1px) translateZ(0)';
+                  e.currentTarget.style.boxShadow = `
+                    0 4px 16px rgba(0, 0, 0, 0.2),
+                    0 2px 8px rgba(0, 0, 0, 0.15),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                    inset 0 -1px 0 rgba(0, 0, 0, 0.2)
+                  `;
+                }}
+                onMouseUp={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                  e.currentTarget.style.boxShadow = `
+                    0 12px 48px rgba(0, 0, 0, 0.2),
+                    0 6px 24px rgba(0, 0, 0, 0.15),
+                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                    inset 0 -3px 0 rgba(0, 0, 0, 0.15),
+                    0 0 0 2px ${glassStyles.buttonBorder}80
                   `;
                 }}
               >
