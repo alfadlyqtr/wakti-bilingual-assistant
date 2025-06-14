@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -112,6 +111,7 @@ serve(async (req) => {
     let actionTaken = null;
     let actionResult = null;
     let fileAnalysisResults = [];
+    let promptTranslationInfo = null;
 
     // Handle trigger types with NO search quota restrictions
     switch (activeTrigger) {
@@ -136,25 +136,56 @@ serve(async (req) => {
         break;
 
       case 'image':
-        if (intent.allowed) {
+        // IMAGE GENERATION MODE WITH ARABIC TRANSLATION SUPPORT
+        if (intent.allowed || (containsArabic(message) && language === 'ar')) {
+          let englishPrompt = message;
+          promptTranslationInfo = null;
+
+          if (containsArabic(message)) {
+            // Translate to English via DeepSeek/OpenAI
+            try {
+              console.log("🌐 Detected Arabic prompt for image generation. Translating...");
+              englishPrompt = await translateToEnglish(message);
+              promptTranslationInfo = {
+                original: message,
+                translated: englishPrompt,
+                explanation: language === 'ar'
+                  ? 'تمت ترجمة وصف الصورة تلقائيًا للإنجليزية لضمان جودة النتائج. يمكنك التحقق أو تحرير الترجمة إذا رغبت.'
+                  : 'The prompt was automatically translated to English for best results. You can verify or edit the translation if you wish.'
+              };
+              console.log('🌐 Arabic prompt translation:', englishPrompt);
+            } catch (error) {
+              console.error("🌐 Error translating Arabic prompt:", error);
+              response = language === 'ar'
+                ? 'حدث خطأ في ترجمة وصف الصورة للإنجليزية. يرجى المحاولة مرة أخرى.'
+                : 'An error occurred while translating your prompt to English. Please try again.';
+              break;
+            }
+          }
+
           try {
-            console.log("🎨 Generating image with Runware API for prompt:", message);
-            const imageResult = await generateImageWithRunware(message, user.id, language);
-            
+            console.log("🎨 Generating image with Runware API for prompt:", englishPrompt);
+            const imageResult = await generateImageWithRunware(englishPrompt, user.id, language);
+
             if (imageResult.success) {
               imageUrl = imageResult.imageUrl;
-              response = language === 'ar' 
-                ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
-                : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
+              response = (promptTranslationInfo
+                ? (language === 'ar'
+                    ? `✅ تمت ترجمة وصفك للإنجليزية وسيتم توليد الصورة بناءً عليه.\n\n**الوصف الأصلي:**\n${promptTranslationInfo.original}\n\n**الترجمة الإنجليزية:**\n${promptTranslationInfo.translated}\n\n🎨 تم إنشاء الصورة بناءً على الوصف باللغة الإنجليزية.`
+                    : `✅ Your Arabic prompt was translated to English and used for image generation.\n\n**Original prompt:**\n${promptTranslationInfo.original}\n\n**English translation:**\n${promptTranslationInfo.translated}\n\n🎨 Image generated using the translated prompt.`)
+                : (language === 'ar'
+                    ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${englishPrompt}`
+                    : `🎨 Image generated successfully!\n\n**Prompt:** ${englishPrompt}`)
+              );
             } else {
               console.error("Image generation failed:", imageResult.error);
-              response = language === 'ar' 
+              response = language === 'ar'
                 ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
                 : `❌ Sorry, there was an error generating the image. Please try again.`;
             }
           } catch (error) {
             console.error("Image generation error:", error);
-            response = language === 'ar' 
+            response = language === 'ar'
               ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
               : `❌ Sorry, there was an error generating the image. Please try again.`;
           }
@@ -191,6 +222,7 @@ serve(async (req) => {
       needsConfirmation: false,
       needsClarification: false,
       fileAnalysisResults,
+      promptTranslationInfo, // include translation info in response!
       success: true
     };
 
@@ -565,6 +597,11 @@ function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
+// Helper: Detect if string contains Arabic characters
+function containsArabic(text: string) {
+  return /[\u0600-\u06FF]/.test(text);
+}
+
 // SIMPLIFIED: Trigger isolation logic - only chat, search, image
 function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
@@ -590,13 +627,15 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
       };
 
     case 'image':
+      // Accept anything for image mode if message contains Arabic, or if keywords match
       const imagePatterns = [
         'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
         'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
       ];
-      
-      const isImageIntent = imagePatterns.some(pattern => lowerMessage.includes(pattern));
-      
+      const isImageIntent =
+        imagePatterns.some(pattern => lowerMessage.includes(pattern)) ||
+        containsArabic(message);
+
       return {
         intent: isImageIntent ? 'generate_image' : 'invalid_for_image',
         confidence: isImageIntent ? 'high' : 'low',
@@ -612,4 +651,49 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         allowed: true
       };
   }
+}
+
+// Translation helper using DeepSeek/OpenAI
+async function translateToEnglish(arabicText: string) {
+  // Prefer DeepSeek, fallback to OpenAI
+  let apiKey = DEEPSEEK_API_KEY;
+  let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+  let model = 'deepseek-chat';
+
+  if (!apiKey) {
+    apiKey = OPENAI_API_KEY;
+    apiUrl = 'https://api.openai.com/v1/chat/completions';
+    model = 'gpt-4o-mini';
+  }
+
+  if (!apiKey) throw new Error("No translation API key configured");
+
+  const systemPrompt =
+    "You are an expert Arabic-to-English translation assistant. Translate the following prompt as concisely and fluently as possible for use in an image generation AI. Do not add, remove or summarize details. Reply ONLY with the English translation:";
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: arabicText }
+  ];
+
+  const response = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.2,
+      max_tokens: 200
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Translation API failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+  return result.choices?.[0]?.message?.content?.trim() || '';
 }
