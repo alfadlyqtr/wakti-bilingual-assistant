@@ -39,7 +39,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const colors = theme === 'dark' ? {
     cardBackground: '#121120',
     primaryText: '#e9ceb0',
-    buttonBackground: '#1a1a3a', // Dark navy blue
+    buttonBackground: '#1a1a3a', // Dark navy blue for dark mode
     buttonText: '#e9ceb0',
     buttonBorder: '#e9ceb0', // Border matches text color
     accentColor: '#e9ceb0',
