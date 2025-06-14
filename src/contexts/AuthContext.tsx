@@ -35,7 +35,8 @@ export function useAuth(): AuthContextType {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  // Explicitly annotate session type to fix TS2339 error
+  const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
@@ -100,6 +101,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // We only care about enforcing once user is set (so when logged in)
     async function checkSingleSession() {
       if (user && session) {
+        if (!session.access_token) {
+          // Prevent attempts to check session if the token is missing
+          console.warn("Session exists but access_token is missing.");
+          return;
+        }
         // Save "this" session token in localStorage if new
         setCurrentSessionToken(session.access_token);
 
@@ -139,6 +145,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const saveSessionRecord = async (forceSession?: string) => {
     if (user && session) {
       const token = forceSession || session.access_token;
+      if (!token) {
+        console.warn("No access token found on session.");
+        return;
+      }
       await supabase.from('user_sessions').upsert([
         {
           user_id: user.id,
