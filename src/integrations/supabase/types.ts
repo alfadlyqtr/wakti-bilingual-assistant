@@ -769,6 +769,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          is_logged_in: boolean | null
           is_subscribed: boolean | null
           last_name: string | null
           next_billing_date: string | null
@@ -789,6 +790,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id: string
+          is_logged_in?: boolean | null
           is_subscribed?: boolean | null
           last_name?: string | null
           next_billing_date?: string | null
@@ -809,6 +811,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          is_logged_in?: boolean | null
           is_subscribed?: boolean | null
           last_name?: string | null
           next_billing_date?: string | null

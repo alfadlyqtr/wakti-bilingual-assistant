@@ -21,6 +21,7 @@ interface AuthContextType {
   updateProfile: (data: { user_metadata: { display_name?: string; avatar_url?: string; full_name?: string; } }) => Promise<void>;
   deleteAccount: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,6 +32,19 @@ export function useAuth(): AuthContextType {
     throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
+}
+
+// Helper: fetch user profile by email
+async function fetchProfileByEmail(email: string) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .ilike("email", email)
+    .maybeSingle();
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -67,29 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // ON/OFF Single-session: Clean up existing session logic and use only is_logged_in flag
+
   useEffect(() => {
-    // Setup auth listener FIRST
+    // Auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      // event is a string like "SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED"
       (event, newSession: import('@supabase/supabase-js').Session | null) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-
-        // If the event is TOKEN_REFRESHED, update the session token in DB,
-        // but do NOT enforce single-session checks during this window.
-        if (event === 'TOKEN_REFRESHED' && newSession && newSession.access_token) {
-          console.log('[SingleSession] TOKEN_REFRESHED: Updating token in DB and localStorage');
-          isSavingSessionRef.current = true;
-          saveSessionRecord(newSession.access_token).finally(() => {
-            isSavingSessionRef.current = false;
-            lastSessionTokenRef.current = newSession.access_token;
-          });
-        }
-        // For login, run single-session check as usual in useEffect (see below)
       }
     );
-
-    // Get current session at mount
+    // Initial load
     const getSession = async () => {
       try {
         setLoading(true);
@@ -104,129 +106,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     getSession();
-
     return () => {
       subscription.unsubscribe();
     };
   }, []);
 
-  // ENFORCE SINGLE SESSION -- only run on new login/signup/refresh session (not token refresh)
-  useEffect(() => {
-    // Run if there is a user and session and we're not in the middle of saving to DB
-    async function checkSingleSession() {
-      if (!user || !session || !session.access_token) {
-        return;
-      }
-      // Avoid running immediately after TOKEN_REFRESHED (when we're saving)
-      if (isSavingSessionRef.current) {
-        console.log('[SingleSession] Skipping enforcement: session token is being saved to DB');
-        return;
-      }
-      // Avoid running twice for the same token
-      if (lastSessionTokenRef.current === session.access_token) {
-        // Already enforced this token
-        return;
-      }
-      lastSessionTokenRef.current = session.access_token;
-
-      setCurrentSessionToken(session.access_token);
-
-      // Query user_sessions DB for token
-      const { data, error } = await supabase
-        .from('user_sessions')
-        .select('session_token')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!data || error) {
-        // No row - insert (first login/device)
-        await supabase.from('user_sessions').upsert([
-          {
-            user_id: user.id,
-            session_token: session.access_token,
-            device_info: window?.navigator?.userAgent ?? null,
-          },
-        ]);
-        setCurrentSessionToken(session.access_token);
-        return;
-      }
-
-      // If session_token in DB does NOT match this session's access_token
-      if (data.session_token !== session.access_token) {
-        // After a token refresh, the DB may be briefly stale.
-        // Add a small timeout and retry.
-        await new Promise(res => setTimeout(res, 350));
-        // Re-query
-        const { data: fresh, error: err2 } = await supabase
-          .from('user_sessions')
-          .select('session_token')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        if (err2) {
-          showError('Unable to verify your session. Please sign in again.');
-          await supabase.auth.signOut();
-          clearCurrentSessionToken();
-          setUser(null);
-          setSession(null);
-          navigate('/login');
-          return;
-        }
-        if (fresh.session_token !== session.access_token) {
-          // Still mismatched (token replaced from another device)
-          showError('You have been logged out because your account was used on another device.');
-          await supabase.auth.signOut();
-          clearCurrentSessionToken();
-          setUser(null);
-          setSession(null);
-          navigate('/login');
-          return;
-        }
-      }
-    }
-
-    // Only enforce if user and session present, and not in TOKEN_REFRESHED (handled by event)
-    if (user && session && session.access_token) {
-      checkSingleSession();
-    }
-    // eslint-disable-next-line
-  }, [user, session]); // DO NOT add other dependencies
-
-  // Update session DB row and set ref accordingly
-  const saveSessionRecord = async (forceSession?: string) => {
-    if (user && session) {
-      isSavingSessionRef.current = true;
-      try {
-        const sessionTyped = session as import('@supabase/supabase-js').Session;
-        const token = forceSession || sessionTyped.access_token;
-        if (!token) {
-          console.warn("No access token found on session.");
-          return;
-        }
-        await supabase.from('user_sessions').upsert([
-          {
-            user_id: user.id,
-            session_token: token,
-            device_info: window?.navigator?.userAgent ?? null,
-          },
-        ]);
-        setCurrentSessionToken(token);
-        lastSessionTokenRef.current = token;
-      } finally {
-        isSavingSessionRef.current = false;
-      }
-    }
-  };
-
+  // Updated simple single-session sign-in
   const signIn = async (email: string) => {
     try {
       setLoading(true);
+
+      // 1. Check if user is already logged in
+      const profile = await fetchProfileByEmail(email);
+      if (profile && profile.is_logged_in) {
+        showError("Your account is already signed in on another device. Please log out first.");
+        setLoading(false);
+        return;
+      }
+
+      // 2. Sign in with OTP magic link (or change to signInWithPassword if desired)
       const { error, data } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
-      // After successful login, store/replace the session DB record
-      if (data?.session) {
-        const sessionTyped = data.session as import('@supabase/supabase-js').Session;
-        await saveSessionRecord(sessionTyped.access_token);
-      }
+
+      // 3. Set is_logged_in to true if there's a current user (magic link sign-in is async)
+      // For password-based sign-in, do:
+      // if (data?.user) { await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id); }
+
       showSuccess("Check your email - we've sent you a magic link to sign in.");
     } catch (error: any) {
       console.error("Error signing in:", error);
@@ -236,6 +141,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Add signInWithPassword for apps that use password login
+  const signInWithPassword = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+
+      // Check ON/OFF flag
+      const profile = await fetchProfileByEmail(email);
+      if (profile && profile.is_logged_in) {
+        showError("Your account is already signed in on another device. Please log out first.");
+        setLoading(false);
+        return;
+      }
+
+      const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      // Set is_logged_in ON for user
+      if (data?.user) {
+        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
+      }
+
+      showSuccess("Sign in successful.");
+      setUser(data.user);
+      setSession(data.session ?? null);
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error("Error signing in (pw):", error);
+      showError(error.message || "Failed to sign in.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // On sign up, set is_logged_in to true if user session exists
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
       setLoading(true);
@@ -249,9 +188,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (error) throw error;
-      if (data?.session) {
-        const sessionTyped = data.session as import('@supabase/supabase-js').Session;
-        await saveSessionRecord(sessionTyped.access_token);
+      if (data?.session && data.user) {
+        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
       }
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
@@ -263,14 +201,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // On sign out, clear ON/OFF flag for current user
   const signOut = async () => {
     try {
       setLoading(true);
       if (user) {
-        await supabase.from('user_sessions').delete().eq('user_id', user.id);
+        await supabase.from('profiles').update({ is_logged_in: false }).eq('id', user.id);
       }
       await supabase.auth.signOut();
-      clearCurrentSessionToken();
       setUser(null);
       setSession(null);
       navigate('/');
@@ -407,6 +345,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     isLoading: loading,
     signIn,
+    signInWithPassword, // added for completeness with new ON/OFF logic
     signOut,
     signUp,
     resetPassword,
