@@ -5,6 +5,7 @@ import { useToastHelper } from '@/hooks/use-toast-helper';
 import { useNavigate } from 'react-router-dom';
 import { UserAttributes } from '@supabase/supabase-js';
 import { useProgressierSync } from '@/hooks/useProgressierSync';
+import { v4 as uuidv4 } from 'uuid';
 
 interface AuthContextType {
   user: User | null;
@@ -54,115 +55,141 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
 
+  // Strict single-session helper state
+  const [sessionMismatch, setSessionMismatch] = useState(false);
+
   // New refs for debouncing enforcement and tracking DB updates
   const isSavingSessionRef = useRef(false);
   const lastSessionTokenRef = useRef<string | null>(null);
 
-  // Minor utility to get/save our device's "session token" key (unique per login)
+  // SESSION TOKEN UTILS
   function getCurrentSessionToken() {
-    // Try to re-use the token if in memory/localStorage, else grab from Supabase session
-    // If not available, we fallback to current supabase.auth.session() access_token
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('wakti_session_token');
-      if (token) return token;
+      return localStorage.getItem('wakti_session_token');
     }
     return null;
   }
-
   function setCurrentSessionToken(token: string) {
     if (typeof window !== 'undefined') {
       localStorage.setItem('wakti_session_token', token);
     }
   }
-
   function clearCurrentSessionToken() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('wakti_session_token');
     }
   }
 
-  // ON/OFF Single-session: Clean up existing session logic and use only is_logged_in flag
-
-  async function setProfileOnlineStatus(userId: string, isOnline: boolean) {
+  // Set online, is_logged_in ON, AND store the unique session_token
+  async function setProfileOnlineStatus(userId: string, isOnline: boolean, sessionToken: string | null = null) {
     try {
       if (!userId) return;
-      await supabase
-        .from('profiles')
-        .update({ is_logged_in: isOnline })
-        .eq('id', userId);
-      console.log(`[AuthContext] Set is_logged_in for user ${userId} to ${isOnline}`);
+      const updateObj: any = { is_logged_in: isOnline };
+      if (sessionToken !== undefined) updateObj.session_token = sessionToken;
+      await supabase.from('profiles').update(updateObj).eq('id', userId);
+      console.log(`[AuthContext] Set is_logged_in for user ${userId} to ${isOnline}, session_token:`, sessionToken);
     } catch (err) {
-      console.error('[AuthContext] Failed to update is_logged_in:', err);
+      console.error('[AuthContext] Failed to update is_logged_in/session_token:', err);
     }
+  }
+
+  // Checks current user's session_token and is_logged_in, triggers force-logout if mismatch
+  async function validateCurrentSession(userObj: User) {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('is_logged_in, session_token')
+      .eq('id', userObj.id)
+      .maybeSingle();
+
+    const localToken = getCurrentSessionToken();
+
+    if (error || !profile) {
+      setSessionMismatch(true);
+      showError("Failed to validate session.");
+      await signOut({ preventProfileUpdate: true }); // fallback
+      return false;
+    }
+    if (!profile.is_logged_in) {
+      setSessionMismatch(true);
+      showError("You have been logged out because your session is no longer active. Please log in again.");
+      await signOut({ preventProfileUpdate: true });
+      return false;
+    }
+    if (!profile.session_token || !localToken || profile.session_token !== localToken) {
+      setSessionMismatch(true);
+      showError("Your account is signed in on another device or browser. Please log in again.");
+      await signOut({ preventProfileUpdate: true });
+      return false;
+    }
+    return true;
   }
 
   useEffect(() => {
     // Auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      async (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        // --- Begin session flag logic ---
+
         if (newSession?.user) {
-          // If user just logged in or session was restored, mark as online
-          setProfileOnlineStatus(newSession.user.id, true);
-          // Extra debug
-          console.log('[AuthContext] AuthStateChange fired: ONLINE event, user:', newSession.user.id, 'event:', event);
-        } else {
-          // If session destroyed or logged out, mark as offline
-          if (user?.id) {
-            setProfileOnlineStatus(user.id, false);
-            console.log('[AuthContext] AuthStateChange fired: OFFLINE event, user:', user.id, 'event:', event);
+          // Always run validation (force logout if session_token mismatch)
+          const valid = await validateCurrentSession(newSession.user);
+          if (!valid) {
+            setUser(null);
+            setSession(null);
+            return;
           }
+          // User valid, nothing else needed because logins already set session_token/is_logged_in
+        } else {
+          // If fully logged out, always clear local session token
+          clearCurrentSessionToken();
         }
       }
     );
-    // Initial session check, also mark online if restoring a session
+
+    // Initial session check (restore)
     const getSession = async () => {
-      try {
-        setLoading(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        // Patch: Set profile online if session exists
-        if (session?.user) {
-          setProfileOnlineStatus(session.user.id, true);
-          console.log('[AuthContext] Initial session restore: Marked online:', session.user.id);
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setUser(session?.user ?? null);
+
+      if (session?.user) {
+        // Validate session on restore
+        const valid = await validateCurrentSession(session.user);
+        if (!valid) {
+          setUser(null);
+          setSession(null);
+          setLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error("Error getting session:", error);
-        showError("Failed to retrieve session. Please try again.");
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
     getSession();
+
     return () => {
       subscription.unsubscribe();
     };
+    // intentionally leaving [] here, NOT [user], so this only runs on mount
+    // (the session change logic is handled by the listener above)
+    // eslint-disable-next-line
   }, []);
 
   // Updated simple single-session sign-in
   const signIn = async (email: string) => {
     try {
       setLoading(true);
-
-      // 1. Check if user is already logged in
+      // 1. Check if user is already logged in somewhere else
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
         showError("Your account is already signed in on another device. Please log out first.");
         setLoading(false);
         return;
       }
-
-      // 2. Sign in with OTP magic link (or change to signInWithPassword if desired)
-      const { error, data } = await supabase.auth.signInWithOtp({ email });
+      // 2. Send magic link
+      const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
-
-      // 3. Set is_logged_in to true if there's a current user (magic link sign-in is async)
-      // For password-based sign-in, do:
-      // if (data?.user) { await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id); }
-
       showSuccess("Check your email - we've sent you a magic link to sign in.");
     } catch (error: any) {
       console.error("Error signing in:", error);
@@ -172,30 +199,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Add signInWithPassword for apps that use password login
+  // Password sign-in (enforced)
   const signInWithPassword = async (email: string, password: string) => {
     try {
       setLoading(true);
-
-      // Check ON/OFF flag
+      // 1. Check if already signed in
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
         showError("Your account is already signed in on another device. Please log out first.");
         setLoading(false);
         return;
       }
-
+      // 2. Proceed
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
 
-      // Set is_logged_in ON for user
-      if (data?.user) {
-        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
+      // 3. Generate session token and save it locally & remotely
+      if (data?.user && data.session) {
+        const waktiSessionToken = uuidv4();
+        setCurrentSessionToken(waktiSessionToken);
+        await setProfileOnlineStatus(data.user.id, true, waktiSessionToken);
+        setUser(data.user);
+        setSession(data.session ?? null);
       }
-
       showSuccess("Sign in successful.");
-      setUser(data.user);
-      setSession(data.session ?? null);
       navigate('/dashboard');
     } catch (error: any) {
       console.error("Error signing in (pw):", error);
@@ -219,9 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (error) throw error;
-      if (data?.session && data.user) {
-        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
-      }
+      // Magic link confirmation will happen later (same logic on first login)
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
     } catch (error: any) {
@@ -233,16 +258,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // On sign out, clear ON/OFF flag for current user
-  const signOut = async () => {
+  const signOut = async (options?: { preventProfileUpdate?: boolean }) => {
     try {
       setLoading(true);
-      if (user) {
-        await supabase.from('profiles').update({ is_logged_in: false }).eq('id', user.id);
-        console.log('[AuthContext] signOut(): Marked user offline:', user.id);
+      if (user && !options?.preventProfileUpdate) {
+        // Mark offline and clear session token in DB and local
+        await supabase.from('profiles').update({ is_logged_in: false, session_token: null }).eq('id', user.id);
+        clearCurrentSessionToken();
+        console.log('[AuthContext] signOut(): Marked user offline and session_token cleared:', user.id);
+      } else {
+        clearCurrentSessionToken();
       }
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
+      setSessionMismatch(false);
       navigate('/');
     } catch (error: any) {
       console.error("Error signing out:", error);
@@ -369,6 +399,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     }
   };
+
+  // Show blocked notice if session mismatch
+  if (sessionMismatch) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-background px-6">
+        <h2 className="font-semibold text-lg text-destructive mb-3 text-center">
+          You have been logged out from this device.
+        </h2>
+        <p className="text-muted-foreground text-center mb-4">
+          Your account is already signed in from another browser or device, or your session expired.
+          If you need to use this device, please log out from other browsers first, or try signing in again.
+        </p>
+        <button
+          onClick={() => window.location.reload()}
+          className="px-4 py-2 text-sm rounded font-medium border bg-muted hover:bg-muted-foreground text-foreground"
+        >
+          Try Again
+        </button>
+      </div>
+    );
+  }
 
   // Update the AuthProvider to include Progressier sync
   const contextValue = {
