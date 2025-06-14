@@ -83,7 +83,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Listen for changes on auth state (login, signout, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      // Add correct type annotation for session
+      (event, session: import('@supabase/supabase-js').Session | null) => {
         setSession(session);
         setUser(session?.user ?? null);
       }
