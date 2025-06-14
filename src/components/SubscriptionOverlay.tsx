@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
-import { LogOut, Sparkles, Star, Ribbon } from 'lucide-react';
+import { LogOut, Sparkles, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
 
@@ -37,15 +37,10 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Real Dashboard Background - Blurred and Faded */}
+      {/* Light Background Overlay - Shows Dashboard Behind */}
       <div className="absolute inset-0 overflow-hidden">
-        {/* This captures the actual dashboard behind */}
-        <div className="absolute inset-0 bg-background/10 backdrop-blur-xl opacity-30"></div>
-        {/* Additional overlay for readability */}
-        <div className="absolute inset-0" style={{
-          background: 'linear-gradient(135deg, rgba(252, 254, 253, 0.95) 0%, rgba(96, 96, 98, 0.85) 50%, rgba(252, 254, 253, 0.95) 100%)',
-          backdropFilter: 'blur(20px)'
-        }}></div>
+        {/* Very light backdrop to show dashboard content */}
+        <div className="absolute inset-0 bg-background/20 backdrop-blur-sm"></div>
       </div>
       
       {/* Top Controls */}
@@ -135,9 +130,8 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                 {t("subscribeYearly", language)}
               </Button>
               
-              {/* Best Value Ribbon */}
-              <div className="absolute -top-2 -right-2 flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-semibold text-white shadow-lg" style={{ backgroundColor: '#d3655a' }}>
-                <Ribbon className="h-3 w-3" />
+              {/* Best Value Badge - No Icon */}
+              <div className="absolute -top-2 -right-2 px-2 py-1 rounded-full text-xs font-semibold text-white shadow-lg" style={{ backgroundColor: '#d3655a' }}>
                 <span>{language === 'ar' ? 'أفضل قيمة' : 'Best Value'}</span>
               </div>
             </div>
