@@ -1,4 +1,3 @@
-
 /**
  * Manually activate a PayPal subscription and update the user's profile.
  * Only for backend/admin use!
@@ -29,7 +28,6 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    // Accept new "plan" param
     const { paypal_subscription_id, user_email, plan } = body as {
       paypal_subscription_id?: string;
       user_email?: string;
@@ -47,6 +45,7 @@ serve(async (req) => {
 
     const lowerPlan = plan.toLowerCase();
     let planDetails;
+
     if (lowerPlan === "monthly") {
       planDetails = {
         plan_name: "Monthly",
@@ -86,8 +85,9 @@ serve(async (req) => {
 
     const user_id = profile.id;
     const startDate = new Date().toISOString();
-    // Monthly/yearly from today
-    const nextBillingDate = new Date(new Date().setMonth(new Date().getMonth() + planDetails.monthsToAdd)).toISOString();
+    const nextBillingDate = new Date(
+      new Date().setMonth(new Date().getMonth() + planDetails.monthsToAdd)
+    ).toISOString();
 
     // Insert or update in subscriptions
     const { data: existingSubscription } = await supabase
