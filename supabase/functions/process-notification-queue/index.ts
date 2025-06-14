@@ -21,8 +21,8 @@ serve(async (req) => {
       supabaseUrlStart: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing'
     });
 
-    // Get pending notifications with detailed logging
-    console.log(`[${requestId}] Fetching pending notifications...`);
+    // Get pending notifications with IMMEDIATE scheduling priority
+    console.log(`[${requestId}] Fetching pending notifications scheduled for now or past...`);
     const { data: notifications, error: fetchError } = await supabase
       .from('notification_queue')
       .select('*')
@@ -42,7 +42,7 @@ serve(async (req) => {
       const response = {
         success: true,
         processed: 0,
-        message: 'No pending notifications',
+        message: 'No pending notifications ready for processing',
         timestamp: new Date().toISOString(),
         requestId
       };
@@ -336,9 +336,9 @@ async function markNotificationFailed(notificationId: string, error: string, att
         }
       }
     } else {
-      // Update with retry
+      // IMPROVED: Much shorter retry delays (1-2 minutes instead of exponential)
       const nextAttempt = new Date();
-      nextAttempt.setMinutes(nextAttempt.getMinutes() + (attempts * 5)); // Exponential backoff
+      nextAttempt.setMinutes(nextAttempt.getMinutes() + (attempts === 1 ? 1 : 2)); // 1 min, then 2 min
 
       console.log(`[${logId}] Scheduling retry ${attempts} for notification ${notificationId} at ${nextAttempt.toISOString()}`);
 

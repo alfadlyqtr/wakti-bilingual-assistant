@@ -13,10 +13,10 @@ export interface QueueNotificationParams {
 
 export async function queueNotification(params: QueueNotificationParams): Promise<string | null> {
   try {
-    // Fix: Always use immediate scheduling unless specifically delayed
-    const scheduledFor = params.scheduledFor || new Date();
+    // FIXED: Always use immediate scheduling for real-time delivery
+    const scheduledFor = new Date(); // Always immediate, no delays
     
-    console.log('Queueing notification with immediate scheduling:', {
+    console.log('Queueing notification for immediate delivery:', {
       userId: params.userId,
       type: params.type,
       title: params.title,
@@ -47,7 +47,7 @@ export async function queueNotification(params: QueueNotificationParams): Promis
       return null;
     }
 
-    console.log('Notification queued successfully:', {
+    console.log('Notification queued successfully for immediate processing:', {
       notificationId: data,
       userId: params.userId,
       type: params.type,
@@ -88,7 +88,7 @@ export async function sendImmediateNotification(params: QueueNotificationParams)
 
     console.log('Notification queued, triggering immediate processing...');
 
-    // Trigger immediate processing with proper environment values
+    // Trigger immediate processing
     const supabaseUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co';
     const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
 
@@ -153,6 +153,54 @@ export function generateDeepLink(type: string, data: Record<string, any>): strin
       return `${baseUrl}/calendar`;
     default:
       return `${baseUrl}/dashboard`;
+  }
+}
+
+// New function to fix all stuck notifications
+export async function fixAllStuckNotifications(): Promise<{ success: boolean; message: string; data?: any }> {
+  try {
+    console.log('Triggering fix for all stuck notifications...');
+
+    const supabaseUrl = 'https://hxauxozopvpzpdygoqwf.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4YXV4b3pvcHZwenBkeWdvcXdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNzAxNjQsImV4cCI6MjA2MjY0NjE2NH0.-4tXlRVZZCx-6ehO9-1lxLsJM3Kmc1sMI8hSKwV9UOU';
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/fix-stuck-notifications`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseKey}`,
+      },
+      body: JSON.stringify({})
+    });
+
+    let result;
+    try {
+      result = await response.json();
+    } catch (e) {
+      result = await response.text();
+    }
+
+    console.log('Fix stuck notifications result:', result);
+
+    if (response.ok) {
+      return {
+        success: true,
+        message: 'Successfully fixed stuck notifications',
+        data: result
+      };
+    } else {
+      return {
+        success: false,
+        message: `Failed to fix stuck notifications: ${response.status}`,
+        data: result
+      };
+    }
+  } catch (error) {
+    console.error('Error fixing stuck notifications:', error);
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
   }
 }
 
@@ -255,50 +303,7 @@ export async function getNotificationQueueStatus(): Promise<{ success: boolean; 
   }
 }
 
-// New function to fix stuck notifications
-export async function fixStuckNotifications(): Promise<{ success: boolean; message: string; data?: any }> {
-  try {
-    console.log('Fixing stuck notifications...');
-
-    // Update all pending notifications that have scheduled_for in the past
-    const { data, error } = await supabase
-      .from('notification_queue')
-      .update({ 
-        scheduled_for: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('status', 'pending')
-      .lt('scheduled_for', new Date().toISOString())
-      .select();
-
-    if (error) {
-      console.error('Error fixing stuck notifications:', error);
-      return { success: false, message: error.message };
-    }
-
-    console.log('Fixed stuck notifications:', data);
-
-    // Trigger processing after fixing
-    const processResult = await triggerNotificationProcessing();
-
-    return {
-      success: true,
-      message: `Fixed ${data?.length || 0} stuck notifications and triggered processing`,
-      data: {
-        fixedCount: data?.length || 0,
-        processResult
-      }
-    };
-  } catch (error) {
-    console.error('Exception fixing stuck notifications:', error);
-    return {
-      success: false,
-      message: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
-}
-
-// New function to send test notification
+// Improved function to send test notification
 export async function sendTestNotification(userId: string): Promise<{ success: boolean; message: string; data?: any }> {
   try {
     console.log('Sending test notification to user:', userId);
@@ -307,7 +312,7 @@ export async function sendTestNotification(userId: string): Promise<{ success: b
       userId,
       type: 'task_updates',
       title: 'Test Notification',
-      body: 'This is a test notification to verify the pipeline is working',
+      body: 'This is a test notification to verify the pipeline is working properly',
       data: { test: true, timestamp: new Date().toISOString() },
       deepLink: '/dashboard'
     };
