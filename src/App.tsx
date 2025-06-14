@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -22,6 +21,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import ForgotPassword from "@/pages/ForgotPassword";
 import ResetPassword from "@/pages/ResetPassword";
+import ResetSuccess from "@/pages/ResetSuccess";
 import Confirmed from "@/pages/Confirmed";
 import Contacts from "@/pages/Contacts";
 import PrivacyTerms from "@/pages/PrivacyTerms";
@@ -49,6 +49,7 @@ function App() {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/reset-success" element={<ResetSuccess />} />
                 <Route path="/confirmed" element={<Confirmed />} />
                 <Route path="/privacy-terms" element={<PrivacyTerms />} />
                 <Route path="/contact" element={<ContactUs />} />
