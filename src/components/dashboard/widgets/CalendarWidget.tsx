@@ -174,14 +174,25 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
 
   return (
     <div className="relative group calendar-widget overflow-visible">
-      {/* Glass Overlay & Vibrant Blue Effects */}
-      <div className="absolute inset-0 z-0 rounded-xl bg-gradient-to-br from-accent-blue/60 via-background/70 to-white/10 blur-[1.5px] pointer-events-none" style={{ backdropFilter: "blur(18px)" }} />
-      <div className="absolute inset-0 z-0 rounded-xl bg-white/10 backdrop-blur-xl border border-accent-blue/20 shadow-glow opacity-90 pointer-events-none" />
-      <div className="absolute inset-0 z-0 rounded-xl bg-gradient-to-tr from-accent-blue/20 via-accent-blue/10 to-transparent opacity-80 pointer-events-none" />
-
-      {/* Drag handle with glass effect */}
-      <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/10 backdrop-blur-sm border border-accent-blue/30 hover:bg-accent-blue/30 hover:border-accent-blue/60 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110">
-        <Hand className="h-3 w-3 text-accent-blue/80" />
+      {/* Glass Overlay & Vibrant Blue Effects (NOW TONED DOWN FOR DARKER THEME) */}
+      <div className="absolute inset-0 z-0 rounded-xl pointer-events-none"
+        style={{
+          background: "rgba(24,30,56,0.92)", // dark background, less bright
+          backdropFilter: "blur(16px)",
+          boxShadow: "0 8px 44px 0 rgba(87,124,255,0.09)",
+          border: "1.5px solid rgba(87,124,255,0.08)",
+        }} />
+      {/* Subtle glass gradient */}
+      <div className="absolute inset-0 z-0 rounded-xl pointer-events-none"
+        style={{
+          background: "linear-gradient(135deg, rgba(41,52,89,0.21) 0%, rgba(255,255,255,0.03) 50%, rgba(24,30,56,0.18) 100%)"
+        }} 
+      />
+      {/* Accent blue-glass spot for icon */}
+      <div className="absolute -bottom-6 -right-6 w-28 h-20 bg-accent-blue/20 rounded-full blur-xl opacity-40 pointer-events-none" />
+      {/* Drag handle with subtle glass */}
+      <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/10 backdrop-blur-md border border-accent-blue/25 hover:bg-accent-blue/30 hover:border-accent-blue/60 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110">
+        <Hand className="h-3 w-3 text-accent-blue/70" />
       </div>
 
       {/* Content */}
