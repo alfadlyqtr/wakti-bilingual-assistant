@@ -37,9 +37,11 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Faded Dashboard Background */}
-      <div className="absolute inset-0 bg-gradient-background opacity-30 blur-sm" />
-      <div className="absolute inset-0 bg-background/90 backdrop-blur-md" />
+      {/* Real Dashboard Background - Blurred */}
+      <div className="absolute inset-0">
+        <div className="w-full h-full bg-background opacity-20 blur-lg" />
+        <div className="absolute inset-0 bg-background/95 backdrop-blur-md" />
+      </div>
       
       {/* Top Controls */}
       <div className="fixed top-4 left-0 right-0 z-10 flex justify-between items-center px-4 max-w-md mx-auto">
@@ -48,7 +50,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
           variant="ghost"
           size="sm"
           onClick={handleLogout}
-          className="bg-gradient-card hover:bg-accent/20 border border-border/50 shadow-soft hover:shadow-glow-orange transition-all duration-300"
+          className="bg-accent-orange hover:bg-accent-orange/80 text-white border border-accent-orange/50 shadow-soft transition-all duration-300"
         >
           <LogOut className="h-4 w-4 mr-2" />
           {language === 'ar' ? 'خروج' : 'Logout'}
@@ -59,7 +61,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
       </div>
 
       {/* Main Subscription Card */}
-      <Card className="w-full max-w-md mx-auto relative z-10 bg-gradient-card border-2 border-accent-blue/30 shadow-vibrant">
+      <Card className="w-full max-w-md mx-auto relative z-10 bg-card border-2 border-accent-blue/30 shadow-vibrant">
         <CardContent className="p-8 text-center space-y-6">
           {/* Welcome Header */}
           <div className="space-y-3">
@@ -70,17 +72,17 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
               </div>
             </div>
             
-            <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold text-accent-blue">
               {t("welcomeToWakti", language)}
             </h1>
             
-            <p className="text-sm text-accent-green font-medium">
+            <p className="text-sm text-green-700 font-medium">
               {t("thankYouMessage", language)}
             </p>
           </div>
 
           {/* Description */}
-          <div className="bg-gradient-secondary/20 rounded-lg p-4 border border-accent-blue/20">
+          <div className="bg-muted/30 rounded-lg p-4 border border-accent-blue/20">
             <p className="text-sm text-foreground/80 leading-relaxed">
               {t("subscriptionRequired", language)}
             </p>
@@ -91,28 +93,22 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             {/* Monthly Plan */}
             <Button 
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base bg-gradient-vibrant hover:shadow-glow-blue border border-accent-blue/30 transition-all duration-300 hover:scale-105 relative overflow-hidden group"
+              className="w-full h-14 text-base bg-accent-blue hover:bg-accent-blue/80 text-white border border-accent-blue/30 transition-all duration-300 hover:scale-105"
               size="lg"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-accent-blue/20 to-accent-purple/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
               <Star className="h-5 w-5 mr-2 text-accent-amber" />
-              <span className="relative z-10">
-                {t("subscribeMonthly", language)}
-              </span>
+              {t("subscribeMonthly", language)}
             </Button>
 
             {/* Yearly Plan */}
             <Button 
               onClick={() => handleSubscribe(yearlyPlanUrl)}
               variant="outline"
-              className="w-full h-14 text-base bg-gradient-warm hover:shadow-glow-green border-2 border-accent-green/50 hover:border-accent-green transition-all duration-300 hover:scale-105 relative overflow-hidden group"
+              className="w-full h-14 text-base bg-accent-green hover:bg-accent-green/80 text-white border-2 border-accent-green/50 hover:border-accent-green transition-all duration-300 hover:scale-105"
               size="lg"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-accent-green/20 to-accent-emerald/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-              <Sparkles className="h-5 w-5 mr-2 text-accent-green" />
-              <span className="relative z-10">
-                {t("subscribeYearly", language)}
-              </span>
+              <Sparkles className="h-5 w-5 mr-2 text-white" />
+              {t("subscribeYearly", language)}
             </Button>
           </div>
 
