@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToastHelper } from '@/hooks/use-toast-helper';
@@ -35,11 +35,14 @@ export function useAuth(): AuthContextType {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  // Explicitly annotate session type to fix TS2339 error
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
+
+  // New refs for debouncing enforcement and tracking DB updates
+  const isSavingSessionRef = useRef(false);
+  const lastSessionTokenRef = useRef<string | null>(null);
 
   // Minor utility to get/save our device's "session token" key (unique per login)
   function getCurrentSessionToken() {
@@ -65,11 +68,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    // Setup auth listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      // event is a string like "SIGNED_IN", "SIGNED_OUT", "TOKEN_REFRESHED"
+      (event, newSession: import('@supabase/supabase-js').Session | null) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        // If the event is TOKEN_REFRESHED, update the session token in DB,
+        // but do NOT enforce single-session checks during this window.
+        if (event === 'TOKEN_REFRESHED' && newSession && newSession.access_token) {
+          console.log('[SingleSession] TOKEN_REFRESHED: Updating token in DB and localStorage');
+          isSavingSessionRef.current = true;
+          saveSessionRecord(newSession.access_token).finally(() => {
+            isSavingSessionRef.current = false;
+            lastSessionTokenRef.current = newSession.access_token;
+          });
+        }
+        // For login, run single-session check as usual in useEffect (see below)
+      }
+    );
+
+    // Get current session at mount
     const getSession = async () => {
       try {
         setLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
-
         setSession(session);
         setUser(session?.user ?? null);
       } catch (error) {
@@ -79,86 +103,117 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(false);
       }
     };
-
     getSession();
-
-    // Listen for changes on auth state (login, signout, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      // Add correct type annotation for session
-      (event, session: import('@supabase/supabase-js').Session | null) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-      }
-    );
 
     return () => {
       subscription.unsubscribe();
     };
   }, []);
 
-  // ENFORCE SINGLE SESSION: on mount, always check against user_sessions
+  // ENFORCE SINGLE SESSION -- only run on new login/signup/refresh session (not token refresh)
   useEffect(() => {
-    // We only care about enforcing once user is set (so when logged in)
+    // Run if there is a user and session and we're not in the middle of saving to DB
     async function checkSingleSession() {
-      if (user && session) {
-        if (!session.access_token) {
-          // Prevent attempts to check session if the token is missing
-          console.warn("Session exists but access_token is missing.");
-          return;
-        }
-        // Save "this" session token in localStorage if new
-        setCurrentSessionToken(session.access_token);
+      if (!user || !session || !session.access_token) {
+        return;
+      }
+      // Avoid running immediately after TOKEN_REFRESHED (when we're saving)
+      if (isSavingSessionRef.current) {
+        console.log('[SingleSession] Skipping enforcement: session token is being saved to DB');
+        return;
+      }
+      // Avoid running twice for the same token
+      if (lastSessionTokenRef.current === session.access_token) {
+        // Already enforced this token
+        return;
+      }
+      lastSessionTokenRef.current = session.access_token;
 
-        // Query user_sessions for latest valid session
-        const { data, error } = await supabase
+      setCurrentSessionToken(session.access_token);
+
+      // Query user_sessions DB for token
+      const { data, error } = await supabase
+        .from('user_sessions')
+        .select('session_token')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!data || error) {
+        // No row - insert (first login/device)
+        await supabase.from('user_sessions').upsert([
+          {
+            user_id: user.id,
+            session_token: session.access_token,
+            device_info: window?.navigator?.userAgent ?? null,
+          },
+        ]);
+        setCurrentSessionToken(session.access_token);
+        return;
+      }
+
+      // If session_token in DB does NOT match this session's access_token
+      if (data.session_token !== session.access_token) {
+        // After a token refresh, the DB may be briefly stale.
+        // Add a small timeout and retry.
+        await new Promise(res => setTimeout(res, 350));
+        // Re-query
+        const { data: fresh, error: err2 } = await supabase
           .from('user_sessions')
           .select('session_token')
           .eq('user_id', user.id)
           .maybeSingle();
-
-        // If there is no row, create one (first login/device)
-        if (!data || error) {
-          // Insert new session row for the user
-          await supabase.from('user_sessions').upsert([
-            {
-              user_id: user.id,
-              session_token: session.access_token,
-              device_info: window?.navigator?.userAgent ?? null,
-            },
-          ]);
-          setCurrentSessionToken(session.access_token);
-        } else if (data.session_token !== session.access_token) {
-          // Token mismatch! Another device has logged in, force logout here
+        if (err2) {
+          showError('Unable to verify your session. Please sign in again.');
+          await supabase.auth.signOut();
+          clearCurrentSessionToken();
+          setUser(null);
+          setSession(null);
+          navigate('/login');
+          return;
+        }
+        if (fresh.session_token !== session.access_token) {
+          // Still mismatched (token replaced from another device)
           showError('You have been logged out because your account was used on another device.');
           await supabase.auth.signOut();
           clearCurrentSessionToken();
           setUser(null);
           setSession(null);
           navigate('/login');
+          return;
         }
       }
     }
-    checkSingleSession();
-  }, [user, session]);
 
-  // Update session DB row on login/signup/refresh
+    // Only enforce if user and session present, and not in TOKEN_REFRESHED (handled by event)
+    if (user && session && session.access_token) {
+      checkSingleSession();
+    }
+    // eslint-disable-next-line
+  }, [user, session]); // DO NOT add other dependencies
+
+  // Update session DB row and set ref accordingly
   const saveSessionRecord = async (forceSession?: string) => {
     if (user && session) {
-      // Explicitly cast session to correct type for access_token
-      const sessionTyped = session as import('@supabase/supabase-js').Session;
-      const token = forceSession || sessionTyped.access_token;
-      if (!token) {
-        console.warn("No access token found on session.");
-        return;
+      isSavingSessionRef.current = true;
+      try {
+        const sessionTyped = session as import('@supabase/supabase-js').Session;
+        const token = forceSession || sessionTyped.access_token;
+        if (!token) {
+          console.warn("No access token found on session.");
+          return;
+        }
+        await supabase.from('user_sessions').upsert([
+          {
+            user_id: user.id,
+            session_token: token,
+            device_info: window?.navigator?.userAgent ?? null,
+          },
+        ]);
+        setCurrentSessionToken(token);
+        lastSessionTokenRef.current = token;
+      } finally {
+        isSavingSessionRef.current = false;
       }
-      await supabase.from('user_sessions').upsert([
-        {
-          user_id: user.id,
-          session_token: token,
-          device_info: window?.navigator?.userAgent ?? null,
-        },
-      ]);
-      setCurrentSessionToken(token);
     }
   };
 
