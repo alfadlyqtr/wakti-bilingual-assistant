@@ -7,6 +7,13 @@ import { UserAttributes } from '@supabase/supabase-js';
 import { useProgressierSync } from '@/hooks/useProgressierSync';
 import { v4 as uuidv4 } from 'uuid';
 
+// Add a type for session tokens info
+type SessionTokenInfo = {
+  session_token: string;
+  is_active: boolean;
+  device_info?: string | null;
+};
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -48,9 +55,42 @@ async function fetchProfileByEmail(email: string) {
   return data;
 }
 
-// Helper: sets is_logged_in flag by user id
-async function setLoggedInFlag(user_id: string, value: boolean) {
-  await supabase.from("profiles").update({ is_logged_in: value }).eq("id", user_id);
+// Helper functions for session handling
+async function getActiveSessionByUserId(user_id: string) {
+  const { data, error } = await supabase
+    .from("user_sessions")
+    .select("*")
+    .eq("user_id", user_id)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function markAllSessionsInactive(user_id: string) {
+  await supabase
+    .from("user_sessions")
+    .update({ is_active: false })
+    .eq("user_id", user_id)
+    .eq("is_active", true);
+}
+
+async function insertUserSession(user_id: string, session_token: string, device_info?: string) {
+  // Remove any other active sessions
+  await markAllSessionsInactive(user_id);
+  await supabase.from("user_sessions").insert({
+    user_id,
+    session_token,
+    is_active: true,
+    device_info,
+  });
+}
+
+async function removeUserSession(session_token: string) {
+  await supabase
+    .from("user_sessions")
+    .update({ is_active: false })
+    .eq("session_token", session_token);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -59,20 +99,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
-  const [loginBlockedEmail, setLoginBlockedEmail] = useState<string | null>(null);
+  // Used for tracking login lock modal
+  const [loginBlockedMsg, setLoginBlockedMsg] = useState<string | null>(null);
 
-  // Completely block sign-in if is_logged_in true; only allow force
+  // MAIN: Enforce single-sesson-at-a-time
   const signIn = async (email: string) => {
     try {
       setLoading(true);
-      const profile = await fetchProfileByEmail(email);
-      if (profile && profile.is_logged_in) {
-        setLoginBlockedEmail(email);
-        showError("Your account is already signed in elsewhere.");
-        setLoading(false);
-        return;
+      // 1. Find user by email
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", email)
+        .maybeSingle();
+      if (profileError) throw profileError;
+
+      if (profile && profile.id) {
+        const activeSession = await getActiveSessionByUserId(profile.id);
+        if (activeSession) {
+          setLoginBlockedMsg(
+            "Can't login because you're already logged in from another device."
+          );
+          setLoading(false);
+          return;
+        }
       }
-      // Attempt sign-in (magic link)
+      // 2. No active session found, proceed to sign in with OTP
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
       showSuccess("Check your email - we've sent you a magic link to sign in.");
@@ -84,37 +136,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Force logout logic: clear is_logged_in on ALL profiles with this email
-  const forceLogoutAndContinue = async () => {
-    if (!loginBlockedEmail) return;
-    try {
-      setLoading(true);
-      await supabase.from('profiles').update({ is_logged_in: false }).ilike('email', loginBlockedEmail);
-      showSuccess("Signed out elsewhere. You can now log in.");
-      setLoginBlockedEmail(null);
-    } catch (err: any) {
-      showError("Could not force logout. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Password sign-in: also block if flag set
+  // Password sign-in: enforce single session
   const signInWithPassword = async (email: string, password: string) => {
     try {
       setLoading(true);
-      const profile = await fetchProfileByEmail(email);
-      if (profile && profile.is_logged_in) {
-        setLoginBlockedEmail(email);
-        showError("Your account is already signed in elsewhere.");
-        setLoading(false);
-        return;
+      // 1. Find user by email
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", email)
+        .maybeSingle();
+      if (profileError) throw profileError;
+
+      if (profile && profile.id) {
+        const activeSession = await getActiveSessionByUserId(profile.id);
+        if (activeSession) {
+          setLoginBlockedMsg(
+            "Can't login because you're already logged in from another device."
+          );
+          setLoading(false);
+          return;
+        }
       }
-      const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+      // 2. No active session found, proceed to sign in
+      const { error, data } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error) throw error;
-      // Note: is_logged_in flag will be set by onAuthStateChange listener
       showSuccess("Sign in successful.");
-      navigate('/dashboard');
+      navigate("/dashboard");
     } catch (error: any) {
       console.error("Error signing in (pw):", error);
       showError(error.message || "Failed to sign in.");
@@ -123,7 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // On sign up, is_logged_in will be set by onAuthStateChange
+  // On sign up
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
       setLoading(true);
@@ -139,7 +190,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
-      // Note: is_logged_in flag will be set by onAuthStateChange listener when session is confirmed
     } catch (error: any) {
       console.error("Error signing up:", error);
       showError(error.message || "Failed to sign up. Please try again.");
@@ -148,18 +198,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Set profile offline on sign out (always)
-  const signOut = async (options?: { preventProfileUpdate?: boolean }) => {
+  // Logout: ensure session is removed in DB
+  const signOut = async () => {
     try {
       setLoading(true);
-      if (user && !options?.preventProfileUpdate) {
-        await setLoggedInFlag(user.id, false);
+      if (session && session.access_token) {
+        // Ensure to clear from user_sessions
+        await removeUserSession(session.access_token);
       }
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      setLoginBlockedEmail(null);
-      navigate('/');
+      setLoginBlockedMsg(null);
+      navigate("/");
     } catch (error: any) {
       console.error("Error signing out:", error);
       showError(error.message || "Failed to sign out. Please try again.");
@@ -286,24 +337,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth state changes; make this synchronous and properly manage is_logged_in flag
+  // Listen for auth state changes; set up/clean up DB session entry
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
-        console.log("Auth state change:", event, newSession?.user?.id);
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        
-        // Properly manage is_logged_in flag based on auth events
-        if (event === 'SIGNED_IN' && newSession?.user) {
-          // User just signed in - set flag to true
-          console.log("Setting is_logged_in to true for user:", newSession.user.id);
+
+        // Set DB user_sessions row for active session
+        if (event === "SIGNED_IN" && newSession?.user && newSession?.access_token) {
+          // Insert user_sessions entry for this device, remove others
           setTimeout(() => {
-            setLoggedInFlag(newSession.user.id, true);
+            insertUserSession(newSession.user.id, newSession.access_token, navigator.userAgent ?? undefined);
           }, 0);
-        } else if (event === 'SIGNED_OUT') {
-          // User signed out - flag will be cleared by signOut function
-          console.log("User signed out");
+        }
+        if (event === "SIGNED_OUT" && newSession?.access_token) {
+          removeUserSession(newSession.access_token);
         }
       }
     );
@@ -312,48 +361,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const getSession = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      
       if (session?.user) {
-        console.log("Restoring session for user:", session.user.id);
-        
-        // Check is_logged_in flag
-        const profile = await supabase
-          .from('profiles')
-          .select('is_logged_in')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (profile.error) {
-          console.error("Error checking profile:", profile.error);
-          // If we can't check the profile, assume it's valid for now
-          setSession(session);
-          setUser(session.user);
-        } else if (!profile.data) {
-          console.log("No profile found for user, creating session anyway");
-          setSession(session);
-          setUser(session.user);
-          // Set the flag to true since we have a valid session
-          await setLoggedInFlag(session.user.id, true);
-        } else if (!profile.data.is_logged_in) {
-          console.log("User session exists but is_logged_in is false, setting to true");
-          // User has a valid session but flag is false (maybe server restart)
-          // Set flag to true instead of logging out
-          await setLoggedInFlag(session.user.id, true);
-          setSession(session);
-          setUser(session.user);
-        } else {
-          console.log("User session and flag are valid");
-          setSession(session);
-          setUser(session.user);
-        }
+        setSession(session);
+        setUser(session.user);
       } else {
-        console.log("No session to restore");
         setSession(null);
         setUser(null);
       }
       setLoading(false);
     };
-    
+
     getSession();
 
     return () => {
@@ -361,28 +378,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // Force logout modal UI
-  const forceLogoutModal = loginBlockedEmail ? (
+  // Blocked login message UI
+  const singleSessionBlockedModal = loginBlockedMsg ? (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-background p-6 rounded-xl max-w-xs text-center flex flex-col gap-4 shadow-lg border border-muted">
         <h2 className="font-semibold text-lg text-destructive">
-          Already signed in elsewhere
+          {loginBlockedMsg}
         </h2>
-        <p className="text-muted-foreground text-sm">
-          This account is signed in on another device or browser.<br />
-          To continue, you can force logout other sessions and sign in here.
-        </p>
         <button
-          onClick={forceLogoutAndContinue}
-          className="w-full rounded px-4 py-2 bg-primary text-white font-semibold shadow hover:bg-accent"
-        >
-          Log out other devices & Continue
-        </button>
-        <button
-          onClick={() => setLoginBlockedEmail(null)}
+          onClick={() => setLoginBlockedMsg(null)}
           className="w-full px-4 py-2 text-muted-foreground hover:text-foreground bg-muted rounded"
         >
-          Cancel
+          Close
         </button>
       </div>
     </div>
@@ -409,7 +416,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
-      {forceLogoutModal}
+      {singleSessionBlockedModal}
       <ProgressierSync />
     </AuthContext.Provider>
   );

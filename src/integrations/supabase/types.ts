@@ -1400,6 +1400,7 @@ export type Database = {
         Row: {
           created_at: string
           device_info: string | null
+          is_active: boolean | null
           session_token: string
           updated_at: string
           user_id: string
@@ -1407,6 +1408,7 @@ export type Database = {
         Insert: {
           created_at?: string
           device_info?: string | null
+          is_active?: boolean | null
           session_token: string
           updated_at?: string
           user_id: string
@@ -1414,6 +1416,7 @@ export type Database = {
         Update: {
           created_at?: string
           device_info?: string | null
+          is_active?: boolean | null
           session_token?: string
           updated_at?: string
           user_id?: string
