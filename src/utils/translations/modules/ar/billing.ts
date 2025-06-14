@@ -18,7 +18,8 @@ export const billingAr = {
   
   // Overlay Messages
   welcomeToWakti: "مرحباً بك في وقتي",
-  subscriptionRequired: "للوصول إلى جميع أدوات الذكاء الاصطناعي وميزات الإنتاجية في wakti، الإنتاجية، يرجى الاشتراك:",
+  thankYouMessage: "شكراً لك لإنشاء حساب!",
+  subscriptionRequired: "للوصول إلى جميع أدوات الذكاء الاصطناعي وميزات الإنتاجية في وقتي، يرجى الاشتراك أدناه:",
   subscribeMonthly: "اشتراك شهري – $16.50 USD ≈ 60 ريال قطري",
   subscribeYearly: "اشتراك سنوي – $165.00 USD ≈ 600 ريال قطري",
   paypalRedirectNote: "سيتم إعادة توجيهك إلى PayPal لإكمال عملية الدفع",
