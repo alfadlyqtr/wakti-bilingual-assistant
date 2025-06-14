@@ -56,7 +56,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     }
   };
 
-  // Enhanced liquid glass styles with liquid maroon/reddish and better contrast
+  // Enhanced liquid glass styles with darker maroon/reddish and better contrast
   const glassStyles = theme === 'dark' ? {
     // Dark mode liquid glass
     overlayBg: 'rgba(12, 15, 20, 0.05)', // More transparent to show dashboard
@@ -68,7 +68,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     buttonBorder: 'rgba(233, 206, 176, 0.25)',
     buttonText: '#ffffff', // White text for dark mode
     buttonHoverBg: 'rgba(233, 206, 176, 0.18)',
-    highlightColor: '#8B3A3A', // Maroon/reddish accent
+    highlightColor: '#722F37', // Darker maroon/reddish accent
     logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(26, 26, 58, 0.05)',
@@ -84,7 +84,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     buttonBorder: 'rgba(6, 5, 65, 0.25)',
     buttonText: '#1a1a3a', // Dark navy text for light mode
     buttonHoverBg: 'rgba(6, 5, 65, 0.18)',
-    highlightColor: '#A0522D', // Sienna/maroon accent for light mode
+    highlightColor: '#800020', // Darker burgundy/maroon accent for light mode
     logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(6, 5, 65, 0.03)',
@@ -193,7 +193,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </p>
           </div>
 
-          {/* Currency Toggle with Flags */}
+          {/* Currency Toggle with Correct Flags */}
           <div className="flex justify-center">
             <div
               className="flex p-1 rounded-full transition-all duration-300"
@@ -223,12 +223,24 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
-                {/* US Flag */}
-                <div className="w-4 h-3 rounded-sm overflow-hidden border border-gray-200">
-                  <div className="h-full bg-gradient-to-b from-red-500 via-white to-blue-600 relative">
-                    <div className="absolute inset-0 bg-blue-800 w-2/5 h-2/3"></div>
+                {/* Correct US Flag */}
+                <div className="w-5 h-3 rounded-sm overflow-hidden border border-gray-300">
+                  <div className="h-full relative bg-white">
+                    {/* Red stripes */}
+                    <div className="absolute inset-0">
+                      <div className="h-full flex flex-col">
+                        <div className="h-1/13 bg-red-600"></div>
+                        <div className="h-1/13 bg-white"></div>
+                        <div className="h-1/13 bg-red-600"></div>
+                        <div className="h-1/13 bg-white"></div>
+                        <div className="h-1/13 bg-red-600"></div>
+                        <div className="h-1/13 bg-white"></div>
+                        <div className="h-1/13 bg-red-600"></div>
+                      </div>
+                    </div>
+                    {/* Blue canton */}
                     <div className="absolute top-0 left-0 w-2/5 h-2/3 bg-blue-800 flex items-center justify-center">
-                      <div className="text-white text-xs">★</div>
+                      <div className="text-white text-xs leading-none">★</div>
                     </div>
                   </div>
                 </div>
@@ -251,12 +263,19 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
-                {/* Qatar Flag */}
-                <div className="w-4 h-3 rounded-sm overflow-hidden border border-gray-200">
-                  <div className="h-full bg-gradient-to-r from-white via-white to-red-800 relative">
-                    <div className="absolute right-0 top-0 w-3/4 h-full bg-red-800"></div>
-                    <div className="absolute left-0 top-0 w-1/4 h-full bg-white"></div>
-                    <div className="absolute left-1/4 top-0 h-full w-px bg-red-800 transform skew-x-12"></div>
+                {/* Correct Qatar Flag */}
+                <div className="w-5 h-3 rounded-sm overflow-hidden border border-gray-300">
+                  <div className="h-full relative bg-white">
+                    {/* White section */}
+                    <div className="absolute left-0 top-0 w-1/3 h-full bg-white"></div>
+                    {/* Maroon section */}
+                    <div className="absolute right-0 top-0 w-2/3 h-full bg-red-900"></div>
+                    {/* Serrated edge */}
+                    <div className="absolute left-1/3 top-0 h-full w-1">
+                      <svg viewBox="0 0 4 12" className="h-full w-full">
+                        <path d="M0 0 L4 2 L0 4 L4 6 L0 8 L4 10 L0 12 Z" fill="#8B0000" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
                 <span className="text-xs">ر.ق</span>
