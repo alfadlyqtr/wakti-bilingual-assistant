@@ -1323,4 +1323,11 @@ export type TranslationKey =
   | "subscribeMonthly"
   | "subscribeYearly"
   | "paypalRedirectNote"
-  | "paymentPageOpened";
+  | "paymentPageOpened"
+  
+  // Confirmation specific keys - NEW ADDITIONS
+  | "emailConfirmed"
+  | "thankYouForConfirming"
+  | "nowYouCanLogin"
+  | "confirmationComplete"
+  | "proceedToLogin";
