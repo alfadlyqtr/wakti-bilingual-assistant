@@ -9,18 +9,20 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 
 serve(async (req) => {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] Starting notification processing...`);
+  const requestId = crypto.randomUUID();
+  
+  console.log(`[${new Date().toISOString()}] [${requestId}] ===== STARTING NOTIFICATION PROCESSING =====`);
   
   try {
     // Enhanced logging for environment validation
-    console.log('Environment validation:', {
+    console.log(`[${requestId}] Environment validation:`, {
       hasSupabaseUrl: !!supabaseUrl,
       hasSupabaseKey: !!supabaseKey,
       supabaseUrlStart: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing'
     });
 
     // Get pending notifications with detailed logging
-    console.log('Fetching pending notifications...');
+    console.log(`[${requestId}] Fetching pending notifications...`);
     const { data: notifications, error: fetchError } = await supabase
       .from('notification_queue')
       .select('*')
@@ -30,24 +32,35 @@ serve(async (req) => {
       .limit(50);
 
     if (fetchError) {
-      console.error('Database fetch error:', fetchError);
+      console.error(`[${requestId}] Database fetch error:`, fetchError);
       throw fetchError;
     }
 
-    console.log(`Found ${notifications?.length || 0} pending notifications`);
+    console.log(`[${requestId}] Found ${notifications?.length || 0} pending notifications to process`);
 
     if (!notifications || notifications.length === 0) {
       const response = {
         success: true,
         processed: 0,
         message: 'No pending notifications',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        requestId
       };
-      console.log('No notifications to process, returning:', response);
+      console.log(`[${requestId}] No notifications to process, returning:`, response);
       return new Response(JSON.stringify(response), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
+
+    // Log details of notifications to be processed
+    console.log(`[${requestId}] Notifications to process:`, notifications.map(n => ({
+      id: n.id,
+      userId: n.user_id,
+      type: n.notification_type,
+      title: n.title,
+      scheduledFor: n.scheduled_for,
+      attempts: n.attempts || 0
+    })));
 
     let successCount = 0;
     let errorCount = 0;
@@ -55,11 +68,13 @@ serve(async (req) => {
 
     for (const notification of notifications) {
       const notificationStartTime = Date.now();
-      console.log(`Processing notification ${notification.id} for user ${notification.user_id}`);
+      const notificationLogId = `${requestId}-${notification.id.substring(0, 8)}`;
+      
+      console.log(`[${notificationLogId}] Processing notification ${notification.id} for user ${notification.user_id}`);
       
       try {
         // Check if user is active and has valid subscription
-        console.log(`Checking subscription for user ${notification.user_id}`);
+        console.log(`[${notificationLogId}] Checking subscription for user ${notification.user_id}`);
         const { data: subscription, error: subError } = await supabase
           .from('user_push_subscriptions')
           .select('*')
@@ -68,12 +83,12 @@ serve(async (req) => {
           .single();
 
         if (subError) {
-          console.error(`Subscription check error for user ${notification.user_id}:`, subError);
+          console.error(`[${notificationLogId}] Subscription check error for user ${notification.user_id}:`, subError);
         }
 
         if (!subscription) {
-          console.log(`No active subscription for user ${notification.user_id}, marking as failed`);
-          await markNotificationFailed(notification.id, 'No active subscription', notification.attempts + 1);
+          console.log(`[${notificationLogId}] No active subscription for user ${notification.user_id}, marking as failed`);
+          await markNotificationFailed(notification.id, 'No active subscription', notification.attempts + 1, notificationLogId);
           errorCount++;
           processingResults.push({
             notificationId: notification.id,
@@ -83,7 +98,7 @@ serve(async (req) => {
           continue;
         }
 
-        console.log(`Active subscription found for user ${notification.user_id}:`, {
+        console.log(`[${notificationLogId}] Active subscription found for user ${notification.user_id}:`, {
           subscriptionId: subscription.id,
           progressierUserId: subscription.progressier_user_id
         });
@@ -102,9 +117,9 @@ serve(async (req) => {
           const quietEnd = profile.notification_preferences.quiet_hours.end;
 
           if (isInQuietHours(currentTime, quietStart, quietEnd)) {
-            console.log(`Notification ${notification.id} postponed due to quiet hours`);
+            console.log(`[${notificationLogId}] Notification postponed due to quiet hours`);
             const nextSchedule = calculateNextSchedule(quietEnd);
-            await rescheduleNotification(notification.id, nextSchedule);
+            await rescheduleNotification(notification.id, nextSchedule, notificationLogId);
             processingResults.push({
               notificationId: notification.id,
               status: 'rescheduled',
@@ -123,6 +138,7 @@ serve(async (req) => {
             ...notification.data,
             deep_link: notification.deep_link,
             notification_id: notification.id,
+            processing_id: notificationLogId
           },
           url: notification.deep_link,
           icon: '/favicon.ico',
@@ -130,8 +146,8 @@ serve(async (req) => {
           tag: `wakti-${notification.notification_type}`,
         };
 
-        console.log(`Sending notification ${notification.id} via send-push-notification edge function`);
-        console.log('Payload summary:', {
+        console.log(`[${notificationLogId}] Sending notification via send-push-notification edge function`);
+        console.log(`[${notificationLogId}] Payload summary:`, {
           userIds: notificationPayload.userIds,
           title: notificationPayload.title,
           hasDeepLink: !!notificationPayload.url,
@@ -148,20 +164,20 @@ serve(async (req) => {
           body: JSON.stringify(notificationPayload),
         });
 
-        console.log(`Push notification response status: ${pushResponse.status}`);
+        console.log(`[${notificationLogId}] Push notification response status: ${pushResponse.status}`);
         
         let pushResult;
         try {
           pushResult = await pushResponse.json();
-          console.log('Push notification result:', pushResult);
+          console.log(`[${notificationLogId}] Push notification result:`, pushResult);
         } catch (parseError) {
-          console.error('Failed to parse push response JSON:', parseError);
+          console.error(`[${notificationLogId}] Failed to parse push response JSON:`, parseError);
           pushResult = { error: 'Invalid JSON response from push service' };
         }
 
         if (pushResponse.ok && pushResult.success) {
-          console.log(`Notification ${notification.id} sent successfully`);
-          await markNotificationSent(notification, pushResult.progressierResponse);
+          console.log(`[${notificationLogId}] Notification sent successfully`);
+          await markNotificationSent(notification, pushResult.progressierResponse, notificationLogId);
           successCount++;
           processingResults.push({
             notificationId: notification.id,
@@ -169,8 +185,8 @@ serve(async (req) => {
             processingTime: Date.now() - notificationStartTime
           });
         } else {
-          console.error(`Failed to send notification ${notification.id}:`, pushResult);
-          await markNotificationFailed(notification.id, pushResult.error || 'Send failed', notification.attempts + 1);
+          console.error(`[${notificationLogId}] Failed to send notification:`, pushResult);
+          await markNotificationFailed(notification.id, pushResult.error || 'Send failed', notification.attempts + 1, notificationLogId);
           errorCount++;
           processingResults.push({
             notificationId: notification.id,
@@ -180,8 +196,8 @@ serve(async (req) => {
         }
 
       } catch (error) {
-        console.error(`Error processing notification ${notification.id}:`, error);
-        await markNotificationFailed(notification.id, error.message, notification.attempts + 1);
+        console.error(`[${notificationLogId}] Error processing notification:`, error);
+        await markNotificationFailed(notification.id, error.message, notification.attempts + 1, notificationLogId);
         errorCount++;
         processingResults.push({
           notificationId: notification.id,
@@ -202,10 +218,12 @@ serve(async (req) => {
       failed: errorCount,
       processingTimeMs: totalTime,
       results: processingResults,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      requestId
     };
 
-    console.log(`Notification processing complete in ${totalTime}ms:`, finalResult);
+    console.log(`[${requestId}] ===== NOTIFICATION PROCESSING COMPLETE in ${totalTime}ms =====`);
+    console.log(`[${requestId}] Final result:`, finalResult);
 
     return new Response(JSON.stringify(finalResult), {
       headers: { 'Content-Type': 'application/json' }
@@ -216,10 +234,12 @@ serve(async (req) => {
       error: 'Internal server error',
       message: error.message,
       timestamp: new Date().toISOString(),
-      processingTimeMs: Date.now() - startTime
+      processingTimeMs: Date.now() - startTime,
+      requestId
     };
     
-    console.error('Critical error in process-notification-queue:', errorResult);
+    console.error(`[${requestId}] ===== CRITICAL ERROR IN NOTIFICATION PROCESSING =====`);
+    console.error(`[${requestId}] Error details:`, errorResult);
     
     return new Response(JSON.stringify(errorResult), {
       status: 500,
@@ -228,8 +248,8 @@ serve(async (req) => {
   }
 });
 
-async function markNotificationSent(notification: any, progressierResponse: any) {
-  console.log(`Moving notification ${notification.id} to history as sent`);
+async function markNotificationSent(notification: any, progressierResponse: any, logId: string) {
+  console.log(`[${logId}] Moving notification ${notification.id} to history as sent`);
   
   try {
     // Move to history
@@ -248,7 +268,9 @@ async function markNotificationSent(notification: any, progressierResponse: any)
       });
 
     if (historyError) {
-      console.error(`Failed to insert notification ${notification.id} into history:`, historyError);
+      console.error(`[${logId}] Failed to insert notification ${notification.id} into history:`, historyError);
+    } else {
+      console.log(`[${logId}] Successfully inserted notification ${notification.id} into history`);
     }
 
     // Remove from queue
@@ -258,21 +280,21 @@ async function markNotificationSent(notification: any, progressierResponse: any)
       .eq('id', notification.id);
 
     if (deleteError) {
-      console.error(`Failed to delete notification ${notification.id} from queue:`, deleteError);
+      console.error(`[${logId}] Failed to delete notification ${notification.id} from queue:`, deleteError);
     } else {
-      console.log(`Successfully moved notification ${notification.id} to history`);
+      console.log(`[${logId}] Successfully removed notification ${notification.id} from queue`);
     }
   } catch (error) {
-    console.error(`Error in markNotificationSent for ${notification.id}:`, error);
+    console.error(`[${logId}] Error in markNotificationSent for ${notification.id}:`, error);
   }
 }
 
-async function markNotificationFailed(notificationId: string, error: string, attempts: number = 1) {
-  console.log(`Marking notification ${notificationId} as failed (attempt ${attempts})`);
+async function markNotificationFailed(notificationId: string, error: string, attempts: number = 1, logId: string) {
+  console.log(`[${logId}] Marking notification ${notificationId} as failed (attempt ${attempts})`);
   
   try {
     if (attempts >= 3) {
-      console.log(`Notification ${notificationId} exceeded max attempts, moving to history as failed`);
+      console.log(`[${logId}] Notification ${notificationId} exceeded max attempts, moving to history as failed`);
       
       // Get notification data before moving to history
       const { data: notification } = await supabase
@@ -297,7 +319,9 @@ async function markNotificationFailed(notificationId: string, error: string, att
           });
 
         if (historyError) {
-          console.error(`Failed to insert failed notification ${notificationId} into history:`, historyError);
+          console.error(`[${logId}] Failed to insert failed notification ${notificationId} into history:`, historyError);
+        } else {
+          console.log(`[${logId}] Successfully moved failed notification ${notificationId} to history`);
         }
 
         const { error: deleteError } = await supabase
@@ -306,7 +330,9 @@ async function markNotificationFailed(notificationId: string, error: string, att
           .eq('id', notificationId);
 
         if (deleteError) {
-          console.error(`Failed to delete failed notification ${notificationId} from queue:`, deleteError);
+          console.error(`[${logId}] Failed to delete failed notification ${notificationId} from queue:`, deleteError);
+        } else {
+          console.log(`[${logId}] Successfully removed failed notification ${notificationId} from queue`);
         }
       }
     } else {
@@ -314,7 +340,7 @@ async function markNotificationFailed(notificationId: string, error: string, att
       const nextAttempt = new Date();
       nextAttempt.setMinutes(nextAttempt.getMinutes() + (attempts * 5)); // Exponential backoff
 
-      console.log(`Scheduling retry ${attempts} for notification ${notificationId} at ${nextAttempt.toISOString()}`);
+      console.log(`[${logId}] Scheduling retry ${attempts} for notification ${notificationId} at ${nextAttempt.toISOString()}`);
 
       const { error: updateError } = await supabase
         .from('notification_queue')
@@ -326,16 +352,18 @@ async function markNotificationFailed(notificationId: string, error: string, att
         .eq('id', notificationId);
 
       if (updateError) {
-        console.error(`Failed to update notification ${notificationId} for retry:`, updateError);
+        console.error(`[${logId}] Failed to update notification ${notificationId} for retry:`, updateError);
+      } else {
+        console.log(`[${logId}] Successfully scheduled retry for notification ${notificationId}`);
       }
     }
   } catch (error) {
-    console.error(`Error in markNotificationFailed for ${notificationId}:`, error);
+    console.error(`[${logId}] Error in markNotificationFailed for ${notificationId}:`, error);
   }
 }
 
-async function rescheduleNotification(notificationId: string, nextSchedule: Date) {
-  console.log(`Rescheduling notification ${notificationId} to ${nextSchedule.toISOString()}`);
+async function rescheduleNotification(notificationId: string, nextSchedule: Date, logId: string) {
+  console.log(`[${logId}] Rescheduling notification ${notificationId} to ${nextSchedule.toISOString()}`);
   
   try {
     const { error } = await supabase
@@ -346,10 +374,12 @@ async function rescheduleNotification(notificationId: string, nextSchedule: Date
       .eq('id', notificationId);
 
     if (error) {
-      console.error(`Failed to reschedule notification ${notificationId}:`, error);
+      console.error(`[${logId}] Failed to reschedule notification ${notificationId}:`, error);
+    } else {
+      console.log(`[${logId}] Successfully rescheduled notification ${notificationId}`);
     }
   } catch (error) {
-    console.error(`Error in rescheduleNotification for ${notificationId}:`, error);
+    console.error(`[${logId}] Error in rescheduleNotification for ${notificationId}:`, error);
   }
 }
 

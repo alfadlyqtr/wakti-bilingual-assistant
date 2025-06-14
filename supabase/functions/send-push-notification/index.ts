@@ -1,7 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const PROGRESSIER_API_KEY = Deno.env.get('PROGRESSIER_API_KEY') || 'fgo11ohil51zyccdhs9cy00w7pgx38dzw6xq5lgmyo8pvy63';
+// Remove hardcoded API key - only use environment variable
+const PROGRESSIER_API_KEY = Deno.env.get('PROGRESSIER_API_KEY');
 const PROGRESSIER_API_URL = 'https://progressier.app/JnUBjX03FyINDYcP2hjx/send';
 
 interface NotificationPayload {
@@ -25,24 +26,40 @@ interface NotificationPayload {
 
 serve(async (req) => {
   const startTime = Date.now();
-  console.log(`[${new Date().toISOString()}] Starting push notification send...`);
+  const requestId = crypto.randomUUID();
+  
+  console.log(`[${new Date().toISOString()}] [${requestId}] Starting push notification send...`);
 
   if (req.method !== 'POST') {
-    console.log('Method not allowed:', req.method);
+    console.log(`[${requestId}] Method not allowed:`, req.method);
     return new Response('Method not allowed', { status: 405 });
   }
 
   try {
-    // Enhanced environment validation
-    console.log('Environment validation:', {
+    // Enhanced environment validation with strict API key check
+    console.log(`[${requestId}] Environment validation:`, {
       hasProgressierKey: !!PROGRESSIER_API_KEY,
-      progressierKeyStart: PROGRESSIER_API_KEY ? PROGRESSIER_API_KEY.substring(0, 10) + '...' : 'missing',
+      progressierKeyStart: PROGRESSIER_API_KEY ? PROGRESSIER_API_KEY.substring(0, 10) + '...' : 'MISSING',
       apiUrl: PROGRESSIER_API_URL
     });
 
+    // Fail immediately if API key is missing
+    if (!PROGRESSIER_API_KEY) {
+      const error = 'PROGRESSIER_API_KEY environment variable is not set';
+      console.error(`[${requestId}] Critical error:`, error);
+      return new Response(JSON.stringify({
+        error: 'Configuration error',
+        message: error,
+        requestId
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const payload: NotificationPayload = await req.json();
     
-    console.log('Received push notification request:', {
+    console.log(`[${requestId}] Received push notification request:`, {
       userIds: payload.userIds,
       title: payload.title,
       hasBody: !!payload.body,
@@ -54,10 +71,11 @@ serve(async (req) => {
     // Validate required fields
     if (!payload.title || !payload.body) {
       const error = 'Missing required fields: title and body are required';
-      console.error(error);
+      console.error(`[${requestId}] Validation error:`, error);
       return new Response(JSON.stringify({
         error: 'Validation error',
-        message: error
+        message: error,
+        requestId
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -66,10 +84,11 @@ serve(async (req) => {
 
     if (!payload.userIds || payload.userIds.length === 0) {
       const error = 'No userIds provided';
-      console.error(error);
+      console.error(`[${requestId}] Validation error:`, error);
       return new Response(JSON.stringify({
         error: 'Validation error',
-        message: error
+        message: error,
+        requestId
       }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -88,6 +107,7 @@ serve(async (req) => {
         data: {
           ...payload.data,
           url: payload.url || payload.data?.deep_link,
+          requestId
         },
         actions: payload.actions,
         requireInteraction: payload.requireInteraction || false,
@@ -96,7 +116,7 @@ serve(async (req) => {
       }
     };
 
-    console.log('Sending to Progressier API:', {
+    console.log(`[${requestId}] Sending to Progressier API:`, {
       url: PROGRESSIER_API_URL,
       userCount: progressierPayload.userIds.length,
       notificationTitle: progressierPayload.notification.title,
@@ -117,19 +137,19 @@ serve(async (req) => {
     });
 
     const progressierTime = Date.now() - progressierStartTime;
-    console.log(`Progressier API call completed in ${progressierTime}ms with status: ${response.status}`);
+    console.log(`[${requestId}] Progressier API call completed in ${progressierTime}ms with status: ${response.status}`);
 
     let responseData;
     try {
       responseData = await response.text();
-      console.log('Progressier API raw response:', responseData);
+      console.log(`[${requestId}] Progressier API raw response:`, responseData);
     } catch (parseError) {
-      console.error('Failed to read Progressier response:', parseError);
+      console.error(`[${requestId}] Failed to read Progressier response:`, parseError);
       responseData = 'Failed to read response';
     }
     
     if (!response.ok) {
-      console.error('Progressier API error:', {
+      console.error(`[${requestId}] Progressier API error:`, {
         status: response.status,
         statusText: response.statusText,
         response: responseData,
@@ -140,7 +160,8 @@ serve(async (req) => {
         error: 'Failed to send notification',
         details: responseData,
         status: response.status,
-        progressierTime: progressierTime
+        progressierTime: progressierTime,
+        requestId
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -162,10 +183,11 @@ serve(async (req) => {
       sentTo: payload.userIds.length,
       processingTimeMs: totalTime,
       progressierTimeMs: progressierTime,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      requestId
     };
 
-    console.log('Push notification sent successfully:', successResult);
+    console.log(`[${requestId}] Push notification sent successfully:`, successResult);
 
     return new Response(JSON.stringify(successResult), {
       headers: { 'Content-Type': 'application/json' }
@@ -177,10 +199,11 @@ serve(async (req) => {
       error: 'Internal server error',
       message: error.message,
       processingTimeMs: totalTime,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      requestId
     };
     
-    console.error('Error in send-push-notification:', errorResult);
+    console.error(`[${requestId}] Error in send-push-notification:`, errorResult);
     
     return new Response(JSON.stringify(errorResult), {
       status: 500,
