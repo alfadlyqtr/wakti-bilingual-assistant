@@ -36,6 +36,21 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
+  // Get pricing text based on language
+  const getMonthlyPricing = () => {
+    if (language === 'ar') {
+      return 'اشتراك شهري – 60 ريال قطري';
+    }
+    return 'اشتراك شهري – $16.50 USD ≈ 60 ريال قطري';
+  };
+
+  const getYearlyPricing = () => {
+    if (language === 'ar') {
+      return 'اشتراك سنوي – 600 ريال قطري';
+    }
+    return 'اشتراك سنوي – $165.00 USD ≈ 600 ريال قطري';
+  };
+
   // Enhanced liquid glass styles with liquid light red and better contrast
   const glassStyles = theme === 'dark' ? {
     // Dark mode liquid glass
@@ -247,7 +262,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             >
               <div className="flex items-center justify-center relative z-10">
                 <Star className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
-                {t("subscribeMonthly", language)}
+                {getMonthlyPricing()}
               </div>
               {/* Subtle inner glow */}
               <div 
@@ -331,7 +346,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
               >
                 <div className="flex items-center justify-center relative z-10">
                   <Sparkles className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
-                  {t("subscribeYearly", language)}
+                  {getYearlyPricing()}
                 </div>
                 {/* Subtle inner glow */}
                 <div 
