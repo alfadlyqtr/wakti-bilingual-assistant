@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
-import { LogOut, Sparkles, Star } from 'lucide-react';
+import { LogOut, Sparkles, Star, Ribbon } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
 
@@ -120,20 +120,27 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
               {t("subscribeMonthly", language)}
             </Button>
 
-            {/* Yearly Plan - Using exact app color #3eb489 */}
-            <Button 
-              onClick={() => handleSubscribe(yearlyPlanUrl)}
-              variant="outline"
-              className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105"
-              style={{ 
-                backgroundColor: '#3eb489',
-                borderColor: '#3eb489'
-              }}
-              size="lg"
-            >
-              <Sparkles className="h-5 w-5 mr-2 text-white" />
-              {t("subscribeYearly", language)}
-            </Button>
+            {/* Yearly Plan - Now matching monthly button color with Best Value ribbon */}
+            <div className="relative">
+              <Button 
+                onClick={() => handleSubscribe(yearlyPlanUrl)}
+                className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105"
+                style={{ 
+                  backgroundColor: '#060541',
+                  borderColor: '#060541'
+                }}
+                size="lg"
+              >
+                <Sparkles className="h-5 w-5 mr-2" style={{ color: '#e9ceb0' }} />
+                {t("subscribeYearly", language)}
+              </Button>
+              
+              {/* Best Value Ribbon */}
+              <div className="absolute -top-2 -right-2 flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-semibold text-white shadow-lg" style={{ backgroundColor: '#d3655a' }}>
+                <Ribbon className="h-3 w-3" />
+                <span>{language === 'ar' ? 'أفضل قيمة' : 'Best Value'}</span>
+              </div>
+            </div>
           </div>
 
           {/* Footer note */}
