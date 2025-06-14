@@ -48,6 +48,11 @@ async function fetchProfileByEmail(email: string) {
   return data;
 }
 
+// Helper: sets is_logged_in flag by user id
+async function setLoggedInFlag(user_id: string, value: boolean) {
+  await supabase.from("profiles").update({ is_logged_in: value }).eq("id", user_id);
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<import('@supabase/supabase-js').Session | null>(null);
@@ -65,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
-        // Block login, but allow user to force logout others.
+        // Block login, let user force logout others
         setLoginBlockedEmail(email);
         showError("Your account is already signed in elsewhere.");
         setLoading(false);
@@ -115,8 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data?.user && data.session) {
-        // Set profile online
-        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
+        await setLoggedInFlag(data.user.id, true);
         setUser(data.user);
         setSession(data.session ?? null);
       }
@@ -146,6 +150,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
+      // Set is_logged_in for this user (if we have id, i.e. session is created)
+      if (data.user && data.user.id) {
+        await setLoggedInFlag(data.user.id, true);
+      }
     } catch (error: any) {
       console.error("Error signing up:", error);
       showError(error.message || "Failed to sign up. Please try again.");
@@ -159,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       if (user && !options?.preventProfileUpdate) {
-        await supabase.from('profiles').update({ is_logged_in: false }).eq('id', user.id);
+        await setLoggedInFlag(user.id, false);
       }
       await supabase.auth.signOut();
       setUser(null);
@@ -292,22 +300,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Listen for auth state changes ONLY to keep user/session in sync
-  // Remove validation logic entirely (no session freezing)
+  // ---- EFFECT: Keep session/user in sync and update is_logged_in ----
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      async (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
+
+        // Update logged in flag on login and logout events
+        if (newSession?.user) {
+          await setLoggedInFlag(newSession.user.id, true);
+        } else if (user && event === "SIGNED_OUT") {
+          await setLoggedInFlag(user.id, false);
+        }
       }
     );
 
-    // Restore session, don't validate anything extra
+    // Restore session and validate is_logged_in to enforce single session
     const getSession = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
+
+      if (session?.user) {
+        // Check is_logged_in
+        const profile = await supabase
+          .from('profiles')
+          .select('is_logged_in')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (profile.error || !profile.data) {
+          // Something failed, sign out just in case
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+        } else if (profile.data.is_logged_in) {
+          // Session OK, keep logged in and update flag just in case
+          await setLoggedInFlag(session.user.id, true);
+        } else {
+          // Someone else logged in elsewhere. Sign out, notify.
+          await supabase.auth.signOut();
+          setUser(null);
+          setSession(null);
+          showError("You were logged out because your account was accessed elsewhere.");
+        }
+      }
       setLoading(false);
     };
     getSession();
@@ -315,8 +355,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-    // intentionally leaving [] here, NOT [user], so this only runs on mount
-    // (the session change logic is handled by the listener above)
     // eslint-disable-next-line
   }, []);
 
