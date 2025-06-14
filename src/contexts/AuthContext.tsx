@@ -64,19 +64,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // We only track is_logged_in flag now.
   const [loginBlockedEmail, setLoginBlockedEmail] = useState<string | null>(null);
 
-  // Updated simple single-session sign-in
+  // Completely block sign-in if is_logged_in true; only allow force
   const signIn = async (email: string) => {
     try {
       setLoading(true);
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
-        // Block login, let user force logout others
         setLoginBlockedEmail(email);
         showError("Your account is already signed in elsewhere.");
         setLoading(false);
         return;
       }
-      // 2. Send magic link
+      // Attempt sign-in (magic link)
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
       showSuccess("Check your email - we've sent you a magic link to sign in.");
@@ -88,17 +87,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Added force logout function—sets is_logged_in to false and retries sign-in
+  // Force logout logic: clear is_logged_in on ALL profiles with this email
   const forceLogoutAndContinue = async () => {
     if (!loginBlockedEmail) return;
     try {
       setLoading(true);
-      // Set is_logged_in to false for this email
       await supabase.from('profiles').update({ is_logged_in: false }).ilike('email', loginBlockedEmail);
       showSuccess("Signed out elsewhere. You can now log in.");
       setLoginBlockedEmail(null);
-      // After forcing logout, try sign-in again
-      await signIn(loginBlockedEmail);
     } catch (err: any) {
       showError("Could not force logout. Please try again.");
     } finally {
@@ -106,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Password sign-in, block by is_logged_in but allow force logout
+  // Password sign-in: also block if flag set
   const signInWithPassword = async (email: string, password: string) => {
     try {
       setLoading(true);
@@ -120,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       if (data?.user && data.session) {
+        // Set profile online ONLY after successful login
         await setLoggedInFlag(data.user.id, true);
         setUser(data.user);
         setSession(data.session ?? null);
@@ -150,7 +147,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
-      // Set is_logged_in for this user (if we have id, i.e. session is created)
       if (data.user && data.user.id) {
         await setLoggedInFlag(data.user.id, true);
       }
@@ -162,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Set profile offline on sign out
+  // Set profile offline on sign out (always)
   const signOut = async (options?: { preventProfileUpdate?: boolean }) => {
     try {
       setLoading(true);
@@ -300,30 +296,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ---- EFFECT: Keep session/user in sync and update is_logged_in ----
-
+  // Listen for auth state changes; make this synchronous (NO async allowed!)
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-
-        // Update logged in flag on login and logout events
-        if (newSession?.user) {
-          await setLoggedInFlag(newSession.user.id, true);
-        } else if (user && event === "SIGNED_OUT") {
-          await setLoggedInFlag(user.id, false);
-        }
       }
     );
 
-    // Restore session and validate is_logged_in to enforce single session
+    // Restore session, check is_logged_in (only ONCE)
     const getSession = async () => {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-
       if (session?.user) {
         // Check is_logged_in
         const profile = await supabase
@@ -332,21 +317,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq('id', session.user.id)
           .maybeSingle();
 
-        if (profile.error || !profile.data) {
-          // Something failed, sign out just in case
-          await supabase.auth.signOut();
-          setUser(null);
-          setSession(null);
-        } else if (profile.data.is_logged_in) {
-          // Session OK, keep logged in and update flag just in case
-          await setLoggedInFlag(session.user.id, true);
-        } else {
-          // Someone else logged in elsewhere. Sign out, notify.
+        if (profile.error || !profile.data || !profile.data.is_logged_in) {
+          // If not allowed, sign out immediately and clear session/user
           await supabase.auth.signOut();
           setUser(null);
           setSession(null);
           showError("You were logged out because your account was accessed elsewhere.");
+        } else {
+          setSession(session);
+          setUser(session.user);
         }
+      } else {
+        setSession(null);
+        setUser(null);
       }
       setLoading(false);
     };
@@ -358,7 +341,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line
   }, []);
 
-  // Show force-logout prompt if blocked by is_logged_in flag
+  // Force logout modal UI
   const forceLogoutModal = loginBlockedEmail ? (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-background p-6 rounded-xl max-w-xs text-center flex flex-col gap-4 shadow-lg border border-muted">
