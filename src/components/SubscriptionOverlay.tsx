@@ -35,177 +35,267 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
-  // App-specific colors based on theme
-  const colors = theme === 'dark' ? {
-    cardBackground: '#121120',
-    primaryText: '#e9ceb0',
-    buttonBackground: '#1a1a3a', // Dark navy blue for dark mode
-    buttonText: '#e9ceb0',
-    buttonBorder: '#e9ceb0', // Border matches text color
-    accentColor: '#e9ceb0',
-    successColor: '#3eb489',
-    highlightColor: '#d3655a'
+  // Liquid glass styles based on theme
+  const glassStyles = theme === 'dark' ? {
+    // Dark mode liquid glass
+    overlayBg: 'rgba(12, 15, 20, 0.15)', // Very transparent to show dashboard
+    cardBg: 'rgba(18, 17, 32, 0.25)',
+    cardBorder: 'rgba(233, 206, 176, 0.2)',
+    textColor: '#e9ceb0',
+    primaryText: '#ffffff',
+    buttonBg: 'rgba(233, 206, 176, 0.15)',
+    buttonBorder: 'rgba(233, 206, 176, 0.3)',
+    buttonText: '#ffffff',
+    buttonHoverBg: 'rgba(233, 206, 176, 0.25)',
+    highlightColor: '#d3655a',
+    backdropBlur: 'blur(20px)',
+    textAreaBg: 'rgba(26, 26, 58, 0.1)',
+    textAreaBorder: 'rgba(233, 206, 176, 0.1)'
   } : {
-    cardBackground: '#fcfefd',
+    // Light mode liquid glass
+    overlayBg: 'rgba(252, 254, 253, 0.15)', // Very transparent to show dashboard
+    cardBg: 'rgba(252, 254, 253, 0.25)',
+    cardBorder: 'rgba(6, 5, 65, 0.2)',
+    textColor: '#060541',
     primaryText: '#060541',
-    buttonBackground: '#060541',
-    buttonText: '#fcfefd',
-    buttonBorder: '#060541',
-    accentColor: '#e9ceb0',
-    successColor: '#3eb489',
-    highlightColor: '#d3655a'
-  };
-
-  // Enhanced button style with proper border radius and thickness
-  const buttonStyle = {
-    backgroundColor: `${colors.buttonBackground} !important`,
-    color: `${colors.buttonText} !important`,
-    borderColor: `${colors.buttonBorder} !important`,
-    borderWidth: '3px !important',
-    borderStyle: 'solid !important',
-    borderRadius: '12px !important',
-    background: `${colors.buttonBackground} !important`, // Override any gradients
-    backgroundImage: 'none !important', // Ensure no gradients in dark mode
-    boxShadow: `0 4px 8px rgba(0, 0, 0, 0.1) !important`,
-    transition: 'all 0.2s ease !important'
-  };
-
-  const buttonHoverStyle = {
-    transform: 'translateY(-2px)',
-    boxShadow: `0 6px 12px rgba(0, 0, 0, 0.15)`
+    buttonBg: 'rgba(6, 5, 65, 0.15)',
+    buttonBorder: 'rgba(6, 5, 65, 0.3)',
+    buttonText: '#060541',
+    buttonHoverBg: 'rgba(6, 5, 65, 0.25)',
+    highlightColor: '#d3655a',
+    backdropBlur: 'blur(20px)',
+    textAreaBg: 'rgba(6, 5, 65, 0.05)',
+    textAreaBorder: 'rgba(6, 5, 65, 0.1)'
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Minimal overlay to show dashboard behind */}
-      <div 
-        className="absolute inset-0" 
-        style={{ 
-          backgroundColor: theme === 'dark' 
-            ? 'rgba(18, 17, 32, 0.4)' 
-            : 'rgba(252, 254, 253, 0.4)'
-        }}
-      />
-      
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{
+        background: `linear-gradient(135deg, ${glassStyles.overlayBg} 0%, ${glassStyles.overlayBg} 100%)`,
+        backdropFilter: glassStyles.backdropBlur,
+        WebkitBackdropFilter: glassStyles.backdropBlur,
+      }}
+    >
       {/* Top Controls */}
       <div className="fixed top-4 left-0 right-0 z-10 flex justify-between items-center px-4 max-w-md mx-auto">
-        {/* Logout Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLogout}
-          className="text-white font-medium transition-all duration-300 hover:scale-105"
-          style={{ 
-            backgroundColor: colors.highlightColor,
-            color: '#ffffff'
+        {/* Logout Button with liquid glass effect */}
+        <div
+          className="px-4 py-2 rounded-xl transition-all duration-300 hover:scale-105"
+          style={{
+            background: `linear-gradient(135deg, ${glassStyles.highlightColor}80, ${glassStyles.highlightColor}60)`,
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: `1px solid ${glassStyles.highlightColor}40`,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
           }}
         >
-          <LogOut className="h-4 w-4 mr-2" />
-          {language === 'ar' ? 'خروج' : 'Logout'}
-        </Button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center text-white font-medium"
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            {language === 'ar' ? 'خروج' : 'Logout'}
+          </button>
+        </div>
 
         {/* Language Toggle */}
         <ThemeLanguageToggle />
       </div>
 
-      {/* Main Subscription Card */}
+      {/* Main Liquid Glass Card */}
       <Card 
-        className="w-full max-w-md mx-auto relative z-10 border-2 shadow-2xl"
+        className="w-full max-w-md mx-auto relative z-10 border-0 shadow-none"
         style={{
-          backgroundColor: colors.cardBackground,
-          borderColor: colors.accentColor,
+          background: `linear-gradient(135deg, ${glassStyles.cardBg} 0%, ${glassStyles.cardBg}90 50%, ${glassStyles.cardBg} 100%)`,
+          backdropFilter: glassStyles.backdropBlur,
+          WebkitBackdropFilter: glassStyles.backdropBlur,
+          border: `1px solid ${glassStyles.cardBorder}`,
+          borderRadius: '24px',
+          boxShadow: `
+            0 32px 64px rgba(0, 0, 0, 0.1),
+            0 16px 32px rgba(0, 0, 0, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.1),
+            inset 0 -1px 0 rgba(0, 0, 0, 0.1)
+          `,
         }}
       >
         <CardContent className="p-8 text-center space-y-6">
-          {/* Welcome Header */}
-          <div className="space-y-3">
+          {/* App Logo and Welcome Header */}
+          <div className="space-y-4">
+            {/* App Logo */}
             <div className="flex justify-center mb-4">
-              <div className="relative">
-                <div className="text-5xl">👋</div>
+              <div 
+                className="relative p-4 rounded-full"
+                style={{
+                  background: `linear-gradient(135deg, ${glassStyles.buttonBg}, ${glassStyles.buttonHoverBg})`,
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: `1px solid ${glassStyles.buttonBorder}`,
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <div className="text-4xl font-bold" style={{ color: glassStyles.primaryText }}>
+                  W
+                </div>
                 <Sparkles 
                   className="absolute -top-1 -right-1 h-6 w-6" 
-                  style={{ color: colors.successColor }} 
+                  style={{ color: glassStyles.highlightColor }} 
                 />
               </div>
             </div>
             
             <h1 
               className="text-2xl font-bold" 
-              style={{ color: colors.primaryText }}
+              style={{ color: glassStyles.primaryText }}
             >
               {t("welcomeToWakti", language)}
             </h1>
             
             <p 
-              className="text-sm font-bold" 
-              style={{ color: colors.successColor }}
+              className="text-sm font-medium" 
+              style={{ color: glassStyles.highlightColor }}
             >
               {t("thankYouMessage", language)}
             </p>
           </div>
 
-          {/* Description */}
+          {/* Clean Description Text Area */}
           <div 
-            className="rounded-lg p-4 border-2"
+            className="rounded-lg p-4"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(26, 26, 58, 0.3)' : 'rgba(6, 5, 65, 0.1)',
-              borderColor: colors.accentColor
+              background: `linear-gradient(135deg, ${glassStyles.textAreaBg} 0%, ${glassStyles.textAreaBg}80 100%)`,
+              border: `1px solid ${glassStyles.textAreaBorder}`,
+              backdropFilter: 'blur(5px)',
+              WebkitBackdropFilter: 'blur(5px)',
             }}
           >
             <p 
-              className="text-sm leading-relaxed font-bold" 
-              style={{ color: colors.primaryText }}
+              className="text-sm leading-relaxed" 
+              style={{ color: glassStyles.textColor }}
             >
               {t("subscriptionRequired", language)}
             </p>
           </div>
 
-          {/* Subscription Buttons */}
+          {/* Liquid Glass Subscribe Buttons */}
           <div className="space-y-4">
-            {/* Monthly Plan */}
-            <Button 
+            {/* Monthly Plan - Liquid Glass Button */}
+            <button
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base font-bold transition-all duration-200 hover:transform hover:-translate-y-0.5 active:translate-y-0"
-              style={buttonStyle}
-              size="lg"
+              className="w-full h-14 text-base font-bold transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] group"
+              style={{
+                background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                border: `2px solid ${glassStyles.buttonBorder}`,
+                borderRadius: '16px',
+                color: glassStyles.buttonText,
+                boxShadow: `
+                  0 16px 32px rgba(0, 0, 0, 0.1),
+                  0 8px 16px rgba(0, 0, 0, 0.05),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                  0 0 0 1px ${glassStyles.buttonBorder}40
+                `,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonHoverBg} 0%, ${glassStyles.buttonBg} 50%, ${glassStyles.buttonHoverBg} 100%)`;
+                e.currentTarget.style.boxShadow = `
+                  0 20px 40px rgba(0, 0, 0, 0.15),
+                  0 12px 24px rgba(0, 0, 0, 0.1),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                  0 0 0 2px ${glassStyles.buttonBorder}60
+                `;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`;
+                e.currentTarget.style.boxShadow = `
+                  0 16px 32px rgba(0, 0, 0, 0.1),
+                  0 8px 16px rgba(0, 0, 0, 0.05),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                  0 0 0 1px ${glassStyles.buttonBorder}40
+                `;
+              }}
             >
-              <Star className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
-              {t("subscribeMonthly", language)}
-            </Button>
+              <div className="flex items-center justify-center">
+                <Star className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
+                {t("subscribeMonthly", language)}
+              </div>
+            </button>
 
-            {/* Yearly Plan with Best Value Badge */}
+            {/* Yearly Plan with Best Value Badge - Liquid Glass Button */}
             <div className="relative">
-              <Button 
+              <button
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base font-bold transition-all duration-200 hover:transform hover:-translate-y-0.5 active:translate-y-0"
-                style={buttonStyle}
-                size="lg"
+                className="w-full h-14 text-base font-bold transition-all duration-500 hover:scale-[1.02] active:scale-[0.98] group"
+                style={{
+                  background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
+                  backdropFilter: 'blur(15px)',
+                  WebkitBackdropFilter: 'blur(15px)',
+                  border: `2px solid ${glassStyles.buttonBorder}`,
+                  borderRadius: '16px',
+                  color: glassStyles.buttonText,
+                  boxShadow: `
+                    0 16px 32px rgba(0, 0, 0, 0.1),
+                    0 8px 16px rgba(0, 0, 0, 0.05),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                    0 0 0 1px ${glassStyles.buttonBorder}40
+                  `,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonHoverBg} 0%, ${glassStyles.buttonBg} 50%, ${glassStyles.buttonHoverBg} 100%)`;
+                  e.currentTarget.style.boxShadow = `
+                    0 20px 40px rgba(0, 0, 0, 0.15),
+                    0 12px 24px rgba(0, 0, 0, 0.1),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                    0 0 0 2px ${glassStyles.buttonBorder}60
+                  `;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`;
+                  e.currentTarget.style.boxShadow = `
+                    0 16px 32px rgba(0, 0, 0, 0.1),
+                    0 8px 16px rgba(0, 0, 0, 0.05),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                    0 0 0 1px ${glassStyles.buttonBorder}40
+                  `;
+                }}
               >
-                <Sparkles className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
-                {t("subscribeYearly", language)}
-              </Button>
+                <div className="flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
+                  {t("subscribeYearly", language)}
+                </div>
+              </button>
               
-              {/* Best Value Badge */}
+              {/* Best Value Badge with liquid glass effect */}
               <div 
                 className="absolute -top-2 -right-2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg transform rotate-12"
-                style={{ backgroundColor: colors.highlightColor }}
+                style={{ 
+                  background: `linear-gradient(135deg, ${glassStyles.highlightColor} 0%, ${glassStyles.highlightColor}CC 100%)`,
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  border: `1px solid ${glassStyles.highlightColor}80`,
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                }}
               >
                 {language === 'ar' ? 'أفضل قيمة' : 'Best Value'}
               </div>
             </div>
           </div>
 
-          {/* Footer note */}
+          {/* Clean Footer Note Text Area */}
           <div 
-            className="rounded-md p-3 border-2"
+            className="rounded-md p-3"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(233, 206, 176, 0.2)' : 'rgba(233, 206, 176, 0.3)',
-              borderColor: colors.accentColor
+              background: `linear-gradient(135deg, ${glassStyles.textAreaBg} 0%, ${glassStyles.textAreaBg}60 100%)`,
+              border: `1px solid ${glassStyles.textAreaBorder}`,
+              backdropFilter: 'blur(5px)',
+              WebkitBackdropFilter: 'blur(5px)',
             }}
           >
             <p 
-              className="text-xs font-bold" 
-              style={{ color: colors.primaryText }}
+              className="text-xs" 
+              style={{ color: glassStyles.textColor }}
             >
               {t("paypalRedirectNote", language)}
             </p>
