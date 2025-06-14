@@ -64,15 +64,30 @@ serve(async (req) => {
     const status = resource.status || resource.state;
     const subscriber = resource.subscriber || {};
     const startTime = resource.start_time || resource.create_time;
-    const nextBillingTime = resource.next_billing_time || resource.next_payment && resource.next_payment.time;
-
-    // Try to get user id: store it in custom_id field when you create subscriptions
-    // (Otherwise, you have to map PayPal subscription to user via email or other means)
+    const nextBillingTime = resource.next_billing_time || (resource.next_payment && resource.next_payment.time);
     let userId = null;
-    if (subscriber.custom_id) userId = subscriber.custom_id;
+    let mappingMethod = "none";
 
-    // Attempt to map PayPal subscription ID to user, fallback to nothing
-    // Optionally, you could try to look up a user by e-mail, but here we only update by paypal_subscription_id
+    // Enhanced Mapping: Try custom_id, then try e-mail fallback
+    if (subscriber.custom_id) {
+      userId = subscriber.custom_id;
+      mappingMethod = "custom_id";
+      console.log("User mapped via subscriber.custom_id:", userId);
+    } else if (subscriber.email_address) {
+      // Find userId by e-mail in profiles
+      const { data: existingProfile, error: profileErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", subscriber.email_address.toLowerCase())
+        .single();
+      if (existingProfile && existingProfile.id) {
+        userId = existingProfile.id;
+        mappingMethod = "email";
+        console.log("User mapped via subscriber.email_address:", subscriber.email_address, "->", userId);
+      } else {
+        console.warn("Unable to map subscription via e-mail:", subscriber.email_address);
+      }
+    }
 
     // Update subscriptions table
     if (paypalSubscriptionId) {
@@ -119,18 +134,20 @@ serve(async (req) => {
           .update(updateObj)
           .eq("paypal_subscription_id", paypalSubscriptionId);
         userId = existingSubscription.user_id; // get it for profile update
+        mappingMethod = mappingMethod === "none" ? "existing_subscription" : mappingMethod;
       } else {
         // Insert: You must have user_id available (e.g., map from PayPal custom_id or after manual verification)
         if (!userId) {
           console.error("No user_id found for new subscription event. SKIPPING DB insert.");
+          console.error("Raw subscriber object:", JSON.stringify(subscriber));
+          return new Response("No user mapping possible", { status: 200, headers: corsHeaders });
         } else {
-          await supabase.from("subscriptions").insert([
-            {
-              ...updateObj,
-              user_id: userId,
-              created_at: new Date().toISOString(),
-            },
-          ]);
+          await supabase.from("subscriptions").insert([{
+            ...updateObj,
+            user_id: userId,
+            created_at: new Date().toISOString(),
+          }]);
+          console.log("Inserted new subscription for user_id", userId, "with mapping method:", mappingMethod);
         }
       }
 
@@ -156,6 +173,10 @@ serve(async (req) => {
           .from("profiles")
           .update(profilesUpdate)
           .eq("id", userId);
+
+        console.log("Updated profile for user_id:", userId, "with mapping method:", mappingMethod);
+      } else {
+        console.warn("Could not update user profile, no mapping found.");
       }
     }
 

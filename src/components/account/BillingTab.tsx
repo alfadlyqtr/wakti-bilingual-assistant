@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +22,9 @@ export function BillingTab() {
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showLinkPayPal, setShowLinkPayPal] = useState(false);
+  const [linkPayPalId, setLinkPayPalId] = useState('');
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     loadSubscription();
@@ -105,6 +107,40 @@ export function BillingTab() {
     toast.success(language === 'ar' ? 'تم تحديث بيانات الاشتراك' : 'Subscription info refreshed');
   };
 
+  const handleManualLink = async () => {
+    if (!linkPayPalId) {
+      toast.error(language === 'ar' ? 'يرجى إدخال معرف الاشتراك' : 'Please enter subscription ID');
+      return;
+    }
+    setLinking(true);
+    try {
+      const res = await fetch(
+        '/functions/v1/link-paypal-subscription',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${await supabase.auth.getSession().then(r => r.data.session?.access_token || '')}`,
+          },
+          body: JSON.stringify({ paypal_subscription_id: linkPayPalId }),
+        }
+      );
+      const result = await res.json();
+      if (result.success) {
+        toast.success(language === 'ar' ? 'تم ربط الاشتراك بنجاح' : 'Subscription linked successfully');
+        loadSubscription();
+        setShowLinkPayPal(false);
+        setLinkPayPalId('');
+      } else {
+        toast.error(result.error || language === 'ar' ? 'فشل في ربط الاشتراك' : 'Failed to link subscription');
+      }
+    } catch (e) {
+      toast.error(language === 'ar' ? 'فشل في ربط الاشتراك' : 'Failed to link subscription');
+    } finally {
+      setLinking(false);
+    }
+  };
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '';
     return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US');
@@ -140,8 +176,15 @@ export function BillingTab() {
   const isYearlyPlan = planName?.toLowerCase().includes('year');
   const isSubscribed = subscription?.is_subscribed || false;
 
-  const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
-  const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
+  const userId = supabase.auth.user()?.id || "";
+
+  const monthlyPlanUrl =
+    'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA'
+    + (userId ? `&custom_id=${userId}` : '');
+
+  const yearlyPlanUrl =
+    'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y'
+    + (userId ? `&custom_id=${userId}` : '');
 
   return (
     <div className="space-y-6">
@@ -227,21 +270,58 @@ export function BillingTab() {
         </CardHeader>
         <CardContent>
           {!isSubscribed ? (
-            <div className="space-y-3">
-              <Button 
-                className="w-full sm:w-auto"
-                onClick={() => handleSubscribe(monthlyPlanUrl)}
+            <>
+              <div className="space-y-3">
+                <Button 
+                  className="w-full sm:w-auto"
+                  onClick={() => handleSubscribe(monthlyPlanUrl)}
+                >
+                  {language === 'ar' ? 'اشترك شهرياً - $16.50 USD ≈ 60 ريال' : 'Subscribe Monthly - $16.50 USD ≈ 60 QAR'}
+                </Button>
+                <Button 
+                  variant="outline"
+                  className="w-full sm:w-auto ml-0 sm:ml-2"
+                  onClick={() => handleSubscribe(yearlyPlanUrl)}
+                >
+                  {language === 'ar' ? 'اشترك سنوياً - $165.00 USD ≈ 600 ريال' : 'Subscribe Yearly - $165.00 USD ≈ 600 QAR'}
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-3 text-xs underline text-primary underline-offset-4"
+                onClick={() => setShowLinkPayPal(true)}
               >
-                {language === 'ar' ? 'اشترك شهرياً - $16.50 USD ≈ 60 ريال' : 'Subscribe Monthly - $16.50 USD ≈ 60 QAR'}
+                {language === 'ar'
+                  ? 'ربط اشتراك بايبال يدوياً'
+                  : 'Link existing PayPal Subscription manually'}
               </Button>
-              <Button 
-                variant="outline"
-                className="w-full sm:w-auto ml-0 sm:ml-2"
-                onClick={() => handleSubscribe(yearlyPlanUrl)}
-              >
-                {language === 'ar' ? 'اشترك سنوياً - $165.00 USD ≈ 600 ريال' : 'Subscribe Yearly - $165.00 USD ≈ 600 QAR'}
-              </Button>
-            </div>
+              {showLinkPayPal && (
+                <div className="my-3 space-y-2 rounded-md border bg-muted p-4">
+                  <label className="block text-sm mb-1">
+                    {language === 'ar'
+                      ? 'ادخل معرف اشتراك PayPal'
+                      : 'Enter your PayPal subscription ID'}
+                  </label>
+                  <input
+                    className="bg-white border p-2 w-full rounded"
+                    value={linkPayPalId}
+                    onChange={e => setLinkPayPalId(e.target.value)}
+                    placeholder="sub_xxxxxxxxxx"
+                  />
+                  <Button
+                    className="mt-2"
+                    disabled={linking}
+                    onClick={handleManualLink}
+                  >
+                    {linking
+                      ? (language === 'ar' ? 'جاري الربط...' : 'Linking...')
+                      : (language === 'ar' ? 'ربط الاشتراك' : 'Link Subscription')
+                    }
+                  </Button>
+                </div>
+              )}
+            </>
           ) : isMonthlyPlan ? (
             <Button 
               className="w-full sm:w-auto"
