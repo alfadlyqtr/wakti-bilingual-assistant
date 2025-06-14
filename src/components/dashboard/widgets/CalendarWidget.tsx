@@ -134,38 +134,32 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
     <div
       className="relative calendar-widget overflow-visible rounded-xl border shadow-glow"
       style={{
-        // SLIGHT GRADIENT: subtle app gradient background
-        background: "linear-gradient(135deg, hsl(var(--background)) 95%, hsl(var(--accent-blue)) 5%)",
-        borderColor: "hsl(var(--accent-blue) / 0.13)",
-        boxShadow: "var(--shadow-glow), var(--shadow-colored)",
+        // SOLID, soft gradient background -- match app style, not frosted
+        background: "linear-gradient(120deg, hsl(var(--background)) 80%, hsl(var(--accent-blue) / 0.06) 100%)",
+        borderColor: "hsl(var(--accent-blue) / 0.23)",
+        boxShadow: "var(--shadow-soft), var(--shadow-colored)",
+        // Remove extra blur, keep slight shadow/glow for separation
       }}
     >
-      {/* Accent blue glassy/frosted overlay */}
-      <div className="absolute inset-0 z-0 rounded-xl pointer-events-none"
-        style={{
-          background: "linear-gradient(120deg, hsl(var(--accent-blue) / 0.07) 65%, transparent 100%)",
-          backdropFilter: "blur(8px)"
-        }}
-      />
-      {/* Subtle glow highlight - bottom corner */}
-      <div className="absolute -bottom-4 -right-6 w-14 h-12 bg-accent-blue/15 rounded-full blur-xl opacity-25 pointer-events-none" />
+      {/* Remove: extra glassy/frosted overlay/blurs */}
+      {/* Remove: subtle glow highlight. Widget looks cleaner without unnecessary overlays */}
       {/* Drag handle */}
       <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/10 border border-accent-blue/20 cursor-grab active:cursor-grabbing">
-        <Hand className="h-3 w-3 text-accent-blue/70" />
+        <Hand className="h-3 w-3 text-accent-blue" />
       </div>
       {/* Main content */}
-      <div className="relative z-10 p-5 pt-11">
+      <div className="relative z-10 p-5 pt-10">
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="h-5 w-5" style={{ color: "hsl(var(--accent-blue))" }} />
-          <h3 className="font-semibold text-lg drop-shadow-sm" style={{ color: "hsl(var(--accent-blue))", letterSpacing: '0.2px' }}>
+          <h3 className="font-bold text-lg text-accent-blue drop-shadow" style={{ letterSpacing: '0.2px' }}>
             {format(new Date(), "MMMM yyyy")}
           </h3>
-          <div className="ml-auto text-xs font-medium bg-accent-blue/15 text-accent-blue px-3 py-1 rounded-full border border-accent-blue/20 backdrop-blur-md">
+          <div className="ml-auto text-xs font-medium bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full border border-accent-blue/30">
             {t("today", language)}
           </div>
         </div>
         {/* Calendar days header */}
-        <div className="grid grid-cols-7 gap-1 mb-3 text-xs text-center font-medium" style={{ color: "hsl(var(--accent-blue) / 0.6)" }}>
+        <div className="grid grid-cols-7 gap-1 mb-3 text-xs text-center font-semibold" style={{ color: "hsl(var(--accent-blue) / 0.70)" }}>
           <div>S</div>
           <div>M</div>
           <div>T</div>
@@ -180,55 +174,56 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
           <div
             className="flex-1 p-3 rounded-xl shadow-glow relative border"
             style={{
-              // Use accent-blue solid bg but readable!
-              background: "linear-gradient(125deg, hsl(var(--accent-blue) / 0.90), hsl(var(--accent-blue) / 0.85))",
-              borderColor: "hsl(var(--accent-blue) / 0.23)"
+              // SOLID: Strong app blue bg, white text
+              background: "hsl(var(--accent-blue))",
+              borderColor: "hsl(var(--accent-blue) / 0.20)",
             }}
           >
-            <div className="font-bold text-center text-lg drop-shadow text-white">{format(new Date(), "d")}</div>
-            <div className="text-xs text-center opacity-90 mb-2 text-white">{t("today", language)}</div>
+            <div className="font-bold text-center text-lg text-white">{format(new Date(), "d")}</div>
+            <div className="text-xs text-center mb-2 text-white/90 font-semibold">{t("today", language)}</div>
             <div className="text-xs text-white/90">
               {isLoading || maw3dLoading || trLoading ? (
-                <Skeleton className="h-3 w-full bg-white/20" />
+                <Skeleton className="h-3 w-full bg-white/40" />
               ) : (
                 <div className="truncate leading-relaxed">{getTodayItemsText()}</div>
               )}
             </div>
-            <div className="absolute inset-0 pointer-events-none opacity-15 rounded-xl bg-gradient-to-tl from-white/15 to-transparent blur-[2px]" />
           </div>
           {/* Tomorrow */}
           <div
             className="flex-1 p-3 rounded-xl relative border"
             style={{
-              // App gradient: blue-tinted, bright foreground
-              background: "linear-gradient(120deg, hsl(var(--background)), hsl(var(--accent-blue) / 0.22) 98%)",
-              borderColor: "hsl(var(--accent-blue) / 0.16)"
+              // Reverse: white background, accent-blue border/text (not faded!)
+              background: "#fff",
+              borderColor: "hsl(var(--accent-blue) / 0.18)",
+              boxShadow: "var(--glow-blue), var(--shadow-soft)",
             }}
           >
             <div className="font-bold text-center text-lg" style={{ color: "hsl(var(--accent-blue))", fontWeight: 700 }}>
               {format(addDays(new Date(), 1), "d")}
             </div>
-            <div className="text-xs text-center mb-2" style={{ color: "hsl(var(--accent-blue) / 0.85)", fontWeight: 600 }}>
+            <div className="text-xs text-center mb-2 text-accent-blue font-semibold">
               {t("tomorrow", language)}
             </div>
-            <div className="text-xs" style={{ color: "hsl(var(--accent-blue))" }}>
+            <div className="text-xs" style={{ color: "hsl(var(--accent-blue) / 0.9)" }}>
               {isLoading || maw3dLoading || trLoading ? (
-                <Skeleton className="h-3 w-full bg-accent-blue/10" />
+                <Skeleton className="h-3 w-full bg-accent-blue/20" />
               ) : (
                 <div className="truncate leading-relaxed">{getTomorrowItemsText()}</div>
               )}
             </div>
-            <div className="absolute inset-0 pointer-events-none opacity-10 rounded-xl bg-gradient-to-br from-accent-blue/10 to-transparent blur-[2px]" />
           </div>
         </div>
-        {/* SOLID, highly visible button: accent gradient, white text */}
+        {/* SOLID, highly visible button: app gradient, white text */}
         <Button
           variant="default"
           size="sm"
-          className="w-full mt-2 font-bold !bg-gradient-to-r !from-accent-blue !to-accent-purple !text-white !shadow-glow !border-0 transition-all duration-200"
+          className="w-full mt-2 font-bold !bg-gradient-to-r !from-accent-blue !to-accent-purple !text-white !shadow-glow !border-0 transition-all"
           style={{
             background: "linear-gradient(90deg, hsl(var(--accent-blue)), hsl(var(--accent-purple)))",
-            color: "#fff"
+            color: "#fff",
+            opacity: 1, // Force fully solid
+            boxShadow: "0 2px 12px hsl(var(--accent-blue) / 0.20)", // subtle but solid
           }}
           onClick={() => navigate('/calendar')}
         >
