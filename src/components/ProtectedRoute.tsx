@@ -16,6 +16,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<{
     isSubscribed: boolean;
     isLoading: boolean;
+    error?: string;
   }>({ isSubscribed: false, isLoading: true });
 
   // Owner accounts that bypass all restrictions
@@ -34,19 +35,24 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   useEffect(() => {
     const checkSubscriptionStatus = async () => {
+      console.log("ProtectedRoute: Starting subscription check for user:", user?.email);
+      
       if (!user) {
+        console.log("ProtectedRoute: No user, setting not subscribed");
         setSubscriptionStatus({ isSubscribed: false, isLoading: false });
         return;
       }
 
       // Check if user is an owner account
       if (ownerAccounts.includes(user.email || '')) {
-        console.log('Owner account detected, bypassing subscription checks');
+        console.log('ProtectedRoute: Owner account detected, bypassing subscription checks');
         setSubscriptionStatus({ isSubscribed: true, isLoading: false });
         return;
       }
 
       try {
+        console.log("ProtectedRoute: Fetching subscription status from database...");
+        
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('is_subscribed, subscription_status')
@@ -54,34 +60,56 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
           .maybeSingle();
 
         if (error) {
-          console.error('Error fetching subscription status:', error);
+          console.error('ProtectedRoute: Error fetching subscription status:', error);
+          setSubscriptionStatus({ 
+            isSubscribed: false, 
+            isLoading: false, 
+            error: error.message 
+          });
+          return;
+        }
+
+        console.log('ProtectedRoute: Raw profile data:', profile);
+
+        if (!profile) {
+          console.log('ProtectedRoute: No profile found, user not subscribed');
           setSubscriptionStatus({ isSubscribed: false, isLoading: false });
           return;
         }
 
-        const isSubscribed = profile?.is_subscribed === true && profile?.subscription_status === 'active';
+        const isSubscribed = profile.is_subscribed === true && profile.subscription_status === 'active';
         
-        console.log('Subscription check result:', {
+        console.log('ProtectedRoute: Subscription check result:', {
           profileExists: !!profile,
-          isSubscribed: profile?.is_subscribed,
-          subscriptionStatus: profile?.subscription_status,
+          isSubscribed: profile.is_subscribed,
+          subscriptionStatus: profile.subscription_status,
           finalIsSubscribed: isSubscribed
         });
 
         setSubscriptionStatus({ isSubscribed, isLoading: false });
       } catch (error) {
-        console.error('Error checking subscription status:', error);
-        setSubscriptionStatus({ isSubscribed: false, isLoading: false });
+        console.error('ProtectedRoute: Exception during subscription check:', error);
+        setSubscriptionStatus({ 
+          isSubscribed: false, 
+          isLoading: false, 
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     };
 
+    // Only run subscription check when we have a user and auth is not loading
     if (!isLoading && user) {
+      console.log("ProtectedRoute: Auth loaded, starting subscription check");
       checkSubscriptionStatus();
+    } else if (!isLoading && !user) {
+      console.log("ProtectedRoute: Auth loaded but no user, setting not subscribed");
+      setSubscriptionStatus({ isSubscribed: false, isLoading: false });
     }
   }, [user, isLoading]);
 
+  // Show loading while auth or subscription status is loading
   if (isLoading || subscriptionStatus.isLoading) {
-    console.log("ProtectedRoute: Still loading auth state or subscription, showing loading");
+    console.log("ProtectedRoute: Still loading - auth:", isLoading, "subscription:", subscriptionStatus.isLoading);
     return <Loading />;
   }
 
@@ -94,6 +122,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Check subscription status for non-owner accounts
   if (!subscriptionStatus.isSubscribed) {
     console.log("ProtectedRoute: User not subscribed, showing subscription overlay");
+    console.log("ProtectedRoute: Subscription status details:", subscriptionStatus);
     return <SubscriptionOverlay />;
   }
 
