@@ -1,3 +1,4 @@
+
 // This util can be run to activate alanoud.qtr6@gmail.com's subscription with evidence.
 // For ADMINS/DEBUG ONLY. Remove after use.
 
@@ -45,8 +46,6 @@ if (typeof window !== "undefined" && window.location?.hash === "#activate-alanou
 }
 
 // The activation util for Alanoud's subscription
-
-import { supabase } from "@/integrations/supabase/client";
 
 async function runImmediateActivation() {
   // Run the edge function call (same as in activateAlanoudSubscriptionWithEvidence)
@@ -114,3 +113,4 @@ if (
 }
 
 export { runImmediateActivation };
+
