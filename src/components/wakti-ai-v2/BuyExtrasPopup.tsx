@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useQuotaManagement } from '@/hooks/useQuotaManagement';
-import { Coins, Zap, Loader2, CheckCircle, Mic, Languages } from 'lucide-react';
+import { Coins, Zap, CheckCircle, Mic, Languages } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface BuyExtrasPopupProps {
@@ -22,70 +22,25 @@ export function BuyExtrasPopup({
     language
   } = useTheme();
   const {
-    userVoiceQuota,
-    purchaseExtraVoiceCredits
+    userVoiceQuota
   } = useExtendedQuotaManagement(language);
   const {
     userQuota: translationQuota,
-    purchaseExtraTranslations,
     MAX_DAILY_TRANSLATIONS
   } = useQuotaManagement(language);
 
-  const [isVoicePurchasing, setIsVoicePurchasing] = useState(false);
-  const [isTranslationPurchasing, setIsTranslationPurchasing] = useState(false);
-
-  const handlePurchaseVoiceCredits = async () => {
-    setIsVoicePurchasing(true);
-    console.log('🛒 Starting voice credits purchase...');
-    try {
-      const success = await purchaseExtraVoiceCredits(5000);
-      console.log('🛒 Voice credits purchase result:', success);
-      if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 5,000 حرف صوتي إضافي بنجاح!' : 'Successfully purchased 5,000 extra voice characters!', {
-          description: language === 'ar' ? 'صالح لمدة 30 يوماً من تاريخ الشراء' : 'Valid for 30 days from purchase date'
-        });
-        setTimeout(() => onOpenChange(false), 1500);
-      } else {
-        console.error('❌ Voice credits purchase failed');
-        toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed', {
-          description: language === 'ar' ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' : 'Please try again or contact support'
-        });
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error during voice credits purchase:', error);
-      toast.error(language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error', {
-        description: language === 'ar' ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' : 'An unexpected error occurred, please try again later'
-      });
-    } finally {
-      setIsVoicePurchasing(false);
-    }
+  const handlePurchaseVoiceCredits = () => {
+    const voiceCreditsUrl = 'https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=E3F4LJP2UR57A';
+    window.open(voiceCreditsUrl, '_blank');
+    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
+    setTimeout(() => onOpenChange(false), 1500);
   };
 
-  const handlePurchaseTranslations = async () => {
-    setIsTranslationPurchasing(true);
-    console.log('🛒 Starting translations purchase...');
-    try {
-      const success = await purchaseExtraTranslations(100);
-      console.log('🛒 Translations purchase result:', success);
-      if (success) {
-        toast.success(language === 'ar' ? 'تم شراء 100 ترجمة إضافية بنجاح!' : 'Successfully purchased 100 extra translations!', {
-          description: language === 'ar' ? 'صالح لمدة 30 يوماً من تاريخ الشراء' : 'Valid for 30 days from purchase date'
-        });
-        setTimeout(() => onOpenChange(false), 1500);
-      } else {
-        console.error('❌ Translations purchase failed');
-        toast.error(language === 'ar' ? 'فشل في الشراء' : 'Purchase failed', {
-          description: language === 'ar' ? 'يرجى المحاولة مرة أخرى أو الاتصال بالدعم' : 'Please try again or contact support'
-        });
-      }
-    } catch (error) {
-      console.error('❌ Unexpected error during translations purchase:', error);
-      toast.error(language === 'ar' ? 'خطأ غير متوقع' : 'Unexpected error', {
-        description: language === 'ar' ? 'حدث خطأ غير متوقع، يرجى المحاولة لاحقاً' : 'An unexpected error occurred, please try again later'
-      });
-    } finally {
-      setIsTranslationPurchasing(false);
-    }
+  const handlePurchaseTranslations = () => {
+    const translationCreditsUrl = 'https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=96SVWU6YWXBFL';
+    window.open(translationCreditsUrl, '_blank');
+    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
+    setTimeout(() => onOpenChange(false), 1500);
   };
 
   const getVoiceQuotaStatus = () => {
@@ -109,8 +64,6 @@ export function BuyExtrasPopup({
 
   const voiceStatus = getVoiceQuotaStatus();
   const translationStatus = getTranslationQuotaStatus();
-
-  const anyPurchaseInProgress = isVoicePurchasing || isTranslationPurchasing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -176,18 +129,9 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-green-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseVoiceCredits} disabled={isVoicePurchasing || anyPurchaseInProgress} className="bg-green-600 hover:bg-green-700" size="sm">
-                    {isVoicePurchasing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4 mr-2" />
-                        {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                  <Button onClick={handlePurchaseVoiceCredits} className="bg-green-600 hover:bg-green-700" size="sm">
+                    <Zap className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
                   </Button>
                 </div>
               </CardContent>
@@ -209,18 +153,9 @@ export function BuyExtrasPopup({
                   <div className="text-lg font-bold text-orange-600">
                     10 {language === 'ar' ? 'ريال' : 'QAR'}
                   </div>
-                  <Button onClick={handlePurchaseTranslations} disabled={isTranslationPurchasing || anyPurchaseInProgress} className="bg-orange-600 hover:bg-orange-700" size="sm">
-                    {isTranslationPurchasing ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        {language === 'ar' ? 'جاري الشراء...' : 'Purchasing...'}
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="h-4 w-4 mr-2" />
-                        {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
-                      </>
-                    )}
+                  <Button onClick={handlePurchaseTranslations} className="bg-orange-600 hover:bg-orange-700" size="sm">
+                    <Zap className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'شراء الآن' : 'Buy Now'}
                   </Button>
                 </div>
               </CardContent>

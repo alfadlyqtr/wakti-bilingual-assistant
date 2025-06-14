@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { CreditCard, Calendar, History } from 'lucide-react';
-import { PayPalService } from '@/services/paypalService';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface UserSubscription {
@@ -22,7 +22,6 @@ export function BillingTab() {
   const { language } = useTheme();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
-  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     loadSubscription();
@@ -30,8 +29,30 @@ export function BillingTab() {
 
   const loadSubscription = async () => {
     try {
-      const data = await PayPalService.getUserSubscription();
-      setSubscription(data);
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching user subscription:', error);
+        throw error;
+      }
+      
+      // If no profile found, return default values
+      if (!profile) {
+        console.log('No profile found, returning default subscription data');
+        setSubscription({
+          is_subscribed: false,
+          subscription_status: 'inactive',
+          plan_name: null,
+          billing_start_date: null,
+          next_billing_date: null
+        });
+      } else {
+        console.log('User subscription data:', profile);
+        setSubscription(profile);
+      }
     } catch (error) {
       console.error('Error loading subscription:', error);
       toast.error('Failed to load subscription details');
@@ -40,52 +61,9 @@ export function BillingTab() {
     }
   };
 
-  const handleSubscribe = async () => {
-    try {
-      setUpgrading(true);
-      
-      // Create subscription plan
-      const { planId } = await PayPalService.createSubscriptionPlan();
-      
-      // Create subscription and get approval URL
-      const { approvalUrl } = await PayPalService.createSubscription(planId);
-      
-      // Redirect to PayPal for approval
-      window.location.href = approvalUrl;
-      
-    } catch (error) {
-      console.error('Error creating subscription:', error);
-      toast.error('Failed to start subscription process');
-    } finally {
-      setUpgrading(false);
-    }
-  };
-
-  // Handle return from PayPal
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const subscriptionId = urlParams.get('subscription_id');
-    const success = urlParams.get('subscription');
-
-    if (success === 'success' && subscriptionId) {
-      handleSubscriptionSuccess(subscriptionId);
-    } else if (success === 'cancelled') {
-      toast.error('Subscription was cancelled');
-    }
-  }, []);
-
-  const handleSubscriptionSuccess = async (subscriptionId: string) => {
-    try {
-      await PayPalService.completeSubscription(subscriptionId);
-      toast.success('Subscription activated successfully!');
-      loadSubscription(); // Reload subscription data
-      
-      // Clean up URL
-      window.history.replaceState({}, document.title, '/account');
-    } catch (error) {
-      console.error('Error completing subscription:', error);
-      toast.error('Failed to activate subscription');
-    }
+  const handleSubscribe = (planUrl: string) => {
+    window.open(planUrl, '_blank');
+    toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
   };
 
   const formatDate = (dateString: string | null) => {
@@ -121,6 +99,9 @@ export function BillingTab() {
   const billingStartDate = formatDate(subscription?.billing_start_date);
   const isMonthlyPlan = subscription?.plan_name === 'Wakti Monthly';
   const isSubscribed = subscription?.is_subscribed || false;
+
+  const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
+  const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
   return (
     <div className="space-y-6">
@@ -201,23 +182,25 @@ export function BillingTab() {
         </CardHeader>
         <CardContent>
           {!isSubscribed ? (
-            <Button 
-              className="w-full sm:w-auto"
-              onClick={handleSubscribe}
-              disabled={upgrading}
-            >
-              {upgrading ? (
-                language === 'ar' ? 'جاري المعالجة...' : 'Processing...'
-              ) : (
-                language === 'ar' ? 'اشترك الآن - 60 ريال/شهر' : 'Subscribe Now - 60 QAR/month'
-              )}
-            </Button>
+            <div className="space-y-3">
+              <Button 
+                className="w-full sm:w-auto"
+                onClick={() => handleSubscribe(monthlyPlanUrl)}
+              >
+                {language === 'ar' ? 'اشترك شهرياً - $16.50 USD ≈ 60 ريال' : 'Subscribe Monthly - $16.50 USD ≈ 60 QAR'}
+              </Button>
+              <Button 
+                variant="outline"
+                className="w-full sm:w-auto ml-0 sm:ml-2"
+                onClick={() => handleSubscribe(yearlyPlanUrl)}
+              >
+                {language === 'ar' ? 'اشترك سنوياً - $165.00 USD ≈ 600 ريال' : 'Subscribe Yearly - $165.00 USD ≈ 600 QAR'}
+              </Button>
+            </div>
           ) : isMonthlyPlan ? (
             <Button 
               className="w-full sm:w-auto"
-              onClick={() => {
-                toast.info(language === 'ar' ? 'سيتم إضافة الخطة السنوية قريباً' : 'Yearly plan coming soon');
-              }}
+              onClick={() => handleSubscribe(yearlyPlanUrl)}
             >
               {t("upgradeToYearly", language)}
             </Button>
