@@ -14,7 +14,7 @@ interface SubscriptionOverlayProps {
 }
 
 export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const { signOut } = useAuth();
 
   const handleLogout = async () => {
@@ -35,25 +35,46 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
+  // Theme-based colors
+  const colors = theme === 'dark' ? {
+    background: '#121120',
+    primary: '#2d2a66',
+    accent: '#e9ceb0',
+    success: '#3eb489',
+    highlight: '#d3655a'
+  } : {
+    background: '#fcfefd',
+    primary: '#060541',
+    accent: '#e9ceb0',
+    success: '#3eb489',
+    highlight: '#d3655a'
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Light Background Overlay - Shows Dashboard Behind */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Very light backdrop to show dashboard content */}
-        <div className="absolute inset-0 bg-background/20 backdrop-blur-sm"></div>
+      {/* Dashboard Background - Minimal Overlay to Show Dashboard */}
+      <div className="absolute inset-0">
+        <div 
+          className="absolute inset-0 backdrop-blur-[2px]" 
+          style={{ 
+            backgroundColor: theme === 'dark' 
+              ? 'rgba(18, 17, 32, 0.3)' 
+              : 'rgba(252, 254, 253, 0.3)' 
+          }}
+        />
       </div>
       
       {/* Top Controls */}
       <div className="fixed top-4 left-0 right-0 z-10 flex justify-between items-center px-4 max-w-md mx-auto">
-        {/* Logout Button - Using exact app color #d3655a */}
+        {/* Logout Button */}
         <Button
           variant="ghost"
           size="sm"
           onClick={handleLogout}
-          className="text-white border border-opacity-50 shadow-soft transition-all duration-300"
+          className="text-white border shadow-lg transition-all duration-300 hover:scale-105"
           style={{ 
-            backgroundColor: '#d3655a',
-            borderColor: '#d3655a'
+            backgroundColor: colors.highlight,
+            borderColor: colors.highlight
           }}
         >
           <LogOut className="h-4 w-4 mr-2" />
@@ -65,84 +86,111 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
       </div>
 
       {/* Main Subscription Card */}
-      <Card className="w-full max-w-md mx-auto relative z-10 border-2 shadow-lg" style={{
-        backgroundColor: '#fcfefd',
-        borderColor: '#060541'
-      }}>
+      <Card 
+        className="w-full max-w-md mx-auto relative z-10 border-2 shadow-2xl backdrop-blur-sm"
+        style={{
+          backgroundColor: colors.background,
+          borderColor: colors.primary,
+          boxShadow: `0 20px 40px rgba(0,0,0,0.3)`
+        }}
+      >
         <CardContent className="p-8 text-center space-y-6">
           {/* Welcome Header */}
           <div className="space-y-3">
             <div className="flex justify-center mb-4">
               <div className="relative">
                 <div className="text-5xl animate-bounce-subtle">👋</div>
-                <Sparkles className="absolute -top-1 -right-1 h-6 w-6 animate-pulse" style={{ color: '#d3655a' }} />
+                <Sparkles 
+                  className="absolute -top-1 -right-1 h-6 w-6 animate-pulse" 
+                  style={{ color: colors.success }} 
+                />
               </div>
             </div>
             
-            <h1 className="text-2xl font-bold" style={{ color: '#060541' }}>
+            <h1 
+              className="text-2xl font-bold" 
+              style={{ color: colors.primary }}
+            >
               {t("welcomeToWakti", language)}
             </h1>
             
-            <p className="text-sm font-medium" style={{ color: '#2d7a5f' }}>
+            <p 
+              className="text-sm font-medium" 
+              style={{ color: colors.success }}
+            >
               {t("thankYouMessage", language)}
             </p>
           </div>
 
           {/* Description */}
-          <div className="rounded-lg p-4 border" style={{
-            backgroundColor: '#f8f9fa',
-            borderColor: '#060541',
-            opacity: 0.9
-          }}>
-            <p className="text-sm leading-relaxed" style={{ color: '#060541' }}>
+          <div 
+            className="rounded-lg p-4 border"
+            style={{
+              backgroundColor: theme === 'dark' ? 'rgba(45, 42, 102, 0.2)' : 'rgba(6, 5, 65, 0.05)',
+              borderColor: colors.accent
+            }}
+          >
+            <p 
+              className="text-sm leading-relaxed" 
+              style={{ color: colors.primary }}
+            >
               {t("subscriptionRequired", language)}
             </p>
           </div>
 
           {/* Subscription Buttons */}
           <div className="space-y-4">
-            {/* Monthly Plan - Using exact app color #060541 */}
+            {/* Monthly Plan */}
             <Button 
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base text-white border transition-all duration-300 hover:scale-105"
+              className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               style={{ 
-                backgroundColor: '#060541',
-                borderColor: '#060541'
+                backgroundColor: colors.primary,
+                borderColor: colors.primary
               }}
               size="lg"
             >
-              <Star className="h-5 w-5 mr-2" style={{ color: '#e9ceb0' }} />
+              <Star className="h-5 w-5 mr-2" style={{ color: colors.accent }} />
               {t("subscribeMonthly", language)}
             </Button>
 
-            {/* Yearly Plan - Now matching monthly button color with Best Value ribbon */}
+            {/* Yearly Plan with Best Value Badge */}
             <div className="relative">
               <Button 
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105"
+                className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 style={{ 
-                  backgroundColor: '#060541',
-                  borderColor: '#060541'
+                  backgroundColor: colors.primary,
+                  borderColor: colors.primary
                 }}
                 size="lg"
               >
-                <Sparkles className="h-5 w-5 mr-2" style={{ color: '#e9ceb0' }} />
+                <Sparkles className="h-5 w-5 mr-2" style={{ color: colors.accent }} />
                 {t("subscribeYearly", language)}
               </Button>
               
-              {/* Best Value Badge - No Icon */}
-              <div className="absolute -top-2 -right-2 px-2 py-1 rounded-full text-xs font-semibold text-white shadow-lg" style={{ backgroundColor: '#d3655a' }}>
-                <span>{language === 'ar' ? 'أفضل قيمة' : 'Best Value'}</span>
+              {/* Best Value Badge - Redesigned */}
+              <div 
+                className="absolute -top-3 -right-3 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg transform rotate-12 animate-pulse"
+                style={{ backgroundColor: colors.highlight }}
+              >
+                {language === 'ar' ? 'أفضل قيمة' : 'Best Value'}
               </div>
             </div>
           </div>
 
           {/* Footer note */}
-          <div className="rounded-md p-3 border" style={{
-            backgroundColor: '#f8f9fa',
-            borderColor: '#e9ceb0'
-          }}>
-            <p className="text-xs" style={{ color: '#60606288' }}>
+          <div 
+            className="rounded-md p-3 border"
+            style={{
+              backgroundColor: theme === 'dark' ? 'rgba(233, 206, 176, 0.1)' : 'rgba(233, 206, 176, 0.2)',
+              borderColor: colors.accent
+            }}
+          >
+            <p 
+              className="text-xs" 
+              style={{ color: theme === 'dark' ? colors.accent : colors.primary }}
+            >
               {t("paypalRedirectNote", language)}
             </p>
           </div>
