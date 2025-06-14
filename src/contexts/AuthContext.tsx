@@ -144,7 +144,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Update session DB row on login/signup/refresh
   const saveSessionRecord = async (forceSession?: string) => {
     if (user && session) {
-      const token = forceSession || session.access_token;
+      // Explicitly cast session to correct type for access_token
+      const sessionTyped = session as import('@supabase/supabase-js').Session;
+      const token = forceSession || sessionTyped.access_token;
       if (!token) {
         console.warn("No access token found on session.");
         return;
