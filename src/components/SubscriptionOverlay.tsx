@@ -62,7 +62,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     primaryText: '#060541',
     buttonBg: 'rgba(6, 5, 65, 0.12)',
     buttonBorder: 'rgba(6, 5, 65, 0.25)',
-    buttonText: '#060541', // Dark blue text for light mode
+    buttonText: '#1a1a3a', // Dark navy text for light mode
     buttonHoverBg: 'rgba(6, 5, 65, 0.18)',
     highlightColor: '#2d5a3d', // Dark liquid green accent
     logoutColor: '#ff6b6b', // Liquid light red
@@ -173,142 +173,176 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </p>
           </div>
 
-          {/* 3D Subscribe Buttons with pressable effect */}
+          {/* Enhanced 3D Subscribe Buttons with deep shadow and glow */}
           <div className="space-y-4">
-            {/* Monthly Plan - 3D Pressable Button */}
+            {/* Monthly Plan - Enhanced 3D Button */}
             <button
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.95] group relative"
+              className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] group relative overflow-hidden"
               style={{
-                background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
+                background: `linear-gradient(145deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
                 backdropFilter: 'blur(20px)',
                 WebkitBackdropFilter: 'blur(20px)',
-                border: `2px solid ${glassStyles.buttonBorder}`,
-                borderRadius: '16px',
+                border: `3px solid ${glassStyles.buttonBorder}`,
+                borderRadius: '18px',
                 color: glassStyles.buttonText,
                 boxShadow: `
+                  0 12px 48px rgba(0, 0, 0, 0.25),
                   0 8px 32px rgba(0, 0, 0, 0.15),
                   0 4px 16px rgba(0, 0, 0, 0.1),
-                  inset 0 2px 0 rgba(255, 255, 255, 0.2),
-                  inset 0 -2px 0 rgba(0, 0, 0, 0.1),
-                  0 0 0 1px ${glassStyles.buttonBorder}60
+                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                  inset 0 -3px 0 rgba(0, 0, 0, 0.2),
+                  0 0 20px rgba(233, 206, 176, 0.3),
+                  0 0 40px rgba(233, 206, 176, 0.1)
                 `,
-                transform: 'translateZ(0)',
+                transform: 'translateZ(0) perspective(1000px) rotateX(2deg)',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                e.currentTarget.style.transform = 'translateY(-4px) translateZ(0) perspective(1000px) rotateX(1deg)';
                 e.currentTarget.style.boxShadow = `
-                  0 12px 48px rgba(0, 0, 0, 0.2),
+                  0 20px 60px rgba(0, 0, 0, 0.3),
+                  0 12px 40px rgba(0, 0, 0, 0.2),
                   0 6px 24px rgba(0, 0, 0, 0.15),
-                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
-                  inset 0 -3px 0 rgba(0, 0, 0, 0.15),
-                  0 0 0 2px ${glassStyles.buttonBorder}80
+                  inset 0 4px 0 rgba(255, 255, 255, 0.4),
+                  inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+                  0 0 30px rgba(233, 206, 176, 0.5),
+                  0 0 60px rgba(233, 206, 176, 0.2)
                 `;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0) translateZ(0)';
+                e.currentTarget.style.transform = 'translateY(0) translateZ(0) perspective(1000px) rotateX(2deg)';
                 e.currentTarget.style.boxShadow = `
+                  0 12px 48px rgba(0, 0, 0, 0.25),
                   0 8px 32px rgba(0, 0, 0, 0.15),
                   0 4px 16px rgba(0, 0, 0, 0.1),
-                  inset 0 2px 0 rgba(255, 255, 255, 0.2),
-                  inset 0 -2px 0 rgba(0, 0, 0, 0.1),
-                  0 0 0 1px ${glassStyles.buttonBorder}60
+                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                  inset 0 -3px 0 rgba(0, 0, 0, 0.2),
+                  0 0 20px rgba(233, 206, 176, 0.3),
+                  0 0 40px rgba(233, 206, 176, 0.1)
                 `;
               }}
               onMouseDown={(e) => {
-                e.currentTarget.style.transform = 'translateY(1px) translateZ(0)';
+                e.currentTarget.style.transform = 'translateY(2px) translateZ(0) perspective(1000px) rotateX(3deg)';
                 e.currentTarget.style.boxShadow = `
+                  0 6px 24px rgba(0, 0, 0, 0.3),
                   0 4px 16px rgba(0, 0, 0, 0.2),
                   0 2px 8px rgba(0, 0, 0, 0.15),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.1),
-                  inset 0 -1px 0 rgba(0, 0, 0, 0.2)
+                  inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                  inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+                  0 0 15px rgba(233, 206, 176, 0.4)
                 `;
               }}
               onMouseUp={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                e.currentTarget.style.transform = 'translateY(-4px) translateZ(0) perspective(1000px) rotateX(1deg)';
                 e.currentTarget.style.boxShadow = `
-                  0 12px 48px rgba(0, 0, 0, 0.2),
+                  0 20px 60px rgba(0, 0, 0, 0.3),
+                  0 12px 40px rgba(0, 0, 0, 0.2),
                   0 6px 24px rgba(0, 0, 0, 0.15),
-                  inset 0 3px 0 rgba(255, 255, 255, 0.3),
-                  inset 0 -3px 0 rgba(0, 0, 0, 0.15),
-                  0 0 0 2px ${glassStyles.buttonBorder}80
+                  inset 0 4px 0 rgba(255, 255, 255, 0.4),
+                  inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+                  0 0 30px rgba(233, 206, 176, 0.5),
+                  0 0 60px rgba(233, 206, 176, 0.2)
                 `;
               }}
             >
-              <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center relative z-10">
                 <Star className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
                 {t("subscribeMonthly", language)}
               </div>
+              {/* Subtle inner glow */}
+              <div 
+                className="absolute inset-0 rounded-[15px] opacity-20"
+                style={{
+                  background: `radial-gradient(circle at center, ${glassStyles.buttonBorder} 0%, transparent 70%)`
+                }}
+              />
             </button>
 
-            {/* Yearly Plan with Best Value Badge - 3D Pressable Button */}
+            {/* Yearly Plan with Best Value Badge - Enhanced 3D Button */}
             <div className="relative">
               <button
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.02] active:scale-[0.95] group relative"
+                className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] group relative overflow-hidden"
                 style={{
-                  background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
+                  background: `linear-gradient(145deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 50%, ${glassStyles.buttonBg} 100%)`,
                   backdropFilter: 'blur(20px)',
                   WebkitBackdropFilter: 'blur(20px)',
-                  border: `2px solid ${glassStyles.buttonBorder}`,
-                  borderRadius: '16px',
+                  border: `3px solid ${glassStyles.buttonBorder}`,
+                  borderRadius: '18px',
                   color: glassStyles.buttonText,
                   boxShadow: `
+                    0 12px 48px rgba(0, 0, 0, 0.25),
                     0 8px 32px rgba(0, 0, 0, 0.15),
                     0 4px 16px rgba(0, 0, 0, 0.1),
-                    inset 0 2px 0 rgba(255, 255, 255, 0.2),
-                    inset 0 -2px 0 rgba(0, 0, 0, 0.1),
-                    0 0 0 1px ${glassStyles.buttonBorder}60
+                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                    inset 0 -3px 0 rgba(0, 0, 0, 0.2),
+                    0 0 20px rgba(233, 206, 176, 0.3),
+                    0 0 40px rgba(233, 206, 176, 0.1)
                   `,
-                  transform: 'translateZ(0)',
+                  transform: 'translateZ(0) perspective(1000px) rotateX(2deg)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                  e.currentTarget.style.transform = 'translateY(-4px) translateZ(0) perspective(1000px) rotateX(1deg)';
                   e.currentTarget.style.boxShadow = `
-                    0 12px 48px rgba(0, 0, 0, 0.2),
+                    0 20px 60px rgba(0, 0, 0, 0.3),
+                    0 12px 40px rgba(0, 0, 0, 0.2),
                     0 6px 24px rgba(0, 0, 0, 0.15),
-                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
-                    inset 0 -3px 0 rgba(0, 0, 0, 0.15),
-                    0 0 0 2px ${glassStyles.buttonBorder}80
+                    inset 0 4px 0 rgba(255, 255, 255, 0.4),
+                    inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+                    0 0 30px rgba(233, 206, 176, 0.5),
+                    0 0 60px rgba(233, 206, 176, 0.2)
                   `;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0) translateZ(0)';
+                  e.currentTarget.style.transform = 'translateY(0) translateZ(0) perspective(1000px) rotateX(2deg)';
                   e.currentTarget.style.boxShadow = `
+                    0 12px 48px rgba(0, 0, 0, 0.25),
                     0 8px 32px rgba(0, 0, 0, 0.15),
                     0 4px 16px rgba(0, 0, 0, 0.1),
-                    inset 0 2px 0 rgba(255, 255, 255, 0.2),
-                    inset 0 -2px 0 rgba(0, 0, 0, 0.1),
-                    0 0 0 1px ${glassStyles.buttonBorder}60
+                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
+                    inset 0 -3px 0 rgba(0, 0, 0, 0.2),
+                    0 0 20px rgba(233, 206, 176, 0.3),
+                    0 0 40px rgba(233, 206, 176, 0.1)
                   `;
                 }}
                 onMouseDown={(e) => {
-                  e.currentTarget.style.transform = 'translateY(1px) translateZ(0)';
+                  e.currentTarget.style.transform = 'translateY(2px) translateZ(0) perspective(1000px) rotateX(3deg)';
                   e.currentTarget.style.boxShadow = `
+                    0 6px 24px rgba(0, 0, 0, 0.3),
                     0 4px 16px rgba(0, 0, 0, 0.2),
                     0 2px 8px rgba(0, 0, 0, 0.15),
-                    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-                    inset 0 -1px 0 rgba(0, 0, 0, 0.2)
+                    inset 0 2px 0 rgba(255, 255, 255, 0.2),
+                    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+                    0 0 15px rgba(233, 206, 176, 0.4)
                   `;
                 }}
                 onMouseUp={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px) translateZ(0)';
+                  e.currentTarget.style.transform = 'translateY(-4px) translateZ(0) perspective(1000px) rotateX(1deg)';
                   e.currentTarget.style.boxShadow = `
-                    0 12px 48px rgba(0, 0, 0, 0.2),
+                    0 20px 60px rgba(0, 0, 0, 0.3),
+                    0 12px 40px rgba(0, 0, 0, 0.2),
                     0 6px 24px rgba(0, 0, 0, 0.15),
-                    inset 0 3px 0 rgba(255, 255, 255, 0.3),
-                    inset 0 -3px 0 rgba(0, 0, 0, 0.15),
-                    0 0 0 2px ${glassStyles.buttonBorder}80
+                    inset 0 4px 0 rgba(255, 255, 255, 0.4),
+                    inset 0 -4px 0 rgba(0, 0, 0, 0.25),
+                    0 0 30px rgba(233, 206, 176, 0.5),
+                    0 0 60px rgba(233, 206, 176, 0.2)
                   `;
                 }}
               >
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center relative z-10">
                   <Sparkles className="h-5 w-5 mr-2" style={{ color: glassStyles.highlightColor }} />
                   {t("subscribeYearly", language)}
                 </div>
+                {/* Subtle inner glow */}
+                <div 
+                  className="absolute inset-0 rounded-[15px] opacity-20"
+                  style={{
+                    background: `radial-gradient(circle at center, ${glassStyles.buttonBorder} 0%, transparent 70%)`
+                  }}
+                />
               </button>
               
-              {/* Best Value Badge with liquid glass effect */}
+              {/* Best Value Badge with enhanced 3D effect */}
               <div 
                 className="absolute -top-2 -right-2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg transform rotate-12"
                 style={{ 
@@ -316,7 +350,11 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                   backdropFilter: 'blur(10px)',
                   WebkitBackdropFilter: 'blur(10px)',
                   border: `1px solid ${glassStyles.highlightColor}80`,
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
+                  boxShadow: `
+                    0 8px 32px rgba(0, 0, 0, 0.2), 
+                    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+                    0 0 15px ${glassStyles.highlightColor}40
+                  `,
                 }}
               >
                 {language === 'ar' ? 'أفضل قيمة' : 'Best Value'}
