@@ -56,13 +56,23 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     highlightColor: '#d3655a'
   };
 
-  // Custom button style with !important to override any conflicting styles
+  // Enhanced button style with proper border radius and thickness
   const buttonStyle = {
     backgroundColor: `${colors.buttonBackground} !important`,
     color: `${colors.buttonText} !important`,
     borderColor: `${colors.buttonBorder} !important`,
-    borderWidth: '2px !important',
-    borderStyle: 'solid !important'
+    borderWidth: '3px !important',
+    borderStyle: 'solid !important',
+    borderRadius: '12px !important',
+    background: `${colors.buttonBackground} !important`, // Override any gradients
+    backgroundImage: 'none !important', // Ensure no gradients in dark mode
+    boxShadow: `0 4px 8px rgba(0, 0, 0, 0.1) !important`,
+    transition: 'all 0.2s ease !important'
+  };
+
+  const buttonHoverStyle = {
+    transform: 'translateY(-2px)',
+    boxShadow: `0 6px 12px rgba(0, 0, 0, 0.15)`
   };
 
   return (
@@ -155,7 +165,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             {/* Monthly Plan */}
             <Button 
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg [&:hover]:opacity-90"
+              className="w-full h-14 text-base font-bold transition-all duration-200 hover:transform hover:-translate-y-0.5 active:translate-y-0"
               style={buttonStyle}
               size="lg"
             >
@@ -167,7 +177,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             <div className="relative">
               <Button 
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg [&:hover]:opacity-90"
+                className="w-full h-14 text-base font-bold transition-all duration-200 hover:transform hover:-translate-y-0.5 active:translate-y-0"
                 style={buttonStyle}
                 size="lg"
               >
