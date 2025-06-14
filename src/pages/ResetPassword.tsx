@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Lock, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
 import { Logo3D } from "@/components/Logo3D";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -89,36 +89,29 @@ export default function ResetPassword() {
   return (
     <div className="mobile-container bg-background min-h-screen flex flex-col">
       {/* Header */}
-      <header className="mobile-header flex items-center border-b pb-1 px-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex items-center gap-1 mr-2"
-          onClick={() => navigate("/home")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          <span className="text-xs">{t.back}</span>
-        </Button>
+      <header className="mobile-header flex items-center justify-between border-b px-4 py-2">
+        <div className="flex items-center">
+          <div
+            className="cursor-pointer flex items-center"
+            onClick={() => navigate("/home")}
+          >
+            <Logo3D size="sm" />
+          </div>
+        </div>
         <ThemeLanguageToggle />
       </header>
-
-      {/* Main Content */}
+      {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-center py-4 px-4">
         <div className="w-full max-w-sm bg-card rounded-2xl shadow-md p-6 space-y-6">
           <div className="flex flex-col items-center mb-2">
-            <div className="mb-3">
-              <Logo3D size="md" />
-            </div>
             <h1 className="text-xl font-bold">{t.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t.sub}</p>
           </div>
-          
           {errorMsg && (
             <div className="bg-red-100 text-red-700 rounded-lg text-sm py-2 px-3 text-center">
               {errorMsg}
             </div>
           )}
-
           <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
             <div className="space-y-1">
               <label htmlFor="password" className="block text-base font-medium">
