@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
+import { Logo3D } from '@/components/Logo3D';
 import { LogOut, Sparkles, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
@@ -35,37 +36,37 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
-  // Liquid glass styles based on theme
+  // Enhanced liquid glass styles with dark green accents
   const glassStyles = theme === 'dark' ? {
     // Dark mode liquid glass
-    overlayBg: 'rgba(12, 15, 20, 0.15)', // Very transparent to show dashboard
-    cardBg: 'rgba(18, 17, 32, 0.25)',
-    cardBorder: 'rgba(233, 206, 176, 0.2)',
+    overlayBg: 'rgba(12, 15, 20, 0.05)', // More transparent to show dashboard
+    cardBg: 'rgba(18, 17, 32, 0.15)',
+    cardBorder: 'rgba(233, 206, 176, 0.15)',
     textColor: '#e9ceb0',
     primaryText: '#ffffff',
-    buttonBg: 'rgba(233, 206, 176, 0.15)',
-    buttonBorder: 'rgba(233, 206, 176, 0.3)',
-    buttonText: '#ffffff',
-    buttonHoverBg: 'rgba(233, 206, 176, 0.25)',
-    highlightColor: '#d3655a',
-    backdropBlur: 'blur(20px)',
-    textAreaBg: 'rgba(26, 26, 58, 0.1)',
-    textAreaBorder: 'rgba(233, 206, 176, 0.1)'
+    buttonBg: 'rgba(233, 206, 176, 0.08)',
+    buttonBorder: 'rgba(233, 206, 176, 0.2)',
+    buttonText: '#1a1a3a', // Dark navy blue for button text
+    buttonHoverBg: 'rgba(233, 206, 176, 0.15)',
+    highlightColor: '#2d5a3d', // Dark liquid green accent
+    backdropBlur: 'blur(25px)',
+    textAreaBg: 'rgba(26, 26, 58, 0.05)',
+    textAreaBorder: 'rgba(233, 206, 176, 0.08)'
   } : {
     // Light mode liquid glass
-    overlayBg: 'rgba(252, 254, 253, 0.15)', // Very transparent to show dashboard
-    cardBg: 'rgba(252, 254, 253, 0.25)',
-    cardBorder: 'rgba(6, 5, 65, 0.2)',
+    overlayBg: 'rgba(252, 254, 253, 0.05)', // More transparent to show dashboard
+    cardBg: 'rgba(252, 254, 253, 0.15)',
+    cardBorder: 'rgba(6, 5, 65, 0.15)',
     textColor: '#060541',
     primaryText: '#060541',
-    buttonBg: 'rgba(6, 5, 65, 0.15)',
-    buttonBorder: 'rgba(6, 5, 65, 0.3)',
-    buttonText: '#060541',
-    buttonHoverBg: 'rgba(6, 5, 65, 0.25)',
-    highlightColor: '#d3655a',
-    backdropBlur: 'blur(20px)',
-    textAreaBg: 'rgba(6, 5, 65, 0.05)',
-    textAreaBorder: 'rgba(6, 5, 65, 0.1)'
+    buttonBg: 'rgba(6, 5, 65, 0.08)',
+    buttonBorder: 'rgba(6, 5, 65, 0.2)',
+    buttonText: '#1a1a3a', // Dark navy blue for button text
+    buttonHoverBg: 'rgba(6, 5, 65, 0.15)',
+    highlightColor: '#2d5a3d', // Dark liquid green accent
+    backdropBlur: 'blur(25px)',
+    textAreaBg: 'rgba(6, 5, 65, 0.03)',
+    textAreaBorder: 'rgba(6, 5, 65, 0.08)'
   };
 
   return (
@@ -123,23 +124,12 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
         <CardContent className="p-8 text-center space-y-6">
           {/* App Logo and Welcome Header */}
           <div className="space-y-4">
-            {/* App Logo */}
+            {/* Proper 3D App Logo */}
             <div className="flex justify-center mb-4">
-              <div 
-                className="relative p-4 rounded-full"
-                style={{
-                  background: `linear-gradient(135deg, ${glassStyles.buttonBg}, ${glassStyles.buttonHoverBg})`,
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
-                  border: `1px solid ${glassStyles.buttonBorder}`,
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
-                }}
-              >
-                <div className="text-4xl font-bold" style={{ color: glassStyles.primaryText }}>
-                  W
-                </div>
+              <div className="relative">
+                <Logo3D size="lg" className="drop-shadow-lg" />
                 <Sparkles 
-                  className="absolute -top-1 -right-1 h-6 w-6" 
+                  className="absolute -top-2 -right-2 h-6 w-6" 
                   style={{ color: glassStyles.highlightColor }} 
                 />
               </div>
@@ -166,8 +156,6 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             style={{
               background: `linear-gradient(135deg, ${glassStyles.textAreaBg} 0%, ${glassStyles.textAreaBg}80 100%)`,
               border: `1px solid ${glassStyles.textAreaBorder}`,
-              backdropFilter: 'blur(5px)',
-              WebkitBackdropFilter: 'blur(5px)',
             }}
           >
             <p 
@@ -289,8 +277,6 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             style={{
               background: `linear-gradient(135deg, ${glassStyles.textAreaBg} 0%, ${glassStyles.textAreaBg}60 100%)`,
               border: `1px solid ${glassStyles.textAreaBorder}`,
-              backdropFilter: 'blur(5px)',
-              WebkitBackdropFilter: 'blur(5px)',
             }}
           >
             <p 
