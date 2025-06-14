@@ -1,4 +1,3 @@
-
 import React from "react";
 import {
   AlertDialog,
@@ -39,10 +38,11 @@ export const EmailConfirmationDialog: React.FC<EmailConfirmationDialogProps> = (
 
   const t = messages[language] || messages.en;
 
+  // Remove onPointerDownOutside (not valid on AlertDialogContent)
   // Basic mobile-friendly alert style; RTL support automatically applies via theme
   return (
     <AlertDialog open={open}>
-      <AlertDialogContent className="max-w-sm w-full rounded-2xl p-6 text-center" onEscapeKeyDown={onClose} onPointerDownOutside={onClose}>
+      <AlertDialogContent className="max-w-sm w-full rounded-2xl p-6 text-center" onEscapeKeyDown={onClose}>
         <AlertDialogHeader>
           <div className="flex flex-col items-center">
             <span className="bg-primary/10 rounded-full p-3 mb-2">
