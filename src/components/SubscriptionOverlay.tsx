@@ -1,12 +1,12 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import { Logo3D } from '@/components/Logo3D';
-import { LogOut, Sparkles, Star } from 'lucide-react';
+import { LogOut, Sparkles, Star, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
 
@@ -17,6 +17,9 @@ interface SubscriptionOverlayProps {
 export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const { language, theme } = useTheme();
   const { signOut } = useAuth();
+  
+  // Currency state - default to USD for English, QAR for Arabic
+  const [currency, setCurrency] = useState<'USD' | 'QAR'>(language === 'ar' ? 'QAR' : 'USD');
 
   const handleLogout = async () => {
     try {
@@ -36,19 +39,21 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
-  // Get pricing text based on language
+  // Get pricing text based on currency and language
   const getMonthlyPricing = () => {
-    if (language === 'ar') {
-      return 'اشتراك شهري – 60 ريال قطري';
+    if (currency === 'USD') {
+      return language === 'ar' ? 'اشتراك شهري - 16 دولار' : 'Monthly Plan - $16 USD';
+    } else {
+      return language === 'ar' ? 'اشتراك شهري - 60 ريال' : 'Monthly Plan - 60 QAR';
     }
-    return 'اشتراك شهري – $16.50 USD ≈ 60 ريال قطري';
   };
 
   const getYearlyPricing = () => {
-    if (language === 'ar') {
-      return 'اشتراك سنوي – 600 ريال قطري';
+    if (currency === 'USD') {
+      return language === 'ar' ? 'اشتراك سنوي - 165 دولار' : 'Yearly Plan - $165 USD';
+    } else {
+      return language === 'ar' ? 'اشتراك سنوي - 600 ريال' : 'Yearly Plan - 600 QAR';
     }
-    return 'اشتراك سنوي – $165.00 USD ≈ 600 ريال قطري';
   };
 
   // Enhanced liquid glass styles with liquid light red and better contrast
@@ -186,6 +191,61 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             >
               {t("subscriptionRequired", language)}
             </p>
+          </div>
+
+          {/* Currency Toggle */}
+          <div className="flex justify-center">
+            <div
+              className="flex p-1 rounded-full transition-all duration-300"
+              style={{
+                background: `linear-gradient(135deg, ${glassStyles.buttonBg} 0%, ${glassStyles.buttonHoverBg} 100%)`,
+                backdropFilter: 'blur(15px)',
+                WebkitBackdropFilter: 'blur(15px)',
+                border: `1px solid ${glassStyles.buttonBorder}`,
+                boxShadow: `
+                  0 8px 32px rgba(0, 0, 0, 0.1),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2)
+                `,
+              }}
+            >
+              <button
+                onClick={() => setCurrency('USD')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
+                  currency === 'USD' ? 'scale-105' : 'scale-100'
+                }`}
+                style={{
+                  background: currency === 'USD' 
+                    ? `linear-gradient(135deg, ${glassStyles.highlightColor} 0%, ${glassStyles.highlightColor}CC 100%)`
+                    : 'transparent',
+                  color: currency === 'USD' ? '#ffffff' : glassStyles.buttonText,
+                  boxShadow: currency === 'USD' 
+                    ? `0 4px 16px ${glassStyles.highlightColor}40, inset 0 1px 0 rgba(255, 255, 255, 0.3)`
+                    : 'none',
+                }}
+              >
+                <DollarSign className="h-4 w-4" />
+                USD
+              </button>
+              
+              <button
+                onClick={() => setCurrency('QAR')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-2 ${
+                  currency === 'QAR' ? 'scale-105' : 'scale-100'
+                }`}
+                style={{
+                  background: currency === 'QAR' 
+                    ? `linear-gradient(135deg, ${glassStyles.highlightColor} 0%, ${glassStyles.highlightColor}CC 100%)`
+                    : 'transparent',
+                  color: currency === 'QAR' ? '#ffffff' : glassStyles.buttonText,
+                  boxShadow: currency === 'QAR' 
+                    ? `0 4px 16px ${glassStyles.highlightColor}40, inset 0 1px 0 rgba(255, 255, 255, 0.3)`
+                    : 'none',
+                }}
+              >
+                <span className="text-xs">ر.ق</span>
+                QAR
+              </button>
+            </div>
           </div>
 
           {/* Enhanced 3D Subscribe Buttons with deep shadow and glow */}
