@@ -169,7 +169,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
       // After successful login, store/replace the session DB record
       if (data?.session) {
-        await saveSessionRecord(data.session.access_token);
+        const sessionTyped = data.session as import('@supabase/supabase-js').Session;
+        await saveSessionRecord(sessionTyped.access_token);
       }
       showSuccess("Check your email - we've sent you a magic link to sign in.");
     } catch (error: any) {
@@ -194,7 +195,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (error) throw error;
       if (data?.session) {
-        await saveSessionRecord(data.session.access_token);
+        const sessionTyped = data.session as import('@supabase/supabase-js').Session;
+        await saveSessionRecord(sessionTyped.access_token);
       }
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
