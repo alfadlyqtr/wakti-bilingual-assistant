@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -126,34 +125,34 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
                 
                 {/* Image Action Buttons */}
-                <div className="flex items-center gap-2 mt-3">
+                {/* === Improved alignment for action buttons === */}
+                <div className="flex items-center gap-2 mt-3 w-full">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => copyToClipboard(message.imageUrl)}
-                    className="h-7 px-2 text-xs"
+                    className="h-7 px-2 text-xs flex-1 min-w-0"
                   >
                     <Copy className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'نسخ' : 'Copy'}
                   </Button>
-                  
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => downloadImage(message.imageUrl)}
-                    className="h-7 px-2 text-xs"
+                    className="h-7 px-2 text-xs flex-1 min-w-0"
                   >
                     <Download className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'تحميل' : 'Download'}
                   </Button>
-
                   {/* Maw3D Background Button - show when in image mode and we have return parameter */}
                   {activeTrigger === 'image' && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => useAsMaw3dBackground(message.imageUrl)}
-                      className="h-7 px-2 text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300"
+                      className="h-7 px-2 text-xs flex-1 min-w-0 bg-purple-100 hover:bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 dark:text-purple-300 font-semibold"
+                      style={{ minWidth: 0, whiteSpace: 'nowrap' }}
                     >
                       <Wand2 className="h-3 w-3 mr-1" />
                       {language === 'ar' ? 'استخدم كخلفية' : 'Use as Maw3D BG'}
