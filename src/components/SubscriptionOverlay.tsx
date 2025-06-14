@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import { Logo3D } from '@/components/Logo3D';
-import { LogOut, Sparkles, Star, DollarSign, Flag } from 'lucide-react';
+import { LogOut, Sparkles, Star, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
 
@@ -193,7 +192,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </p>
           </div>
 
-          {/* Currency Toggle with Correct Flags */}
+          {/* Currency Toggle without Flags */}
           <div className="flex justify-center">
             <div
               className="flex p-1 rounded-full transition-all duration-300"
@@ -223,27 +222,6 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
-                {/* Correct US Flag */}
-                <div className="w-5 h-3 rounded-sm overflow-hidden border border-gray-300">
-                  <div className="h-full relative bg-white">
-                    {/* Red stripes */}
-                    <div className="absolute inset-0">
-                      <div className="h-full flex flex-col">
-                        <div className="h-1/13 bg-red-600"></div>
-                        <div className="h-1/13 bg-white"></div>
-                        <div className="h-1/13 bg-red-600"></div>
-                        <div className="h-1/13 bg-white"></div>
-                        <div className="h-1/13 bg-red-600"></div>
-                        <div className="h-1/13 bg-white"></div>
-                        <div className="h-1/13 bg-red-600"></div>
-                      </div>
-                    </div>
-                    {/* Blue canton */}
-                    <div className="absolute top-0 left-0 w-2/5 h-2/3 bg-blue-800 flex items-center justify-center">
-                      <div className="text-white text-xs leading-none">★</div>
-                    </div>
-                  </div>
-                </div>
                 <DollarSign className="h-4 w-4" />
                 USD
               </button>
@@ -263,21 +241,6 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
-                {/* Correct Qatar Flag */}
-                <div className="w-5 h-3 rounded-sm overflow-hidden border border-gray-300">
-                  <div className="h-full relative bg-white">
-                    {/* White section */}
-                    <div className="absolute left-0 top-0 w-1/3 h-full bg-white"></div>
-                    {/* Maroon section */}
-                    <div className="absolute right-0 top-0 w-2/3 h-full bg-red-900"></div>
-                    {/* Serrated edge */}
-                    <div className="absolute left-1/3 top-0 h-full w-1">
-                      <svg viewBox="0 0 4 12" className="h-full w-full">
-                        <path d="M0 0 L4 2 L0 4 L4 6 L0 8 L4 10 L0 12 Z" fill="#8B0000" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
                 <span className="text-xs">ر.ق</span>
                 QAR
               </button>
