@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +40,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
 
+  // Minor utility to get/save our device's "session token" key (unique per login)
+  function getCurrentSessionToken() {
+    // Try to re-use the token if in memory/localStorage, else grab from Supabase session
+    // If not available, we fallback to current supabase.auth.session() access_token
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('wakti_session_token');
+      if (token) return token;
+    }
+    return null;
+  }
+
+  function setCurrentSessionToken(token: string) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('wakti_session_token', token);
+    }
+  }
+
+  function clearCurrentSessionToken() {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('wakti_session_token');
+    }
+  }
+
   useEffect(() => {
     const getSession = async () => {
       try {
@@ -72,11 +94,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // ENFORCE SINGLE SESSION: on mount, always check against user_sessions
+  useEffect(() => {
+    // We only care about enforcing once user is set (so when logged in)
+    async function checkSingleSession() {
+      if (user && session) {
+        // Save "this" session token in localStorage if new
+        setCurrentSessionToken(session.access_token);
+
+        // Query user_sessions for latest valid session
+        const { data, error } = await supabase
+          .from('user_sessions')
+          .select('session_token')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        // If there is no row, create one (first login/device)
+        if (!data || error) {
+          // Insert new session row for the user
+          await supabase.from('user_sessions').upsert([
+            {
+              user_id: user.id,
+              session_token: session.access_token,
+              device_info: window?.navigator?.userAgent ?? null,
+            },
+          ]);
+          setCurrentSessionToken(session.access_token);
+        } else if (data.session_token !== session.access_token) {
+          // Token mismatch! Another device has logged in, force logout here
+          showError('You have been logged out because your account was used on another device.');
+          await supabase.auth.signOut();
+          clearCurrentSessionToken();
+          setUser(null);
+          setSession(null);
+          navigate('/login');
+        }
+      }
+    }
+    checkSingleSession();
+  }, [user, session]);
+
+  // Update session DB row on login/signup/refresh
+  const saveSessionRecord = async (forceSession?: string) => {
+    if (user && session) {
+      const token = forceSession || session.access_token;
+      await supabase.from('user_sessions').upsert([
+        {
+          user_id: user.id,
+          session_token: token,
+          device_info: window?.navigator?.userAgent ?? null,
+        },
+      ]);
+      setCurrentSessionToken(token);
+    }
+  };
+
   const signIn = async (email: string) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error, data } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
+      // After successful login, store/replace the session DB record
+      if (data?.session) {
+        await saveSessionRecord(data.session.access_token);
+      }
       showSuccess("Check your email - we've sent you a magic link to sign in.");
     } catch (error: any) {
       console.error("Error signing in:", error);
@@ -99,6 +180,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (error) throw error;
+      if (data?.session) {
+        await saveSessionRecord(data.session.access_token);
+      }
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
     } catch (error: any) {
@@ -112,7 +196,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
+      if (user) {
+        await supabase.from('user_sessions').delete().eq('user_id', user.id);
+      }
       await supabase.auth.signOut();
+      clearCurrentSessionToken();
       setUser(null);
       setSession(null);
       navigate('/');
