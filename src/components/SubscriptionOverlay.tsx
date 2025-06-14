@@ -39,8 +39,9 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const colors = theme === 'dark' ? {
     cardBackground: '#121120',
     primaryText: '#e9ceb0',
-    buttonBackground: '#2d2a66',
+    buttonBackground: '#1a1a3a', // Dark navy blue
     buttonText: '#e9ceb0',
+    buttonBorder: '#e9ceb0', // Border matches text color
     accentColor: '#e9ceb0',
     successColor: '#3eb489',
     highlightColor: '#d3655a'
@@ -49,6 +50,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     primaryText: '#060541',
     buttonBackground: '#060541',
     buttonText: '#fcfefd',
+    buttonBorder: '#060541',
     accentColor: '#e9ceb0',
     successColor: '#3eb489',
     highlightColor: '#d3655a'
@@ -61,8 +63,8 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
         className="absolute inset-0" 
         style={{ 
           backgroundColor: theme === 'dark' 
-            ? 'rgba(18, 17, 32, 0.85)' 
-            : 'rgba(252, 254, 253, 0.85)'
+            ? 'rgba(18, 17, 32, 0.4)' 
+            : 'rgba(252, 254, 253, 0.4)'
         }}
       />
       
@@ -116,7 +118,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </h1>
             
             <p 
-              className="text-sm font-medium" 
+              className="text-sm font-bold" 
               style={{ color: colors.successColor }}
             >
               {t("thankYouMessage", language)}
@@ -127,12 +129,12 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
           <div 
             className="rounded-lg p-4 border-2"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(45, 42, 102, 0.3)' : 'rgba(6, 5, 65, 0.1)',
+              backgroundColor: theme === 'dark' ? 'rgba(26, 26, 58, 0.3)' : 'rgba(6, 5, 65, 0.1)',
               borderColor: colors.accentColor
             }}
           >
             <p 
-              className="text-sm leading-relaxed font-medium" 
+              className="text-sm leading-relaxed font-bold" 
               style={{ color: colors.primaryText }}
             >
               {t("subscriptionRequired", language)}
@@ -148,7 +150,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
               style={{ 
                 backgroundColor: colors.buttonBackground,
                 color: colors.buttonText,
-                borderColor: colors.buttonBackground
+                borderColor: colors.buttonBorder
               }}
               size="lg"
             >
@@ -164,7 +166,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                 style={{ 
                   backgroundColor: colors.buttonBackground,
                   color: colors.buttonText,
-                  borderColor: colors.buttonBackground
+                  borderColor: colors.buttonBorder
                 }}
                 size="lg"
               >
@@ -191,7 +193,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             }}
           >
             <p 
-              className="text-xs font-medium" 
+              className="text-xs font-bold" 
               style={{ color: colors.primaryText }}
             >
               {t("paypalRedirectNote", language)}
