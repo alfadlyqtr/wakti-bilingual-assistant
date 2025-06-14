@@ -15,35 +15,69 @@ import { PrivacySettings } from '@/components/settings/PrivacySettings';
 import { NotificationSetupCard } from '@/components/settings/NotificationSetupCard';
 import { PageContainer } from '@/components/PageContainer';
 import { Sun, Moon, Bell, Layout, Palette } from 'lucide-react';
-import { getUserPreferences, saveUserPreferences } from '@/utils/widgetPreferences';
+import { getUserPreferences, saveUserPreferences, fetchRemoteWidgetPrefs, saveRemoteWidgetPrefs } from '@/utils/widgetPreferences';
 
 export default function Settings() {
   const { showSuccess } = useToastHelper();
   const { language, theme, setTheme, toggleLanguage } = useTheme();
-  
-  // Widget preferences state
+
+  // DB widget fields: calendarWidget, tasksWidget, maw3dWidget, remindersWidget, quoteWidget
+  // Dashboard expects: calendar, tr, maw3d, quote
+  // So: tr = tasksWidget || remindersWidget
+
   const [widgetPrefs, setWidgetPrefs] = useState({
-    calendar: true,
-    tr: true,
-    maw3d: true,
-    dailyQuote: true
+    calendarWidget: true,
+    tasksWidget: true,
+    maw3dWidget: true,
+    remindersWidget: true,
+    quoteWidget: true
   });
 
   useEffect(() => {
-    // Load widget preferences
-    const prefs = getUserPreferences();
-    setWidgetPrefs({
-      calendar: prefs.calendar !== false,
-      tr: prefs.tr !== false,
-      maw3d: prefs.maw3d !== false,
-      dailyQuote: prefs.dailyQuote !== false
-    });
+    // Try to load DB prefs, fallback to localStorage
+    (async () => {
+      const remote = await fetchRemoteWidgetPrefs();
+      if (remote) {
+        setWidgetPrefs({
+          calendarWidget: remote.calendarWidget !== false,
+          tasksWidget: remote.tasksWidget !== false,
+          maw3dWidget: remote.maw3dWidget !== false,
+          remindersWidget: remote.remindersWidget !== false,
+          quoteWidget: remote.quoteWidget !== false,
+        });
+      } else {
+        // Fallback: treat local tr pref as both tasks/reminders
+        const local = getUserPreferences();
+        setWidgetPrefs({
+          calendarWidget: local.calendar !== false,
+          tasksWidget: local.tr !== false,
+          maw3dWidget: local.maw3d !== false,
+          remindersWidget: local.tr !== false,
+          quoteWidget: local.dailyQuote !== false,
+        });
+      }
+    })();
   }, []);
 
-  const handleWidgetToggle = (widgetId: string, enabled: boolean) => {
-    const newPrefs = { ...widgetPrefs, [widgetId]: enabled };
+  // Helper: on widget toggle, set + save to both Supabase DB and localStorage for compatibility
+  const handleWidgetToggle = async (settingKey: string, enabled: boolean) => {
+    const newPrefs = { ...widgetPrefs, [settingKey]: enabled };
+
     setWidgetPrefs(newPrefs);
-    saveUserPreferences(newPrefs);
+
+    // Update DB (Supabase profile.settings.widgets)
+    await saveRemoteWidgetPrefs(newPrefs);
+
+    // Also update localStorage for compatibility with old fallback (e.g. force tr/dailyQuote, etc)
+    const localWidgetPrefs = {
+      // map DB to local for grid
+      calendar: newPrefs.calendarWidget !== false,
+      tr: (newPrefs.tasksWidget !== false) || (newPrefs.remindersWidget !== false),
+      maw3d: newPrefs.maw3dWidget !== false,
+      dailyQuote: newPrefs.quoteWidget !== false,
+    };
+    saveUserPreferences(localWidgetPrefs);
+
     showSuccess(language === 'ar' ? 'تم تحديث تفضيلات الأدوات' : 'Widget preferences updated');
   };
 
@@ -171,23 +205,38 @@ export default function Settings() {
                     </p>
                   </div>
                   <Switch
-                    checked={widgetPrefs.calendar}
-                    onCheckedChange={(checked) => handleWidgetToggle('calendar', checked)}
+                    checked={widgetPrefs.calendarWidget}
+                    onCheckedChange={(checked) => handleWidgetToggle('calendarWidget', checked)}
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="text-base font-medium">
-                      {language === 'ar' ? 'أداة المهام والتذكيرات' : 'Tasks & Reminders Widget'}
+                      {language === 'ar' ? 'أداة المهام' : 'Tasks Widget'}
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      {language === 'ar' ? 'عرض المهام والتذكيرات المعلقة' : 'Show pending tasks and reminders'}
+                      {language === 'ar' ? 'عرض المهام المعلقة' : 'Show pending tasks'}
                     </p>
                   </div>
                   <Switch
-                    checked={widgetPrefs.tr}
-                    onCheckedChange={(checked) => handleWidgetToggle('tr', checked)}
+                    checked={widgetPrefs.tasksWidget}
+                    onCheckedChange={(checked) => handleWidgetToggle('tasksWidget', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base font-medium">
+                      {language === 'ar' ? 'أداة التذكيرات' : 'Reminders Widget'}
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {language === 'ar' ? 'عرض التذكيرات المعلقة' : 'Show pending reminders'}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={widgetPrefs.remindersWidget}
+                    onCheckedChange={(checked) => handleWidgetToggle('remindersWidget', checked)}
                   />
                 </div>
 
@@ -201,8 +250,8 @@ export default function Settings() {
                     </p>
                   </div>
                   <Switch
-                    checked={widgetPrefs.maw3d}
-                    onCheckedChange={(checked) => handleWidgetToggle('maw3d', checked)}
+                    checked={widgetPrefs.maw3dWidget}
+                    onCheckedChange={(checked) => handleWidgetToggle('maw3dWidget', checked)}
                   />
                 </div>
 
@@ -216,8 +265,8 @@ export default function Settings() {
                     </p>
                   </div>
                   <Switch
-                    checked={widgetPrefs.dailyQuote}
-                    onCheckedChange={(checked) => handleWidgetToggle('dailyQuote', checked)}
+                    checked={widgetPrefs.quoteWidget}
+                    onCheckedChange={(checked) => handleWidgetToggle('quoteWidget', checked)}
                   />
                 </div>
               </CardContent>

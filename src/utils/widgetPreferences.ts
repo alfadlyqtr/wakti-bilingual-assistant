@@ -1,3 +1,52 @@
+import { supabase } from "@/integrations/supabase/client";
+
+/**
+ * Map profile.settings.widgets DB fields to dashboard widget IDs
+ * @param widgetsDbPrefs settings.widgets from DB, or fallback
+ */
+export function getWidgetVisibilityFromProfile(widgetsDbPrefs: any) {
+  // Dashboard widget IDs: calendar, tr, maw3d, quote
+  // DB fields: calendarWidget, tasksWidget, remindersWidget, maw3dWidget, quoteWidget
+  // 'tr' is true if either tasksWidget or remindersWidget is true
+  return {
+    calendar: widgetsDbPrefs?.calendarWidget !== false,
+    tr: (widgetsDbPrefs?.tasksWidget !== false) || (widgetsDbPrefs?.remindersWidget !== false),
+    maw3d: widgetsDbPrefs?.maw3dWidget !== false,
+    quote: widgetsDbPrefs?.quoteWidget !== false,
+  };
+}
+
+/** Get widget prefs from remote Supabase profile for the signed-in user (id = in JWT) */
+export async function fetchRemoteWidgetPrefs() {
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("settings")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching profile settings:", error);
+    return null;
+  }
+  return profile?.settings?.widgets ?? null;
+}
+
+/**
+ * Save widget prefs to Supabase profiles.settings.widgets for the signed-in user
+ * @param widgetsDbPrefs Object like {calendarWidget:true, tasksWidget:false, ...}
+ */
+export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      settings: {
+        widgets: widgetsDbPrefs
+      }
+    })
+    .eq("id", supabase.auth.getUser()?.data?.user?.id);
+  if (error) {
+    console.error("Error saving profile widget settings:", error);
+  }
+}
 
 export const getUserPreferences = () => {
   try {
