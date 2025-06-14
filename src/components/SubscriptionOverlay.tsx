@@ -35,34 +35,36 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
   const yearlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5V753699962632454NBGLE6Y';
 
-  // Theme-based colors
+  // App-specific colors based on theme
   const colors = theme === 'dark' ? {
-    background: '#121120',
-    primary: '#2d2a66',
-    accent: '#e9ceb0',
-    success: '#3eb489',
-    highlight: '#d3655a'
+    cardBackground: '#121120',
+    primaryText: '#e9ceb0',
+    buttonBackground: '#2d2a66',
+    buttonText: '#e9ceb0',
+    accentColor: '#e9ceb0',
+    successColor: '#3eb489',
+    highlightColor: '#d3655a'
   } : {
-    background: '#fcfefd',
-    primary: '#060541',
-    accent: '#e9ceb0',
-    success: '#3eb489',
-    highlight: '#d3655a'
+    cardBackground: '#fcfefd',
+    primaryText: '#060541',
+    buttonBackground: '#060541',
+    buttonText: '#fcfefd',
+    accentColor: '#e9ceb0',
+    successColor: '#3eb489',
+    highlightColor: '#d3655a'
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Dashboard Background - Minimal Overlay to Show Dashboard */}
-      <div className="absolute inset-0">
-        <div 
-          className="absolute inset-0 backdrop-blur-[2px]" 
-          style={{ 
-            backgroundColor: theme === 'dark' 
-              ? 'rgba(18, 17, 32, 0.3)' 
-              : 'rgba(252, 254, 253, 0.3)' 
-          }}
-        />
-      </div>
+      {/* Minimal overlay to show dashboard behind */}
+      <div 
+        className="absolute inset-0" 
+        style={{ 
+          backgroundColor: theme === 'dark' 
+            ? 'rgba(18, 17, 32, 0.85)' 
+            : 'rgba(252, 254, 253, 0.85)'
+        }}
+      />
       
       {/* Top Controls */}
       <div className="fixed top-4 left-0 right-0 z-10 flex justify-between items-center px-4 max-w-md mx-auto">
@@ -71,10 +73,10 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
           variant="ghost"
           size="sm"
           onClick={handleLogout}
-          className="text-white border shadow-lg transition-all duration-300 hover:scale-105"
+          className="text-white font-medium transition-all duration-300 hover:scale-105"
           style={{ 
-            backgroundColor: colors.highlight,
-            borderColor: colors.highlight
+            backgroundColor: colors.highlightColor,
+            color: '#ffffff'
           }}
         >
           <LogOut className="h-4 w-4 mr-2" />
@@ -87,11 +89,10 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
 
       {/* Main Subscription Card */}
       <Card 
-        className="w-full max-w-md mx-auto relative z-10 border-2 shadow-2xl backdrop-blur-sm"
+        className="w-full max-w-md mx-auto relative z-10 border-2 shadow-2xl"
         style={{
-          backgroundColor: colors.background,
-          borderColor: colors.primary,
-          boxShadow: `0 20px 40px rgba(0,0,0,0.3)`
+          backgroundColor: colors.cardBackground,
+          borderColor: colors.accentColor,
         }}
       >
         <CardContent className="p-8 text-center space-y-6">
@@ -99,24 +100,24 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
           <div className="space-y-3">
             <div className="flex justify-center mb-4">
               <div className="relative">
-                <div className="text-5xl animate-bounce-subtle">👋</div>
+                <div className="text-5xl">👋</div>
                 <Sparkles 
-                  className="absolute -top-1 -right-1 h-6 w-6 animate-pulse" 
-                  style={{ color: colors.success }} 
+                  className="absolute -top-1 -right-1 h-6 w-6" 
+                  style={{ color: colors.successColor }} 
                 />
               </div>
             </div>
             
             <h1 
               className="text-2xl font-bold" 
-              style={{ color: colors.primary }}
+              style={{ color: colors.primaryText }}
             >
               {t("welcomeToWakti", language)}
             </h1>
             
             <p 
               className="text-sm font-medium" 
-              style={{ color: colors.success }}
+              style={{ color: colors.successColor }}
             >
               {t("thankYouMessage", language)}
             </p>
@@ -124,15 +125,15 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
 
           {/* Description */}
           <div 
-            className="rounded-lg p-4 border"
+            className="rounded-lg p-4 border-2"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(45, 42, 102, 0.2)' : 'rgba(6, 5, 65, 0.05)',
-              borderColor: colors.accent
+              backgroundColor: theme === 'dark' ? 'rgba(45, 42, 102, 0.3)' : 'rgba(6, 5, 65, 0.1)',
+              borderColor: colors.accentColor
             }}
           >
             <p 
-              className="text-sm leading-relaxed" 
-              style={{ color: colors.primary }}
+              className="text-sm leading-relaxed font-medium" 
+              style={{ color: colors.primaryText }}
             >
               {t("subscriptionRequired", language)}
             </p>
@@ -143,14 +144,15 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             {/* Monthly Plan */}
             <Button 
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+              className="w-full h-14 text-base font-bold border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               style={{ 
-                backgroundColor: colors.primary,
-                borderColor: colors.primary
+                backgroundColor: colors.buttonBackground,
+                color: colors.buttonText,
+                borderColor: colors.buttonBackground
               }}
               size="lg"
             >
-              <Star className="h-5 w-5 mr-2" style={{ color: colors.accent }} />
+              <Star className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
               {t("subscribeMonthly", language)}
             </Button>
 
@@ -158,21 +160,22 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             <div className="relative">
               <Button 
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base text-white border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
+                className="w-full h-14 text-base font-bold border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 style={{ 
-                  backgroundColor: colors.primary,
-                  borderColor: colors.primary
+                  backgroundColor: colors.buttonBackground,
+                  color: colors.buttonText,
+                  borderColor: colors.buttonBackground
                 }}
                 size="lg"
               >
-                <Sparkles className="h-5 w-5 mr-2" style={{ color: colors.accent }} />
+                <Sparkles className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
                 {t("subscribeYearly", language)}
               </Button>
               
-              {/* Best Value Badge - Redesigned */}
+              {/* Best Value Badge */}
               <div 
-                className="absolute -top-3 -right-3 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg transform rotate-12 animate-pulse"
-                style={{ backgroundColor: colors.highlight }}
+                className="absolute -top-2 -right-2 px-3 py-1 rounded-full text-xs font-bold text-white shadow-lg transform rotate-12"
+                style={{ backgroundColor: colors.highlightColor }}
               >
                 {language === 'ar' ? 'أفضل قيمة' : 'Best Value'}
               </div>
@@ -181,15 +184,15 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
 
           {/* Footer note */}
           <div 
-            className="rounded-md p-3 border"
+            className="rounded-md p-3 border-2"
             style={{
-              backgroundColor: theme === 'dark' ? 'rgba(233, 206, 176, 0.1)' : 'rgba(233, 206, 176, 0.2)',
-              borderColor: colors.accent
+              backgroundColor: theme === 'dark' ? 'rgba(233, 206, 176, 0.2)' : 'rgba(233, 206, 176, 0.3)',
+              borderColor: colors.accentColor
             }}
           >
             <p 
-              className="text-xs" 
-              style={{ color: theme === 'dark' ? colors.accent : colors.primary }}
+              className="text-xs font-medium" 
+              style={{ color: colors.primaryText }}
             >
               {t("paypalRedirectNote", language)}
             </p>
