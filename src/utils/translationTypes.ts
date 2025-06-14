@@ -1,3 +1,4 @@
+
 export type SupportedLanguage = "en" | "ar";
 
 export type TranslationKey = 
@@ -1302,6 +1303,8 @@ export type TranslationKey =
   | "needHelp"
   | "contactSupport"
   | "billing"
+  
+  // Billing specific keys that were missing
   | "subscriptionInfo"
   | "planName"
   | "subscriptionStatus"
@@ -1312,10 +1315,12 @@ export type TranslationKey =
   | "highestPlanMessage"
   | "paymentHistory"
   | "amount"
-  | "date"
   | "noPaymentHistory"
-  | "active"
-  | "inactive"
   | "cancelled"
-  | "monthly"
-  | "yearly";
+  | "welcomeToWakti"
+  | "thankYouMessage"
+  | "subscriptionRequired"
+  | "subscribeMonthly"
+  | "subscribeYearly"
+  | "paypalRedirectNote"
+  | "paymentPageOpened";
