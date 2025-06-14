@@ -174,40 +174,44 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
 
   return (
     <div className="relative group calendar-widget overflow-visible">
-      {/* Glass Overlay & Vibrant Blue Effects (NOW TONED DOWN FOR DARKER THEME) */}
-      <div className="absolute inset-0 z-0 rounded-xl pointer-events-none"
+      {/* Deeper accent blue glass background, with less brightness and more saturation */}
+      <div
+        className="absolute inset-0 z-0 rounded-xl pointer-events-none"
         style={{
-          background: "rgba(24,30,56,0.92)", // dark background, less bright
-          backdropFilter: "blur(16px)",
-          boxShadow: "0 8px 44px 0 rgba(87,124,255,0.09)",
-          border: "1.5px solid rgba(87,124,255,0.08)",
-        }} />
-      {/* Subtle glass gradient */}
-      <div className="absolute inset-0 z-0 rounded-xl pointer-events-none"
-        style={{
-          background: "linear-gradient(135deg, rgba(41,52,89,0.21) 0%, rgba(255,255,255,0.03) 50%, rgba(24,30,56,0.18) 100%)"
-        }} 
+          // More saturated, richer blue with 93% darkness and just enough alpha for liquidity glass
+          background: "rgba(36,54,140,0.88)",
+          backdropFilter: "blur(18px) saturate(150%)",
+          boxShadow: "0 8px 36px 0 rgba(36,54,140,0.13)",
+          border: "2px solid rgba(36,54,140,0.09)",
+        }}
       />
-      {/* Accent blue-glass spot for icon */}
-      <div className="absolute -bottom-6 -right-6 w-28 h-20 bg-accent-blue/20 rounded-full blur-xl opacity-40 pointer-events-none" />
-      {/* Drag handle with subtle glass */}
-      <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/10 backdrop-blur-md border border-accent-blue/25 hover:bg-accent-blue/30 hover:border-accent-blue/60 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110">
-        <Hand className="h-3 w-3 text-accent-blue/70" />
+      {/* Glass gradient for liquidity/glassmorphic feel */}
+      <div
+        className="absolute inset-0 z-0 rounded-xl pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(87,154,255,0.18) 0%, rgba(255,255,255,0.025) 45%, rgba(36,54,140,0.10) 100%)",
+        }}
+      />
+      {/* Blue-glass spot for icon glow */}
+      <div className="absolute -bottom-6 -right-6 w-28 h-20 bg-accent-blue/30 rounded-full blur-2xl opacity-25 pointer-events-none" />
+      {/* Drag handle */}
+      <div className="absolute top-2 left-2 z-20 p-2 rounded-lg bg-accent-blue/15 backdrop-blur-md border border-accent-blue/40 hover:bg-accent-blue/30 hover:border-accent-blue/60 transition-all duration-300 cursor-grab active:cursor-grabbing group-hover:scale-110">
+        <Hand className="h-3 w-3 text-accent-blue/80" />
       </div>
 
-      {/* Content */}
+      {/* Main Content */}
       <div className="relative z-10 p-6 pt-12">
         <div className="flex items-center gap-2 mb-4">
           <Calendar className="h-5 w-5 text-accent-blue" />
           <h3 className="font-semibold text-lg bg-gradient-to-r from-accent-blue to-accent-blue/80 bg-clip-text text-transparent drop-shadow-md">
             {format(new Date(), "MMMM yyyy")}
           </h3>
-          <div className="ml-auto text-xs font-medium bg-accent-blue/10 text-accent-blue px-3 py-1 rounded-full backdrop-blur-sm border border-accent-blue/20">
+          <div className="ml-auto text-xs font-medium bg-accent-blue/15 text-accent-blue px-3 py-1 rounded-full backdrop-blur-sm border border-accent-blue/20">
             {t("today", language)}
           </div>
         </div>
-        
-        {/* Calendar days of week header */}
+        {/* Calendar days header */}
         <div className="grid grid-cols-7 gap-1 mb-3 text-xs text-center font-medium text-accent-blue/70">
           <div>S</div>
           <div>M</div>
@@ -217,43 +221,42 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
           <div>F</div>
           <div>S</div>
         </div>
-        
-        {/* Today and tomorrow calendar cells */}
+        {/* Today & Tomorrow cards with improved contrast */}
         <div className="flex gap-3 mb-4">
           {/* Today */}
-          <div className="flex-1 bg-accent-blue/90 bg-blur backdrop-blur-md border border-white/10 text-primary-foreground p-3 rounded-xl shadow-glow relative">
+          <div className="flex-1 bg-accent-blue/95 bg-blur backdrop-blur-[10px] border border-white/15 text-white p-3 rounded-xl shadow-glow relative">
             <div className="font-bold text-center text-lg drop-shadow">{format(new Date(), "d")}</div>
             <div className="text-xs text-center opacity-90 mb-2">{t("today", language)}</div>
-            <div className="text-xs">
+            <div className="text-xs text-white/90">
               {isLoading || maw3dLoading || trLoading ? (
                 <Skeleton className="h-3 w-full bg-white/20" />
               ) : (
                 <div className="truncate leading-relaxed">{getTodayItemsText()}</div>
               )}
             </div>
-            {/* Glass glare accent */}
-            <div className="absolute inset-0 pointer-events-none opacity-40 rounded-xl bg-gradient-to-tl from-white/20 via-accent-blue/5 to-transparent blur-[2px]" />
+            {/* Light inner glass glare */}
+            <div className="absolute inset-0 pointer-events-none opacity-25 rounded-xl bg-gradient-to-tl from-white/10 via-accent-blue/5 to-transparent blur-[2px]" />
           </div>
-          
+
           {/* Tomorrow */}
-          <div className="flex-1 bg-background/60 backdrop-blur-lg border border-accent-blue/20 text-accent-blue p-3 rounded-xl hover:border-accent-blue/40 transition-all duration-300 relative">
-            <div className="font-bold text-center text-lg">{format(addDays(new Date(), 1), "d")}</div>
-            <div className="text-xs text-center text-accent-blue/70 mb-2">{t("tomorrow", language)}</div>
-            <div className="text-xs text-accent-blue/80">
+          <div className="flex-1 bg-accent-blue/35 backdrop-blur-[7px] border border-accent-blue/15 text-accent-blue p-3 rounded-xl hover:border-accent-blue/35 transition-all duration-300 relative">
+            <div className="font-bold text-center text-lg text-accent-blue">{format(addDays(new Date(), 1), "d")}</div>
+            <div className="text-xs text-center text-accent-blue/80 mb-2">{t("tomorrow", language)}</div>
+            <div className="text-xs text-accent-blue/90">
               {isLoading || maw3dLoading || trLoading ? (
-                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-full bg-accent-blue/10" />
               ) : (
                 <div className="truncate leading-relaxed">{getTomorrowItemsText()}</div>
               )}
             </div>
-            {/* Glass glare */}
-            <div className="absolute inset-0 pointer-events-none opacity-30 rounded-xl bg-gradient-to-br from-accent-blue/15 to-transparent blur-[2px]" />
+            {/* Lighter glass gradient */}
+            <div className="absolute inset-0 pointer-events-none opacity-15 rounded-xl bg-gradient-to-br from-accent-blue/15 to-transparent blur-[2px]" />
           </div>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full bg-accent-blue/20 text-accent-blue shadow-glow hover:bg-accent-blue/50 hover:text-background font-semibold border-accent-blue/20 transition-all duration-300"
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full bg-accent-blue/15 text-accent-blue shadow-glow hover:bg-accent-blue/40 hover:text-background font-semibold border-accent-blue/25 transition-all duration-300"
           onClick={() => navigate('/calendar')}
         >
           {t("calendar_open", language)}
