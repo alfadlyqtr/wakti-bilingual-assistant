@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ThemeLanguageToggle } from '@/components/ThemeLanguageToggle';
 import { Logo3D } from '@/components/Logo3D';
-import { LogOut, Sparkles, Star, DollarSign } from 'lucide-react';
+import { LogOut, Sparkles, Star, DollarSign, Flag } from 'lucide-react';
 import { toast } from 'sonner';
 import { t } from '@/utils/translations';
 
@@ -56,7 +56,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     }
   };
 
-  // Enhanced liquid glass styles with liquid light red and better contrast
+  // Enhanced liquid glass styles with liquid maroon/reddish and better contrast
   const glassStyles = theme === 'dark' ? {
     // Dark mode liquid glass
     overlayBg: 'rgba(12, 15, 20, 0.05)', // More transparent to show dashboard
@@ -68,7 +68,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     buttonBorder: 'rgba(233, 206, 176, 0.25)',
     buttonText: '#ffffff', // White text for dark mode
     buttonHoverBg: 'rgba(233, 206, 176, 0.18)',
-    highlightColor: '#2d5a3d', // Dark liquid green accent
+    highlightColor: '#8B3A3A', // Maroon/reddish accent
     logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(26, 26, 58, 0.05)',
@@ -84,7 +84,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     buttonBorder: 'rgba(6, 5, 65, 0.25)',
     buttonText: '#1a1a3a', // Dark navy text for light mode
     buttonHoverBg: 'rgba(6, 5, 65, 0.18)',
-    highlightColor: '#2d5a3d', // Dark liquid green accent
+    highlightColor: '#A0522D', // Sienna/maroon accent for light mode
     logoutColor: '#ff6b6b', // Liquid light red
     backdropBlur: 'blur(25px)',
     textAreaBg: 'rgba(6, 5, 65, 0.03)',
@@ -193,7 +193,7 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             </p>
           </div>
 
-          {/* Currency Toggle */}
+          {/* Currency Toggle with Flags */}
           <div className="flex justify-center">
             <div
               className="flex p-1 rounded-full transition-all duration-300"
@@ -223,6 +223,15 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
+                {/* US Flag */}
+                <div className="w-4 h-3 rounded-sm overflow-hidden border border-gray-200">
+                  <div className="h-full bg-gradient-to-b from-red-500 via-white to-blue-600 relative">
+                    <div className="absolute inset-0 bg-blue-800 w-2/5 h-2/3"></div>
+                    <div className="absolute top-0 left-0 w-2/5 h-2/3 bg-blue-800 flex items-center justify-center">
+                      <div className="text-white text-xs">★</div>
+                    </div>
+                  </div>
+                </div>
                 <DollarSign className="h-4 w-4" />
                 USD
               </button>
@@ -242,6 +251,14 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
                     : 'none',
                 }}
               >
+                {/* Qatar Flag */}
+                <div className="w-4 h-3 rounded-sm overflow-hidden border border-gray-200">
+                  <div className="h-full bg-gradient-to-r from-white via-white to-red-800 relative">
+                    <div className="absolute right-0 top-0 w-3/4 h-full bg-red-800"></div>
+                    <div className="absolute left-0 top-0 w-1/4 h-full bg-white"></div>
+                    <div className="absolute left-1/4 top-0 h-full w-px bg-red-800 transform skew-x-12"></div>
+                  </div>
+                </div>
                 <span className="text-xs">ر.ق</span>
                 QAR
               </button>

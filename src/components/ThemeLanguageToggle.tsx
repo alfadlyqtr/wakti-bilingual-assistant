@@ -35,7 +35,7 @@ export function ThemeLanguageToggle() {
       >
         <div className="absolute inset-0 bg-gradient-to-r from-accent-green/20 to-accent-blue/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
         <span className="relative z-10 font-medium">
-          {language === "en" ? t("arabic", language) : t("english", language)}
+          {language === "en" ? "العربية" : "English"}
         </span>
       </Button>
     </div>
