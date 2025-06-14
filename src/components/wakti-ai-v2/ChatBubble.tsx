@@ -125,7 +125,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
                 
                 {/* Image Action Buttons */}
-                {/* === Improved alignment for action buttons === */}
+                {/* Two rows: first row Copy/Download, second row (if active) Use as Maw3D BG */}
                 <div className="flex items-center gap-2 mt-3 w-full">
                   <Button
                     variant="ghost"
@@ -145,8 +145,9 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                     <Download className="h-3 w-3 mr-1" />
                     {language === 'ar' ? 'تحميل' : 'Download'}
                   </Button>
-                  {/* Maw3D Background Button - show when in image mode and we have return parameter */}
-                  {activeTrigger === 'image' && (
+                </div>
+                {activeTrigger === 'image' && (
+                  <div className="flex w-full mt-2">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -157,8 +158,8 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                       <Wand2 className="h-3 w-3 mr-1" />
                       {language === 'ar' ? 'استخدم كخلفية' : 'Use as Maw3D BG'}
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
