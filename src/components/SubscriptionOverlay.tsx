@@ -56,6 +56,15 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
     highlightColor: '#d3655a'
   };
 
+  // Custom button style with !important to override any conflicting styles
+  const buttonStyle = {
+    backgroundColor: `${colors.buttonBackground} !important`,
+    color: `${colors.buttonText} !important`,
+    borderColor: `${colors.buttonBorder} !important`,
+    borderWidth: '2px !important',
+    borderStyle: 'solid !important'
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Minimal overlay to show dashboard behind */}
@@ -146,12 +155,8 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             {/* Monthly Plan */}
             <Button 
               onClick={() => handleSubscribe(monthlyPlanUrl)}
-              className="w-full h-14 text-base font-bold border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-              style={{ 
-                backgroundColor: colors.buttonBackground,
-                color: colors.buttonText,
-                borderColor: colors.buttonBorder
-              }}
+              className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg [&:hover]:opacity-90"
+              style={buttonStyle}
               size="lg"
             >
               <Star className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
@@ -162,12 +167,8 @@ export function SubscriptionOverlay({ onClose }: SubscriptionOverlayProps) {
             <div className="relative">
               <Button 
                 onClick={() => handleSubscribe(yearlyPlanUrl)}
-                className="w-full h-14 text-base font-bold border-2 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-                style={{ 
-                  backgroundColor: colors.buttonBackground,
-                  color: colors.buttonText,
-                  borderColor: colors.buttonBorder
-                }}
+                className="w-full h-14 text-base font-bold transition-all duration-300 hover:scale-105 hover:shadow-lg [&:hover]:opacity-90"
+                style={buttonStyle}
                 size="lg"
               >
                 <Sparkles className="h-5 w-5 mr-2" style={{ color: colors.accentColor }} />
