@@ -25,9 +25,21 @@ export function BillingTab() {
   const [showLinkPayPal, setShowLinkPayPal] = useState(false);
   const [linkPayPalId, setLinkPayPalId] = useState('');
   const [linking, setLinking] = useState(false);
+  const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
     loadSubscription();
+    // Get userId and store in state
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (data?.user?.id) {
+        setUserId(data.user.id);
+      } else {
+        setUserId(""); // fallback
+      }
+      if (error) {
+        console.error("Error fetching user:", error);
+      }
+    });
     // eslint-disable-next-line
   }, []);
 
@@ -176,8 +188,7 @@ export function BillingTab() {
   const isYearlyPlan = planName?.toLowerCase().includes('year');
   const isSubscribed = subscription?.is_subscribed || false;
 
-  const userId = supabase.auth.user()?.id || "";
-
+  // Build PayPal URLs with userId if available
   const monthlyPlanUrl =
     'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA'
     + (userId ? `&custom_id=${userId}` : '');
