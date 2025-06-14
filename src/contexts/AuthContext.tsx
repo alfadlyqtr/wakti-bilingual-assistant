@@ -55,135 +55,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { showSuccess, showError } = useToastHelper();
   const navigate = useNavigate();
 
-  // Strict single-session helper state
-  const [sessionMismatch, setSessionMismatch] = useState(false);
-
-  // New refs for debouncing enforcement and tracking DB updates
-  const isSavingSessionRef = useRef(false);
-  const lastSessionTokenRef = useRef<string | null>(null);
-
-  // SESSION TOKEN UTILS
-  function getCurrentSessionToken() {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('wakti_session_token');
-    }
-    return null;
-  }
-  function setCurrentSessionToken(token: string) {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('wakti_session_token', token);
-    }
-  }
-  function clearCurrentSessionToken() {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('wakti_session_token');
-    }
-  }
-
-  // Set online, is_logged_in ON, AND store the unique session_token
-  async function setProfileOnlineStatus(userId: string, isOnline: boolean, sessionToken: string | null = null) {
-    try {
-      if (!userId) return;
-      const updateObj: any = { is_logged_in: isOnline };
-      if (sessionToken !== undefined) updateObj.session_token = sessionToken;
-      await supabase.from('profiles').update(updateObj).eq('id', userId);
-      console.log(`[AuthContext] Set is_logged_in for user ${userId} to ${isOnline}, session_token:`, sessionToken);
-    } catch (err) {
-      console.error('[AuthContext] Failed to update is_logged_in/session_token:', err);
-    }
-  }
-
-  // Checks current user's session_token and is_logged_in, triggers force-logout if mismatch
-  async function validateCurrentSession(userObj: User) {
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('is_logged_in, session_token')
-      .eq('id', userObj.id)
-      .maybeSingle();
-
-    const localToken = getCurrentSessionToken();
-
-    if (error || !profile) {
-      setSessionMismatch(true);
-      showError("Failed to validate session.");
-      await signOut({ preventProfileUpdate: true }); // fallback
-      return false;
-    }
-    if (!profile.is_logged_in) {
-      setSessionMismatch(true);
-      showError("You have been logged out because your session is no longer active. Please log in again.");
-      await signOut({ preventProfileUpdate: true });
-      return false;
-    }
-    if (!profile.session_token || !localToken || profile.session_token !== localToken) {
-      setSessionMismatch(true);
-      showError("Your account is signed in on another device or browser. Please log in again.");
-      await signOut({ preventProfileUpdate: true });
-      return false;
-    }
-    return true;
-  }
-
-  useEffect(() => {
-    // Auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user ?? null);
-
-        if (newSession?.user) {
-          // Always run validation (force logout if session_token mismatch)
-          const valid = await validateCurrentSession(newSession.user);
-          if (!valid) {
-            setUser(null);
-            setSession(null);
-            return;
-          }
-          // User valid, nothing else needed because logins already set session_token/is_logged_in
-        } else {
-          // If fully logged out, always clear local session token
-          clearCurrentSessionToken();
-        }
-      }
-    );
-
-    // Initial session check (restore)
-    const getSession = async () => {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        // Validate session on restore
-        const valid = await validateCurrentSession(session.user);
-        if (!valid) {
-          setUser(null);
-          setSession(null);
-          setLoading(false);
-          return;
-        }
-      }
-      setLoading(false);
-    };
-    getSession();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-    // intentionally leaving [] here, NOT [user], so this only runs on mount
-    // (the session change logic is handled by the listener above)
-    // eslint-disable-next-line
-  }, []);
+  // Remove sessionMismatch, session token, and validation complexity.
+  // We only track is_logged_in flag now.
+  const [loginBlockedEmail, setLoginBlockedEmail] = useState<string | null>(null);
 
   // Updated simple single-session sign-in
   const signIn = async (email: string) => {
     try {
       setLoading(true);
-      // 1. Check if user is already logged in somewhere else
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
-        showError("Your account is already signed in on another device. Please log out first.");
+        // Block login, but allow user to force logout others.
+        setLoginBlockedEmail(email);
+        showError("Your account is already signed in elsewhere.");
         setLoading(false);
         return;
       }
@@ -199,26 +83,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Password sign-in (enforced)
+  // Added force logout function—sets is_logged_in to false and retries sign-in
+  const forceLogoutAndContinue = async () => {
+    if (!loginBlockedEmail) return;
+    try {
+      setLoading(true);
+      // Set is_logged_in to false for this email
+      await supabase.from('profiles').update({ is_logged_in: false }).ilike('email', loginBlockedEmail);
+      showSuccess("Signed out elsewhere. You can now log in.");
+      setLoginBlockedEmail(null);
+      // After forcing logout, try sign-in again
+      await signIn(loginBlockedEmail);
+    } catch (err: any) {
+      showError("Could not force logout. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Password sign-in, block by is_logged_in but allow force logout
   const signInWithPassword = async (email: string, password: string) => {
     try {
       setLoading(true);
-      // 1. Check if already signed in
       const profile = await fetchProfileByEmail(email);
       if (profile && profile.is_logged_in) {
-        showError("Your account is already signed in on another device. Please log out first.");
+        setLoginBlockedEmail(email);
+        showError("Your account is already signed in elsewhere.");
         setLoading(false);
         return;
       }
-      // 2. Proceed
       const { error, data } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      // 3. Generate session token and save it locally & remotely
       if (data?.user && data.session) {
-        const waktiSessionToken = uuidv4();
-        setCurrentSessionToken(waktiSessionToken);
-        await setProfileOnlineStatus(data.user.id, true, waktiSessionToken);
+        // Set profile online
+        await supabase.from('profiles').update({ is_logged_in: true }).eq('id', data.user.id);
         setUser(data.user);
         setSession(data.session ?? null);
       }
@@ -232,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // On sign up, set is_logged_in to true if user session exists
+  // On sign up, set is_logged_in to true if session exists
   const signUp = async (email: string, password: string, displayName: string) => {
     try {
       setLoading(true);
@@ -246,7 +144,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
       if (error) throw error;
-      // Magic link confirmation will happen later (same logic on first login)
       showSuccess("Check your email - we've sent you a confirmation link to verify your email.");
       setUser(data.user);
     } catch (error: any) {
@@ -257,22 +154,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // On sign out, clear ON/OFF flag for current user
+  // Set profile offline on sign out
   const signOut = async (options?: { preventProfileUpdate?: boolean }) => {
     try {
       setLoading(true);
       if (user && !options?.preventProfileUpdate) {
-        // Mark offline and clear session token in DB and local
-        await supabase.from('profiles').update({ is_logged_in: false, session_token: null }).eq('id', user.id);
-        clearCurrentSessionToken();
-        console.log('[AuthContext] signOut(): Marked user offline and session_token cleared:', user.id);
-      } else {
-        clearCurrentSessionToken();
+        await supabase.from('profiles').update({ is_logged_in: false }).eq('id', user.id);
       }
       await supabase.auth.signOut();
       setUser(null);
       setSession(null);
-      setSessionMismatch(false);
+      setLoginBlockedEmail(null);
       navigate('/');
     } catch (error: any) {
       console.error("Error signing out:", error);
@@ -400,35 +292,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Show blocked notice if session mismatch
-  if (sessionMismatch) {
-    return (
-      <div className="flex flex-col justify-center items-center h-screen bg-background px-6">
-        <h2 className="font-semibold text-lg text-destructive mb-3 text-center">
-          You have been logged out from this device.
+  // Listen for auth state changes ONLY to keep user/session in sync
+  // Remove validation logic entirely (no session freezing)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+      }
+    );
+
+    // Restore session, don't validate anything extra
+    const getSession = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
+    getSession();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+    // intentionally leaving [] here, NOT [user], so this only runs on mount
+    // (the session change logic is handled by the listener above)
+    // eslint-disable-next-line
+  }, []);
+
+  // Show force-logout prompt if blocked by is_logged_in flag
+  const forceLogoutModal = loginBlockedEmail ? (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-background p-6 rounded-xl max-w-xs text-center flex flex-col gap-4 shadow-lg border border-muted">
+        <h2 className="font-semibold text-lg text-destructive">
+          Already signed in elsewhere
         </h2>
-        <p className="text-muted-foreground text-center mb-4">
-          Your account is already signed in from another browser or device, or your session expired.
-          If you need to use this device, please log out from other browsers first, or try signing in again.
+        <p className="text-muted-foreground text-sm">
+          This account is signed in on another device or browser.<br />
+          To continue, you can force logout other sessions and sign in here.
         </p>
         <button
-          onClick={() => window.location.reload()}
-          className="px-4 py-2 text-sm rounded font-medium border bg-muted hover:bg-muted-foreground text-foreground"
+          onClick={forceLogoutAndContinue}
+          className="w-full rounded px-4 py-2 bg-primary text-white font-semibold shadow hover:bg-accent"
         >
-          Try Again
+          Log out other devices & Continue
+        </button>
+        <button
+          onClick={() => setLoginBlockedEmail(null)}
+          className="w-full px-4 py-2 text-muted-foreground hover:text-foreground bg-muted rounded"
+        >
+          Cancel
         </button>
       </div>
-    );
-  }
+    </div>
+  ) : null;
 
-  // Update the AuthProvider to include Progressier sync
   const contextValue = {
     user,
     session,
     loading,
     isLoading: loading,
     signIn,
-    signInWithPassword, // added for completeness with new ON/OFF logic
+    signInWithPassword,
     signOut,
     signUp,
     resetPassword,
@@ -443,7 +368,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={contextValue}>
       {children}
-      {/* Add Progressier sync component */}
+      {forceLogoutModal}
       <ProgressierSync />
     </AuthContext.Provider>
   );
