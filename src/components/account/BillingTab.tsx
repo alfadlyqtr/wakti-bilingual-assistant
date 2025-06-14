@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { CreditCard, Calendar, History } from 'lucide-react';
+import { CreditCard, Calendar, History, RefreshCw, ThumbsUp } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -22,48 +22,87 @@ export function BillingTab() {
   const { language } = useTheme();
   const [subscription, setSubscription] = useState<UserSubscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadSubscription();
+    // eslint-disable-next-line
   }, []);
 
   const loadSubscription = async () => {
+    setLoading(true);
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
+      // 1. Try to fetch latest subscription from subscriptions table; Fallback to profiles if none.
+      const { data: subRows, error: subErr } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching user subscription:', error);
-        throw error;
-      }
-      
-      // If no profile found, return default values
-      if (!profile) {
-        console.log('No profile found, returning default subscription data');
-        setSubscription({
-          is_subscribed: false,
-          subscription_status: 'inactive',
-          plan_name: null,
-          billing_start_date: null,
-          next_billing_date: null
-        });
+      let sub: UserSubscription | null = null;
+
+      if (subRows && (subRows.status === "active" || subRows.status === "trialing")) {
+        sub = {
+          is_subscribed: subRows.status === "active" || subRows.status === "trialing",
+          subscription_status: subRows.status,
+          plan_name: subRows.plan_name,
+          billing_start_date: subRows.start_date,
+          next_billing_date: subRows.next_billing_date,
+        };
       } else {
-        console.log('User subscription data:', profile);
-        setSubscription(profile);
+        // fallback to profiles (legacy)
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('is_subscribed, subscription_status, plan_name, billing_start_date, next_billing_date')
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error fetching user subscription:', error);
+          throw error;
+        }
+        sub = profile
+          ? {
+              is_subscribed: profile.is_subscribed,
+              subscription_status: profile.subscription_status,
+              plan_name: profile.plan_name,
+              billing_start_date: profile.billing_start_date,
+              next_billing_date: profile.next_billing_date,
+            }
+          : {
+              is_subscribed: false,
+              subscription_status: 'inactive',
+              plan_name: null,
+              billing_start_date: null,
+              next_billing_date: null,
+            };
       }
+      setSubscription(sub);
     } catch (error) {
       console.error('Error loading subscription:', error);
-      toast.error('Failed to load subscription details');
+      toast.error(language === 'ar' ? 'فشل في تحميل تفاصيل الاشتراك' : 'Failed to load subscription details');
+      setSubscription({
+        is_subscribed: false,
+        subscription_status: 'inactive',
+        plan_name: null,
+        billing_start_date: null,
+        next_billing_date: null
+      });
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const handleSubscribe = (planUrl: string) => {
     window.open(planUrl, '_blank');
     toast.info(language === 'ar' ? 'تم فتح صفحة الدفع في نافذة جديدة' : 'Payment page opened in new window');
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadSubscription();
+    toast.success(language === 'ar' ? 'تم تحديث بيانات الاشتراك' : 'Subscription info refreshed');
   };
 
   const formatDate = (dateString: string | null) => {
@@ -97,7 +136,8 @@ export function BillingTab() {
   const subscriptionStatus = subscription?.subscription_status || '';
   const nextBillingDate = formatDate(subscription?.next_billing_date);
   const billingStartDate = formatDate(subscription?.billing_start_date);
-  const isMonthlyPlan = subscription?.plan_name === 'Wakti Monthly';
+  const isMonthlyPlan = planName?.toLowerCase().includes('month');
+  const isYearlyPlan = planName?.toLowerCase().includes('year');
   const isSubscribed = subscription?.is_subscribed || false;
 
   const monthlyPlanUrl = 'https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-5RM543441H466435NNBGLCWA';
@@ -108,16 +148,24 @@ export function BillingTab() {
       {/* Subscription Information */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            {t("subscriptionInfo", language)}
-          </CardTitle>
-          <CardDescription>
-            {language === 'ar' 
-              ? 'معلومات خطة الاشتراك الحالية'
-              : 'Current subscription plan information'
-            }
-          </CardDescription>
+          <div className="flex flex-row justify-between items-center">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                {t("subscriptionInfo", language)}
+              </CardTitle>
+              <CardDescription>
+                {language === 'ar' 
+                  ? 'معلومات خطة الاشتراك الحالية'
+                  : 'Current subscription plan information'
+                }
+              </CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing || loading}>
+              <RefreshCw className={`h-4 w-4${refreshing ? " animate-spin" : ""} mr-1`} />
+              {language === 'ar' ? 'تحديث' : 'Refresh'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-2">
@@ -130,7 +178,6 @@ export function BillingTab() {
               placeholder={language === 'ar' ? 'لم يتم تحديد الخطة' : 'No plan selected'}
             />
           </div>
-          
           <div className="grid gap-2">
             <Label htmlFor="subscription-status">{t("subscriptionStatus", language)}</Label>
             <Input
@@ -141,7 +188,6 @@ export function BillingTab() {
               placeholder={language === 'ar' ? 'غير محدد' : 'Not specified'}
             />
           </div>
-          
           <div className="grid gap-2">
             <Label htmlFor="next-billing">{t("nextBillingDate", language)}</Label>
             <Input
@@ -152,7 +198,6 @@ export function BillingTab() {
               placeholder={language === 'ar' ? 'غير محدد' : 'Not specified'}
             />
           </div>
-          
           <div className="grid gap-2">
             <Label htmlFor="billing-start">{t("billingStartDate", language)}</Label>
             <Input
@@ -204,6 +249,15 @@ export function BillingTab() {
             >
               {t("upgradeToYearly", language)}
             </Button>
+          ) : isYearlyPlan ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-3">
+              <ThumbsUp className="h-8 w-8 text-green-600 dark:text-green-400 mb-1" />
+              <p className="text-base font-semibold text-center">
+                {language === 'ar'
+                  ? 'أنت مشترك في الخطة الأعلى 👍'
+                  : "You're on the highest available plan 👍"}
+              </p>
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
               {t("highestPlanMessage", language)}
