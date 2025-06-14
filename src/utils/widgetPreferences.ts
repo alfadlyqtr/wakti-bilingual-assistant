@@ -35,6 +35,14 @@ export async function fetchRemoteWidgetPrefs() {
  * @param widgetsDbPrefs Object like {calendarWidget:true, tasksWidget:false, ...}
  */
 export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
+  // Fix: Await supabase.auth.getUser() before accessing .data.user.id
+  const { data } = await supabase.auth.getUser();
+  const userId = data?.user?.id;
+  if (!userId) {
+    console.error("No authenticated user found when saving widget prefs.");
+    return;
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
@@ -42,7 +50,7 @@ export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
         widgets: widgetsDbPrefs
       }
     })
-    .eq("id", supabase.auth.getUser()?.data?.user?.id);
+    .eq("id", userId);
   if (error) {
     console.error("Error saving profile widget settings:", error);
   }
