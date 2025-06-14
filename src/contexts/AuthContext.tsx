@@ -83,21 +83,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ON/OFF Single-session: Clean up existing session logic and use only is_logged_in flag
 
+  async function setProfileOnlineStatus(userId: string, isOnline: boolean) {
+    try {
+      if (!userId) return;
+      await supabase
+        .from('profiles')
+        .update({ is_logged_in: isOnline })
+        .eq('id', userId);
+      console.log(`[AuthContext] Set is_logged_in for user ${userId} to ${isOnline}`);
+    } catch (err) {
+      console.error('[AuthContext] Failed to update is_logged_in:', err);
+    }
+  }
+
   useEffect(() => {
     // Auth listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, newSession: import('@supabase/supabase-js').Session | null) => {
+      (event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        // --- Begin session flag logic ---
+        if (newSession?.user) {
+          // If user just logged in or session was restored, mark as online
+          setProfileOnlineStatus(newSession.user.id, true);
+          // Extra debug
+          console.log('[AuthContext] AuthStateChange fired: ONLINE event, user:', newSession.user.id, 'event:', event);
+        } else {
+          // If session destroyed or logged out, mark as offline
+          if (user?.id) {
+            setProfileOnlineStatus(user.id, false);
+            console.log('[AuthContext] AuthStateChange fired: OFFLINE event, user:', user.id, 'event:', event);
+          }
+        }
       }
     );
-    // Initial load
+    // Initial session check, also mark online if restoring a session
     const getSession = async () => {
       try {
         setLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         setUser(session?.user ?? null);
+        // Patch: Set profile online if session exists
+        if (session?.user) {
+          setProfileOnlineStatus(session.user.id, true);
+          console.log('[AuthContext] Initial session restore: Marked online:', session.user.id);
+        }
       } catch (error) {
         console.error("Error getting session:", error);
         showError("Failed to retrieve session. Please try again.");
@@ -207,6 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       if (user) {
         await supabase.from('profiles').update({ is_logged_in: false }).eq('id', user.id);
+        console.log('[AuthContext] signOut(): Marked user offline:', user.id);
       }
       await supabase.auth.signOut();
       setUser(null);
