@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   Drawer,
@@ -67,6 +68,8 @@ export function ChatDrawers({
               currentConversationId={currentConversationId}
               onSelectConversation={onSelectConversation}
               onDeleteConversation={onDeleteConversation}
+              onRefresh={fetchConversations}
+              onClose={() => setShowConversations(false)}
               onNewConversation={onNewConversation}
               onClearChat={onClearChat}
               sessionMessages={sessionMessages}
