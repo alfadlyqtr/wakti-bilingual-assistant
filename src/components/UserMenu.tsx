@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,12 +9,15 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { t } from "@/utils/translations";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { UnreadBadge } from "./UnreadBadge";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
   const { language } = useTheme();
   const { user, signOut } = useAuth();
+  const { unreadTotal } = useUnreadMessages();
 
   const toggleMenu = () => {
     setIsOpen(!isOpen);
@@ -67,9 +69,18 @@ export function UserMenu() {
 
   const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
 
-  // User menu options
+  // User menu options, insert unread badge in contacts
   const menuOptions = [
-    { icon: <Users size={16} />, label: t("contacts", language), path: "/contacts" },
+    { 
+      icon: (
+        <span className="relative">
+          <Users size={16} />
+          <UnreadBadge count={unreadTotal} size="sm" blink={!!unreadTotal} />
+        </span>
+      ),
+      label: t("contacts", language), 
+      path: "/contacts" 
+    },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
     { icon: <Book size={16} />, label: t("help", language), path: "/help" },
     { divider: true },
@@ -80,15 +91,18 @@ export function UserMenu() {
     <div className="relative z-50">
       <button 
         onClick={toggleMenu}
-        className="flex items-center space-x-1 bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded-full transition-colors"
+        className="flex items-center space-x-1 bg-muted/40 hover:bg-muted/60 px-2 py-1 rounded-full transition-colors relative"
       >
-        <Avatar className="h-6 w-6">
-          <AvatarImage 
-            src={avatarUrl} 
-            alt={displayName}
-          />
-          <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
-        </Avatar>
+        <span className="relative">
+          <Avatar className="h-6 w-6">
+            <AvatarImage 
+              src={avatarUrl} 
+              alt={displayName}
+            />
+            <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
+          </Avatar>
+          <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+        </span>
         <span className="text-sm max-w-[70px] truncate">{displayName}</span>
         <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -112,13 +126,16 @@ export function UserMenu() {
             >
               <div className="py-2 px-3 border-b border-border">
                 <div className="flex items-center space-x-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage 
-                      src={avatarUrl} 
-                      alt={displayName}
-                    />
-                    <AvatarFallback>{getInitials()}</AvatarFallback>
-                  </Avatar>
+                  <span className="relative">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage 
+                        src={avatarUrl} 
+                        alt={displayName}
+                      />
+                      <AvatarFallback>{getInitials()}</AvatarFallback>
+                    </Avatar>
+                    <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+                  </span>
                   <div>
                     <p className="text-sm font-medium truncate">{displayName}</p>
                     <p className="text-xs text-muted-foreground truncate">{user?.email}</p>

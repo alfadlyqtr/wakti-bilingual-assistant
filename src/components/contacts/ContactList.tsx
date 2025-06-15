@@ -22,6 +22,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ContactRelationshipIndicator } from "./ContactRelationshipIndicator";
+import { UnreadBadge } from "@/components/UnreadBadge";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 type UserProfile = {
   display_name?: string;
@@ -47,6 +49,7 @@ export function ContactList() {
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
+  const { unreadPerContact } = useUnreadMessages();
 
   // Fetch contacts with improved configuration
   const { 
@@ -62,38 +65,6 @@ export function ContactList() {
     refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
-
-  // Fetch unread counts for each contact
-  useEffect(() => {
-    const fetchUnreadCounts = async () => {
-      if (contacts) {
-        const counts: Record<string, number> = {};
-        for (const contact of contacts) {
-          try {
-            const { data } = await supabase.auth.getSession();
-            if (data.session) {
-              const { count } = await supabase
-                .from("messages")
-                .select("*", { count: "exact", head: true })
-                .eq("sender_id", contact.contact_id)
-                .eq("recipient_id", data.session.user.id)
-                .eq("is_read", false);
-              counts[contact.contact_id] = count || 0;
-            }
-          } catch (error) {
-            console.error("Error fetching unread count:", error);
-            counts[contact.contact_id] = 0;
-          }
-        }
-        setUnreadCounts(counts);
-      }
-    };
-
-    fetchUnreadCounts();
-    const interval = setInterval(fetchUnreadCounts, 10000);
-
-    return () => clearInterval(interval);
-  }, [contacts]);
 
   // Block contact mutation
   const blockContactMutation = useMutation({
@@ -225,7 +196,7 @@ export function ContactList() {
             const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
-            const unreadCount = unreadCounts[contact.contact_id] || 0;
+            const unreadCount = unreadPerContact[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
             const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
@@ -271,23 +242,21 @@ export function ContactList() {
                       </Button>
                       {/* Relationship Status Icon */}
                       <ContactRelationshipIndicator status={relationshipStatus} />
-                      <Button 
-                        size="icon" 
-                        variant="ghost"
-                        onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
-                        className={`h-8 w-8 relative transition-colors ${
-                          unreadCount > 0 
-                            ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                            : 'hover:bg-blue-50 hover:text-blue-600'
-                        }`}
-                      >
-                        <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'}`} />
-                        {unreadCount > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                          </span>
-                        )}
-                      </Button>
+                      <div className="relative">
+                        <Button 
+                          size="icon" 
+                          variant="ghost"
+                          onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
+                          className={`h-8 w-8 relative transition-colors ${
+                            unreadCount > 0 
+                              ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                              : 'hover:bg-blue-50 hover:text-blue-600'
+                          }`}
+                        >
+                          <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-600'} ${unreadCount ? 'animate-blink' : ''}`} />
+                          <UnreadBadge count={unreadCount} blink={!!unreadCount} />
+                        </Button>
+                      </div>
                       <Button 
                         size="icon" 
                         variant="ghost"

@@ -18,12 +18,15 @@ import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
 import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
+import { UnreadBadge } from "./UnreadBadge";
+import { useUnreadMessages } from "@/hooks/useUnreadMessages";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { unreadTotal } = useUnreadMessages();
   
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
@@ -203,11 +206,14 @@ export function AppHeader() {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={avatarUrl} />
-                  <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
-                </Avatar>
+              <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
+                <span className="relative">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={avatarUrl} />
+                    <AvatarFallback>{user?.email ? user.email[0].toUpperCase() : '?'}</AvatarFallback>
+                  </Avatar>
+                  <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
