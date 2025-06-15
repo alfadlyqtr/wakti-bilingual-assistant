@@ -397,7 +397,7 @@ function analyzeSmartModeIntent(message: string, activeTrigger: string, language
   };
 }
 
-// Enhanced task analysis function - NOW uses OpenAI for extraction
+// Enhanced task analysis function - NOW prefers DeepSeek for extraction, falls back to OpenAI
 async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
@@ -437,14 +437,19 @@ async function analyzeTaskIntent(message: string, language: string = 'en') {
     return { isTask: false, isReminder: false };
   }
 
-  // --- NEW LOGIC: AI-powered extraction using OpenAI/DeepSeek ---
+  // --- NEW LOGIC: AI-powered extraction using DeepSeek preferred, fallback to OpenAI ---
   let extractionOk = false;
   let aiExtracted: any = {};
+  let providerTried: string = "";
 
-  try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    const promptBase = language === 'ar'
-      ? `
+  // Compose a single prompt for both providers, with date context for better results
+  const todayISO = new Date().toISOString().split('T')[0];
+  const systemPrompt = language === 'ar'
+    ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
+    : "Help me extract structured fields from a user's to-do or reminder request.";
+  const userPrompt = language === 'ar'
+    ? `
+اليوم: ${todayISO}
 حلل رسالة المستخدم التالية. استخرج الحقول (title, description, due_date, due_time, subtasks (قائمة), priority).
 - date بصيغة YYYY-MM-DD
 - time بصيغة HH:MM (24)
@@ -460,7 +465,8 @@ async function analyzeTaskIntent(message: string, language: string = 'en') {
 رسالة المستخدم:
 "${message}"
 `
-      : `
+    : `
+Today is: ${todayISO}
 Analyze the following user message and extract:
 - title (short task intent/action),
 - description (only if present; otherwise empty),
@@ -482,46 +488,89 @@ User message:
 "${message}"
 `;
 
-    // Use OpenAI for robust extraction (gpt-4o-mini, vision not needed)
-    const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: language === 'ar'
-            ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
-            : "Help me extract structured fields from a user's to-do or reminder request."
-          },
-          { role: 'user', content: promptBase }
-        ],
-        temperature: 0.0,
-        max_tokens: 512
-      }),
-    });
-
-    if (apiResp.ok) {
-      const aiData = await apiResp.json();
-      const reply = aiData.choices?.[0]?.message?.content || "";
-      try {
-        aiExtracted = JSON.parse(reply);
-        extractionOk = true;
-      } catch (e) {
-        // Sometimes model gives codeblocks or extra output, try to cleanup:
-        const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+  // Try DeepSeek first if key is available
+  if (DEEPSEEK_API_KEY) {
+    try {
+      providerTried = "deepseek";
+      const resp = await fetch('https://api.deepseek.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.0,
+          max_tokens: 512
+        })
+      });
+      if (resp.ok) {
+        const dsData = await resp.json();
+        const reply = dsData.choices?.[0]?.message?.content || "";
         try {
-          aiExtracted = JSON.parse(jsonStr);
+          aiExtracted = JSON.parse(reply);
           extractionOk = true;
-        } catch (e2) {
-          extractionOk = false;
+        } catch (e) {
+          // Try cleaning up code blocks
+          const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+          try {
+            aiExtracted = JSON.parse(jsonStr);
+            extractionOk = true;
+          } catch (e2) {
+            extractionOk = false;
+          }
         }
       }
+    } catch (e) {
+      extractionOk = false;
     }
-  } catch (err) {
-    extractionOk = false;
+  }
+
+  // Fallback to OpenAI if DeepSeek not available or failed
+  if (!extractionOk && OPENAI_API_KEY) {
+    try {
+      providerTried = "openai";
+      const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.0,
+          max_tokens: 512
+        }),
+      });
+
+      if (apiResp.ok) {
+        const aiData = await apiResp.json();
+        const reply = aiData.choices?.[0]?.message?.content || "";
+        try {
+          aiExtracted = JSON.parse(reply);
+          extractionOk = true;
+        } catch (e) {
+          // Try to cleanup codeblocks or extra output:
+          const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+          try {
+            aiExtracted = JSON.parse(jsonStr);
+            extractionOk = true;
+          } catch (e2) {
+            extractionOk = false;
+          }
+        }
+      }
+    } catch (err) {
+      extractionOk = false;
+    }
   }
 
   if (extractionOk && typeof aiExtracted === 'object' && aiExtracted.title) {
@@ -1126,9 +1175,6 @@ Formatting instructions:
       : `Sorry buddy, I hit a small snag there. But don't worry, I'm still here for you! 😊 Can you try again?`;
   }
 }
-
-// THIS FUNCTION IS NO LONGER USED AND WILL BE REMOVED
-// async function analyzeImageWithOpenAIVision...
 
 function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
