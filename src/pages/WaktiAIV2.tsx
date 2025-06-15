@@ -879,7 +879,7 @@ const WaktiAIV2 = () => {
       />
 
       {/* Fixed layout structure - header always at top, input always at bottom */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <NotificationBars
           quotaStatus={quotaStatus}
           searchConfirmationRequired={searchConfirmationRequired}
