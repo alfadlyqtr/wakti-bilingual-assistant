@@ -56,7 +56,7 @@ export function ChatDrawers({
     <div>
       {/* Conversations Drawer */}
       <Drawer open={showConversations} onOpenChange={setShowConversations}>
-        <DrawerContent className="h-[80vh]">
+        <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>
               {language === 'ar' ? 'المحادثات' : 'Conversations'}
@@ -81,7 +81,7 @@ export function ChatDrawers({
 
       {/* Quick Actions Drawer */}
       <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
-        <DrawerContent className="h-[80vh]">
+        <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>
               {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
