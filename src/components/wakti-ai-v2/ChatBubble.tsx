@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
 import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface ChatBubbleProps {
   message: any;
@@ -15,7 +15,6 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
   const { language } = useTheme();
-  const { toast } = useToast();
   const isUser = message.role === 'user';
 
   // Format message content with enhanced buddy-chat features
@@ -38,16 +37,13 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
-      toast({
-        title: language === 'ar' ? 'تم النسخ!' : 'Copied!',
+      toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!', {
         description: language === 'ar' ? 'تم نسخ الرسالة إلى الحافظة' : 'Message copied to clipboard',
       });
     } catch (error) {
       console.error('Failed to copy message:', error);
-      toast({
-        title: language === 'ar' ? 'خطأ' : 'Error',
+      toast.error(language === 'ar' ? 'خطأ' : 'Error', {
         description: language === 'ar' ? 'فشل في نسخ الرسالة' : 'Failed to copy message',
-        variant: 'destructive',
       });
     }
   };
