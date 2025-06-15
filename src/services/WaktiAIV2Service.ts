@@ -211,6 +211,51 @@ export class WaktiAIV2ServiceClass {
     }
   }
 
+  // Helper: Convert any attachedFiles[] with `url` and no `content` to base64 format for vision models
+  private static async convertFilesToBase64IfNeeded(attachedFiles: any[]): Promise<any[]> {
+    if (!attachedFiles || !Array.isArray(attachedFiles) || attachedFiles.length === 0) return [];
+
+    // Only process files that do NOT already have a 'content' field (already base64)
+    const processed = await Promise.all(
+      attachedFiles.map(async (file) => {
+        if (file.content) {
+          // Already in the correct format for vision
+          return { type: file.type, content: file.content };
+        }
+        if (!file.url) {
+          // Not a supported file, skip
+          return null;
+        }
+        try {
+          // Fetch the file from the public URL and convert to base64
+          const response = await fetch(file.url);
+          const blob = await response.blob();
+          // Only image/* or plain text supported!
+          if (!file.type.startsWith('image/') && file.type !== 'text/plain') return null;
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              // This gets the full data URL; strip the prefix to send only base64 part per OpenAI docs
+              let result = reader.result as string;
+              // Only keep the base64 content (for data:image/jpeg;base64,... OR data:text/plain;base64,...)
+              const base64Index = result.indexOf('base64,');
+              if (base64Index !== -1) result = result.substring(base64Index + 7);
+              resolve({ type: file.type, content: result });
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.error('[WaktiAIV2Service] Failed to fetch and convert file to base64:', file.url, e);
+          return null;
+        }
+      })
+    );
+
+    // Filter nulls (unsupported or failed)
+    return processed.filter(Boolean);
+  }
+
   // Instance methods that delegate to static methods
   saveChatSession(messages: AIMessage[], conversationId: string | null) {
     return WaktiAIV2ServiceClass.saveChatSession(messages, conversationId);
@@ -516,15 +561,20 @@ export class WaktiAIV2ServiceClass {
       // Enhanced context for the AI
       const fullContextMessages = activeTrigger === 'chat' ? chatMemory : conversationHistory;
 
-      // --- BEGIN CRITICAL VISION LOGIC ---
-      // Pass attachedFiles without any transformation or extraction
+      // --- BEGIN VISION LOGIC (convert attachedFiles with url to base64 if needed) ---
+      let processedAttachedFiles = attachedFiles;
       if (attachedFiles && attachedFiles.length > 0) {
-        // Diagnostic logging for debugging vision: Show file structure/type
-        console.log('🖼️ Preparing to send attached files for vision...', attachedFiles.map(f => ({
-          isObject: typeof f === "object",
+        const missingBase64 = attachedFiles.some(f => f.url && !f.content && f.type?.startsWith('image/'));
+        if (missingBase64) {
+          processedAttachedFiles = await this.convertFilesToBase64IfNeeded(attachedFiles);
+          if (!processedAttachedFiles || processedAttachedFiles.length === 0) {
+            console.warn('[WaktiAIV2Service] No image files were available after conversion. Proceeding without files.');
+          }
+        }
+        console.log('🖼️ Final attached files sent to vision:', processedAttachedFiles.map(f => ({
           type: f.type,
           hasContent: !!f.content,
-          contentLength: f.content ? ('' + f.content).length : 0
+          contentSnippet: f.content ? ('' + f.content).substring(0, 24) : 'none'
         })));
       }
       // --- END CRITICAL VISION LOGIC ---
@@ -541,7 +591,7 @@ export class WaktiAIV2ServiceClass {
           confirmSearch,
           activeTrigger,
           textGenParams,
-          attachedFiles,
+          attachedFiles: processedAttachedFiles,
           calendarContext,
           userContext,
           enableAdvancedIntegration,
