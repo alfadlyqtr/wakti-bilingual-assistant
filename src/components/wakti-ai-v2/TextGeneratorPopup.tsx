@@ -276,7 +276,7 @@ USER PREFERENCES:`;
 
     try {
       const enhancedPrompt = createEnhancedPrompt();
-      console.log('📝 TextGenerator: Starting text generation...');
+      console.log('📝 TextGenerator: Starting text generation with unified-ai-brain...');
       console.log('📝 Generation input:', {
         promptLength: enhancedPrompt.length,
         mode: formData.mode,
@@ -284,12 +284,15 @@ USER PREFERENCES:`;
       });
 
       const startTime = Date.now();
-      const { data, error } = await supabase.functions.invoke('text-generator', {
+      const { data, error } = await supabase.functions.invoke('unified-ai-brain', {
         body: {
-          prompt: enhancedPrompt,
-          mode: formData.mode,
+          message: enhancedPrompt,
+          userId: user.id,
           language: language,
-          messageAnalysis: messageAnalysis
+          activeTrigger: 'chat',
+          conversationId: null,
+          inputType: 'text',
+          attachedFiles: []
         }
       });
 
@@ -304,15 +307,15 @@ USER PREFERENCES:`;
       console.log('📝 TextGenerator: Generation response:', {
         hasData: !!data,
         success: data?.success,
-        hasGeneratedText: !!data?.generatedText,
+        hasResponse: !!data?.response,
         dataKeys: data ? Object.keys(data) : []
       });
 
-      if (data.success && data.generatedText) {
-        console.log('📝 TextGenerator: Generation successful, length:', data.generatedText.length);
+      if (data.success && data.response) {
+        console.log('📝 TextGenerator: Generation successful, length:', data.response.length);
         
         // Store the generated text and switch to the Generated Text tab
-        setGeneratedText(data.generatedText);
+        setGeneratedText(data.response);
         setActiveTab('generated');
         setLastError(null);
 
