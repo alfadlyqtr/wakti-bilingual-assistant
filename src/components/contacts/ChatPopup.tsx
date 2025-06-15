@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -511,6 +512,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
             }}
           >
             <div className="space-y-3">
+              {/* Auto-delete notification */}
+              <div className="text-center">
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'} leading-relaxed`}>
+                  {language === 'ar' 
+                    ? 'الرسائل تُحذف تلقائياً بعد 24 ساعة للخصوصية'
+                    : 'Messages auto-delete after 24 hours for privacy'
+                  }
+                </p>
+              </div>
+
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"

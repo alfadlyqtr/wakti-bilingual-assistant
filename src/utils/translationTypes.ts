@@ -1334,4 +1334,7 @@ export type TranslationKey =
   
   // Image save specific keys - NEW ADDITIONS
   | "imageSaved"
-  | "errorSavingImage";
+  | "errorSavingImage"
+  
+  // Messages auto-delete notification - NEW ADDITION
+  | "messagesAutoDelete";
