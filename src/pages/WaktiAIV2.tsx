@@ -857,6 +857,11 @@ const WaktiAIV2 = () => {
 
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
+  // Add this function just before the return
+  const handleOpenPlusDrawer = () => {
+    setShowQuickActions(true);
+  };
+
   return (
     <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
       {/* Notification Bars only */}
