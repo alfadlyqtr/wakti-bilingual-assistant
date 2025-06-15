@@ -516,6 +516,19 @@ export class WaktiAIV2ServiceClass {
       // Enhanced context for the AI
       const fullContextMessages = activeTrigger === 'chat' ? chatMemory : conversationHistory;
 
+      // --- BEGIN CRITICAL VISION LOGIC ---
+      // Pass attachedFiles without any transformation or extraction
+      if (attachedFiles && attachedFiles.length > 0) {
+        // Diagnostic logging for debugging vision: Show file structure/type
+        console.log('🖼️ Preparing to send attached files for vision...', attachedFiles.map(f => ({
+          isObject: typeof f === "object",
+          type: f.type,
+          hasContent: !!f.content,
+          contentLength: f.content ? ('' + f.content).length : 0
+        })));
+      }
+      // --- END CRITICAL VISION LOGIC ---
+
       // CORRECTED: Use the wakti-ai-v2-brain function with enhanced buddy-chat context
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
@@ -524,7 +537,7 @@ export class WaktiAIV2ServiceClass {
           language,
           conversationId,
           inputType,
-          conversationHistory: fullContextMessages,
+          contextMessages: fullContextMessages,
           confirmSearch,
           activeTrigger,
           textGenParams,
@@ -538,7 +551,6 @@ export class WaktiAIV2ServiceClass {
           confirmReminder,
           pendingTaskData,
           pendingReminderData,
-          // Enhanced buddy-chat context
           enhancedContext,
           memoryStats: ChatMemoryService.getMemoryStats(userId),
           conversationSummary: ChatMemoryService.loadConversationSummary(userId)
