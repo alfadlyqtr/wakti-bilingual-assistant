@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useToastHelper } from '@/hooks/use-toast-helper';
-import { RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw, Settings, Check } from 'lucide-react';
 import { 
   getQuotePreferences, 
   saveQuotePreferences, 
@@ -17,59 +19,67 @@ import {
   QuoteObject
 } from '@/utils/quoteService';
 
+type MultiCategoryPreferences = QuotePreferences & { categories: string[] };
+
 export const QuotePreferencesManager: React.FC = () => {
   const { language } = useTheme();
   const { showSuccess } = useToastHelper();
-  const [preferences, setPreferences] = useState<QuotePreferences>({ category: 'motivational', frequency: '2xday' });
+
+  // Updated: use categories: string[] instead of category: string
+  const defaultCategories = ['motivational'];
+  const [preferences, setPreferences] = useState<MultiCategoryPreferences>({
+    categories: defaultCategories,
+    frequency: '2xday',
+  });
   const [currentQuote, setCurrentQuote] = useState<QuoteObject | string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Add all available quote categories
   const categoryOptions = [
-    {
-      value: "motivational",
-      label: language === "ar" ? "تحفيزية" : "Motivational",
-    },
-    {
-      value: "islamic",
-      label: language === "ar" ? "إسلامية" : "Islamic",
-    },
-    {
-      value: "positive",
-      label: language === "ar" ? "إيجابية" : "Positive",
-    },
-    {
-      value: "health",
-      label: language === "ar" ? "صحة" : "Health",
-    },
-    {
-      value: "productivity",
-      label: language === "ar" ? "إنتاجية" : "Productivity",
-    },
-    {
-      value: "discipline",
-      label: language === "ar" ? "انضباط" : "Discipline",
-    },
-    {
-      value: "mixed",
-      label: language === "ar" ? "متنوعة" : "Mixed",
-    },
-    {
-      value: "custom",
-      label: language === "ar" ? "مخصصة" : "Custom",
-    },
+    { value: "motivational", label: language === "ar" ? "تحفيزية" : "Motivational" },
+    { value: "islamic", label: language === "ar" ? "إسلامية" : "Islamic" },
+    { value: "positive", label: language === "ar" ? "إيجابية" : "Positive" },
+    { value: "health", label: language === "ar" ? "صحة" : "Health" },
+    { value: "productivity", label: language === "ar" ? "إنتاجية" : "Productivity" },
+    { value: "discipline", label: language === "ar" ? "انضباط" : "Discipline" },
+    { value: "mixed", label: language === "ar" ? "متنوعة" : "Mixed" },
+    { value: "custom", label: language === "ar" ? "مخصصة" : "Custom" },
   ];
 
+  // Safe loading and migration from old single-category prefs
   useEffect(() => {
-    const prefs = getQuotePreferences();
-    setPreferences(prefs);
-    
+    const prefs = getQuotePreferences() as any;
+    let newPrefs: MultiCategoryPreferences;
+    if ('category' in prefs && typeof prefs.category === 'string') {
+      newPrefs = { ...prefs, categories: [prefs.category] };
+    } else if ('categories' in prefs && Array.isArray(prefs.categories)) {
+      newPrefs = { ...prefs };
+    } else {
+      newPrefs = { categories: defaultCategories, frequency: '2xday' };
+    }
+    setPreferences(newPrefs);
+
     const quote = getQuoteForDisplay();
     setCurrentQuote(quote);
   }, []);
 
-  const handlePreferenceChange = (key: keyof QuotePreferences, value: string) => {
-    const newPrefs = { ...preferences, [key]: value };
+  const handleCategoryToggle = (categoryValue: string) => {
+    let newCats: string[];
+    if (preferences.categories.includes(categoryValue)) {
+      // Minimum 1 category must be kept
+      if (preferences.categories.length === 1) return;
+      newCats = preferences.categories.filter(c => c !== categoryValue);
+    } else {
+      newCats = [...preferences.categories, categoryValue];
+    }
+    const newPrefs = { ...preferences, categories: newCats };
+    setPreferences(newPrefs);
+    saveQuotePreferences(newPrefs);
+    showSuccess(language === 'ar' ? 'تم تحديث تفضيلات الاقتباس' : 'Quote preferences updated');
+  };
+
+  const handleFrequencyChange = (value: string) => {
+    const newPrefs = { ...preferences, frequency: value };
     setPreferences(newPrefs);
     saveQuotePreferences(newPrefs);
     showSuccess(language === 'ar' ? 'تم تحديث تفضيلات الاقتباس' : 'Quote preferences updated');
@@ -78,7 +88,7 @@ export const QuotePreferencesManager: React.FC = () => {
   const handleRefreshQuote = async () => {
     setIsRefreshing(true);
     try {
-      const newQuote = forceNewQuote();
+      const newQuote = forceNewQuote(undefined, preferences.categories);
       setCurrentQuote(newQuote);
       showSuccess(language === 'ar' ? 'تم تحديث الاقتباس' : 'Quote refreshed');
     } catch (error) {
@@ -91,6 +101,12 @@ export const QuotePreferencesManager: React.FC = () => {
   const quoteText = currentQuote ? getQuoteText(currentQuote, language) : '';
   const quoteAuthor = currentQuote ? getQuoteAuthor(currentQuote) : '';
 
+  // Display selected categories as comma-separated
+  const selectedCatsLabels = categoryOptions
+    .filter(opt => preferences.categories.includes(opt.value))
+    .map(opt => opt.label)
+    .join(', ');
+
   return (
     <Card>
       <CardHeader>
@@ -99,7 +115,7 @@ export const QuotePreferencesManager: React.FC = () => {
           {language === 'ar' ? 'إعدادات الاقتباس اليومي' : 'Daily Quote Settings'}
         </CardTitle>
         <CardDescription>
-          {language === 'ar' 
+          {language === 'ar'
             ? 'تخصيص نوع وتكرار عرض الاقتباسات اليومية'
             : 'Customize the type and frequency of daily quotes'}
         </CardDescription>
@@ -108,20 +124,45 @@ export const QuotePreferencesManager: React.FC = () => {
         {/* Quote Category */}
         <div className="space-y-2">
           <Label className="text-base font-medium">
-            {language === 'ar' ? 'فئة الاقتباس' : 'Quote Category'}
+            {language === 'ar' ? 'فئات الاقتباس (يمكنك اختيار أكثر من واحدة)' : 'Quote Categories (multi-select)'}
           </Label>
-          <Select value={preferences.category} onValueChange={(value) => handlePreferenceChange('category', value)}>
+          {/* Custom multi-select dropdown UI that matches shadcn triggers */}
+          <Select value="" onValueChange={() => undefined} open={false}>
             <SelectTrigger>
-              <SelectValue />
+              <SelectValue placeholder={language === 'ar' ? 'اختر... ' : 'Select...'}>
+                {selectedCatsLabels}
+              </SelectValue>
             </SelectTrigger>
-            <SelectContent>
-              {categoryOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
+            {/* Fake trigger above for styling. Real category selection below: */}
           </Select>
+          <div className="relative mt-2">
+            <div className="absolute z-50 w-full bg-popover border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              {categoryOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleCategoryToggle(option.value)}
+                  className={`flex items-center px-3 py-2 w-full text-left hover:bg-accent transition 
+                      ${preferences.categories.includes(option.value) ? 'bg-accent' : ''}`}
+                  style={{ direction: language === "ar" ? "rtl" : "ltr" }}
+                >
+                  <Checkbox
+                    checked={preferences.categories.includes(option.value)}
+                    className="mr-2"
+                    tabIndex={-1}
+                    readOnly
+                  />
+                  <span className="flex-1">{option.label}</span>
+                  {preferences.categories.includes(option.value) && <Check className="w-4 h-4 text-primary ml-2" />}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground mt-1">
+            {language === "ar"
+              ? "يجب اختيار فئة واحدة على الأقل"
+              : "You must select at least one category"}
+          </div>
         </div>
 
         {/* Quote Frequency */}
@@ -129,7 +170,7 @@ export const QuotePreferencesManager: React.FC = () => {
           <Label className="text-base font-medium">
             {language === 'ar' ? 'تكرار تغيير الاقتباس' : 'Quote Change Frequency'}
           </Label>
-          <Select value={preferences.frequency} onValueChange={(value) => handlePreferenceChange('frequency', value)}>
+          <Select value={preferences.frequency} onValueChange={handleFrequencyChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -157,9 +198,9 @@ export const QuotePreferencesManager: React.FC = () => {
               <Label className="text-base font-medium">
                 {language === 'ar' ? 'الاقتباس الحالي' : 'Current Quote'}
               </Label>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRefreshQuote}
                 disabled={isRefreshing}
               >
@@ -167,7 +208,7 @@ export const QuotePreferencesManager: React.FC = () => {
                 {language === 'ar' ? 'تحديث' : 'Refresh'}
               </Button>
             </div>
-            
+
             <div className="p-4 bg-muted/30 rounded-lg border">
               <p className="text-sm italic font-medium mb-2">"{quoteText}"</p>
               <p className="text-xs text-muted-foreground">— {quoteAuthor}</p>

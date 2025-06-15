@@ -14,25 +14,36 @@ export interface QuoteObject {
 
 // Interface for quote preferences
 export interface QuotePreferences {
-  // Making category plural for possible future support
-  category: string;
+  categories: string[];
   frequency: string;
 }
+
+// Helper for migration from old single category prefs
+const legacySingleCategoryToCategories = (stored: any) => {
+  if (!stored) return ['motivational'];
+  if ('categories' in stored && Array.isArray(stored.categories)) return stored.categories;
+  if ('category' in stored && typeof stored.category === 'string') return [stored.category];
+  return ['motivational'];
+};
 
 // Get user preferences from localStorage
 export const getQuotePreferences = (): QuotePreferences => {
   try {
     const storedPreferences = localStorage.getItem('wakti_quote_preferences');
     if (storedPreferences) {
-      return JSON.parse(storedPreferences);
+      const parsed = JSON.parse(storedPreferences);
+      // Migration logic
+      const categories = legacySingleCategoryToCategories(parsed);
+      return {
+        categories,
+        frequency: parsed.frequency || '2xday',
+      };
     }
   } catch (error) {
     console.error('Error loading quote preferences:', error);
   }
-  
-  // Default preferences - use "motivational" instead of "motivation"
   return {
-    category: 'motivational',
+    categories: ['motivational'],
     frequency: '2xday',
   };
 };
@@ -108,10 +119,31 @@ const getAllQuotesFromCategory = (category: string, userId?: string): (QuoteObje
   }];
 };
 
-// Get a random quote based on preferences - updated to accept userId for custom quotes
-export const getRandomQuote = (category: string = 'motivational', userId?: string): QuoteObject | string => {
-  const allQuotes = getAllQuotesFromCategory(category, userId);
-  console.log(`Found ${allQuotes.length} quotes in category '${category}'`);
+// Update function accepts an array of categories (multi-selection)
+const getAllQuotesFromCategories = (categories: string[], userId?: string): (QuoteObject | string)[] => {
+  let allQuotes: (QuoteObject | string)[] = [];
+  categories.forEach(category => {
+    // Re-use existing logic
+    const quotesArr = getAllQuotesFromCategory(category, userId);
+    allQuotes = allQuotes.concat(quotesArr);
+  });
+  // Remove duplicate quotes (by text_en or full string)
+  const seen = new Set();
+  return allQuotes.filter(quote => {
+    if (typeof quote === 'string') {
+      if (seen.has(quote)) return false;
+      seen.add(quote);
+      return true;
+    }
+    if (seen.has(quote.text_en)) return false;
+    seen.add(quote.text_en);
+    return true;
+  });
+};
+
+// Get a random quote based on preferences (now multi-category)
+export const getRandomQuote = (categories: string[] = ['motivational'], userId?: string): QuoteObject | string => {
+  const allQuotes = getAllQuotesFromCategories(categories, userId);
   if (allQuotes.length === 0) {
     return {
       text_en: "Wisdom awaits. More quotes coming soon.",
@@ -138,10 +170,11 @@ export const getRandomQuote = (category: string = 'motivational', userId?: strin
   return quote;
 };
 
-// Force a new quote regardless of timing preferences (accepts userId for custom quotes)
-export const forceNewQuote = (userId?: string): QuoteObject | string => {
-  const { category } = getQuotePreferences();
-  const newQuote = getRandomQuote(category, userId);
+// Force a new quote (pass categories from preferences, not just one)
+export const forceNewQuote = (userId?: string, categories?: string[]): QuoteObject | string => {
+  const prefs = getQuotePreferences();
+  const cats = categories || prefs.categories;
+  const newQuote = getRandomQuote(cats, userId);
   return newQuote;
 };
 
@@ -230,29 +263,19 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
   }
 };
 
-// Get quote for display based on preferences
+// Get quote for display based on preferences (now supports multiple categories)
 export const getQuoteForDisplay = (userId?: string): QuoteObject | string => {
-  const { category, frequency } = getQuotePreferences();
-  
-  // Check if localStorage has valid quote data
+  const { categories, frequency } = getQuotePreferences();
   const lastQuoteData = getLastQuoteObject();
-  const hasValidQuote = lastQuoteData !== null && 
-                        lastQuoteData !== undefined && 
-                        typeof lastQuoteData !== 'string' &&
-                        lastQuoteData.text_en !== "Welcome to WAKTI.";
-  
-  console.log("Has valid quote stored:", hasValidQuote);
-  
-  // If we should show a new quote based on frequency or don't have a valid quote
+  const hasValidQuote = lastQuoteData !== null &&
+    lastQuoteData !== undefined &&
+    typeof lastQuoteData !== 'string' &&
+    lastQuoteData.text_en !== "Welcome to WAKTI.";
   if (shouldShowNewQuote(frequency) || !hasValidQuote) {
-    const newQuote = getRandomQuote(category, userId);
-    console.log("Showing new quote:", newQuote);
+    const newQuote = getRandomQuote(categories, userId);
     return newQuote;
   }
-  
-  // Otherwise return the last quote
   const { quote } = getLastQuote();
-  console.log("Showing existing quote:", quote);
   return quote;
 };
 
