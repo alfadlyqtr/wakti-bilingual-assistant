@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +26,8 @@ interface CustomQuoteManagerProps {
 export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate, open, onOpenChange }) => {
   const { language } = useTheme();
   const { user } = useAuth();
-  const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes() || []);
+  const userId = user?.id ?? "";
+  const [customQuotes, setCustomQuotes] = useState<string[]>(getCustomQuotes(userId));
   const [newQuote, setNewQuote] = useState('');
   const [username, setUsername] = useState('');
   const MAX_QUOTES = 5;
@@ -50,6 +50,11 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
     }
   }, [userProfile, user]);
 
+  // Update customQuotes whenever userId changes
+  useEffect(() => {
+    setCustomQuotes(getCustomQuotes(userId));
+  }, [userId]);
+
   const handleAddQuote = () => {
     if (!newQuote.trim()) {
       toast.error(language === 'ar' ? 'الرجاء إدخال اقتباس صالح' : 'Please enter a valid quote');
@@ -69,7 +74,7 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
     const updatedQuotes = [...customQuotes, formattedQuote];
     
     setCustomQuotes(updatedQuotes);
-    saveCustomQuotes(updatedQuotes);
+    saveCustomQuotes(updatedQuotes, userId);
     setNewQuote('');
     
     if (onUpdate) onUpdate();
@@ -78,20 +83,6 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
       language === 'ar' 
         ? 'تمت إضافة الاقتباس بنجاح'
         : 'Quote added successfully'
-    );
-  };
-
-  const handleRemoveQuote = (index: number) => {
-    const updatedQuotes = customQuotes.filter((_, i) => i !== index);
-    setCustomQuotes(updatedQuotes);
-    saveCustomQuotes(updatedQuotes);
-    
-    if (onUpdate) onUpdate();
-    
-    toast.success(
-      language === 'ar' 
-        ? 'تمت إزالة الاقتباس بنجاح'
-        : 'Quote removed successfully'
     );
   };
 
@@ -147,14 +138,7 @@ export const CustomQuoteManager: React.FC<CustomQuoteManagerProps> = ({ onUpdate
             {customQuotes.map((quote, index) => (
               <div key={index} className="flex justify-between items-center p-2 bg-secondary/20 rounded-md">
                 <p className="text-sm">{quote}</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleRemoveQuote(index)}
-                  className="h-8 w-8 p-0"
-                >
-                  ✕
-                </Button>
+                {/* No delete button here; quotes are read-only for the user */}
               </div>
             ))}
           </div>

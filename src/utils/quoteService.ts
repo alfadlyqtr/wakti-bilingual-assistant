@@ -1,8 +1,7 @@
-
 import { quotes } from './dailyQuotes';
 
 // Custom quotes storage
-const CUSTOM_QUOTES_KEY = 'wakti_custom_quotes';
+const CUSTOM_QUOTES_KEY_PREFIX = 'wakti_custom_quotes_';
 const LAST_QUOTE_KEY = 'wakti_last_quote';
 const LAST_QUOTE_TIME_KEY = 'wakti_last_quote_time';
 
@@ -15,6 +14,7 @@ export interface QuoteObject {
 
 // Interface for quote preferences
 export interface QuotePreferences {
+  // Making category plural for possible future support
   category: string;
   frequency: string;
 }
@@ -46,61 +46,59 @@ export const saveQuotePreferences = (preferences: QuotePreferences): void => {
   }
 };
 
-// Save custom quotes
-export const saveCustomQuotes = (customQuotes: string[]): void => {
+// ------- USER-PRIVATE CUSTOM QUOTES -------
+
+// Save custom quotes for a specific user
+export const saveCustomQuotes = (customQuotes: string[], userId?: string): void => {
+  if (!userId) return;
   try {
-    localStorage.setItem(CUSTOM_QUOTES_KEY, JSON.stringify(customQuotes));
+    localStorage.setItem(`${CUSTOM_QUOTES_KEY_PREFIX}${userId}`, JSON.stringify(customQuotes));
   } catch (error) {
     console.error('Error saving custom quotes:', error);
   }
 };
 
-// Get custom quotes
-export const getCustomQuotes = (): string[] => {
+// Get custom quotes for a specific user
+export const getCustomQuotes = (userId?: string): string[] => {
+  if (!userId) return [];
   try {
-    const storedQuotes = localStorage.getItem(CUSTOM_QUOTES_KEY);
+    const storedQuotes = localStorage.getItem(`${CUSTOM_QUOTES_KEY_PREFIX}${userId}`);
     if (storedQuotes) {
       return JSON.parse(storedQuotes);
     }
   } catch (error) {
     console.error('Error loading custom quotes:', error);
   }
-  
   return [];
 };
 
-// Helper function to get all quotes from a category
-const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] => {
+// -------------------------------------------
+// Helper function to get all quotes from a category or multiple categories
+const getAllQuotesFromCategory = (category: string, userId?: string): (QuoteObject | string)[] => {
   console.log(`Getting quotes from category: ${category}`);
-  
+
   if (category === 'mixed') {
     // For mixed category, collect all quotes from all categories
     let allQuotes: QuoteObject[] = [];
-    
     Object.keys(quotes).forEach(cat => {
       if (cat !== 'mixed' && cat !== 'custom' && typeof quotes[cat] !== 'string') {
         const categoryQuotes = getAllQuotesFromCategory(cat) as QuoteObject[];
         allQuotes = [...allQuotes, ...categoryQuotes];
       }
     });
-    
     return allQuotes;
   } else if (category === 'custom') {
-    return getCustomQuotes();
+    return getCustomQuotes(userId);
   } else if (quotes[category] && typeof quotes[category] === 'object') {
-    // For structured categories like motivational, islamic, etc.
     let categoryQuotes: QuoteObject[] = [];
-    
     Object.keys(quotes[category]).forEach(subcat => {
       if (Array.isArray(quotes[category][subcat])) {
         categoryQuotes = [...categoryQuotes, ...quotes[category][subcat]];
       }
     });
-    
     console.log(`Found ${categoryQuotes.length} quotes in category '${category}'`);
     return categoryQuotes;
   }
-  
   // If category doesn't exist or is empty
   console.log(`Category '${category}' not found or empty, using default quote`);
   return [{
@@ -110,57 +108,40 @@ const getAllQuotesFromCategory = (category: string): (QuoteObject | string)[] =>
   }];
 };
 
-// Get a random quote based on preferences
-export const getRandomQuote = (category: string = 'motivational'): QuoteObject | string => {
-  const allQuotes = getAllQuotesFromCategory(category);
+// Get a random quote based on preferences - updated to accept userId for custom quotes
+export const getRandomQuote = (category: string = 'motivational', userId?: string): QuoteObject | string => {
+  const allQuotes = getAllQuotesFromCategory(category, userId);
   console.log(`Found ${allQuotes.length} quotes in category '${category}'`);
-  
-  // If no quotes available for the category
   if (allQuotes.length === 0) {
-    console.log("No quotes found for category:", category);
     return {
       text_en: "Wisdom awaits. More quotes coming soon.",
       text_ar: "الحكمة تنتظر. المزيد من الاقتباسات قريبًا.",
       source: "WAKTI"
     };
   }
-  
-  // We need to make sure we don't show the same quote twice in a row
   const lastQuote = getLastQuoteObject();
   let availableQuotes = allQuotes;
-  
-  // If we have a last quote and enough quotes to choose from, filter it out
   if (lastQuote && allQuotes.length > 1) {
     availableQuotes = allQuotes.filter(quote => {
-      // For string quotes
       if (typeof quote === 'string' && typeof lastQuote === 'string') {
         return quote !== lastQuote;
       }
-      
-      // For object quotes
       if (typeof quote === 'object' && typeof lastQuote === 'object') {
         return quote.text_en !== lastQuote.text_en;
       }
-      
       return true;
     });
   }
-  
-  // Get a random quote
   const randomIndex = Math.floor(Math.random() * availableQuotes.length);
   const quote = availableQuotes[randomIndex];
-  console.log("Selected quote:", quote);
-  
-  // Store this quote and time
   saveLastQuote(quote);
-  
   return quote;
 };
 
-// Force a new quote regardless of timing preferences
-export const forceNewQuote = (): QuoteObject | string => {
+// Force a new quote regardless of timing preferences (accepts userId for custom quotes)
+export const forceNewQuote = (userId?: string): QuoteObject | string => {
   const { category } = getQuotePreferences();
-  const newQuote = getRandomQuote(category);
+  const newQuote = getRandomQuote(category, userId);
   return newQuote;
 };
 
@@ -250,7 +231,7 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
 };
 
 // Get quote for display based on preferences
-export const getQuoteForDisplay = (): QuoteObject | string => {
+export const getQuoteForDisplay = (userId?: string): QuoteObject | string => {
   const { category, frequency } = getQuotePreferences();
   
   // Check if localStorage has valid quote data
@@ -264,7 +245,7 @@ export const getQuoteForDisplay = (): QuoteObject | string => {
   
   // If we should show a new quote based on frequency or don't have a valid quote
   if (shouldShowNewQuote(frequency) || !hasValidQuote) {
-    const newQuote = getRandomQuote(category);
+    const newQuote = getRandomQuote(category, userId);
     console.log("Showing new quote:", newQuote);
     return newQuote;
   }
