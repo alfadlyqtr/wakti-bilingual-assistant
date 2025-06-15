@@ -857,7 +857,62 @@ const WaktiAIV2 = () => {
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
+      {/* Fixed Header – always visible at top */}
+      <div className="flex-shrink-0 z-10">
+        <ChatHeader
+          activeTrigger={activeTrigger}
+          onTriggerChange={handleTriggerChange}
+          onToggleConversations={() => setShowConversations(!showConversations)}
+          onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
+          onNewConversation={handleNewConversation}
+          onClearChat={handleClearChat}
+          hasMessages={allDisplayMessages.length > 0}
+          currentConversationId={currentConversationId}
+        />
+      </div>
+
+      {/* Notification Bars, just below header */}
+      <div className="flex-shrink-0 z-10">
+        <NotificationBars
+          quotaStatus={quotaStatus}
+          searchConfirmationRequired={searchConfirmationRequired}
+          onSearchConfirmation={handleSearchConfirmation}
+          onQuotaRefresh={() => fetchQuota(true)}
+        />
+      </div>
+
+      {/* Scrollable Messages Area – main flex-1 area */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        <ChatMessages
+          sessionMessages={allDisplayMessages}
+          isLoading={isLoading}
+          activeTrigger={activeTrigger}
+          scrollAreaRef={scrollAreaRef}
+          userProfile={userProfile}
+          showTaskConfirmation={showTaskConfirmation}
+          pendingTaskData={pendingTaskData}
+          pendingReminderData={pendingReminderData}
+          taskConfirmationLoading={taskConfirmationLoading}
+          onTaskConfirmation={handleTaskConfirmation}
+          onReminderConfirmation={handleReminderConfirmation}
+          onCancelTaskConfirmation={handleCancelTaskConfirmation}
+        />
+      </div>
+
+      {/* Fixed Input – always visible at bottom */}
+      <div className="flex-shrink-0 z-10">
+        <ChatInput
+          message={message}
+          setMessage={setMessage}
+          isLoading={isLoading}
+          sessionMessages={allDisplayMessages}
+          onSendMessage={handleSendMessage}
+          onClearChat={handleClearChat}
+        />
+      </div>
+
+      {/* Drawers are portal-based, no change */}
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
@@ -877,60 +932,6 @@ const WaktiAIV2 = () => {
         sessionMessages={allDisplayMessages}
         isLoading={isLoading}
       />
-
-      {/* Fixed layout structure - header always at top, input always at bottom */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <NotificationBars
-          quotaStatus={quotaStatus}
-          searchConfirmationRequired={searchConfirmationRequired}
-          onSearchConfirmation={handleSearchConfirmation}
-          onQuotaRefresh={() => fetchQuota(true)}
-        />
-
-        {/* Fixed Header - always visible */}
-        <div className="flex-shrink-0">
-          <ChatHeader
-            activeTrigger={activeTrigger}
-            onTriggerChange={handleTriggerChange}
-            onToggleConversations={() => setShowConversations(!showConversations)}
-            onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
-            onNewConversation={handleNewConversation}
-            onClearChat={handleClearChat}
-            hasMessages={allDisplayMessages.length > 0}
-            currentConversationId={currentConversationId}
-          />
-        </div>
-
-        {/* Scrollable Messages Area - takes remaining space */}
-        <div className="flex-1 overflow-hidden">
-          <ChatMessages
-            sessionMessages={allDisplayMessages}
-            isLoading={isLoading}
-            activeTrigger={activeTrigger}
-            scrollAreaRef={scrollAreaRef}
-            userProfile={userProfile}
-            showTaskConfirmation={showTaskConfirmation}
-            pendingTaskData={pendingTaskData}
-            pendingReminderData={pendingReminderData}
-            taskConfirmationLoading={taskConfirmationLoading}
-            onTaskConfirmation={handleTaskConfirmation}
-            onReminderConfirmation={handleReminderConfirmation}
-            onCancelTaskConfirmation={handleCancelTaskConfirmation}
-          />
-        </div>
-
-        {/* Fixed Input - always visible at bottom */}
-        <div className="flex-shrink-0">
-          <ChatInput
-            message={message}
-            setMessage={setMessage}
-            isLoading={isLoading}
-            sessionMessages={allDisplayMessages}
-            onSendMessage={handleSendMessage}
-            onClearChat={handleClearChat}
-          />
-        </div>
-      </div>
     </div>
   );
 };

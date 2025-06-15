@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -110,7 +109,24 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
               />
 
-              {/* Image display */}
+              {/* Image display - Show images in user bubbles as well, immediate preview */}
+              {Array.isArray(message.attachedFiles) && message.attachedFiles.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2 max-w-xs">
+                  {message.attachedFiles.map((file: any, idx: number) =>
+                    file.type && file.type.startsWith('image/') ? (
+                      <img
+                        key={idx}
+                        src={file.preview || file.url}
+                        alt={file.name || 'Uploaded image'}
+                        className="rounded-lg border max-h-40 max-w-[140px] object-contain"
+                        style={{ background: '#f6f6f8' }}
+                      />
+                    ) : null
+                  )}
+                </div>
+              )}
+
+              {/* Image display for assistant bubble (original logic) */}
               {message.imageUrl && (
                 <div className="mt-2">
                   <img 
