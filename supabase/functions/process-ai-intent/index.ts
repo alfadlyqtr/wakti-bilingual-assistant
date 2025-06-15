@@ -64,28 +64,30 @@ serve(async (req) => {
       }
     }
 
-    // Enhanced task detection patterns for your specific format
+    // UPDATED: Enhanced task detection patterns - more specific and explicit
     const taskPatterns = [
-      // Your specific formats
-      /\b(create|add|make|new)\s+(a\s+)?task\s+(.+)/i,
-      /\btask\s+due\s+(.+)/i,
-      /\b(shopping\s+list|shop\s+at|go\s+shopping)\s*(.+)?/i,
-      /\bsub\s+tasks?\s+(.+)/i,
-      /\bdue\s+(tomorrow|today|tonight|this\s+\w+|next\s+\w+|\d+)/i,
-      // General patterns
-      /\b(buy|purchase|get|pick\s+up)\s+(.+)/i,
-      /\bneed\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
-      /\bhave\s+to\s+(go|buy|get|shop|visit|pick\s+up)/i,
-      /\bmust\s+(go|buy|get|shop|visit|pick\s+up)/i,
-      /\bto\s+do\s+list/i,
-      /\btodo/i
+      // UPDATED: More explicit task creation patterns
+      /\b(create|add|make|new)\s+(a\s+)?task\b/i,
+      /\b(help\s+(me\s+)?)?(create|add|make)\s+(a\s+)?task\b/i,
+      /\b(i\s+want\s+to|need\s+to|can\s+you)\s+(create|add|make)\s+(a\s+)?task\b/i,
+      /\b(please\s+)?(create|add|make)\s+(a\s+)?task\b/i,
+      /\btask\s+(creation|creator|maker)\b/i,
+      /\bnew\s+task\b/i,
+      /\btodo\s+(list|item|entry)\b/i,
+      /\b(create|add|make)\s+(a\s+)?(todo|reminder)\b/i,
+      // Arabic patterns
+      /\b(أنشئ|اصنع|أضف)\s+(مهمة|تذكير)\b/i,
+      /\b(ساعدني|أريد|أحتاج)\s+(في\s+)?(إنشاء|عمل|إضافة)\s+(مهمة|تذكير)\b/i
     ];
 
-    // Check if this is a task creation request
+    // REMOVED: Overly broad shopping and action verb patterns that caused false positives
+    // These were too aggressive and interpreted casual conversation as task requests
+
+    // Check if this is a task creation request with explicit patterns only
     const isTaskRequest = taskPatterns.some(pattern => pattern.test(text));
     
     if (isTaskRequest) {
-      console.log("Detected task creation request");
+      console.log("Detected explicit task creation request");
       
       // Extract task details from the current message
       const taskData = extractTaskDataFromMessage(text);
@@ -264,7 +266,7 @@ serve(async (req) => {
   }
 });
 
-// Enhanced task data extraction to handle your specific format
+// UPDATED: Enhanced task data extraction with more specific detection
 function extractTaskDataFromMessage(text: string) {
   const lowerText = text.toLowerCase();
   
@@ -276,8 +278,14 @@ function extractTaskDataFromMessage(text: string) {
   let priority = "normal";
   let hasTaskKeywords = false;
 
-  // Check for task keywords
-  if (lowerText.includes('task') || lowerText.includes('shopping') || lowerText.includes('buy') || lowerText.includes('get') || lowerText.includes('sub tasks')) {
+  // UPDATED: Check for explicit task keywords only
+  const explicitTaskPhrases = [
+    'create task', 'create a task', 'add task', 'add a task', 'make task', 'make a task',
+    'new task', 'help me create task', 'i want to create task', 'can you create task',
+    'please create task', 'task creation'
+  ];
+  
+  if (explicitTaskPhrases.some(phrase => lowerText.includes(phrase))) {
     hasTaskKeywords = true;
   }
 
@@ -421,7 +429,7 @@ function generateClarificationQuestions(taskData: any, originalText: string) {
   };
 }
 
-// Enhanced mode detection
+// UPDATED: Enhanced mode detection - more conservative
 function detectBetterMode(userText: string, currentMode: string) {
   const lowerText = userText.toLowerCase();
   let detectedMode = null;
@@ -442,16 +450,12 @@ function detectBetterMode(userText: string, currentMode: string) {
     detectedMode = currentMode !== 'creative' ? 'creative' : null;
   }
   
-  // Task creation - assistant mode
+  // UPDATED: Task creation - assistant mode (more specific)
   else if (
     lowerText.includes("create task") ||
     lowerText.includes("add task") ||
     lowerText.includes("make task") ||
-    lowerText.includes("shopping") ||
-    lowerText.includes("buy") ||
-    lowerText.includes("purchase") ||
-    lowerText.includes("get") ||
-    lowerText.includes("pick up") ||
+    lowerText.includes("new task") ||
     lowerText.includes("create reminder") ||
     lowerText.includes("add reminder") ||
     lowerText.includes("remind me") ||

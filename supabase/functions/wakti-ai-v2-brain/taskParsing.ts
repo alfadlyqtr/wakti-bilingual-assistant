@@ -1,3 +1,4 @@
+
 /**
  * Task and reminder extraction for Wakti Edge Function
  */
@@ -6,37 +7,55 @@ import { DEEPSEEK_API_KEY, OPENAI_API_KEY } from "./utils.ts";
 export async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
-  // Task keywords
-  const taskKeywords = [
-    'task', 'todo', 'do', 'complete', 'finish', 'work on', 'need to', 'have to', 'must',
-    'مهمة', 'عمل', 'أنجز', 'أكمل', 'يجب', 'لازم', 'محتاج'
+  // UPDATED: More specific task keywords that require explicit task creation intent
+  const explicitTaskKeywords = [
+    'create task', 'create a task', 'add task', 'add a task', 'make task', 'make a task',
+    'new task', 'create todo', 'add todo', 'make todo', 'new todo',
+    'help me create task', 'help me add task', 'help me make task',
+    'i want to create task', 'i want to add task', 'i want to make task',
+    'need to create task', 'need to add task', 'need to make task',
+    'can you create task', 'can you add task', 'can you make task',
+    'please create task', 'please add task', 'please make task',
+    // Arabic equivalents
+    'أنشئ مهمة', 'اصنع مهمة', 'أضف مهمة', 'مهمة جديدة',
+    'ساعدني في إنشاء مهمة', 'أريد إنشاء مهمة', 'أحتاج إنشاء مهمة'
   ];
 
-  // Reminder keywords  
-  const reminderKeywords = [
-    'remind', 'reminder', "don't forget", 'remember', 'alert', 'notify',
-    'ذكرني', 'تذكير', 'لا تنس', 'تذكر', 'نبهني'
+  // UPDATED: More specific reminder keywords
+  const explicitReminderKeywords = [
+    'create reminder', 'create a reminder', 'add reminder', 'add a reminder', 
+    'make reminder', 'make a reminder', 'new reminder',
+    'help me create reminder', 'help me add reminder', 'help me make reminder',
+    'i want to create reminder', 'i want to add reminder', 'i want to make reminder',
+    'need to create reminder', 'need to add reminder', 'need to make reminder',
+    'can you create reminder', 'can you add reminder', 'can you make reminder',
+    'please create reminder', 'please add reminder', 'please make reminder',
+    'remind me to', 'set reminder', 'schedule reminder',
+    // Arabic equivalents
+    'أنشئ تذكير', 'اصنع تذكير', 'أضف تذكير', 'تذكير جديد',
+    'ذكرني أن', 'ذكرني ب', 'اجعل تذكير'
   ];
 
-  const isTaskKeyword = taskKeywords.some(keyword => lowerMessage.includes(keyword));
-  const isReminderKeyword = reminderKeywords.some(keyword => lowerMessage.includes(keyword));
+  // Check for explicit task creation phrases
+  const isExplicitTaskKeyword = explicitTaskKeywords.some(keyword => lowerMessage.includes(keyword));
+  const isExplicitReminderKeyword = explicitReminderKeywords.some(keyword => lowerMessage.includes(keyword));
 
   let isTask = false;
   let isReminder = false;
 
-  if (isTaskKeyword && !isReminderKeyword) {
+  // UPDATED: Only detect as task/reminder if explicit keywords are found
+  if (isExplicitTaskKeyword && !isExplicitReminderKeyword) {
     isTask = true;
-  } else if (isReminderKeyword && !isTaskKeyword) {
+  } else if (isExplicitReminderKeyword && !isExplicitTaskKeyword) {
     isReminder = true;
-  } else if (isTaskKeyword && isReminderKeyword) {
+  } else if (isExplicitTaskKeyword && isExplicitReminderKeyword) {
+    // If both are present, prefer task
     isTask = true;
-  } else {
-    const actionVerbs = [
-      'buy', 'get', 'call', 'email', 'meeting', 'appointment', 'shopping',
-      'اشتري', 'خذ', 'اتصل', 'ايميل', 'اجتماع', 'موعد', 'تسوق'
-    ];
-    isTask = actionVerbs.some(verb => lowerMessage.includes(verb));
   }
+
+  // REMOVED: The fallback action verb detection that was too aggressive
+  // No longer checking for general action verbs like 'buy', 'get', 'call', etc.
+  // These were causing false positives when users were just having conversations
 
   if (!isTask && !isReminder) {
     return { isTask: false, isReminder: false };
@@ -47,7 +66,6 @@ export async function analyzeTaskIntent(message: string, language: string = 'en'
   let aiExtracted: any = {};
   let providerTried: string = "";
 
-  // Compose a single prompt for both providers, with date context for better results
   const todayISO = new Date().toISOString().split('T')[0];
   const systemPrompt = language === 'ar'
     ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
@@ -211,7 +229,7 @@ User message:
     }
   }
 
-  // Fallback: If for some reason extraction failed, use previous (regex) logic:
+  // Fallback: If AI extraction failed, use previous regex logic but only for explicit requests
   // --- BEGIN FALLBACK LEGACY REGEX LOGIC ---
 
   // Extract subtasks after the word 'subtask' or 'subtasks'
