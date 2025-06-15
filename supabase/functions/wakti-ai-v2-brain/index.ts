@@ -400,25 +400,25 @@ function analyzeSmartModeIntent(message: string, activeTrigger: string, language
 // Enhanced task analysis function
 function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
-  
+
   // Task keywords
   const taskKeywords = [
     'task', 'todo', 'do', 'complete', 'finish', 'work on', 'need to', 'have to', 'must',
     'مهمة', 'عمل', 'أنجز', 'أكمل', 'يجب', 'لازم', 'محتاج'
   ];
-  
+
   // Reminder keywords  
   const reminderKeywords = [
-    'remind', 'reminder', 'don\'t forget', 'remember', 'alert', 'notify',
+    'remind', 'reminder', "don't forget", 'remember', 'alert', 'notify',
     'ذكرني', 'تذكير', 'لا تنس', 'تذكر', 'نبهني'
   ];
-  
+
   const isTaskKeyword = taskKeywords.some(keyword => lowerMessage.includes(keyword));
   const isReminderKeyword = reminderKeywords.some(keyword => lowerMessage.includes(keyword));
-  
+
   let isTask = false;
   let isReminder = false;
-  
+
   // Determine if it's a task or reminder
   if (isTaskKeyword && !isReminderKeyword) {
     isTask = true;
@@ -429,103 +429,175 @@ function analyzeTaskIntent(message: string, language: string = 'en') {
     isTask = true;
   } else {
     // Check for action verbs that indicate tasks
-    const actionVerbs = ['buy', 'get', 'call', 'email', 'meeting', 'appointment', 'shopping', 'اشتري', 'خذ', 'اتصل', 'ايميل', 'اجتماع', 'موعد', 'تسوق'];
+    const actionVerbs = [
+      'buy', 'get', 'call', 'email', 'meeting', 'appointment', 'shopping',
+      'اشتري', 'خذ', 'اتصل', 'ايميل', 'اجتماع', 'موعد', 'تسوق'
+    ];
     isTask = actionVerbs.some(verb => lowerMessage.includes(verb));
   }
-  
+
   if (!isTask && !isReminder) {
     return { isTask: false, isReminder: false };
   }
-  
-  // Extract title (first meaningful part)
-  let title = message.trim();
-  if (title.length > 100) {
-    title = title.substring(0, 100) + '...';
+
+  // --- NEW LOGIC: Smart parsing for title, subtasks, and time ---
+
+  // Extract subtasks after the word 'subtask' or 'subtasks'
+  let subtasks: string[] = [];
+  let textForSubtasks = '';
+  const subtaskRegex = /(subtask[s]?:?|مهام فرعية|subtasks?|مهام?)\s*([^\n]*)/i;
+  const subtaskMatch = message.match(subtaskRegex);
+  if (subtaskMatch && subtaskMatch[2]) {
+    // Look for comma or Arabic comma
+    textForSubtasks = subtaskMatch[2];
+    subtasks = textForSubtasks.split(/[,،]/).map(s => s.trim()).filter(s => s.length > 0);
   }
-  
-  // Extract due date and time
-  const dateTimeRegex = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}:\d{2}|غداً|اليوم|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)/gi;
-  const dateTimeMatches = message.match(dateTimeRegex);
-  
-  let due_date = null;
-  let due_time = null;
-  
-  if (dateTimeMatches) {
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    for (const match of dateTimeMatches) {
-      const lower = match.toLowerCase();
-      
-      // Handle time patterns
-      if (lower.match(/\d{1,2}:\d{2}/)) {
-        due_time = match;
-      }
-      // Handle date patterns
-      else if (lower === 'today' || lower === 'اليوم') {
-        due_date = today.toISOString().split('T')[0];
-      } else if (lower === 'tomorrow' || lower === 'غداً') {
-        due_date = tomorrow.toISOString().split('T')[0];
-      }
-    }
-  }
-  
-  // If no date specified, default to tomorrow
-  if (!due_date) {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    due_date = tomorrow.toISOString().split('T')[0];
-  }
-  
-  // Extract subtasks (items in lists or comma-separated)
-  const subtasks = [];
+
+  // Additionally, if there is "subtask X, Y, Z" in the middle of the message
+  // but also some list items, combine them
+  // e.g. "- item1\n- item2" (markdown) or "* item" or "• item"
   const listItems = message.match(/[-•*]\s*([^-•*\n]+)/g);
   if (listItems) {
     listItems.forEach(item => {
       const cleaned = item.replace(/[-•*]\s*/, '').trim();
       if (cleaned) subtasks.push(cleaned);
     });
-  } else {
-    // Try comma-separated items
-    const commaItems = message.split(/[,،]/);
-    if (commaItems.length > 2) {
-      commaItems.slice(1).forEach(item => {
-        const cleaned = item.trim();
-        if (cleaned && cleaned.length < 50) {
-          subtasks.push(cleaned);
-        }
-      });
+  }
+
+  // Remove duplicates from subtasks
+  subtasks = [...new Set(subtasks)];
+
+  // --- Title extraction ---
+  // Look for "title X", or after "task", trim around
+  let title = '';
+  // 1. Try "title: ..." or "title ..." 
+  const titleRegex = /(title[:\s]*|العنوان[:\s]*)([^,؛\n]*)/i;
+  const titleMatch = message.match(titleRegex);
+  if (titleMatch && titleMatch[2]) {
+    title = titleMatch[2].trim();
+  }
+  // 2. Else, try after "task", e.g. "task X" or "مهمة X"
+  if (!title) {
+    const afterTaskRegex = /(task|مهمة)[:,]?\s*([^\n,،]*)/i;
+    const taskMatch = message.match(afterTaskRegex);
+    if (taskMatch && taskMatch[2]) {
+      title = taskMatch[2].trim();
     }
   }
-  
-  // Determine priority
+  // 3. Else, try looking for something before "subtask" or just after keywords
+  if (!title && subtaskRegex.test(message)) {
+    // Anything before "subtask ..."
+    title = message.split(subtaskMatch[0])[0]
+      .replace(/.*title[:,]?\s*/i, '')
+      .replace(/.*task[:,]?\s*/i, '')
+      .replace(/.*مهمة[:,]?\s*/i, '')
+      .trim()
+      .replace(/[,،]+$/, '');
+  }
+  // 4. Fallback, if still empty, remove all keywords and subtasks, try picking a main phrase.
+  if (!title) {
+    let fallback = message
+      .replace(subtaskRegex, '')
+      .replace(/(task|todo|reminder|remind|title|subtask|subtasks|do|need to|have to|must|create|for|at|في|على|مهمة|تذكير|العنوان|مهام فرعية)/gi, '')
+      .replace(/[,،]+/g, ' ')
+      .replace(/\s+/, ' ')
+      .trim();
+    if (fallback.length > 0) {
+      title = fallback;
+    } else {
+      // Default fallback
+      title = language === 'ar' ? 'مهمة بدون عنوان' : 'Untitled Task';
+    }
+  }
+
+  // 5. Remove trailing times or dates from title
+  title = title.replace(/\b(at|في)\s*\d{1,2}(:\d{2})?\s*(am|pm|ص|م)?/gi, '').replace(/\s+$/, '');
+
+  // --- Description extraction (NOT extracted from user message at this time) ---
+  let description = '';
+
+  // --- Date & Time extraction ---
+  let due_date = null;
+  let due_time = null;
+  // Standard patterns
+  const timeRegex = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|ص|م)?\b/gi;
+  const dateTimeRegex = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|غداً|اليوم|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)/gi;
+  const dateTimeMatches = message.match(dateTimeRegex);
+
+  // Dates
+  if (dateTimeMatches) {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    for (const match of dateTimeMatches) {
+      const lower = match.toLowerCase();
+      if (lower === 'today' || lower === 'اليوم') {
+        due_date = today.toISOString().split('T')[0];
+      } else if (lower === 'tomorrow' || lower === 'غداً') {
+        due_date = tomorrow.toISOString().split('T')[0];
+      }
+      // Else, ignore for now (other dates not handled here: future enhancement)
+    }
+  }
+  // If no date, fallback to tomorrow
+  if (!due_date) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    due_date = tomorrow.toISOString().split('T')[0];
+  }
+
+  // Times
+  const timeMatch = message.match(timeRegex);
+  if (timeMatch && timeMatch.length > 0) {
+    // Take the first recognized time in the string
+    const first = timeMatch[0];
+    // Parse e.g. "9 AM", "09:00", "3pm"
+    const parsed = first.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm|ص|م)?/i);
+    if (parsed) {
+      let hour = parseInt(parsed[1]);
+      let minute = parsed[2] ? parseInt(parsed[2]) : 0;
+      const suffix = parsed[3] ? parsed[3].toLowerCase() : '';
+      if (suffix === 'pm' || suffix === 'م') {
+        if (hour < 12) hour += 12;
+      }
+      if (suffix === 'am' || suffix === 'ص') {
+        if (hour === 12) hour = 0;
+      }
+      // Format as "HH:MM"
+      due_time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    }
+  }
+
+  // --- Priority extraction ---
   let priority = 'normal';
   const urgentWords = ['urgent', 'asap', 'important', 'priority', 'عاجل', 'مهم', 'أولوية'];
   if (urgentWords.some(word => lowerMessage.includes(word))) {
     priority = 'high';
   }
-  
+
+  // Remove title parts from subtasks if user wrote "subtask: ...title..."
+  subtasks = subtasks.filter(st => st && st.toLowerCase() !== title.toLowerCase());
+
   const taskData = {
     title,
-    description: '',
+    description,
     due_date,
     due_time,
     subtasks,
     priority
   };
-  
   const reminderData = {
     title,
-    description: '',
+    description,
     due_date,
     due_time,
     priority
   };
-  
+
   return {
     isTask,
-    isReminder, 
+    isReminder,
     taskData: isTask ? taskData : null,
     reminderData: isReminder ? reminderData : null
   };
