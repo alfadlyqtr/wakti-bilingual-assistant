@@ -29,6 +29,7 @@ interface ChatDrawersProps {
   onNewConversation: () => void;
   onClearChat: () => void;
   sessionMessages: any[];
+  isLoading: boolean;
 }
 
 export function ChatDrawers({
@@ -47,7 +48,8 @@ export function ChatDrawers({
   onTextGenerated,
   onNewConversation,
   onClearChat,
-  sessionMessages
+  sessionMessages,
+  isLoading
 }: ChatDrawersProps) {
   const { language } = useTheme();
 

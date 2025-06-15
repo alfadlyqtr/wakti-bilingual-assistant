@@ -5,18 +5,22 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 interface NotificationBarsProps {
   searchConfirmationRequired: boolean;
-  error: string | null;
   onSearchConfirmation: () => void;
-  onDismissSearchConfirmation: () => void;
+  onQuotaRefresh: () => void;
+  quotaStatus?: any;
 }
 
 export function NotificationBars({
   searchConfirmationRequired,
-  error,
   onSearchConfirmation,
-  onDismissSearchConfirmation
+  onQuotaRefresh,
+  quotaStatus
 }: NotificationBarsProps) {
   const { language } = useTheme();
+
+  const handleDismissSearchConfirmation = () => {
+    // Handle dismiss logic if needed
+  };
 
   return (
     <>
@@ -35,7 +39,7 @@ export function NotificationBars({
             <Button
               variant="outline"
               size="sm"
-              onClick={onDismissSearchConfirmation}
+              onClick={handleDismissSearchConfirmation}
             >
               {language === 'ar' ? 'لا، شكراً' : 'No, Thanks'}
             </Button>
@@ -43,10 +47,19 @@ export function NotificationBars({
         </div>
       )}
       
-      {/* Error Display */}
-      {error && (
-        <div className="bg-red-100 border-b p-4">
-          <p className="text-sm text-red-800">{error}</p>
+      {/* Quota Status Display */}
+      {quotaStatus && quotaStatus.needs_upgrade && (
+        <div className="bg-orange-100 border-b p-4">
+          <p className="text-sm text-orange-800">
+            {language === 'ar' 
+              ? 'تم الوصول للحد الأقصى اليومي - انقر للترقية' 
+              : 'Daily quota reached - Click to refresh'}
+          </p>
+          <div className="mt-2">
+            <Button size="sm" onClick={onQuotaRefresh}>
+              {language === 'ar' ? 'تحديث الحصة' : 'Refresh Quota'}
+            </Button>
+          </div>
         </div>
       )}
     </>
