@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -165,6 +164,14 @@ export function ContactSearch() {
           {t("search", language)}
         </Button>
       </div>
+
+      {/* Informational note */}
+      <p className="text-xs text-muted-foreground mt-2 text-center">
+        {language === 'ar' 
+          ? 'يجب أن يكون كلا المستخدمين في قائمة جهات الاتصال لدى الآخر لتبادل الرسائل'
+          : 'Both users must be in each other\'s contact list to exchange messages'
+        }
+      </p>
 
       {isSearching && isSearchLoading && (
         <div className="flex justify-center items-center py-8">

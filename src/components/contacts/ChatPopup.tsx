@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -7,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
 import { toast } from "sonner";
@@ -37,6 +36,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [isUploading, setIsUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -234,6 +234,26 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   };
 
+  // Handle image download
+  const handleImageDownload = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `image-${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success(t("imageSaved", language) || "Image saved!");
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      toast.error(t("errorSavingImage", language) || "Error saving image");
+    }
+  };
+
   // Format message timestamp
   const formatMessageTime = (dateString: string) => {
     try {
@@ -325,12 +345,34 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               } backdrop-blur-sm shadow-sm`}
             >
               {message.message_type === 'image' ? (
-                <img 
-                  src={message.media_url} 
-                  alt="Image message" 
-                  className="max-w-full h-auto rounded-lg"
-                  loading="lazy"
-                />
+                <div className="relative group">
+                  <img 
+                    src={message.media_url} 
+                    alt="Image message" 
+                    className="max-w-full h-auto rounded-lg cursor-pointer"
+                    loading="lazy"
+                    onClick={() => setExpandedImage(message.media_url)}
+                  />
+                  {/* Image overlay buttons */}
+                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setExpandedImage(message.media_url)}
+                      className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
+                    >
+                      <Expand className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleImageDownload(message.media_url)}
+                      className="h-7 w-7 p-0 rounded-full bg-black/60 hover:bg-black/80 text-white border-0"
+                    >
+                      <Save className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
               ) : message.message_type === 'voice' ? (
                 <div className="flex items-center gap-2">
                   <Button
@@ -379,187 +421,226 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent 
-        className={`w-full max-w-sm md:max-w-md mx-auto h-[80vh] p-0 gap-0 rounded-2xl overflow-hidden border-0 shadow-xl`}
-        style={{
-          background: colors.background,
-          boxShadow: `0 10px 25px -5px ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}`,
-        }}
-        hideCloseButton
-      >
-        {/* Glassmorphic header */}
-        <div 
-          className="flex items-center justify-between p-4 border-b backdrop-blur-md sticky top-0 z-10"
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent 
+          className={`w-full max-w-sm md:max-w-md mx-auto h-[80vh] p-0 gap-0 rounded-2xl overflow-hidden border-0 shadow-xl`}
           style={{
-            borderColor: `${colors.secondary}30`,
-            background: isDark ? 
-              `linear-gradient(to bottom, ${colors.surfaceDark}, transparent)` : 
-              `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
+            background: colors.background,
+            boxShadow: `0 10px 25px -5px ${isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.1)'}`,
           }}
+          hideCloseButton
         >
-          <div className="flex items-center gap-3 flex-1">
-            <Avatar className={`h-10 w-10 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
-              <AvatarImage src={contactAvatar || ""} />
-              <AvatarFallback className={`text-sm font-semibold ${isDark ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
-                {contactName.substring(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <h3 className={`font-semibold text-base truncate ${isDark ? 'text-white' : 'text-light-primary'}`}>
-                {contactName}
-              </h3>
-              <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t("activeNow", language)}
-              </p>
-            </div>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={onClose}
-            className={`h-9 w-9 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+          {/* Glassmorphic header */}
+          <div 
+            className="flex items-center justify-between p-4 border-b backdrop-blur-md sticky top-0 z-10"
+            style={{
+              borderColor: `${colors.secondary}30`,
+              background: isDark ? 
+                `linear-gradient(to bottom, ${colors.surfaceDark}, transparent)` : 
+                `linear-gradient(to bottom, ${colors.surfaceLight}, transparent)`
+            }}
           >
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
+            <div className="flex items-center gap-3 flex-1">
+              <Avatar className={`h-10 w-10 border-2 ${isDark ? 'border-dark-secondary' : 'border-light-secondary'}`}>
+                <AvatarImage src={contactAvatar || ""} />
+                <AvatarFallback className={`text-sm font-semibold ${isDark ? 'bg-dark-secondary text-white' : 'bg-light-secondary text-light-primary'}`}>
+                  {contactName.substring(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <h3 className={`font-semibold text-base truncate ${isDark ? 'text-white' : 'text-light-primary'}`}>
+                  {contactName}
+                </h3>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t("activeNow", language)}
+                </p>
+              </div>
+            </div>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={onClose}
+              className={`h-9 w-9 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
 
-        {/* Message area */}
-        <ScrollArea className="flex-1 px-4 pt-4 pb-2">
-          {isLoadingMessages ? (
-            <div className="flex flex-col gap-3 p-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex gap-2">
-                  <div className={`h-8 w-8 rounded-full ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} animate-pulse`}></div>
-                  <div className="flex-1">
-                    <div className={`h-20 ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} rounded-xl animate-pulse`}></div>
-                    <div className={`h-3 w-16 mt-1 ml-1 ${isDark ? 'bg-dark-secondary/40' : 'bg-light-secondary/30'} rounded animate-pulse`}></div>
+          {/* Message area */}
+          <ScrollArea className="flex-1 px-4 pt-4 pb-2">
+            {isLoadingMessages ? (
+              <div className="flex flex-col gap-3 p-4">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex gap-2">
+                    <div className={`h-8 w-8 rounded-full ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} animate-pulse`}></div>
+                    <div className="flex-1">
+                      <div className={`h-20 ${isDark ? 'bg-dark-secondary/60' : 'bg-light-secondary/40'} rounded-xl animate-pulse`}></div>
+                      <div className={`h-3 w-16 mt-1 ml-1 ${isDark ? 'bg-dark-secondary/40' : 'bg-light-secondary/30'} rounded animate-pulse`}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : allMessages && allMessages.length > 0 ? (
+              <div className="space-y-1 py-2">
+                <AnimatePresence>
+                  {allMessages.map((message, index) => (
+                    renderMessage(message, index, allMessages)
+                  ))}
+                </AnimatePresence>
+                <div ref={messageEndRef} />
+              </div>
+            ) : (
+              <div className="flex flex-col justify-center items-center h-48 text-center py-8">
+                <div className={`text-4xl mb-4 ${isDark ? 'text-dark-tertiary' : 'text-light-secondary'}`}>👋</div>
+                <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t("startConversation", language)}
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+
+          {/* Floating compose area */}
+          <div 
+            className="p-4 pt-2 border-t"
+            style={{
+              borderColor: `${colors.secondary}30`,
+              background: isDark ? 
+                `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
+                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
+            }}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                >
+                  <Image className="h-4 w-4" />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageSelected}
+                  />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
+                  onClick={() => pdfInputRef.current?.click()}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                >
+                  <FileText className="h-4 w-4" />
+                  <input
+                    ref={pdfInputRef}
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={handlePDFSelected}
+                  />
+                </Button>
+
+                <VoiceRecorder 
+                  onRecordingComplete={handleVoiceRecording}
+                  disabled={sendMessageMutation.isPending || isUploading}
+                />
+              </div>
+
+              <div className="relative">
+                <div 
+                  className={`p-1 rounded-2xl backdrop-blur-sm ${isDark ? 'bg-dark-secondary/30' : 'bg-light-secondary/20'}`}
+                  style={{
+                    boxShadow: `0 4px 12px ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'}`
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      placeholder={t("typeMessage", language)}
+                      className={`h-10 border-0 bg-transparent text-sm flex-1 ${isDark ? 'text-white placeholder:text-gray-400' : 'text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                      disabled={sendMessageMutation.isPending || isUploading}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendTextMessage();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button" 
+                      size="icon"
+                      onClick={sendTextMessage}
+                      disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                      className={`rounded-full h-9 w-9 ${
+                        messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading
+                          ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                      } transition-colors`}
+                    >
+                      <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : allMessages && allMessages.length > 0 ? (
-            <div className="space-y-1 py-2">
-              <AnimatePresence>
-                {allMessages.map((message, index) => (
-                  renderMessage(message, index, allMessages)
-                ))}
-              </AnimatePresence>
-              <div ref={messageEndRef} />
-            </div>
-          ) : (
-            <div className="flex flex-col justify-center items-center h-48 text-center py-8">
-              <div className={`text-4xl mb-4 ${isDark ? 'text-dark-tertiary' : 'text-light-secondary'}`}>👋</div>
-              <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                {t("startConversation", language)}
-              </p>
-            </div>
-          )}
-        </ScrollArea>
-
-        {/* Floating compose area */}
-        <div 
-          className="p-4 pt-2 border-t"
-          style={{
-            borderColor: `${colors.secondary}30`,
-            background: isDark ? 
-              `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
-              `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
-          }}
-        >
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
-                onClick={() => fileInputRef.current?.click()}
-                disabled={sendMessageMutation.isPending || isUploading}
-              >
-                <Image className="h-4 w-4" />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleImageSelected}
-                />
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 rounded-full ${isDark ? 'hover:bg-dark-secondary/60 text-white' : 'hover:bg-light-secondary/50 text-light-primary'}`}
-                onClick={() => pdfInputRef.current?.click()}
-                disabled={sendMessageMutation.isPending || isUploading}
-              >
-                <FileText className="h-4 w-4" />
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept=".pdf"
-                  className="hidden"
-                  onChange={handlePDFSelected}
-                />
-              </Button>
-
-              <VoiceRecorder 
-                onRecordingComplete={handleVoiceRecording}
-                disabled={sendMessageMutation.isPending || isUploading}
-              />
-            </div>
-
-            <div className="relative">
-              <div 
-                className={`p-1 rounded-2xl backdrop-blur-sm ${isDark ? 'bg-dark-secondary/30' : 'bg-light-secondary/20'}`}
-                style={{
-                  boxShadow: `0 4px 12px ${isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)'}`
-                }}
-              >
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    placeholder={t("typeMessage", language)}
-                    className={`h-10 border-0 bg-transparent text-sm flex-1 ${isDark ? 'text-white placeholder:text-gray-400' : 'text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                    disabled={sendMessageMutation.isPending || isUploading}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        sendTextMessage();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button" 
-                    size="icon"
-                    onClick={sendTextMessage}
-                    disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                    className={`rounded-full h-9 w-9 ${
-                      messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading
-                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                        : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                
+                {/* Character counter */}
+                {messageText && (
+                  <div 
+                    className={`absolute right-14 bottom-3 text-xs ${
+                      isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'
                     } transition-colors`}
                   >
-                    <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
-                  </Button>
-                </div>
+                    {charCount}/{MAX_CHARS}
+                  </div>
+                )}
               </div>
-              
-              {/* Character counter */}
-              {messageText && (
-                <div 
-                  className={`absolute right-14 bottom-3 text-xs ${
-                    isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'
-                  } transition-colors`}
-                >
-                  {charCount}/{MAX_CHARS}
-                </div>
-              )}
             </div>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image expansion modal */}
+      {expandedImage && (
+        <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] p-4" hideCloseButton>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">{t("image", language) || "Image"}</h3>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleImageDownload(expandedImage)}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {t("save", language) || "Save"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedImage(null)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="relative bg-muted rounded-lg overflow-hidden">
+              <img
+                src={expandedImage}
+                alt="Expanded image"
+                className="w-full h-auto max-h-[70vh] object-contain"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
