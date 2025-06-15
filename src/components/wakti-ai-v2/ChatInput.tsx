@@ -145,8 +145,14 @@ export function ChatInput({
   // Layout & Mode highlighting classes
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
+
+  // Responsive classes
+  // Move input just above bottom nav (h-16 = 64px, so bottom-16)
   const mobileFixed =
     "fixed bottom-16 left-0 right-0 z-[101] bg-background bg-opacity-90 backdrop-blur-xl border-t border-border";
+
+  // Wrapper to detect mobile, or just always apply on all screens if this is a mobile-only app.
+  // Per your specs, mobile only, so we apply always.
 
   return (
     <>
@@ -226,61 +232,60 @@ export function ChatInput({
                   `}
                   style={{ willChange: "box-shadow,border-color" }}
                 >
-                  {/* ALL ICONS AND INPUT: Aligned horizontally on the same row */}
-                  <div className="flex items-end gap-1 px-3 pb-2 pt-2">
-                    {/* Icon/buttons group */}
-                    <div className="flex items-center gap-2 mr-2">
-                      <PlusMenu
-                        onCamera={triggerCamera}
-                        onUpload={triggerUpload}
-                        isLoading={isLoading}
-                      />
-                      <button
-                        onClick={handleOpenConversationsDrawer}
-                        aria-label={language === "ar" ? "المحادثات" : "Conversations"}
-                        className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
-                        disabled={isLoading}
-                        type="button"
-                        tabIndex={0}
-                      >
-                        <span className="text-lg" role="img" aria-label="Conversations">💬</span>
-                        <span className="text-xs font-medium text-foreground/80">
-                          {language === 'ar' ? 'المحادثات' : 'Conversations'}
-                        </span>
-                      </button>
-                      <button
-                        onClick={handleOpenQuickActionsDrawer}
-                        aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
-                        className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
-                        disabled={isLoading}
-                        type="button"
-                        tabIndex={0}
-                      >
-                        <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
-                        <span className="text-xs font-medium text-foreground/80">
-                          {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
-                        </span>
-                      </button>
-                      <ActiveModeIndicator activeTrigger={activeTrigger} />
-                      {/* Hidden file/camera inputs */}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        accept="image/*,.txt"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                      <input
-                        ref={cameraInputRef}
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleCameraChange}
-                        className="hidden"
-                      />
-                    </div>
-                    {/* Textarea */}
+                  {/* TOP ROW: [Plus] [💬 Conversations] [⚡ Quick Actions] [Mode Badge] */}
+                  <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
+                    <PlusMenu
+                      onCamera={triggerCamera}
+                      onUpload={triggerUpload}
+                      isLoading={isLoading}
+                    />
+                    <button
+                      onClick={handleOpenConversationsDrawer}
+                      aria-label={language === "ar" ? "المحادثات" : "Conversations"}
+                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                      disabled={isLoading}
+                      type="button"
+                      tabIndex={0}
+                    >
+                      <span className="text-lg" role="img" aria-label="Conversations">💬</span>
+                      <span className="text-xs font-medium text-foreground/80">
+                        {language === 'ar' ? 'المحادثات' : 'Conversations'}
+                      </span>
+                    </button>
+                    <button
+                      onClick={handleOpenQuickActionsDrawer}
+                      aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
+                      className="h-9 px-3 rounded-2xl flex items-center justify-center gap-2 bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                      disabled={isLoading}
+                      type="button"
+                      tabIndex={0}
+                    >
+                      <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
+                      <span className="text-xs font-medium text-foreground/80">
+                        {language === 'ar' ? 'إجراءات سريعة' : 'Quick Actions'}
+                      </span>
+                    </button>
+                    <ActiveModeIndicator activeTrigger={activeTrigger} />
+                    {/* Hidden file/camera inputs */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.txt"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleCameraChange}
+                      className="hidden"
+                    />
+                  </div>
+                  {/* INPUT ROW: Textarea + Send */}
+                  <div className="relative flex items-end gap-1 px-3 pb-2 pt-0.5">
                     <div className="flex-1 flex items-end">
                       <Textarea
                         value={message}
@@ -308,7 +313,6 @@ export function ChatInput({
                         aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
                       />
                     </div>
-                    {/* Send button */}
                     {(message.trim() || uploadedFiles.length > 0) && (
                       <TooltipProvider>
                         <Tooltip>
