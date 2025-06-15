@@ -2,9 +2,11 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy } from 'lucide-react';
+import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy, Save, Expand } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useState } from 'react';
+import { ImageModal } from './ImageModal';
 
 interface ChatBubbleProps {
   message: any;
@@ -58,6 +60,43 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
       default:
         return <MessageSquare className="w-3 h-3" />;
     }
+  };
+
+  // ------ GENERATED IMAGE ACTIONS ------
+  const [showImageModal, setShowImageModal] = useState(false);
+
+  // Save image to downloads
+  const handleSaveImage = async () => {
+    try {
+      const response = await fetch(message.imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `wakti-generated-image-${Date.now()}.webp`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success(language === 'ar' ? 'تم حفظ الصورة' : 'Image saved!');
+    } catch (error) {
+      toast.error(language === 'ar' ? 'فشل في حفظ الصورة' : 'Failed to save image');
+    }
+  };
+
+  // Copy generated image URL
+  const handleCopyImageUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(message.imageUrl);
+      toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Image URL copied!');
+    } catch (error) {
+      toast.error(language === 'ar' ? 'فشل في نسخ الرابط' : 'Failed to copy image URL');
+    }
+  };
+
+  // Expand image: just opens the image modal
+  const handleExpandImage = () => {
+    setShowImageModal(true);
   };
 
   return (
@@ -134,6 +173,43 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                     alt="Generated image" 
                     className="max-w-full h-auto rounded-lg border"
                     style={{ maxHeight: '300px' }}
+                  />
+                  {/* Mini action buttons for generated images */}
+                  <div className="flex flex-row items-center gap-2 mt-2">
+                    {/* Save Image */}
+                    <button
+                      aria-label={language === 'ar' ? 'حفظ' : 'Save image'}
+                      className="p-1 rounded hover:bg-primary/10 active:bg-primary/20 transition-colors"
+                      onClick={handleSaveImage}
+                      type="button"
+                    >
+                      <Save className="w-4 h-4" />
+                    </button>
+                    {/* Copy Image URL */}
+                    <button
+                      aria-label={language === 'ar' ? 'نسخ الرابط' : 'Copy image url'}
+                      className="p-1 rounded hover:bg-primary/10 active:bg-primary/20 transition-colors"
+                      onClick={handleCopyImageUrl}
+                      type="button"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                    {/* Expand/Zoom Image */}
+                    <button
+                      aria-label={language === 'ar' ? 'تكبير' : 'Expand image'}
+                      className="p-1 rounded hover:bg-primary/10 active:bg-primary/20 transition-colors"
+                      onClick={handleExpandImage}
+                      type="button"
+                    >
+                      <Expand className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {/* Image Modal for Expand */}
+                  <ImageModal
+                    isOpen={showImageModal}
+                    onClose={() => setShowImageModal(false)}
+                    imageUrl={message.imageUrl}
+                    prompt={message.content}
                   />
                 </div>
               )}
