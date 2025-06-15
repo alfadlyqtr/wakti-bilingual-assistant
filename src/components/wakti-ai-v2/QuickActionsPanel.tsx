@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { 
   MessageSquare, Search, Image, PenTool, Mic, Volume2, 
-  Zap, Brain, FileText, Calculator, Calendar, Clock
+  Zap
 } from 'lucide-react';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
 import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
@@ -92,34 +92,6 @@ export function QuickActionsPanel({
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
   };
 
-  const handleQuickPrompt = (prompt: string) => {
-    onSendMessage(prompt);
-    console.log('⚡ Quick Actions: Sent prompt:', prompt);
-  };
-
-  const quickPrompts = [
-    { 
-      text: language === 'ar' ? 'اشرح لي موضوع معقد ببساطة' : 'Explain a complex topic simply',
-      icon: <Brain className="h-4 w-4" />
-    },
-    { 
-      text: language === 'ar' ? 'اكتب لي ملخص للاجتماع' : 'Write me a meeting summary',
-      icon: <FileText className="h-4 w-4" />
-    },
-    { 
-      text: language === 'ar' ? 'احسب لي ميزانية الشهر' : 'Calculate my monthly budget',
-      icon: <Calculator className="h-4 w-4" />
-    },
-    { 
-      text: language === 'ar' ? 'اعمل لي جدول أعمال' : 'Create me a schedule',
-      icon: <Calendar className="h-4 w-4" />
-    },
-    { 
-      text: language === 'ar' ? 'ذكرني بمهامي اليوم' : 'Remind me of my tasks today',
-      icon: <Clock className="h-4 w-4" />
-    }
-  ];
-
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
@@ -190,33 +162,6 @@ export function QuickActionsPanel({
             ))}
           </div>
         </div>
-
-        {/* Quick Prompts */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">
-              {language === 'ar' ? 'اقتراحات سريعة' : 'Quick Prompts'}
-            </CardTitle>
-            <CardDescription className="text-xs">
-              {language === 'ar' ? 'انقر للبدء بسرعة' : 'Click to get started quickly'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {quickPrompts.map((prompt, index) => (
-              <Button
-                key={index}
-                onClick={() => handleQuickPrompt(prompt.text)}
-                variant="ghost"
-                className="w-full justify-start h-auto p-3 text-left"
-              >
-                <div className="p-1 rounded mr-3 text-primary">
-                  {prompt.icon}
-                </div>
-                <span className="text-sm">{prompt.text}</span>
-              </Button>
-            ))}
-          </CardContent>
-        </Card>
 
         {/* Text Generator Popup */}
         <TextGeneratorPopup
