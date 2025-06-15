@@ -67,15 +67,14 @@ export function ChatInput({
     clearFiles
   } = useFileUpload();
 
-  // ADD: Handler to open Conversations Drawer (left)
+  // Handler to open Conversations Drawer (💬)
   const handleOpenConversationsDrawer = () => {
     if (typeof window !== "undefined") {
       const nativeEvent = new CustomEvent("open-wakti-conversations");
       window.dispatchEvent(nativeEvent);
     }
   };
-
-  // ADD: Handler to invoke onOpenPlusDrawer (for Quick Actions, right)
+  // Handler to open Quick Actions Drawer (⚡)
   const handleOpenQuickActionsDrawer = () => {
     if (onOpenPlusDrawer) onOpenPlusDrawer();
   };
@@ -143,7 +142,7 @@ export function ChatInput({
 
   // --- NEW: Reworked Visual Arrangement Below ---
 
-  // Mode border/highlight logic
+  // Layout & Mode highlighting classes
   const containerHighlight = modeHighlightStyles(activeTrigger);
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
@@ -216,20 +215,38 @@ export function ChatInput({
                 ${containerHighlight}
                 shadow-xl rounded-2xl backdrop-blur-2xl
                 p-0 transition-all duration-300
-                shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1px_22px_0_rgba(70,70,150,0.12)]
+                shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1.5px_18px_0_rgba(70,70,150,0.13)]
                 border-[2.5px] min-h-[70px] max-w-full
               `}
-              style={{ willChange: 'box-shadow,border-color' }}
+              style={{ willChange: "box-shadow,border-color" }}
             >
-              {/* TOP ROW: Plus + Mode Badge */}
-              <div className="flex items-center gap-2 px-3 pt-2 pb-0.5">
+              {/* TOP ROW: [Plus] [💬] [⚡] [Mode Badge] */}
+              <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 w-full">
                 <PlusMenu
                   onCamera={triggerCamera}
                   onUpload={triggerUpload}
-                  onOpenConversations={handleOpenConversationsDrawer}
-                  onOpenQuickActions={handleOpenQuickActionsDrawer}
                   isLoading={isLoading}
                 />
+                <button
+                  onClick={handleOpenConversationsDrawer}
+                  aria-label={language === "ar" ? "المحادثات" : "Conversations"}
+                  className="h-9 w-9 rounded-2xl flex items-center justify-center bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  disabled={isLoading}
+                  type="button"
+                  tabIndex={0}
+                >
+                  <span className="text-lg" role="img" aria-label="Conversations">💬</span>
+                </button>
+                <button
+                  onClick={handleOpenQuickActionsDrawer}
+                  aria-label={language === "ar" ? "إجراءات سريعة" : "Quick Actions"}
+                  className="h-9 w-9 rounded-2xl flex items-center justify-center bg-white/10 dark:bg-white/5 hover:bg-white/20 transition-all border-0 ml-0"
+                  disabled={isLoading}
+                  type="button"
+                  tabIndex={0}
+                >
+                  <span className="text-lg" role="img" aria-label="Quick Actions">⚡</span>
+                </button>
                 <ActiveModeIndicator activeTrigger={activeTrigger} />
                 {/* Hidden file/camera inputs */}
                 <input
@@ -257,10 +274,10 @@ export function ChatInput({
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
                     className={`
-                      flex-1 border-[1.5px]
+                      flex-1 border-[2.5px]
                       bg-white/95 dark:bg-black/50
                       ${textareaHighlightClass}
-                      shadow-inner
+                      shadow-inner shadow-primary/10
                       backdrop-blur-[3px] resize-none
                       focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
                       py-3 px-3 min-h-[36px] max-h-32 text-base
