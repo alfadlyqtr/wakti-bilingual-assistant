@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -105,10 +104,13 @@ export function QuickActionsPanel({
     }
   };
 
+  // UPDATED FUNCTION: Now closes the drawer after opening the popup/tool.
   const handleToolAction = (action: () => void) => {
     action();
-    // DO NOT auto-close drawer for tools - let popups display properly
-    console.log('🔧 Quick Actions: Tool opened, keeping drawer open for popup');
+    if (onClose) {
+      onClose(); // immediately close the drawer
+    }
+    console.log('🔧 Quick Actions: Tool opened and drawer closed');
   };
 
   return (
