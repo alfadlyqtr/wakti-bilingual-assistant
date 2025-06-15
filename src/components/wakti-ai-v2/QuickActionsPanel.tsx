@@ -104,13 +104,11 @@ export function QuickActionsPanel({
     }
   };
 
-  // UPDATED FUNCTION: Now closes the drawer after opening the popup/tool.
+  // UPDATED FUNCTION: Do NOT close the drawer after opening the popup/tool.
   const handleToolAction = (action: () => void) => {
     action();
-    if (onClose) {
-      onClose(); // immediately close the drawer
-    }
-    console.log('🔧 Quick Actions: Tool opened and drawer closed');
+    // DO NOT close the drawer here! Popups will remain open now.
+    console.log('🔧 Quick Actions: Tool opened and drawer stays open');
   };
 
   return (
