@@ -111,10 +111,46 @@ export const getWidgetOrder = () => {
   return defaultOrder;
 };
 
-export const saveWidgetOrder = (newOrder: string[]) => {
+export const saveWidgetOrder = async (newOrder: string[]) => {
   try {
-    console.log('Saving widget order:', newOrder);
+    // Save to localStorage
     localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
+    console.log('Saving widget order (local):', newOrder);
+
+    // Save to Supabase profiles.settings.widgets.widgetOrder
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.id) {
+      // Get the current settings so we don't overwrite unrelated settings
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("settings")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const currentSettings = profile?.settings ?? {};
+      const widgetsDbPrefs = currentSettings.widgets ?? {};
+
+      const newWidgetsPrefs = {
+        ...widgetsDbPrefs,
+        widgetOrder: newOrder,
+      };
+
+      const updatedSettings = {
+        ...currentSettings,
+        widgets: newWidgetsPrefs,
+      };
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ settings: updatedSettings })
+        .eq("id", user.id);
+
+      if (error) {
+        console.error("Error updating widget order in remote profile:", error);
+      } else {
+        console.log("Widget order updated in remote profile:", newOrder);
+      }
+    }
   } catch (error) {
     console.error('Error saving widget order:', error);
   }

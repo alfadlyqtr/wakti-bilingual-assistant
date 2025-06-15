@@ -91,7 +91,8 @@ export const useWidgetManager = (
     loadWidgetPrefsAndInit();
   }, [language, navigate, isLoading, legacyEvents]);
 
-  const handleDragEnd = (result: any) => {
+  // Enhanced: Persist new widget order both locally and remotely
+  const handleDragEnd = async (result: any) => {
     if (!result.destination) return;
 
     const items = Array.from(widgets);
@@ -99,9 +100,10 @@ export const useWidgetManager = (
     items.splice(result.destination.index, 0, reorderedItem);
 
     setWidgets(items);
-    const { saveWidgetOrder } = require("@/utils/widgetPreferences");
+
     const newOrder = items.map((widget) => widget.id);
-    saveWidgetOrder(newOrder);
+    const { saveWidgetOrder } = require("@/utils/widgetPreferences");
+    await saveWidgetOrder(newOrder);
 
     toast.success(
       language === "ar"
