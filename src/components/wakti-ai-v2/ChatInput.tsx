@@ -1,3 +1,4 @@
+
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -194,7 +195,6 @@ export function ChatInput({
         {/* Main Input Area - Liquid Glass Container */}
         <div className="px-4 pb-4">
           <div className="max-w-4xl mx-auto">
-            
             {/* Liquid Glass Input Container */}
             <div className="relative group">
               <div className="absolute -inset-0.5 rounded-3xl bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-500 blur-sm"></div>
