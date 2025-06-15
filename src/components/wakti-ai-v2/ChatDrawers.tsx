@@ -1,14 +1,12 @@
-
 import React from 'react';
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import { useTheme } from '@/providers/ThemeProvider';
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { ConversationsList } from './ConversationsList';
+import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
 
@@ -22,10 +20,10 @@ interface ChatDrawersProps {
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
   fetchConversations: () => void;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
   activeTrigger: string;
   onTriggerChange: (trigger: string) => void;
-  onTextGenerated: (text: string, mode: 'compose' | 'reply') => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onNewConversation: () => void;
   onClearChat: () => void;
   sessionMessages: any[];
@@ -54,44 +52,48 @@ export function ChatDrawers({
   const { language } = useTheme();
 
   return (
-    <>
-      {/* Left Drawer - Conversations */}
-      <Sheet open={showConversations} onOpenChange={setShowConversations}>
-        <SheetContent side="left" className="w-80 p-0">
-          <SheetHeader className="p-4 border-b">
-            <SheetTitle>{language === 'ar' ? 'المحادثات' : 'Conversations'}</SheetTitle>
-            <SheetDescription>
-              {language === 'ar'
-                ? 'اختر محادثة موجودة أو ابدأ واحدة جديدة.'
-                : 'Select an existing conversation or start a new one.'}
-            </SheetDescription>
-          </SheetHeader>
-          <ConversationsList
-            conversations={conversations}
-            currentConversationId={currentConversationId}
-            onSelectConversation={onSelectConversation}
-            onDeleteConversation={onDeleteConversation}
-            onRefresh={fetchConversations}
-            onClose={() => setShowConversations(false)}
-            onNewConversation={onNewConversation}
-            onClearChat={onClearChat}
-            sessionMessages={sessionMessages}
-          />
-        </SheetContent>
-      </Sheet>
+    <div>
+      {/* Conversations Drawer */}
+      <Drawer open={showConversations} onOpenChange={setShowConversations}>
+        <DrawerContent className="h-[80vh]">
+          <DrawerHeader>
+            <DrawerTitle>
+              {language === 'ar' ? 'المحادثات' : 'Conversations'}
+            </DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-hidden">
+            <ConversationsList
+              conversations={conversations}
+              currentConversationId={currentConversationId}
+              onSelectConversation={onSelectConversation}
+              onDeleteConversation={onDeleteConversation}
+              onNewConversation={onNewConversation}
+              onClearChat={onClearChat}
+              sessionMessages={sessionMessages}
+              isLoading={isLoading}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
 
-      {/* Right Drawer - Quick Actions */}
-      <Sheet open={showQuickActions} onOpenChange={setShowQuickActions}>
-        <SheetContent side="right" className="w-80 p-4">
-          <QuickActionsPanel
-            onSendMessage={onSendMessage}
-            activeTrigger={activeTrigger as any}
-            onTriggerChange={onTriggerChange}
-            onTextGenerated={onTextGenerated}
-            onClose={() => setShowQuickActions(false)}
-          />
-        </SheetContent>
-      </Sheet>
-    </>
+      {/* Quick Actions Drawer */}
+      <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
+        <DrawerContent className="h-[80vh]">
+          <DrawerHeader>
+            <DrawerTitle>
+              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+            </DrawerTitle>
+          </DrawerHeader>
+          <div className="flex-1 overflow-hidden">
+            <QuickActionsPanel
+              onSendMessage={onSendMessage}
+              activeTrigger={activeTrigger}
+              onTriggerChange={onTriggerChange}
+              onTextGenerated={onTextGenerated}
+            />
+          </div>
+        </DrawerContent>
+      </Drawer>
+    </div>
   );
 }

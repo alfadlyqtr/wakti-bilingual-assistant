@@ -1,274 +1,264 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Languages, Settings, Brain, Search, MessageSquare, Image, PenTool, ShoppingCart, Mic2 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
-import { BuyExtrasPopup } from './BuyExtrasPopup';
-import { VoiceClonePopup } from './VoiceClonePopup';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { 
+  MessageSquare, Search, Image, PenTool, Mic, Volume2, 
+  Zap, Brain, FileText, Calculator, Calendar, Clock
+} from 'lucide-react';
 import { TextGeneratorPopup } from './TextGeneratorPopup';
-import { KnowledgeModal } from './KnowledgeModal';
+import { VoiceTranslatorPopup } from './VoiceTranslatorPopup';
+import { VoiceClonePopup } from './VoiceClonePopup';
+import { BuyExtrasPopup } from './BuyExtrasPopup';
 
-type TriggerMode = 'chat' | 'search' | 'image';
-
-interface QuickActionsPanelProps {
-  onSendMessage: (message: string) => void;
-  activeTrigger: TriggerMode;
-  onTriggerChange: (trigger: TriggerMode) => void;
-  onTextGenerated?: (text: string, mode: 'compose' | 'reply') => void;
-  onClose?: () => void;
+interface QuickActionsProps {
+  onSendMessage: (message: string, inputType?: 'text' | 'voice') => void;
+  activeTrigger: string;
+  onTriggerChange: (trigger: string) => void;
+  onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
 }
 
-export function QuickActionsPanel({ onSendMessage, activeTrigger, onTriggerChange, onTextGenerated, onClose }: QuickActionsPanelProps) {
-  const { language, toggleLanguage } = useTheme();
-  const [voiceTranslatorOpen, setVoiceTranslatorOpen] = useState(false);
-  const [buyExtrasOpen, setBuyExtrasOpen] = useState(false);
-  const [voiceCloneOpen, setVoiceCloneOpen] = useState(false);
-  const [textGeneratorOpen, setTextGeneratorOpen] = useState(false);
-  const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
+export function QuickActionsPanel({ 
+  onSendMessage, 
+  activeTrigger, 
+  onTriggerChange,
+  onTextGenerated 
+}: QuickActionsProps) {
+  const { language } = useTheme();
+  const [showTextGen, setShowTextGen] = useState(false);
+  const [showVoiceTranslator, setShowVoiceTranslator] = useState(false);
+  const [showVoiceClone, setShowVoiceClone] = useState(false);
+  const [showBuyExtras, setShowBuyExtras] = useState(false);
 
-  // Save trigger state to localStorage and dispatch event for header
-  React.useEffect(() => {
-    localStorage.setItem('wakti-ai-active-trigger', activeTrigger);
-    window.dispatchEvent(new Event('ai-trigger-change'));
-  }, [activeTrigger]);
-
-  const triggerButtons = [
+  const triggerModes = [
     {
-      id: 'chat' as TriggerMode,
-      icon: MessageSquare,
+      id: 'chat',
       label: language === 'ar' ? 'محادثة' : 'Chat',
-      description: language === 'ar' ? 'الوضع الافتراضي' : 'Default mode',
-      color: 'bg-blue-500'
+      icon: <MessageSquare className="h-4 w-4" />,
+      color: 'bg-blue-500',
+      description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
     },
     {
-      id: 'search' as TriggerMode,
-      icon: Search,
+      id: 'search',
       label: language === 'ar' ? 'بحث' : 'Search',
-      description: language === 'ar' ? 'البحث والمعلومات الحديثة' : 'Search & current info',
-      color: 'bg-green-500'
+      icon: <Search className="h-4 w-4" />,
+      color: 'bg-green-500',
+      description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet'
     },
     {
-      id: 'image' as TriggerMode,
-      icon: Image,
+      id: 'image',
       label: language === 'ar' ? 'صورة' : 'Image',
-      description: language === 'ar' ? 'إنشاء الصور' : 'Image generation',
-      color: 'bg-orange-500'
+      icon: <Image className="h-4 w-4" />,
+      color: 'bg-orange-500',
+      description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
     }
   ];
 
-  const handleTriggerChange = (trigger: TriggerMode) => {
-    onTriggerChange(trigger);
-    onClose?.();
+  const quickActions = [
+    {
+      icon: <PenTool className="h-5 w-5" />,
+      label: language === 'ar' ? 'مولد النصوص' : 'Text Generator',
+      description: language === 'ar' ? 'إنشاء النصوص والردود الذكية' : 'Generate texts and smart replies',
+      action: () => setShowTextGen(true),
+      color: 'bg-purple-500'
+    },
+    {
+      icon: <Volume2 className="h-5 w-5" />,
+      label: language === 'ar' ? 'مترجم صوتي' : 'Voice Translator',
+      description: language === 'ar' ? 'ترجمة فورية بالصوت' : 'Real-time voice translation',
+      action: () => setShowVoiceTranslator(true),
+      color: 'bg-indigo-500'
+    },
+    {
+      icon: <Mic className="h-5 w-5" />,
+      label: language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone',
+      description: language === 'ar' ? 'إنشاء نسخة من صوتك' : 'Create a copy of your voice',
+      action: () => setShowVoiceClone(true),
+      color: 'bg-pink-500'
+    },
+    {
+      icon: <Zap className="h-5 w-5" />,
+      label: language === 'ar' ? 'شراء إضافات' : 'Buy Extras',
+      description: language === 'ar' ? 'المزيد من الميزات المتقدمة' : 'More advanced features',
+      action: () => setShowBuyExtras(true),
+      color: 'bg-yellow-500'
+    }
+  ];
+
+  const handleTriggerSelect = (triggerId: string) => {
+    onTriggerChange(triggerId);
+    console.log('✨ Quick Actions: Trigger changed to:', triggerId);
   };
 
-  // Handle tool state changes - don't close drawer immediately
-  const handleVoiceTranslatorChange = (open: boolean) => {
-    setVoiceTranslatorOpen(open);
-    // Only close drawer if tool was closed
-    if (!open) {
-      setTimeout(() => onClose?.(), 100);
-    }
+  const handleQuickPrompt = (prompt: string) => {
+    onSendMessage(prompt);
+    console.log('⚡ Quick Actions: Sent prompt:', prompt);
   };
 
-  const handleBuyExtrasChange = (open: boolean) => {
-    setBuyExtrasOpen(open);
-    if (!open) {
-      setTimeout(() => onClose?.(), 100);
+  const quickPrompts = [
+    { 
+      text: language === 'ar' ? 'اشرح لي موضوع معقد ببساطة' : 'Explain a complex topic simply',
+      icon: <Brain className="h-4 w-4" />
+    },
+    { 
+      text: language === 'ar' ? 'اكتب لي ملخص للاجتماع' : 'Write me a meeting summary',
+      icon: <FileText className="h-4 w-4" />
+    },
+    { 
+      text: language === 'ar' ? 'احسب لي ميزانية الشهر' : 'Calculate my monthly budget',
+      icon: <Calculator className="h-4 w-4" />
+    },
+    { 
+      text: language === 'ar' ? 'اعمل لي جدول أعمال' : 'Create me a schedule',
+      icon: <Calendar className="h-4 w-4" />
+    },
+    { 
+      text: language === 'ar' ? 'ذكرني بمهامي اليوم' : 'Remind me of my tasks today',
+      icon: <Clock className="h-4 w-4" />
     }
-  };
-
-  const handleVoiceCloneChange = (open: boolean) => {
-    setVoiceCloneOpen(open);
-    if (!open) {
-      setTimeout(() => onClose?.(), 100);
-    }
-  };
-
-  const handleTextGeneratorChange = (open: boolean) => {
-    setTextGeneratorOpen(open);
-    if (!open) {
-      setTimeout(() => onClose?.(), 100);
-    }
-  };
-
-  const handleKnowledgeModalChange = (open: boolean) => {
-    setKnowledgeModalOpen(open);
-    if (!open) {
-      setTimeout(() => onClose?.(), 100);
-    }
-  };
-
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    if (onTextGenerated) {
-      onTextGenerated(text, mode);
-    }
-    // Close drawer after text is generated and applied
-    onClose?.();
-  };
+  ];
 
   return (
-    <div className="space-y-6 h-full flex flex-col p-1">
-      {/* AI Trigger Controls */}
-      <div className="flex-shrink-0">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2">
-            <Brain className="h-4 w-4" />
-            {language === 'ar' ? 'وضع الذكاء الاصطناعي' : 'AI Mode'}
-          </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleLanguage}
-            className="h-10 px-4 rounded-full text-sm font-medium"
-          >
-            {language === 'ar' ? 'English' : 'العربية'}
-          </Button>
+    <div className="h-full overflow-y-auto">
+      <div className="p-4 space-y-6">
+        <div className="text-center">
+          <h2 className="text-xl font-bold">
+            {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {language === 'ar' ? 'أدوات ذكية لتحسين تجربتك' : 'Smart tools to enhance your experience'}
+          </p>
         </div>
-        
-        {/* Updated trigger layout - vertical with more spacing */}
-        <div className="space-y-4">
-          {triggerButtons.map((trigger) => (
-            <Button
-              key={trigger.id}
-              variant={activeTrigger === trigger.id ? "default" : "outline"}
-              className={cn(
-                "w-full h-16 p-4 flex items-center justify-start gap-4 text-left transition-all duration-200",
-                activeTrigger === trigger.id && "ring-2 ring-primary ring-offset-1"
-              )}
-              onClick={() => handleTriggerChange(trigger.id)}
-            >
-              <div className={cn(
-                "p-2 rounded-lg flex-shrink-0",
-                activeTrigger === trigger.id ? "bg-primary-foreground" : trigger.color
-              )}>
-                <trigger.icon className={cn(
-                  "h-4 w-4",
-                  activeTrigger === trigger.id ? "text-primary" : "text-white"
-                )} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium">{trigger.label}</div>
-                <div className="text-xs text-muted-foreground">{trigger.description}</div>
-              </div>
-            </Button>
-          ))}
-        </div>
+
+        <Tabs defaultValue="modes" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="modes">
+              {language === 'ar' ? 'الأنماط' : 'Modes'}
+            </TabsTrigger>
+            <TabsTrigger value="tools">
+              {language === 'ar' ? 'الأدوات' : 'Tools'}
+            </TabsTrigger>
+            <TabsTrigger value="prompts">
+              {language === 'ar' ? 'اقتراحات' : 'Prompts'}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="modes" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  {language === 'ar' ? 'أنماط الذكاء الاصطناعي' : 'AI Modes'}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {language === 'ar' ? 'اختر النمط المناسب لمهمتك' : 'Choose the right mode for your task'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {triggerModes.map((mode) => (
+                  <Button
+                    key={mode.id}
+                    onClick={() => handleTriggerSelect(mode.id)}
+                    variant={activeTrigger === mode.id ? 'default' : 'ghost'}
+                    className="w-full justify-start h-auto p-3"
+                  >
+                    <div className={`p-2 rounded-lg ${mode.color} text-white mr-3`}>
+                      {mode.icon}
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium text-sm">{mode.label}</div>
+                      <div className="text-xs text-muted-foreground">{mode.description}</div>
+                    </div>
+                    {activeTrigger === mode.id && (
+                      <Badge variant="secondary" className="ml-auto text-xs">
+                        {language === 'ar' ? 'نشط' : 'Active'}
+                      </Badge>
+                    )}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="tools" className="space-y-3">
+            <div className="grid gap-3">
+              {quickActions.map((action, index) => (
+                <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4" onClick={action.action}>
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${action.color} text-white`}>
+                        {action.icon}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-sm">{action.label}</h3>
+                        <p className="text-xs text-muted-foreground">{action.description}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="prompts" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">
+                  {language === 'ar' ? 'اقتراحات سريعة' : 'Quick Prompts'}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {language === 'ar' ? 'انقر للبدء بسرعة' : 'Click to get started quickly'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {quickPrompts.map((prompt, index) => (
+                  <Button
+                    key={index}
+                    onClick={() => handleQuickPrompt(prompt.text)}
+                    variant="ghost"
+                    className="w-full justify-start h-auto p-3 text-left"
+                  >
+                    <div className="p-1 rounded mr-3 text-primary">
+                      {prompt.icon}
+                    </div>
+                    <span className="text-sm">{prompt.text}</span>
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Text Generator Popup */}
+        <TextGeneratorPopup
+          open={showTextGen}
+          onOpenChange={setShowTextGen}
+          onGenerated={onTextGenerated}
+        />
+
+        {/* Voice Translator Popup */}
+        <VoiceTranslatorPopup
+          open={showVoiceTranslator}
+          onOpenChange={setShowVoiceTranslator}
+          onTranslated={(translatedText) => {
+            onSendMessage(translatedText, 'voice');
+            console.log('🔄 Voice translation completed:', translatedText);
+          }}
+        />
+
+        {/* Voice Clone Popup */}
+        <VoiceClonePopup
+          open={showVoiceClone}
+          onOpenChange={setShowVoiceClone}
+        />
+
+        {/* Buy Extras Popup */}
+        <BuyExtrasPopup
+          open={showBuyExtras}
+          onOpenChange={setShowBuyExtras}
+        />
       </div>
-
-      {/* Action Buttons (Not Triggers) */}
-      <div className="flex-shrink-0">
-        <h3 className="font-semibold text-sm text-muted-foreground flex items-center gap-2 mb-4">
-          <Settings className="h-4 w-4" />
-          {language === 'ar' ? 'أدوات' : 'Tools'}
-        </h3>
-        
-        <div className="grid grid-cols-2 gap-3">
-          {/* Voice Translator Button */}
-          <Button
-            variant="ghost"
-            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setVoiceTranslatorOpen(true)}
-          >
-            <div className="p-2 rounded-lg bg-gradient-to-r from-rose-500 to-pink-500">
-              <Languages className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-xs font-medium leading-tight">
-              {language === 'ar' ? 'مترجم' : 'Translator'}
-            </span>
-          </Button>
-          
-          {/* Text Generation Button */}
-          <Button
-            variant="ghost"
-            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setTextGeneratorOpen(true)}
-          >
-            <div className="p-2 rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500">
-              <PenTool className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-xs font-medium leading-tight">
-              {language === 'ar' ? 'إنشاء نص' : 'Text Generate'}
-            </span>
-          </Button>
-          
-          {/* Improve AI Button - Updated to open KnowledgeModal */}
-          <Button
-            variant="ghost"
-            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setKnowledgeModalOpen(true)}
-          >
-            <div className="p-2 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500">
-              <Brain className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-xs font-medium leading-tight">
-              {language === 'ar' ? 'تحسين الذكاء الاصطناعي' : 'Improve AI'}
-            </span>
-          </Button>
-          
-          {/* Voice Clone Button */}
-          <Button
-            variant="ghost"
-            className="h-20 p-3 flex flex-col items-center justify-center gap-2 hover:scale-105 transition-all duration-200 border border-border/50 hover:border-border text-center"
-            onClick={() => setVoiceCloneOpen(true)}
-          >
-            <div className="p-2 rounded-lg bg-gradient-to-r from-indigo-500 to-blue-500">
-              <Mic2 className="h-4 w-4 text-white" />
-            </div>
-            <span className="text-xs font-medium leading-tight">
-              {language === 'ar' ? 'استنساخ الصوت' : 'Voice Clone'}
-            </span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Buy Extras Button - Fixed at bottom */}
-      <div className="flex-shrink-0 pt-4 border-t border-border/30 mt-auto">
-        <Button
-          onClick={() => setBuyExtrasOpen(true)}
-          variant="outline"
-          className="w-full h-14 flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950/30 dark:to-blue-950/30 border-emerald-200 dark:border-emerald-800 hover:from-emerald-100 hover:to-blue-100 dark:hover:from-emerald-900/50 dark:hover:to-blue-900/50 transition-all duration-200 text-base font-medium"
-        >
-          <ShoppingCart className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-          <span className="text-emerald-700 dark:text-emerald-300">
-            {language === 'ar' ? 'شراء إضافات' : 'Buy Extras'}
-          </span>
-        </Button>
-      </div>
-
-      {/* Voice Translator Popup */}
-      <VoiceTranslatorPopup 
-        open={voiceTranslatorOpen} 
-        onOpenChange={handleVoiceTranslatorChange} 
-      />
-
-      {/* Buy Extras Popup */}
-      <BuyExtrasPopup 
-        open={buyExtrasOpen} 
-        onOpenChange={handleBuyExtrasChange} 
-      />
-
-      {/* Voice Clone Popup */}
-      <VoiceClonePopup 
-        open={voiceCloneOpen} 
-        onOpenChange={handleVoiceCloneChange} 
-      />
-
-      {/* Text Generator Popup */}
-      <TextGeneratorPopup 
-        open={textGeneratorOpen} 
-        onOpenChange={handleTextGeneratorChange}
-        onGenerated={handleTextGenerated}
-      />
-
-      {/* Knowledge Modal */}
-      <KnowledgeModal 
-        open={knowledgeModalOpen} 
-        onOpenChange={handleKnowledgeModalChange} 
-      />
     </div>
   );
 }

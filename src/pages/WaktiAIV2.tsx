@@ -829,9 +829,10 @@ const WaktiAIV2 = () => {
     console.log('✨ Active trigger set to:', trigger);
   };
 
-  const handleTextGenerated = (text: string, mode: 'compose' | 'reply') => {
-    console.log('📝 Text generated from tool:', { text, mode });
+  const handleTextGenerated = (text: string, mode: 'compose' | 'reply', isTextGenerated: boolean = true) => {
+    console.log('📝 WaktiAIV2: Text generated from tool:', { text, mode, length: text.length });
     
+    // Create assistant message with the generated text
     const assistantMessage: AIMessage = {
       id: `assistant-textgen-${Date.now()}`,
       role: 'assistant',
@@ -843,16 +844,36 @@ const WaktiAIV2 = () => {
       isTextGenerated: true
     };
 
+    console.log('📝 WaktiAIV2: Adding generated text to session messages');
     const updatedSessionMessages = [...sessionMessages, assistantMessage].slice(-30);
     setSessionMessages(updatedSessionMessages);
 
+    // Save to conversation if one exists
     if (currentConversationId) {
+      console.log('📝 WaktiAIV2: Saving generated text to conversation:', currentConversationId);
       saveMessageToConversation(assistantMessage, currentConversationId);
     }
     
+    // Close the quick actions drawer
+    setShowQuickActions(false);
+    
+    // Show success message
     showSuccess(
       language === 'ar' ? 'تم إنشاء النص وإضافته للمحادثة' : 'Text generated and added to chat'
     );
+
+    // Auto-scroll to the new message
+    setTimeout(() => {
+      if (scrollAreaRef.current) {
+        const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+        if (scrollContainer) {
+          scrollContainer.scrollTo({
+            top: scrollContainer.scrollHeight,
+            behavior: 'smooth'
+          });
+        }
+      }
+    }, 100);
   };
 
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
