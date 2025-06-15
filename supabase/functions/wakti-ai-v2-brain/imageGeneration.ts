@@ -1,8 +1,7 @@
-
 /**
  * Image generation for Wakti Edge Function
  */
-import { supabase, OPENAI_API_KEY } from "./utils.ts";
+import { supabase, OPENAI_API_KEY, RUNWARE_API_KEY } from "./utils.ts";
 
 // Utility: Detects if input contains Arabic characters
 function containsArabic(text: string): boolean {
@@ -130,5 +129,3 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     };
   }
 }
-
-// ... no other code in this file is changed
