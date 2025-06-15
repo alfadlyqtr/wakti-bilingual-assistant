@@ -46,9 +46,9 @@ export async function getContacts() {
   }
 
   const userId = session.session.user.id;
-
-  // Add is_favorite to the query
-  const { data, error } = await supabase
+  
+  // 1. Get all contacts you added
+  const { data: youAddedRows, error: error1 } = await supabase
     .from('contacts')
     .select(`
       id,
@@ -64,19 +64,45 @@ export async function getContacts() {
     `)
     .eq('user_id', userId)
     .eq('status', 'approved');
-  
-  if (error) {
-    console.error("Error fetching contacts:", error);
-    throw error;
+  if (error1) {
+    console.error("Error fetching contacts:", error1);
+    throw error1;
   }
 
-  // Add is_favorite to returned objects
-  return data.map(contact => ({
-    id: contact.id,
-    contact_id: contact.contact_id,
-    is_favorite: contact.is_favorite,
-    profile: contact.profiles
-  }));
+  // 2. Get all contacts who have added you (reciprocal)
+  const contactIds = youAddedRows.map(contact => contact.contact_id);
+  let theyAddedRows = [];
+  if (contactIds.length > 0) {
+    const { data: reciprocalRows, error: error2 } = await supabase
+      .from('contacts')
+      .select('user_id, contact_id')
+      .in('user_id', contactIds)
+      .eq('contact_id', userId)
+      .eq('status', 'approved');
+    if (!error2) {
+      theyAddedRows = reciprocalRows;
+    }
+  }
+
+  // 3. Map relationship status
+  const reciprocalUserSet = new Set(theyAddedRows.map(c => c.user_id));
+  const results = youAddedRows.map(contact => {
+    let relationship: "mutual" | "you-added-them" | "they-added-you" = "you-added-them";
+    if (reciprocalUserSet.has(contact.contact_id)) {
+      relationship = "mutual";
+    }
+    // In this context, 'they-added-you' (where you haven't added them) is not possible,
+    // since we're only getting contacts YOU added, but we'll return either mutual or you-added-them.
+    return {
+      id: contact.id,
+      contact_id: contact.contact_id,
+      is_favorite: contact.is_favorite,
+      profile: contact.profiles,
+      relationshipStatus: relationship,
+    };
+  });
+
+  return results;
 }
 
 // Get all pending contact requests for the current user

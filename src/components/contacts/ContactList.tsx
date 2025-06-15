@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { ContactRelationshipIndicator } from "./ContactRelationshipIndicator";
 
 type UserProfile = {
   display_name?: string;
@@ -220,14 +221,15 @@ export function ContactList() {
             </div>
           </Card>
         ) : (
-          contacts.map((contact: ContactType) => {
-            const contactProfile = contact.profile || {} as UserProfile;
+          contacts.map((contact: any) => {
+            const contactProfile = contact.profile || {};
             const displayName = contactProfile.username || "unknown";
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
             const unreadCount = unreadCounts[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
             const isFavorite = contact.is_favorite === true;
-            
+            const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
+
             console.log(`Contact ${displayName} avatar:`, { 
               avatarUrl, 
               hasError: avatarErrors[contact.contact_id],
@@ -267,6 +269,8 @@ export function ContactList() {
                       >
                         <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
                       </Button>
+                      {/* Relationship Status Icon */}
+                      <ContactRelationshipIndicator status={relationshipStatus} />
                       <Button 
                         size="icon" 
                         variant="ghost"
