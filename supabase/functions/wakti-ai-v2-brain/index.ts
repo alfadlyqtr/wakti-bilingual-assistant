@@ -13,12 +13,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-// Add API keys for real AI integration
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
-const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
-
 console.log("🤖 BUDDY-CHAT AI BRAIN: Enhanced conversational intelligence loaded");
 
 serve(async (req) => {
