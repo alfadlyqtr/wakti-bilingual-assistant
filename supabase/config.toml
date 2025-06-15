@@ -148,6 +148,9 @@ verify_jwt = true
 [functions.wakti-voice-v2]
 verify_jwt = false
 
+[functions.text-generator]
+verify_jwt = true
+
 [analytics]
 enabled = false
 port = 54327
