@@ -147,17 +147,17 @@ export function ChatInput({
   const textareaHighlightClass = textareaHighlight(activeTrigger);
 
   // Responsive classes
+  // Move input just above bottom nav (h-16 = 64px, so bottom-16)
   const mobileFixed =
-    "fixed bottom-0 left-0 right-0 z-[101] bg-background bg-opacity-90 backdrop-blur-xl border-t border-border"; // rounded-top-xl, border-top for separation
+    "fixed bottom-16 left-0 right-0 z-[101] bg-background bg-opacity-90 backdrop-blur-xl border-t border-border";
 
   // Wrapper to detect mobile, or just always apply on all screens if this is a mobile-only app.
   // Per your specs, mobile only, so we apply always.
 
   return (
     <>
-      {/* Height-spacer to prevent overlap with pinned input */}
-      {/* This spacer should be above the chat messages! */}
-      <div className="h-[90px] w-full flex-shrink-0" />
+      {/* Height-spacer to prevent overlap with pinned input and bottom nav */}
+      <div className="h-[154px] w-full flex-shrink-0" />
       <div className={mobileFixed}>
         <div className="w-full">
           <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
