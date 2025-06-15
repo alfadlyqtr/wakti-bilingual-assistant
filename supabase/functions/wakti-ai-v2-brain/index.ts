@@ -887,10 +887,13 @@ Formatting instructions:
       attachedFiles.forEach(file => {
         // file has { type: 'image/jpeg', base64: 'base64string' }
         if (file.type && file.type.startsWith('image/')) {
+          // Robustness FIX: Strip any existing data URI scheme and rebuild it correctly.
+          const base64Data = file.base64.split(',').pop() || '';
+
           contentParts.push({
             type: 'image_url',
             image_url: {
-              url: `data:${file.type};base64,${file.base64}`
+              url: `data:${file.type};base64,${base64Data}`
             }
           });
         }
