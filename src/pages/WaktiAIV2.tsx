@@ -307,17 +307,17 @@ const WaktiAIV2 = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      // Create the task in the TR system
+      // Create the task in the TR system with correct column name
       const { error } = await supabase
         .from('tr_tasks')
         .insert({
           user_id: user.id,
           title: taskData.title,
           description: taskData.description || '',
-          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString() : null,
+          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString().split('T')[0] : null,
           due_time: taskData.due_time || null,
           priority: taskData.priority || 'normal',
-          status: 'pending'
+          completed: false // Fixed: Use 'completed' instead of 'status'
         });
 
       if (error) {
@@ -337,10 +337,11 @@ const WaktiAIV2 = () => {
           .single();
 
         if (createdTask) {
-          const subtaskInserts = taskData.subtasks.map((subtask: string) => ({
+          const subtaskInserts = taskData.subtasks.map((subtask: string, index: number) => ({
             task_id: createdTask.id,
             title: subtask,
-            is_completed: false
+            completed: false,
+            order_index: index
           }));
 
           await supabase
@@ -349,13 +350,13 @@ const WaktiAIV2 = () => {
         }
       }
 
-      // Add success message to chat
+      // Add simple success message to chat
       const successMessage: AIMessage = {
         id: `success-${Date.now()}`,
         role: 'assistant',
         content: language === 'ar' 
-          ? `✅ تم إنشاء المهمة بنجاح! توجه إلى صفحة المهام والتذكيرات لرؤية مهمتك الجديدة.`
-          : `✅ Task created successfully! Head over to the T&R page to see your new task.`,
+          ? `✅ تم إنشاء المهمة بنجاح!`
+          : `✅ Task created successfully!`,
         timestamp: new Date(),
         intent: 'task_created_success',
         confidence: 'high',
@@ -398,10 +399,8 @@ const WaktiAIV2 = () => {
           user_id: user.id,
           title: reminderData.title,
           description: reminderData.description || '',
-          reminder_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString() : null,
-          reminder_time: reminderData.due_time || null,
-          priority: reminderData.priority || 'normal',
-          status: 'active'
+          due_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString().split('T')[0] : null,
+          due_time: reminderData.due_time || null
         });
 
       if (error) {
@@ -409,13 +408,13 @@ const WaktiAIV2 = () => {
         throw new Error('Failed to create reminder');
       }
 
-      // Add success message to chat
+      // Add simple success message to chat
       const successMessage: AIMessage = {
         id: `success-${Date.now()}`,
         role: 'assistant',
         content: language === 'ar' 
-          ? `✅ تم إنشاء التذكير بنجاح! توجه إلى صفحة المهام والتذكيرات لرؤية تذكيرك الجديد.`
-          : `✅ Reminder created successfully! Head over to the T&R page to see your new reminder.`,
+          ? `✅ تم إنشاء التذكير بنجاح!`
+          : `✅ Reminder created successfully!`,
         timestamp: new Date(),
         intent: 'reminder_created_success',
         confidence: 'high',
@@ -453,8 +452,8 @@ const WaktiAIV2 = () => {
       id: `cancel-${Date.now()}`,
       role: 'assistant',
       content: language === 'ar' 
-        ? 'تم إلغاء إنشاء المهمة. يمكنك إنشاء مهمة جديدة في أي وقت!'
-        : 'Task creation cancelled. You can create a new task anytime!',
+        ? 'تم إلغاء الإنشاء. يمكنك المحاولة مرة أخرى في أي وقت!'
+        : 'Creation cancelled. You can try again anytime!',
       timestamp: new Date(),
       intent: 'task_cancelled',
       confidence: 'high'

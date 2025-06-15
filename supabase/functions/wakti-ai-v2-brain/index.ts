@@ -67,7 +67,10 @@ serve(async (req) => {
       inputType = 'text',
       confirmSearch = false,
       activeTrigger = 'chat',
-      attachedFiles = []
+      contextMessages = [],
+      attachedFiles = [],
+      calendarContext = null,
+      userContext = null
     } = requestBody;
 
     // CRITICAL: Ensure userId matches authenticated user
@@ -98,7 +101,7 @@ serve(async (req) => {
     console.log("🔍 UNIFIED AI BRAIN: Active trigger mode:", activeTrigger);
     console.log("🔍 UNIFIED AI BRAIN: Attached files count:", attachedFiles.length);
 
-    // Enhanced task/reminder detection
+    // Enhanced task analysis
     const taskAnalysis = analyzeTaskIntent(message, language);
     console.log("🔍 UNIFIED AI BRAIN: Task analysis result:", taskAnalysis);
 
@@ -114,138 +117,92 @@ serve(async (req) => {
     let quotaStatus = null;
     let actionTaken = null;
     let actionResult = null;
-    let fileAnalysisResults = [];
-    let promptTranslationInfo = null;
     let needsConfirmation = false;
     let pendingTaskData = null;
     let pendingReminderData = null;
 
-    // Handle trigger types with NO search quota restrictions
-    switch (activeTrigger) {
-      case 'search':
-        // No quota checking - execute search directly
-        if (intent.allowed) {
-          console.log("🔍 Executing search for user:", user.id);
-          
-          const searchResult = await executeRegularSearch(message, language);
-          if (searchResult.success) {
-            browsingUsed = true;
-            browsingData = searchResult.data;
-            response = await processWithAI(message, searchResult.context, language, attachedFiles);
-          } else {
-            response = await processWithAI(message, null, language, attachedFiles);
-          }
-        } else {
-          response = language === 'ar' 
-            ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
-        }
-        break;
-
-      case 'image':
-        // IMAGE GENERATION MODE WITH ARABIC TRANSLATION SUPPORT
-        if (intent.allowed || (containsArabic(message) && language === 'ar')) {
-          let englishPrompt = message;
-          promptTranslationInfo = null;
-
-          if (containsArabic(message)) {
-            // Translate to English via DeepSeek/OpenAI
-            try {
-              console.log("🌐 Detected Arabic prompt for image generation. Translating...");
-              englishPrompt = await translateToEnglish(message);
-              promptTranslationInfo = {
-                original: message,
-                translated: englishPrompt,
-                explanation: language === 'ar'
-                  ? 'تمت ترجمة وصف الصورة تلقائيًا للإنجليزية لضمان جودة النتائج. يمكنك التحقق أو تحرير الترجمة إذا رغبت.'
-                  : 'The prompt was automatically translated to English for best results. You can verify or edit the translation if you wish.'
-              };
-              console.log('🌐 Arabic prompt translation:', englishPrompt);
-            } catch (error) {
-              console.error("🌐 Error translating Arabic prompt:", error);
-              response = language === 'ar'
-                ? 'حدث خطأ في ترجمة وصف الصورة للإنجليزية. يرجى المحاولة مرة أخرى.'
-                : 'An error occurred while translating your prompt to English. Please try again.';
-              break;
-            }
-          }
-
-          try {
-            console.log("🎨 Generating image with Runware API for prompt:", englishPrompt);
-            const imageResult = await generateImageWithRunware(englishPrompt, user.id, language);
-
-            if (imageResult.success) {
-              imageUrl = imageResult.imageUrl;
-              response = (promptTranslationInfo
-                ? (language === 'ar'
-                    ? `✅ تمت ترجمة وصفك للإنجليزية وسيتم توليد الصورة بناءً عليه.\n\n**الوصف الأصلي:**\n${promptTranslationInfo.original}\n\n**الترجمة الإنجليزية:**\n${promptTranslationInfo.translated}\n\n🎨 تم إنشاء الصورة بناءً على الوصف باللغة الإنجليزية.`
-                    : `✅ Your Arabic prompt was translated to English and used for image generation.\n\n**Original prompt:**\n${promptTranslationInfo.original}\n\n**English translation:**\n${promptTranslationInfo.translated}\n\n🎨 Image generated using the translated prompt.`)
-                : (language === 'ar'
-                    ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${englishPrompt}`
-                    : `🎨 Image generated successfully!\n\n**Prompt:** ${englishPrompt}`)
-              );
+    // Handle task/reminder creation intelligence
+    if (taskAnalysis.isTask || taskAnalysis.isReminder) {
+      console.log("🔍 UNIFIED AI BRAIN: Task/Reminder detected, preparing confirmation data");
+      
+      needsConfirmation = true;
+      
+      if (taskAnalysis.isTask) {
+        pendingTaskData = taskAnalysis.taskData;
+        response = language === 'ar' 
+          ? `اكتشفت أنك تريد إنشاء مهمة. راجع التفاصيل أدناه وتأكد من صحتها:`
+          : `I detected you want to create a task. Please review the details below and confirm:`;
+      } else {
+        pendingReminderData = taskAnalysis.reminderData;
+        response = language === 'ar' 
+          ? `اكتشفت أنك تريد إنشاء تذكير. راجع التفاصيل أدناه وتأكد من صحتها:`
+          : `I detected you want to create a reminder. Please review the details below and confirm:`;
+      }
+    } else {
+      // Handle trigger types with NO search quota restrictions for non-task messages
+      switch (activeTrigger) {
+        case 'search':
+          // No quota checking - execute search directly
+          if (intent.allowed) {
+            console.log("🔍 Executing search for user:", user.id);
+            
+            const searchResult = await executeRegularSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
+              response = await processWithAI(message, searchResult.context, language, contextMessages);
             } else {
-              console.error("Image generation failed:", imageResult.error);
-              response = language === 'ar'
+              response = await processWithAI(message, null, language, contextMessages);
+            }
+          } else {
+            response = language === 'ar' 
+              ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+              : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
+          }
+          break;
+
+        case 'image':
+          if (intent.allowed) {
+            try {
+              console.log("🎨 Generating image with Runware API for prompt:", message);
+              const imageResult = await generateImageWithRunware(message, user.id, language);
+              
+              if (imageResult.success) {
+                imageUrl = imageResult.imageUrl;
+                response = language === 'ar' 
+                  ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
+                  : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
+              } else {
+                console.error("Image generation failed:", imageResult.error);
+                response = language === 'ar' 
+                  ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
+                  : `❌ Sorry, there was an error generating the image. Please try again.`;
+              }
+            } catch (error) {
+              console.error("Image generation error:", error);
+              response = language === 'ar' 
                 ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
                 : `❌ Sorry, there was an error generating the image. Please try again.`;
             }
-          } catch (error) {
-            console.error("Image generation error:", error);
-            response = language === 'ar'
-              ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
-              : `❌ Sorry, there was an error generating the image. Please try again.`;
+          } else {
+            response = language === 'ar' 
+              ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
+              : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
           }
-        } else {
-          response = language === 'ar' 
-            ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-            : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
-        }
-        break;
+          break;
 
-      case 'chat':
-      default:
-        // Chat mode - use real AI with file analysis and enhanced task detection
-        if (attachedFiles && attachedFiles.length > 0) {
-          console.log("🔍 UNIFIED AI BRAIN: Processing files for analysis");
-          fileAnalysisResults = await processAttachedFiles(attachedFiles, user.id);
-        }
-
-        // Enhanced task detection and processing
-        if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-          console.log("🔍 UNIFIED AI BRAIN: Task/Reminder detected, preparing confirmation data");
-          
-          if (taskAnalysis.isTask) {
-            pendingTaskData = taskAnalysis.taskData;
-            needsConfirmation = true;
-            response = await processWithAI(
-              `The user wants to create a task. I've prepared the task details for confirmation. Present the task information clearly and let them know they can edit the details before confirming.\n\nUser request: ${message}`,
-              null, 
-              language, 
-              attachedFiles, 
-              fileAnalysisResults
-            );
-          } else if (taskAnalysis.isReminder) {
-            pendingReminderData = taskAnalysis.reminderData;
-            needsConfirmation = true;
-            response = await processWithAI(
-              `The user wants to create a reminder. I've prepared the reminder details for confirmation. Present the reminder information clearly and let them know they can edit the details before confirming.\n\nUser request: ${message}`,
-              null, 
-              language, 
-              attachedFiles, 
-              fileAnalysisResults
-            );
-          }
-        } else {
-          response = await processWithAI(message, null, language, attachedFiles, fileAnalysisResults);
-        }
-        break;
+        case 'chat':
+        default:
+          // Chat mode - use real AI
+          response = await processWithAI(message, null, language, contextMessages);
+          break;
+      }
     }
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: taskAnalysis.isTask ? 'task_creation' : taskAnalysis.isReminder ? 'reminder_creation' : intent.intent,
+      intent: intent.intent,
       confidence: intent.confidence,
       actionTaken,
       actionResult,
@@ -255,11 +212,9 @@ serve(async (req) => {
       quotaStatus,
       requiresSearchConfirmation: false,
       needsConfirmation,
-      needsClarification: false,
       pendingTaskData,
       pendingReminderData,
-      fileAnalysisResults,
-      promptTranslationInfo,
+      needsClarification: false,
       success: true
     };
 
@@ -284,280 +239,138 @@ serve(async (req) => {
   }
 });
 
-// Enhanced task and reminder analysis function
+// Enhanced task analysis function
 function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
-  // Task creation patterns
-  const taskPatterns = [
-    'create a task', 'make a task', 'add a task', 'new task', 'task for',
-    'i need to', 'remind me to', 'schedule', 'plan to', 'have to',
-    'meeting', 'appointment', 'buy', 'pick up', 'call', 'visit',
-    'أنشئ مهمة', 'اصنع مهمة', 'أضف مهمة', 'مهمة جديدة', 'مهمة لـ',
-    'أحتاج إلى', 'ذكرني أن', 'جدولة', 'خطة لـ', 'يجب أن',
-    'اجتماع', 'موعد', 'شراء', 'التقاط', 'اتصال', 'زيارة'
+  // Task keywords
+  const taskKeywords = [
+    'task', 'todo', 'do', 'complete', 'finish', 'work on', 'need to', 'have to', 'must',
+    'مهمة', 'عمل', 'أنجز', 'أكمل', 'يجب', 'لازم', 'محتاج'
   ];
-
-  // Reminder patterns
-  const reminderPatterns = [
-    'remind me', 'reminder', 'alert me', 'notify me',
-    'ذكرني', 'تذكير', 'نبهني', 'أخبرني'
+  
+  // Reminder keywords  
+  const reminderKeywords = [
+    'remind', 'reminder', 'don\'t forget', 'remember', 'alert', 'notify',
+    'ذكرني', 'تذكير', 'لا تنس', 'تذكر', 'نبهني'
   ];
-
-  const isTask = taskPatterns.some(pattern => lowerMessage.includes(pattern));
-  const isReminder = reminderPatterns.some(pattern => lowerMessage.includes(pattern));
-
-  if (isTask || isReminder) {
-    const parsedData = parseTaskDetails(message, language);
-    
-    if (isTask) {
-      return {
-        isTask: true,
-        isReminder: false,
-        taskData: parsedData
-      };
-    } else {
-      return {
-        isTask: false,
-        isReminder: true,
-        reminderData: parsedData
-      };
-    }
-  }
-
-  return {
-    isTask: false,
-    isReminder: false,
-    taskData: null,
-    reminderData: null
-  };
-}
-
-// Enhanced task details parsing function
-function parseTaskDetails(message: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase();
   
-  // Extract title - look for main action or purpose
-  let title = extractTitle(message, language);
+  const isTaskKeyword = taskKeywords.some(keyword => lowerMessage.includes(keyword));
+  const isReminderKeyword = reminderKeywords.some(keyword => lowerMessage.includes(keyword));
   
-  // Extract date
-  const dateInfo = extractDate(message, language);
+  let isTask = false;
+  let isReminder = false;
   
-  // Extract time
-  const timeInfo = extractTime(message, language);
-  
-  // Extract subtasks
-  const subtasks = extractSubtasks(message, language);
-  
-  // Extract priority
-  const priority = extractPriority(message, language);
-
-  return {
-    title: title || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
-    description: '',
-    due_date: dateInfo.date,
-    due_time: timeInfo.time,
-    subtasks: subtasks,
-    priority: priority
-  };
-}
-
-// Helper functions for parsing
-function extractTitle(message: string, language: string) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Common title extraction patterns
-  if (lowerMessage.includes('shopping') || lowerMessage.includes('buy') || lowerMessage.includes('groceries')) {
-    if (lowerMessage.includes('lulu')) return 'Shopping at Lulu Center';
-    return language === 'ar' ? 'تسوق' : 'Shopping';
+  // Determine if it's a task or reminder
+  if (isTaskKeyword && !isReminderKeyword) {
+    isTask = true;
+  } else if (isReminderKeyword && !isTaskKeyword) {
+    isReminder = true;
+  } else if (isTaskKeyword && isReminderKeyword) {
+    // If both, default to task
+    isTask = true;
+  } else {
+    // Check for action verbs that indicate tasks
+    const actionVerbs = ['buy', 'get', 'call', 'email', 'meeting', 'appointment', 'shopping', 'اشتري', 'خذ', 'اتصل', 'ايميل', 'اجتماع', 'موعد', 'تسوق'];
+    isTask = actionVerbs.some(verb => lowerMessage.includes(verb));
   }
   
-  if (lowerMessage.includes('meeting')) {
-    return language === 'ar' ? 'اجتماع' : 'Meeting';
+  if (!isTask && !isReminder) {
+    return { isTask: false, isReminder: false };
   }
   
-  if (lowerMessage.includes('call')) {
-    return language === 'ar' ? 'مكالمة' : 'Call';
+  // Extract title (first meaningful part)
+  let title = message.trim();
+  if (title.length > 100) {
+    title = title.substring(0, 100) + '...';
   }
   
-  if (lowerMessage.includes('pick up')) {
-    return language === 'ar' ? 'استلام' : 'Pick up';
-  }
+  // Extract due date and time
+  const dateTimeRegex = /(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}:\d{2}|غداً|اليوم|الاثنين|الثلاثاء|الأربعاء|الخميس|الجمعة|السبت|الأحد)/gi;
+  const dateTimeMatches = message.match(dateTimeRegex);
   
-  // Try to extract from context
-  const words = message.split(' ');
-  for (let i = 0; i < words.length - 1; i++) {
-    if (['to', 'لـ', 'أن'].includes(words[i].toLowerCase())) {
-      const titleWords = words.slice(i + 1, Math.min(i + 4, words.length));
-      return titleWords.join(' ');
-    }
-  }
+  let due_date = null;
+  let due_time = null;
   
-  return null;
-}
-
-function extractDate(message: string, language: string) {
-  const lowerMessage = message.toLowerCase();
-  const today = new Date();
-  
-  if (lowerMessage.includes('tomorrow') || lowerMessage.includes('غداً') || lowerMessage.includes('غدا')) {
+  if (dateTimeMatches) {
+    const today = new Date();
     const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-    return {
-      date: tomorrow.toISOString().split('T')[0],
-      relative: 'tomorrow'
-    };
-  }
-  
-  if (lowerMessage.includes('today') || lowerMessage.includes('اليوم')) {
-    return {
-      date: today.toISOString().split('T')[0],
-      relative: 'today'
-    };
-  }
-  
-  if (lowerMessage.includes('next week') || lowerMessage.includes('الأسبوع القادم')) {
-    const nextWeek = new Date(today);
-    nextWeek.setDate(today.getDate() + 7);
-    return {
-      date: nextWeek.toISOString().split('T')[0],
-      relative: 'next week'
-    };
-  }
-  
-  // Day names
-  const dayNames = {
-    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0,
-    'الإثنين': 1, 'الثلاثاء': 2, 'الأربعاء': 3, 'الخميس': 4, 'الجمعة': 5, 'السبت': 6, 'الأحد': 0
-  };
-  
-  for (const [dayName, dayNum] of Object.entries(dayNames)) {
-    if (lowerMessage.includes(dayName)) {
-      const targetDate = new Date(today);
-      const daysUntilTarget = (dayNum - today.getDay() + 7) % 7;
-      targetDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
-      return {
-        date: targetDate.toISOString().split('T')[0],
-        relative: dayName
-      };
-    }
-  }
-  
-  return { date: null, relative: null };
-}
-
-function extractTime(message: string, language: string) {
-  const lowerMessage = message.toLowerCase();
-  
-  // Common time patterns
-  if (lowerMessage.includes('noon') || lowerMessage.includes('الظهر')) {
-    return { time: '12:00', relative: 'noon' };
-  }
-  
-  if (lowerMessage.includes('morning') || lowerMessage.includes('الصباح')) {
-    return { time: '09:00', relative: 'morning' };
-  }
-  
-  if (lowerMessage.includes('evening') || lowerMessage.includes('المساء')) {
-    return { time: '18:00', relative: 'evening' };
-  }
-  
-  if (lowerMessage.includes('night') || lowerMessage.includes('الليل')) {
-    return { time: '20:00', relative: 'night' };
-  }
-  
-  // Specific time patterns (5 PM, 17:00, etc.)
-  const timePattern = /(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/i;
-  const timeMatch = lowerMessage.match(timePattern);
-  
-  if (timeMatch) {
-    let hour = parseInt(timeMatch[1]);
-    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
-    const meridiem = timeMatch[3]?.toLowerCase();
+    tomorrow.setDate(tomorrow.getDate() + 1);
     
-    if (meridiem === 'pm' || meridiem === 'م') {
-      if (hour !== 12) hour += 12;
-    } else if (meridiem === 'am' || meridiem === 'ص') {
-      if (hour === 12) hour = 0;
-    }
-    
-    return {
-      time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
-      relative: timeMatch[0]
-    };
-  }
-  
-  return { time: null, relative: null };
-}
-
-function extractSubtasks(message: string, language: string) {
-  const subtasks = [];
-  
-  // Look for lists with common separators
-  const listPattern = /(?:buy|get|pick up|purchase)\s+(.+?)(?:\s+(?:and|from|at)|$)/i;
-  const listMatch = message.match(listPattern);
-  
-  if (listMatch) {
-    const items = listMatch[1].split(/[,،\s+and\s+و\s+]/);
-    items.forEach(item => {
-      const cleanItem = item.trim().replace(/^(and|or|و|أو)\s+/, '');
-      if (cleanItem && cleanItem.length > 1) {
-        subtasks.push(cleanItem);
+    for (const match of dateTimeMatches) {
+      const lower = match.toLowerCase();
+      
+      // Handle time patterns
+      if (lower.match(/\d{1,2}:\d{2}/)) {
+        due_time = match;
       }
+      // Handle date patterns
+      else if (lower === 'today' || lower === 'اليوم') {
+        due_date = today.toISOString().split('T')[0];
+      } else if (lower === 'tomorrow' || lower === 'غداً') {
+        due_date = tomorrow.toISOString().split('T')[0];
+      }
+    }
+  }
+  
+  // If no date specified, default to tomorrow
+  if (!due_date) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    due_date = tomorrow.toISOString().split('T')[0];
+  }
+  
+  // Extract subtasks (items in lists or comma-separated)
+  const subtasks = [];
+  const listItems = message.match(/[-•*]\s*([^-•*\n]+)/g);
+  if (listItems) {
+    listItems.forEach(item => {
+      const cleaned = item.replace(/[-•*]\s*/, '').trim();
+      if (cleaned) subtasks.push(cleaned);
     });
-  }
-  
-  return subtasks;
-}
-
-function extractPriority(message: string, language: string) {
-  const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes('urgent') || lowerMessage.includes('asap') || lowerMessage.includes('عاجل')) {
-    return 'high';
-  }
-  
-  if (lowerMessage.includes('important') || lowerMessage.includes('مهم')) {
-    return 'high';
-  }
-  
-  if (lowerMessage.includes('low priority') || lowerMessage.includes('أولوية منخفضة')) {
-    return 'low';
-  }
-  
-  return 'normal';
-}
-
-// Process attached files for analysis
-async function processAttachedFiles(attachedFiles: any[], userId: string) {
-  const results = [];
-  
-  for (const file of attachedFiles) {
-    try {
-      console.log("🔍 Processing file:", file.name, "Type:", file.type);
-      
-      const analysis = {
-        fileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-        success: true,
-        content: file.url || file.preview || null
-      };
-      
-      results.push({ file: file.name, analysis });
-    } catch (error) {
-      console.error("Error processing file:", file.name, error);
-      results.push({ 
-        file: file.name, 
-        analysis: { 
-          success: false, 
-          error: error.message 
-        } 
+  } else {
+    // Try comma-separated items
+    const commaItems = message.split(/[,،]/);
+    if (commaItems.length > 2) {
+      commaItems.slice(1).forEach(item => {
+        const cleaned = item.trim();
+        if (cleaned && cleaned.length < 50) {
+          subtasks.push(cleaned);
+        }
       });
     }
   }
   
-  return results;
+  // Determine priority
+  let priority = 'normal';
+  const urgentWords = ['urgent', 'asap', 'important', 'priority', 'عاجل', 'مهم', 'أولوية'];
+  if (urgentWords.some(word => lowerMessage.includes(word))) {
+    priority = 'high';
+  }
+  
+  const taskData = {
+    title,
+    description: '',
+    due_date,
+    due_time,
+    subtasks,
+    priority
+  };
+  
+  const reminderData = {
+    title,
+    description: '',
+    due_date,
+    due_time,
+    priority
+  };
+  
+  return {
+    isTask,
+    isReminder, 
+    taskData: isTask ? taskData : null,
+    reminderData: isReminder ? reminderData : null
+  };
 }
 
 // SIMPLIFIED: Regular search function with optional web browsing
@@ -731,19 +544,19 @@ async function generateImageWithRunware(prompt: string, userId: string, language
   }
 }
 
-// Real AI processing function with vision capabilities
-async function processWithAI(message: string, context: string | null, language: string = 'en', attachedFiles: any[] = [], fileAnalysisResults: any[] = []) {
+// Real AI processing function
+async function processWithAI(message: string, context: string | null, language: string = 'en', contextMessages: any[] = []) {
   try {
     console.log("🤖 UNIFIED AI BRAIN: Processing with real AI and vision capabilities");
     
-    let apiKey = OPENAI_API_KEY;
-    let apiUrl = 'https://api.openai.com/v1/chat/completions';
-    let model = 'gpt-4o-mini';
+    let apiKey = DEEPSEEK_API_KEY;
+    let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+    let model = 'deepseek-chat';
     
     if (!apiKey) {
-      apiKey = DEEPSEEK_API_KEY;
-      apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-      model = 'deepseek-chat';
+      apiKey = OPENAI_API_KEY;
+      apiUrl = 'https://api.openai.com/v1/chat/completions';
+      model = 'gpt-4o-mini';
     }
     
     if (!apiKey) {
@@ -753,26 +566,12 @@ async function processWithAI(message: string, context: string | null, language: 
     const systemPrompt = language === 'ar' 
       ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.
 
-**قدرات مهمة:**
-- يمكنك رؤية وتحليل الصور المرفقة بالرسائل
-- يمكنك قراءة النصوص في الصور والمستندات
-- يمكنك الإجابة على الأسئلة المتعلقة بمحتوى الصور
-- يمكنك تحليل المخططات والرسوم البيانية والجداول
-- يمكنك مساعدة المستخدمين في إنشاء المهام والتذكيرات بذكاء
-
 تعليمات مهمة للتنسيق:
 - استخدم نصاً عادياً واضحاً
 - تجنب الرموز الزائدة مثل # أو ** أو ***
 - استخدم فقرات بسيطة مع فواصل أسطر طبيعية
 - اجعل الإجابة سهلة القراءة وبدون تعقيد في التنسيق`
       : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.
-
-**Important capabilities:**
-- You CAN see and analyze images attached to messages
-- You CAN read text in images and documents
-- You CAN answer questions about image content
-- You CAN analyze charts, graphs, tables, and visual data
-- You CAN help users create tasks and reminders intelligently
 
 Important formatting instructions:
 - Use clean, plain text
@@ -784,53 +583,22 @@ Important formatting instructions:
       { role: 'system', content: systemPrompt }
     ];
     
+    // Add context messages for conversation history
+    if (contextMessages && contextMessages.length > 0) {
+      const recentMessages = contextMessages.slice(-10);
+      recentMessages.forEach(msg => {
+        messages.push({
+          role: msg.role,
+          content: msg.content
+        });
+      });
+    }
+    
     if (context) {
       messages.push({ role: 'assistant', content: `Context: ${context}` });
     }
     
-    if (fileAnalysisResults && fileAnalysisResults.length > 0) {
-      const fileContext = fileAnalysisResults.map(result => {
-        if (result.analysis.success) {
-          return `File: ${result.file} (${result.analysis.fileType}) - Available for analysis`;
-        } else {
-          return `File: ${result.file} - Error: ${result.analysis.error}`;
-        }
-      }).join('\n');
-      
-      messages.push({ 
-        role: 'assistant', 
-        content: `Files attached: ${fileContext}` 
-      });
-    }
-    
-    const userMessage: any = {
-      role: 'user',
-      content: []
-    };
-    
-    userMessage.content.push({
-      type: 'text',
-      text: message
-    });
-    
-    if (attachedFiles && attachedFiles.length > 0 && apiKey === OPENAI_API_KEY) {
-      for (const file of attachedFiles) {
-        if (file.type && file.type.startsWith('image/') && (file.url || file.preview)) {
-          userMessage.content.push({
-            type: 'image_url',
-            image_url: {
-              url: file.url || file.preview
-            }
-          });
-        }
-      }
-    }
-    
-    if (userMessage.content.length === 1) {
-      userMessage.content = message;
-    }
-    
-    messages.push(userMessage);
+    messages.push({ role: 'user', content: message });
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -866,10 +634,6 @@ function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function containsArabic(text: string) {
-  return /[\u0600-\u06FF]/.test(text);
-}
-
 function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
@@ -897,10 +661,9 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
         'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
       ];
-      const isImageIntent =
-        imagePatterns.some(pattern => lowerMessage.includes(pattern)) ||
-        containsArabic(message);
-
+      
+      const isImageIntent = imagePatterns.some(pattern => lowerMessage.includes(pattern));
+      
       return {
         intent: isImageIntent ? 'generate_image' : 'invalid_for_image',
         confidence: isImageIntent ? 'high' : 'low',
@@ -915,47 +678,4 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
         allowed: true
       };
   }
-}
-
-async function translateToEnglish(arabicText: string) {
-  let apiKey = DEEPSEEK_API_KEY;
-  let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-  let model = 'deepseek-chat';
-
-  if (!apiKey) {
-    apiKey = OPENAI_API_KEY;
-    apiUrl = 'https://api.openai.com/v1/chat/completions';
-    model = 'gpt-4o-mini';
-  }
-
-  if (!apiKey) throw new Error("No translation API key configured");
-
-  const systemPrompt =
-    "You are an expert Arabic-to-English translation assistant. Translate the following prompt as concisely and fluently as possible for use in an image generation AI. Do not add, remove or summarize details. Reply ONLY with the English translation:";
-
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: arabicText }
-  ];
-
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: 0.2,
-      max_tokens: 200
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`Translation API failed: ${response.status}`);
-  }
-
-  const result = await response.json();
-  return result.choices?.[0]?.message?.content?.trim() || '';
 }

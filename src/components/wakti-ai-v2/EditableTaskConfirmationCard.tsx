@@ -113,21 +113,19 @@ export function EditableTaskConfirmationCard({
         </div>
 
         {/* Editable Description */}
-        {type === 'task' && (
-          <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">
-              {language === 'ar' ? 'الوصف:' : 'Description:'}
-            </label>
-            <Input
-              value={editedData.description}
-              onChange={(e) => handleDescriptionChange(e.target.value)}
-              placeholder={language === 'ar' ? 'وصف اختياري' : 'Optional description'}
-              className="text-sm"
-            />
-          </div>
-        )}
+        <div>
+          <label className="text-sm font-medium text-gray-700 mb-1 block">
+            {language === 'ar' ? 'الوصف:' : 'Description:'}
+          </label>
+          <Input
+            value={editedData.description}
+            onChange={(e) => handleDescriptionChange(e.target.value)}
+            placeholder={language === 'ar' ? 'وصف اختياري' : 'Optional description'}
+            className="text-sm"
+          />
+        </div>
 
-        {/* Editable Subtasks */}
+        {/* Editable Subtasks - Only show for tasks */}
         {type === 'task' && (
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -214,7 +212,9 @@ export function EditableTaskConfirmationCard({
                 {language === 'ar' ? 'جاري الإنشاء...' : 'Creating...'}
               </div>
             ) : (
-              language === 'ar' ? 'إنشاء المهمة' : 'Create Task'
+              type === 'task' 
+                ? (language === 'ar' ? 'إنشاء المهمة' : 'Create Task')
+                : (language === 'ar' ? 'إنشاء التذكير' : 'Create Reminder')
             )}
           </Button>
           <Button
