@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -34,6 +33,7 @@ interface ConversationsListProps {
   onNewConversation?: () => void;
   onClearChat: () => void;
   sessionMessages: any[];
+  isLoading?: boolean;
 }
 
 export function ConversationsList({
@@ -45,7 +45,8 @@ export function ConversationsList({
   onClose,
   onNewConversation,
   onClearChat,
-  sessionMessages
+  sessionMessages,
+  isLoading
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
   const [isClearing, setIsClearing] = useState(false);

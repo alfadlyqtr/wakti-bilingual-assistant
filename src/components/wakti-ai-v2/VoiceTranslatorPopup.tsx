@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 interface VoiceTranslatorPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onTranslated?: (translatedText: string) => void;
 }
 
 interface TranslationItem {
@@ -139,7 +140,7 @@ const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
 
-export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
+export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
@@ -496,6 +497,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       if (playbackEnabled) {
         playTranslatedText(result.translatedText);
       }
+
+      // Call the onTranslated callback if provided
+      if (onTranslated) {
+        onTranslated(result.translatedText);
+      }
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
       toast({
@@ -509,7 +515,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopu
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled]);
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, onTranslated]);
 
   const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
     console.log('🔊 Play button clicked, text:', text);
