@@ -29,6 +29,12 @@ export interface AIMessage {
   pendingReminderData?: any;
   attachedFiles?: any[];
   fileAnalysisResults?: any[];
+  buddyChat?: {
+    followUpSuggestion?: string;
+    crossModeHint?: string;
+    conversationContinuity?: string;
+    engagement?: 'high' | 'medium' | 'low';
+  };
 }
 
 export interface AIConversation {
@@ -48,8 +54,161 @@ export class WaktiAIV2ServiceClass {
 
   // SECURITY FIX: Get user-specific localStorage key
   private static getUserStorageKey(suffix: string): string {
-    // We'll get this from auth context when available
     return `wakti_ai_${suffix}`;
+  }
+
+  // Enhanced buddy-chat message processing
+  private static enhanceMessageWithBuddyChat(
+    message: string, 
+    response: any, 
+    activeTrigger: string,
+    conversationContext: string
+  ): any {
+    const buddyEnhancements: any = {};
+
+    // Cross-mode suggestions
+    if (activeTrigger === 'chat') {
+      const searchTriggers = ['weather', 'news', 'current', 'latest', 'price', 'score', 'what is'];
+      const needsSearch = searchTriggers.some(trigger => 
+        message.toLowerCase().includes(trigger)
+      );
+      
+      if (needsSearch) {
+        buddyEnhancements.crossModeHint = 'search';
+      }
+    }
+
+    if (activeTrigger === 'search' && response.browsingUsed) {
+      buddyEnhancements.followUpSuggestion = this.generateSearchFollowUp(response.response);
+    }
+
+    // Conversation continuity detection
+    if (conversationContext) {
+      buddyEnhancements.conversationContinuity = this.detectTopicContinuity(
+        message, 
+        conversationContext
+      );
+    }
+
+    // Engagement level based on response content
+    buddyEnhancements.engagement = this.calculateEngagementLevel(response.response);
+
+    return {
+      ...response,
+      buddyChat: buddyEnhancements
+    };
+  }
+
+  // Generate natural follow-up suggestions for search results
+  private static generateSearchFollowUp(searchResponse: string): string {
+    const followUps = [
+      "Would you like me to search for more specific details about this?",
+      "What aspect of this interests you most?",
+      "Should I look up related information?",
+      "Would you like me to find more recent updates on this topic?",
+      "Is there a particular part you'd like me to explore further?"
+    ];
+    
+    return followUps[Math.floor(Math.random() * followUps.length)];
+  }
+
+  // Detect if user is continuing previous topic or starting new one
+  private static detectTopicContinuity(message: string, conversationContext: string): string {
+    const continuityWords = ['also', 'and', 'additionally', 'furthermore', 'more about', 'tell me more'];
+    const newTopicWords = ['now', 'instead', 'different', 'change topic', 'something else'];
+    
+    const lowerMessage = message.toLowerCase();
+    
+    if (continuityWords.some(word => lowerMessage.includes(word))) {
+      return 'continuing';
+    }
+    
+    if (newTopicWords.some(word => lowerMessage.includes(word))) {
+      return 'new_topic';
+    }
+    
+    // Check if message relates to recent conversation topics
+    const recentTopics = this.extractTopicsFromContext(conversationContext);
+    const messageWords = lowerMessage.split(' ');
+    
+    const topicOverlap = recentTopics.some(topic => 
+      messageWords.some(word => topic.includes(word) || word.includes(topic))
+    );
+    
+    return topicOverlap ? 'related' : 'new_topic';
+  }
+
+  // Extract topics from conversation context
+  private static extractTopicsFromContext(context: string): string[] {
+    const topics: string[] = [];
+    const lines = context.split('\n');
+    
+    lines.forEach(line => {
+      if (line.startsWith('Topic: ')) {
+        topics.push(line.replace('Topic: ', '').toLowerCase());
+      }
+    });
+    
+    return topics;
+  }
+
+  // Calculate engagement level based on response characteristics
+  private static calculateEngagementLevel(response: string): 'high' | 'medium' | 'low' {
+    const engagementIndicators = {
+      high: ['?', '!', 'interesting', 'exciting', 'amazing', 'curious', 'explore'],
+      medium: ['can', 'would', 'could', 'might', 'perhaps'],
+      low: ['yes', 'no', 'ok', 'simple']
+    };
+    
+    const lowerResponse = response.toLowerCase();
+    
+    for (const [level, indicators] of Object.entries(engagementIndicators)) {
+      if (indicators.some(indicator => lowerResponse.includes(indicator))) {
+        return level as 'high' | 'medium' | 'low';
+      }
+    }
+    
+    return 'medium';
+  }
+
+  // Enhanced conversation context preparation
+  private static prepareEnhancedContext(
+    userId: string, 
+    activeTrigger: string, 
+    contextMessages: any[]
+  ): string {
+    // Get enhanced memory context
+    const memoryContext = ChatMemoryService.getConversationContext(userId);
+    
+    // Combine with current session context
+    let fullContext = memoryContext;
+    
+    if (contextMessages && contextMessages.length > 0) {
+      fullContext += '\nCurrent session:\n';
+      contextMessages.slice(-5).forEach(msg => {
+        fullContext += `${msg.role}: ${msg.content}\n`;
+      });
+    }
+    
+    // Add mode-specific context hints
+    fullContext += `\nCurrent mode: ${activeTrigger}\n`;
+    fullContext += this.getModeSpecificHints(activeTrigger);
+    
+    return fullContext;
+  }
+
+  // Get mode-specific conversation hints
+  private static getModeSpecificHints(activeTrigger: string): string {
+    switch (activeTrigger) {
+      case 'chat':
+        return 'Mode context: Casual conversation mode - be warm, engaging, and naturally suggest search mode for factual queries.\n';
+      case 'search':
+        return 'Mode context: Search mode - provide informative responses and engage conversationally after search results.\n';
+      case 'image':
+        return 'Mode context: Image generation mode - focus on creative image descriptions and artistic guidance.\n';
+      default:
+        return '';
+    }
   }
 
   // Instance methods that delegate to static methods
@@ -160,15 +319,13 @@ export class WaktiAIV2ServiceClass {
     if (sessionMessages.length === 0) return null;
 
     try {
-      // Create a conversation title from the first user message
       const firstUserMessage = sessionMessages.find(msg => msg.role === 'user');
       const title = firstUserMessage?.content?.slice(0, 50) + '...' || 'Untitled Conversation';
 
-      // SECURITY: Ensure user_id is set correctly for RLS
       const { data: conversation, error } = await supabase
         .from('ai_conversations')
         .insert({
-          user_id: userId, // CRITICAL: Always use the provided userId
+          user_id: userId,
           title: title,
           last_message_at: new Date().toISOString()
         })
@@ -183,10 +340,9 @@ export class WaktiAIV2ServiceClass {
       if (conversation) {
         console.log('✅ Created new conversation:', conversation.id);
         
-        // SECURITY: Save all session messages with proper user_id
         const messageInserts = sessionMessages.map((msg, index) => ({
           conversation_id: conversation.id,
-          user_id: userId, // CRITICAL: Always use the provided userId
+          user_id: userId,
           role: msg.role,
           content: msg.content,
           created_at: new Date(Date.now() + index).toISOString(),
@@ -269,7 +425,6 @@ export class WaktiAIV2ServiceClass {
         timestamp: Date.now()
       };
       
-      // Use user-specific key (will be enhanced when we have user context)
       const storageKey = this.getUserStorageKey('chat_session');
       localStorage.setItem(storageKey, JSON.stringify(sessionData));
       console.log('💾 Chat session saved to localStorage with user isolation');
@@ -286,7 +441,6 @@ export class WaktiAIV2ServiceClass {
 
       const parsed = JSON.parse(sessionData);
       
-      // Check if session is too old (more than 24 hours)
       const now = Date.now();
       const sessionAge = now - (parsed.timestamp || 0);
       if (sessionAge > 24 * 60 * 60 * 1000) {
@@ -294,7 +448,6 @@ export class WaktiAIV2ServiceClass {
         return null;
       }
 
-      // Convert timestamp strings back to Date objects
       if (parsed.messages) {
         parsed.messages = parsed.messages.map((msg: any) => ({
           ...msg,
@@ -347,25 +500,31 @@ export class WaktiAIV2ServiceClass {
     pendingReminderData: any = null
   ) {
     try {
-      console.log('📤 WAKTI AI V2: Sending message with user isolation for user:', userId);
+      console.log('📤 WAKTI AI V2: Sending enhanced buddy-chat message for user:', userId);
 
-      // Load chat memory for chat mode only
+      // Prepare enhanced conversation context with memory
+      const enhancedContext = this.prepareEnhancedContext(userId, activeTrigger, conversationHistory);
+      
+      // Load enhanced chat memory for better continuity
       let chatMemory: any[] = [];
       if (activeTrigger === 'chat') {
         const memoryExchanges = ChatMemoryService.loadMemory(userId);
         chatMemory = ChatMemoryService.formatForAI(memoryExchanges);
-        console.log(`🧠 Loaded ${memoryExchanges.length} chat exchanges from memory`);
+        console.log(`🧠 Loaded ${memoryExchanges.length} enhanced chat exchanges from memory`);
       }
 
-      // CORRECTED: Use the wakti-ai-v2-brain function with proper authentication
+      // Enhanced context for the AI
+      const fullContextMessages = activeTrigger === 'chat' ? chatMemory : conversationHistory;
+
+      // CORRECTED: Use the wakti-ai-v2-brain function with enhanced buddy-chat context
       const response = await supabase.functions.invoke('wakti-ai-v2-brain', {
         body: {
           message,
-          userId, // CRITICAL: Always include userId for verification
+          userId,
           language,
           conversationId,
           inputType,
-          conversationHistory: activeTrigger === 'chat' ? chatMemory : conversationHistory,
+          conversationHistory: fullContextMessages,
           confirmSearch,
           activeTrigger,
           textGenParams,
@@ -378,7 +537,11 @@ export class WaktiAIV2ServiceClass {
           confirmTask,
           confirmReminder,
           pendingTaskData,
-          pendingReminderData
+          pendingReminderData,
+          // Enhanced buddy-chat context
+          enhancedContext,
+          memoryStats: ChatMemoryService.getMemoryStats(userId),
+          conversationSummary: ChatMemoryService.loadConversationSummary(userId)
         }
       });
 
@@ -386,15 +549,23 @@ export class WaktiAIV2ServiceClass {
         throw new Error(response.error.message || 'AI service error');
       }
 
-      // Save to chat memory if this was a successful chat mode interaction
-      if (activeTrigger === 'chat' && response.data?.response) {
-        ChatMemoryService.addExchange(message, response.data.response, userId);
+      // Enhance response with buddy-chat features
+      const enhancedResponse = this.enhanceMessageWithBuddyChat(
+        message, 
+        response.data, 
+        activeTrigger,
+        enhancedContext
+      );
+
+      // Save to enhanced chat memory if this was a successful chat mode interaction
+      if (activeTrigger === 'chat' && enhancedResponse?.response) {
+        ChatMemoryService.addExchange(message, enhancedResponse.response, userId);
       }
 
-      console.log('📥 WAKTI AI V2: Received response with user isolation');
-      return response.data;
+      console.log('📥 WAKTI AI V2: Received enhanced buddy-chat response');
+      return enhancedResponse;
     } catch (error: any) {
-      console.error('WaktiAIV2Service sendMessage error:', error);
+      console.error('WaktiAIV2Service enhanced sendMessage error:', error);
       throw error;
     }
   }
@@ -473,46 +644,95 @@ export class WaktiAIV2ServiceClass {
   static async getOrFetchQuota(userId: string, forceRefresh: boolean = false): Promise<any> {
     const now = Date.now();
     
-    // Check cache first, but skip if forceRefresh is true
     if (!forceRefresh && this.quotaCache && (now - this.quotaCacheTime) < this.CACHE_DURATION) {
-      console.log('📊 Using cached quota data');
       return this.quotaCache;
     }
 
     try {
-      console.log(`📊 ${forceRefresh ? 'Force refreshing' : 'Fetching fresh'} quota data for user:`, userId);
-      
-      const { data, error } = await supabase.rpc('check_browsing_quota', {
-        p_user_id: userId
-      });
-      
-      if (error) {
-        console.error("Quota check error:", error);
-        return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
-      }
-      
-      const count = data || 0;
-      const limit = 60;
-      const usagePercentage = Math.round((count / limit) * 100);
-      
-      const quota = {
-        count,
-        limit,
-        usagePercentage,
-        remaining: Math.max(0, limit - count),
-        canBrowse: count < limit,
-        requiresConfirmation: usagePercentage >= 80
-      };
+      const { data, error } = await supabase
+        .from('ai_quota_management')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-      // Cache the result
-      this.quotaCache = quota;
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      this.quotaCache = data || null;
       this.quotaCacheTime = now;
       
-      console.log('📊 Fresh quota data loaded:', quota);
-      return quota;
+      return this.quotaCache;
+    } catch (error: any) {
+      console.error('Error fetching quota:', error);
+      return null;
+    }
+  }
+
+  static async getCalendarContext(userId: string): Promise<any> {
+    try {
+      const today = new Date();
+      const nextWeek = new Date();
+      nextWeek.setDate(today.getDate() + 7);
+
+      const [tasksData, remindersData, eventsData] = await Promise.all([
+        supabase
+          .from('tr_tasks')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('due_date', today.toISOString().split('T')[0])
+          .lte('due_date', nextWeek.toISOString().split('T')[0]),
+        
+        supabase
+          .from('tr_reminders')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('due_date', today.toISOString().split('T')[0])
+          .lte('due_date', nextWeek.toISOString().split('T')[0]),
+        
+        supabase
+          .from('events')
+          .select('*')
+          .eq('user_id', userId)
+          .gte('date', today.toISOString().split('T')[0])
+          .lte('date', nextWeek.toISOString().split('T')[0])
+      ]);
+
+      return {
+        upcomingTasks: tasksData.data || [],
+        upcomingReminders: remindersData.data || [],
+        upcomingEvents: eventsData.data || [],
+        currentDate: today.toISOString().split('T')[0]
+      };
     } catch (error) {
-      console.error("Quota check error:", error);
-      return { count: 0, limit: 60, canBrowse: true, usagePercentage: 0, remaining: 60 };
+      console.error('Error fetching calendar context:', error);
+      return null;
+    }
+  }
+
+  static async getUserContext(userId: string): Promise<any> {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, preferences')
+        .eq('id', userId)
+        .single();
+
+      const { data: recentTasks } = await supabase
+        .from('tr_tasks')
+        .select('title, priority, completed')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      return {
+        profile: profile || {},
+        recentActivity: recentTasks || [],
+        preferences: profile?.preferences || {}
+      };
+    } catch (error) {
+      console.error('Error fetching user context:', error);
+      return null;
     }
   }
 
@@ -525,12 +745,11 @@ export class WaktiAIV2ServiceClass {
         .from('ai_conversations')
         .select('*')
         .eq('user_id', user.id)
-        .order('last_message_at', { ascending: false })
-        .limit(50);
+        .order('last_message_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching conversations:', error);
       throw error;
     }
@@ -546,7 +765,7 @@ export class WaktiAIV2ServiceClass {
 
       if (error) throw error;
       return data || [];
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching conversation messages:', error);
       throw error;
     }
@@ -554,13 +773,20 @@ export class WaktiAIV2ServiceClass {
 
   static async deleteConversation(conversationId: string): Promise<void> {
     try {
-      const { error } = await supabase
+      const { error: messagesError } = await supabase
+        .from('ai_chat_history')
+        .delete()
+        .eq('conversation_id', conversationId);
+
+      if (messagesError) throw messagesError;
+
+      const { error: conversationError } = await supabase
         .from('ai_conversations')
         .delete()
         .eq('id', conversationId);
 
-      if (error) throw error;
-    } catch (error) {
+      if (conversationError) throw conversationError;
+    } catch (error: any) {
       console.error('Error deleting conversation:', error);
       throw error;
     }
@@ -575,228 +801,17 @@ export class WaktiAIV2ServiceClass {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message,
-          userId: user.id,
-          language,
-          conversationId,
-          confirmSearch: true,
-          activeTrigger: 'search'
-        }
-      });
-
-      if (error) throw new Error(error.message || 'Failed to process search confirmation');
-      return data;
-    } catch (error) {
-      console.error('Error in search confirmation:', error);
-      throw error;
-    }
-  }
-
-  // Phase 4: Advanced Integration Methods
-  static async getCalendarContext(userId: string): Promise<any> {
-    console.log('📅 Getting calendar context for user:', userId);
-    
-    try {
-      // Get upcoming events and tasks for context
-      const now = new Date();
-      const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-      const [tasksResult, eventsResult, remindersResult] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('id, title, due_date, priority, status')
-          .eq('user_id', userId)
-          .gte('due_date', now.toISOString())
-          .lte('due_date', nextWeek.toISOString())
-          .limit(10),
-        
-        supabase
-          .from('maw3d_events')
-          .select('id, title, event_date, start_time, end_time')
-          .eq('created_by', userId)
-          .gte('event_date', now.toISOString().split('T')[0])
-          .limit(10),
-        
-        supabase
-          .from('tr_reminders')
-          .select('id, title, due_date, due_time')
-          .eq('user_id', userId)
-          .gte('due_date', now.toISOString().split('T')[0])
-          .limit(10)
-      ]);
-
-      const context = {
-        upcomingTasks: tasksResult.data || [],
-        upcomingEvents: eventsResult.data || [],
-        upcomingReminders: remindersResult.data || [],
-        currentDateTime: now.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      };
-
-      console.log('📅 Calendar context retrieved:', {
-        tasksCount: context.upcomingTasks.length,
-        eventsCount: context.upcomingEvents.length,
-        remindersCount: context.upcomingReminders.length
-      });
-
-      return context;
-    } catch (error) {
-      console.error('❌ Error fetching calendar context:', error);
-      return null;
-    }
-  }
-
-  static async getUserContext(userId: string): Promise<any> {
-    console.log('👤 Getting user context for user:', userId);
-    
-    try {
-      const [profileResult, preferencesResult, activityResult] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single(),
-        
-        supabase
-          .from('ai_user_knowledge')
-          .select('*')
-          .eq('user_id', userId)
-          .single(),
-        
-        // Get recent activity patterns
-        supabase
-          .from('tasks')
-          .select('created_at, status, priority')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(50)
-      ]);
-
-      const context = {
-        profile: profileResult.data,
-        preferences: preferencesResult.data,
-        recentActivity: activityResult.data || [],
-        productivityPatterns: await this.analyzeProductivityPatterns(userId)
-      };
-
-      console.log('👤 User context retrieved:', {
-        hasProfile: !!context.profile,
-        hasPreferences: !!context.preferences,
-        activityCount: context.recentActivity.length,
-        hasPatterns: !!context.productivityPatterns
-      });
-
-      return context;
-    } catch (error) {
-      console.error('❌ Error fetching user context:', error);
-      return null;
-    }
-  }
-
-  private static async analyzeProductivityPatterns(userId: string): Promise<any> {
-    try {
-      // Analyze when user typically creates tasks, completes them, etc.
-      const { data } = await supabase
-        .from('tasks')
-        .select('created_at, status, due_date, priority')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (!data || data.length === 0) return null;
-
-      // Simple pattern analysis
-      const patterns = {
-        mostActiveHours: this.getMostActiveHours(data),
-        preferredPriority: this.getPreferredPriority(data),
-        completionRate: this.getCompletionRate(data),
-        averageTaskDuration: this.getAverageTaskDuration(data)
-      };
-
-      return patterns;
-    } catch (error) {
-      console.error('Error analyzing productivity patterns:', error);
-      return null;
-    }
-  }
-
-  private static getMostActiveHours(tasks: any[]): number[] {
-    const hourCounts: { [key: number]: number } = {};
-    
-    tasks.forEach(task => {
-      const hour = new Date(task.created_at).getHours();
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-    });
-
-    return Object.entries(hourCounts)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 3)
-      .map(([hour]) => parseInt(hour));
-  }
-
-  private static getPreferredPriority(tasks: any[]): string {
-    const priorityCounts: { [key: string]: number } = {};
-    
-    tasks.forEach(task => {
-      const priority = task.priority || 'normal';
-      priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
-    });
-
-    return Object.entries(priorityCounts)
-      .sort(([,a], [,b]) => b - a)[0]?.[0] || 'normal';
-  }
-
-  private static getCompletionRate(tasks: any[]): number {
-    const completed = tasks.filter(task => task.status === 'completed').length;
-    return tasks.length > 0 ? Math.round((completed / tasks.length) * 100) : 0;
-  }
-
-  private static getAverageTaskDuration(tasks: any[]): number {
-    const completedTasks = tasks.filter(task => 
-      task.status === 'completed' && task.due_date
-    );
-
-    if (completedTasks.length === 0) return 0;
-
-    const durations = completedTasks.map(task => {
-      const created = new Date(task.created_at);
-      const due = new Date(task.due_date);
-      return Math.max(0, Math.floor((due.getTime() - created.getTime()) / (1000 * 60 * 60 * 24)));
-    });
-
-    return Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length);
-  }
-
-  // Phase 4: Advanced automation methods
-  static async executeAdvancedAction(
-    userId: string,
-    actionType: string,
-    actionData: any,
-    language: string = 'en'
-  ): Promise<any> {
-    console.log('⚡ executeAdvancedAction called:', { userId, actionType, actionData });
-    
-    try {
-      const { data, error } = await supabase.functions.invoke('wakti-execute-action', {
-        body: {
-          action: {
-            type: actionType,
-            data: actionData
-          },
-          userId,
-          language,
-          advanced: true // Phase 4 flag
-        }
-      });
-
-      if (error) throw error;
-      
-      console.log('✅ Advanced action executed successfully');
-      return data;
-    } catch (error) {
-      console.error('❌ Error executing advanced action:', error);
+      return await this.sendMessage(
+        message,
+        user.id,
+        language,
+        conversationId,
+        'text',
+        [],
+        true
+      );
+    } catch (error: any) {
+      console.error('Error sending message with search confirmation:', error);
       throw error;
     }
   }

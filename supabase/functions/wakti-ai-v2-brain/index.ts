@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with enhanced task intelligence");
+console.log("🤖 BUDDY-CHAT AI BRAIN: Enhanced conversational intelligence loaded");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -27,12 +27,12 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with enhanced task intelligence");
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Processing with enhanced conversational intelligence");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
-      console.error("🔍 UNIFIED AI BRAIN: Missing authorization header");
+      console.error("🤖 BUDDY-CHAT AI BRAIN: Missing authorization header");
       return new Response(JSON.stringify({ 
         error: "Authentication required",
         success: false
@@ -45,7 +45,7 @@ serve(async (req) => {
     // Verify the user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
     if (authError || !user) {
-      console.error("🔍 UNIFIED AI BRAIN: Authentication failed:", authError);
+      console.error("🤖 BUDDY-CHAT AI BRAIN: Authentication failed:", authError);
       return new Response(JSON.stringify({ 
         error: "Invalid authentication",
         success: false
@@ -57,7 +57,7 @@ serve(async (req) => {
 
     // Get request body
     const requestBody = await req.json();
-    console.log("🔍 UNIFIED AI BRAIN: Request body received for user:", user.id);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Request body received for user:", user.id);
 
     const {
       message,
@@ -70,12 +70,15 @@ serve(async (req) => {
       contextMessages = [],
       attachedFiles = [],
       calendarContext = null,
-      userContext = null
+      userContext = null,
+      enhancedContext = '',
+      memoryStats = {},
+      conversationSummary = null
     } = requestBody;
 
     // CRITICAL: Ensure userId matches authenticated user
     if (userId !== user.id) {
-      console.error("🔍 UNIFIED AI BRAIN: User ID mismatch - potential security breach attempt");
+      console.error("🤖 BUDDY-CHAT AI BRAIN: User ID mismatch - potential security breach attempt");
       return new Response(JSON.stringify({ 
         error: "User ID mismatch",
         success: false
@@ -87,7 +90,7 @@ serve(async (req) => {
 
     // Validate required fields
     if (!message || typeof message !== 'string' || message.trim() === '') {
-      console.error("🔍 UNIFIED AI BRAIN: Invalid message field");
+      console.error("🤖 BUDDY-CHAT AI BRAIN: Invalid message field");
       return new Response(JSON.stringify({ 
         error: "Message is required and must be a non-empty string",
         success: false
@@ -97,19 +100,24 @@ serve(async (req) => {
       });
     }
 
-    console.log("🔍 UNIFIED AI BRAIN: Processing message for authenticated user:", user.id);
-    console.log("🔍 UNIFIED AI BRAIN: Active trigger mode:", activeTrigger);
-    console.log("🔍 UNIFIED AI BRAIN: Attached files count:", attachedFiles.length);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Processing message for authenticated user:", user.id);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Active trigger mode:", activeTrigger);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Enhanced context available:", !!enhancedContext);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Memory stats:", memoryStats);
+
+    // Enhanced buddy-chat analysis with natural intelligence
+    const buddyAnalysis = analyzeBuddyChatIntent(message, activeTrigger, enhancedContext, language);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Buddy analysis result:", buddyAnalysis);
 
     // Enhanced task analysis
     const taskAnalysis = analyzeTaskIntent(message, language);
-    console.log("🔍 UNIFIED AI BRAIN: Task analysis result:", taskAnalysis);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Task analysis result:", taskAnalysis);
 
-    // Enforce trigger isolation
-    const intent = analyzeTriggerIntent(message, activeTrigger, language);
-    console.log("🔍 UNIFIED AI BRAIN: Trigger analysis result:", intent);
+    // Smart cross-mode suggestions
+    const modeAnalysis = analyzeSmartModeIntent(message, activeTrigger, language);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Mode analysis result:", modeAnalysis);
 
-    // Generate response based on trigger isolation with REAL AI
+    // Generate response based on enhanced buddy-chat intelligence
     let response = '';
     let imageUrl = null;
     let browsingUsed = false;
@@ -120,10 +128,11 @@ serve(async (req) => {
     let needsConfirmation = false;
     let pendingTaskData = null;
     let pendingReminderData = null;
+    let buddyChat = {};
 
     // Handle task/reminder creation intelligence
     if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-      console.log("🔍 UNIFIED AI BRAIN: Task/Reminder detected, preparing confirmation data");
+      console.log("🤖 BUDDY-CHAT AI BRAIN: Task/Reminder detected, preparing confirmation data");
       
       needsConfirmation = true;
       
@@ -139,62 +148,123 @@ serve(async (req) => {
           : `I detected you want to create a reminder. Please review the details below and confirm:`;
       }
     } else {
-      // Handle trigger types with NO search quota restrictions for non-task messages
+      // Handle enhanced buddy-chat modes with natural intelligence
       switch (activeTrigger) {
         case 'search':
-          // No quota checking - execute search directly
-          if (intent.allowed) {
-            console.log("🔍 Executing search for user:", user.id);
+          // Enhanced search with conversational follow-up
+          if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
+            console.log("🔍 Executing enhanced conversational search for user:", user.id);
             
             const searchResult = await executeRegularSearch(message, language);
             if (searchResult.success) {
               browsingUsed = true;
               browsingData = searchResult.data;
-              response = await processWithAI(message, searchResult.context, language, contextMessages);
+              
+              // Process with enhanced buddy-chat AI
+              response = await processWithBuddyChatAI(
+                message, 
+                searchResult.context, 
+                language, 
+                contextMessages, 
+                enhancedContext,
+                activeTrigger,
+                'search_with_results'
+              );
+              
+              // Add conversational follow-up for search
+              response += generateSearchFollowUp(language);
             } else {
-              response = await processWithAI(message, null, language, contextMessages);
+              response = await processWithBuddyChatAI(
+                message, 
+                null, 
+                language, 
+                contextMessages, 
+                enhancedContext,
+                activeTrigger,
+                'search_without_results'
+              );
             }
+            
+            buddyChat = {
+              searchFollowUp: true,
+              engagement: 'high'
+            };
           } else {
             response = language === 'ar' 
-              ? `⚠️ أنت في وضع البحث\n\nهذا الوضع مخصص للأسئلة والبحث.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-              : `⚠️ You're in Search Mode\n\nThis mode is for questions and search.\n\nFor general chat, switch to Chat mode.`;
+              ? `🔍 أنت في وضع البحث الذكي\n\nيمكنني مساعدتك في البحث عن المعلومات الحديثة. ما الذي تود البحث عنه؟`
+              : `🔍 You're in Smart Search Mode\n\nI can help you find current information. What would you like to search for?`;
           }
           break;
 
         case 'image':
-          if (intent.allowed) {
+          if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
             try {
-              console.log("🎨 Generating image with Runware API for prompt:", message);
+              console.log("🎨 Generating image with enhanced creativity for prompt:", message);
               const imageResult = await generateImageWithRunware(message, user.id, language);
               
               if (imageResult.success) {
                 imageUrl = imageResult.imageUrl;
-                response = language === 'ar' 
-                  ? `🎨 تم إنشاء الصورة بنجاح!\n\n**الوصف:** ${message}`
-                  : `🎨 Image generated successfully!\n\n**Prompt:** ${message}`;
+                response = await processWithBuddyChatAI(
+                  message,
+                  `Image generated successfully for: ${message}`,
+                  language,
+                  contextMessages,
+                  enhancedContext,
+                  activeTrigger,
+                  'image_generated'
+                );
+                
+                buddyChat = {
+                  creativeEncouragement: true,
+                  engagement: 'high'
+                };
               } else {
                 console.error("Image generation failed:", imageResult.error);
                 response = language === 'ar' 
-                  ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
-                  : `❌ Sorry, there was an error generating the image. Please try again.`;
+                  ? `❌ عذراً، واجهت مشكلة في إنشاء الصورة. هل يمكنك تجربة وصف مختلف؟`
+                  : `❌ Sorry, I had trouble creating that image. Could you try a different description?`;
               }
             } catch (error) {
               console.error("Image generation error:", error);
               response = language === 'ar' 
-                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. يرجى المحاولة مرة أخرى.`
-                : `❌ Sorry, there was an error generating the image. Please try again.`;
+                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. دعني أساعدك بطريقة أخرى.`
+                : `❌ Sorry, there was an error generating the image. Let me help you another way.`;
             }
           } else {
             response = language === 'ar' 
-              ? `⚠️ أنت في وضع إنشاء الصور\n\nهذا الوضع مخصص لإنشاء الصور فقط.\n\nللدردشة العامة، انتقل إلى وضع المحادثة.`
-              : `⚠️ You're in Image Mode\n\nThis mode is for image generation only.\n\nFor general chat, switch to Chat mode.`;
+              ? `🎨 أنت في وضع إنشاء الصور الإبداعي\n\nصف لي الصورة التي تريد إنشاءها وسأجعلها حقيقة!`
+              : `🎨 You're in Creative Image Mode\n\nDescribe the image you want to create and I'll bring it to life!`;
           }
           break;
 
         case 'chat':
         default:
-          // Chat mode - use real AI
-          response = await processWithAI(message, null, language, contextMessages);
+          // Enhanced buddy-chat mode with natural conversations
+          response = await processWithBuddyChatAI(
+            message, 
+            null, 
+            language, 
+            contextMessages, 
+            enhancedContext,
+            activeTrigger,
+            'buddy_chat'
+          );
+          
+          // Add smart cross-mode suggestions
+          if (modeAnalysis.suggestMode && modeAnalysis.suggestMode !== activeTrigger) {
+            const modeSuggestion = generateModeSuggestion(modeAnalysis.suggestMode, language);
+            response += '\n\n' + modeSuggestion;
+            
+            buddyChat = {
+              crossModeSuggestion: modeAnalysis.suggestMode,
+              engagement: 'medium'
+            };
+          } else {
+            buddyChat = {
+              followUpQuestion: generateNaturalFollowUp(message, response, language),
+              engagement: 'high'
+            };
+          }
           break;
       }
     }
@@ -202,8 +272,8 @@ serve(async (req) => {
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: intent.intent,
-      confidence: intent.confidence,
+      intent: buddyAnalysis.intent,
+      confidence: buddyAnalysis.confidence,
       actionTaken,
       actionResult,
       imageUrl,
@@ -215,17 +285,18 @@ serve(async (req) => {
       pendingTaskData,
       pendingReminderData,
       needsClarification: false,
+      buddyChat,
       success: true
     };
 
-    console.log("🔍 UNIFIED AI BRAIN: Sending enhanced response with task intelligence for user:", user.id);
+    console.log("🤖 BUDDY-CHAT AI BRAIN: Sending enhanced conversational response for user:", user.id);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
-    console.error("🔍 UNIFIED AI BRAIN: Error processing request:", error);
+    console.error("🤖 BUDDY-CHAT AI BRAIN: Error processing request:", error);
     
     const errorResponse = {
       error: error.message || 'Unknown error occurred',
@@ -238,6 +309,92 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced buddy-chat intent analysis
+function analyzeBuddyChatIntent(message: string, activeTrigger: string, enhancedContext: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase();
+  
+  // Natural conversation patterns
+  const naturalPatterns = {
+    greeting: ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'مرحبا', 'أهلا', 'السلام'],
+    continuation: ['also', 'and', 'furthermore', 'additionally', 'كذلك', 'أيضا', 'و'],
+    question: ['what', 'how', 'when', 'where', 'why', 'ما', 'كيف', 'متى', 'أين', 'لماذا', '?'],
+    enthusiasm: ['awesome', 'great', 'amazing', 'wonderful', 'رائع', 'عظيم', 'ممتاز'],
+    concern: ['worried', 'concerned', 'problem', 'issue', 'قلق', 'مشكلة', 'مهتم']
+  };
+  
+  let intent = 'general_chat';
+  let confidence = 'medium';
+  let naturalQuery = true;
+  
+  // Detect intent based on patterns
+  for (const [intentType, patterns] of Object.entries(naturalPatterns)) {
+    if (patterns.some(pattern => lowerMessage.includes(pattern))) {
+      intent = intentType;
+      confidence = 'high';
+      break;
+    }
+  }
+  
+  // Check if this feels like a natural continuation of conversation
+  if (enhancedContext) {
+    const hasContext = enhancedContext.length > 100;
+    const mentionsPrevious = ['that', 'this', 'it', 'them', 'هذا', 'ذلك', 'إياه'].some(word => 
+      lowerMessage.includes(word)
+    );
+    
+    if (hasContext && mentionsPrevious) {
+      intent = 'conversation_continuation';
+      confidence = 'high';
+    }
+  }
+  
+  return {
+    intent,
+    confidence,
+    naturalQuery,
+    conversational: true
+  };
+}
+
+// Smart mode analysis for natural cross-mode suggestions
+function analyzeSmartModeIntent(message: string, activeTrigger: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase();
+  
+  // Patterns that suggest different modes
+  const modePatterns = {
+    search: ['weather', 'news', 'current', 'latest', 'price', 'score', 'who is', 'what is', 'طقس', 'أخبار', 'آخر', 'سعر'],
+    image: ['create image', 'draw', 'generate picture', 'make art', 'أنشئ صورة', 'ارسم', 'اصنع'],
+    chat: ['tell me about yourself', 'how are you', 'chat', 'talk', 'أخبرني', 'كيف حالك', 'تحدث']
+  };
+  
+  let suggestMode = null;
+  let allowInMode = true;
+  
+  // If in chat mode, suggest other modes for specific queries
+  if (activeTrigger === 'chat') {
+    for (const [mode, patterns] of Object.entries(modePatterns)) {
+      if (mode !== 'chat' && patterns.some(pattern => lowerMessage.includes(pattern))) {
+        suggestMode = mode;
+        break;
+      }
+    }
+  }
+  
+  // All modes should allow natural conversation
+  if (activeTrigger === 'search') {
+    allowInMode = true; // Always allow search queries
+  } else if (activeTrigger === 'image') {
+    allowInMode = modePatterns.image.some(pattern => lowerMessage.includes(pattern)) || 
+                 lowerMessage.length > 10; // Allow descriptive prompts
+  }
+  
+  return {
+    suggestMode,
+    allowInMode,
+    naturalFlow: true
+  };
+}
 
 // Enhanced task analysis function
 function analyzeTaskIntent(message: string, language: string = 'en') {
@@ -371,6 +528,57 @@ function analyzeTaskIntent(message: string, language: string = 'en') {
     taskData: isTask ? taskData : null,
     reminderData: isReminder ? reminderData : null
   };
+}
+
+// Generate natural follow-up questions
+function generateNaturalFollowUp(userMessage: string, aiResponse: string, language: string = 'en'): string {
+  const followUps = language === 'ar' ? [
+    'هل تريد معرفة المزيد عن هذا؟',
+    'ما رأيك في هذا؟',
+    'هل هذا يساعدك؟',
+    'هل لديك أسئلة أخرى؟',
+    'ما الذي تريد معرفته أيضا؟'
+  ] : [
+    'What do you think about this?',
+    'Would you like to know more?',
+    'Is this helpful for you?',
+    'Do you have any other questions?',
+    'What else would you like to explore?'
+  ];
+  
+  return followUps[Math.floor(Math.random() * followUps.length)];
+}
+
+// Generate mode suggestions
+function generateModeSuggestion(suggestedMode: string, language: string = 'en'): string {
+  const suggestions = {
+    search: language === 'ar' 
+      ? '💡 هل تريد أن أبحث لك عن معلومات حديثة حول هذا؟ يمكنك التبديل لوضع البحث.'
+      : '💡 Would you like me to search for current information about this? You can switch to Search mode.',
+    image: language === 'ar'
+      ? '🎨 هل تريد إنشاء صورة لهذا؟ جرب وضع إنشاء الصور!'
+      : '🎨 Would you like to create an image for this? Try Image mode!',
+    chat: language === 'ar'
+      ? '💬 هل تريد مناقشة هذا أكثر؟ ارجع لوضع المحادثة.'
+      : '💬 Want to discuss this more? Go back to Chat mode.'
+  };
+  
+  return suggestions[suggestedMode] || '';
+}
+
+// Generate search follow-up
+function generateSearchFollowUp(language: string = 'en'): string {
+  const followUps = language === 'ar' ? [
+    '\n\n🔍 هل تريد البحث عن تفاصيل أكثر؟',
+    '\n\n💭 ما الذي يثير اهتمامك في هذا الموضوع؟',
+    '\n\n📚 هل تريد معرفة معلومات ذات صلة؟'
+  ] : [
+    '\n\n🔍 Would you like me to search for more details?',
+    '\n\n💭 What interests you most about this topic?',
+    '\n\n📚 Want to explore related information?'
+  ];
+  
+  return followUps[Math.floor(Math.random() * followUps.length)];
 }
 
 // SIMPLIFIED: Regular search function with optional web browsing
@@ -544,10 +752,18 @@ async function generateImageWithRunware(prompt: string, userId: string, language
   }
 }
 
-// Real AI processing function
-async function processWithAI(message: string, context: string | null, language: string = 'en', contextMessages: any[] = []) {
+// Enhanced AI processing function with buddy-chat personality
+async function processWithBuddyChatAI(
+  message: string, 
+  context: string | null, 
+  language: string = 'en', 
+  contextMessages: any[] = [],
+  enhancedContext: string = '',
+  activeTrigger: string = 'chat',
+  interactionType: string = 'buddy_chat'
+) {
   try {
-    console.log("🤖 UNIFIED AI BRAIN: Processing with real AI and vision capabilities");
+    console.log("🤖 BUDDY-CHAT AI: Processing with enhanced conversational intelligence");
     
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
@@ -563,29 +779,61 @@ async function processWithAI(message: string, context: string | null, language: 
       throw new Error("No AI API key configured");
     }
 
+    // Enhanced buddy-chat system prompt
     const systemPrompt = language === 'ar' 
-      ? `أنت WAKTI، مساعد ذكي متقدم يتحدث العربية بطلاقة. تتخصص في المساعدة في المهام اليومية وتقديم معلومات دقيقة ومفيدة. كن ودوداً ومفيداً ومختصراً في إجاباتك.
+      ? `أنت WAKTI، مساعد ذكي ودود يشبه الصديق المقرب. تتميز بالدفء والفضول الطبيعي وتحب المحادثات العميقة والمفيدة.
 
-تعليمات مهمة للتنسيق:
-- استخدم نصاً عادياً واضحاً
-- تجنب الرموز الزائدة مثل # أو ** أو ***
-- استخدم فقرات بسيطة مع فواصل أسطر طبيعية
-- اجعل الإجابة سهلة القراءة وبدون تعقيد في التنسيق`
-      : `You are WAKTI, an advanced AI assistant. You specialize in helping with daily tasks and providing accurate, helpful information. Be friendly, helpful, and concise in your responses.
+خصائص شخصيتك:
+- ودود ومحادث طبيعي مثل الصديق المفضل
+- فضولي ومهتم حقاً بما يقوله المستخدم
+- تطرح أسئلة متابعة طبيعية ومثيرة للاهتمام
+- تتذكر ما تم مناقشته وتشير إليه بشكل طبيعي
+- تقترح أوضاع مختلفة بذكاء عند الحاجة
+- تستخدم الرموز التعبيرية بذوق وطبيعية
 
-Important formatting instructions:
-- Use clean, plain text
-- Avoid excessive symbols like #, **, or ***
-- Use simple paragraphs with natural line breaks
-- Keep responses readable and clean without formatting clutter`;
+الوضع الحالي: ${activeTrigger}
+نوع التفاعل: ${interactionType}
+
+تعليمات التنسيق:
+- استخدم نصاً طبيعياً ودافئاً
+- اجعل المحادثة تتدفق بشكل طبيعي
+- أضف أسئلة متابعة أو تعليقات مثيرة للاهتمام
+- كن مفيداً ومشاركاً في نفس الوقت`
+
+      : `You are WAKTI, an intelligent and friendly AI assistant that feels like a close buddy. You're warm, naturally curious, and love having deep, helpful conversations.
+
+Your personality traits:
+- Friendly and conversational like a favorite friend
+- Genuinely curious and interested in what the user says
+- Ask natural, engaging follow-up questions
+- Remember what's been discussed and reference it naturally
+- Intelligently suggest different modes when helpful
+- Use emojis tastefully and naturally
+
+Current mode: ${activeTrigger}
+Interaction type: ${interactionType}
+
+Formatting instructions:
+- Use natural, warm text
+- Make conversation flow naturally
+- Add engaging follow-up questions or comments
+- Be helpful and engaging at the same time`;
     
     const messages = [
       { role: 'system', content: systemPrompt }
     ];
     
-    // Add context messages for conversation history
+    // Add enhanced context if available
+    if (enhancedContext) {
+      messages.push({ 
+        role: 'assistant', 
+        content: `Previous conversation context:\n${enhancedContext}` 
+      });
+    }
+    
+    // Add recent context messages for better continuity
     if (contextMessages && contextMessages.length > 0) {
-      const recentMessages = contextMessages.slice(-10);
+      const recentMessages = contextMessages.slice(-6); // More context for buddy chat
       recentMessages.forEach(msg => {
         messages.push({
           role: msg.role,
@@ -594,10 +842,15 @@ Important formatting instructions:
       });
     }
     
+    // Add search context if available
     if (context) {
-      messages.push({ role: 'assistant', content: `Context: ${context}` });
+      messages.push({ 
+        role: 'assistant', 
+        content: `Search context: ${context}` 
+      });
     }
     
+    // Add the current message
     messages.push({ role: 'user', content: message });
     
     const response = await fetch(apiUrl, {
@@ -609,7 +862,7 @@ Important formatting instructions:
       body: JSON.stringify({
         model: model,
         messages: messages,
-        temperature: 0.7,
+        temperature: 0.8, // Higher temperature for more conversational responses
         max_tokens: 1000
       })
     });
@@ -622,60 +875,15 @@ Important formatting instructions:
     return result.choices[0].message.content;
     
   } catch (error) {
-    console.error("🤖 UNIFIED AI BRAIN: AI processing error:", error);
+    console.error("🤖 BUDDY-CHAT AI: Processing error:", error);
     
+    // Enhanced fallback responses
     return language === 'ar' 
-      ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
-      : `Sorry, there was an error processing your request. Please try again.`;
+      ? `أعتذر صديقي، واجهت مشكلة صغيرة. لكن لا تقلق، سأكون هنا عندما تحتاجني! 😊 هل يمكنك المحاولة مرة أخرى؟`
+      : `Sorry buddy, I hit a small snag there. But don't worry, I'm still here for you! 😊 Can you try again?`;
   }
 }
 
 function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
-  const lowerMessage = message.toLowerCase();
-  
-  console.log("🔍 UNIFIED AI BRAIN: Analyzing trigger intent for:", activeTrigger);
-  
-  switch (activeTrigger) {
-    case 'search':
-      const searchPatterns = [
-        'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
-        'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
-        'ما', 'من', 'متى', 'أين', 'كيف', 'حالي', 'آخر', 'مؤخراً', 'اليوم', 'أخبار',
-        'طقس', 'نتيجة', 'سعر', 'معلومات', 'ابحث', 'بحث'
-      ];
-      
-      const isSearchIntent = searchPatterns.some(pattern => lowerMessage.includes(pattern)) || lowerMessage.includes('?');
-      
-      return {
-        intent: isSearchIntent ? 'search' : 'general_query',
-        confidence: 'high',
-        allowed: true
-      };
-
-    case 'image':
-      const imagePatterns = [
-        'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
-        'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
-      ];
-      
-      const isImageIntent = imagePatterns.some(pattern => lowerMessage.includes(pattern));
-      
-      return {
-        intent: isImageIntent ? 'generate_image' : 'invalid_for_image',
-        confidence: isImageIntent ? 'high' : 'low',
-        allowed: isImageIntent
-      };
-
-    case 'chat':
-    default:
-      return {
-        intent: 'general_chat',
-        confidence: 'high',
-        allowed: true
-      };
-  }
 }
