@@ -17,6 +17,7 @@ import { Globe, Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo } fr
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
 import { t } from "@/utils/translations";
+import { Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut } from "lucide-react";
 
 export function AppHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -41,12 +42,33 @@ export function AppHeader() {
 
   const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
   
+  // Define menu items with icons
   const menuItems = [
-    { title: language === 'ar' ? 'الإعدادات' : 'Settings', href: '/settings' },
-    { title: language === 'ar' ? 'الحساب' : 'Account', href: '/account' },
-    { title: t("help", language), href: '/help' },
-    { title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', href: '/contacts' },
-    { title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', onClick: handleLogout }
+    { 
+      title: language === 'ar' ? 'الإعدادات' : 'Settings', 
+      href: '/settings',
+      icon: <Settings className="w-4 h-4 mr-2 text-muted-foreground" />
+    },
+    { 
+      title: language === 'ar' ? 'الحساب' : 'Account', 
+      href: '/account',
+      icon: <Account className="w-4 h-4 mr-2 text-muted-foreground" />
+    },
+    { 
+      title: t("help", language), 
+      href: '/help',
+      icon: <Help className="w-4 h-4 mr-2 text-muted-foreground" />
+    },
+    { 
+      title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', 
+      href: '/contacts',
+      icon: <Contacts className="w-4 h-4 mr-2 text-muted-foreground" />
+    },
+    { 
+      title: language === 'ar' ? 'تسجيل الخروج' : 'Logout', 
+      onClick: handleLogout,
+      icon: <LogOut className="w-4 h-4 mr-2 text-muted-foreground" />
+    }
   ];
   
   // Function to get page title and icon with matching colors from MobileNav
@@ -192,8 +214,25 @@ export function AppHeader() {
               <DropdownMenuLabel>{language === 'ar' ? 'الحساب' : 'Account'}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {menuItems.map((item, index) => (
-                <DropdownMenuItem key={index} onClick={item.onClick} className={cn(item.onClick ? "cursor-pointer" : "")} asChild={item.href ? true : false}>
-                  {item.href ? <Link to={item.href}>{item.title}</Link> : item.title}
+                <DropdownMenuItem 
+                  key={index} 
+                  onClick={item.onClick} 
+                  className={cn(item.onClick ? "cursor-pointer" : "")}
+                  asChild={!!item.href}
+                >
+                  {item.href 
+                    ? (
+                      <Link to={item.href} className="flex items-center">
+                        <span className="mr-2 flex items-center">{item.icon}</span>
+                        {item.title}
+                      </Link>
+                    ) : (
+                      <span className="flex items-center">
+                        <span className="mr-2 flex items-center">{item.icon}</span>
+                        {item.title}
+                      </span>
+                    )
+                  }
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
