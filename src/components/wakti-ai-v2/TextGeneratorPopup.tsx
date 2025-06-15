@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PenTool, MessageSquare, Loader2, Brain, CheckCircle, AlertTriangle } from 'lucide-react';
+import { PenTool, MessageSquare, Loader2, Brain, CheckCircle, AlertTriangle, Copy, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -54,6 +54,8 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [messageAnalysis, setMessageAnalysis] = useState<MessageAnalysis | null>(null);
+  const [generatedText, setGeneratedText] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<string>('compose');
   const [formData, setFormData] = useState<FormData>({
     mode: 'compose',
     contentType: '',
@@ -376,28 +378,15 @@ USER PREFERENCES:`;
       });
 
       if (data.success && (data.generatedText || data.response)) {
-        const generatedText = data.generatedText || data.response;
-        console.log('📝 TextGenerator: Generation successful, length:', generatedText.length);
+        const generatedResult = data.generatedText || data.response;
+        console.log('📝 TextGenerator: Generation successful, length:', generatedResult.length);
         
-        onGenerated(generatedText, formData.mode, true);
-        onOpenChange(false);
-        
-        // Reset form
-        setFormData({
-          mode: 'compose',
-          contentType: '',
-          tone: '',
-          length: '',
-          format: '',
-          to: '',
-          from: '',
-          topic: '',
-          originalMessage: ''
-        });
-        setMessageAnalysis(null);
+        // Store the generated text and switch to the Generated Text tab
+        setGeneratedText(generatedResult);
+        setActiveTab('generated');
         setLastError(null);
 
-        toast.success(language === 'ar' ? 'تم إنشاء النص بناءً على التحليل الذكي' : 'Text generated with smart analysis');
+        toast.success(language === 'ar' ? 'تم إنشاء النص بنجاح' : 'Text generated successfully');
       } else {
         const errorMsg = data?.error || 'No generated text received';
         console.error('📝 TextGenerator: Generation failed:', errorMsg);
@@ -415,6 +404,46 @@ USER PREFERENCES:`;
       toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedText);
+      toast.success(language === 'ar' ? 'تم نسخ النص' : 'Text copied to clipboard');
+    } catch (error) {
+      toast.error(language === 'ar' ? 'فشل في نسخ النص' : 'Failed to copy text');
+    }
+  };
+
+  const handleUseInChat = () => {
+    onGenerated(generatedText, formData.mode, true);
+    onOpenChange(false);
+    
+    // Reset form
+    setFormData({
+      mode: 'compose',
+      contentType: '',
+      tone: '',
+      length: '',
+      format: '',
+      to: '',
+      from: '',
+      topic: '',
+      originalMessage: ''
+    });
+    setMessageAnalysis(null);
+    setGeneratedText('');
+    setActiveTab('compose');
+    setLastError(null);
+
+    toast.success(language === 'ar' ? 'تم إرسال النص إلى المحادثة' : 'Text sent to chat');
+  };
+
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    if (value !== 'generated') {
+      setFormData(prev => ({ ...prev, mode: value as 'compose' | 'reply' }));
     }
   };
 
@@ -441,8 +470,8 @@ USER PREFERENCES:`;
           </div>
         )}
 
-        <Tabs value={formData.mode} onValueChange={(value) => updateFormData('mode', value)} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="compose" className="flex items-center gap-1">
               <PenTool className="h-3 w-3" />
               {language === 'ar' ? 'إنشاء' : 'Compose'}
@@ -451,6 +480,12 @@ USER PREFERENCES:`;
               <MessageSquare className="h-3 w-3" />
               {language === 'ar' ? 'رد ذكي' : 'Smart Reply'}
             </TabsTrigger>
+            {generatedText && (
+              <TabsTrigger value="generated" className="flex items-center gap-1">
+                <CheckCircle className="h-3 w-3" />
+                {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="compose" className="space-y-4">
@@ -675,30 +710,71 @@ USER PREFERENCES:`;
               </div>
             </div>
           </TabsContent>
+
+          {/* New Generated Text Tab */}
+          {generatedText && (
+            <TabsContent value="generated" className="space-y-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <h3 className="font-medium">
+                    {language === 'ar' ? 'النص المُولد' : 'Generated Text'}
+                  </h3>
+                </div>
+                
+                <div className="p-4 bg-muted/30 rounded-lg border">
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                    {generatedText}
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <Button 
+                    onClick={handleCopyToClipboard}
+                    variant="outline" 
+                    className="flex-1"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'نسخ النص' : 'Copy Text'}
+                  </Button>
+                  <Button 
+                    onClick={handleUseInChat}
+                    className="flex-1"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {language === 'ar' ? 'استخدام في المحادثة' : 'Use in Chat'}
+                  </Button>
+                </div>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
 
-        <div className="flex gap-3 pt-4">
-          <Button onClick={() => onOpenChange(false)} variant="outline" className="flex-1">
-            {language === 'ar' ? 'إلغاء' : 'Cancel'}
-          </Button>
-          <Button 
-            onClick={handleGenerate} 
-            disabled={!isFormValid() || isGenerating || isAnalyzing}
-            className="flex-1"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
-              </>
-            ) : (
-              <>
-                <PenTool className="h-4 w-4 mr-2" />
-                {language === 'ar' ? 'إنشاء النص' : 'Generate Text'}
-              </>
-            )}
-          </Button>
-        </div>
+        {/* Generate Button - Only show on Compose and Reply tabs */}
+        {activeTab !== 'generated' && (
+          <div className="flex gap-3 pt-4">
+            <Button onClick={() => onOpenChange(false)} variant="outline" className="flex-1">
+              {language === 'ar' ? 'إلغاء' : 'Cancel'}
+            </Button>
+            <Button 
+              onClick={handleGenerate} 
+              disabled={!isFormValid() || isGenerating || isAnalyzing}
+              className="flex-1"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {language === 'ar' ? 'جاري الإنشاء...' : 'Generating...'}
+                </>
+              ) : (
+                <>
+                  <PenTool className="h-4 w-4 mr-2" />
+                  {language === 'ar' ? 'إنشاء النص' : 'Generate Text'}
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
