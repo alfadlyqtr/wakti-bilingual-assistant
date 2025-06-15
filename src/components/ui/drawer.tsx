@@ -35,14 +35,17 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> & {
+    side?: 'left' | 'right'
+  }
+>(({ className, children, side = 'right', ...props }, ref) => (
   <DrawerPortal>
     <DrawerOverlay />
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed right-0 top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col bg-background border-l shadow-lg",
+        "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col bg-background shadow-lg",
+        side === 'left' ? "left-0 border-r" : "right-0 border-l",
         className
       )}
       {...props}

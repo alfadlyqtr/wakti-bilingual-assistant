@@ -54,9 +54,9 @@ export function ChatDrawers({
 
   return (
     <div>
-      {/* Conversations Drawer */}
+      {/* Conversations Drawer - slides from left */}
       <Drawer open={showConversations} onOpenChange={setShowConversations}>
-        <DrawerContent>
+        <DrawerContent side="left">
           <DrawerHeader>
             <DrawerTitle>
               {language === 'ar' ? 'المحادثات' : 'Conversations'}
@@ -79,9 +79,9 @@ export function ChatDrawers({
         </DrawerContent>
       </Drawer>
 
-      {/* Quick Actions Drawer */}
+      {/* Quick Actions Drawer - slides from right */}
       <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
-        <DrawerContent>
+        <DrawerContent side="right">
           <DrawerHeader>
             <DrawerTitle>
               {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}

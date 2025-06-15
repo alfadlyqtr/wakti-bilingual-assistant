@@ -1,7 +1,7 @@
+
 import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
@@ -132,103 +132,91 @@ export function QuickActionsPanel({
           </p>
         </div>
 
-        <Tabs defaultValue="modes" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="modes">
-              {language === 'ar' ? 'الأنماط' : 'Modes'}
-            </TabsTrigger>
-            <TabsTrigger value="tools">
-              {language === 'ar' ? 'الأدوات' : 'Tools'}
-            </TabsTrigger>
-            <TabsTrigger value="prompts">
-              {language === 'ar' ? 'اقتراحات' : 'Prompts'}
-            </TabsTrigger>
-          </TabsList>
+        {/* AI Modes */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
+              {language === 'ar' ? 'أنماط الذكاء الاصطناعي' : 'AI Modes'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {language === 'ar' ? 'اختر النمط المناسب لمهمتك' : 'Choose the right mode for your task'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {triggerModes.map((mode) => (
+              <Button
+                key={mode.id}
+                onClick={() => handleTriggerSelect(mode.id)}
+                variant={activeTrigger === mode.id ? 'default' : 'ghost'}
+                className="w-full justify-start h-auto p-3"
+              >
+                <div className={`p-2 rounded-lg ${mode.color} text-white mr-3`}>
+                  {mode.icon}
+                </div>
+                <div className="text-left">
+                  <div className="font-medium text-sm">{mode.label}</div>
+                  <div className="text-xs text-muted-foreground">{mode.description}</div>
+                </div>
+                {activeTrigger === mode.id && (
+                  <Badge variant="secondary" className="ml-auto text-xs">
+                    {language === 'ar' ? 'نشط' : 'Active'}
+                  </Badge>
+                )}
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
 
-          <TabsContent value="modes" className="space-y-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">
-                  {language === 'ar' ? 'أنماط الذكاء الاصطناعي' : 'AI Modes'}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  {language === 'ar' ? 'اختر النمط المناسب لمهمتك' : 'Choose the right mode for your task'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {triggerModes.map((mode) => (
-                  <Button
-                    key={mode.id}
-                    onClick={() => handleTriggerSelect(mode.id)}
-                    variant={activeTrigger === mode.id ? 'default' : 'ghost'}
-                    className="w-full justify-start h-auto p-3"
-                  >
-                    <div className={`p-2 rounded-lg ${mode.color} text-white mr-3`}>
-                      {mode.icon}
+        {/* Quick Tools */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium">
+            {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
+          </h3>
+          <div className="grid gap-3">
+            {quickActions.map((action, index) => (
+              <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="p-4" onClick={action.action}>
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-lg ${action.color} text-white`}>
+                      {action.icon}
                     </div>
-                    <div className="text-left">
-                      <div className="font-medium text-sm">{mode.label}</div>
-                      <div className="text-xs text-muted-foreground">{mode.description}</div>
+                    <div className="flex-1">
+                      <h3 className="font-medium text-sm">{action.label}</h3>
+                      <p className="text-xs text-muted-foreground">{action.description}</p>
                     </div>
-                    {activeTrigger === mode.id && (
-                      <Badge variant="secondary" className="ml-auto text-xs">
-                        {language === 'ar' ? 'نشط' : 'Active'}
-                      </Badge>
-                    )}
-                  </Button>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
 
-          <TabsContent value="tools" className="space-y-3">
-            <div className="grid gap-3">
-              {quickActions.map((action, index) => (
-                <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow">
-                  <CardContent className="p-4" onClick={action.action}>
-                    <div className="flex items-center space-x-3">
-                      <div className={`p-2 rounded-lg ${action.color} text-white`}>
-                        {action.icon}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-medium text-sm">{action.label}</h3>
-                        <p className="text-xs text-muted-foreground">{action.description}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="prompts" className="space-y-3">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">
-                  {language === 'ar' ? 'اقتراحات سريعة' : 'Quick Prompts'}
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  {language === 'ar' ? 'انقر للبدء بسرعة' : 'Click to get started quickly'}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {quickPrompts.map((prompt, index) => (
-                  <Button
-                    key={index}
-                    onClick={() => handleQuickPrompt(prompt.text)}
-                    variant="ghost"
-                    className="w-full justify-start h-auto p-3 text-left"
-                  >
-                    <div className="p-1 rounded mr-3 text-primary">
-                      {prompt.icon}
-                    </div>
-                    <span className="text-sm">{prompt.text}</span>
-                  </Button>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+        {/* Quick Prompts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">
+              {language === 'ar' ? 'اقتراحات سريعة' : 'Quick Prompts'}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {language === 'ar' ? 'انقر للبدء بسرعة' : 'Click to get started quickly'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {quickPrompts.map((prompt, index) => (
+              <Button
+                key={index}
+                onClick={() => handleQuickPrompt(prompt.text)}
+                variant="ghost"
+                className="w-full justify-start h-auto p-3 text-left"
+              >
+                <div className="p-1 rounded mr-3 text-primary">
+                  {prompt.icon}
+                </div>
+                <span className="text-sm">{prompt.text}</span>
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
 
         {/* Text Generator Popup */}
         <TextGeneratorPopup
