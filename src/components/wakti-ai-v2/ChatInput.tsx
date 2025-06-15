@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,17 +10,21 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { PlusMenu } from './PlusMenu';
 import { ActiveModeIndicator } from './ActiveModeIndicator';
 
-// Returns border/outline classes per mode
+// Returns border/outline classes per mode for main container & textarea
 const modeHighlightStyles = (activeTrigger: string) => {
   switch (activeTrigger) {
-    case 'chat':
-      return 'border-blue-400 shadow-blue-300/25 ring-2 ring-blue-200/70';
-    case 'search':
-      return 'border-green-400 shadow-green-300/25 ring-2 ring-green-200/70';
-    case 'image':
-      return 'border-orange-400 shadow-orange-200/25 ring-2 ring-orange-200/70';
-    default:
-      return 'border-primary/40';
+    case 'chat': return 'border-blue-400 ring-2 ring-blue-200/70 shadow-blue-200/10';
+    case 'search': return 'border-green-400 ring-2 ring-green-200/70 shadow-green-100/10';
+    case 'image': return 'border-orange-400 ring-2 ring-orange-200/70 shadow-orange-100/15';
+    default: return 'border-primary/40';
+  }
+};
+const textareaHighlight = (activeTrigger: string) => {
+  switch (activeTrigger) {
+    case 'chat': return 'border-blue-300 shadow-[inset_0_2px_12px_0_rgba(96,165,250,0.10)]';
+    case 'search': return 'border-green-300 shadow-[inset_0_2px_12px_0_rgba(74,222,128,0.10)]';
+    case 'image': return 'border-orange-300 shadow-[inset_0_2px_12px_0_rgba(251,191,36,0.08)]';
+    default: return 'border-primary/20';
   }
 };
 
@@ -81,8 +84,6 @@ export function ChatInput({
   const triggerCamera = () => {
     cameraInputRef.current?.click();
   };
-
-  // Pass to PlusMenu: onUpload triggers the hidden file input
   const triggerUpload = () => {
     fileInputRef.current?.click();
   };
@@ -143,7 +144,8 @@ export function ChatInput({
   // --- NEW: Reworked Visual Arrangement Below ---
 
   // Mode border/highlight logic
-  const highlightClasses = modeHighlightStyles(activeTrigger);
+  const containerHighlight = modeHighlightStyles(activeTrigger);
+  const textareaHighlightClass = textareaHighlight(activeTrigger);
 
   return (
     <div className="w-full">
@@ -178,7 +180,7 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Uploaded Files Display - Liquid Glass Style */}
+        {/* Uploaded Files Display */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
             <div className="max-w-4xl mx-auto">
@@ -205,16 +207,22 @@ export function ChatInput({
           </div>
         )}
 
-        {/* Main Input Area - Enhanced Liquid Glass, Always Visual, Prominent */}
-        <div className="px-4 pb-4">
+        {/* Main Input Area */}
+        <div className="px-2 pb-2">
           <div className="max-w-4xl mx-auto">
             <div
-              className={`relative group flex flex-col items-stretch bg-white/30 dark:bg-black/30 border-2 ${highlightClasses} shadow-xl rounded-3xl backdrop-blur-2xl p-0 transition-all duration-300`}
-              style={{ minHeight: 92, willChange: 'box-shadow,border-color' }}
+              className={`
+                relative group flex flex-col bg-white/40 dark:bg-black/30 border-2
+                ${containerHighlight}
+                shadow-xl rounded-2xl backdrop-blur-2xl
+                p-0 transition-all duration-300
+                shadow-[0_8px_24px_0_rgba(60,60,100,0.08),inset_0_1px_22px_0_rgba(70,70,150,0.12)]
+                border-[2.5px] min-h-[70px] max-w-full
+              `}
+              style={{ willChange: 'box-shadow,border-color' }}
             >
-              {/* Top Row: Plus Icon, Hidden Inputs */}
-              <div className="flex items-start gap-2 px-4 pt-3 pb-1">
-                {/* Plus Icon */}
+              {/* TOP ROW: Plus + Mode Badge */}
+              <div className="flex items-center gap-2 px-3 pt-2 pb-0.5">
                 <PlusMenu
                   onCamera={triggerCamera}
                   onUpload={triggerUpload}
@@ -222,8 +230,8 @@ export function ChatInput({
                   onOpenQuickActions={handleOpenQuickActionsDrawer}
                   isLoading={isLoading}
                 />
-
-                {/* Hidden file input */}
+                <ActiveModeIndicator activeTrigger={activeTrigger} />
+                {/* Hidden file/camera inputs */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -232,8 +240,6 @@ export function ChatInput({
                   onChange={handleFileChange}
                   className="hidden"
                 />
-
-                {/* Hidden camera input */}
                 <input
                   ref={cameraInputRef}
                   type="file"
@@ -243,19 +249,25 @@ export function ChatInput({
                   className="hidden"
                 />
               </div>
-              {/* Mode Badge - Directly BELOW plus icon, visually separated */}
-              <div className="flex flex-row py-1 px-4">
-                <ActiveModeIndicator activeTrigger={activeTrigger} />
-              </div>
-              {/* Input Row: Typing Area + Send Button */}
-              <div className="relative flex items-end gap-2 px-4 pb-3 pt-1">
-                {/* Expanded Textarea - highlight, more spacious! */}
+              {/* INPUT ROW: Textarea + Send */}
+              <div className="relative flex items-end gap-1 px-3 pb-2 pt-0.5">
                 <div className="flex-1 flex items-end">
                   <Textarea
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder={language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'}
-                    className={`flex-1 border-0 bg-white/90 dark:bg-black/40 backdrop-blur-md resize-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0 py-4 px-4 min-h-[52px] max-h-40 text-base placeholder:text-foreground/40 rounded-2xl shadow-inner transition-all duration-200 outline-none`}
+                    className={`
+                      flex-1 border-[1.5px]
+                      bg-white/95 dark:bg-black/50
+                      ${textareaHighlightClass}
+                      shadow-inner
+                      backdrop-blur-[3px] resize-none
+                      focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-0
+                      py-3 px-3 min-h-[36px] max-h-32 text-base
+                      placeholder:text-foreground/50
+                      rounded-xl
+                      outline-none transition-all duration-200
+                    `}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -266,7 +278,6 @@ export function ChatInput({
                     aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
                   />
                 </div>
-                {/* Send Button - Floating Glass Orb */}
                 {(message.trim() || uploadedFiles.length > 0) && (
                   <TooltipProvider>
                     <Tooltip>
@@ -274,7 +285,12 @@ export function ChatInput({
                         <Button
                           onClick={handleSend}
                           disabled={isLoading || isUploading}
-                          className={`h-12 w-12 rounded-2xl p-0 flex-shrink-0 bg-primary/80 hover:bg-primary border-0 shadow-2xl backdrop-blur-md transition-all duration-200 hover:scale-110 hover:shadow-2xl shadow-lg`}
+                          className={`
+                            h-11 w-11 rounded-xl p-0 flex-shrink-0 bg-primary/90 hover:bg-primary
+                            border-0 shadow-2xl backdrop-blur-md
+                            transition-all duration-200 hover:scale-110 hover:shadow-2xl
+                            shadow-lg
+                          `}
                           size="icon"
                           aria-label={language === 'ar' ? 'إرسال' : 'Send'}
                         >
@@ -293,15 +309,13 @@ export function ChatInput({
                 )}
               </div>
             </div>
-            {/* Status Indicators - Glass Style */}
+            {/* Status Indicators */}
             {isUploading && (
-              <div className="mt-3 flex justify-center">
-                {isUploading && (
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    {language === 'ar' ? 'رفع...' : 'Uploading...'}
-                  </div>
-                )}
+              <div className="mt-2 flex justify-center">
+                <div className="inline-flex items-center gap-2 px-2 py-1.5 bg-blue-500/10 backdrop-blur-xl text-blue-500 rounded-2xl border border-blue-500/20 text-xs font-medium">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {language === 'ar' ? 'رفع...' : 'Uploading...'}
+                </div>
               </div>
             )}
           </div>
