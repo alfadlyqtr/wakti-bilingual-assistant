@@ -176,8 +176,8 @@ async function validateCanMessage(recipientId: string): Promise<boolean> {
   }
 }
 
-// Upload voice or PDF file
-export async function uploadMessageAttachment(file: File, type: 'voice' | 'pdf'): Promise<string> {
+// Upload message attachment (images, voice, or PDF)
+export async function uploadMessageAttachment(file: File, type: 'image' | 'voice' | 'pdf'): Promise<string> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) {
     throw new Error("User not authenticated");
@@ -187,6 +187,8 @@ export async function uploadMessageAttachment(file: File, type: 'voice' | 'pdf')
   const fileExt = file.name.split('.').pop();
   const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
+  console.log("📤 Uploading file to message_attachments bucket:", { fileName, type, size: file.size });
+
   const { data, error } = await supabase.storage
     .from('message_attachments')
     .upload(fileName, file, {
@@ -195,7 +197,7 @@ export async function uploadMessageAttachment(file: File, type: 'voice' | 'pdf')
     });
 
   if (error) {
-    console.error("Error uploading file:", error);
+    console.error("❌ Error uploading file:", error);
     throw error;
   }
 
@@ -203,6 +205,7 @@ export async function uploadMessageAttachment(file: File, type: 'voice' | 'pdf')
     .from('message_attachments')
     .getPublicUrl(fileName);
 
+  console.log("✅ File uploaded successfully:", urlData.publicUrl);
   return urlData.publicUrl;
 }
 

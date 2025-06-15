@@ -124,7 +124,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     try {
       setIsUploading(true);
-      const mediaUrl = await uploadMessageAttachment(file, 'voice');
+      console.log("📷 Uploading image file:", file.name, file.type);
+      const mediaUrl = await uploadMessageAttachment(file, 'image');
 
       sendMessageMutation.mutate({
         message_type: "image",
@@ -155,6 +156,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     try {
       setIsUploading(true);
+      console.log("📄 Uploading PDF file:", file.name, file.type);
       const mediaUrl = await uploadMessageAttachment(file, 'pdf');
 
       sendMessageMutation.mutate({
@@ -178,6 +180,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const handleVoiceRecording = async (audioBlob: Blob, duration: number) => {
     try {
       setIsUploading(true);
+      console.log("🎵 Uploading voice recording:", duration, "seconds");
       const file = new File([audioBlob], `voice-${Date.now()}.webm`, { type: 'audio/webm' });
       const mediaUrl = await uploadMessageAttachment(file, 'voice');
 
