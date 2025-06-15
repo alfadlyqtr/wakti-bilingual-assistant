@@ -103,134 +103,72 @@ export function TextGeneratorPopup({ open, onOpenChange, onGenerated }: TextGene
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const analyzeMessageSimple = (message: string) => {
+    const lowerText = message.toLowerCase();
+    
+    // Basic analysis without any task detection
+    const analysis: MessageAnalysis = {
+      messageType: "message",
+      intent: "communication",
+      mainPoints: [message.substring(0, 100) + (message.length > 100 ? "..." : "")],
+      questionsAsked: [],
+      urgency: "medium",
+      tone: "neutral",
+      suggestedQuestions: [
+        {
+          id: 'q1',
+          question: language === 'ar' ? 'ما هو هدف ردك؟' : 'What is your reply goal?',
+          options: language === 'ar' 
+            ? ['موافقة', 'رفض', 'طلب معلومات', 'تقديم تحديث']
+            : ['Accept', 'Decline', 'Ask for info', 'Provide update']
+        }
+      ]
+    };
+
+    // Detect basic patterns
+    if (lowerText.includes("urgent") || lowerText.includes("asap")) {
+      analysis.urgency = "high";
+    }
+    
+    if (lowerText.includes("thank") || lowerText.includes("please")) {
+      analysis.tone = "polite";
+    }
+    
+    if (lowerText.includes("?")) {
+      analysis.intent = "inquiry";
+      analysis.questionsAsked = ["Question detected in message"];
+    }
+
+    return analysis;
+  };
+
   const analyzeMessage = async (message: string) => {
-    if (!message.trim() || !user?.id) return;
+    if (!message.trim()) return;
     
     setIsAnalyzing(true);
     setLastError(null);
     
     try {
-      console.log('📝 TextGenerator: Starting message analysis...');
-      console.log('📝 Analysis input:', {
-        messageLength: message.length,
-        userId: user.id,
-        language
-      });
+      console.log('📝 TextGenerator: Starting simple message analysis...');
       
-      const analysisPrompt = `Analyze this message quickly and provide:
-1. Message type (email, text, request, complaint, etc.)
-2. Main intent/purpose
-3. Key points mentioned
-4. Any questions asked in the message
-5. Urgency level (low/medium/high)
-6. Original tone
-7. Generate 2-3 contextual questions to help craft the best reply
-
-Message to analyze: "${message}"
-
-Respond in JSON format:
-{
-  "messageType": "string",
-  "intent": "string", 
-  "mainPoints": ["point1", "point2"],
-  "questionsAsked": ["question1"],
-  "urgency": "low/medium/high",
-  "tone": "formal/casual/friendly/etc",
-  "suggestedQuestions": [
-    {
-      "id": "q1",
-      "question": "What's the main goal of your reply?",
-      "options": ["Accept", "Decline", "Request more info", "Provide update"]
-    }
-  ]
-}`;
-
-      console.log('📝 TextGenerator: Calling edge function for analysis...');
-      const startTime = Date.now();
+      // Use simple local analysis instead of external API
+      const analysis = analyzeMessageSimple(message);
+      setMessageAnalysis(analysis);
       
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
-        body: {
-          message: analysisPrompt,
-          userId: user.id,
-          language: language,
-          activeTrigger: 'chat',
-          isQuickAnalysis: true
+      // Auto-suggest tone based on analysis
+      if (analysis.tone && !formData.tone) {
+        const suggestedTone = tones.find(t => 
+          t.value.toLowerCase() === analysis.tone.toLowerCase()
+        );
+        if (suggestedTone) {
+          updateFormData('tone', suggestedTone.value);
         }
-      });
-
-      const duration = Date.now() - startTime;
-      console.log(`📝 TextGenerator: Analysis request completed in ${duration}ms`);
-
-      if (error) {
-        console.error('📝 TextGenerator: Edge function error:', error);
-        throw new Error(`Analysis failed: ${error.message || 'Unknown error'}`);
       }
-
-      console.log('📝 TextGenerator: Analysis response:', {
-        hasData: !!data,
-        success: data?.success,
-        hasResponse: !!data?.response,
-        dataKeys: data ? Object.keys(data) : []
-      });
-
-      if (data.success && data.response) {
-        try {
-          // Try to parse JSON from the response
-          const jsonMatch = data.response.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const analysis = JSON.parse(jsonMatch[0]);
-            setMessageAnalysis(analysis);
-            
-            // Auto-suggest tone based on analysis
-            if (analysis.tone && !formData.tone) {
-              const suggestedTone = tones.find(t => 
-                t.value.toLowerCase() === analysis.tone.toLowerCase()
-              );
-              if (suggestedTone) {
-                updateFormData('tone', suggestedTone.value);
-              }
-            }
-            
-            console.log('📝 TextGenerator: Analysis successful:', analysis);
-          } else {
-            console.warn('📝 TextGenerator: No JSON found in response, creating fallback');
-            throw new Error('No JSON found in response');
-          }
-        } catch (parseError) {
-          console.warn('📝 TextGenerator: JSON parse failed, using fallback:', parseError);
-          // Create a simple fallback analysis
-          setMessageAnalysis({
-            messageType: 'Message',
-            intent: 'Reply needed',
-            mainPoints: [message.substring(0, 50) + '...'],
-            questionsAsked: [],
-            urgency: 'medium',
-            tone: 'neutral',
-            suggestedQuestions: [
-              {
-                id: 'q1',
-                question: language === 'ar' ? 'ما هو هدف ردك؟' : 'What is your reply goal?',
-                options: language === 'ar' 
-                  ? ['موافقة', 'رفض', 'طلب معلومات', 'تقديم تحديث']
-                  : ['Accept', 'Decline', 'Ask for info', 'Provide update']
-              }
-            ]
-          });
-        }
-      } else {
-        const errorMsg = data?.error || 'Analysis failed - no response received';
-        console.error('📝 TextGenerator: Analysis failed:', errorMsg);
-        throw new Error(errorMsg);
-      }
+      
+      console.log('📝 TextGenerator: Simple analysis completed:', analysis);
     } catch (error: any) {
-      console.error('📝 TextGenerator: Analysis comprehensive error:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
-      
+      console.error('📝 TextGenerator: Analysis error:', error);
       setLastError(`Analysis failed: ${error.message}`);
-      toast.error(language === 'ar' ? 'خطأ في تحليل الرسالة' : 'Error analyzing message');
     } finally {
       setIsAnalyzing(false);
     }
@@ -342,23 +280,16 @@ USER PREFERENCES:`;
       console.log('📝 Generation input:', {
         promptLength: enhancedPrompt.length,
         mode: formData.mode,
-        hasAnalysis: !!messageAnalysis,
-        userId: user.id
+        hasAnalysis: !!messageAnalysis
       });
 
       const startTime = Date.now();
-      const { data, error } = await supabase.functions.invoke('wakti-ai-v2-brain', {
+      const { data, error } = await supabase.functions.invoke('text-generator', {
         body: {
-          message: enhancedPrompt,
-          userId: user.id,
+          prompt: enhancedPrompt,
+          mode: formData.mode,
           language: language,
-          activeTrigger: 'chat',
-          textGenParams: {
-            mode: formData.mode,
-            originalMessage: formData.originalMessage,
-            analysis: messageAnalysis,
-            userAnswers: messageAnalysis?.suggestedQuestions.filter(q => q.selectedOption) || []
-          }
+          messageAnalysis: messageAnalysis
         }
       });
 
@@ -373,16 +304,15 @@ USER PREFERENCES:`;
       console.log('📝 TextGenerator: Generation response:', {
         hasData: !!data,
         success: data?.success,
-        hasGeneratedText: !!(data?.generatedText || data?.response),
+        hasGeneratedText: !!data?.generatedText,
         dataKeys: data ? Object.keys(data) : []
       });
 
-      if (data.success && (data.generatedText || data.response)) {
-        const generatedResult = data.generatedText || data.response;
-        console.log('📝 TextGenerator: Generation successful, length:', generatedResult.length);
+      if (data.success && data.generatedText) {
+        console.log('📝 TextGenerator: Generation successful, length:', data.generatedText.length);
         
         // Store the generated text and switch to the Generated Text tab
-        setGeneratedText(generatedResult);
+        setGeneratedText(data.generatedText);
         setActiveTab('generated');
         setLastError(null);
 
