@@ -1330,4 +1330,8 @@ export type TranslationKey =
   | "thankYouForConfirming"
   | "nowYouCanLogin"
   | "confirmationComplete"
-  | "proceedToLogin";
+  | "proceedToLogin"
+  
+  // Image save specific keys - NEW ADDITIONS
+  | "imageSaved"
+  | "errorSavingImage";
