@@ -8,6 +8,7 @@ import { useFileUpload } from '@/hooks/useFileUpload';
 import { FilePreview } from './FilePreview';
 import { DragDropUpload } from './DragDropUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { PlusMenu } from './PlusMenu';
 
 interface ChatInputProps {
   message: string;
@@ -63,6 +64,29 @@ export function ChatInput({
     removeFile,
     clearFiles
   } = useFileUpload();
+
+  // ADD: Handler to open Conversations Drawer (left)
+  const handleOpenConversationsDrawer = () => {
+    if (typeof window !== "undefined") {
+      const nativeEvent = new CustomEvent("open-wakti-conversations");
+      window.dispatchEvent(nativeEvent);
+    }
+  };
+
+  // ADD: Handler to invoke onOpenPlusDrawer (for Quick Actions, right)
+  const handleOpenQuickActionsDrawer = () => {
+    if (onOpenPlusDrawer) onOpenPlusDrawer();
+  };
+
+  // New method: trigger camera input
+  const triggerCamera = () => {
+    cameraInputRef.current?.click();
+  };
+
+  // Pass to PlusMenu: onUpload triggers the hidden file input
+  const triggerUpload = () => {
+    fileInputRef.current?.click();
+  };
 
   const handleSend = () => {
     if (message.trim() || uploadedFiles.length > 0) {
@@ -226,50 +250,32 @@ export function ChatInput({
               {/* Main Container */}
               <div className="relative flex items-center gap-3 bg-white/10 dark:bg-black/10 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-white/10 p-2 shadow-2xl">
                 
-                {/* ========== NEW: Plus Icon ========== */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={onOpenPlusDrawer}
-                  className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
-                  aria-label={language === 'ar' ? 'خيارات إضافية' : 'More options'}
-                  disabled={isLoading}
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                {/* ========== NEW: Plus Dropdown Menu ========== */}
+                <PlusMenu
+                  onCamera={triggerCamera}
+                  onUpload={triggerUpload}
+                  onOpenConversations={handleOpenConversationsDrawer}
+                  onOpenQuickActions={handleOpenQuickActionsDrawer}
+                  isLoading={isLoading}
+                />
 
-                {/* Upload Button - Liquid Glass Style */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
-                        onClick={handleFileUpload}
-                        disabled={isUploading || isLoading}
-                        aria-label={language === 'ar' ? 'رفع ملف' : 'Upload file'}
-                      >
-                        {isUploading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Upload className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                      {language === 'ar' ? 'رفع ملف' : 'Upload file'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                {/* Hidden file input - Updated to exclude PDF */}
+                {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
                   accept="image/*,.txt"
                   onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {/* Hidden camera input */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleCameraChange}
                   className="hidden"
                 />
 
