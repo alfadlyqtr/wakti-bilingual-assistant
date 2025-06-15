@@ -3,8 +3,9 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/providers/ThemeProvider';
-import { User, Bot, Image as ImageIcon, Search, MessageSquare } from 'lucide-react';
+import { User, Bot, Image as ImageIcon, Search, MessageSquare, Copy } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChatBubbleProps {
   message: any;
@@ -14,6 +15,7 @@ interface ChatBubbleProps {
 
 export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubbleProps) {
   const { language } = useTheme();
+  const { toast } = useToast();
   const isUser = message.role === 'user';
 
   // Format message content with enhanced buddy-chat features
@@ -30,6 +32,24 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     formattedContent = formattedContent.replace(/\n/g, '<br />');
     
     return formattedContent;
+  };
+
+  // Copy message content to clipboard
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast({
+        title: language === 'ar' ? 'تم النسخ!' : 'Copied!',
+        description: language === 'ar' ? 'تم نسخ الرسالة إلى الحافظة' : 'Message copied to clipboard',
+      });
+    } catch (error) {
+      console.error('Failed to copy message:', error);
+      toast({
+        title: language === 'ar' ? 'خطأ' : 'Error',
+        description: language === 'ar' ? 'فشل في نسخ الرسالة' : 'Failed to copy message',
+        variant: 'destructive',
+      });
+    }
   };
 
   // Get mode indicator icon
@@ -163,6 +183,19 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
               )}
             </div>
           </Card>
+
+          {/* Copy button for AI messages */}
+          {!isUser && (
+            <Button
+              onClick={handleCopy}
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 mt-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <Copy className="w-3 h-3 mr-1" />
+              {language === 'ar' ? 'نسخ' : 'Copy'}
+            </Button>
+          )}
 
           {/* Message timestamp */}
           <div className="text-xs text-muted-foreground mt-1 px-1">
