@@ -350,13 +350,13 @@ const WaktiAIV2 = () => {
         }
       }
 
-      // Add simple success message to chat
+      // Enhanced success message with task title and navigation button
       const successMessage: AIMessage = {
         id: `success-${Date.now()}`,
         role: 'assistant',
         content: language === 'ar' 
-          ? `✅ تم إنشاء المهمة بنجاح!`
-          : `✅ Task created successfully!`,
+          ? `تم إنشاء المهمة بنجاح! 👍\n\n**${taskData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
+          : `Task successfully created! 👍\n\n**${taskData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
         timestamp: new Date(),
         intent: 'task_created_success',
         confidence: 'high',
@@ -408,13 +408,13 @@ const WaktiAIV2 = () => {
         throw new Error('Failed to create reminder');
       }
 
-      // Add simple success message to chat
+      // Enhanced success message with reminder title and navigation button
       const successMessage: AIMessage = {
         id: `success-${Date.now()}`,
         role: 'assistant',
         content: language === 'ar' 
-          ? `✅ تم إنشاء التذكير بنجاح!`
-          : `✅ Reminder created successfully!`,
+          ? `تم إنشاء التذكير بنجاح! 👍\n\n**${reminderData.title}**\n\n[انتقل إلى المهام والتذكيرات](/tasks-reminders)`
+          : `Reminder successfully created! 👍\n\n**${reminderData.title}**\n\n[Go to Tasks & Reminders](/tasks-reminders)`,
         timestamp: new Date(),
         intent: 'reminder_created_success',
         confidence: 'high',
