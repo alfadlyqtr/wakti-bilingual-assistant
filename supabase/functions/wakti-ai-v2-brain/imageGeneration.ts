@@ -1,7 +1,7 @@
 /**
  * Image generation for Wakti Edge Function
  */
-import { supabase, OPENAI_API_KEY, RUNWARE_API_KEY } from "./utils.ts";
+import { supabase, OPENAI_API_KEY, RUNWARE_API_KEY, DEEPSEEK_API_KEY } from "./utils.ts";
 
 // Utility: Detects if input contains Arabic characters
 function containsArabic(text: string): boolean {
@@ -38,20 +38,49 @@ async function translateToEnglishOpenAI(prompt: string): Promise<string> {
   return data.choices?.[0]?.message?.content?.trim() || prompt;
 }
 
+// Utility: Translate Arabic text to English via DeepSeek
+async function translateToEnglishDeepSeek(prompt: string): Promise<string> {
+  if (!DEEPSEEK_API_KEY) throw new Error("DeepSeek API key not set for translation");
+  const systemPrompt = "You are a professional translator. Given the following Arabic prompt for image generation, translate it to clear English, optimized for AI image creation. Respond with only the English translation, and DO NOT include any explanations, notes, or non-English words.";
+  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 512
+    })
+  });
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error("DeepSeek translation failed: " + errText);
+  }
+  const data = await resp.json();
+  return data.choices?.[0]?.message?.content?.trim() || prompt;
+}
+
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = 'en') {
   try {
     console.log("🎨 Generating image with Runware for prompt:", prompt);
-
     let runwarePrompt = prompt;
+    let translatedPrompt: string | undefined = undefined;
 
-    // Only translate if input language is Arabic & system lang is 'ar'
-    if (language === "ar" && containsArabic(prompt)) {
+    // Translate if Arabic is detected (regardless of language param)
+    if (containsArabic(prompt)) {
       try {
-        console.log("🌐 Translating Arabic prompt to English via OpenAI...");
-        runwarePrompt = await translateToEnglishOpenAI(prompt);
-        console.log("🌐 Arabic-to-English result:", runwarePrompt);
+        console.log("🌐 Translating Arabic prompt to English via DeepSeek...");
+        translatedPrompt = await translateToEnglishDeepSeek(prompt);
+        runwarePrompt = translatedPrompt;
+        console.log("🌐 Arabic-to-English result:", translatedPrompt);
       } catch (err) {
-        console.error("❌ Failed to translate Arabic prompt, using original:", err);
+        console.error("❌ Failed to translate Arabic prompt via DeepSeek, using original prompt:", err);
         runwarePrompt = prompt;
       }
     }
@@ -87,9 +116,9 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     if (response.ok) {
       const result = await response.json();
       console.log("🎨 Runware response data:", result);
-      
+
       const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
-      
+
       if (imageResult && imageResult.imageURL) {
         try {
           await supabase
@@ -98,11 +127,11 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
               user_id: userId,
               prompt: prompt,
               image_url: imageResult.imageURL,
-              metadata: { 
-                provider: 'runware', 
-                imageUUID: imageResult.imageUUID, 
+              metadata: {
+                provider: 'runware',
+                imageUUID: imageResult.imageUUID,
                 originalPrompt: prompt,
-                translatedPrompt: runwarePrompt !== prompt ? runwarePrompt : undefined
+                translatedPrompt: translatedPrompt // always show if set
               }
             });
         } catch (dbError) {
@@ -111,7 +140,9 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
 
         return {
           success: true,
-          imageUrl: imageResult.imageURL
+          imageUrl: imageResult.imageURL,
+          originalPrompt: prompt,
+          translatedPrompt: translatedPrompt
         };
       } else {
         throw new Error('No image URL in Runware response');
