@@ -1,8 +1,7 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Mic, Send, Loader2, MicOff } from 'lucide-react';
+import { Upload, Mic, Send, Loader2, MicOff, Camera } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
@@ -29,7 +28,13 @@ export function ChatInput({
 }: ChatInputProps) {
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Camera preview modal state
+  const [cameraPreviewUrl, setCameraPreviewUrl] = useState<string | null>(null);
+  const [cameraFile, setCameraFile] = useState<File | null>(null);
+  const [showCameraPreview, setShowCameraPreview] = useState(false);
+
   // Dynamic language setting for speech recognition
   const speechLang = language === 'ar' ? 'ar-SA' : 'en-US';
   
@@ -116,10 +121,71 @@ export function ChatInput({
       : 'Tap to speak';
   };
 
+  // ---- Camera Snap and Upload (NEW) ----
+
+  // Handle camera file input
+  const handleCameraChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files[0]) {
+      const file = files[0];
+      setCameraFile(file);
+      setCameraPreviewUrl(URL.createObjectURL(file));
+      setShowCameraPreview(true);
+    }
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+  };
+
+  // Send snapped photo (from camera)
+  const handleSendCameraPhoto = () => {
+    if (cameraFile) {
+      // Call onSendMessage with an empty message and image file as blob
+      onSendMessage('', 'text', [cameraFile]);
+      setCameraFile(null);
+      setCameraPreviewUrl(null);
+      setShowCameraPreview(false);
+    }
+  };
+
+  // Cancel and cleanup camera modal
+  const handleCancelCamera = () => {
+    setCameraFile(null);
+    setCameraPreviewUrl(null);
+    setShowCameraPreview(false);
+  };
+
   return (
     <div className="w-full">
       <DragDropUpload onFilesSelected={handleFilesSelected} disabled={isLoading}>
-        
+        {/* Camera Preview Modal */}
+        {showCameraPreview && cameraPreviewUrl && (
+          <div className="fixed inset-0 z-50 bg-black/70 flex flex-col items-center justify-center">
+            <div className="bg-background rounded-2xl p-4 shadow-2xl w-80 flex flex-col items-center gap-4">
+              <img
+                src={cameraPreviewUrl}
+                alt="Camera preview"
+                className="w-full h-60 object-contain rounded-xl bg-black/10"
+              />
+              <div className="flex gap-2 mt-2 w-full">
+                <Button
+                  className="flex-1"
+                  variant="default"
+                  onClick={handleSendCameraPhoto}
+                  disabled={isLoading}
+                >
+                  {language === 'ar' ? 'إرسال' : 'Send'}
+                </Button>
+                <Button
+                  className="flex-1"
+                  variant="ghost"
+                  onClick={handleCancelCamera}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Uploaded Files Display - Liquid Glass Style */}
         {uploadedFiles.length > 0 && (
           <div className="px-4 py-3 mb-3 mx-4 rounded-2xl bg-white/5 dark:bg-black/5 backdrop-blur-xl border border-white/10 dark:border-white/5">
@@ -193,6 +259,28 @@ export function ChatInput({
                   onChange={handleFileChange}
                   className="hidden"
                 />
+
+                {/* Camera Button - Liquid Glass Style */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0
+                          backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
+                        disabled={isLoading}
+                        aria-label={language === 'ar' ? 'التقاط صورة' : 'Take Photo'}
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
+                      {language === 'ar' ? 'التقاط صورة' : 'Take photo'}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
                 {/* Mic Button - Liquid Glass Style */}
                 <TooltipProvider>

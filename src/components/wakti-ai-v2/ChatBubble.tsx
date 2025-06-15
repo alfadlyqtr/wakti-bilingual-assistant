@@ -67,6 +67,85 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }).format(new Date(timestamp));
   };
 
+  // Detect user uploaded image
+  const userUploadedImages = message.attachedFiles?.filter((file: any) =>
+    file.type?.startsWith('image/')
+  );
+
+  // Show images sent by user in chat bubble just like ai's images
+  // Each image will be displayed with preview, copy, download
+  const showUserImages = !userUploadedImages || userUploadedImages.length === 0
+    ? null
+    : (
+      <div className="mb-3 space-y-3">
+        {userUploadedImages.map((file: any, idx: number) => (
+          <div key={file.name || idx}>
+            <div 
+              className="relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={() => setImageModalOpen(true)}
+            >
+              <img 
+                src={typeof file === 'string' ? file : (file.url || file.previewUrl || URL.createObjectURL(file))}
+                alt="User uploaded"
+                className="w-full max-w-sm rounded-lg"
+                style={{ maxHeight: 300 }}
+              />
+              <div className="absolute inset-0 bg-black/0 hover:bg-black/10 transition-colors flex items-center justify-center">
+                <ExternalLink className="h-6 w-6 text-white opacity-0 hover:opacity-100 transition-opacity" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-3 w-full">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  // Try to copy the image url
+                  if (file.url || file.previewUrl) {
+                    navigator.clipboard.writeText(file.url || file.previewUrl);
+                    toast.success(language === 'ar' ? 'تم النسخ!' : 'Copied!');
+                  }
+                }}
+                className="h-7 px-2 text-xs flex-1 min-w-0"
+              >
+                <Copy className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'نسخ' : 'Copy'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  // Download the image
+                  const url = typeof file === 'string'
+                    ? file
+                    : file.url || file.previewUrl || URL.createObjectURL(file);
+                  const response = await fetch(url);
+                  const blob = await response.blob();
+                  const link = document.createElement('a');
+                  link.href = URL.createObjectURL(blob);
+                  link.download = file.name || `wakti-upload-${Date.now()}.jpg`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  toast.success(language === 'ar' ? 'تم تحميل الصورة!' : 'Image downloaded!');
+                }}
+                className="h-7 px-2 text-xs flex-1 min-w-0"
+              >
+                <Download className="h-3 w-3 mr-1" />
+                {language === 'ar' ? 'تحميل' : 'Download'}
+              </Button>
+            </div>
+            {imageModalOpen && (
+              <ImageModal
+                isOpen={imageModalOpen}
+                onClose={() => setImageModalOpen(false)}
+                imageUrl={typeof file === 'string' ? file : (file.url || file.previewUrl || URL.createObjectURL(file))}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+
   const isUser = message.role === 'user';
 
   // Show copy button for AI messages in chat and search modes (not image mode)
@@ -107,7 +186,10 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
               ? "bg-primary text-primary-foreground rounded-br-md"
               : "bg-muted rounded-bl-md"
           )}>
-            {/* Image Content */}
+            {/* Show user-uploaded/snapped images if present */}
+            {showUserImages}
+
+            {/* AI Image Content */}
             {message.imageUrl && (
               <div className="mb-3">
                 <div 
