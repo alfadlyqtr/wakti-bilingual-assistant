@@ -89,10 +89,10 @@ serve(async (req) => {
     }
 
     // Validate required fields
-    if (!message || typeof message !== 'string' || message.trim() === '') {
+    if ((!message || typeof message !== 'string' || message.trim() === '') && attachedFiles.length === 0) {
       console.error("🤖 BUDDY-CHAT AI BRAIN: Invalid message field");
       return new Response(JSON.stringify({ 
-        error: "Message is required and must be a non-empty string",
+        error: "Message or an attachment is required.",
         success: false
       }), {
         status: 400,
@@ -130,199 +130,143 @@ serve(async (req) => {
     let pendingReminderData = null;
     let buddyChat = {};
 
-    // (new) Support image analysis: if attachedFiles contains image and activeTrigger === 'chat' or 'vision'
-    let visionAnalysisResult = null;
-    let visionError = null;
-    let visionImageDescription = '';
-    let isVisionRequest = false;
-
-    if (Array.isArray(attachedFiles) && attachedFiles.length > 0) {
-      // Just use first image, can support multi-image in the future
-      const imgFile = attachedFiles.find(f =>
-        (f.type || '').startsWith('image/') && f.base64
-      );
-      if (imgFile) {
-        isVisionRequest = true;
-        try {
-          const analysisPrompt = language === 'ar'
-            ? `حلل هذه الصورة كخبير - صف محتواها بالتفصيل وأخبرني بالمعلومات المهمة، إذا بها نص استخرجه بالكامل مع ترجمته للعربية إن أمكن. إذا كانت وثيقة أو شيء تقني أو غريب، فسّره بطريقتك.`
-            : `Analyze this image like an expert—describe its content in detail, extract any visible text and translate if possible, and explain what stands out. If it's a document, technical or unusual, interpret it as best as possible.`;
-
-          const oaiImageRes = await analyzeImageWithOpenAIVision(imgFile.base64, analysisPrompt, language);
-
-          if (oaiImageRes.success) {
-            visionAnalysisResult = oaiImageRes.content;
-            visionImageDescription = oaiImageRes.summary || '';
-          } else {
-            visionError = oaiImageRes.error;
-          }
-        } catch (e) {
-          visionError = (e && e.message) || 'OpenAI Vision error.';
-        }
-      }
-    }
-
-    // (injected vision behavior): If vision processing present, build the response using it; prioritize image analysis before text
-    if (isVisionRequest && visionAnalysisResult) {
-      response =
-        (language === 'ar'
-          ? '📷 تحليل الصورة:\n\n'
-          : '📷 Image Analysis:\n\n'
-        ) + visionAnalysisResult;
-      // Optionally, buddyChat can reference image analysis
-      buddyChat = {
-        crossModeSuggestion: null,
-        followUpQuestion: language === 'ar'
-          ? 'هل لديك أسئلة أخرى حول هذه الصورة؟'
-          : 'Do you have more questions about this image?',
-        vision: true
-      };
-    }
-    else if (isVisionRequest && visionError) {
-      response =
-        (language === 'ar'
-          ? 'لم أتمكن من تحليل الصورة بنجاح. السبب: '
-          : 'Failed to analyze image. Reason: '
-        ) + visionError;
-    }
-    else {
-      // Handle task/reminder creation intelligence
-      if (taskAnalysis.isTask || taskAnalysis.isReminder) {
-        console.log("🤖 BUDDY-CHAT AI BRAIN: Task/Reminder detected, preparing confirmation data");
-        
-        needsConfirmation = true;
-        
-        if (taskAnalysis.isTask) {
-          pendingTaskData = taskAnalysis.taskData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء مهمة. راجع التفاصيل أدناه وتأكد من صحتها:`
-            : `I detected you want to create a task. Please review the details below and confirm:`;
-        } else {
-          pendingReminderData = taskAnalysis.reminderData;
-          response = language === 'ar' 
-            ? `اكتشفت أنك تريد إنشاء تذكير. راجع التفاصيل أدناه وتأكد من صحتها:`
-            : `I detected you want to create a reminder. Please review the details below and confirm:`;
-        }
+    // Handle task/reminder creation intelligence
+    if (taskAnalysis.isTask || taskAnalysis.isReminder) {
+      console.log("🤖 BUDDY-CHAT AI BRAIN: Task/Reminder detected, preparing confirmation data");
+      
+      needsConfirmation = true;
+      
+      if (taskAnalysis.isTask) {
+        pendingTaskData = taskAnalysis.taskData;
+        response = language === 'ar' 
+          ? `اكتشفت أنك تريد إنشاء مهمة. راجع التفاصيل أدناه وتأكد من صحتها:`
+          : `I detected you want to create a task. Please review the details below and confirm:`;
       } else {
-        // Handle enhanced buddy-chat modes with natural intelligence
-        switch (activeTrigger) {
-          case 'search':
-            // Enhanced search with conversational follow-up
-            if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
-              console.log("🔍 Executing enhanced conversational search for user:", user.id);
-              
-              const searchResult = await executeRegularSearch(message, language);
-              if (searchResult.success) {
-                browsingUsed = true;
-                browsingData = searchResult.data;
-                
-                // Process with enhanced buddy-chat AI
-                response = await processWithBuddyChatAI(
-                  message, 
-                  searchResult.context, 
-                  language, 
-                  contextMessages, 
-                  enhancedContext,
-                  activeTrigger,
-                  'search_with_results'
-                );
-                
-                // Add conversational follow-up for search
-                response += generateSearchFollowUp(language);
-              } else {
-                response = await processWithBuddyChatAI(
-                  message, 
-                  null, 
-                  language, 
-                  contextMessages, 
-                  enhancedContext,
-                  activeTrigger,
-                  'search_without_results'
-                );
-              }
-              
-              buddyChat = {
-                searchFollowUp: true,
-                engagement: 'high'
-              };
-            } else {
-              response = language === 'ar' 
-                ? `🔍 أنت في وضع البحث الذكي\n\nيمكنني مساعدتك في البحث عن المعلومات الحديثة. ما الذي تود البحث عنه؟`
-                : `🔍 You're in Smart Search Mode\n\nI can help you find current information. What would you like to search for?`;
-            }
-            break;
-
-          case 'image':
-            if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
-              try {
-                console.log("🎨 Generating image with enhanced creativity for prompt:", message);
-                const imageResult = await generateImageWithRunware(message, user.id, language);
-                
-                if (imageResult.success) {
-                  imageUrl = imageResult.imageUrl;
-                  response = await processWithBuddyChatAI(
-                    message,
-                    `Image generated successfully for: ${message}`,
-                    language,
-                    contextMessages,
-                    enhancedContext,
-                    activeTrigger,
-                    'image_generated'
-                  );
-                  
-                  buddyChat = {
-                    creativeEncouragement: true,
-                    engagement: 'high'
-                  };
-                } else {
-                  console.error("Image generation failed:", imageResult.error);
-                  response = language === 'ar' 
-                    ? `❌ عذراً، واجهت مشكلة في إنشاء الصورة. هل يمكنك تجربة وصف مختلف؟`
-                    : `❌ Sorry, I had trouble creating that image. Could you try a different description?`;
-                }
-              } catch (error) {
-                console.error("Image generation error:", error);
-                response = language === 'ar' 
-                  ? `❌ عذراً، حدث خطأ في إنشاء الصورة. دعني أساعدك بطريقة أخرى.`
-                  : `❌ Sorry, there was an error generating the image. Let me help you another way.`;
-              }
-            } else {
-              response = language === 'ar' 
-                ? `🎨 أنت في وضع إنشاء الصور الإبداعي\n\nصف لي الصورة التي تريد إنشاءها وسأجعلها حقيقة!`
-                : `🎨 You're in Creative Image Mode\n\nDescribe the image you want to create and I'll bring it to life!`;
-            }
-            break;
-
-          case 'chat':
-          default:
-            // Enhanced buddy-chat mode with natural conversations
-            response = await processWithBuddyChatAI(
-              message, 
-              null, 
-              language, 
-              contextMessages, 
-              enhancedContext,
-              activeTrigger,
-              'buddy_chat'
-            );
+        pendingReminderData = taskAnalysis.reminderData;
+        response = language === 'ar' 
+          ? `اكتشفت أنك تريد إنشاء تذكير. راجع التفاصيل أدناه وتأكد من صحتها:`
+          : `I detected you want to create a reminder. Please review the details below and confirm:`;
+      }
+    } else {
+      // Handle enhanced buddy-chat modes with natural intelligence
+      switch (activeTrigger) {
+        case 'search':
+          // Enhanced search with conversational follow-up
+          if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
+            console.log("🔍 Executing enhanced conversational search for user:", user.id);
             
-            // Add smart cross-mode suggestions
-            if (modeAnalysis.suggestMode && modeAnalysis.suggestMode !== activeTrigger) {
-              const modeSuggestion = generateModeSuggestion(modeAnalysis.suggestMode, language);
-              response += '\n\n' + modeSuggestion;
+            const searchResult = await executeRegularSearch(message, language);
+            if (searchResult.success) {
+              browsingUsed = true;
+              browsingData = searchResult.data;
               
-              buddyChat = {
-                crossModeSuggestion: modeAnalysis.suggestMode,
-                engagement: 'medium'
-              };
+              // Process with enhanced buddy-chat AI
+              response = await processWithBuddyChatAI(
+                message, 
+                searchResult.context, 
+                language, 
+                contextMessages, 
+                enhancedContext,
+                activeTrigger,
+                'search_with_results'
+              );
+              
+              // Add conversational follow-up for search
+              response += generateSearchFollowUp(language);
             } else {
-              buddyChat = {
-                followUpQuestion: generateNaturalFollowUp(message, response, language),
-                engagement: 'high'
-              };
+              response = await processWithBuddyChatAI(
+                message, 
+                null, 
+                language, 
+                contextMessages, 
+                enhancedContext,
+                activeTrigger,
+                'search_without_results'
+              );
             }
-            break;
-        }
+            
+            buddyChat = {
+              searchFollowUp: true,
+              engagement: 'high'
+            };
+          } else {
+            response = language === 'ar' 
+              ? `🔍 أنت في وضع البحث الذكي\n\nيمكنني مساعدتك في البحث عن المعلومات الحديثة. ما الذي تود البحث عنه؟`
+              : `🔍 You're in Smart Search Mode\n\nI can help you find current information. What would you like to search for?`;
+          }
+          break;
+
+        case 'image':
+          if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
+            try {
+              console.log("🎨 Generating image with enhanced creativity for prompt:", message);
+              const imageResult = await generateImageWithRunware(message, user.id, language);
+              
+              if (imageResult.success) {
+                imageUrl = imageResult.imageUrl;
+                response = await processWithBuddyChatAI(
+                  message,
+                  `Image generated successfully for: ${message}`,
+                  language,
+                  contextMessages,
+                  enhancedContext,
+                  activeTrigger,
+                  'image_generated'
+                );
+                
+                buddyChat = {
+                  creativeEncouragement: true,
+                  engagement: 'high'
+                };
+              } else {
+                console.error("Image generation failed:", imageResult.error);
+                response = language === 'ar' 
+                  ? `❌ عذراً، واجهت مشكلة في إنشاء الصورة. هل يمكنك تجربة وصف مختلف؟`
+                  : `❌ Sorry, I had trouble creating that image. Could you try a different description?`;
+              }
+            } catch (error) {
+              console.error("Image generation error:", error);
+              response = language === 'ar' 
+                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. دعني أساعدك بطريقة أخرى.`
+                : `❌ Sorry, there was an error generating the image. Let me help you another way.`;
+            }
+          } else {
+            response = language === 'ar' 
+              ? `🎨 أنت في وضع إنشاء الصور الإبداعي\n\nصف لي الصورة التي تريد إنشاءها وسأجعلها حقيقة!`
+              : `🎨 You're in Creative Image Mode\n\nDescribe the image you want to create and I'll bring it to life!`;
+          }
+          break;
+
+        case 'chat':
+        default:
+          // Enhanced buddy-chat mode with natural conversations
+          response = await processWithBuddyChatAI(
+            message, 
+            null, 
+            language, 
+            contextMessages, 
+            enhancedContext,
+            activeTrigger,
+            'buddy_chat',
+            attachedFiles
+          );
+          
+          // Add smart cross-mode suggestions
+          if (modeAnalysis.suggestMode && modeAnalysis.suggestMode !== activeTrigger) {
+            const modeSuggestion = generateModeSuggestion(modeAnalysis.suggestMode, language);
+            response += '\n\n' + modeSuggestion;
+            
+            buddyChat = {
+              crossModeSuggestion: modeAnalysis.suggestMode,
+              engagement: 'medium'
+            };
+          } else {
+            buddyChat = {
+              followUpQuestion: generateNaturalFollowUp(message, response, language),
+              engagement: 'high'
+            };
+          }
+          break;
       }
     }
 
@@ -827,19 +771,24 @@ async function processWithBuddyChatAI(
   contextMessages: any[] = [],
   enhancedContext: string = '',
   activeTrigger: string = 'chat',
-  interactionType: string = 'buddy_chat'
+  interactionType: string = 'buddy_chat',
+  attachedFiles: any[] = []
 ) {
   try {
     console.log("🤖 BUDDY-CHAT AI: Processing with enhanced conversational intelligence");
+    if (attachedFiles.length > 0) {
+      console.log(`🤖 BUDDY-CHAT AI: Processing with ${attachedFiles.length} file(s) for vision analysis.`);
+    }
     
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
     let model = 'deepseek-chat';
     
-    if (!apiKey) {
+    // Force OpenAI for any request with files/images
+    if (!apiKey || (attachedFiles && attachedFiles.length > 0)) {
       apiKey = OPENAI_API_KEY;
       apiUrl = 'https://api.openai.com/v1/chat/completions';
-      model = 'gpt-4o-mini';
+      model = 'gpt-4o-mini'; // This model supports vision
     }
     
     if (!apiKey) {
@@ -886,7 +835,7 @@ Formatting instructions:
 - Add engaging follow-up questions or comments
 - Be helpful and engaging at the same time`;
     
-    const messages = [
+    const messages: any[] = [
       { role: 'system', content: systemPrompt }
     ];
     
@@ -902,9 +851,20 @@ Formatting instructions:
     if (contextMessages && contextMessages.length > 0) {
       const recentMessages = contextMessages.slice(-6); // More context for buddy chat
       recentMessages.forEach(msg => {
+        // Ensure content is a simple string for non-vision models if needed
+        let content = msg.content;
+        if (typeof content !== 'string') {
+          // Attempt to find a text part if it's a complex object
+          if (Array.isArray(content) && content.length > 0) {
+            const textPart = content.find(p => p.type === 'text');
+            content = textPart ? textPart.text : '[attachment]';
+          } else {
+            content = '[attachment]';
+          }
+        }
         messages.push({
           role: msg.role,
-          content: msg.content
+          content: content
         });
       });
     }
@@ -917,8 +877,30 @@ Formatting instructions:
       });
     }
     
-    // Add the current message
-    messages.push({ role: 'user', content: message });
+    // Construct user message content. It can be a simple string or an array for multimodal input.
+    let userContent: any = message;
+    
+    // If there are files, build a multipart message for vision-capable models
+    if (attachedFiles && attachedFiles.length > 0) {
+      const contentParts: any[] = [{ type: 'text', text: message }];
+
+      attachedFiles.forEach(file => {
+        // file has { type: 'image/jpeg', base64: 'base64string' }
+        if (file.type && file.type.startsWith('image/')) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${file.type};base64,${file.base64}`
+            }
+          });
+        }
+      });
+      
+      userContent = contentParts;
+    }
+
+    // Add the current message (which could be multimodal)
+    messages.push({ role: 'user', content: userContent });
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -930,12 +912,14 @@ Formatting instructions:
         model: model,
         messages: messages,
         temperature: 0.8, // Higher temperature for more conversational responses
-        max_tokens: 1000
+        max_tokens: 2048 // Increased token limit for vision
       })
     });
     
     if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`AI API failed: ${response.status}`, errorText);
+      throw new Error(`AI API failed: ${response.status} - ${errorText}`);
     }
     
     const result = await response.json();
@@ -951,57 +935,8 @@ Formatting instructions:
   }
 }
 
-// (helper) Analyze image with OpenAI Vision API (gpt-4o)
-async function analyzeImageWithOpenAIVision(base64Image: string, prompt: string, language: string) {
-  try {
-    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-    if (!OPENAI_API_KEY) {
-      return { success: false, error: 'OpenAI API key not configured on backend.' };
-    }
-    // gpt-4o supports vision via multi-modal messages (see OpenAI docs)
-    const messages = [
-      { role: 'system', content: language === 'ar'
-        ? 'أنت مساعد AI خبير بمجال تحليل الصور وفهم النصوص داخل الصور بدقة. جاوب كأنك إنسان حساس للصور.'
-        : 'You are an expert AI assistant that analyzes and extracts details from images as sensitively as a human.' },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          {
-            type: 'image_url',
-            image_url: `data:${(base64Image.startsWith('data:') ? base64Image.split(';')[0].split(':')[1] : 'image/png')};base64,${base64Image.replace(/^data:image\/[a-zA-Z]+;base64,/, '')}`,
-          }
-        ]
-      }
-    ];
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages,
-        max_tokens: 850,
-        temperature: 0.3,
-      }),
-    });
-
-    if (!response.ok) {
-      const te = await response.text();
-      return { success: false, error: `OpenAI Vision API error: ${response.status} - ${te}` };
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    return { success: true, content };
-
-  } catch (error) {
-    return { success: false, error: (error && error.message) || 'Unknown error in OpenAI vision.' };
-  }
-}
+// THIS FUNCTION IS NO LONGER USED AND WILL BE REMOVED
+// async function analyzeImageWithOpenAIVision...
 
 function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
