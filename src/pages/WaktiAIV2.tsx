@@ -911,6 +911,7 @@ const WaktiAIV2 = () => {
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}
           onOpenPlusDrawer={handleOpenPlusDrawer}
+          activeTrigger={activeTrigger}
         />
       </div>
       {/* Drawers portal */}

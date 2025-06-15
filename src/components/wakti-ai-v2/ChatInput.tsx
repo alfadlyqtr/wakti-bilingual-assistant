@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,6 +8,7 @@ import { FilePreview } from './FilePreview';
 import { DragDropUpload } from './DragDropUpload';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { PlusMenu } from './PlusMenu';
+import { ActiveModeIndicator } from './ActiveModeIndicator';
 
 interface ChatInputProps {
   message: string;
@@ -18,6 +18,7 @@ interface ChatInputProps {
   onSendMessage: (message: string, inputType?: 'text' | 'voice', files?: any[]) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
+  activeTrigger: string; // Added here
 }
 
 export function ChatInput({
@@ -28,6 +29,7 @@ export function ChatInput({
   onSendMessage,
   onClearChat,
   onOpenPlusDrawer,
+  activeTrigger // Added here
 }: ChatInputProps) {
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -230,10 +232,8 @@ export function ChatInput({
                 />
 
                 {/* Chat Badge / Indicator */}
-                <div className="flex items-center justify-center h-9 w-9 flex-shrink-0">
-                  <span className="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                    {language === 'ar' ? 'دردشة' : 'Chat'}
-                  </span>
+                <div className="flex items-center justify-center h-9 w-28 flex-shrink-0">
+                  <ActiveModeIndicator activeTrigger={activeTrigger} />
                 </div>
 
                 {/* Text Input - Glass Style */}
