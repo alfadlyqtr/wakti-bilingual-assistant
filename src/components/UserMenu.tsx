@@ -69,13 +69,21 @@ export function UserMenu() {
 
   const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
 
-  // User menu options, insert unread badge in contacts
+  // Adjusted UnreadBadge sizing for avatar in dropdown
+  const dropdownAvatarBadgeSize = "sm"; // Use "sm" but can be increased if needed
+
+  // User menu options with blinking and badge
   const menuOptions = [
     { 
       icon: (
         <span className="relative">
           <Users size={16} />
-          <UnreadBadge count={unreadTotal} size="sm" blink={!!unreadTotal} />
+          <UnreadBadge
+            count={unreadTotal}
+            size="sm"
+            blink={!!unreadTotal}
+            className="-right-2 -top-2"
+          />
         </span>
       ),
       label: t("contacts", language), 
@@ -101,7 +109,12 @@ export function UserMenu() {
             />
             <AvatarFallback className="text-xs">{getInitials()}</AvatarFallback>
           </Avatar>
-          <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+          {/* Header avatar badge, tiny size & offset */}
+          <UnreadBadge
+            count={unreadTotal}
+            size="sm"
+            className="-right-1.5 -top-1.5"
+          />
         </span>
         <span className="text-sm max-w-[70px] truncate">{displayName}</span>
         <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
@@ -110,13 +123,12 @@ export function UserMenu() {
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop for closing menu when clicked outside */}
+            {/* Backdrop */}
             <div 
-              className="fixed inset-0 z-40" 
+              className="fixed inset-0 z-40"
               onClick={closeMenu}
             />
-            
-            {/* User menu dropdown */}
+            {/* Dropdown */}
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -134,7 +146,12 @@ export function UserMenu() {
                       />
                       <AvatarFallback>{getInitials()}</AvatarFallback>
                     </Avatar>
-                    <UnreadBadge count={unreadTotal} size="sm" className="-right-1 -top-1" />
+                    {/* Dropdown avatar badge, keep 'sm' but move slightly for more visibility */}
+                    <UnreadBadge
+                      count={unreadTotal}
+                      size={dropdownAvatarBadgeSize}
+                      className="-right-1.5 -top-1.5"
+                    />
                   </span>
                   <div>
                     <p className="text-sm font-medium truncate">{displayName}</p>
