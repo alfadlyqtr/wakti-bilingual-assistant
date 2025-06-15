@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ChatBubble } from './ChatBubble';
@@ -77,7 +76,8 @@ export function ChatMessages({
   return (
     <div className="h-full w-full">
       <ScrollArea ref={scrollAreaRef} className="h-full w-full">
-        <div className="p-2 pb-6 min-h-full">
+        {/* The pb-8 here creates a tiny space above the chat input/footer */}
+        <div className="p-2 pb-8 min-h-full">
           <div className="w-full space-y-4">
             {sessionMessages.length === 0 && !showTaskConfirmation && (
               <div className="text-center py-8">
