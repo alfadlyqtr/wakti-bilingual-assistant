@@ -862,6 +862,17 @@ const WaktiAIV2 = () => {
     setShowQuickActions(true);
   };
 
+  // Listen for open-wakti-conversations event to open conversations drawer
+  React.useEffect(() => {
+    const handleOpenDrawer = () => {
+      setShowConversations(true);
+    };
+    window.addEventListener("open-wakti-conversations", handleOpenDrawer);
+    return () => {
+      window.removeEventListener("open-wakti-conversations", handleOpenDrawer);
+    };
+  }, []);
+
   return (
     <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
       {/* Notification Bars only */}
