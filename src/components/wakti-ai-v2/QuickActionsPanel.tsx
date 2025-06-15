@@ -35,7 +35,7 @@ export function QuickActionsPanel({
   const triggerModes = [
     {
       id: 'chat',
-      label: language === 'ar' ? 'محادثة' : 'Chat',
+      label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
       icon: <MessageSquare className="h-4 w-4" />,
       color: 'bg-blue-500',
       description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
