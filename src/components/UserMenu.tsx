@@ -135,11 +135,12 @@ export function UserMenu() {
                       />
                       <AvatarFallback>{getInitials()}</AvatarFallback>
                     </Avatar>
-                    {/* Dropdown avatar badge, now md size and offset for visibility */}
+                    {/* Dropdown avatar badge: make slightly larger, blink, and visually clear */}
                     <UnreadBadge
                       count={unreadTotal}
-                      size={dropdownAvatarBadgeSize}
-                      className="-right-2.5 -top-2.5"
+                      size="md"
+                      blink={!!unreadTotal}
+                      className="-right-3 -top-3"
                     />
                   </span>
                   <div>
