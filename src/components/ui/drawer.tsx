@@ -27,7 +27,10 @@ const DrawerOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Overlay
     ref={ref}
-    className={cn("fixed inset-0 z-50 bg-black/80", className)}
+    className={cn(
+      "fixed inset-0 z-50 bg-black/20 backdrop-blur-md transition-all duration-300",
+      className
+    )}
     {...props}
   />
 ))
@@ -44,13 +47,18 @@ const DrawerContent = React.forwardRef<
     <DrawerPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col bg-background shadow-lg",
-        side === 'left' ? "left-0 border-r" : "right-0 border-l",
+        "fixed top-0 z-50 h-full w-80 max-w-[80vw] flex flex-col",
+        // Liquid glass effect
+        "bg-white/10 dark:bg-black/10 backdrop-blur-2xl",
+        "border-white/20 dark:border-white/10",
+        "shadow-[0_8px_32px_0_rgba(31,38,135,0.37)]",
+        "transition-all duration-500 ease-out",
+        side === 'left' ? "left-0 border-r-2" : "right-0 border-l-2",
         className
       )}
       {...props}
     >
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
         {children}
       </div>
     </DrawerPrimitive.Content>
@@ -87,7 +95,7 @@ const DrawerTitle = React.forwardRef<
   <DrawerPrimitive.Title
     ref={ref}
     className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
+      "text-lg font-semibold leading-none tracking-tight text-white/90 dark:text-white/90",
       className
     )}
     {...props}
@@ -101,7 +109,7 @@ const DrawerDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DrawerPrimitive.Description
     ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
+    className={cn("text-sm text-white/70 dark:text-white/70", className)}
     {...props}
   />
 ))

@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { 
   MessageSquare, Search, Image, PenTool, Mic, Volume2, 
   Zap
@@ -18,13 +17,15 @@ interface QuickActionsProps {
   activeTrigger: string;
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
+  onClose?: () => void;
 }
 
 export function QuickActionsPanel({ 
   onSendMessage, 
   activeTrigger, 
   onTriggerChange,
-  onTextGenerated 
+  onTextGenerated,
+  onClose
 }: QuickActionsProps) {
   const { language } = useTheme();
   const [showTextGen, setShowTextGen] = useState(false);
@@ -37,21 +38,27 @@ export function QuickActionsPanel({
       id: 'chat',
       label: language === 'ar' ? 'محادثة عادية' : 'Regular Chat',
       icon: <MessageSquare className="h-4 w-4" />,
-      color: 'bg-blue-500',
+      activeColor: 'bg-blue-500',
+      hoverColor: 'hover:bg-blue-500/20',
+      borderColor: 'border-blue-500',
       description: language === 'ar' ? 'محادثة عادية مع الذكاء الاصطناعي' : 'Normal chat with AI'
     },
     {
       id: 'search',
       label: language === 'ar' ? 'بحث' : 'Search',
       icon: <Search className="h-4 w-4" />,
-      color: 'bg-green-500',
+      activeColor: 'bg-green-500',
+      hoverColor: 'hover:bg-green-500/20',
+      borderColor: 'border-green-500',
       description: language === 'ar' ? 'بحث في الإنترنت' : 'Search the internet'
     },
     {
       id: 'image',
       label: language === 'ar' ? 'صورة' : 'Image',
       icon: <Image className="h-4 w-4" />,
-      color: 'bg-orange-500',
+      activeColor: 'bg-orange-500',
+      hoverColor: 'hover:bg-orange-500/20',
+      borderColor: 'border-orange-500',
       description: language === 'ar' ? 'إنشاء الصور' : 'Generate images'
     }
   ];
@@ -90,71 +97,93 @@ export function QuickActionsPanel({
   const handleTriggerSelect = (triggerId: string) => {
     onTriggerChange(triggerId);
     console.log('✨ Quick Actions: Trigger changed to:', triggerId);
+    // Auto-close drawer after selection
+    if (onClose) {
+      setTimeout(() => {
+        onClose();
+      }, 300);
+    }
+  };
+
+  const handleToolAction = (action: () => void) => {
+    action();
+    // Auto-close drawer after tool selection
+    if (onClose) {
+      setTimeout(() => {
+        onClose();
+      }, 300);
+    }
   };
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-4 space-y-6">
         <div className="text-center">
-          <h2 className="text-xl font-bold">
+          <h2 className="text-xl font-bold text-white/90">
             {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-white/70 mt-1">
             {language === 'ar' ? 'أدوات ذكية لتحسين تجربتك' : 'Smart tools to enhance your experience'}
           </p>
         </div>
 
         {/* AI Modes */}
-        <Card>
+        <Card className="bg-white/10 border-white/20 backdrop-blur-xl">
           <CardHeader>
-            <CardTitle className="text-sm">
+            <CardTitle className="text-sm text-white/90">
               {language === 'ar' ? 'أنماط الذكاء الاصطناعي' : 'AI Modes'}
             </CardTitle>
-            <CardDescription className="text-xs">
+            <CardDescription className="text-xs text-white/70">
               {language === 'ar' ? 'اختر النمط المناسب لمهمتك' : 'Choose the right mode for your task'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
-            {triggerModes.map((mode) => (
-              <Button
-                key={mode.id}
-                onClick={() => handleTriggerSelect(mode.id)}
-                variant={activeTrigger === mode.id ? 'default' : 'ghost'}
-                className="w-full justify-start h-auto p-3"
-              >
-                <div className={`p-2 rounded-lg ${mode.color} text-white mr-3`}>
-                  {mode.icon}
-                </div>
-                <div className="text-left">
-                  <div className="font-medium text-sm">{mode.label}</div>
-                  <div className="text-xs text-muted-foreground">{mode.description}</div>
-                </div>
-                {activeTrigger === mode.id && (
-                  <Badge variant="secondary" className="ml-auto text-xs">
-                    {language === 'ar' ? 'نشط' : 'Active'}
-                  </Badge>
-                )}
-              </Button>
-            ))}
+            {triggerModes.map((mode) => {
+              const isActive = activeTrigger === mode.id;
+              return (
+                <Button
+                  key={mode.id}
+                  onClick={() => handleTriggerSelect(mode.id)}
+                  variant="ghost"
+                  className={`w-full justify-start h-auto p-3 transition-all duration-300 ${
+                    isActive 
+                      ? `${mode.activeColor} border-2 ${mode.borderColor} text-white shadow-lg` 
+                      : `bg-white/5 ${mode.hoverColor} border-2 border-transparent text-white/80 hover:text-white`
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : mode.activeColor} text-white mr-3`}>
+                    {mode.icon}
+                  </div>
+                  <div className="text-left">
+                    <div className="font-medium text-sm">{mode.label}</div>
+                    <div className="text-xs opacity-70">{mode.description}</div>
+                  </div>
+                </Button>
+              );
+            })}
           </CardContent>
         </Card>
 
         {/* Quick Tools */}
         <div className="space-y-3">
-          <h3 className="text-sm font-medium">
+          <h3 className="text-sm font-medium text-white/90">
             {language === 'ar' ? 'الأدوات السريعة' : 'Quick Tools'}
           </h3>
           <div className="grid gap-3">
             {quickActions.map((action, index) => (
-              <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4" onClick={action.action}>
+              <Card 
+                key={index} 
+                className="cursor-pointer hover:shadow-md transition-all duration-300 bg-white/10 hover:bg-white/15 border-white/20 hover:border-white/30"
+                onClick={() => handleToolAction(action.action)}
+              >
+                <CardContent className="p-4">
                   <div className="flex items-center space-x-3">
                     <div className={`p-2 rounded-lg ${action.color} text-white`}>
                       {action.icon}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-medium text-sm">{action.label}</h3>
-                      <p className="text-xs text-muted-foreground">{action.description}</p>
+                      <h3 className="font-medium text-sm text-white/90">{action.label}</h3>
+                      <p className="text-xs text-white/70">{action.description}</p>
                     </div>
                   </div>
                 </CardContent>

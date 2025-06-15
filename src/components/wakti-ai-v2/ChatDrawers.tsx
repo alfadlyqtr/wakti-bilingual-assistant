@@ -93,6 +93,7 @@ export function ChatDrawers({
               activeTrigger={activeTrigger}
               onTriggerChange={onTriggerChange}
               onTextGenerated={onTextGenerated}
+              onClose={() => setShowQuickActions(false)}
             />
           </div>
         </DrawerContent>
