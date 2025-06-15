@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
@@ -193,20 +194,35 @@ serve(async (req) => {
         case 'image':
           if (buddyAnalysis.naturalQuery || modeAnalysis.allowInMode) {
             try {
-              console.log("🎨 Generating image with enhanced creativity for prompt:", message);
+              console.log("🎨 Handling image generation request for prompt:", message);
               const imageResult = await generateImageWithRunware(message, user.id, language);
               
               if (imageResult.success) {
                 imageUrl = imageResult.imageUrl;
-                response = await processWithBuddyChatAI(
+                
+                let baseResponse = language === 'ar' 
+                  ? `تم إنشاء الصورة بنجاح.`
+                  : `I've successfully generated the image.`;
+
+                if (imageResult.translation_status === 'success' && imageResult.translatedPrompt) {
+                  baseResponse += language === 'ar'
+                    ? `\n\n📝 (ملاحظة: تمت ترجمة وصفك إلى الإنجليزية: "${imageResult.translatedPrompt}")`
+                    : `\n\n📝 (Note: Your prompt was translated to English: "${imageResult.translatedPrompt}")`;
+                }
+
+                const buddyContext = `Image generated successfully. Original prompt: "${message}". ${imageResult.translatedPrompt ? `Translated to: "${imageResult.translatedPrompt}"` : ''}`;
+
+                const buddyResponse = await processWithBuddyChatAI(
                   message,
-                  `Image generated successfully for: ${message}`,
+                  buddyContext,
                   language,
                   contextMessages,
                   enhancedContext,
                   activeTrigger,
                   'image_generated'
                 );
+
+                response = baseResponse + "\n\n" + buddyResponse;
                 
                 buddyChat = {
                   creativeEncouragement: true,
@@ -214,15 +230,13 @@ serve(async (req) => {
                 };
               } else {
                 console.error("Image generation failed:", imageResult.error);
-                response = language === 'ar' 
-                  ? `❌ عذراً، واجهت مشكلة في إنشاء الصورة. هل يمكنك تجربة وصف مختلف؟`
-                  : `❌ Sorry, I had trouble creating that image. Could you try a different description?`;
+                response = imageResult.error; // Use the specific error message from the handler
               }
             } catch (error) {
-              console.error("Image generation error:", error);
+              console.error("An unexpected error occurred during image generation:", error);
               response = language === 'ar' 
-                ? `❌ عذراً، حدث خطأ في إنشاء الصورة. دعني أساعدك بطريقة أخرى.`
-                : `❌ Sorry, there was an error generating the image. Let me help you another way.`;
+                ? `❌ عذراً، حدث خطأ غير متوقع أثناء إنشاء الصورة.`
+                : `❌ Sorry, an unexpected error occurred while generating the image.`;
             }
           } else {
             response = language === 'ar' 

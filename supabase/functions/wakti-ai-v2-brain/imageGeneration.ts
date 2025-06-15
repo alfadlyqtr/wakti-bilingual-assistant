@@ -6,20 +6,20 @@ import { supabase, RUNWARE_API_KEY, DEEPSEEK_API_KEY } from "./utils.ts";
 
 // Utility: Detects if input contains Arabic characters
 function containsArabic(text: string): boolean {
+  if (!text) return false;
   return /[\u0600-\u06FF]/.test(text);
 }
 
-// Translate Arabic text to English via DeepSeek ONLY
+// Translate Arabic text to English via DeepSeek ONLY, now with enhanced logging and error handling
 async function translateToEnglishDeepSeek(prompt: string): Promise<string> {
-  if (!DEEPSEEK_API_KEY) throw new Error("DeepSeek API key not set for translation");
+  console.log("  [translateToEnglishDeepSeek] Starting translation for:", prompt);
+  if (!DEEPSEEK_API_KEY) {
+    console.error("  [translateToEnglishDeepSeek] CRITICAL: DEEPSEEK_API_KEY is not configured.");
+    throw new Error("DeepSeek API key not set for translation");
+  }
+
   const systemPrompt = "You are a professional translator. Given the following Arabic prompt for image generation, translate it to clear English, optimized for AI image creation. Respond with only the English translation, and DO NOT include any explanations, notes, or non-English words.";
-  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  const body = {
       model: "deepseek-chat",
       messages: [
         { role: "system", content: systemPrompt },
@@ -27,36 +27,68 @@ async function translateToEnglishDeepSeek(prompt: string): Promise<string> {
       ],
       temperature: 0.3,
       max_tokens: 512
-    })
+  };
+
+  console.log("  [translateToEnglishDeepSeek] Sending request to DeepSeek API.");
+  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body)
   });
+
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error("DeepSeek translation failed: " + errText);
+    console.error(`  [translateToEnglishDeepSeek] DeepSeek API returned status ${resp.status}:`, errText);
+    throw new Error("DeepSeek translation API request failed.");
   }
+
   const data = await resp.json();
-  return data.choices?.[0]?.message?.content?.trim() || prompt;
+  const translation = data.choices?.[0]?.message?.content?.trim() || "";
+  console.log(`  [translateToEnglishDeepSeek] Received translation: "${translation}"`);
+
+  if (!translation || containsArabic(translation)) {
+    console.error(`  [translateToEnglishDeepSeek] Translation result is invalid (empty or still contains Arabic).`);
+    throw new Error("Invalid translation result from DeepSeek API.");
+  }
+  
+  return translation;
 }
+
 
 export async function generateImageWithRunware(prompt: string, userId: string, language: string = "en") {
   try {
-    console.log("🎨 Generating image with Runware for prompt:", prompt);
+    console.log("🎨 Entering generateImageWithRunware with prompt:", prompt);
     let runwarePrompt = prompt;
     let translatedPrompt: string | null = null;
+    let translation_status: 'not_needed' | 'pending' | 'success' | 'failed_no_key' | 'failed_api_error' = 'not_needed';
 
-    // Always translate if Arabic detected (language irrelevant)
+    // Dedicated handler for Arabic prompts
     if (containsArabic(prompt)) {
+      console.log("🗣️ Arabic detected in prompt. Initiating dedicated translation handler.");
+      translation_status = 'pending';
+
       try {
-        console.log("🌐 Detected Arabic prompt, translating to English via DeepSeek...");
         translatedPrompt = await translateToEnglishDeepSeek(prompt);
         runwarePrompt = translatedPrompt;
-        console.log("🌐 Arabic prompt:", prompt);
-        console.log("🌐 English translation:", runwarePrompt);
-      } catch (err) {
-        console.error("❌ DeepSeek translation failed. Using original Arabic prompt, error:", err);
-        runwarePrompt = prompt;
+        translation_status = 'success';
+      } catch (err: any) {
+        console.error("❌ Translation workflow failed:", err.message);
+        translation_status = err.message.includes("API key not set") ? 'failed_no_key' : 'failed_api_error';
+        const userErrorMessage = language === 'ar'
+            ? 'عفواً، فشلت محاولة ترجمة الوصف من العربية إلى الإنجليزية. يرجى المحاولة مرة أخرى أو استخدام وصف باللغة الإنجليزية.'
+            : 'Sorry, the prompt translation from Arabic to English failed. Please try again or use an English prompt.';
+        return {
+          success: false,
+          error: userErrorMessage,
+          translation_status: translation_status,
+        };
       }
     }
 
+    console.log(`🚀 Proceeding to Runware with prompt: "${runwarePrompt}"`);
     // Send to Runware
     const response = await fetch("https://api.runware.ai/v1", {
       method: "POST",
@@ -109,12 +141,12 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
           console.log("Could not save image to database:", dbError);
         }
 
-        // Always return original+translated
         return {
           success: true,
           imageUrl: imageResult.imageURL,
           originalPrompt: prompt,
-          translatedPrompt: translatedPrompt
+          translatedPrompt: translatedPrompt,
+          translation_status: translation_status
         };
       } else {
         throw new Error('No image URL in Runware response');
@@ -129,7 +161,8 @@ export async function generateImageWithRunware(prompt: string, userId: string, l
     console.error('🎨 Error generating image with Runware:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      translation_status: 'not_needed'
     };
   }
 }
