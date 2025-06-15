@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Mic, Send, Loader2, MicOff, Camera } from 'lucide-react';
+import { Upload, Mic, Send, Loader2, MicOff, Plus } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useBrowserSpeechRecognition } from '@/hooks/useBrowserSpeechRecognition';
 import { useFileUpload } from '@/hooks/useFileUpload';
@@ -16,6 +16,7 @@ interface ChatInputProps {
   sessionMessages: any[];
   onSendMessage: (message: string, inputType?: 'text' | 'voice', files?: any[]) => void;
   onClearChat: () => void;
+  onOpenPlusDrawer: () => void; // ADDED: open drawer on plus
 }
 
 export function ChatInput({
@@ -24,7 +25,8 @@ export function ChatInput({
   isLoading,
   sessionMessages,
   onSendMessage,
-  onClearChat
+  onClearChat,
+  onOpenPlusDrawer,
 }: ChatInputProps) {
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -219,12 +221,23 @@ export function ChatInput({
             
             {/* Liquid Glass Input Container */}
             <div className="relative group">
-              {/* Glow Effect */}
               <div className="absolute -inset-0.5 rounded-3xl bg-gradient-to-r from-primary/20 via-transparent to-primary/20 opacity-0 group-hover:opacity-100 transition-all duration-500 blur-sm"></div>
               
               {/* Main Container */}
               <div className="relative flex items-center gap-3 bg-white/10 dark:bg-black/10 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-white/10 p-2 shadow-2xl">
                 
+                {/* ========== NEW: Plus Icon ========== */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={onOpenPlusDrawer}
+                  className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0 backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
+                  aria-label={language === 'ar' ? 'خيارات إضافية' : 'More options'}
+                  disabled={isLoading}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+
                 {/* Upload Button - Liquid Glass Style */}
                 <TooltipProvider>
                   <Tooltip>
@@ -260,28 +273,6 @@ export function ChatInput({
                   className="hidden"
                 />
 
-                {/* Camera Button - Liquid Glass Style */}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="h-9 w-9 rounded-2xl bg-white/10 dark:bg-white/5 hover:bg-white/20 dark:hover:bg-white/10 border-0
-                          backdrop-blur-sm transition-all duration-300 hover:scale-105 hover:shadow-lg flex-shrink-0"
-                        disabled={isLoading}
-                        aria-label={language === 'ar' ? 'التقاط صورة' : 'Take Photo'}
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                      {language === 'ar' ? 'التقاط صورة' : 'Take photo'}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
                 {/* Mic Button - Liquid Glass Style */}
                 <TooltipProvider>
                   <Tooltip>
@@ -314,24 +305,34 @@ export function ChatInput({
                 </TooltipProvider>
 
                 {/* Text Input - Glass Style */}
-                <Textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder={
-                    isListening
-                      ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
-                      : language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
-                  }
-                  className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-2 px-3 min-h-[36px] max-h-20 text-sm placeholder:text-foreground/40 rounded-2xl"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
+                <div className="relative flex-1 flex items-center">
+                  <Textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={
+                      isListening
+                        ? language === 'ar' ? 'جاري الاستماع...' : 'Listening...'
+                        : language === 'ar' ? 'اكتب رسالتك...' : 'Type your message...'
                     }
-                  }}
-                  disabled={isListening || isLoading}
-                  aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
-                />
+                    className="flex-1 border-0 bg-transparent resize-none focus-visible:ring-0 focus-visible:ring-offset-0 py-2 px-3 min-h-[36px] max-h-20 text-sm placeholder:text-foreground/40 rounded-2xl"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    disabled={isListening || isLoading}
+                    aria-label={language === 'ar' ? 'اكتب رسالتك' : 'Type your message'}
+                  />
+                  {/* ========== Chat Badge / Indicator ========== */}
+                  <div className="absolute top-1 right-2 flex items-center gap-1">
+                    {/* Show a chat badge */}
+                    <span className="inline-block px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                      {language === 'ar' ? 'دردشة' : 'Chat'}
+                    </span>
+                    {/* ... more badges possible ... */}
+                  </div>
+                </div>
 
                 {/* Send Button - Floating Glass Orb */}
                 {(message.trim() || uploadedFiles.length > 0) && (

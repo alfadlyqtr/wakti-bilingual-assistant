@@ -10,6 +10,7 @@ import { ChatMessages } from '@/components/wakti-ai-v2/ChatMessages';
 import { ChatInput } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { NotificationBars } from '@/components/wakti-ai-v2/NotificationBars';
+import { Plus } from 'lucide-react';
 
 const WaktiAIV2 = () => {
   const [message, setMessage] = useState('');
@@ -858,21 +859,8 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
-      {/* Fixed Header – always visible */}
-      <div className="sticky top-0 z-40">
-        <ChatHeader
-          activeTrigger={activeTrigger}
-          onTriggerChange={handleTriggerChange}
-          onToggleConversations={() => setShowConversations(!showConversations)}
-          onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
-          onNewConversation={handleNewConversation}
-          onClearChat={handleClearChat}
-          hasMessages={allDisplayMessages.length > 0}
-          currentConversationId={currentConversationId}
-        />
-      </div>
-      {/* Notification Bars */}
-      <div className="sticky top-[56px] z-30">
+      {/* Notification Bars only */}
+      <div className="sticky top-0 z-30">
         <NotificationBars
           quotaStatus={quotaStatus}
           searchConfirmationRequired={searchConfirmationRequired}
@@ -906,6 +894,7 @@ const WaktiAIV2 = () => {
           sessionMessages={allDisplayMessages}
           onSendMessage={handleSendMessage}
           onClearChat={handleClearChat}
+          onOpenPlusDrawer={handleOpenPlusDrawer}
         />
       </div>
       {/* Drawers portal */}
