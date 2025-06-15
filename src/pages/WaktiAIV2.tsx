@@ -878,7 +878,8 @@ const WaktiAIV2 = () => {
         isLoading={isLoading}
       />
 
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Fixed layout structure - header always at top, input always at bottom */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <NotificationBars
           quotaStatus={quotaStatus}
           searchConfirmationRequired={searchConfirmationRequired}
@@ -886,18 +887,22 @@ const WaktiAIV2 = () => {
           onQuotaRefresh={() => fetchQuota(true)}
         />
 
-        <ChatHeader
-          activeTrigger={activeTrigger}
-          onTriggerChange={handleTriggerChange}
-          onToggleConversations={() => setShowConversations(!showConversations)}
-          onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
-          onNewConversation={handleNewConversation}
-          onClearChat={handleClearChat}
-          hasMessages={allDisplayMessages.length > 0}
-          currentConversationId={currentConversationId}
-        />
+        {/* Fixed Header - always visible */}
+        <div className="flex-shrink-0">
+          <ChatHeader
+            activeTrigger={activeTrigger}
+            onTriggerChange={handleTriggerChange}
+            onToggleConversations={() => setShowConversations(!showConversations)}
+            onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
+            onNewConversation={handleNewConversation}
+            onClearChat={handleClearChat}
+            hasMessages={allDisplayMessages.length > 0}
+            currentConversationId={currentConversationId}
+          />
+        </div>
 
-        <div className="flex-1 min-h-0">
+        {/* Scrollable Messages Area - takes remaining space */}
+        <div className="flex-1 overflow-hidden">
           <ChatMessages
             sessionMessages={allDisplayMessages}
             isLoading={isLoading}
@@ -914,14 +919,17 @@ const WaktiAIV2 = () => {
           />
         </div>
 
-        <ChatInput
-          message={message}
-          setMessage={setMessage}
-          isLoading={isLoading}
-          sessionMessages={allDisplayMessages}
-          onSendMessage={handleSendMessage}
-          onClearChat={handleClearChat}
-        />
+        {/* Fixed Input - always visible at bottom */}
+        <div className="flex-shrink-0">
+          <ChatInput
+            message={message}
+            setMessage={setMessage}
+            isLoading={isLoading}
+            sessionMessages={allDisplayMessages}
+            onSendMessage={handleSendMessage}
+            onClearChat={handleClearChat}
+          />
+        </div>
       </div>
     </div>
   );
