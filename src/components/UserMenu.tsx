@@ -69,25 +69,16 @@ export function UserMenu() {
 
   const avatarUrl = user?.user_metadata?.avatar_url ? getCacheBustedAvatarUrl(user.user_metadata.avatar_url) : '';
 
-  // Adjusted UnreadBadge sizing for avatar in dropdown
-  const dropdownAvatarBadgeSize = "sm"; // Use "sm" but can be increased if needed
+  // Bump up badge size for dropdown avatar to 'md'
+  const dropdownAvatarBadgeSize = "md";
 
-  // User menu options with blinking and badge
+  // User menu options with blinking and badge (badge is after text for Contacts row)
   const menuOptions = [
     { 
-      icon: (
-        <span className="relative">
-          <Users size={16} />
-          <UnreadBadge
-            count={unreadTotal}
-            size="sm"
-            blink={!!unreadTotal}
-            className="-right-2 -top-2"
-          />
-        </span>
-      ),
+      icon: <Users size={16} />, // No badge here; put badge after label for clarity
       label: t("contacts", language), 
-      path: "/contacts" 
+      path: "/contacts",
+      showUnread: true // custom flag for special rendering below
     },
     { icon: <UserIcon size={16} />, label: t("account", language), path: "/account" },
     { icon: <Book size={16} />, label: t("help", language), path: "/help" },
@@ -123,12 +114,10 @@ export function UserMenu() {
       <AnimatePresence>
         {isOpen && (
           <>
-            {/* Backdrop */}
             <div 
               className="fixed inset-0 z-40"
               onClick={closeMenu}
             />
-            {/* Dropdown */}
             <motion.div
               initial={{ opacity: 0, y: -5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -146,11 +135,11 @@ export function UserMenu() {
                       />
                       <AvatarFallback>{getInitials()}</AvatarFallback>
                     </Avatar>
-                    {/* Dropdown avatar badge, keep 'sm' but move slightly for more visibility */}
+                    {/* Dropdown avatar badge, now md size and offset for visibility */}
                     <UnreadBadge
                       count={unreadTotal}
                       size={dropdownAvatarBadgeSize}
-                      className="-right-1.5 -top-1.5"
+                      className="-right-2.5 -top-2.5"
                     />
                   </span>
                   <div>
@@ -167,11 +156,20 @@ export function UserMenu() {
                   ) : (
                     <button
                       key={option.label}
-                      className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center space-x-2"
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-muted flex items-center space-x-2 relative"
                       onClick={() => option.action ? option.action() : handleMenuItemClick(option.path)}
                     >
                       <span className="text-muted-foreground">{option.icon}</span>
                       <span>{option.label}</span>
+                      {/* Only for Contacts row: show badge beside label */}
+                      {option.showUnread && (
+                        <UnreadBadge
+                          count={unreadTotal}
+                          size="sm"
+                          blink={!!unreadTotal}
+                          className="ml-2"
+                        />
+                      )}
                     </button>
                   )
                 ))}
