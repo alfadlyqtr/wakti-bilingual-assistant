@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { MessageSquare, Star, UserX, Trash2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getContacts, blockContact, deleteContact } from "@/services/contactsService";
+import { getContacts, blockContact, deleteContact, toggleContactFavorite } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 import { ChatPopup } from "./ChatPopup";
@@ -41,7 +40,6 @@ type ContactType = {
 export function ContactList() {
   const { language } = useTheme();
   const queryClient = useQueryClient();
-  const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<{id: string, name: string} | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
@@ -123,20 +121,40 @@ export function ContactList() {
     }
   });
 
+  // Favorites mutation for toggle with optimistic update
+  const favoriteMutation = useMutation({
+    mutationFn: ({ contactId, currentVal }: { contactId: string, currentVal: boolean }) =>
+      toggleContactFavorite(contactId, !currentVal),
+    onMutate: async ({ contactId, currentVal }) => {
+      // optimistic update: update cache before actual request
+      await queryClient.cancelQueries({ queryKey: ['contacts'] });
+      const previousContacts = queryClient.getQueryData<any[]>(['contacts']);
+      queryClient.setQueryData(['contacts'], (old: any[] = []) =>
+        old.map(c =>
+          c.id === contactId ? { ...c, is_favorite: !currentVal } : c
+        )
+      );
+      return { previousContacts };
+    },
+    onError: (err, variables, context) => {
+      // rollback
+      queryClient.setQueryData(['contacts'], context?.previousContacts || []);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    }
+  });
+
   // Handle opening chat popup with a contact
   const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
     setSelectedContact({ id: contactId, name, avatar });
     setChatOpen(true);
   };
 
-  const handleToggleFavorite = (id: string, name: string) => {
-    const isFavorite = !!favorites[id];
-    setFavorites({
-      ...favorites,
-      [id]: !isFavorite
-    });
-    
-    toast(isFavorite ? t("removedFromFavorites", language) : t("addedToFavorites", language));
+  // handle toggle favorite in db, with optimistic update
+  const handleToggleFavorite = (contactId: string, isCurrentlyFavorite: boolean) => {
+    favoriteMutation.mutate({ contactId, currentVal: isCurrentlyFavorite });
+    // No local toast because backend success triggers cache update, can add if desired
   };
 
   const handleBlock = (contactId: string) => {
@@ -208,6 +226,7 @@ export function ContactList() {
             const emailOrName = contactProfile.display_name || contactProfile.email || "";
             const unreadCount = unreadCounts[contact.contact_id] || 0;
             const avatarUrl = contactProfile.avatar_url;
+            const isFavorite = contact.is_favorite === true;
             
             console.log(`Contact ${displayName} avatar:`, { 
               avatarUrl, 
@@ -241,10 +260,12 @@ export function ContactList() {
                       <Button 
                         size="icon" 
                         variant="ghost"
-                        onClick={() => handleToggleFavorite(contact.id, displayName)}
+                        onClick={() => handleToggleFavorite(contact.id, isFavorite)}
+                        disabled={favoriteMutation.isPending}
                         className="h-8 w-8 hover:bg-yellow-50 hover:text-yellow-600 transition-colors"
+                        aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                       >
-                        <Star className={`h-4 w-4 ${favorites[contact.id] ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
+                        <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-500 fill-yellow-500' : 'text-gray-600'}`} />
                       </Button>
                       <Button 
                         size="icon" 

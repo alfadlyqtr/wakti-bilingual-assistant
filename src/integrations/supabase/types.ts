@@ -211,6 +211,7 @@ export type Database = {
           contact_id: string
           created_at: string | null
           id: string
+          is_favorite: boolean
           status: string
           updated_at: string | null
           user_id: string
@@ -219,6 +220,7 @@ export type Database = {
           contact_id: string
           created_at?: string | null
           id?: string
+          is_favorite?: boolean
           status?: string
           updated_at?: string | null
           user_id: string
@@ -227,6 +229,7 @@ export type Database = {
           contact_id?: string
           created_at?: string | null
           id?: string
+          is_favorite?: boolean
           status?: string
           updated_at?: string | null
           user_id?: string

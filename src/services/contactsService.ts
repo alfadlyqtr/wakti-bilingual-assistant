@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface Contact {
@@ -14,6 +13,7 @@ export interface Contact {
     avatar_url?: string;
     email?: string;
   };
+  is_favorite: boolean;
 }
 
 export interface ContactRequest {
@@ -47,13 +47,14 @@ export async function getContacts() {
 
   const userId = session.session.user.id;
 
-  // Modified query to fetch contact relationship records along with profile data
+  // Add is_favorite to the query
   const { data, error } = await supabase
     .from('contacts')
     .select(`
       id,
       user_id,
       contact_id,
+      is_favorite,
       profiles:contact_id(
         id, 
         username, 
@@ -69,10 +70,11 @@ export async function getContacts() {
     throw error;
   }
 
-  // Transform data to match expected format
+  // Add is_favorite to returned objects
   return data.map(contact => ({
-    id: contact.id,                  // This is now the contact relationship ID
-    contact_id: contact.contact_id,  // This is the user's ID we're contacting
+    id: contact.id,
+    contact_id: contact.contact_id,
+    is_favorite: contact.is_favorite,
     profile: contact.profiles
   }));
 }
@@ -707,4 +709,27 @@ export async function getBlockStatus(userId: string): Promise<{
   ]);
   
   return { isBlocked, isBlockedBy };
+}
+
+/**
+ * Toggle contact favorite
+ * @param contactId The contact relationship row id (not the user id!)
+ * @param isFav    New favorite state (true/false)
+ */
+export async function toggleContactFavorite(contactId: string, isFav: boolean) {
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) throw new Error("User not authenticated");
+
+  const { data, error } = await supabase
+    .from("contacts")
+    .update({ is_favorite: isFav })
+    .eq("id", contactId)
+    .select();
+
+  if (error) {
+    console.error("Error toggling favorite:", error);
+    throw error;
+  }
+
+  return data && data.length > 0 ? data[0] : null;
 }
