@@ -149,29 +149,20 @@ export function AppHeader() {
           )}
         </div>
         <div className="flex items-center space-x-4">
-          {/* Language Toggle Button - disabled on Wakti AI page */}
+          {/* Language Toggle Button - always enabled */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button 
                   variant="ghost" 
                   size="icon" 
-                  onClick={isWaktiAIPage ? undefined : toggleLanguage}
-                  className={cn(
-                    "rounded-full",
-                    isWaktiAIPage && "opacity-50 cursor-not-allowed"
-                  )}
-                  disabled={isWaktiAIPage}
+                  onClick={toggleLanguage}
+                  className="rounded-full"
                   aria-label={language === 'en' ? 'Switch to Arabic' : 'Switch to English'}
                 >
                   <Globe className="h-[1.2rem] w-[1.2rem]" />
                 </Button>
               </TooltipTrigger>
-              {isWaktiAIPage && (
-                <TooltipContent>
-                  <p>{language === 'ar' ? 'تغيير اللغة معطل في صفحة WAKTI AI' : 'Language toggle disabled on WAKTI AI page'}</p>
-                </TooltipContent>
-              )}
             </Tooltip>
           </TooltipProvider>
           
