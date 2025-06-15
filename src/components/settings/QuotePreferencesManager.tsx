@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,6 +23,42 @@ export const QuotePreferencesManager: React.FC = () => {
   const [preferences, setPreferences] = useState<QuotePreferences>({ category: 'motivational', frequency: '2xday' });
   const [currentQuote, setCurrentQuote] = useState<QuoteObject | string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Add all available quote categories
+  const categoryOptions = [
+    {
+      value: "motivational",
+      label: language === "ar" ? "تحفيزية" : "Motivational",
+    },
+    {
+      value: "islamic",
+      label: language === "ar" ? "إسلامية" : "Islamic",
+    },
+    {
+      value: "positive",
+      label: language === "ar" ? "إيجابية" : "Positive",
+    },
+    {
+      value: "health",
+      label: language === "ar" ? "صحة" : "Health",
+    },
+    {
+      value: "productivity",
+      label: language === "ar" ? "إنتاجية" : "Productivity",
+    },
+    {
+      value: "discipline",
+      label: language === "ar" ? "انضباط" : "Discipline",
+    },
+    {
+      value: "mixed",
+      label: language === "ar" ? "متنوعة" : "Mixed",
+    },
+    {
+      value: "custom",
+      label: language === "ar" ? "مخصصة" : "Custom",
+    },
+  ];
 
   useEffect(() => {
     const prefs = getQuotePreferences();
@@ -80,18 +115,11 @@ export const QuotePreferencesManager: React.FC = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="motivational">
-                {language === 'ar' ? 'تحفيزية' : 'Motivational'}
-              </SelectItem>
-              <SelectItem value="islamic">
-                {language === 'ar' ? 'إسلامية' : 'Islamic'}
-              </SelectItem>
-              <SelectItem value="mixed">
-                {language === 'ar' ? 'متنوعة' : 'Mixed'}
-              </SelectItem>
-              <SelectItem value="custom">
-                {language === 'ar' ? 'مخصصة' : 'Custom'}
-              </SelectItem>
+              {categoryOptions.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
