@@ -1,6 +1,11 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { analyzeTaskIntent } from "./taskParsing.ts";
+import { analyzeBuddyChatIntent, analyzeSmartModeIntent, processWithBuddyChatAI } from "./chatAnalysis.ts";
+import { generateImageWithRunware } from "./imageGeneration.ts";
+import { executeRegularSearch } from "./search.ts";
+import { generateModeSuggestion, generateNaturalFollowUp, generateSearchFollowUp, generateConversationId, DEEPSEEK_API_KEY, OPENAI_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY, supabase } from "./utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,11 +20,6 @@ const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
 console.log("🤖 BUDDY-CHAT AI BRAIN: Enhanced conversational intelligence loaded");
-
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
 
 serve(async (req) => {
   // Handle CORS preflight requests
