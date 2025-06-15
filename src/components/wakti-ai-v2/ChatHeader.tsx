@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { MessageSquare, Plus, Zap, History } from 'lucide-react';
@@ -49,13 +48,6 @@ export function ChatHeader({
           <Zap size={16} />
           <span className="hidden sm:inline">
             {language === 'ar' ? 'الأدوات' : 'Tools'}
-          </span>
-        </Button>
-        
-        <Button variant="outline" size="sm" onClick={onNewConversation} className="flex items-center gap-2">
-          <Plus size={16} />
-          <span className="hidden sm:inline">
-            {language === 'ar' ? 'جديد' : 'New'}
           </span>
         </Button>
       </div>

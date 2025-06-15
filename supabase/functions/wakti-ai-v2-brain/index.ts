@@ -549,21 +549,31 @@ function generateNaturalFollowUp(userMessage: string, aiResponse: string, langua
   return followUps[Math.floor(Math.random() * followUps.length)];
 }
 
-// Generate mode suggestions
+// Generate mode suggestions (buddy-like, explicit about current mode, never asking for action, just suggestion)
 function generateModeSuggestion(suggestedMode: string, language: string = 'en'): string {
-  const suggestions = {
-    search: language === 'ar' 
-      ? '💡 هل تريد أن أبحث لك عن معلومات حديثة حول هذا؟ يمكنك التبديل لوضع البحث.'
-      : '💡 Would you like me to search for current information about this? You can switch to Search mode.',
-    image: language === 'ar'
-      ? '🎨 هل تريد إنشاء صورة لهذا؟ جرب وضع إنشاء الصور!'
-      : '🎨 Would you like to create an image for this? Try Image mode!',
-    chat: language === 'ar'
-      ? '💬 هل تريد مناقشة هذا أكثر؟ ارجع لوضع المحادثة.'
-      : '💬 Want to discuss this more? Go back to Chat mode.'
-  };
-  
-  return suggestions[suggestedMode] || '';
+  if (language === 'ar') {
+    switch (suggestedMode) {
+      case 'search':
+        return "أنا حالياً في وضع المحادثة! للمعلومات الأحدث أو النتائج الفورية، اضغط على زر البحث بالأسفل 🔍";
+      case 'image':
+        return "محادثتنا الآن نصية، لكن إذا أردت صورة لهذا، جرّب زر الصور بالأسفل 🎨";
+      case 'chat':
+        return "هذه إجابة مباشرة منّي. إذا أردت دردشة أعمق أو معرفة أكثر، استمر في الحديث هنا! 😊";
+      default:
+        return "جرّب الوضع المناسب من الأزرار بالأسفل لتحصل على أفضل تجربة!";
+    }
+  } else {
+    switch (suggestedMode) {
+      case 'search':
+        return "I'm in chat mode! For up-to-date scores or info, just hit the search button below! 🔍";
+      case 'image':
+        return "We're chatting here—if you want an image for this, tap the image button below! 🎨";
+      case 'chat':
+        return "That’s a quick answer from me. If you want to chat more, just keep talking! 😊";
+      default:
+        return "Try the buttons below for the best experience for your request!";
+    }
+  }
 }
 
 // Generate search follow-up
