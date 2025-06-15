@@ -9,6 +9,7 @@ import { Maw3dEvent } from "@/types/maw3d";
 import { TRService, TRTask, TRReminder } from "@/services/trService";
 import { getCalendarEntries, CalendarEntry, EntryType } from "@/utils/calendarUtils";
 import { Hand, Calendar } from "lucide-react";
+import { useCalendarData } from "@/hooks/useCalendarData";
 
 interface CalendarWidgetProps {
   isLoading: boolean;
@@ -18,81 +19,14 @@ interface CalendarWidgetProps {
 
 export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, events, language }) => {
   const navigate = useNavigate();
-  const [maw3dEvents, setMaw3dEvents] = useState<Maw3dEvent[]>([]);
-  const [manualEntries, setManualEntries] = useState<CalendarEntry[]>([]);
-  const [tasks, setTasks] = useState<TRTask[]>([]);
-  const [reminders, setReminders] = useState<TRReminder[]>([]);
-  const [maw3dLoading, setMaw3dLoading] = useState(true);
-  const [trLoading, setTrLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchMaw3dEvents = async () => {
-      try {
-        const userEvents = await Maw3dService.getUserEvents();
-        setMaw3dEvents(userEvents);
-      } catch (error) {
-        setMaw3dEvents([]);
-      } finally {
-        setMaw3dLoading(false);
-      }
-    };
-
-    const loadManualEntries = () => {
-      try {
-        const savedEntries = localStorage.getItem('calendarManualEntries');
-        if (savedEntries) {
-          setManualEntries(JSON.parse(savedEntries));
-        } else {
-          setManualEntries([]);
-        }
-      } catch (error) {
-        setManualEntries([]);
-      }
-    };
-
-    const fetchTasksAndReminders = async () => {
-      try {
-        const [tasksData, remindersData] = await Promise.all([
-          TRService.getTasks(),
-          TRService.getReminders()
-        ]);
-        setTasks(tasksData);
-        setReminders(remindersData);
-      } catch (error) {
-        setTasks([]);
-        setReminders([]);
-      } finally {
-        setTrLoading(false);
-      }
-    };
-
-    fetchMaw3dEvents();
-    loadManualEntries();
-    fetchTasksAndReminders();
-  }, []);
+  // Use shared calendar data (live syncs)
+  const { loading, entries, refresh } = useCalendarData();
 
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = addDays(new Date(), 1).toISOString().split('T')[0];
 
-  const [allEntries, setAllEntries] = useState<CalendarEntry[]>([]);
-  
-  useEffect(() => {
-    const fetchEntries = async () => {
-      try {
-        const entries = await getCalendarEntries(manualEntries, events, maw3dEvents, tasks, reminders);
-        setAllEntries(entries);
-      } catch (error) {
-        setAllEntries([]);
-      }
-    };
-
-    if (!isLoading && !maw3dLoading && !trLoading) {
-      fetchEntries();
-    }
-  }, [events, maw3dEvents, manualEntries, tasks, reminders, isLoading, maw3dLoading, trLoading]);
-  
-  const todayEntries = allEntries.filter(entry => entry.date === today);
-  const tomorrowEntries = allEntries.filter(entry => entry.date === tomorrow);
+  const todayEntries = entries.filter(entry => entry.date === today);
+  const tomorrowEntries = entries.filter(entry => entry.date === tomorrow);
 
   const getTodayItemsText = () => {
     if (todayEntries.length === 0) {
@@ -182,7 +116,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
             <div className="font-bold text-center text-lg text-white">{format(new Date(), "d")}</div>
             <div className="text-xs text-center mb-2 text-white/90 font-semibold">{t("today", language)}</div>
             <div className="text-xs text-white/90">
-              {isLoading || maw3dLoading || trLoading ? (
+              {isLoading || loading ? (
                 <Skeleton className="h-3 w-full bg-white/40" />
               ) : (
                 <div className="truncate leading-relaxed">{getTodayItemsText()}</div>
@@ -206,7 +140,7 @@ export const CalendarWidget: React.FC<CalendarWidgetProps> = ({ isLoading, event
               {t("tomorrow", language)}
             </div>
             <div className="text-xs" style={{ color: "hsl(var(--accent-blue) / 0.9)" }}>
-              {isLoading || maw3dLoading || trLoading ? (
+              {isLoading || loading ? (
                 <Skeleton className="h-3 w-full bg-accent-blue/20" />
               ) : (
                 <div className="truncate leading-relaxed">{getTomorrowItemsText()}</div>
