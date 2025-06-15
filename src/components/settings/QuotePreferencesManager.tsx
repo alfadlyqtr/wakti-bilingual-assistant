@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,6 +32,9 @@ export const QuotePreferencesManager: React.FC = () => {
   });
   const [currentQuote, setCurrentQuote] = useState<QuoteObject | string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Dropdown open state for category select
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
 
   // Add all available quote categories
   const categoryOptions = [
@@ -126,38 +128,39 @@ export const QuotePreferencesManager: React.FC = () => {
           <Label className="text-base font-medium">
             {language === 'ar' ? 'فئات الاقتباس (يمكنك اختيار أكثر من واحدة)' : 'Quote Categories (multi-select)'}
           </Label>
-          {/* Custom multi-select dropdown UI that matches shadcn triggers */}
-          <Select value="" onValueChange={() => undefined} open={false}>
+          {/* True dropdown with checkable items */}
+          <Select open={catDropdownOpen} onOpenChange={setCatDropdownOpen} value={""} onValueChange={() => undefined}>
             <SelectTrigger>
               <SelectValue placeholder={language === 'ar' ? 'اختر... ' : 'Select...'}>
-                {selectedCatsLabels}
+                {selectedCatsLabels || (language === 'ar' ? 'اختر... ' : 'Select...')}
               </SelectValue>
             </SelectTrigger>
-            {/* Fake trigger above for styling. Real category selection below: */}
-          </Select>
-          <div className="relative mt-2">
-            <div className="absolute z-50 w-full bg-popover border rounded-lg shadow-lg max-h-64 overflow-y-auto">
+            <SelectContent className="max-h-64 overflow-y-auto z-[60] bg-popover">
               {categoryOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => handleCategoryToggle(option.value)}
-                  className={`flex items-center px-3 py-2 w-full text-left hover:bg-accent transition 
-                      ${preferences.categories.includes(option.value) ? 'bg-accent' : ''}`}
+                  onClick={e => {
+                    e.preventDefault();
+                    handleCategoryToggle(option.value);
+                  }}
+                  className={`flex items-center px-3 py-2 w-full text-left hover:bg-accent transition
+                    ${preferences.categories.includes(option.value) ? 'bg-accent' : ''}`}
                   style={{ direction: language === "ar" ? "rtl" : "ltr" }}
                 >
                   <Checkbox
                     checked={preferences.categories.includes(option.value)}
                     className="mr-2"
                     tabIndex={-1}
-                    readOnly
                   />
                   <span className="flex-1">{option.label}</span>
-                  {preferences.categories.includes(option.value) && <Check className="w-4 h-4 text-primary ml-2" />}
+                  {preferences.categories.includes(option.value) && (
+                    <Check className="w-4 h-4 text-primary ml-2" />
+                  )}
                 </button>
               ))}
-            </div>
-          </div>
+            </SelectContent>
+          </Select>
           <div className="text-xs text-muted-foreground mt-1">
             {language === "ar"
               ? "يجب اختيار فئة واحدة على الأقل"
@@ -208,7 +211,6 @@ export const QuotePreferencesManager: React.FC = () => {
                 {language === 'ar' ? 'تحديث' : 'Refresh'}
               </Button>
             </div>
-
             <div className="p-4 bg-muted/30 rounded-lg border">
               <p className="text-sm italic font-medium mb-2">"{quoteText}"</p>
               <p className="text-xs text-muted-foreground">— {quoteAuthor}</p>
