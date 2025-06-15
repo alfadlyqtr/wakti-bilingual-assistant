@@ -13,7 +13,7 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const TAVILY_API_KEY = Deno.env.get("TAVILY_API_KEY");
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY") || "yzJMWPrRdkJcge2q0yjSOwTGvlhMeOy1";
 
-console.log("🔍 UNIFIED AI BRAIN: Function loaded with no search quota restrictions");
+console.log("🔍 UNIFIED AI BRAIN: Function loaded with enhanced task intelligence");
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL') ?? '',
@@ -27,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("🔍 UNIFIED AI BRAIN: Processing request with user isolation and no search restrictions");
+    console.log("🔍 UNIFIED AI BRAIN: Processing request with enhanced task intelligence");
 
     // CRITICAL: Extract and verify authentication token
     const authHeader = req.headers.get('authorization');
@@ -98,6 +98,10 @@ serve(async (req) => {
     console.log("🔍 UNIFIED AI BRAIN: Active trigger mode:", activeTrigger);
     console.log("🔍 UNIFIED AI BRAIN: Attached files count:", attachedFiles.length);
 
+    // Enhanced task/reminder detection
+    const taskAnalysis = analyzeTaskIntent(message, language);
+    console.log("🔍 UNIFIED AI BRAIN: Task analysis result:", taskAnalysis);
+
     // Enforce trigger isolation
     const intent = analyzeTriggerIntent(message, activeTrigger, language);
     console.log("🔍 UNIFIED AI BRAIN: Trigger analysis result:", intent);
@@ -112,6 +116,9 @@ serve(async (req) => {
     let actionResult = null;
     let fileAnalysisResults = [];
     let promptTranslationInfo = null;
+    let needsConfirmation = false;
+    let pendingTaskData = null;
+    let pendingReminderData = null;
 
     // Handle trigger types with NO search quota restrictions
     switch (activeTrigger) {
@@ -198,19 +205,47 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        // Chat mode - use real AI with file analysis
+        // Chat mode - use real AI with file analysis and enhanced task detection
         if (attachedFiles && attachedFiles.length > 0) {
           console.log("🔍 UNIFIED AI BRAIN: Processing files for analysis");
           fileAnalysisResults = await processAttachedFiles(attachedFiles, user.id);
         }
-        response = await processWithAI(message, null, language, attachedFiles, fileAnalysisResults);
+
+        // Enhanced task detection and processing
+        if (taskAnalysis.isTask || taskAnalysis.isReminder) {
+          console.log("🔍 UNIFIED AI BRAIN: Task/Reminder detected, preparing confirmation data");
+          
+          if (taskAnalysis.isTask) {
+            pendingTaskData = taskAnalysis.taskData;
+            needsConfirmation = true;
+            response = await processWithAI(
+              `The user wants to create a task. I've prepared the task details for confirmation. Present the task information clearly and let them know they can edit the details before confirming.\n\nUser request: ${message}`,
+              null, 
+              language, 
+              attachedFiles, 
+              fileAnalysisResults
+            );
+          } else if (taskAnalysis.isReminder) {
+            pendingReminderData = taskAnalysis.reminderData;
+            needsConfirmation = true;
+            response = await processWithAI(
+              `The user wants to create a reminder. I've prepared the reminder details for confirmation. Present the reminder information clearly and let them know they can edit the details before confirming.\n\nUser request: ${message}`,
+              null, 
+              language, 
+              attachedFiles, 
+              fileAnalysisResults
+            );
+          }
+        } else {
+          response = await processWithAI(message, null, language, attachedFiles, fileAnalysisResults);
+        }
         break;
     }
 
     const result = {
       response,
       conversationId: conversationId || generateConversationId(),
-      intent: intent.intent,
+      intent: taskAnalysis.isTask ? 'task_creation' : taskAnalysis.isReminder ? 'reminder_creation' : intent.intent,
       confidence: intent.confidence,
       actionTaken,
       actionResult,
@@ -219,14 +254,16 @@ serve(async (req) => {
       browsingData,
       quotaStatus,
       requiresSearchConfirmation: false,
-      needsConfirmation: false,
+      needsConfirmation,
       needsClarification: false,
+      pendingTaskData,
+      pendingReminderData,
       fileAnalysisResults,
-      promptTranslationInfo, // include translation info in response!
+      promptTranslationInfo,
       success: true
     };
 
-    console.log("🔍 UNIFIED AI BRAIN: Sending real AI response for user:", user.id);
+    console.log("🔍 UNIFIED AI BRAIN: Sending enhanced response with task intelligence for user:", user.id);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -246,6 +283,250 @@ serve(async (req) => {
     });
   }
 });
+
+// Enhanced task and reminder analysis function
+function analyzeTaskIntent(message: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase();
+  
+  // Task creation patterns
+  const taskPatterns = [
+    'create a task', 'make a task', 'add a task', 'new task', 'task for',
+    'i need to', 'remind me to', 'schedule', 'plan to', 'have to',
+    'meeting', 'appointment', 'buy', 'pick up', 'call', 'visit',
+    'أنشئ مهمة', 'اصنع مهمة', 'أضف مهمة', 'مهمة جديدة', 'مهمة لـ',
+    'أحتاج إلى', 'ذكرني أن', 'جدولة', 'خطة لـ', 'يجب أن',
+    'اجتماع', 'موعد', 'شراء', 'التقاط', 'اتصال', 'زيارة'
+  ];
+
+  // Reminder patterns
+  const reminderPatterns = [
+    'remind me', 'reminder', 'alert me', 'notify me',
+    'ذكرني', 'تذكير', 'نبهني', 'أخبرني'
+  ];
+
+  const isTask = taskPatterns.some(pattern => lowerMessage.includes(pattern));
+  const isReminder = reminderPatterns.some(pattern => lowerMessage.includes(pattern));
+
+  if (isTask || isReminder) {
+    const parsedData = parseTaskDetails(message, language);
+    
+    if (isTask) {
+      return {
+        isTask: true,
+        isReminder: false,
+        taskData: parsedData
+      };
+    } else {
+      return {
+        isTask: false,
+        isReminder: true,
+        reminderData: parsedData
+      };
+    }
+  }
+
+  return {
+    isTask: false,
+    isReminder: false,
+    taskData: null,
+    reminderData: null
+  };
+}
+
+// Enhanced task details parsing function
+function parseTaskDetails(message: string, language: string = 'en') {
+  const lowerMessage = message.toLowerCase();
+  
+  // Extract title - look for main action or purpose
+  let title = extractTitle(message, language);
+  
+  // Extract date
+  const dateInfo = extractDate(message, language);
+  
+  // Extract time
+  const timeInfo = extractTime(message, language);
+  
+  // Extract subtasks
+  const subtasks = extractSubtasks(message, language);
+  
+  // Extract priority
+  const priority = extractPriority(message, language);
+
+  return {
+    title: title || (language === 'ar' ? 'مهمة جديدة' : 'New Task'),
+    description: '',
+    due_date: dateInfo.date,
+    due_time: timeInfo.time,
+    subtasks: subtasks,
+    priority: priority
+  };
+}
+
+// Helper functions for parsing
+function extractTitle(message: string, language: string) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Common title extraction patterns
+  if (lowerMessage.includes('shopping') || lowerMessage.includes('buy') || lowerMessage.includes('groceries')) {
+    if (lowerMessage.includes('lulu')) return 'Shopping at Lulu Center';
+    return language === 'ar' ? 'تسوق' : 'Shopping';
+  }
+  
+  if (lowerMessage.includes('meeting')) {
+    return language === 'ar' ? 'اجتماع' : 'Meeting';
+  }
+  
+  if (lowerMessage.includes('call')) {
+    return language === 'ar' ? 'مكالمة' : 'Call';
+  }
+  
+  if (lowerMessage.includes('pick up')) {
+    return language === 'ar' ? 'استلام' : 'Pick up';
+  }
+  
+  // Try to extract from context
+  const words = message.split(' ');
+  for (let i = 0; i < words.length - 1; i++) {
+    if (['to', 'لـ', 'أن'].includes(words[i].toLowerCase())) {
+      const titleWords = words.slice(i + 1, Math.min(i + 4, words.length));
+      return titleWords.join(' ');
+    }
+  }
+  
+  return null;
+}
+
+function extractDate(message: string, language: string) {
+  const lowerMessage = message.toLowerCase();
+  const today = new Date();
+  
+  if (lowerMessage.includes('tomorrow') || lowerMessage.includes('غداً') || lowerMessage.includes('غدا')) {
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    return {
+      date: tomorrow.toISOString().split('T')[0],
+      relative: 'tomorrow'
+    };
+  }
+  
+  if (lowerMessage.includes('today') || lowerMessage.includes('اليوم')) {
+    return {
+      date: today.toISOString().split('T')[0],
+      relative: 'today'
+    };
+  }
+  
+  if (lowerMessage.includes('next week') || lowerMessage.includes('الأسبوع القادم')) {
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    return {
+      date: nextWeek.toISOString().split('T')[0],
+      relative: 'next week'
+    };
+  }
+  
+  // Day names
+  const dayNames = {
+    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4, 'friday': 5, 'saturday': 6, 'sunday': 0,
+    'الإثنين': 1, 'الثلاثاء': 2, 'الأربعاء': 3, 'الخميس': 4, 'الجمعة': 5, 'السبت': 6, 'الأحد': 0
+  };
+  
+  for (const [dayName, dayNum] of Object.entries(dayNames)) {
+    if (lowerMessage.includes(dayName)) {
+      const targetDate = new Date(today);
+      const daysUntilTarget = (dayNum - today.getDay() + 7) % 7;
+      targetDate.setDate(today.getDate() + (daysUntilTarget === 0 ? 7 : daysUntilTarget));
+      return {
+        date: targetDate.toISOString().split('T')[0],
+        relative: dayName
+      };
+    }
+  }
+  
+  return { date: null, relative: null };
+}
+
+function extractTime(message: string, language: string) {
+  const lowerMessage = message.toLowerCase();
+  
+  // Common time patterns
+  if (lowerMessage.includes('noon') || lowerMessage.includes('الظهر')) {
+    return { time: '12:00', relative: 'noon' };
+  }
+  
+  if (lowerMessage.includes('morning') || lowerMessage.includes('الصباح')) {
+    return { time: '09:00', relative: 'morning' };
+  }
+  
+  if (lowerMessage.includes('evening') || lowerMessage.includes('المساء')) {
+    return { time: '18:00', relative: 'evening' };
+  }
+  
+  if (lowerMessage.includes('night') || lowerMessage.includes('الليل')) {
+    return { time: '20:00', relative: 'night' };
+  }
+  
+  // Specific time patterns (5 PM, 17:00, etc.)
+  const timePattern = /(\d{1,2}):?(\d{2})?\s*(am|pm|ص|م)?/i;
+  const timeMatch = lowerMessage.match(timePattern);
+  
+  if (timeMatch) {
+    let hour = parseInt(timeMatch[1]);
+    const minute = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+    const meridiem = timeMatch[3]?.toLowerCase();
+    
+    if (meridiem === 'pm' || meridiem === 'م') {
+      if (hour !== 12) hour += 12;
+    } else if (meridiem === 'am' || meridiem === 'ص') {
+      if (hour === 12) hour = 0;
+    }
+    
+    return {
+      time: `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`,
+      relative: timeMatch[0]
+    };
+  }
+  
+  return { time: null, relative: null };
+}
+
+function extractSubtasks(message: string, language: string) {
+  const subtasks = [];
+  
+  // Look for lists with common separators
+  const listPattern = /(?:buy|get|pick up|purchase)\s+(.+?)(?:\s+(?:and|from|at)|$)/i;
+  const listMatch = message.match(listPattern);
+  
+  if (listMatch) {
+    const items = listMatch[1].split(/[,،\s+and\s+و\s+]/);
+    items.forEach(item => {
+      const cleanItem = item.trim().replace(/^(and|or|و|أو)\s+/, '');
+      if (cleanItem && cleanItem.length > 1) {
+        subtasks.push(cleanItem);
+      }
+    });
+  }
+  
+  return subtasks;
+}
+
+function extractPriority(message: string, language: string) {
+  const lowerMessage = message.toLowerCase();
+  
+  if (lowerMessage.includes('urgent') || lowerMessage.includes('asap') || lowerMessage.includes('عاجل')) {
+    return 'high';
+  }
+  
+  if (lowerMessage.includes('important') || lowerMessage.includes('مهم')) {
+    return 'high';
+  }
+  
+  if (lowerMessage.includes('low priority') || lowerMessage.includes('أولوية منخفضة')) {
+    return 'low';
+  }
+  
+  return 'normal';
+}
 
 // Process attached files for analysis
 async function processAttachedFiles(attachedFiles: any[], userId: string) {
@@ -305,11 +586,11 @@ async function executeRegularSearch(query: string, language: string = 'en') {
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query: query,
-        search_depth: "basic", // Use basic for regular search
+        search_depth: "basic",
         include_answer: true,
         include_raw_content: false,
-        max_results: 10, // Updated from 3 to 10
-        max_chunks: 5, // Added max_chunks parameter
+        max_results: 10,
+        max_chunks: 5,
         include_domains: [],
         exclude_domains: []
       })
@@ -319,7 +600,6 @@ async function executeRegularSearch(query: string, language: string = 'en') {
       const errorText = await response.text();
       console.error("Tavily API error:", response.status, errorText);
       
-      // Fallback to AI response
       const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
       return {
         success: true,
@@ -336,7 +616,6 @@ async function executeRegularSearch(query: string, language: string = 'en') {
     const data = await response.json();
     console.log("✅ Regular Tavily search successful");
     
-    // Create context from search results
     let searchContext = `Search results for: "${query}"\n\n`;
     if (data.answer) {
       searchContext += `Summary: ${data.answer}\n\n`;
@@ -364,7 +643,6 @@ async function executeRegularSearch(query: string, language: string = 'en') {
   } catch (error) {
     console.error("Regular search execution error:", error);
     
-    // Always provide AI response as fallback
     const searchContext = `Search request: "${query}". Provide helpful information based on your knowledge.`;
     return {
       success: true,
@@ -416,11 +694,9 @@ async function generateImageWithRunware(prompt: string, userId: string, language
       const result = await response.json();
       console.log("🎨 Runware response data:", result);
       
-      // Find the image inference result
       const imageResult = result.data?.find((item: any) => item.taskType === "imageInference");
       
       if (imageResult && imageResult.imageURL) {
-        // Save image to database
         try {
           await supabase
             .from('images')
@@ -432,7 +708,6 @@ async function generateImageWithRunware(prompt: string, userId: string, language
             });
         } catch (dbError) {
           console.log("Could not save image to database:", dbError);
-          // Continue anyway, the image was generated successfully
         }
 
         return {
@@ -461,7 +736,6 @@ async function processWithAI(message: string, context: string | null, language: 
   try {
     console.log("🤖 UNIFIED AI BRAIN: Processing with real AI and vision capabilities");
     
-    // Try OpenAI first (for vision support), fallback to DeepSeek
     let apiKey = OPENAI_API_KEY;
     let apiUrl = 'https://api.openai.com/v1/chat/completions';
     let model = 'gpt-4o-mini';
@@ -484,6 +758,7 @@ async function processWithAI(message: string, context: string | null, language: 
 - يمكنك قراءة النصوص في الصور والمستندات
 - يمكنك الإجابة على الأسئلة المتعلقة بمحتوى الصور
 - يمكنك تحليل المخططات والرسوم البيانية والجداول
+- يمكنك مساعدة المستخدمين في إنشاء المهام والتذكيرات بذكاء
 
 تعليمات مهمة للتنسيق:
 - استخدم نصاً عادياً واضحاً
@@ -497,6 +772,7 @@ async function processWithAI(message: string, context: string | null, language: 
 - You CAN read text in images and documents
 - You CAN answer questions about image content
 - You CAN analyze charts, graphs, tables, and visual data
+- You CAN help users create tasks and reminders intelligently
 
 Important formatting instructions:
 - Use clean, plain text
@@ -508,12 +784,10 @@ Important formatting instructions:
       { role: 'system', content: systemPrompt }
     ];
     
-    // Add context if available
     if (context) {
       messages.push({ role: 'assistant', content: `Context: ${context}` });
     }
     
-    // Add file analysis context if available
     if (fileAnalysisResults && fileAnalysisResults.length > 0) {
       const fileContext = fileAnalysisResults.map(result => {
         if (result.analysis.success) {
@@ -529,19 +803,16 @@ Important formatting instructions:
       });
     }
     
-    // Create user message with potential image content
     const userMessage: any = {
       role: 'user',
       content: []
     };
     
-    // Add text content
     userMessage.content.push({
       type: 'text',
       text: message
     });
     
-    // Add image content if available and using OpenAI
     if (attachedFiles && attachedFiles.length > 0 && apiKey === OPENAI_API_KEY) {
       for (const file of attachedFiles) {
         if (file.type && file.type.startsWith('image/') && (file.url || file.preview)) {
@@ -555,7 +826,6 @@ Important formatting instructions:
       }
     }
     
-    // If no image content was added, convert to simple text message
     if (userMessage.content.length === 1) {
       userMessage.content = message;
     }
@@ -586,7 +856,6 @@ Important formatting instructions:
   } catch (error) {
     console.error("🤖 UNIFIED AI BRAIN: AI processing error:", error);
     
-    // Fallback response
     return language === 'ar' 
       ? `أعتذر، حدث خطأ في معالجة طلبك. يرجى المحاولة مرة أخرى.`
       : `Sorry, there was an error processing your request. Please try again.`;
@@ -597,12 +866,10 @@ function generateConversationId() {
   return `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Helper: Detect if string contains Arabic characters
 function containsArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text);
 }
 
-// SIMPLIFIED: Trigger isolation logic - only chat, search, image
 function analyzeTriggerIntent(message: string, activeTrigger: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
   
@@ -610,7 +877,6 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
   
   switch (activeTrigger) {
     case 'search':
-      // Search allows questions and search queries
       const searchPatterns = [
         'what', 'who', 'when', 'where', 'how', 'current', 'latest', 'recent', 'today', 'news',
         'weather', 'score', 'price', 'stock', 'update', 'information', 'find', 'search',
@@ -623,11 +889,10 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
       return {
         intent: isSearchIntent ? 'search' : 'general_query',
         confidence: 'high',
-        allowed: true // Allow all queries in search mode
+        allowed: true
       };
 
     case 'image':
-      // Accept anything for image mode if message contains Arabic, or if keywords match
       const imagePatterns = [
         'generate', 'create', 'make', 'draw', 'image', 'picture', 'photo', 'art', 'illustration',
         'أنشئ', 'اصنع', 'ارسم', 'صورة', 'رسم', 'فن'
@@ -644,7 +909,6 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
 
     case 'chat':
     default:
-      // Chat mode allows everything
       return {
         intent: 'general_chat',
         confidence: 'high',
@@ -653,9 +917,7 @@ function analyzeTriggerIntent(message: string, activeTrigger: string, language: 
   }
 }
 
-// Translation helper using DeepSeek/OpenAI
 async function translateToEnglish(arabicText: string) {
-  // Prefer DeepSeek, fallback to OpenAI
   let apiKey = DEEPSEEK_API_KEY;
   let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
   let model = 'deepseek-chat';

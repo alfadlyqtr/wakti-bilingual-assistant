@@ -25,6 +25,12 @@ const WaktiAIV2 = () => {
   const [textGenParams, setTextGenParams] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   
+  // Enhanced task confirmation state
+  const [showTaskConfirmation, setShowTaskConfirmation] = useState(false);
+  const [pendingTaskData, setPendingTaskData] = useState<any>(null);
+  const [pendingReminderData, setPendingReminderData] = useState<any>(null);
+  const [taskConfirmationLoading, setTaskConfirmationLoading] = useState(false);
+  
   const [calendarContext, setCalendarContext] = useState<any>(null);
   const [userContext, setUserContext] = useState<any>(null);
   
@@ -292,6 +298,172 @@ const WaktiAIV2 = () => {
     }
   };
 
+  // Enhanced task confirmation handlers
+  const handleTaskConfirmation = async (taskData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      console.log('🔧 Creating task with data:', taskData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Create the task in the TR system
+      const { error } = await supabase
+        .from('tr_tasks')
+        .insert({
+          user_id: user.id,
+          title: taskData.title,
+          description: taskData.description || '',
+          due_date: taskData.due_date ? new Date(taskData.due_date).toISOString() : null,
+          due_time: taskData.due_time || null,
+          priority: taskData.priority || 'normal',
+          status: 'pending'
+        });
+
+      if (error) {
+        console.error('❌ Error creating task:', error);
+        throw new Error('Failed to create task');
+      }
+
+      // Create subtasks if any
+      if (taskData.subtasks && taskData.subtasks.length > 0) {
+        const { data: createdTask } = await supabase
+          .from('tr_tasks')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('title', taskData.title)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (createdTask) {
+          const subtaskInserts = taskData.subtasks.map((subtask: string) => ({
+            task_id: createdTask.id,
+            title: subtask,
+            is_completed: false
+          }));
+
+          await supabase
+            .from('tr_subtasks')
+            .insert(subtaskInserts);
+        }
+      }
+
+      // Add success message to chat
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `✅ تم إنشاء المهمة بنجاح! توجه إلى صفحة المهام والتذكيرات لرؤية مهمتك الجديدة.`
+          : `✅ Task created successfully! Head over to the T&R page to see your new task.`,
+        timestamp: new Date(),
+        intent: 'task_created_success',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      const updatedMessages = [...sessionMessages, successMessage];
+      setSessionMessages(updatedMessages);
+
+      // Clear confirmation state
+      setPendingTaskData(null);
+      setShowTaskConfirmation(false);
+
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء المهمة بنجاح!' : 'Task created successfully!'
+      );
+
+    } catch (error: any) {
+      console.error('❌ Task creation failed:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إنشاء المهمة' : 'Failed to create task')
+      );
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  const handleReminderConfirmation = async (reminderData: any) => {
+    setTaskConfirmationLoading(true);
+    try {
+      console.log('🔧 Creating reminder with data:', reminderData);
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Create the reminder in the TR system
+      const { error } = await supabase
+        .from('tr_reminders')
+        .insert({
+          user_id: user.id,
+          title: reminderData.title,
+          description: reminderData.description || '',
+          reminder_date: reminderData.due_date ? new Date(reminderData.due_date).toISOString() : null,
+          reminder_time: reminderData.due_time || null,
+          priority: reminderData.priority || 'normal',
+          status: 'active'
+        });
+
+      if (error) {
+        console.error('❌ Error creating reminder:', error);
+        throw new Error('Failed to create reminder');
+      }
+
+      // Add success message to chat
+      const successMessage: AIMessage = {
+        id: `success-${Date.now()}`,
+        role: 'assistant',
+        content: language === 'ar' 
+          ? `✅ تم إنشاء التذكير بنجاح! توجه إلى صفحة المهام والتذكيرات لرؤية تذكيرك الجديد.`
+          : `✅ Reminder created successfully! Head over to the T&R page to see your new reminder.`,
+        timestamp: new Date(),
+        intent: 'reminder_created_success',
+        confidence: 'high',
+        actionTaken: true
+      };
+
+      const updatedMessages = [...sessionMessages, successMessage];
+      setSessionMessages(updatedMessages);
+
+      // Clear confirmation state
+      setPendingReminderData(null);
+      setShowTaskConfirmation(false);
+
+      showSuccess(
+        language === 'ar' ? 'تم إنشاء التذكير بنجاح!' : 'Reminder created successfully!'
+      );
+
+    } catch (error: any) {
+      console.error('❌ Reminder creation failed:', error);
+      showError(
+        error.message || (language === 'ar' ? 'فشل في إنشاء التذكير' : 'Failed to create reminder')
+      );
+    } finally {
+      setTaskConfirmationLoading(false);
+    }
+  };
+
+  const handleCancelTaskConfirmation = () => {
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+    setShowTaskConfirmation(false);
+    
+    // Add cancellation message to chat
+    const cancelMessage: AIMessage = {
+      id: `cancel-${Date.now()}`,
+      role: 'assistant',
+      content: language === 'ar' 
+        ? 'تم إلغاء إنشاء المهمة. يمكنك إنشاء مهمة جديدة في أي وقت!'
+        : 'Task creation cancelled. You can create a new task anytime!',
+      timestamp: new Date(),
+      intent: 'task_cancelled',
+      confidence: 'high'
+    };
+
+    const updatedMessages = [...sessionMessages, cancelMessage];
+    setSessionMessages(updatedMessages);
+  };
+
   const handleSendMessage = async (
     message: string, 
     inputType: 'text' | 'voice' = 'text',
@@ -303,7 +475,7 @@ const WaktiAIV2 = () => {
     setError(null);
 
     try {
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED SYSTEM ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED TASK SYSTEM ===');
       console.log('🔄 WAKTI AI V2.5: Message:', message);
       console.log('🔄 WAKTI AI V2.5: Input Type:', inputType);
       console.log('🔄 WAKTI AI V2.5: Active Trigger:', activeTrigger);
@@ -338,7 +510,7 @@ const WaktiAIV2 = () => {
       const completeContext = getCompleteConversationContext();
       const contextForAI = [...completeContext, userMessage].slice(-50);
 
-      console.log('🧠 WAKTI AI V2.5: Sending expanded context to AI:', {
+      console.log('🧠 WAKTI AI V2.5: Sending enhanced context to AI:', {
         contextMessages: contextForAI.length,
         hasConversationHistory: conversationMessages.length > 0,
         currentConversationId
@@ -359,9 +531,11 @@ const WaktiAIV2 = () => {
         userContext
       );
 
-      console.log('🔄 WAKTI AI V2.5: === SIMPLIFIED RESPONSE RECEIVED ===');
+      console.log('🔄 WAKTI AI V2.5: === ENHANCED RESPONSE RECEIVED ===');
       console.log('🔄 WAKTI AI V2.5: Response length:', response.response?.length);
-      console.log('🔄 WAKTI AI V2.5: Browsing Used:', response.browsingUsed);
+      console.log('🔄 WAKTI AI V2.5: Needs Confirmation:', response.needsConfirmation);
+      console.log('🔄 WAKTI AI V2.5: Pending Task Data:', !!response.pendingTaskData);
+      console.log('🔄 WAKTI AI V2.5: Pending Reminder Data:', !!response.pendingReminderData);
 
       if (response.error) {
         throw new Error(response.error);
@@ -401,6 +575,14 @@ const WaktiAIV2 = () => {
 
       const finalSessionMessages = [...updatedSessionMessages, assistantMessage].slice(-30);
       setSessionMessages(finalSessionMessages);
+
+      // Handle task/reminder confirmation
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Setting up task/reminder confirmation UI');
+        setPendingTaskData(response.pendingTaskData);
+        setPendingReminderData(response.pendingReminderData);
+        setShowTaskConfirmation(true);
+      }
 
       if (!currentConversationId) {
         const allMessagesForConversation = [...updatedSessionMessages, assistantMessage];
@@ -465,17 +647,17 @@ const WaktiAIV2 = () => {
         );
       }
 
-      if (response.needsConfirmation) {
-        console.log('🔄 WAKTI AI V2.5: Confirmation card should be shown');
+      if (response.needsConfirmation && (response.pendingTaskData || response.pendingReminderData)) {
+        console.log('🔧 Task/Reminder confirmation card should be shown');
         showSuccess(
           language === 'ar' 
-            ? 'تم تحضير البيانات للتأكيد' 
-            : 'Data prepared for confirmation'
+            ? 'تم تحضير البيانات للتأكيد - راجع التفاصيل وأكد الإنشاء' 
+            : 'Data prepared for confirmation - review details and confirm creation'
         );
       }
 
     } catch (error: any) {
-      console.error('🔄 WAKTI AI V2.5: ❌ Simplified system error:', error);
+      console.error('🔄 WAKTI AI V2.5: ❌ Enhanced system error:', error);
       setError(error.message || 'Failed to send message');
       showError(
         error.message || (language === 'ar' ? 'فشل في إرسال الرسالة' : 'Failed to send message')
@@ -566,6 +748,11 @@ const WaktiAIV2 = () => {
     setSearchConfirmationRequired(false);
     setError(null);
     
+    // Clear task confirmation state
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+    setShowTaskConfirmation(false);
+    
     await fetchConversations();
     
     setShowConversations(false);
@@ -587,6 +774,11 @@ const WaktiAIV2 = () => {
       setSearchConfirmationRequired(false);
       setError(null);
       
+      // Clear task confirmation state
+      setPendingTaskData(null);
+      setPendingReminderData(null);
+      setShowTaskConfirmation(false);
+      
       console.log('📂 Conversation loaded successfully');
       
     } catch (error: any) {
@@ -604,6 +796,11 @@ const WaktiAIV2 = () => {
     WaktiAIV2Service.clearChatSession();
     setSearchConfirmationRequired(false);
     setError(null);
+    
+    // Clear task confirmation state
+    setPendingTaskData(null);
+    setPendingReminderData(null);
+    setShowTaskConfirmation(false);
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
@@ -679,57 +876,45 @@ const WaktiAIV2 = () => {
         onNewConversation={handleNewConversation}
         onClearChat={handleClearChat}
         sessionMessages={allDisplayMessages}
+        isLoading={isLoading}
       />
 
-      <div className="flex-1 flex flex-col h-screen">
-        <div 
-          className="fixed top-16 right-0 bg-background/80 backdrop-blur-md border-b rounded-b-2xl z-40"
-          style={{ 
-            left: showConversations || showQuickActions ? '320px' : '0',
-            transition: 'left 0.3s ease-in-out'
-          }}
-        >
-          <ChatHeader
-            currentConversationId={currentConversationId}
-            activeTrigger={activeTrigger}
-            onShowConversations={() => setShowConversations(true)}
-            onNewConversation={handleNewConversation}
-            onShowQuickActions={() => setShowQuickActions(true)}
-            quotaStatus={quotaStatus}
-          />
-          <NotificationBars
-            searchConfirmationRequired={searchConfirmationRequired}
-            error={error}
-            onSearchConfirmation={handleSearchConfirmation}
-            onDismissSearchConfirmation={() => setSearchConfirmationRequired(false)}
-          />
-        </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <NotificationBars
+          quotaStatus={quotaStatus}
+          searchConfirmationRequired={searchConfirmationRequired}
+          onSearchConfirmation={handleSearchConfirmation}
+          onQuotaRefresh={() => fetchQuota(true)}
+        />
 
-        <div 
-          className="flex-1 overflow-hidden"
-          style={{ 
-            paddingTop: '130px',
-            paddingBottom: '100px'
-          }}
-        >
+        <ChatHeader
+          activeTrigger={activeTrigger}
+          onTriggerChange={handleTriggerChange}
+          onToggleConversations={() => setShowConversations(!showConversations)}
+          onToggleQuickActions={() => setShowQuickActions(!showQuickActions)}
+          onNewConversation={handleNewConversation}
+          onClearChat={handleClearChat}
+          hasMessages={allDisplayMessages.length > 0}
+          currentConversationId={currentConversationId}
+        />
+
+        <div className="flex-1 min-h-0">
           <ChatMessages
             sessionMessages={allDisplayMessages}
             isLoading={isLoading}
             activeTrigger={activeTrigger}
             scrollAreaRef={scrollAreaRef}
             userProfile={userProfile}
+            showTaskConfirmation={showTaskConfirmation}
+            pendingTaskData={pendingTaskData}
+            pendingReminderData={pendingReminderData}
+            taskConfirmationLoading={taskConfirmationLoading}
+            onTaskConfirmation={handleTaskConfirmation}
+            onReminderConfirmation={handleReminderConfirmation}
+            onCancelTaskConfirmation={handleCancelTaskConfirmation}
           />
         </div>
-      </div>
 
-      <div 
-        className="fixed bottom-8 right-0 bg-background border-t z-20 pb-safe" 
-        style={{ 
-          left: showConversations || showQuickActions ? '320px' : '0',
-          paddingBottom: 'max(env(safe-area-inset-bottom), 20px)',
-          transition: 'left 0.3s ease-in-out'
-        }}
-      >
         <ChatInput
           message={message}
           setMessage={setMessage}
