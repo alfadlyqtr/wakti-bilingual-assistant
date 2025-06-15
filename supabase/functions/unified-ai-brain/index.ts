@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 
@@ -66,7 +67,8 @@ serve(async (req) => {
       conversationId = null,
       inputType = 'text',
       confirmSearch = false,
-      activeTrigger = 'chat'
+      activeTrigger = 'chat',
+      attachedFiles = []
     } = requestBody;
 
     // CRITICAL: Ensure userId matches authenticated user
@@ -163,8 +165,8 @@ serve(async (req) => {
 
       case 'chat':
       default:
-        // Chat mode - use real AI
-        response = await processWithAI(message, null, language);
+        // Chat mode - use real AI, now with vision capabilities
+        response = await processWithAI(message, null, language, attachedFiles);
         break;
     }
 
@@ -384,19 +386,23 @@ async function generateImageWithRunware(prompt: string, userId: string, language
 }
 
 // Real AI processing function
-async function processWithAI(message: string, context: string | null, language: string = 'en') {
+async function processWithAI(message: string, context: string | null, language: string = 'en', attachedFiles: any[] = []) {
   try {
     console.log("🤖 UNIFIED AI BRAIN: Processing with real AI");
+    if (attachedFiles.length > 0) {
+      console.log(`🤖 UNIFIED AI BRAIN: Processing with ${attachedFiles.length} file(s) for vision analysis.`);
+    }
     
-    // Try DeepSeek first, fallback to OpenAI
+    // Try DeepSeek first, fallback to OpenAI. Force OpenAI for vision.
     let apiKey = DEEPSEEK_API_KEY;
     let apiUrl = 'https://api.deepseek.com/v1/chat/completions';
     let model = 'deepseek-chat';
     
-    if (!apiKey) {
+    // Force OpenAI for any request with files/images
+    if (!apiKey || (attachedFiles && attachedFiles.length > 0)) {
       apiKey = OPENAI_API_KEY;
       apiUrl = 'https://api.openai.com/v1/chat/completions';
-      model = 'gpt-4o-mini';
+      model = 'gpt-4o-mini'; // This model supports vision
     }
     
     if (!apiKey) {
@@ -419,9 +425,31 @@ Important formatting instructions:
 - Use simple paragraphs with natural line breaks
 - Keep responses readable and clean without formatting clutter`;
     
-    const messages = [
+    // Construct user message content. It can be a simple string or an array for multimodal input.
+    let userContent: any = message;
+    
+    // If there are files, build a multipart message
+    if (attachedFiles && attachedFiles.length > 0) {
+      const contentParts: any[] = [{ type: 'text', text: message }];
+
+      attachedFiles.forEach(file => {
+        // Assuming file has { type: 'image/jpeg', content: 'base64string' }
+        if (file.type && file.type.startsWith('image/')) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${file.type};base64,${file.content}`
+            }
+          });
+        }
+      });
+      
+      userContent = contentParts;
+    }
+    
+    const messages: any[] = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message }
+      { role: 'user', content: userContent }
     ];
     
     if (context) {
@@ -438,12 +466,14 @@ Important formatting instructions:
         model: model,
         messages: messages,
         temperature: 0.7,
-        max_tokens: 1000
+        max_tokens: 2048
       })
     });
     
     if (!response.ok) {
-      throw new Error(`AI API failed: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`AI API failed: ${response.status}`, errorText);
+      throw new Error(`AI API failed: ${response.status} - ${errorText}`);
     }
     
     const result = await response.json();
