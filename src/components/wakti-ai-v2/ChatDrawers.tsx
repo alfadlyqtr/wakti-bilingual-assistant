@@ -1,16 +1,9 @@
-
 import React from 'react';
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { ConversationsList } from './ConversationsList';
 import { useTheme } from '@/providers/ThemeProvider';
 import { QuickActionsPanel } from './QuickActionsPanel';
 import { AIConversation } from '@/services/WaktiAIV2Service';
-
 interface ChatDrawersProps {
   showConversations: boolean;
   setShowConversations: (show: boolean) => void;
@@ -30,7 +23,6 @@ interface ChatDrawersProps {
   sessionMessages: any[];
   isLoading: boolean;
 }
-
 export function ChatDrawers({
   showConversations,
   setShowConversations,
@@ -50,10 +42,10 @@ export function ChatDrawers({
   sessionMessages,
   isLoading
 }: ChatDrawersProps) {
-  const { language } = useTheme();
-
-  return (
-    <div>
+  const {
+    language
+  } = useTheme();
+  return <div>
       {/* Conversations Drawer - slides from left */}
       <Drawer open={showConversations} onOpenChange={setShowConversations}>
         <DrawerContent side="left">
@@ -63,18 +55,7 @@ export function ChatDrawers({
             </DrawerTitle>
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
-            <ConversationsList
-              conversations={conversations}
-              currentConversationId={currentConversationId}
-              onSelectConversation={onSelectConversation}
-              onDeleteConversation={onDeleteConversation}
-              onRefresh={fetchConversations}
-              onClose={() => setShowConversations(false)}
-              onNewConversation={onNewConversation}
-              onClearChat={onClearChat}
-              sessionMessages={sessionMessages}
-              isLoading={isLoading}
-            />
+            <ConversationsList conversations={conversations} currentConversationId={currentConversationId} onSelectConversation={onSelectConversation} onDeleteConversation={onDeleteConversation} onRefresh={fetchConversations} onClose={() => setShowConversations(false)} onNewConversation={onNewConversation} onClearChat={onClearChat} sessionMessages={sessionMessages} isLoading={isLoading} />
           </div>
         </DrawerContent>
       </Drawer>
@@ -83,21 +64,12 @@ export function ChatDrawers({
       <Drawer open={showQuickActions} onOpenChange={setShowQuickActions}>
         <DrawerContent side="right">
           <DrawerHeader>
-            <DrawerTitle>
-              {language === 'ar' ? 'الإجراءات السريعة' : 'Quick Actions'}
-            </DrawerTitle>
+            
           </DrawerHeader>
           <div className="flex-1 overflow-hidden">
-            <QuickActionsPanel
-              onSendMessage={onSendMessage}
-              activeTrigger={activeTrigger}
-              onTriggerChange={onTriggerChange}
-              onTextGenerated={onTextGenerated}
-              onClose={() => setShowQuickActions(false)}
-            />
+            <QuickActionsPanel onSendMessage={onSendMessage} activeTrigger={activeTrigger} onTriggerChange={onTriggerChange} onTextGenerated={onTextGenerated} onClose={() => setShowQuickActions(false)} />
           </div>
         </DrawerContent>
       </Drawer>
-    </div>
-  );
+    </div>;
 }
