@@ -857,9 +857,9 @@ const WaktiAIV2 = () => {
   const allDisplayMessages = [...conversationMessages, ...sessionMessages];
 
   return (
-    <div className="flex flex-col h-screen bg-background overflow-hidden">
-      {/* Fixed Header – always visible at top */}
-      <div className="flex-shrink-0 z-10">
+    <div className="flex flex-col h-full min-h-screen bg-background overflow-hidden">
+      {/* Fixed Header – always visible */}
+      <div className="sticky top-0 z-40">
         <ChatHeader
           activeTrigger={activeTrigger}
           onTriggerChange={handleTriggerChange}
@@ -871,9 +871,8 @@ const WaktiAIV2 = () => {
           currentConversationId={currentConversationId}
         />
       </div>
-
-      {/* Notification Bars, just below header */}
-      <div className="flex-shrink-0 z-10">
+      {/* Notification Bars */}
+      <div className="sticky top-[56px] z-30">
         <NotificationBars
           quotaStatus={quotaStatus}
           searchConfirmationRequired={searchConfirmationRequired}
@@ -881,9 +880,8 @@ const WaktiAIV2 = () => {
           onQuotaRefresh={() => fetchQuota(true)}
         />
       </div>
-
-      {/* Scrollable Messages Area – main flex-1 area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      {/* Main scrollable chat/msgs area */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <ChatMessages
           sessionMessages={allDisplayMessages}
           isLoading={isLoading}
@@ -899,9 +897,8 @@ const WaktiAIV2 = () => {
           onCancelTaskConfirmation={handleCancelTaskConfirmation}
         />
       </div>
-
-      {/* Fixed Input – always visible at bottom */}
-      <div className="flex-shrink-0 z-10">
+      {/* Fixed Input at bottom */}
+      <div className="sticky bottom-0 z-40 bg-background">
         <ChatInput
           message={message}
           setMessage={setMessage}
@@ -911,8 +908,7 @@ const WaktiAIV2 = () => {
           onClearChat={handleClearChat}
         />
       </div>
-
-      {/* Drawers are portal-based, no change */}
+      {/* Drawers portal */}
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}
