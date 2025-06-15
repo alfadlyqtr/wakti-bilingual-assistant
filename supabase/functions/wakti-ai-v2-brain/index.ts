@@ -110,7 +110,7 @@ serve(async (req) => {
     console.log("🤖 BUDDY-CHAT AI BRAIN: Buddy analysis result:", buddyAnalysis);
 
     // Enhanced task analysis
-    const taskAnalysis = analyzeTaskIntent(message, language);
+    const taskAnalysis = await analyzeTaskIntent(message, language);
     console.log("🤖 BUDDY-CHAT AI BRAIN: Task analysis result:", taskAnalysis);
 
     // Smart cross-mode suggestions
@@ -397,8 +397,8 @@ function analyzeSmartModeIntent(message: string, activeTrigger: string, language
   };
 }
 
-// Enhanced task analysis function
-function analyzeTaskIntent(message: string, language: string = 'en') {
+// Enhanced task analysis function - NOW uses OpenAI for extraction
+async function analyzeTaskIntent(message: string, language: string = 'en') {
   const lowerMessage = message.toLowerCase();
 
   // Task keywords
@@ -419,16 +419,13 @@ function analyzeTaskIntent(message: string, language: string = 'en') {
   let isTask = false;
   let isReminder = false;
 
-  // Determine if it's a task or reminder
   if (isTaskKeyword && !isReminderKeyword) {
     isTask = true;
   } else if (isReminderKeyword && !isTaskKeyword) {
     isReminder = true;
   } else if (isTaskKeyword && isReminderKeyword) {
-    // If both, default to task
     isTask = true;
   } else {
-    // Check for action verbs that indicate tasks
     const actionVerbs = [
       'buy', 'get', 'call', 'email', 'meeting', 'appointment', 'shopping',
       'اشتري', 'خذ', 'اتصل', 'ايميل', 'اجتماع', 'موعد', 'تسوق'
@@ -440,7 +437,128 @@ function analyzeTaskIntent(message: string, language: string = 'en') {
     return { isTask: false, isReminder: false };
   }
 
-  // --- NEW LOGIC: Smart parsing for title, subtasks, and time ---
+  // --- NEW LOGIC: AI-powered extraction using OpenAI/DeepSeek ---
+  let extractionOk = false;
+  let aiExtracted: any = {};
+
+  try {
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const promptBase = language === 'ar'
+      ? `
+حلل رسالة المستخدم التالية. استخرج الحقول (title, description, due_date, due_time, subtasks (قائمة), priority).
+- date بصيغة YYYY-MM-DD
+- time بصيغة HH:MM (24)
+أعد فقط JSON منظم، مثال:
+{
+  "title": "اذهب إلى فيستيفال سيتي مول",
+  "description": "",
+  "due_date": "2025-06-16",
+  "due_time": "09:00",
+  "subtasks": ["قميص أسود", "بنطال أسود", "حذاء أسود", "جوارب سوداء"],
+  "priority": "normal"
+}
+رسالة المستخدم:
+"${message}"
+`
+      : `
+Analyze the following user message and extract:
+- title (short task intent/action),
+- description (only if present; otherwise empty),
+- due_date (YYYY-MM-DD),
+- due_time (24hr format HH:MM, if present),
+- subtasks (as an array, extracted from shopping lists, comma/and/bullet separated, etc.),
+- priority ("normal" or "high")
+
+Return ONLY this JSON, with no comments:
+{
+  "title": "...",
+  "description": "...",
+  "due_date": "...",
+  "due_time": "...",
+  "subtasks": [...],
+  "priority": "normal"
+}
+User message:
+"${message}"
+`;
+
+    // Use OpenAI for robust extraction (gpt-4o-mini, vision not needed)
+    const apiResp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: language === 'ar'
+            ? "ساعدني في استخراج الحقول المنظمة من نص عبارة عن طلب مهمة أو تذكير."
+            : "Help me extract structured fields from a user's to-do or reminder request."
+          },
+          { role: 'user', content: promptBase }
+        ],
+        temperature: 0.0,
+        max_tokens: 512
+      }),
+    });
+
+    if (apiResp.ok) {
+      const aiData = await apiResp.json();
+      const reply = aiData.choices?.[0]?.message?.content || "";
+      try {
+        aiExtracted = JSON.parse(reply);
+        extractionOk = true;
+      } catch (e) {
+        // Sometimes model gives codeblocks or extra output, try to cleanup:
+        const jsonStr = reply.replace(/^```(json)?/,'').replace(/```$/,'').trim();
+        try {
+          aiExtracted = JSON.parse(jsonStr);
+          extractionOk = true;
+        } catch (e2) {
+          extractionOk = false;
+        }
+      }
+    }
+  } catch (err) {
+    extractionOk = false;
+  }
+
+  if (extractionOk && typeof aiExtracted === 'object' && aiExtracted.title) {
+    const fill = (field: string, fallback: any) =>
+      (typeof aiExtracted[field] === 'string' || Array.isArray(aiExtracted[field]))
+        ? aiExtracted[field]
+        : fallback;
+
+    const resultData = {
+      title: fill("title", ""),
+      description: fill("description", ""),
+      due_date: fill("due_date", null),
+      due_time: fill("due_time", null),
+      subtasks: Array.isArray(aiExtracted.subtasks) ? aiExtracted.subtasks : [],
+      priority: fill("priority", "normal")
+    };
+
+    if (isTask) {
+      return {
+        isTask,
+        isReminder,
+        taskData: resultData,
+        reminderData: null
+      };
+    }
+    if (isReminder) {
+      return {
+        isTask,
+        isReminder,
+        taskData: null,
+        reminderData: resultData
+      };
+    }
+  }
+
+  // Fallback: If for some reason extraction failed, use previous (regex) logic:
+  // --- BEGIN FALLBACK LEGACY REGEX LOGIC ---
 
   // Extract subtasks after the word 'subtask' or 'subtasks'
   let subtasks: string[] = [];
@@ -601,6 +719,8 @@ function analyzeTaskIntent(message: string, language: string = 'en') {
     taskData: isTask ? taskData : null,
     reminderData: isReminder ? reminderData : null
   };
+
+  // --- END FALLBACK LEGACY REGEX LOGIC ---
 }
 
 // Generate natural follow-up questions
