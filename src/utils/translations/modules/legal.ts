@@ -1,8 +1,8 @@
 
 export const legal = {
   // Audio player labels
-  englishAudio: "🎧 English Audio",
-  arabicAudio: "🎧 Arabic Audio",
+  englishAudio: "🎧 Listen to the WAKTI Privacy Policy & Terms of Use",
+  arabicAudio: "🎧 Listen to the WAKTI Privacy Policy & Terms of Use",
   audioPlay: "Play",
   audioPause: "Pause",
   audioStop: "Stop",

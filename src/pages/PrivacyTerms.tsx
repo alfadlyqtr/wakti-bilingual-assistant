@@ -1,15 +1,30 @@
-
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
 import { MobileHeader } from "@/components/MobileHeader";
 import { Footer } from "@/components/Footer";
 import { ThemeLanguageToggle } from "@/components/ThemeLanguageToggle";
-import AudioControls from "@/components/tasjeel/AudioControls";
+import EnhancedAudioControls from "@/components/tasjeel/EnhancedAudioControls";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { useRef, useState } from "react";
 
 export default function PrivacyTerms() {
   const { language } = useTheme();
   const navigate = useNavigate();
+  const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Audio state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  // Auto-scroll hook
+  const { isAutoScrollActive, userHasScrolled } = useAutoScroll({
+    isPlaying,
+    currentTime,
+    duration,
+    containerRef: contentRef
+  });
 
   const handleBackClick = () => {
     navigate("/home");
@@ -36,6 +51,26 @@ export default function PrivacyTerms() {
     error: t("audioError", language)
   };
 
+  // Audio event handlers
+  const handlePlay = () => {
+    setIsPlaying(true);
+  };
+
+  const handlePause = () => {
+    setIsPlaying(false);
+  };
+
+  const handleTimeUpdate = (time: number, audioDuration: number) => {
+    setCurrentTime(time);
+    if (audioDuration && audioDuration !== duration) {
+      setDuration(audioDuration);
+    }
+  };
+
+  const handleLoadedMetadata = (audioDuration: number) => {
+    setDuration(audioDuration);
+  };
+
   return (
     <div className="mobile-container">
       <MobileHeader 
@@ -46,19 +81,36 @@ export default function PrivacyTerms() {
         <ThemeLanguageToggle />
       </MobileHeader>
       
-      <div className="flex-1 overflow-y-auto">
+      <div ref={contentRef} className="flex-1 overflow-y-auto" style={{ scrollBehavior: 'smooth' }}>
         <div className="px-4 py-6 space-y-8">
           {/* Audio Player - Show only relevant language audio */}
           <div className="space-y-4">
             <div className="flex justify-center">
-              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3 w-full max-w-md">
+              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3 w-full max-w-md relative">
                 <h3 className="text-sm font-semibold text-primary text-center">
                   {language === "ar" ? t("arabicAudio", language) : t("englishAudio", language)}
                 </h3>
-                <AudioControls
+                <EnhancedAudioControls
                   audioUrl={language === "ar" ? arabicAudioUrl : englishAudioUrl}
                   labels={audioLabels}
+                  onPlay={handlePlay}
+                  onPause={handlePause}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
                 />
+                
+                {/* Auto-scroll indicator */}
+                {isAutoScrollActive && (
+                  <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                    Auto-scroll
+                  </div>
+                )}
+                
+                {userHasScrolled && isPlaying && (
+                  <div className="text-xs text-muted-foreground text-center mt-2">
+                    Auto-scroll paused - scroll stopped
+                  </div>
+                )}
               </div>
             </div>
           </div>
