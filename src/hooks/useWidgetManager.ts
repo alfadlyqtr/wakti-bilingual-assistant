@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { TranslationKey } from "@/utils/translationTypes";
-import { getWidgetOrder } from "@/utils/widgetPreferences";
+import { getWidgetOrder, saveWidgetOrder } from "@/utils/widgetPreferences";
 import { fetchRemoteWidgetPrefs, getWidgetVisibilityFromProfile } from "@/utils/widgetPreferences";
 import { toast } from "sonner";
 import React from "react";
@@ -22,11 +22,43 @@ export const useWidgetManager = (
   reminders: any[]
 ) => {
   const [widgets, setWidgets] = useState<WidgetType[]>([]);
+  const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
   const navigate = useNavigate();
 
+  // Load widget order from both local and remote storage
   useEffect(() => {
-    // Try to load remotely or fallback to localStorage
+    const loadWidgetOrder = async () => {
+      try {
+        // Try to get widget order from Supabase first
+        const widgetsDbPrefs = await fetchRemoteWidgetPrefs();
+        let savedOrder: string[];
+        
+        if (widgetsDbPrefs?.widgetOrder) {
+          savedOrder = widgetsDbPrefs.widgetOrder;
+          console.log('Loaded widget order from remote:', savedOrder);
+        } else {
+          // Fallback to localStorage
+          savedOrder = getWidgetOrder();
+          console.log('Loaded widget order from local:', savedOrder);
+        }
+        
+        setWidgetOrder(savedOrder);
+      } catch (error) {
+        console.error('Error loading widget order:', error);
+        // Fallback to localStorage on error
+        const localOrder = getWidgetOrder();
+        setWidgetOrder(localOrder);
+      }
+    };
+
+    loadWidgetOrder();
+  }, []);
+
+  useEffect(() => {
     const loadWidgetPrefsAndInit = async () => {
+      // Wait for widget order to be loaded
+      if (widgetOrder.length === 0) return;
+
       let widgetVisibility: any = undefined;
       try {
         const widgetsDbPrefs = await fetchRemoteWidgetPrefs();
@@ -36,6 +68,7 @@ export const useWidgetManager = (
       } catch (e) {
         widgetVisibility = null;
       }
+      
       // If still null, fallback to localStorage
       if (!widgetVisibility) {
         const { getUserPreferences } = await import("@/utils/widgetPreferences");
@@ -49,6 +82,7 @@ export const useWidgetManager = (
       const { QuoteWidget } = await import(
         "@/components/dashboard/QuoteWidget"
       );
+      
       const defaultWidgets = {
         calendar: {
           id: "calendar",
@@ -80,18 +114,21 @@ export const useWidgetManager = (
         },
       };
 
-      const savedOrder = getWidgetOrder();
-      const orderedWidgets = savedOrder
+      // Apply the saved order
+      const orderedWidgets = widgetOrder
         .map((id: string) => defaultWidgets[id as keyof typeof defaultWidgets])
         .filter(Boolean);
 
+      console.log('Setting widgets with order:', widgetOrder);
+      console.log('Ordered widgets:', orderedWidgets.map(w => w.id));
+      
       setWidgets(orderedWidgets);
     };
 
     loadWidgetPrefsAndInit();
-  }, [language, navigate, isLoading, legacyEvents]);
+  }, [language, navigate, isLoading, legacyEvents, widgetOrder]);
 
-  // Enhanced: Persist new widget order both locally and remotely
+  // Enhanced: Persist new widget order and immediately update state
   const handleDragEnd = async (result: any) => {
     if (!result.destination) return;
 
@@ -99,10 +136,16 @@ export const useWidgetManager = (
     const [reorderedItem] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, reorderedItem);
 
+    // Update local state immediately
     setWidgets(items);
-
+    
     const newOrder = items.map((widget) => widget.id);
-    const { saveWidgetOrder } = require("@/utils/widgetPreferences");
+    console.log('New widget order after drag:', newOrder);
+    
+    // Update the widgetOrder state
+    setWidgetOrder(newOrder);
+    
+    // Save to both local and remote storage
     await saveWidgetOrder(newOrder);
 
     toast.success(
