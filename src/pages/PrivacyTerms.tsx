@@ -1,3 +1,4 @@
+
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
@@ -118,8 +119,8 @@ export default function PrivacyTerms() {
                     {formatText(t("section3List", language))}
                   </div>
                 </div>
-                <div className="bg-destructive/20 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-destructive-foreground">
+                <div className="bg-red-100 dark:bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-red-800 dark:text-destructive-foreground">
                     {t("section3Warning", language)}
                   </p>
                 </div>
@@ -169,8 +170,8 @@ export default function PrivacyTerms() {
                     {formatText(t("section6List", language))}
                   </div>
                 </div>
-                <div className="bg-destructive/20 p-3 rounded-lg">
-                  <p className="text-sm font-bold text-destructive-foreground">
+                <div className="bg-red-100 dark:bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-red-800 dark:text-destructive-foreground">
                     {t("section6Warning", language)}
                   </p>
                 </div>
@@ -189,8 +190,8 @@ export default function PrivacyTerms() {
                     {formatText(t("section7List", language))}
                   </div>
                 </div>
-                <div className="bg-destructive/20 p-3 rounded-lg">
-                  <p className="text-sm font-bold text-destructive-foreground">
+                <div className="bg-red-100 dark:bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-red-800 dark:text-destructive-foreground">
                     {t("section7Warning", language)}
                   </p>
                 </div>
@@ -221,8 +222,8 @@ export default function PrivacyTerms() {
                     {formatText(t("section9List", language))}
                   </div>
                 </div>
-                <div className="bg-destructive/20 p-3 rounded-lg">
-                  <p className="text-sm font-bold text-destructive-foreground">
+                <div className="bg-red-100 dark:bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-red-800 dark:text-destructive-foreground">
                     {t("section9Warning", language)}
                   </p>
                 </div>
@@ -256,8 +257,8 @@ export default function PrivacyTerms() {
                     {formatText(t("section11List", language))}
                   </div>
                 </div>
-                <div className="bg-destructive/20 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-destructive-foreground">
+                <div className="bg-red-100 dark:bg-destructive/20 p-3 rounded-lg">
+                  <p className="text-sm font-bold text-red-800 dark:text-destructive-foreground">
                     {t("section11Warning", language)}
                   </p>
                 </div>
@@ -287,7 +288,7 @@ export default function PrivacyTerms() {
               <div className="space-y-3">
                 <p className="text-sm leading-relaxed">{t("section13Text", language)}</p>
                 <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 text-center">
-                  <p className="text-lg font-semibold text-primary">
+                  <p className="text-lg font-bold text-red-700 dark:text-primary">
                     {t("section13Contact", language)}
                   </p>
                 </div>
@@ -301,10 +302,10 @@ export default function PrivacyTerms() {
                   {t("footerQuote", language)}
                 </blockquote>
                 <div className="text-center space-y-2">
-                  <p className="font-bold text-primary">
+                  <p className="font-bold text-red-700 dark:text-primary">
                     {t("footerCopyright", language)}
                   </p>
-                  <p className="text-sm font-medium text-accent-foreground">
+                  <p className="text-sm font-bold text-red-600 dark:text-accent-foreground">
                     {t("footerWarning", language)}
                   </p>
                 </div>
