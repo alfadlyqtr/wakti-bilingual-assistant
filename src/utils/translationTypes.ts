@@ -1346,5 +1346,8 @@ export type TranslationKey =
   | "audioRewind"
   | "audioError"
   | "englishAudio"
-  | "arabicAudio";
+  | "arabicAudio"
 
+  // NEW REMINDER KEYS FOR TASJEEL
+  | "reviewTranscriptReminder"
+  | "reviewSummaryReminder";

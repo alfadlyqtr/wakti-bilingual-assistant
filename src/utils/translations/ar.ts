@@ -16,7 +16,7 @@ import { feedbackAr } from "./modules/ar/feedback";
 import { rsvpAr } from "./modules/ar/rsvp";
 import { miscAr } from "./modules/ar/misc";
 import { helpAr } from "./modules/ar/help";
-import { legalAr } from "./modules/ar/legal";
+import { legal as legalAr } from "./modules/ar/legal";
 import { billingAr } from "./modules/ar/billing";
 import { confirmationAr } from "./modules/ar/confirmation";
 
