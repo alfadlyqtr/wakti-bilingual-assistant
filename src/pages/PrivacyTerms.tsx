@@ -18,12 +18,13 @@ export default function PrivacyTerms() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
 
-  // Auto-scroll hook
+  // Auto-scroll hook with language prop
   const { isAutoScrollActive, userHasScrolled } = useAutoScroll({
     isPlaying,
     currentTime,
     duration,
-    containerRef: contentRef
+    containerRef: contentRef,
+    language
   });
 
   const handleBackClick = () => {

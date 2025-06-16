@@ -6,9 +6,10 @@ interface UseAutoScrollProps {
   currentTime: number;
   duration: number;
   containerRef: React.RefObject<HTMLElement>;
+  language?: string; // Add language prop for speed adjustment
 }
 
-export const useAutoScroll = ({ isPlaying, currentTime, duration, containerRef }: UseAutoScrollProps) => {
+export const useAutoScroll = ({ isPlaying, currentTime, duration, containerRef, language }: UseAutoScrollProps) => {
   const [isAutoScrollActive, setIsAutoScrollActive] = useState(false);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const lastScrollTimeRef = useRef<number>(0);
@@ -21,7 +22,12 @@ export const useAutoScroll = ({ isPlaying, currentTime, duration, containerRef }
     
     const container = containerRef.current;
     const maxScrollTop = container.scrollHeight - container.clientHeight;
-    const progress = time / totalDuration;
+    let progress = time / totalDuration;
+    
+    // Slow down Arabic scrolling by 15%
+    if (language === 'ar') {
+      progress = progress * 0.85;
+    }
     
     return Math.min(maxScrollTop * progress, maxScrollTop);
   };
@@ -104,7 +110,7 @@ export const useAutoScroll = ({ isPlaying, currentTime, duration, containerRef }
     setIsAutoScrollActive(true);
     const targetPosition = calculateScrollPosition(currentTime, duration);
     smoothScrollTo(targetPosition);
-  }, [isPlaying, currentTime, duration, userHasScrolled]);
+  }, [isPlaying, currentTime, duration, userHasScrolled, language]);
 
   // Reset user scroll flag when audio starts
   useEffect(() => {
