@@ -1,3 +1,4 @@
+
 import { useTheme } from "@/providers/ThemeProvider";
 import { useNavigate } from "react-router-dom";
 import { t } from "@/utils/translations";
@@ -47,27 +48,15 @@ export default function PrivacyTerms() {
       
       <div className="flex-1 overflow-y-auto">
         <div className="px-4 py-6 space-y-8">
-          {/* Audio Players - placed just above the title */}
+          {/* Audio Player - Show only relevant language audio */}
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* English Audio Player */}
-              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3">
+            <div className="flex justify-center">
+              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3 w-full max-w-md">
                 <h3 className="text-sm font-semibold text-primary text-center">
-                  {t("englishAudio", language)}
+                  {language === "ar" ? t("arabicAudio", language) : t("englishAudio", language)}
                 </h3>
                 <AudioControls
-                  audioUrl={englishAudioUrl}
-                  labels={audioLabels}
-                />
-              </div>
-
-              {/* Arabic Audio Player */}
-              <div className="bg-gradient-card border border-accent/20 rounded-lg p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-primary text-center">
-                  {t("arabicAudio", language)}
-                </h3>
-                <AudioControls
-                  audioUrl={arabicAudioUrl}
+                  audioUrl={language === "ar" ? arabicAudioUrl : englishAudioUrl}
                   labels={audioLabels}
                 />
               </div>
