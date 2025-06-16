@@ -9,13 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { Mic, Square, Copy, Loader2, AlertTriangle, Plus, Clock, PlayCircle, Volume2, ChevronDown, VolumeX } from 'lucide-react';
+import { Mic, Square, Copy, Loader2, AlertTriangle, Clock, PlayCircle, Volume2, ChevronDown, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface VoiceTranslatorPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onTranslated?: (translatedText: string) => void;
 }
 
 interface TranslationItem {
@@ -140,7 +139,7 @@ const MAX_HISTORY_ITEMS = 5;
 const AUDIO_CACHE_EXPIRY = 24 * 60 * 60 * 1000;
 const MAX_CACHE_SIZE = 50;
 
-export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: VoiceTranslatorPopupProps) {
+export function VoiceTranslatorPopup({ open, onOpenChange }: VoiceTranslatorPopupProps) {
   const { user } = useAuth();
   const { language } = useTheme();
   const [selectedLanguage, setSelectedLanguage] = useState('en');
@@ -151,7 +150,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
     isLoadingQuota,
     quotaError,
     incrementTranslationCount,
-    purchaseExtraTranslations,
     remainingFreeTranslations,
     isAtSoftLimit,
     isAtHardLimit,
@@ -498,10 +496,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
         playTranslatedText(result.translatedText);
       }
 
-      // Call the onTranslated callback if provided
-      if (onTranslated) {
-        onTranslated(result.translatedText);
-      }
     } catch (error) {
       console.error('🎤 Voice Translator: Error processing translation:', error);
       toast({
@@ -515,7 +509,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
       setIsProcessing(false);
       setRecordingTime(0);
     }
-  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled, onTranslated]);
+  }, [selectedLanguage, incrementTranslationCount, quotaError, language, addToHistory, playbackEnabled]);
 
   const playTranslatedText = useCallback(async (text: string, retryAttempt: number = 0) => {
     console.log('🔊 Play button clicked, text:', text);
@@ -663,9 +657,11 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
   }, []);
 
   const handlePurchaseExtra = useCallback(async () => {
-    const success = await purchaseExtraTranslations(EXTRA_TRANSLATIONS_COUNT);
-    return success;
-  }, [purchaseExtraTranslations]);
+    toast({
+      title: language === 'ar' ? 'استخدم قائمة الإضافات' : 'Use Extras Menu',
+      description: language === 'ar' ? 'يمكنك شراء الإضافات من القائمة الرئيسية' : 'You can purchase extras from the main menu',
+    });
+  }, [language]);
 
   // Only show daily reset info if needed
   const showDailyResetInfo = !quotaError && (isAtSoftLimit || isAtHardLimit);
@@ -897,7 +893,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
             </p>
           </div>
 
-          {/* Translation Results with FIXED buttons */}
+          {/* Translation Results with buttons */}
           {translatedText && (
             <div className="space-y-3">
               <div className="p-4 bg-muted rounded-lg text-center relative">
@@ -909,7 +905,7 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      console.log('🔊 Play button clicked directly');
+                      console.log('📋 Copy button clicked directly');
                       copyToClipboard(translatedText);
                     }}
                     disabled={isCopying}
@@ -951,24 +947,6 @@ export function VoiceTranslatorPopup({ open, onOpenChange, onTranslated }: Voice
                   </Button>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Extra translations purchase */}
-          {!quotaError && !isAtHardLimit && userQuota.extra_translations === 0 && (
-            <div className="pt-2 border-t">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handlePurchaseExtra}
-                className="w-full"
-              >
-                <Plus className="h-3 w-3 mr-2" />
-                {language === 'ar' 
-                  ? `شراء ${EXTRA_TRANSLATIONS_COUNT} ترجمة إضافية (${EXTRA_TRANSLATIONS_PRICE} ريال)` 
-                  : `Buy ${EXTRA_TRANSLATIONS_COUNT} extra translations (${EXTRA_TRANSLATIONS_PRICE} QAR)`
-                }
-              </Button>
             </div>
           )}
         </div>

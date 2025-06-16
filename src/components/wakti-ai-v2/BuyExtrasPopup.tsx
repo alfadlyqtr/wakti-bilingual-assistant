@@ -97,10 +97,10 @@ export function BuyExtrasPopup({
                 )}
               </div>
               
-              {/* Daily Translations */}
+              {/* Voice Translations - CHANGED from Daily Translations */}
               <div className="text-sm">
                 <span>
-                  {language === 'ar' ? 'الترجمات اليومية:' : 'Daily Translations:'} {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
+                  {language === 'ar' ? 'الترجمات الصوتية:' : 'Voice Translations:'} {translationStatus.remaining}/{MAX_DAILY_TRANSLATIONS} {language === 'ar' ? 'متبقي' : 'remaining'}
                 </span>
                 {translationStatus.extraTranslations > 0 && (
                   <span className="text-green-600 ml-2">
@@ -142,12 +142,12 @@ export function BuyExtrasPopup({
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   <Languages className="h-4 w-4 text-orange-500" />
-                  {language === 'ar' ? 'ترجمات إضافية' : 'Extra Translations'}
+                  {language === 'ar' ? 'ترجمات صوتية إضافية' : 'Extra Voice Translations'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-muted-foreground">
-                  {language === 'ar' ? 'احصل على 100 ترجمة إضافية صالحة لمدة شهر واحد' : 'Get 100 extra translations valid for 1 month'}
+                  {language === 'ar' ? 'احصل على 100 ترجمة صوتية إضافية صالحة لمدة شهر واحد' : 'Get 100 extra voice translations valid for 1 month'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="text-lg font-bold text-orange-600">
