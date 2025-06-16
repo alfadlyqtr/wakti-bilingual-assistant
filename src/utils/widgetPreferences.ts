@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -114,7 +113,7 @@ export const getWidgetOrder = () => {
 
 export const saveWidgetOrder = async (newOrder: string[]) => {
   try {
-    // Save to localStorage first for immediate feedback
+    // Save to localStorage
     localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
     console.log('Saving widget order (local):', newOrder);
 
@@ -154,36 +153,5 @@ export const saveWidgetOrder = async (newOrder: string[]) => {
     }
   } catch (error) {
     console.error('Error saving widget order:', error);
-  }
-};
-
-/**
- * Get widget order from remote storage, fallback to local
- */
-export const getRemoteWidgetOrder = async (): Promise<string[]> => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user?.id) {
-      return getWidgetOrder(); // Fallback to local
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("settings")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const remoteOrder = profile?.settings?.widgets?.widgetOrder;
-    
-    if (remoteOrder && Array.isArray(remoteOrder)) {
-      console.log('Retrieved remote widget order:', remoteOrder);
-      return remoteOrder;
-    }
-    
-    // Fallback to local storage
-    return getWidgetOrder();
-  } catch (error) {
-    console.error('Error getting remote widget order:', error);
-    return getWidgetOrder();
   }
 };
